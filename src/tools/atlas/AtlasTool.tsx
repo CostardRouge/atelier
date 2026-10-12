@@ -9,7 +9,8 @@ import AtlasInspector from './AtlasInspector';
 import AtlasStage from './AtlasStage';
 import AtlasTransport from './AtlasTransport';
 import { AtlasTiles } from './atlas-tiles';
-import type { AtlasView } from './atlas-view';
+import { visibleBox, type AtlasView } from './atlas-view';
+import type { WorldBox } from './atlas-flight';
 import { PlayClock } from './play-clock';
 import { useAtlasExport, type ExportKind } from './use-atlas-export';
 import { useAtlasFlights, type FlightSource } from './use-atlas-flights';
@@ -44,12 +45,12 @@ export default function AtlasTool() {
   const sources = useMemo<FlightSource[]>(
     () =>
       selectedUsableAssets(ATLAS_KINDS, lib.assets, lib.selection).flatMap((a) =>
-        a.parts.srt ? [{ id: a.id, name: a.baseName, srt: a.parts.srt }] : [],
+        a.parts.srt ? [{ id: a.id, name: a.baseName, srt: a.parts.srt, video: a.parts.video ?? null }] : [],
       ),
     [lib.assets, lib.selection],
   );
-  const { flights, reading, empty } = useAtlasFlights(sources);
-  const scene = useAtlasScene(flights, hidden, settings, freeView);
+  const { flights, reading, empty, aircraft } = useAtlasFlights(sources);
+  const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft);
 
   const clock = useRef(new PlayClock()).current;
   useEffect(() => clock.setTotal(scene.schedule.total), [clock, scene.schedule.total]);
@@ -92,12 +93,26 @@ export default function AtlasTool() {
 
   const exporter = useAtlasExport(settings);
   const onExport = useCallback(
-    (kind: ExportKind, short: number, fps: number) => {
+    (kind: ExportKind) => {
       clock.setPlaying(false);
-      void exporter.run({ kind, short, fps, at: clock.t }, scene.core, scene.viewAt, tilesOn);
+      void exporter.run({ kind, at: clock.t }, scene.core, scene.viewAt, tilesOn);
     },
     [clock, exporter, scene.core, scene.viewAt, tilesOn],
   );
+
+  // A zone is drawn on the map, or taken from the view on screen.
+  const [drawingZone, setDrawingZone] = useState(false);
+  const onZone = useCallback(
+    (zone: WorldBox) => {
+      setDrawingZone(false);
+      update((s) => ({ ...s, camera: { ...s.camera, frame: 'zone', zone } }));
+    },
+    [update],
+  );
+  const onZoneFromView = useCallback(() => {
+    const look = { bearing: settings.camera.bearing, tilt: settings.camera.tilt };
+    onZone(visibleBox(scene.viewAt(clock.t), look, scene.mapFrame.w, scene.mapFrame.h));
+  }, [onZone, scene, clock, settings.camera.bearing, settings.camera.tilt]);
 
   const look = useMemo(() => ({ bearing: settings.camera.bearing, tilt: settings.camera.tilt }), [settings.camera.bearing, settings.camera.tilt]);
 
@@ -130,9 +145,12 @@ export default function AtlasTool() {
               clock={clock}
               tiles={tiles}
               focus={focus}
-              aspect={settings.aspect}
+              format={settings.format}
+              theme={settings.hud.theme}
               look={look}
               onFreeView={onFreeView}
+              drawingZone={drawingZone}
+              onZone={onZone}
               paintSeq={paintSeq}
             />
             {empties && (
@@ -166,6 +184,13 @@ export default function AtlasTool() {
             tilesOn={tilesOn}
             setTilesOn={setTilesOn}
             onFit={onFit}
+            drawingZone={drawingZone}
+            setDrawingZone={setDrawingZone}
+            onZoneFromView={onZoneFromView}
+            aircraftFound={scene.aircraftFound}
+            unnamed={scene.unnamed}
+            dateRange={scene.core.dateRange}
+            total={scene.schedule.total}
             exporter={exporter}
             onExport={onExport}
           />

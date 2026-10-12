@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../../shared/lib/prng';
-import { DEFAULT_SETTINGS, LOOK_PRESETS, MOTION_PRESETS, aspectRatio, resolvedClock, sanitizeSettings, surpriseLook } from './atlas-settings';
+import { DEFAULT_SETTINGS, LOOK_PRESETS, MOTION_PRESETS, aspectRatio, mapRect, mapUnitFrame, resolvedClock, sanitizeSettings, surpriseLook } from './atlas-settings';
 import { flightTone, parseHex, samplePalette, sampleCyclic, toHex } from './atlas-colour';
-import { counterLine, formatDate, formatElapsed, formatTimeOfDay } from './atlas-hud';
+import { counterLine, formatDate, formatDateRange, formatElapsed, formatTimeOfDay } from './atlas-hud';
 
 describe('sanitizeSettings', () => {
   it('gives the defaults for nothing, and keeps the defaults whole', () => {
@@ -66,5 +66,33 @@ describe('small readings', () => {
     expect(counterLine(413, 'buses running')).toBe('413 buses running');
     expect(counterLine(1, 'drones flying')).toBe('1 drone flying');
     expect(counterLine(1, 'flying')).toBe('1 flying');
+  });
+});
+
+describe('the frame and the overlay style', () => {
+  it('moves an old root aspect into the format, and refuses a broken theme field by field', () => {
+    const s = sanitizeSettings({ aspect: '9:16', hud: { theme: { presetId: 'or-cine', style: { color: 'gold', weight: 650, fontFamily: 'Comic Sans' } } } });
+    expect(s.format.aspect).toBe('9:16');
+    expect(s.hud.theme.presetId).toBe('or-cine');
+    expect(s.hud.theme.style.fontFamily).toBe('Instrument Serif');
+    expect(s.hud.theme.style.weight).toBe(400);
+    expect(s.hud.theme.style.color).toBe('#f2c230');
+    expect(sanitizeSettings({ camera: { zone: { x0: 1, y0: 0, x1: 0, y1: 1 } } }).camera.zone).toBeNull();
+  });
+
+  it('lays the map inside its border and band', () => {
+    const f = { ...DEFAULT_SETTINGS.format, aspect: '4:5' as const, border: 0.05, band: 0.2 };
+    expect(mapRect(f, 1080, 1350)).toEqual({ x: 54, y: 54, w: 972, h: 1350 - 108 - 216 });
+    const u = mapUnitFrame(f);
+    expect(u.w).toBeCloseTo(0.9, 9);
+    expect(u.h).toBeCloseTo(1.25 - 0.1 - 0.2, 9);
+  });
+
+  it('words a date range', () => {
+    expect(formatDateRange([null])).toBeNull();
+    expect(formatDateRange([Date.UTC(2026, 4, 30, 9)])).toBe('30 May 2026');
+    expect(formatDateRange([Date.UTC(2026, 4, 12), Date.UTC(2026, 4, 30)])).toBe('12 – 30 May 2026');
+    expect(formatDateRange([Date.UTC(2026, 0, 12), null, Date.UTC(2026, 4, 30)])).toBe('12 Jan – 30 May 2026');
+    expect(formatDateRange([Date.UTC(2025, 11, 31), Date.UTC(2026, 0, 2)])).toBe('31 Dec 2025 – 2 Jan 2026');
   });
 });

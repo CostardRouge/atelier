@@ -5,7 +5,7 @@ import { ensureFontFaces } from '../../shared/overlay/fonts';
 import { startTask } from '../../shared/tasks/tasks';
 import { HUD_FONT_FACES, paintAtlas, type PaintScene } from './atlas-paint';
 import { AtlasTiles } from './atlas-tiles';
-import { aspectRatio, type AtlasSettings } from './atlas-settings';
+import { aspectRatio, mapRect, type AtlasSettings } from './atlas-settings';
 import { visibleBox, type AtlasView } from './atlas-view';
 import type { SceneCore } from './use-atlas-scene';
 
@@ -13,9 +13,6 @@ export type ExportKind = 'mp4' | 'still' | 'poster';
 
 export interface ExportRequest {
   kind: ExportKind;
-  /** Pixels on the frame's short side. */
-  short: number;
-  fps: number;
   /** For a still: the instant drawn. */
   at: number;
 }
@@ -30,7 +27,7 @@ export interface AtlasExport {
 }
 
 /** The frame's pixel size for an aspect and a short side, both even (H.264 refuses odd). */
-export function exportSize(aspect: AtlasSettings['aspect'], short: number): { w: number; h: number } {
+export function exportSize(aspect: AtlasSettings['format']['aspect'], short: number): { w: number; h: number } {
   const ar = aspectRatio(aspect);
   const even = (n: number) => Math.max(2, 2 * Math.round(n / 2));
   return ar >= 1 ? { w: even(short * ar), h: even(short) } : { w: even(short), h: even(short / ar) };
@@ -68,7 +65,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
       const ctl = new AbortController();
       controller.current = ctl;
       setNote(null);
-      const { w, h } = exportSize(settings.aspect, req.short);
+      const { w, h } = exportSize(settings.format.aspect, settings.format.short);
       const label = req.kind === 'mp4' ? `Flight Atlas · ${w}×${h} video` : `Flight Atlas · ${w}×${h} image`;
       const task = startTask({ label, progress: 0, cancel: () => ctl.abort() });
       setRunning(req.kind === 'mp4' ? 'Rendering the video…' : 'Rendering the image…');
@@ -76,7 +73,8 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
       const tiles = tilesOn ? new AtlasTiles() : null;
       tiles?.setTone(settings.map.tileTone);
       try {
-        await ensureFontFaces(HUD_FONT_FACES);
+        const ts = core.settings.hud.theme.style;
+        await ensureFontFaces([...HUD_FONT_FACES, `${ts.italic ? 'italic ' : ''}${ts.weight} 32px '${ts.fontFamily}'`]);
         const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
         const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
         if (!ctx) throw new Error('This browser cannot draw the frame.');
@@ -84,7 +82,9 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
         const look = { bearing: settings.camera.bearing, tilt: settings.camera.tilt };
         const paint = async (t: number, poster = false) => {
           const view = viewAt(t);
-          if (tiles) await tiles.ready(visibleBox(view, look, w, h), view.scale * Math.min(w, h));
+          // The view is the MAP's, inside the mount.
+          const r = mapRect(settings.format, w, h);
+          if (tiles) await tiles.ready(visibleBox(view, look, r.w, r.h), view.scale * Math.min(r.w, r.h));
           if (ctl.signal.aborted) throw new DOMException('Export cancelled', 'AbortError');
           paintAtlas(ctx, scene, { t, view, width: w, height: h, poster });
           return canvas;
@@ -97,7 +97,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
             width: w,
             height: h,
             seconds: core.schedule.total,
-            fps: req.fps,
+            fps: settings.format.fps,
             draw: (t) => paint(t),
             signal: ctl.signal,
             onProgress: (p) => {
@@ -133,7 +133,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
         setProgress(null);
       }
     },
-    [settings.aspect, settings.camera.bearing, settings.camera.tilt, settings.map.tileTone],
+    [settings.format, settings.camera.bearing, settings.camera.tilt, settings.map.tileTone],
   );
 
   return { running, progress, note, cancel, run };

@@ -16,16 +16,22 @@
 import type { ChoreoMode, ChoreoOrder, ChoreoSettings, Tempo } from './atlas-schedule';
 import type { PaletteId } from './atlas-colour';
 import { PALETTES } from './atlas-colour';
+import type { WorldBox } from './atlas-flight';
+import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
+import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
+import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
+import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
 export type ColourBy = 'single' | 'flight' | 'altitude' | 'speed' | 'date' | 'hour' | 'place';
 export type LandMode = 'off' | 'fill' | 'outline';
 export type GridMode = 'off' | 'lines' | 'dots';
 export type TileTone = 'night' | 'grey' | 'natural' | 'sepia';
-export type CameraFrame = 'all' | 'follow' | 'place' | 'free';
+export type CameraFrame = 'world' | 'all' | 'place' | 'zone' | 'follow' | 'free';
 export type ClockMode = 'auto' | 'off' | 'time' | 'date' | 'datetime' | 'elapsed';
-export type HudCorner = 'br' | 'bl' | 'tl' | 'tr';
-export type HudFont = 'sans' | 'serif' | 'mono';
+/** Where a piece of the overlay sits: a corner or the middle of the top or bottom edge. */
+export type Spot = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br';
 export type FrameAspect = '16:9' | '9:16' | '1:1' | '4:5' | '3:2';
+export type DroneLine = 'off' | 'all' | 'flying';
 
 export interface TrailSettings {
   /** Fraction of a flight the comet's tail spans; 1 draws everything flown. */
@@ -96,33 +102,84 @@ export interface CameraSettings {
   frame: CameraFrame;
   /** The place framed under `place`. */
   place: string | null;
+  /** The zone framed under `zone`, drawn on the map or taken from a view. */
+  zone: WorldBox | null;
   /** Margin around what is framed, a fraction of the short side. */
   padding: number;
-  /** Follow: 0 lazy … 1 snappy. */
+  /** Follow and spotlight: 0 lazy … 1 snappy. */
   tightness: number;
   /** A slow zoom over the whole animation, in zoom steps (negative pulls out). */
   drift: number;
   bearing: number;
   tilt: number;
+  /** Now and then, dive on one flight and follow it (`atlas-spotlight.ts`). */
+  spotlight: SpotlightSettings;
+  /** The flights the spotlight picks from under `picked`, by id. */
+  picked: string[];
 }
 
 export interface HudSettings {
+  /**
+   * The overlay's text style — the Studio's and Trips' title styles
+   * (`shared/overlay/title-styles.ts`), picked from the same presets and
+   * edited with the same panel.
+   */
+  theme: StyleTheme;
+  /** The counter's, the graph's and the live values' colour. */
+  accent: string;
+  /** Every text, 0.5..2. */
+  scale: number;
   clock: ClockMode;
+  clockAt: Spot;
   counter: boolean;
   /** The noun after the count: «drones flying». */
   noun: string;
   graph: boolean;
   title: string;
   subtitle: string;
+  titleAt: Spot;
+  titleSize: number;
+  stats: StatKey[];
+  statsAt: Spot;
+  statsLayout: 'row' | 'column';
+  /** Count what has been flown by the frame drawn (the numbers grow), or the totals throughout. */
+  statsLive: boolean;
+  units: Units;
+  /** The first and last day of the flights shown. */
+  dates: boolean;
+  datesAt: Spot;
+  /** Which drones are named: every one shown, those in the air, or none. */
+  drone: DroneLine;
+  droneAt: Spot;
+  /** While the spotlight follows a flight: its name, day, drone and live readings. */
+  spotCard: boolean;
+  spotCardAt: Spot;
   credit: boolean;
-  corner: HudCorner;
-  font: HudFont;
-  /** The clock's colour. */
-  ink: string;
-  /** The counter's and the graph's colour. */
-  accent: string;
-  /** Text size, 0.5..2. */
-  scale: number;
+}
+
+/** The frame around the map — what a print would call its mount. */
+export interface FormatSettings {
+  aspect: FrameAspect;
+  /** Export pixels on the short side. */
+  short: number;
+  fps: number;
+  /** Border on every side, a fraction of the short side. */
+  border: number;
+  /** An extra band under the map for the text, a fraction of the short side. */
+  band: number;
+  borderColour: string;
+  /** The map's corner radius, a fraction of the short side. */
+  radius: number;
+  /** Where the overlay is laid out: inside the map, or across the whole frame (on the border). */
+  textOn: 'map' | 'frame';
+}
+
+/** What the atlas calls each aircraft. */
+export interface AircraftSettings {
+  /** Renames, keyed by the name the file gives. */
+  names: Record<string, string>;
+  /** The name of a flight whose file says nothing (a loose `.srt`). Empty: unnamed. */
+  fallback: string;
 }
 
 export interface AtlasSettings {
@@ -133,7 +190,14 @@ export interface AtlasSettings {
   map: MapSettings;
   camera: CameraSettings;
   hud: HudSettings;
-  aspect: FrameAspect;
+  format: FormatSettings;
+  aircraft: AircraftSettings;
+}
+
+/** A title style from a preset, with a few of its values changed. */
+export function themeWith(presetId: string, patch: Partial<TitleStyle> = {}): StyleTheme {
+  const base = themeFromPreset(presetId) ?? (themeFromPreset('neutral') as StyleTheme);
+  return { presetId: base.presetId, style: { ...base.style, ...patch } };
 }
 
 export const DEFAULT_SETTINGS: AtlasSettings = {
@@ -166,22 +230,46 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     tileDim: 0.45,
     labels: true,
   },
-  camera: { frame: 'all', place: null, padding: 0.08, tightness: 0.45, drift: 0, bearing: 0, tilt: 1 },
+  camera: {
+    frame: 'all',
+    place: null,
+    zone: null,
+    padding: 0.08,
+    tightness: 0.45,
+    drift: 0,
+    bearing: 0,
+    tilt: 1,
+    spotlight: { on: false, pick: 'random', every: 6, hold: 5, closeness: 1.2, dim: 0.6, seed: 3 },
+    picked: [],
+  },
   hud: {
+    theme: themeWith('neutral', { color: '#f4f1ea', legibility: { mode: 'shadow', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 } }),
+    accent: '#7fd38a',
+    scale: 1,
     clock: 'auto',
+    clockAt: 'br',
     counter: true,
     noun: 'drones flying',
     graph: true,
     title: '',
     subtitle: '',
+    titleAt: 'tl',
+    titleSize: 1,
+    stats: ['flights', 'distance', 'time', 'maxAlt'],
+    statsAt: 'bl',
+    statsLayout: 'column',
+    statsLive: true,
+    units: 'metric',
+    dates: true,
+    datesAt: 'tl',
+    drone: 'all',
+    droneAt: 'tl',
+    spotCard: true,
+    spotCardAt: 'tr',
     credit: true,
-    corner: 'br',
-    font: 'sans',
-    ink: '#f4f1ea',
-    accent: '#7fd38a',
-    scale: 1,
   },
-  aspect: '16:9',
+  format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map' },
+  aircraft: { names: {}, fallback: '' },
 };
 
 // --- presets -----------------------------------------------------------------
@@ -194,18 +282,35 @@ export interface LookPreset {
   apply: (s: AtlasSettings) => AtlasSettings;
 }
 
+/** A look's text: its ink, its accent and a face, as a title style. */
+interface LookText {
+  ink: string;
+  accent: string;
+  font: 'sans' | 'serif' | 'mono';
+}
+
+function lookTheme({ ink, font }: LookText): StyleTheme {
+  // A light ink sits on a dark map and wants its shadow; a dark one is printed.
+  const dark = parseInt(ink.slice(1, 3), 16) < 128;
+  const legibility: LegibilityStyle = dark ? { mode: 'none', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 } : { mode: 'shadow', color: 'rgba(0,0,0,0.55)', padFrac: 0.3 };
+  if (font === 'serif') return themeWith('or-cine', { color: ink, glowAmount: dark ? 0 : 0.12, legibility });
+  if (font === 'mono') return themeWith('neutral', { color: ink, fontFamily: 'JetBrains Mono', weight: 500, legibility });
+  return themeWith('neutral', { color: ink, legibility });
+}
+
 const look = (
   s: AtlasSettings,
   colour: Partial<ColourSettings>,
   map: Partial<MapSettings>,
-  more: { trail?: Partial<TrailSettings>; head?: Partial<HeadSettings>; hud?: Partial<HudSettings> } = {},
+  more: { trail?: Partial<TrailSettings>; head?: Partial<HeadSettings>; hud: LookText; border: string },
 ): AtlasSettings => ({
   ...s,
   colour: { ...s.colour, ...colour },
   map: { ...s.map, ...map },
   trail: { ...s.trail, ...more.trail },
   head: { ...s.head, ...more.head },
-  hud: { ...s.hud, ...more.hud },
+  hud: { ...s.hud, theme: lookTheme(more.hud), accent: more.hud.accent },
+  format: { ...s.format, borderColour: more.border },
 });
 
 export const LOOK_PRESETS: readonly LookPreset[] = [
@@ -218,7 +323,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'single', palette: 'perth', trail: '#5fd3e6', head: '#ffffff', ghost: '#6d4bd8', glow: 0.55, additive: true },
         { background: '#1e1f26', land: 'fill', landColour: '#060609', grid: 'off', vignette: 0.35, tileTone: 'night' },
-        { trail: { ghost: 0.32, afterglow: 0.3 }, hud: { ink: '#f4f1ea', accent: '#7fd38a', font: 'sans' } },
+        { trail: { ghost: 0.32, afterglow: 0.3 }, hud: { ink: '#f4f1ea', accent: '#7fd38a', font: 'sans' }, border: '#0b0b0e' },
       ),
   },
   {
@@ -230,7 +335,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'altitude', palette: 'aurora', head: '#e5ffb0', ghost: '#1b4d5c', glow: 0.75, additive: true },
         { background: '#030d14', land: 'fill', landColour: '#071a22', grid: 'off', vignette: 0.45, tileTone: 'night' },
-        { trail: { ghost: 0.18, afterglow: 0.4, length: 0.25 }, hud: { ink: '#e8fff4', accent: '#7cf29c', font: 'sans' } },
+        { trail: { ghost: 0.18, afterglow: 0.4, length: 0.25 }, hud: { ink: '#e8fff4', accent: '#7cf29c', font: 'sans' }, border: '#020a0f' },
       ),
   },
   {
@@ -242,7 +347,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'speed', palette: 'ember', head: '#fff1c9', ghost: '#5a1a10', glow: 0.7, additive: true },
         { background: '#0b0605', land: 'fill', landColour: '#170d0a', grid: 'off', vignette: 0.5, tileTone: 'night' },
-        { trail: { ghost: 0.25, afterglow: 0.3 }, hud: { ink: '#ffe9d1', accent: '#ff8a3d', font: 'serif' } },
+        { trail: { ghost: 0.25, afterglow: 0.3 }, hud: { ink: '#ffe9d1', accent: '#ff8a3d', font: 'serif' }, border: '#080403' },
       ),
   },
   {
@@ -254,7 +359,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'flight', palette: 'neon', head: '#ffffff', ghost: '#2a2140', glow: 0.85, additive: true },
         { background: '#050508', land: 'outline', landColour: '#1d1a2e', grid: 'dots', gridColour: '#1b1830', vignette: 0.3, tileTone: 'night' },
-        { trail: { ghost: 0.12, afterglow: 0.5, length: 0.3 }, hud: { ink: '#ffffff', accent: '#ff3fa4', font: 'mono' } },
+        { trail: { ghost: 0.12, afterglow: 0.5, length: 0.3 }, hud: { ink: '#ffffff', accent: '#ff3fa4', font: 'mono' }, border: '#030305' },
       ),
   },
   {
@@ -266,7 +371,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'single', palette: 'papier', trail: '#d9442a', head: '#1b1813', ghost: '#8c7f6a', glow: 0, additive: false },
         { background: '#efe8da', land: 'fill', landColour: '#e4dccb', grid: 'lines', gridColour: '#ddd3bf', vignette: 0.1, tileTone: 'sepia' },
-        { trail: { ghost: 0.35, afterglow: 0.45 }, head: { halo: 0.15 }, hud: { ink: '#1b1813', accent: '#d9442a', font: 'serif' } },
+        { trail: { ghost: 0.35, afterglow: 0.45 }, head: { halo: 0.15 }, hud: { ink: '#1b1813', accent: '#d9442a', font: 'serif' }, border: '#f6f1e6' },
       ),
   },
   {
@@ -278,7 +383,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'single', palette: 'ice', trail: '#ffffff', head: '#ffffff', ghost: '#7fa3e0', glow: 0.25, additive: false },
         { background: '#0f2c60', land: 'outline', landColour: '#3e62a3', grid: 'lines', gridColour: '#1f427f', vignette: 0.2, tileTone: 'grey' },
-        { trail: { ghost: 0.3, afterglow: 0.5 }, hud: { ink: '#ffffff', accent: '#9fd0ff', font: 'mono' } },
+        { trail: { ghost: 0.3, afterglow: 0.5 }, hud: { ink: '#ffffff', accent: '#9fd0ff', font: 'mono' }, border: '#0a2149' },
       ),
   },
   {
@@ -290,7 +395,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'hour', palette: 'sunset', head: '#fff1a8', ghost: '#3a1f4f', glow: 0.65, additive: true },
         { background: '#0f0819', land: 'fill', landColour: '#1a1027', grid: 'off', vignette: 0.45, tileTone: 'night' },
-        { trail: { ghost: 0.2, afterglow: 0.35 }, hud: { ink: '#fff1e0', accent: '#ffb05c', font: 'serif' } },
+        { trail: { ghost: 0.2, afterglow: 0.35 }, hud: { ink: '#fff1e0', accent: '#ffb05c', font: 'serif' }, border: '#0a0512' },
       ),
   },
   {
@@ -302,7 +407,7 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
         s,
         { by: 'single', palette: 'mono', trail: '#ffffff', head: '#ffffff', ghost: '#3a3a3a', glow: 0.2, additive: true },
         { background: '#000000', land: 'off', grid: 'off', vignette: 0, tileTone: 'grey' },
-        { trail: { ghost: 0.3, afterglow: 0.6, taper: 0.9 }, head: { halo: 0.3 }, hud: { ink: '#ffffff', accent: '#bdbdbd', font: 'mono' } },
+        { trail: { ghost: 0.3, afterglow: 0.6, taper: 0.9 }, head: { halo: 0.3 }, hud: { ink: '#ffffff', accent: '#bdbdbd', font: 'mono' }, border: '#000000' },
       ),
   },
 ];
@@ -375,11 +480,14 @@ const COLOUR_BY: readonly ColourBy[] = ['single', 'flight', 'altitude', 'speed',
 const LANDS: readonly LandMode[] = ['off', 'fill', 'outline'];
 const GRIDS: readonly GridMode[] = ['off', 'lines', 'dots'];
 const TONES: readonly TileTone[] = ['night', 'grey', 'natural', 'sepia'];
-const FRAMES: readonly CameraFrame[] = ['all', 'follow', 'place', 'free'];
+const FRAMES: readonly CameraFrame[] = ['world', 'all', 'place', 'zone', 'follow', 'free'];
 const CLOCKS: readonly ClockMode[] = ['auto', 'off', 'time', 'date', 'datetime', 'elapsed'];
-const CORNERS: readonly HudCorner[] = ['br', 'bl', 'tl', 'tr'];
-const FONTS: readonly HudFont[] = ['sans', 'serif', 'mono'];
+export const SPOTS: readonly Spot[] = ['tl', 'tc', 'tr', 'bl', 'bc', 'br'];
+const PICKS: readonly SpotlightPick[] = ['random', 'picked', 'longest', 'farthest'];
+const DRONE_LINES: readonly DroneLine[] = ['off', 'all', 'flying'];
 export const ASPECTS: readonly FrameAspect[] = ['16:9', '9:16', '1:1', '4:5', '3:2'];
+const SHORTS = [720, 1080, 1440, 2160];
+const WEIGHTS: readonly FontWeight[] = [400, 500, 600, 700];
 
 function num(v: unknown, d: number, min: number, max: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d;
@@ -387,8 +495,8 @@ function num(v: unknown, d: number, min: number, max: number): number {
 function bool(v: unknown, d: boolean): boolean {
   return typeof v === 'boolean' ? v : d;
 }
-function oneOf<T extends string>(v: unknown, list: readonly T[], d: T): T {
-  return typeof v === 'string' && (list as readonly string[]).includes(v) ? (v as T) : d;
+function oneOf<T extends string | number>(v: unknown, list: readonly T[], d: T): T {
+  return (list as readonly unknown[]).includes(v) ? (v as T) : d;
 }
 function hex(v: unknown, d: string): string {
   return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : d;
@@ -398,6 +506,45 @@ function str(v: unknown, d: string, max = 80): string {
 }
 function obj(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+function box(v: unknown): WorldBox | null {
+  const b = obj(v);
+  const ok = ['x0', 'y0', 'x1', 'y1'].every((k) => typeof b[k] === 'number' && Number.isFinite(b[k] as number));
+  if (!ok) return null;
+  const out = { x0: b.x0 as number, y0: b.y0 as number, x1: b.x1 as number, y1: b.y1 as number };
+  return out.x1 > out.x0 && out.y1 > out.y0 ? out : null;
+}
+
+/** A stored title style, field by field, over its preset's — a theme can never break the draw. */
+export function sanitizeTheme(v: unknown, d: StyleTheme): StyleTheme {
+  const t = obj(v);
+  const presetId = typeof t.presetId === 'string' && TITLE_STYLE_PRESETS.some((p) => p.id === t.presetId) ? t.presetId : d.presetId;
+  const base = presetId === d.presetId ? d.style : themeWith(presetId).style;
+  const st = obj(t.style);
+  const leg = obj(st.legibility);
+  const legibility: LegibilityStyle = {
+    mode: oneOf(leg.mode, ['none', 'shadow', 'box'] as const, base.legibility.mode),
+    color: typeof leg.color === 'string' && leg.color.length < 40 ? leg.color : base.legibility.color,
+    padFrac: num(leg.padFrac, base.legibility.padFrac, 0, 2),
+    ...(typeof leg.radiusFrac === 'number' ? { radiusFrac: num(leg.radiusFrac, 0.5, 0, 10) } : {}),
+    ...(typeof leg.borderColor === 'string' ? { borderColor: leg.borderColor.slice(0, 40) } : {}),
+    ...(typeof leg.borderWidthFrac === 'number' ? { borderWidthFrac: num(leg.borderWidthFrac, 0, 0, 1) } : {}),
+  };
+  return {
+    presetId,
+    style: {
+      fontFamily: oneOf(st.fontFamily, CURATED_FONTS as readonly OverlayFontFamily[], base.fontFamily),
+      weight: oneOf(st.weight, WEIGHTS, base.weight),
+      italic: bool(st.italic, base.italic),
+      uppercase: bool(st.uppercase, base.uppercase),
+      letterSpacingEm: num(st.letterSpacingEm, base.letterSpacingEm, -0.2, 1),
+      color: hex(st.color, base.color),
+      sizeScale: num(st.sizeScale, base.sizeScale, 0.3, 3),
+      legibility,
+      glowAmount: num(st.glowAmount, base.glowAmount, 0, 1),
+      glowWarmth: num(st.glowWarmth, base.glowWarmth, 0, 1),
+    },
+  };
 }
 
 /** Any stored value → settings that are whole and in range. */
@@ -410,7 +557,14 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
   const k = obj(root.colour);
   const m = obj(root.map);
   const cam = obj(root.camera);
+  const sp = obj(cam.spotlight);
   const u = obj(root.hud);
+  const f = obj(root.format);
+  const a = obj(root.aircraft);
+  const names: Record<string, string> = {};
+  for (const [key, val] of Object.entries(obj(a.names))) {
+    if (typeof val === 'string' && key.length <= 80) names[key] = val.slice(0, 60);
+  }
   return {
     choreo: {
       mode: oneOf(c.mode, MODES, d.choreo.mode),
@@ -470,27 +624,61 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
     camera: {
       frame: oneOf(cam.frame, FRAMES, d.camera.frame),
       place: typeof cam.place === 'string' ? cam.place : null,
+      zone: box(cam.zone),
       padding: num(cam.padding, d.camera.padding, 0, 0.4),
       tightness: num(cam.tightness, d.camera.tightness, 0, 1),
       drift: num(cam.drift, d.camera.drift, -3, 3),
       bearing: num(cam.bearing, d.camera.bearing, -180, 180),
       tilt: num(cam.tilt, d.camera.tilt, 0.3, 1),
+      spotlight: {
+        on: bool(sp.on, d.camera.spotlight.on),
+        pick: oneOf(sp.pick, PICKS, d.camera.spotlight.pick),
+        every: num(sp.every, d.camera.spotlight.every, 0.5, 60),
+        hold: num(sp.hold, d.camera.spotlight.hold, 1, 60),
+        closeness: num(sp.closeness, d.camera.spotlight.closeness, 0.1, 50),
+        dim: num(sp.dim, d.camera.spotlight.dim, 0, 1),
+        seed: Math.round(num(sp.seed, d.camera.spotlight.seed, 0, 1e9)),
+      },
+      picked: Array.isArray(cam.picked) ? cam.picked.filter((x): x is string => typeof x === 'string').slice(0, 500) : [],
     },
     hud: {
+      theme: sanitizeTheme(u.theme, d.hud.theme),
+      accent: hex(u.accent, d.hud.accent),
+      scale: num(u.scale, d.hud.scale, 0.5, 2),
       clock: oneOf(u.clock, CLOCKS, d.hud.clock),
+      clockAt: oneOf(u.clockAt, SPOTS, d.hud.clockAt),
       counter: bool(u.counter, d.hud.counter),
       noun: str(u.noun, d.hud.noun, 40),
       graph: bool(u.graph, d.hud.graph),
       title: str(u.title, d.hud.title),
       subtitle: str(u.subtitle, d.hud.subtitle),
+      titleAt: oneOf(u.titleAt, SPOTS, d.hud.titleAt),
+      titleSize: num(u.titleSize, d.hud.titleSize, 0.4, 3),
+      stats: Array.isArray(u.stats) ? STAT_KEYS.filter((key) => (u.stats as unknown[]).includes(key)) : d.hud.stats,
+      statsAt: oneOf(u.statsAt, SPOTS, d.hud.statsAt),
+      statsLayout: oneOf(u.statsLayout, ['row', 'column'] as const, d.hud.statsLayout),
+      statsLive: bool(u.statsLive, d.hud.statsLive),
+      units: oneOf(u.units, ['metric', 'imperial'] as const, d.hud.units),
+      dates: bool(u.dates, d.hud.dates),
+      datesAt: oneOf(u.datesAt, SPOTS, d.hud.datesAt),
+      drone: oneOf(u.drone, DRONE_LINES, d.hud.drone),
+      droneAt: oneOf(u.droneAt, SPOTS, d.hud.droneAt),
+      spotCard: bool(u.spotCard, d.hud.spotCard),
+      spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
-      corner: oneOf(u.corner, CORNERS, d.hud.corner),
-      font: oneOf(u.font, FONTS, d.hud.font),
-      ink: hex(u.ink, d.hud.ink),
-      accent: hex(u.accent, d.hud.accent),
-      scale: num(u.scale, d.hud.scale, 0.5, 2),
     },
-    aspect: oneOf(root.aspect, ASPECTS, d.aspect),
+    format: {
+      // The frame's shape lived at the root before the Format tab.
+      aspect: oneOf(f.aspect ?? root.aspect, ASPECTS, d.format.aspect),
+      short: oneOf(f.short, SHORTS, d.format.short),
+      fps: oneOf(f.fps, [30, 60], d.format.fps),
+      border: num(f.border, d.format.border, 0, 0.25),
+      band: num(f.band, d.format.band, 0, 0.5),
+      borderColour: hex(f.borderColour, d.format.borderColour),
+      radius: num(f.radius, d.format.radius, 0, 0.15),
+      textOn: oneOf(f.textOn, ['map', 'frame'] as const, d.format.textOn),
+    },
+    aircraft: { names, fallback: str(a.fallback, d.aircraft.fallback, 60) },
   };
 }
 
@@ -522,4 +710,35 @@ export function surpriseLook(s: AtlasSettings, rand: () => number): AtlasSetting
     trail: { ...base.trail, length: 0.05 + rand() * 0.5, taper: rand(), width: 1 + rand() * 4, ghost: rand() * 0.4, afterglow: rand() * 0.7 },
     head: { ...base.head, size: 1.5 + rand() * 5, pulse: rand(), ripple: rand(), halo: rand() },
   };
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The map's rectangle inside a `width × height` frame: the border on every
+ * side, the text band under it. Never smaller than a tenth of the short side.
+ */
+export function mapRect(format: FormatSettings, width: number, height: number): Rect {
+  const short = Math.min(width, height);
+  const b = format.border * short;
+  const band = format.band * short;
+  return { x: b, y: b, w: Math.max(short * 0.1, width - 2 * b), h: Math.max(short * 0.1, height - 2 * b - band) };
+}
+
+/** Width and height of a frame of `aspect` whose short side is 1. */
+export function unitFrame(aspect: FrameAspect): { w: number; h: number } {
+  const ar = aspectRatio(aspect);
+  return ar >= 1 ? { w: ar, h: 1 } : { w: 1, h: 1 / ar };
+}
+
+/** The MAP's own width and height in that unit frame — what a camera fits to. */
+export function mapUnitFrame(format: FormatSettings): { w: number; h: number } {
+  const f = unitFrame(format.aspect);
+  const r = mapRect(format, f.w, f.h);
+  return { w: r.w, h: r.h };
 }

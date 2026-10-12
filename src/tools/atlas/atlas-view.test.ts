@@ -76,7 +76,9 @@ describe('the follow camera', () => {
   it('ends on the target, and pulls out to travel far', () => {
     const a = { x0: 0.1, y0: 0.4, x1: 0.1001, y1: 0.4001 };
     const b = { x0: 0.9, y0: 0.6, x1: 0.9001, y1: 0.6001 };
-    const track = buildCameraTrack((t) => (t < 5 ? a : b), 20, flat, 16 / 9, 1, 0.1, 0.8);
+    const va = fitView(a, flat, 16 / 9, 1, 0.1);
+    const vb = fitView(b, flat, 16 / 9, 1, 0.1);
+    const track = buildCameraTrack((t) => (t < 5 ? va : vb), 20, 0.8);
     const start = cameraAt(track, 0);
     const mid = cameraAt(track, 6);
     const end = cameraAt(track, 20);

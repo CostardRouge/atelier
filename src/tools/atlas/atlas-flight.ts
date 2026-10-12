@@ -33,6 +33,15 @@ export interface AtlasFlight {
   alts: Float32Array;
   /** Ground speed, m/s, measured over the kept fixes and lightly smoothed. */
   speeds: Float32Array;
+  /**
+   * Running totals at each kept fix, so a statistic at any instant is one
+   * lookup: km flown so far, the time integral of height (m·s — divided by
+   * the time it gives the average height), the highest and fastest so far.
+   */
+  cumKm: Float64Array;
+  cumAltS: Float64Array;
+  cumMaxAlt: Float32Array;
+  cumMaxSpeed: Float32Array;
   /** Capture seconds from the first fix to the last. */
   duration: number;
   /** Ground distance flown, km. */
@@ -226,6 +235,20 @@ export function flightFromCues(id: string, name: string, cues: readonly Cue[]): 
   let maxAlt = 0;
   for (const a of alts) if (a > maxAlt) maxAlt = a;
 
+  const cumKm = new Float64Array(n);
+  const cumAltS = new Float64Array(n);
+  const cumMaxAlt = new Float32Array(n);
+  const cumMaxSpeed = new Float32Array(n);
+  cumMaxAlt[0] = Math.max(0, alts[0]);
+  cumMaxSpeed[0] = speeds[0];
+  for (let i = 1; i < n; i++) {
+    cumKm[i] = cumKm[i - 1] + haversineKm(lat[i - 1], lon[i - 1], lat[i], lon[i]);
+    // Trapezoids: the height held between two fixes, times the time between.
+    cumAltS[i] = cumAltS[i - 1] + ((Math.max(0, alts[i - 1]) + Math.max(0, alts[i])) / 2) * (ts[i] - ts[i - 1]);
+    cumMaxAlt[i] = Math.max(cumMaxAlt[i - 1], alts[i]);
+    cumMaxSpeed[i] = Math.max(cumMaxSpeed[i - 1], speeds[i]);
+  }
+
   return {
     id,
     name,
@@ -234,6 +257,10 @@ export function flightFromCues(id: string, name: string, cues: readonly Cue[]): 
     ts: Float32Array.from(ts),
     alts: Float32Array.from(alts),
     speeds,
+    cumKm,
+    cumAltS,
+    cumMaxAlt,
+    cumMaxSpeed,
     duration: ts[n - 1],
     distanceKm,
     maxAlt,

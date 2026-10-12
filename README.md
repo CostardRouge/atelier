@@ -3235,42 +3235,59 @@ coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
 Every DJI flight selected in the Library — a clip with its `.srt`, or a loose
 `.srt` log — drawn together on one map and animated. Only the **GPS track** of
 each log is read (four fixes a second, timed by the log's own wall clock, so a
-time-lapse or a slow-motion clip runs at its real pace); the videos are never
-opened. *Add .srt files* / *A folder* in the panel feed the Library directly.
+time-lapse or a slow-motion clip runs at its real pace); of a clip beside it,
+only the few kilobytes of metadata that may name the aircraft. *Add .srt
+files* / *A folder* in the panel feed the Library directly. The panel has
+seven tabs:
 
-- **Flights and places.** Take-offs within 4 km of each other form a *place*,
-  named offline from the shipped city index. A place chip shows or hides its
+- **Flights.** Take-offs within 4 km of each other form a *place*, named
+  offline from the shipped city index; a place chip shows or hides its
   flights (double-click: that place alone); hovering a flight singles it out.
-- **Looks** (Transit, Aurora, Ember, Neon, Papier, Blueprint, Golden hour,
-  Ink, plus *Surprise me*) set colours, trails, drones and ground at once;
-  every dial stays editable.
-- **Choreography.** *Together*, *Cascade* (staggered launches), *Relay* (each
-  takes off as the last lands, with an overlap), *Day clock* (every flight on
-  one day at the hour it was flown, slowed against the clock) or *Calendar*
-  (in the order flown, the idle between flights cut to a cap while the clock
-  races through it). Dials: total length, stagger, overlap, *equalize* (real
-  lengths ↔ all alike), seeded jitter, order, a tempo curve inside each
-  flight, a hold at the end. Seven motion presets combine with any look.
-- **Trails and drones.** Comet tail length, taper, width, afterglow and its
-  fade, the ghost network, smoothing; drone size, pulse, halo, take-off and
-  landing ripples, and *altitude* drawn as height (with a ground shadow and a
-  thread) — tilt the camera to read it as relief.
-- **Colour** by one colour, flight, place, altitude, speed, date or hour of
-  day, over nine palettes, with glow and additive light.
-- **Map.** A ground colour, the shipped coastline (filled or as a coast), a
-  grid of lines or dots, a vignette, place names — and, only if switched on in
-  this screen, OpenStreetMap tiles toned *night*, *grey*, *sepia* or
-  *natural*, credited in every frame they appear in (see "The network
-  exceptions"; the switch is off every time the atlas opens).
-- **Camera.** Every flight, one place, a *follow* camera that eases to what is
-  in the air (and pulls out to travel between places), or free — drag and
-  zoom the map. A slow drift, a bearing and a tilt on top.
-- **Overlay text.** A clock (time of day, date, elapsed), the count of what
-  is flying, the activity curve, a title, a subtitle, the data credit; corner,
-  font, size and colours.
-- **Export.** The preview is drawn by the export's own painter: an MP4
-  (H.264, no sound, 720 to 4K, 30 or 60 fps, five frame shapes), the frame on
-  screen as a PNG, or a *poster* with every route drawn whole.
+  **Drones**: the aircraft each clip's MP4 metadata names (QuickTime `©mdl`,
+  an `ilst`, Apple's `keys`; a DJI camera code such as `FC8482` becomes
+  *DJI Mini 4 Pro*) — renamable, and a name for the flights whose file says
+  nothing. Nothing is guessed from the flight itself.
+- **Style.** Looks (Transit, Aurora, Ember, Neon, Papier, Blueprint, Golden
+  hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
+  fade, ghost network, smoothing), drones (size, pulse, halo, take-off and
+  landing ripples, altitude drawn as height with a ground shadow and a thread),
+  colour (one, per flight, place, altitude, speed, date or hour, nine palettes,
+  glow, additive light) and the map (ground, shipped coastline, grid, vignette,
+  place names, and — only if switched on here — OpenStreetMap tiles toned
+  *night*, *grey*, *sepia* or *natural*, credited in every frame they appear
+  in; see "The network exceptions"; the switch is off every time the atlas
+  opens).
+- **Motion.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
+  day at the hour it was flown, slowed against the clock) or *Calendar* (in
+  the order flown, the idle between flights cut to a cap while the clock
+  races through it); total length, stagger, overlap, *equalize*, seeded
+  jitter, order, a tempo curve, a hold. Seven motion presets.
+- **Camera.** What the frame shows: the **world**, every **flight**, one
+  **place**, a **zone** (drawn as a rectangle on the map, or taken from the
+  view on screen), a camera that **follows** what is in the air (pulling out to
+  travel between places), or **free** (drag and zoom). Drift, bearing and tilt
+  on top. **Spotlight** (optional): now and then the camera dives on one
+  flight — at random, from the flights you star, the longest still flying or
+  the one that goes farthest — follows it at a chosen closeness while the
+  others fade, and comes back; on a place or a zone, only the flights it shows
+  are followed.
+- **Overlay.** Every word wears the **Studio's and Trips' title styles** (the
+  same presets and panel: font, case, colour, legibility, glow) plus an
+  accent. Pieces, each in one of six spots (corners, top, bottom): a title and
+  subtitle; **statistics** — flights, distance, airtime, highest, average
+  height (time-weighted), average and top speed, places — as a column or a
+  row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
+  or mi/ft; the **date range**; the **drones** (all shown, or those in the
+  air); a **card** for the drone in the spotlight (its name, day, aircraft,
+  live height, speed and distance); a clock, the count of what is flying, the
+  activity curve and the credits.
+- **Format.** Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
+  rate (30/60), and a **mount**: a border, a deeper band under the map for the
+  text, rounded corners, its colour, and whether the text sits on the map or
+  across the whole frame. The preview is letterboxed to it.
+- **Export.** The preview is drawn by the export's own painter: an MP4 (H.264,
+  no sound), the frame on screen as a PNG, or a *poster* with every route
+  drawn whole.
 
 The dials are remembered in this browser; nothing here is a document.
 

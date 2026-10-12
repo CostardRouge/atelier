@@ -67,3 +67,21 @@ export function counterLine(count: number, noun: string): string {
   }
   return `${count} ${n}`;
 }
+
+/**
+ * The span of the flights shown: «30 May 2026» for one day, «12 – 30 May
+ * 2026» within a month, «12 Jan – 30 May 2026» within a year, else both
+ * dates whole. Null when no flight carries a date.
+ */
+export function formatDateRange(walls: readonly (number | null)[]): string | null {
+  const dated = walls.filter((w): w is number => w !== null);
+  if (!dated.length) return null;
+  const a = new Date(Math.min(...dated));
+  const b = new Date(Math.max(...dated));
+  const sameYear = a.getUTCFullYear() === b.getUTCFullYear();
+  const sameMonth = sameYear && a.getUTCMonth() === b.getUTCMonth();
+  if (sameMonth && a.getUTCDate() === b.getUTCDate()) return formatDate(a.getTime());
+  if (sameMonth) return `${a.getUTCDate()} – ${formatDate(b.getTime())}`;
+  if (sameYear) return `${a.getUTCDate()} ${MONTHS[a.getUTCMonth()]} – ${formatDate(b.getTime())}`;
+  return `${formatDate(a.getTime())} – ${formatDate(b.getTime())}`;
+}

@@ -184,49 +184,48 @@ export interface CameraTrack {
 }
 
 /**
- * A camera that follows what is in the air. `targetAt(t)` names the box to
- * frame (the flights flying, or the last ones seen); the camera eases to it
- * with a time constant set by `tightness` (0 lazy … 1 snappy). When the next
- * box is far — another town, another country — the zoom is pulled out first
- * so the move reads as a flight across the map rather than a smear.
+ * An eased camera over a moving aim. `targetAt(t)` names the view to reach
+ * at each instant (the flights in the air, the drone in the spotlight, the
+ * frame to come back to) — null keeps the last one; the camera eases to it
+ * with a time constant set by `tightness` (0 lazy … 1 snappy). When the aim
+ * is far — another town, another country — the zoom is pulled out first so
+ * the move reads as a flight across the map rather than a smear.
  */
 export function buildCameraTrack(
-  targetAt: (t: number) => WorldBox | null,
+  targetAt: (t: number) => AtlasView | null,
   total: number,
-  look: ViewLook,
-  width: number,
-  height: number,
-  padding: number,
   tightness: number,
   step = 1 / 30,
 ): CameraTrack {
   const tau = 0.25 + (1 - Math.min(1, Math.max(0, tightness))) * 3; // seconds
   const samples: CameraSample[] = [];
   let cur: CameraSample | null = null;
-  let lastBox: WorldBox | null = null;
+  let last: AtlasView | null = null;
   const count = Math.max(2, Math.ceil(total / step) + 1);
   for (let k = 0; k < count; k++) {
     const t = k * step;
-    const box: WorldBox | null = targetAt(t) ?? lastBox;
-    if (box) lastBox = box;
-    if (!box) {
+    const target: AtlasView | null = targetAt(t) ?? last;
+    if (target) last = target;
+    if (!target) {
       samples.push(cur ?? { cx: 0.5, cy: 0.5, ls: 0 });
       continue;
     }
-    const target = fitView(box, look, width, height, padding);
     const tl = Math.log2(target.scale);
     if (!cur) {
       cur = { cx: target.cx, cy: target.cy, ls: tl };
       samples.push(cur);
       continue;
     }
-    // How far the target is, in frames of the current view: past ~0.6 the
+    // How far the aim is, in frames of the current view: past ~0.6 the
     // zoom is held back so the whole move fits on screen.
-    const dist = Math.hypot(target.cx - cur.cx, target.cy - cur.cy);
-    const seen = 0.6 / Math.max(1e-12, 2 ** cur.ls); // world units across 0.6 short sides
+    const dist: number = Math.hypot(target.cx - cur.cx, target.cy - cur.cy);
+    const seen: number = 0.6 / Math.max(1e-12, 2 ** cur.ls); // world units across 0.6 short sides
     const travelLs = dist > seen ? Math.log2(0.6 / dist) : Infinity;
     const goalLs: number = Math.min(tl, travelLs);
-    const kMove = 1 - Math.exp(-step / tau);
+    // While travelling (the aim off the frame) the centre moves faster: the
+    // zoom is already out, so the screen speed is the same — and the zoom,
+    // held back until the aim is near, is not left waiting on a slow approach.
+    const kMove: number = 1 - Math.exp(-step / (dist > seen ? tau * 0.35 : tau));
     // Out faster than in: a camera that lingers zoomed-in while the subject
     // leaves the frame loses it.
     const kZoom: number = 1 - Math.exp(-step / (goalLs < cur.ls ? tau * 0.6 : tau * 1.2));
@@ -263,6 +262,9 @@ export function driftView(view: AtlasView, drift: number, progress: number): Atl
   const p = Math.min(1, Math.max(0, progress));
   return { ...view, scale: clampScale(view.scale * 2 ** (drift * p)) };
 }
+
+/** The whole world, as a box (Mercator's useful band: no poles). */
+export const WORLD_BOX: WorldBox = { x0: 0, y0: 0.13, x1: 1, y1: 0.87 };
 
 /** Boxes of the given indices, unioned. */
 export function boxOf(boxes: readonly WorldBox[], indices: Iterable<number>): WorldBox | null {

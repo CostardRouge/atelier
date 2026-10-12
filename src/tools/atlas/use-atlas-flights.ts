@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { parseSrt } from '../../shared/telemetry/srt-parser';
 import { yieldToMain } from '../../shared/lib/yield-to-main';
 import { flightFromCues, type AtlasFlight } from './atlas-flight';
+import { readAircraft } from './read-aircraft';
 
 /** One telemetry file the Library holds for a selected asset. */
 export interface FlightSource {
   id: string;
   name: string;
   srt: File;
+  /** The clip beside the log, when the Library holds it — only its metadata is read, for the drone's name. */
+  video: File | null;
 }
 
 /**
@@ -37,6 +40,8 @@ export interface AtlasFlights {
   reading: { done: number; total: number } | null;
   /** Names of the logs that held no usable track. */
   empty: string[];
+  /** The aircraft each clip's metadata names, by flight id (absent: no clip, or it names none). */
+  aircraft: ReadonlyMap<string, string>;
 }
 
 /**
@@ -47,6 +52,7 @@ export interface AtlasFlights {
 export function useAtlasFlights(sources: readonly FlightSource[]): AtlasFlights {
   const [byId, setById] = useState<Map<string, AtlasFlight | null>>(() => new Map());
   const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
+  const [aircraft, setAircraft] = useState<ReadonlyMap<string, string>>(() => new Map());
   const key = sources.map((s) => `${s.id}:${s.srt.name}:${s.srt.size}`).join('|');
 
   useEffect(() => {
@@ -80,6 +86,25 @@ export function useAtlasFlights(sources: readonly FlightSource[]): AtlasFlights 
     // `key` names the sources: a new array of the same files reads nothing.
   }, [key]);
 
+  // The drones' names, from the clips' metadata — after the tracks, never before them.
+  const videoKey = sources.map((s) => (s.video ? `${s.id}:${s.video.name}:${s.video.size}` : '')).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const next = new Map<string, string>();
+      for (const source of sources) {
+        if (!source.video) continue;
+        const name = await readAircraft(source.video);
+        if (cancelled) return;
+        if (name) next.set(source.id, name);
+      }
+      if (!cancelled) setAircraft(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [videoKey]);
+
   return useMemo(() => {
     const flights: AtlasFlight[] = [];
     const empty: string[] = [];
@@ -89,6 +114,6 @@ export function useAtlasFlights(sources: readonly FlightSource[]): AtlasFlights 
       if (f) flights.push(f);
       else empty.push(s.name);
     }
-    return { flights, reading, empty };
-  }, [byId, reading, sources]);
+    return { flights, reading, empty, aircraft };
+  }, [byId, reading, sources, aircraft]);
 }
