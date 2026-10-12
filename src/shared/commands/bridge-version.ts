@@ -16,13 +16,22 @@
  * (`mcp-protocol.ts`'s rule).
  */
 
-export const BRIDGE_VERSION = 3;
+export const BRIDGE_VERSION = 4;
 
 /** SHA-256 of `scripts/atelier-mcp.mjs` + `src/shared/commands/mcp-protocol.ts`, line endings normalised. */
-export const BRIDGE_SOURCE_HASH = 'f0ef057b8e0fe59a58eb9111222d0a65d7b88cc35c31593145d6d9369ae6e3a3';
+export const BRIDGE_SOURCE_HASH = 'bc2f63796591533e511a3b37f150eb19db4638b5c364975f3ee4569a9839f9ea';
 
 /** What each version changed, newest first — drawn on `#/agents`. */
 export const BRIDGE_CHANGES: readonly { version: number; date: string; changes: readonly string[] }[] = [
+  {
+    version: 4,
+    date: '2026-10-12',
+    changes: [
+      'The instructions teach the dosing rule: a look is never left at 100 % — it lands at 40 % (a log conversion whole), develop.fitLook measures how far it may go, and the result is looked at before going further.',
+      'They name the purchased packs, now open to the agent by name (never their files), and the saturation develop.measure reads.',
+      'No change to the bridge’s wire: the same four tools, the same files.',
+    ],
+  },
   {
     version: 3,
     date: '2026-10-12',

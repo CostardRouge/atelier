@@ -104,3 +104,15 @@ one-picture sheet blown up four times past its thumbnail, a long label
 pushing its culling mark off the cell. The LUT dosing proposal (a default
 under 100 %, saturation measured, a command that finds the strength, his
 pack opened to the agent) waits on his word.
+
+## 4. Dosing a look (2026-10-12)
+
+His go on the proposal the third round left open. Four commits, then this one:
+
+| # | Delivers | Verified by |
+| --- | --- | --- |
+| L1 | a creative look lands at 40 %, a conversion whole (`look-strength.ts`), in the picker, the select, an upload and `develop.addLook` | specs; the picker driven headless (40 % on a creative look, 100 % on a conversion, the author's number kept once moved) |
+| L2 | `develop.measure` reads saturation (chroma mean, p95, vivid, gamut edge) | specs; a vivid stock measured on a stage at four strengths |
+| L3 | `develop.fitLook` — a ladder and halving over the stage, relative limits, a ceiling | specs with a fake stage; on a stage, ~3 s, 50 % for a vivid stock |
+| L4 | his packs listed and added by reference | specs; an upload in the vault listed, added, fitted |
+| L5 | the bridge's instructions, v4 | gates |

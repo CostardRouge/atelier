@@ -2982,8 +2982,8 @@ is in the app**: [`#/agents`](https://atelier.steeve.website/#/agents) (or
 
 The bridge has its **own number** — v1, v2, v3… — which moves only when the
 bridge itself changes (a new command in the tab needs no new bridge). The
-extension is saved as `atelier-v3.mcpb` today, Claude Desktop sees it as
-version `3.0.0` and offers *Update* over an older one, `node atelier-mcp.mjs
+extension is saved as `atelier-v4.mcpb` today, Claude Desktop sees it as
+version `4.0.0` and offers *Update* over an older one, `node atelier-mcp.mjs
 --version` prints it, the guide and the *Agents* row on `#/sources` say which
 bridge is running and whether a newer one is out, and `atelier_status` tells
 the agent too. A test fails CI when the bridge changes without its number.
@@ -3132,6 +3132,17 @@ time, gear, camera, orientation…) → a preset — judged on the Winnow row ea
 file came from; `develop.autoAll` runs the Auto verbs on many pictures in
 turn; `develop.deliveryPreset` sets the export targets for a use in one word
 (`instagram`, `x`, `web`, `archive`, `print`).
+
+Looks are **dosed**, never left at 100 %: a creative look lands at 40 % —
+in the look picker too, until you move its slider — and a log-to-Rec.709
+conversion lands whole. `develop.measure` reads the picture's saturation
+beside its light (mean and 95th-percentile chroma, the vivid share, colour
+pushed against the gamut's wall), and `develop.fitLook` measures the picture
+with the look off and at rising strengths, then sets the strongest whose
+colour stays within limits of the look-off picture, saying why it stopped.
+Your purchased packs are open to the agent by name — `develop.looks` lists
+them, `develop.addLook {pack, look}` adds one — and their files never leave
+the vault.
 
 **Trips** is driven the same way, from the trip to the delivered files:
 `trips.list`, `trips.create` (a name and two days), `trips.open`, `trips.get`
