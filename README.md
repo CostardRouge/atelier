@@ -3067,7 +3067,11 @@ the tab, from the suite's own paper and ink, so no photograph leaves as a file.
 case, the ordinary ones and the edges (one picture, a full page, long names,
 broken thumbnails, a year with no position, nothing dated), drawn from made-up
 pictures by the same code the commands call, at each width, on paper or at
-night, with the command an agent would send and a Save button.
+night, with the command an agent would send and a Save button. And while an
+agent is connected, the **Agent** pill in the top bar opens **What Claude
+saw**: every picture this tab sent it during the session — the real ones, on
+your own photographs — with the command that asked for it. Kept in memory
+only, gone with the tab.
 
 What a thumbnail says is one primitive every sorting command reads
 (`winnow.analyse`: sharpness, exposure, colour, a hash — a sample, never the
