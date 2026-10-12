@@ -40,19 +40,20 @@ describe('luminanceHistogram', () => {
 
   it('reads nothing into an empty sample', () => {
     const h = luminanceHistogram([], 4);
-    expect(h).toEqual({ bins: [0, 0, 0, 0], red: [0, 0, 0, 0], green: [0, 0, 0, 0], blue: [0, 0, 0, 0], total: 0, clippedHighlights: 0, crushedShadows: 0 });
+    expect(h).toMatchObject({ bins: [0, 0, 0, 0], red: [0, 0, 0, 0], green: [0, 0, 0, 0], blue: [0, 0, 0, 0], total: 0, clippedHighlights: 0, crushedShadows: 0, chromaMean: 0, gamutEdge: 0 });
+    expect(histogramReading(h).saturation).toEqual({ mean: 0, p95: 0, vivid: 0, gamutEdge: 0 });
   });
 });
 
 describe('histogramShape', () => {
   it('scales on the tallest inner bin, so a spike at white does not flatten the rest', () => {
-    const h = { bins: [0, 4, 8, 2, 400], red: [], green: [], blue: [], total: 414, clippedHighlights: 0.9, crushedShadows: 0 };
+    const h = { bins: [0, 4, 8, 2, 400], red: [], green: [], blue: [], total: 414, clippedHighlights: 0.9, crushedShadows: 0, chroma: [], chromaMean: 0, gamutEdge: 0 };
     expect(histogramShape(h)).toEqual([0, 0.5, 1, 0.25, 1]);
   });
 
   it('draws the end bins when they are all there is, and nothing for nothing', () => {
-    expect(histogramShape({ bins: [5, 0, 0, 10], red: [], green: [], blue: [], total: 15, clippedHighlights: 0, crushedShadows: 0 })).toEqual([0.5, 0, 0, 1]);
-    expect(histogramShape({ bins: [0, 0, 0], red: [], green: [], blue: [], total: 0, clippedHighlights: 0, crushedShadows: 0 })).toEqual([0, 0, 0]);
+    expect(histogramShape({ bins: [5, 0, 0, 10], red: [], green: [], blue: [], total: 15, clippedHighlights: 0, crushedShadows: 0, chroma: [], chromaMean: 0, gamutEdge: 0 })).toEqual([0.5, 0, 0, 1]);
+    expect(histogramShape({ bins: [0, 0, 0], red: [], green: [], blue: [], total: 0, clippedHighlights: 0, crushedShadows: 0, chroma: [], chromaMean: 0, gamutEdge: 0 })).toEqual([0, 0, 0]);
   });
 });
 
@@ -105,5 +106,30 @@ describe('histogramReading', () => {
     expect(r.p99).toBeGreaterThan(240);
     expect(r.mean).toBeGreaterThan(120);
     expect(r.mean).toBeLessThan(136);
+  });
+});
+
+describe('the saturation', () => {
+  it('reads a grey as no colour and a primary as all of it', () => {
+    expect(histogramReading(luminanceHistogram(flat(10, 128, 128, 128))).saturation).toEqual({ mean: 0, p95: 0.05, vivid: 0, gamutEdge: 0 });
+    const red = histogramReading(luminanceHistogram(flat(10, 255, 0, 0))).saturation;
+    expect(red).toEqual({ mean: 1, p95: 1, vivid: 1, gamutEdge: 1 });
+  });
+
+  it('rises as a picture is pushed, and counts a colour against the wall apart from white', () => {
+    const soft = histogramReading(luminanceHistogram([...flat(80, 150, 120, 100), ...flat(20, 200, 200, 200)])).saturation;
+    const pushed = histogramReading(luminanceHistogram([...flat(80, 255, 110, 40), ...flat(20, 255, 255, 255)])).saturation;
+    expect(pushed.mean).toBeGreaterThan(soft.mean);
+    expect(pushed.vivid).toBeCloseTo(0.8);
+    expect(soft.vivid).toBe(0);
+    // White is clipped highlights, not colour at the gamut's edge; the orange is.
+    expect(pushed.gamutEdge).toBeCloseTo(0.8);
+    expect(soft.gamutEdge).toBe(0);
+  });
+
+  it('puts the 95th percentile where the colourful tail starts', () => {
+    const r = histogramReading(luminanceHistogram([...flat(90, 120, 120, 120), ...flat(10, 220, 60, 60)])).saturation;
+    expect(r.p95).toBeCloseTo(0.65, 2);
+    expect(r.vivid).toBeCloseTo(0.1);
   });
 });

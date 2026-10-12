@@ -1805,7 +1805,7 @@ export default function PictureWorkbench({
       id: 'develop.measure',
       title: 'Measure the picture',
       description:
-        'The open picture’s histogram as numbers, graded and uncropped (what the strip draws): mean, 1st percentile, median and 99th percentile luminance (0–255), each channel’s mean (a cast is one channel standing apart), and the share of pixels clipped to white and crushed to black. Waits for the stage to catch up with the last write — read it after develop.set to check a move.',
+        'The open picture’s histogram as numbers, graded and uncropped (what the strip draws): mean, 1st percentile, median and 99th percentile luminance (0–255), each channel’s mean (a cast is one channel standing apart), the share of pixels clipped to white and crushed to black, and the SATURATION — mean and 95th-percentile chroma (0 grey … 1 a primary), the share of vivid pixels (chroma ≥ 0.5) and of colourful pixels with a channel at 0 or 255 (gamutEdge: colour flattened against the wall). A look that oversaturates raises them: compare with the look off. Waits for the stage to catch up with the last write — read it after develop.set to check a move.',
       available: () => (looking.current.source ? true : 'the open picture is still decoding'),
       run: async () => {
         await untilSteady(() => looking.current.delivered);

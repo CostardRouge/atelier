@@ -23,6 +23,12 @@ import { clipOf } from '../render/clipping';
 export const HISTOGRAM_BINS = 64;
 /** The long edge the picture is shrunk to before it is read. */
 export const HISTOGRAM_SAMPLE_EDGE = 160;
+/** How many bins the chroma is counted in, 0 (grey) to 1 (a channel at 255, another at 0). */
+export const CHROMA_BINS = 20;
+/** A pixel at least this colourful reads as VIVID — what a look pushed too far fills a picture with. */
+export const VIVID_CHROMA = 0.5;
+/** A colourful pixel (chroma at least this) with a channel at 0 or 255 sits against the gamut's wall. */
+const EDGE_CHROMA = 0.3;
 
 export interface Histogram {
   /** Pixels per luminance bin, dark to light. */
@@ -41,6 +47,20 @@ export interface Histogram {
   clippedHighlights: number;
   /** Share (0..1) of pixels with every channel at black: shadows crushed. */
   crushedShadows: number;
+  /**
+   * Pixels per bin of CHROMA — (max − min) / 255 of the encoded channels, the
+   * hexcone's own measure of colour: 0 for any grey, 1 for a primary. What a
+   * look's saturation is read by (`develop.measure`, `fit-strength.ts`).
+   */
+  chroma: number[];
+  /** The mean chroma, 0..1. */
+  chromaMean: number;
+  /**
+   * Share (0..1) of COLOURFUL pixels with a channel at 0 or 255: colour pushed
+   * against the gamut's wall, where hues flatten into blocks — a clip that
+   * `clippedHighlights` (all channels white) never counts.
+   */
+  gamutEdge: number;
 }
 
 /**
@@ -57,6 +77,9 @@ export function luminanceHistogram(rgba: ArrayLike<number>, binCount = HISTOGRAM
   const blue = new Array<number>(count).fill(0);
   const binOf = (v: number) => Math.min(count - 1, Math.max(0, Math.floor((v * count) / 256)));
   const pixels = Math.floor(rgba.length / 4);
+  const chroma = new Array<number>(CHROMA_BINS).fill(0);
+  let chromaSum = 0;
+  let edge = 0;
   let highs = 0;
   let lows = 0;
   for (let i = 0; i < pixels; i++) {
@@ -72,6 +95,12 @@ export function luminanceHistogram(rgba: ArrayLike<number>, binCount = HISTOGRAM
     const clip = clipOf(r, g, b);
     if (clip === 'white') highs += 1;
     else if (clip === 'black') lows += 1;
+    const hi = Math.max(r, g, b);
+    const lo = Math.min(r, g, b);
+    const c = (hi - lo) / 255;
+    chromaSum += c;
+    chroma[Math.min(CHROMA_BINS - 1, Math.floor(c * CHROMA_BINS))] += 1;
+    if (c >= EDGE_CHROMA && (hi >= 255 || lo <= 0)) edge += 1;
   }
   return {
     bins,
@@ -81,6 +110,9 @@ export function luminanceHistogram(rgba: ArrayLike<number>, binCount = HISTOGRAM
     total: pixels,
     clippedHighlights: pixels ? highs / pixels : 0,
     crushedShadows: pixels ? lows / pixels : 0,
+    chroma,
+    chromaMean: pixels ? chromaSum / pixels : 0,
+    gamutEdge: pixels ? edge / pixels : 0,
   };
 }
 
@@ -134,6 +166,14 @@ export interface HistogramReading {
   /** Shares 0..1, as the strip's clip words count them. */
   clippedHighlights: number;
   crushedShadows: number;
+  /**
+   * How COLOURFUL the picture reads, on the hexcone's chroma (0 grey … 1 a
+   * primary): the mean, the level 95 % of the pixels sit under, the share at
+   * least `VIVID_CHROMA`, and the share of colourful pixels with a channel
+   * against 0 or 255. A look that oversaturates raises all four; compare
+   * them with the look off (`develop.fitLook` does).
+   */
+  saturation: { mean: number; p95: number; vivid: number; gamutEdge: number };
 }
 
 function binMean(bins: readonly number[], total: number): number {
@@ -168,5 +208,25 @@ export function histogramReading(h: Histogram): HistogramReading {
     blue: r1(binMean(h.blue, h.total)),
     clippedHighlights: share(h.clippedHighlights),
     crushedShadows: share(h.crushedShadows),
+    saturation: saturationOf(h),
   };
+}
+
+/** The chroma half of a reading, rounded to what twenty bins can tell. */
+export function saturationOf(h: Pick<Histogram, 'chroma' | 'chromaMean' | 'gamutEdge' | 'total'>): HistogramReading['saturation'] {
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+  const bins = h.chroma ?? [];
+  const n = bins.length || 1;
+  let seen = 0;
+  let p95 = 1;
+  for (let i = 0; i < bins.length; i++) {
+    seen += bins[i];
+    if (seen >= 0.95 * h.total) {
+      p95 = (i + 1) / n;
+      break;
+    }
+  }
+  const vividFrom = Math.ceil(VIVID_CHROMA * n);
+  const vivid = h.total > 0 ? bins.slice(vividFrom).reduce((a, b) => a + b, 0) / h.total : 0;
+  return { mean: r3(h.chromaMean ?? 0), p95: h.total > 0 ? r3(p95) : 0, vivid: r3(vivid), gamutEdge: r3(h.gamutEdge ?? 0) };
 }
