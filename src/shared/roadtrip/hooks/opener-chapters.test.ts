@@ -19,6 +19,12 @@ describe('opener chapters', () => {
     expect(chapterSummary(road, driveOptions({ path: 'straight', ahead: 'hidden', trail: false }))).toBe('Straight · nothing ahead');
   });
 
+  it('leaves out a fact that does not hold — no voice named for a silent tick', () => {
+    const sound = DRIVE_CHAPTERS.find((c) => c.id === 'sound')!;
+    expect(chapterSummary(sound, driveOptions({ sound: false, kit: 'ratchet' }))).toBe('Silent');
+    expect(chapterSummary(sound, driveOptions({ sound: true, kit: 'ratchet' }))).toBe('Tick · Ratchet');
+  });
+
   it('marks a chapter that departs from the defaults, a missing key reading as its default', () => {
     expect(chapterChanged(road, {}, DRIVE_DEFAULTS as never)).toBe(false);
     expect(chapterChanged(road, { path: 'curved' }, DRIVE_DEFAULTS as never)).toBe(false);

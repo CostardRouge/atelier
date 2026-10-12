@@ -20,6 +20,8 @@ export interface ChapterFact {
   key: string;
   /** The words for the value, or null to say nothing (an off switch, a default). */
   say: (value: unknown) => string | null;
+  /** Said only when this holds of the options — a voice is not named while the sound is off. */
+  when?: (read: Readonly<Record<string, unknown>>) => boolean;
 }
 
 export interface OpenerChapter {
@@ -80,7 +82,7 @@ export function resetChapter(chapter: OpenerChapter, options: HookOptions, defau
 export function chapterSummary(chapter: OpenerChapter, read: object): string {
   const values = read as Readonly<Record<string, unknown>>;
   return (chapter.facts ?? [])
-    .map((fact) => fact.say(values[fact.key]))
+    .map((fact) => (fact.when && !fact.when(values) ? null : fact.say(values[fact.key])))
     .filter((s): s is string => !!s)
     .join(' · ');
 }

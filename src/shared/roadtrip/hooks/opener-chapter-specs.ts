@@ -11,6 +11,7 @@ import { EASINGS, type HookEasing } from './easing';
 import { TICK_KITS, type TickKit } from './tick-kits';
 import { sourceStops } from './stop-source';
 import { mapOptions } from './map-plan';
+import { SHOWCASE_RECIPES } from './showcase-plan';
 import { say, type OpenerChapter } from './opener-chapters';
 
 const kit = (v: unknown) => (typeof v === 'string' && v in TICK_KITS ? TICK_KITS[v as TickKit].label : null);
@@ -30,7 +31,7 @@ const CAMERA_FACTS = [
 ];
 const SOUND_FACTS = [
   { key: 'sound', say: (v: unknown) => (v === true ? 'Tick' : v === false ? 'Silent' : null) },
-  { key: 'kit', say: kit },
+  { key: 'kit', say: kit, when: (read: Readonly<Record<string, unknown>>) => read.sound !== false },
 ];
 const SOUND_WORDS = ['Tick', 'Sound', 'Voice', 'Ratchet', 'Woodblock', 'Typewriter', 'Shutter', 'Pitch', 'Volume', 'Mix in', 'Audio'];
 const CARD_KEYS = [
@@ -286,6 +287,7 @@ export const SHOWCASE_CHAPTERS: readonly OpenerChapter[] = [
     title: 'Start from',
     keys: [],
     words: ['Start from', 'Recipe', 'Preset'],
+    facts: [{ key: 'place', say: () => `${SHOWCASE_RECIPES.length} ready-made scenes` }],
   },
   {
     id: 'place',
