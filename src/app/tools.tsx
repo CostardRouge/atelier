@@ -20,6 +20,7 @@ import type { AssetKind } from '../shared/library/assets';
  * so a menu can fetch the chunk on hover, before the click.
  */
 const LOAD = {
+  atlas: () => import('../tools/atlas/AtlasTool'),
   compare: () => import('../tools/compare/CompareTool'),
   composer: () => import('../tools/composer/ComposerTool'),
   develop: () => import('../tools/develop/DevelopTool'),
@@ -31,6 +32,7 @@ const LOAD = {
   studio: () => import('../tools/studio/StudioTool'),
   telemetry: () => import('../tools/telemetry/TelemetryTool'),
 };
+const AtlasTool = lazy(LOAD.atlas);
 const CompareTool = lazy(LOAD.compare);
 const ComposerTool = lazy(LOAD.composer);
 const DevelopTool = lazy(LOAD.develop);
@@ -152,6 +154,18 @@ export const TOOLS: Tool[] = [
       'Trace a DJI clip’s GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.',
     Component: MapTool,
     preload: LOAD.map,
+    accepts: ['video+telemetry', 'telemetry'],
+  },
+  {
+    id: 'atlas',
+    group: 'instrument',
+    path: '/atlas',
+    label: 'Flight Atlas',
+    subtitle: 'Every flight · experimental',
+    blurb:
+      'Draw every drone flight you select on one map and animate them together — staggered, in relay, on the hour flown or day by day — with trails, glows and a clock. Only the GPS track of each log is read.',
+    Component: AtlasTool,
+    preload: LOAD.atlas,
     accepts: ['video+telemetry', 'telemetry'],
   },
   {

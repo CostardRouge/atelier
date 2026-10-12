@@ -24,6 +24,10 @@ Today it ships ten tools, converging into a few editors:
   a DJI clip and export an MP4 with the telemetry burned in.
 - **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
   walk the aircraft along it (the base map is opt-in — see below).
+- **Flight Atlas** *(experimental)* — draw every drone flight you select on one
+  map and animate them together, the way the Perth bus map draws a city's day:
+  a faint network of every route, comets for what is in the air, a clock and a
+  count in the corner; export it as an MP4 or a PNG.
 - **Composer** — combine a clip, its flight map and a draggable telemetry
   readout into one framed composition (aspect, layout, LUT), preview it live,
   and export it to MP4.
@@ -40,8 +44,8 @@ Today it ships ten tools, converging into a few editors:
 > *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The **base map** under a flight path, in the Flight Map and the Composer,
->   under the map Trips' openers pick their stops on, and under a trip's map
+> - The **base map** under a flight path, in the Flight Map, the Composer and
+>   the Flight Atlas, under the map Trips' openers pick their stops on, and under a trip's map
 >   view (whose own coastline ships with the app): turning it on
 >   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
 >   tile server. The flight path, the stops, the legs and the towns always draw locally;
@@ -3225,6 +3229,50 @@ MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
 CSS): it stays out of the main bundle and downloads only when you open this
 tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
 coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
+
+## Flight Atlas tool (experimental)
+
+Every DJI flight selected in the Library — a clip with its `.srt`, or a loose
+`.srt` log — drawn together on one map and animated. Only the **GPS track** of
+each log is read (four fixes a second, timed by the log's own wall clock, so a
+time-lapse or a slow-motion clip runs at its real pace); the videos are never
+opened. *Add .srt files* / *A folder* in the panel feed the Library directly.
+
+- **Flights and places.** Take-offs within 4 km of each other form a *place*,
+  named offline from the shipped city index. A place chip shows or hides its
+  flights (double-click: that place alone); hovering a flight singles it out.
+- **Looks** (Transit, Aurora, Ember, Neon, Papier, Blueprint, Golden hour,
+  Ink, plus *Surprise me*) set colours, trails, drones and ground at once;
+  every dial stays editable.
+- **Choreography.** *Together*, *Cascade* (staggered launches), *Relay* (each
+  takes off as the last lands, with an overlap), *Day clock* (every flight on
+  one day at the hour it was flown, slowed against the clock) or *Calendar*
+  (in the order flown, the idle between flights cut to a cap while the clock
+  races through it). Dials: total length, stagger, overlap, *equalize* (real
+  lengths ↔ all alike), seeded jitter, order, a tempo curve inside each
+  flight, a hold at the end. Seven motion presets combine with any look.
+- **Trails and drones.** Comet tail length, taper, width, afterglow and its
+  fade, the ghost network, smoothing; drone size, pulse, halo, take-off and
+  landing ripples, and *altitude* drawn as height (with a ground shadow and a
+  thread) — tilt the camera to read it as relief.
+- **Colour** by one colour, flight, place, altitude, speed, date or hour of
+  day, over nine palettes, with glow and additive light.
+- **Map.** A ground colour, the shipped coastline (filled or as a coast), a
+  grid of lines or dots, a vignette, place names — and, only if switched on in
+  this screen, OpenStreetMap tiles toned *night*, *grey*, *sepia* or
+  *natural*, credited in every frame they appear in (see "The network
+  exceptions"; the switch is off every time the atlas opens).
+- **Camera.** Every flight, one place, a *follow* camera that eases to what is
+  in the air (and pulls out to travel between places), or free — drag and
+  zoom the map. A slow drift, a bearing and a tilt on top.
+- **Overlay text.** A clock (time of day, date, elapsed), the count of what
+  is flying, the activity curve, a title, a subtitle, the data credit; corner,
+  font, size and colours.
+- **Export.** The preview is drawn by the export's own painter: an MP4
+  (H.264, no sound, 720 to 4K, 30 or 60 fps, five frame shapes), the frame on
+  screen as a PNG, or a *poster* with every route drawn whole.
+
+The dials are remembered in this browser; nothing here is a document.
 
 ## Composer tool
 
