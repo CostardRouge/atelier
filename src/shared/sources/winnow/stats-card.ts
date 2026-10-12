@@ -1,5 +1,6 @@
 import type { ImageResult } from '../../commands/registry';
 import { imageResult } from '../../commands/image-result';
+import { SCREEN_LIGHT, SCREEN_MONO, screenFonts, type ScreenPalette } from '../../commands/screens/paper';
 import { spanWords, topOf, type LibraryStats, WEEKDAYS } from './stats';
 
 /**
@@ -7,17 +8,12 @@ import { spanWords, topOf, type LibraryStats, WEEKDAYS } from './stats';
  * ink and its one vermilion: the headline numbers, then one bar row per
  * question — with what, which body, which hour, which light, which weekday,
  * which country. Drawn from `libraryStats` alone, so the card and the JSON
- * can never disagree.
+ * can never disagree. One of the agent's SCREENS (`screens/registry.ts`):
+ * the bench in `#/agents` draws it through this very function.
  *
  * DOM: a canvas.
  */
 
-const PAPER = '#f4efe6';
-const INK = '#1d1a16';
-const MUTED = '#6f6a62';
-const RULE = '#ddd5c7';
-const ACCENT = '#c4381f';
-const MONO = 'ui-monospace, Menlo, monospace';
 const W = 1200;
 const PAD = 56;
 
@@ -26,7 +22,15 @@ interface Section {
   rows: [string, number][];
 }
 
-export async function statsCardImage(stats: LibraryStats, title: string, people: readonly [string, number][] = []): Promise<ImageResult> {
+export async function statsCardImage(
+  stats: LibraryStats,
+  title: string,
+  people: readonly [string, number][] = [],
+  palette: ScreenPalette = SCREEN_LIGHT,
+): Promise<ImageResult> {
+  await screenFonts();
+  const { paper: PAPER, ink: INK, muted: MUTED, line: RULE, accent: ACCENT } = palette;
+  const MONO = SCREEN_MONO;
   const sections: Section[] = [
     { title: 'With what', rows: topOf(stats.byGear, 4) },
     { title: 'Which body', rows: topOf(stats.byCamera, 5) },
