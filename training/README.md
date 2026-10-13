@@ -12,9 +12,10 @@ Rien n'est envoyé nulle part : pas de service en ligne, pas de compte. Les
 photos, le jeu FiveK et les modèles entraînés restent dans `training/data/` et
 `training/runs/`, que git ignore.
 
-> **État actuel : M1.** Les outils pour installer, vérifier la machine et
-> préparer les données sont là. L'entraînement lui-même arrive en M2 — voir
-> [`PLAN.md`](PLAN.md).
+> **État actuel : M2.** Installer, vérifier la machine, préparer les données,
+> **entraîner** le modèle, le mesurer et exporter un `.cube` : tout se fait
+> depuis le Terminal. Le tableau de bord (courbes, grilles d'images, boutons)
+> arrive en M3 — voir [`PLAN.md`](PLAN.md).
 
 ---
 
@@ -146,7 +147,10 @@ ignorée pour l'instant : aligner ces paires, c'est M5).
 | `make validate` | vérifie tes groupes de paires |
 | `make ingest` | prépare les paires pour l'entraînement (redimensionnées, en cache) |
 | `uv run atelier-train init-group <dossier>` | écrit un `manifest.toml` deviné |
-| `uv run atelier-train train / eval / export` | arrivent en M2 |
+| `make bench` | chronomètre un pas d'entraînement sur ce Mac et estime la durée d'un run |
+| `make train` | entraîne le modèle sur les paires préparées |
+| `make eval` | mesure le dernier run (PSNR, ΔE) et dessine les grilles origine \| retouche \| modèle |
+| `make export` | écrit le look appris en `.cube` |
 | `make test` | lance les tests |
 
 `make ingest` lit les sources de `ingest.sources` (FiveK et tes paires par
@@ -159,7 +163,48 @@ désactiver ; `ingest.workers` dans la config). Le résultat va dans
 (`preview.jpg`). Une paire déjà préparée n'est pas refaite : on peut
 interrompre et relancer.
 
-## 6. Les réglages
+## 6. Entraîner, mesurer, exporter
+
+Le modèle (Zeng et al. 2020) est petit : un réseau regarde une **miniature**
+de la photo et choisit comment mélanger quelques LUT 3D apprises ; la LUT
+obtenue s'applique à la photo entière, exactement comme un `.cube` dans
+Atelier. Ce qu'il apprend sort donc en `.cube`, sans rien d'autre à installer
+côté Atelier.
+
+```bash
+make bench                       # combien de temps prendra un run sur ce Mac ?
+make train                       # entraîne sur ingest.sources (FiveK + tes paires)
+uv run atelier-train train --source fivek --name fivek-c   # une source, un nom de run
+uv run atelier-train train --resume runs/<dossier>          # reprend un run interrompu
+uv run atelier-train train --init runs/<run FiveK> --source pairs --name moi   # affinage (M5)
+make eval                        # le dernier run : PSNR, ΔE2000, grilles d'images
+make export                      # runs/<dossier>/style.cube — le look moyen appris
+uv run atelier-train export --image photo.jpg   # la LUT que le modèle prédit pour UNE photo
+```
+
+Chaque run est un dossier `runs/<date>-<nom>/` :
+
+- `config.toml` — tous les réglages du run, figés ;
+- `metrics.jsonl` — une ligne par époque : perte, PSNR et ΔE de validation ;
+- `best.pt` et `last.pt` — les poids (le meilleur en validation, le dernier) ;
+- `split.json` — quelles paires ont servi à apprendre, lesquelles à vérifier
+  (**des groupes entiers** : deux retouches d'un même original ne sont jamais
+  des deux côtés) ;
+- `eval/<split>.json` et `eval/grids/*.jpg` — les mesures et les grilles,
+  les pires ΔE en premier ;
+- `style.cube` — le look moyen, à déposer dans Atelier (« Upload .cube », où
+  un look créatif se pose à 40 % par défaut).
+
+**Ce que mesurent les chiffres** : le PSNR (en dB, plus c'est haut mieux
+c'est ; au-delà de 25 dB sur FiveK, le modèle est au niveau des publications)
+et le ΔE2000, l'écart de couleur tel que l'œil le voit (≈ 1 : à peine
+perceptible ; 2 à 3 : visible). Un ΔE moyen qui descend, c'est le modèle qui
+se rapproche de tes retouches.
+
+Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
+dernière époque sauvegardée.
+
+## 7. Les réglages
 
 Tous les paramètres sont dans `configs/default.toml`, commentés. Pour un essai :
 
@@ -172,8 +217,8 @@ uv run atelier-train ingest --set ingest.long_edge=768   # un seul réglage, pon
 Les chemins peuvent pointer ailleurs, par exemple un disque externe :
 `--set paths.fivek=/Volumes/Photos/fivek`.
 
-## 7. Ce qui reste privé
+## 8. Ce qui reste privé
 
 `training/.gitignore` exclut `data/`, `runs/`, les checkpoints et `.venv/`.
-FiveK, tes photos et tes modèles ne partent jamais dans git. La suite (M2 à M6),
+FiveK, tes photos et tes modèles ne partent jamais dans git. La suite (M3 à M6),
 c'est [`PLAN.md`](PLAN.md).

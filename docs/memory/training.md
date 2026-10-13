@@ -53,6 +53,33 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   few seconds. `training/` is excluded from ESLint; TS and Vitest only read
   `src/`. Never add a GPU or a FiveK job.
 
+## M2 — the model (2026-10-13)
+
+- **The trilinear lookup is written with `gather`, never `grid_sample`**: a
+  3-D `grid_sample` has no MPS kernel, and gathers run the same on CPU, MPS and
+  CUDA — and ARE `lut.apply` to the bit (`test_model.py` holds them equal), so
+  what the model applies in training is what Atelier applies to the `.cube`.
+- **The split is by GROUP** (`data.split`, a seeded SHA-256 of
+  `source/group`): two edits of one original never sit on both sides. The
+  run writes `split.json` so an eval reads the same sides.
+- **A run folder is self-describing**: `config.toml` carries the resolved
+  config AND the sources trained on (`[train] sources`), so `eval` and
+  `export` never need them again; `metrics.jsonl` one line per epoch;
+  checkpoints written through a rename. `Run.sources` is the one reader.
+- **The CNN's depth follows the thumbnail**: five stride-2 stages at 256 px,
+  fewer below (`log2(thumb) − 1`), because `InstanceNorm2d` refuses a 1 × 1
+  map in training and out of it (no running stats). The model starts on the
+  identity LUT alone (head bias `[1, 0, …]`, basis LUT 0 = identity), so an
+  untrained model leaves the picture as it came.
+- **The synthetic set is unlearnable unless it has ONE style**: with several
+  random transforms per group, one input has several answers and the e2e
+  training test plateaued at fit 0.004. `generate(style=…)` /
+  `synthetic.style` make every edit one transform — the training oracle; the
+  default stays random, as the readers' exercise.
+- Thresholds measured on CPU for the e2e test: identity PSNR on teal-orange
+  ≈ 33.6 dB, the exported mean cube ≈ 40 dB; `fit` falls by > 10× in 60
+  tiny epochs. Not a quality bar for real data.
+
 ## Traps
 
 - Pillow reads a 48-bit PNG as 8 bits per channel: 16-bit material goes

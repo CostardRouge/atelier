@@ -30,9 +30,24 @@ read by Atelier's own `src/shared/lib/cube-parser.ts`; the ingest cache
 Not verified here: `make setup` on macOS (MPS wheel, MLX, rawpy wheel), a real
 FiveK folder, a real RAW decode, `doctor` on his Mac.
 
-## M2 — the image-adaptive 3D LUT model, training, evaluation, `.cube` export
+## M2 — the image-adaptive 3D LUT model, training, evaluation, `.cube` export — BUILT (2026-10-13)
 
-**Delivers.**
+`model/lut3d.py` (the CNN, the basis LUTs, a gather-based trilinear `apply_lut`
+held equal to `lut.apply`, the two regularisers), `data.py` (the index as a
+torch dataset, the split by GROUP), `train.py` (runs under `runs/<date>-<name>/`
+with `config.toml`, `metrics.jsonl`, `best.pt`/`last.pt`, `split.json`;
+`--resume`, `--init`; `bench`), `evaluate.py` (`eval/<split>.json`, the grids
+worst-ΔE first), `export.py` (`style.cube`, `--image`), `metrics.py` (Lab,
+ΔE76, ΔE2000 against Sharma's pairs, PSNR). The end-to-end test trains on CPU
+on a synthetic set made with one `style` and recovers it: val PSNR ≈ 33 dB,
+ΔE2000 ≈ 1, the exported cube at 40 dB on a fresh picture against 33.6 for the
+identity. CI: a second job with the torch CPU extra.
+
+Not verified here: MPS at all (speed, `gather` on a 5-D tensor, the
+`InstanceNorm` kernels), the paper's ~25 dB on real FiveK, batch sizes above
+8 on his memory. Run `make bench` first on the Mac.
+
+**Delivered as planned:**
 - `model/lut3d.py`: Zeng et al. 2020 (TPAMI, "Learning Image-adaptive 3D
   Lookup Tables…"): a tiny CNN on a 256 px thumbnail of the input predicts
   weights over `model.basis` (3) learned 33³ basis LUTs; the output is the
