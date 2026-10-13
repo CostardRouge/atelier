@@ -141,7 +141,12 @@ grabs for the trim handles and curve points. Nothing changes under a mouse.
 - Left as native ranges on purpose: the PLAYHEADS (Develop's transport, the
   overlay page, LUT Studio, Compare, the making-of preview, the Composer's
   seek) — a position in a clip, not a setting.
-- Next: the remaining raw setting ranges (look strength in the gallery and
-  the LUT picker, a layer's opacity, Deduce's grain and fine settings, the
-  road settings, the Composer's toolbar) and a lint rule; then the other
-  small targets of §4.
+- The raw SETTING ranges are bars too: the look's strength in the gallery
+  and the LUT picker (filled from 0, back to 100 %), a Develop layer's
+  opacity, Deduce's grain and fine settings, the road's detail, look-ahead
+  and turn radius, the Composer's split, inset, map zoom and overlay
+  numbers — each in a `flex-[1_1_12rem]` cell so a row of them wraps.
+- `eslint.config.js` refuses a raw `type="range"` unless its element says
+  `data-playhead` (the six seek bars); the bar's own hidden input is the one
+  disabled line.
+- Next: the other small targets of §4, after the sliders as he asked.

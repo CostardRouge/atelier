@@ -59,6 +59,22 @@ const tokenRules = [
  */
 const VIEWPORT_HEIGHT = /\b(?:min-|max-)?h-(?:screen|dvh|svh|lvh)\b|\[(?![^\]]*var\(--app-h)[^\]]*\d(?:d|s|l)?vh\b/;
 
+/**
+ * A setting SLIDER is `SliderBar` (`shared/ui/SliderBar.tsx`, 2026-10-13,
+ * `docs/slider-touch.md`): its row IS the bar, full width, 44 px under a
+ * finger. A raw `<input type="range">` was 16 px to grab and shared its line
+ * with whatever stood beside it — the 35 px *On screen* slider. A PLAYHEAD (a
+ * position in a clip, beside ▶) is not a setting and stays native: it says
+ * so with `data-playhead`.
+ */
+const sliderRules = [
+  {
+    selector:
+      "JSXOpeningElement:not(:has(JSXAttribute[name.name='data-playhead'])) > JSXAttribute[name.name='type'][value.value='range']",
+    message: 'A setting slider is a SliderBar / SliderRow (shared/ui), never a raw range; a playhead says data-playhead.',
+  },
+];
+
 const layoutRules = [
   {
     selector: "CallExpression[callee.property.name='scrollIntoView']",
@@ -92,7 +108,7 @@ export default tseslint.config(
       ecmaVersion: 2020,
     },
     rules: {
-      'no-restricted-syntax': ['error', ...tokenRules, ...layoutRules],
+      'no-restricted-syntax': ['error', ...tokenRules, ...layoutRules, ...sliderRules],
     },
   },
 );

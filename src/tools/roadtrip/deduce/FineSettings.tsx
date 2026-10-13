@@ -1,5 +1,6 @@
 import Button from '../../../shared/ui/Button';
 import Segmented from '../../../shared/ui/Segmented';
+import SliderBar from '../../../shared/ui/SliderBar';
 import { legend, note } from './pieces';
 import { settingsChanged, type DeduceSettings } from './settings';
 import type { DeduceActions } from './context';
@@ -36,16 +37,10 @@ function Range({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="flex items-baseline justify-between gap-3">
-        <span className={legend}>{label}</span>
-        <span className="font-mono text-xs text-accent-ink tabular-nums">
-          {value} {unit}
-        </span>
-      </span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-accent" />
+    <div className="flex flex-col gap-1">
+      <SliderBar label={label} min={min} max={max} step={step} value={value} onChange={onChange} printed={`${value} ${unit}`} />
       <span className={note}>{hint}</span>
-    </label>
+    </div>
   );
 }
 

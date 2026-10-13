@@ -49,6 +49,7 @@ export default function DevelopTransport({
       <span className="flex-none font-mono text-2xs tabular-nums text-muted">{formatTimecode(time)}</span>
       <input
         type="range"
+        data-playhead
         min={0}
         max={duration > 0 ? duration : 0}
         step={0.01}

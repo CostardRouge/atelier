@@ -204,6 +204,7 @@ export default function TimelapseSheet({
               </Button>
               <input
                 type="range"
+                data-playhead
                 min={0}
                 max={Math.max(0.1, script.seconds)}
                 step={0.05}

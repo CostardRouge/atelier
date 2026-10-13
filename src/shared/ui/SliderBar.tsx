@@ -249,8 +249,11 @@ export default function SliderBar({
         className="absolute inset-y-0 w-0.5 bg-accent"
         style={{ left: `clamp(0px, calc(${edge * 100}% - 1px), calc(100% - 2px))` }}
       />
+      {/* The one raw range the lint allows: it is the bar's keyboard and its
+          screen-reader half, never seen and never pointed at. */}
       <input
         ref={inputRef}
+        // eslint-disable-next-line no-restricted-syntax
         type="range"
         min={min}
         max={max}
@@ -265,10 +268,9 @@ export default function SliderBar({
         className="absolute inset-0 w-full h-full m-0 opacity-0 pointer-events-none"
       />
       <span className="relative flex items-center h-full gap-1.5 pl-3 pr-2.5 pointer-events-none">
-        <span
-          aria-hidden="true"
-          className={`flex-none w-1.5 h-1.5 rounded-full bg-accent transition-opacity ${departed ? 'opacity-100' : 'opacity-0'} ${reset === undefined ? 'hidden' : ''}`}
-        />
+        {/* In the bar's own left padding, so every name starts at the same x
+            whether or not its row can depart from a default. */}
+        {departed && <span aria-hidden="true" className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
         {lead}
         <span className={`min-w-0 truncate text-sm leading-none ${departed ? 'text-ink font-medium' : 'text-ink-soft'}`}>{label}</span>
         {(after || (departed && reset !== undefined)) && (
