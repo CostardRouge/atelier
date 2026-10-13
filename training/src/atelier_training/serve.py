@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -218,17 +219,38 @@ def create_app(config: Config | None = None):
             raise HTTPException(404)
         return FileResponse(path, media_type="text/plain", filename=file)
 
-    @app.get("/api/pairs")
-    def pairs(limit: int = 48, source: str | None = None) -> list[dict[str, Any]]:
+    def _index_entries() -> Iterator[dict[str, Any]]:
         index = config.paths.cache / "index.jsonl"
         if not index.is_file():
-            return []
-        out = []
+            return
         for line in index.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            e = json.loads(line)
+            if line.strip():
+                yield json.loads(line)
+
+    def _aligned(entry: dict[str, Any]) -> bool:
+        try:
+            meta = json.loads((config.paths.cache / entry["folder"] / "meta.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return bool(meta.get("alignment"))
+
+    @app.get("/api/pairs/sources")
+    def pair_sources() -> list[dict[str, Any]]:
+        """How many prepared pairs each source holds, in the order they first appear in the index."""
+        counts: dict[str, int] = {}
+        for e in _index_entries():
+            counts[e["source"]] = counts.get(e["source"], 0) + 1
+        return [{"source": k, "count": v} for k, v in counts.items()]
+
+    @app.get("/api/pairs")
+    def pairs(limit: int = 48, source: str | None = None, aligned: bool = False) -> list[dict[str, Any]]:
+        """``aligned``: only the pairs whose edit was found inside its original (a crop, a turn, a
+        straightening) — the ones worth looking at to trust the alignment."""
+        out = []
+        for e in _index_entries():
             if source and e["source"] != source:
+                continue
+            if aligned and not _aligned(e):
                 continue
             out.append({k: e[k] for k in ("id", "source", "group", "label", "width", "height", "folder")})
             if len(out) >= limit:

@@ -71,6 +71,14 @@ def test_pairs_listing_after_an_ingest(client):
     assert c.get(f"/api/pairs/preview?folder={pairs[0]['folder']}").status_code == 200
     assert c.get("/api/pairs/preview?folder=../../configs").status_code == 404
     assert c.get("/api/status").json()["pairs"] == 9
+    assert c.get("/api/pairs/sources").json() == [{"source": "synthetic", "count": 9}]
+    assert c.get("/api/pairs?source=pairs").json() == []
+
+    # "Aligned only": the pairs whose edit was found inside its original.
+    folder = config.paths.cache / pairs[1]["folder"]
+    meta = json.loads((folder / "meta.json").read_text())
+    (folder / "meta.json").write_text(json.dumps({**meta, "alignment": {"turn": "none", "angle": 0.0}}))
+    assert [p["id"] for p in c.get("/api/pairs?aligned=true").json()] == [pairs[1]["id"]]
 
 
 def test_an_action_runs_as_a_subprocess_and_streams(client):

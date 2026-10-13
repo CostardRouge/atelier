@@ -98,6 +98,12 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   — validated on the paper surfaces light (`#fbf8f1`: two slots under 3 : 1,
   hence direct labels + the table) and dark (`#2a251c`: all pass). Text wears
   ink tokens, never the series colour.
+- **The pairs panel opens on HIS pairs** (2026-10-13, his "make serve sert
+  du synthetic"): `index.jsonl` keeps earlier sources first, so "the first
+  24" showed the synthetic set his test run left behind. The panel picks a
+  source (the first one that is not `synthetic`) and can show only the
+  ALIGNED pairs (`meta.json` `alignment`), the ones to look at before
+  trusting a crop. Any new listing over the index filters by source.
 - **Trap**: a `display: inline-block` on a class beats the UA's `[hidden]`;
   the page carries `[hidden] { display: none !important }`.
 - **Trap**: with `from __future__ import annotations`, a Pydantic model
