@@ -5,7 +5,7 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
-import { FieldRow, RangeField } from '../../shared/ui/Inspector';
+import { FieldRow, SliderRow } from '../../shared/ui/Inspector';
 import DevelopFold from '../../shared/develop/DevelopFold';
 import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
@@ -151,17 +151,15 @@ export default function CropPanel({
             {Icons.swap}
           </IconButton>
         </FieldRow>
-        <FieldRow label="Straighten">
-          <RangeField
-            label="Straighten"
-            min={-45}
-            max={45}
-            step={0.1}
-            value={splitRotation(framing.rotation).fine}
-            onChange={crop.straighten}
-            format={(v) => `${v.toFixed(1)}°`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Straighten"
+          min={-45}
+          max={45}
+          step={0.1}
+          value={splitRotation(framing.rotation).fine}
+          onChange={crop.straighten}
+          format={(v) => `${v.toFixed(1)}°`}
+        />
         <FieldRow label="Level">
           <Button
             size="sm"

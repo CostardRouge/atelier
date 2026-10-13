@@ -1,4 +1,4 @@
-import { FieldRow, RangeField, SelectField, swatchClass } from '../ui/Inspector';
+import { FieldRow, SelectField, swatchClass, SliderRow } from '../ui/Inspector';
 import { KNOCKOUT_MODES, switchKnockout, type Knockout, type KnockoutMode } from './knockout';
 
 interface Props {
@@ -44,17 +44,16 @@ export default function KnockoutRows({ value, onChange, label }: Props) {
         </FieldRow>
       )}
       {value?.mode === 'wash' && (
-        <FieldRow label="Strength">
-          <RangeField
-            label={name('wash strength')}
-            min={0.2}
-            max={1}
-            step={0.01}
-            value={value.alpha}
-            onChange={(alpha) => onChange({ ...value, alpha })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Strength"
+          name={name('wash strength')}
+          min={0.2}
+          max={1}
+          step={0.01}
+          value={value.alpha}
+          onChange={(alpha) => onChange({ ...value, alpha })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
       )}
     </>
   );

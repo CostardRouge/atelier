@@ -12,7 +12,7 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import IconButton from '../../shared/ui/IconButton';
-import { FieldRow, RangeField, ToggleField } from '../../shared/ui/Inspector';
+import { FieldRow, ToggleField, SliderRow } from '../../shared/ui/Inspector';
 import DevelopFold from '../../shared/develop/DevelopFold';
 import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
@@ -206,40 +206,40 @@ export default function BorderSection({
                 </button>
               </div>
             </FieldRow>
-            <FieldRow label="Left · right">
-              <RangeField
-                label="Left and right margin"
-                min={0}
-                max={BORDER_MARGIN_MAX}
-                step={0.005}
-                value={b.margin.x}
-                onChange={(v) => marginTo('x', v)}
-                format={pct}
-              />
-            </FieldRow>
-            <FieldRow label="Top · bottom">
-              <RangeField
-                label="Top and bottom margin"
-                min={0}
-                max={BORDER_MARGIN_MAX}
-                step={0.005}
-                value={b.margin.y}
-                onChange={(v) => marginTo('y', v)}
-                format={pct}
-              />
-              <IconButton
-                size="sm"
-                label={linked ? 'The same margin everywhere — click to set them apart' : 'Set the same margin everywhere'}
-                aria-pressed={linked}
-                onClick={() => {
-                  setLinked(!linked);
-                  if (!linked && b.margin.y !== b.margin.x) set({ margin: { x: b.margin.x, y: b.margin.x } });
-                }}
-                className={linked ? 'text-accent-ink' : ''}
-              >
-                {Icons.link}
-              </IconButton>
-            </FieldRow>
+            <SliderRow
+              label="Left · right"
+              name="Left and right margin"
+              min={0}
+              max={BORDER_MARGIN_MAX}
+              step={0.005}
+              value={b.margin.x}
+              onChange={(v) => marginTo('x', v)}
+              format={pct}
+            />
+            <SliderRow
+              label="Top · bottom"
+              name="Top and bottom margin"
+              min={0}
+              max={BORDER_MARGIN_MAX}
+              step={0.005}
+              value={b.margin.y}
+              onChange={(v) => marginTo('y', v)}
+              format={pct}
+              trailing={
+                <IconButton
+                  size="sm"
+                  label={linked ? 'The same margin everywhere — click to set them apart' : 'Set the same margin everywhere'}
+                  aria-pressed={linked}
+                  onClick={() => {
+                    setLinked(!linked);
+                    if (!linked && b.margin.y !== b.margin.x) set({ margin: { x: b.margin.x, y: b.margin.x } });
+                  }}
+                  className={linked ? 'text-accent-ink' : ''}
+                >
+                  {Icons.link}
+                </IconButton>
+              }
+            />
           </>
         )}
       </DevelopFold>

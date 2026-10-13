@@ -4,7 +4,7 @@ import type { Shade } from '../../../shared/shades/shades';
 import { defaultCascade, type BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
 import { STAGGER_ORDERS, newStaggerSeed } from '../../../shared/overlay/stagger';
 import { StepRows } from '../PieceStylePanel';
-import { SelectField, ToggleField } from '../../../shared/ui/Inspector';
+import { SelectField, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
 import type { BadgePiece } from '../../../shared/roadtrip/day-badge';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
 import type {
@@ -27,7 +27,7 @@ import PieceStylePanel from '../PieceStylePanel';
 import ShadesPanel from '../../../shared/shades/ShadesPanel';
 import { linkButton } from './ui';
 import Button from '../../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection } from '../../../shared/ui/Inspector';
 
 /** The nine anchors, laid out as the 3×3 grid they are. */
 const ANCHORS: Anchor[] = [
@@ -280,21 +280,20 @@ export default function LookTab({
                     options={STAGGER_ORDERS.map((o) => ({ id: o.id, label: `${o.label} — ${o.hint}` }))}
                   />
                 </FieldRow>
-                <FieldRow label="Each">
-                  <RangeField
-                    label="Seconds between two ranks"
-                    min={0}
-                    max={0.6}
-                    step={0.01}
-                    value={post.badge.cascade.stagger.each}
-                    onChange={(each) =>
-                      patchBadge({
-                        cascade: { ...post.badge.cascade!, stagger: { ...post.badge.cascade!.stagger, each } },
-                      })
-                    }
-                    format={(v) => `${v.toFixed(2)} s`}
-                  />
-                </FieldRow>
+                <SliderRow
+                  label="Each"
+                  name="Seconds between two ranks"
+                  min={0}
+                  max={0.6}
+                  step={0.01}
+                  value={post.badge.cascade.stagger.each}
+                  onChange={(each) =>
+                    patchBadge({
+                      cascade: { ...post.badge.cascade!, stagger: { ...post.badge.cascade!.stagger, each } },
+                    })
+                  }
+                  format={(v) => `${v.toFixed(2)} s`}
+                />
                 {post.badge.cascade.stagger.order === 'random' && (
                   <FieldRow label="Shuffle">
                     <Button
@@ -478,17 +477,16 @@ function PlacementRows({
           ))}
         </div>
       </FieldRow>
-      <FieldRow label="Numeral">
-        <RangeField
-          label="Numeral size"
-          min={minSize}
-          max={0.4}
-          step={0.005}
-          value={layout.sizeFrac}
-          onChange={(sizeFrac) => onLayout({ ...layout, sizeFrac })}
-          format={(v) => `${Math.round(v * 100)}%`}
-        />
-      </FieldRow>
+      <SliderRow
+        label="Numeral"
+        name="Numeral size"
+        min={minSize}
+        max={0.4}
+        step={0.005}
+        value={layout.sizeFrac}
+        onChange={(sizeFrac) => onLayout({ ...layout, sizeFrac })}
+        format={(v) => `${Math.round(v * 100)}%`}
+      />
     </>
   );
 }

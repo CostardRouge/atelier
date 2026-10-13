@@ -30,7 +30,7 @@ import { MAX_SHADES, createShade } from '../../../shared/shades/shades';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import IconButton from '../../../shared/ui/IconButton';
-import { FieldRow, RangeField, ToggleField } from '../../../shared/ui/Inspector';
+import { FieldRow, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
 import { inputClass } from './ui';
 
@@ -372,17 +372,16 @@ export default function CameraPanel({ trip, post, exif, patchBadge, onChangeTrip
             </div>
           </FieldRow>
 
-          <FieldRow label="Size">
-            <RangeField
-              label="Camera credit size"
-              min={MIN_PLATE_SIZE}
-              max={MAX_PLATE_SIZE}
-              step={0.05}
-              value={spec.size}
-              onChange={(size) => setSpec({ size })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Size"
+            name="Camera credit size"
+            min={MIN_PLATE_SIZE}
+            max={MAX_PLATE_SIZE}
+            step={0.05}
+            value={spec.size}
+            onChange={(size) => setSpec({ size })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
 
           {rawBody && (
             <FieldRow

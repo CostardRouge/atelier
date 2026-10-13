@@ -19,7 +19,7 @@ import { type KeyTarget } from '../media/transport-keys';
  * Input types that hold no text, and so have no undo of their own to protect.
  *
  * A slider is the one that matters: every number in the suite is an `<input
- * type="range">` (`RangeField`), and dragging one leaves it focused — so
+ * type="range">` (inside every `SliderBar`), and a press focuses it — so
  * standing down for "a field" swallowed every ⌘Z from the first edit onwards,
  * which is what made undo look broken in the Develop tool, where a slider is
  * most of the tool. An unknown type keeps the field's claim: guessing wrong

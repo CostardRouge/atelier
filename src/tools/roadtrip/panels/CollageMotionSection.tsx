@@ -6,7 +6,7 @@ import {
   type SlideCollage,
 } from '../../../shared/roadtrip/collage';
 import Button from '../../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, SelectField, ToggleField } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, SelectField, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
 import { StepRows } from '../PieceStylePanel';
 
 interface CollageMotionSectionProps {
@@ -97,17 +97,16 @@ export default function CollageMotionSection({ collage, seconds, onChange }: Col
               options={STAGGER_ORDERS.map((o) => ({ id: o.id, label: `${o.label} — ${o.hint}` }))}
             />
           </FieldRow>
-          <FieldRow label="Each">
-            <RangeField
-              label="Seconds between two ranks"
-              min={0}
-              max={0.6}
-              step={0.01}
-              value={enter.stagger.each}
-              onChange={(each) => onChange({ ...collage, enter: { ...enter, stagger: { ...enter.stagger, each } } })}
-              format={(v) => `${v.toFixed(2)} s`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Each"
+            name="Seconds between two ranks"
+            min={0}
+            max={0.6}
+            step={0.01}
+            value={enter.stagger.each}
+            onChange={(each) => onChange({ ...collage, enter: { ...enter, stagger: { ...enter.stagger, each } } })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
           {enter.stagger.order === 'random' && (
             <FieldRow label="Shuffle">
               <Button

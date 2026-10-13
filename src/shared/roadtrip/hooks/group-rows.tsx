@@ -7,7 +7,7 @@
 
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
-import { FieldRow, RangeField, SelectField, SwitchRow } from '../../ui/Inspector';
+import { FieldRow, SelectField, SliderRow, SwitchRow } from '../../ui/Inspector';
 import { GROUP_LIMITS, GROUP_SHORTCUTS, type GroupOptions } from './stop-clusters';
 
 interface GroupRowsProps {
@@ -46,26 +46,21 @@ export function GroupRows({ value, onChange, count, townsReady }: GroupRowsProps
       />
       {on && (
         <>
-          <FieldRow label="Within" align="start">
-            <div className="flex flex-col gap-1.5 min-w-0">
-              <RangeField
-                label="Grouping distance"
-                min={Math.log10(GROUP_LIMITS.groupKm.min)}
-                max={Math.log10(GROUP_LIMITS.groupKm.max)}
-                step={0.02}
-                value={Math.log10(Math.max(GROUP_LIMITS.groupKm.min, Math.min(GROUP_LIMITS.groupKm.max, value.groupKm)))}
-                onChange={(v) => onChange({ groupKm: Math.round(10 ** v * 10) / 10 })}
-                format={(v) => formatKm(10 ** v)}
-              />
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {GROUP_SHORTCUTS.map((s) => (
-                  <Button key={s.km} size="sm" variant={value.groupKm === s.km ? 'primary' : 'default'} onClick={() => onChange({ groupKm: s.km })} title={`${s.label} — ${s.km} km`}>
-                    {s.km} km
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </FieldRow>
+          <SliderRow
+            label="Within"
+            name="Grouping distance"
+            min={Math.log10(GROUP_LIMITS.groupKm.min)}
+            max={Math.log10(GROUP_LIMITS.groupKm.max)}
+            step={0.02}
+            value={Math.log10(Math.max(GROUP_LIMITS.groupKm.min, Math.min(GROUP_LIMITS.groupKm.max, value.groupKm)))}
+            onChange={(v) => onChange({ groupKm: Math.round(10 ** v * 10) / 10 })}
+            format={(v) => formatKm(10 ** v)}
+            trailing={GROUP_SHORTCUTS.map((s) => (
+              <Button key={s.km} size="sm" variant={value.groupKm === s.km ? 'primary' : 'default'} onClick={() => onChange({ groupKm: s.km })} title={`${s.label} — ${s.km} km`}>
+                {s.km} km
+              </Button>
+            ))}
+          />
           <FieldRow
             label="Which"
             hint={

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FieldRow, InspectorSection, RangeField, Readout, SelectField, SwitchRow, TextField, swatchClass } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, SliderRow, SelectField, SwitchRow, TextField, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
@@ -93,9 +93,7 @@ const secs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} s`;
 /** One slider row. */
 function Slider(props: { label: string; value: number; min: number; max: number; step: number; format: (v: number) => string; onChange: (v: number) => void; hint?: ReactNode }) {
   return (
-    <FieldRow label={props.label} hint={props.hint}>
-      <RangeField label={props.label} value={props.value} min={props.min} max={props.max} step={props.step} format={props.format} onChange={props.onChange} />
-    </FieldRow>
+    <SliderRow label={props.label} hint={props.hint} value={props.value} min={props.min} max={props.max} step={props.step} format={props.format} onChange={props.onChange} />
   );
 }
 
@@ -637,12 +635,20 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         )}
         <Slider label="Equalize" value={s.choreo.equalize} min={0} max={1} step={0.01} format={pct} onChange={(v) => choreo({ equalize: v })} hint="0 keeps each flight's real length; 100% gives every flight the same." />
         {(mode === 'cascade' || mode === 'relay') && (
-          <FieldRow label="Jitter">
-            <RangeField label="Jitter" value={s.choreo.jitter} min={0} max={1} step={0.01} format={pct} onChange={(v) => choreo({ jitter: v })} />
-            <IconButton size="sm" variant="ghost" label="Shake differently" onClick={() => choreo({ seed: (s.choreo.seed * 48271 + 11) % 2147483647 })}>
-              {Icons.refresh}
-            </IconButton>
-          </FieldRow>
+          <SliderRow
+            label="Jitter"
+            value={s.choreo.jitter}
+            min={0}
+            max={1}
+            step={0.01}
+            format={pct}
+            onChange={(v) => choreo({ jitter: v })}
+            trailing={
+              <IconButton size="sm" variant="ghost" label="Shake differently" onClick={() => choreo({ seed: (s.choreo.seed * 48271 + 11) % 2147483647 })}>
+                {Icons.refresh}
+              </IconButton>
+            }
+          />
         )}
         <FieldRow label="Tempo" hint="How time runs inside each flight.">
           <Segmented<Tempo>

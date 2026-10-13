@@ -12,7 +12,7 @@ import { SHADE_FADE, type Scene, type SceneScrim } from './scenes';
 import ShadesPanel from '../shades/ShadesPanel';
 import { DEFAULT_STAGGER, STAGGER_ORDERS, newStaggerSeed } from './stagger';
 import Button from '../ui/Button';
-import { FieldRow, NumberField, RangeField, SelectField, ToggleField } from '../ui/Inspector';
+import { FieldRow, NumberField, SelectField, ToggleField, SliderRow } from '../ui/Inspector';
 
 interface ScenePanelProps {
   scene: Scene;
@@ -97,28 +97,26 @@ export default function ScenePanel({
       </FieldRow>
       {scrim && (
         <>
-          <FieldRow label="Strength">
-            <RangeField
-              label="Veil strength"
-              min={0.05}
-              max={1}
-              step={0.05}
-              value={scrim.opacity}
-              onChange={(opacity) => patch({ scrim: { ...scrim, opacity } })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
-          <FieldRow label="Fade">
-            <RangeField
-              label="Veil fade"
-              min={0}
-              max={2}
-              step={0.05}
-              value={scrim.fade}
-              onChange={(fade) => patch({ scrim: { ...scrim, fade } })}
-              format={(v) => `${v.toFixed(2)} s`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Strength"
+            name="Veil strength"
+            min={0.05}
+            max={1}
+            step={0.05}
+            value={scrim.opacity}
+            onChange={(opacity) => patch({ scrim: { ...scrim, opacity } })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <SliderRow
+            label="Fade"
+            name="Veil fade"
+            min={0}
+            max={2}
+            step={0.05}
+            value={scrim.fade}
+            onChange={(fade) => patch({ scrim: { ...scrim, fade } })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
         </>
       )}
 
@@ -135,17 +133,16 @@ export default function ScenePanel({
         />
       </div>
       {(scene.shades?.length ?? 0) > 0 && (
-        <FieldRow label="Fade">
-          <RangeField
-            label="Shades fade"
-            min={0}
-            max={2}
-            step={0.05}
-            value={scene.shadeFade ?? SHADE_FADE}
-            onChange={(shadeFade) => patch({ shadeFade })}
-            format={(v) => `${v.toFixed(2)} s`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Fade"
+          name="Shades fade"
+          min={0}
+          max={2}
+          step={0.05}
+          value={scene.shadeFade ?? SHADE_FADE}
+          onChange={(shadeFade) => patch({ shadeFade })}
+          format={(v) => `${v.toFixed(2)} s`}
+        />
       )}
 
       {/* One cascade over the scene's members, from where they sit — added to
@@ -183,17 +180,16 @@ export default function ScenePanel({
               options={STAGGER_ORDERS.map((o) => ({ id: o.id, label: `${o.label} — ${o.hint}` }))}
             />
           </FieldRow>
-          <FieldRow label="Each">
-            <RangeField
-              label="Seconds between two ranks"
-              min={0}
-              max={1}
-              step={0.01}
-              value={scene.stagger.each}
-              onChange={(each) => patch({ stagger: { ...scene.stagger!, each } })}
-              format={(v) => `${v.toFixed(2)} s`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Each"
+            name="Seconds between two ranks"
+            min={0}
+            max={1}
+            step={0.01}
+            value={scene.stagger.each}
+            onChange={(each) => patch({ stagger: { ...scene.stagger!, each } })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
           {scene.stagger.order === 'random' && (
             <FieldRow label="Shuffle">
               <Button size="sm" onClick={() => patch({ stagger: { ...scene.stagger!, seed: newStaggerSeed() } })}>
@@ -208,17 +204,16 @@ export default function ScenePanel({
         <ToggleField label="Hold the rest of the deck back" checked={scene.solo} onChange={(solo) => patch({ solo })} />
       </FieldRow>
       {scene.solo && (
-        <FieldRow label="Comes back">
-          <RangeField
-            label="The deck comes back over"
-            min={0}
-            max={3}
-            step={0.05}
-            value={scene.hudFade}
-            onChange={(hudFade) => patch({ hudFade })}
-            format={(v) => (v === 0 ? 'cut' : `${v.toFixed(2)} s`)}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Comes back"
+          name="The deck comes back over"
+          min={0}
+          max={3}
+          step={0.05}
+          value={scene.hudFade}
+          onChange={(hudFade) => patch({ hudFade })}
+          format={(v) => (v === 0 ? 'cut' : `${v.toFixed(2)} s`)}
+        />
       )}
 
       <FieldRow

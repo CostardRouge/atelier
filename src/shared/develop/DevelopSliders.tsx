@@ -1,5 +1,5 @@
 import DevelopFold from './DevelopFold';
-import { Icons } from '../ui/icons';
+import SliderBar from '../ui/SliderBar';
 import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
 
 const LABELS: Readonly<Record<DevelopKey, string>> = {
@@ -70,8 +70,10 @@ export default function DevelopSliders({
  *
  * Generalised when Levels needed the same row (`DevelopAuto.tsx`): a second
  * copy is how two panels come to disagree about what a slider looks like and
- * which keys it answers. `DevelopSlider` below is this one, keyed on a
- * develop's own field.
+ * which keys it answers. Since 2026-10-13 it IS the suite's `SliderBar` — the
+ * bar with its name inside, filled from 0, ↺ and double-click to reset,
+ * Shift + arrows for ten steps — so Develop and every inspector read alike.
+ * `DevelopSlider` below is this one, keyed on a develop's own field.
  */
 export function RangeSlider({
   label,
@@ -93,71 +95,24 @@ export function RangeSlider({
   printed?: string;
   onChange: (v: number) => void;
 }) {
-  const changed = value !== reset;
   return (
-    <div className="flex flex-col gap-1" onDoubleClick={() => onChange(reset)}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="inline-flex items-baseline gap-1.5 min-w-0">
-          {/* Ahead of the label rather than on it: it must read in the same
-              glance as the row above and below, not only once the eye lands
-              here. */}
-          <span
-            aria-hidden="true"
-            className={`inline-block w-1.5 h-1.5 rounded-full bg-accent transition-opacity ${changed ? 'opacity-100' : 'opacity-0'}`}
-          />
-          {swatch && (
-            <span
-              aria-hidden="true"
-              className="inline-block w-2.5 h-2.5 rounded-full self-center border border-line"
-              style={{ background: swatch }}
-            />
-          )}
-          <span className={`text-xs truncate ${changed ? 'font-semibold text-ink' : 'text-ink'}`}>{label}</span>
-        </span>
-        <span className="inline-flex items-baseline gap-1">
-          <span className={`font-mono text-2xs tabular-nums ${changed ? 'text-ink-soft' : 'text-faint'}`}>
-            {printed ?? signed(value)}
-          </span>
-          {/* Dimmed rather than hover-revealed, so it still works with a
-              finger; the row's own double-click (kept below) is the shortcut
-              for anyone who already reaches for it. */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange(reset);
-            }}
-            aria-label={`Reset ${label}`}
-            title="Reset"
-            className={`relative inline-grid place-items-center w-3.5 h-3.5 rounded-[4px] transition-opacity after:absolute after:-inset-2 after:content-[''] [&>svg]:w-3 [&>svg]:h-3 ${
-              changed
-                ? 'opacity-100 text-accent-ink hover:bg-accent-wash'
-                : 'opacity-30 text-ink-soft hover:opacity-60 hover:bg-paper-2'
-            }`}
-          >
-            {Icons.reset}
-          </button>
-        </span>
-      </div>
-      <input
-        type="range"
-        min={range.min}
-        max={range.max}
-        step={range.step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onKeyDown={(e) => {
-          if (!e.shiftKey) return;
-          const dir =
-            e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
-          if (!dir) return;
-          e.preventDefault();
-          onChange(Math.min(range.max, Math.max(range.min, value + dir * range.step * 10)));
-        }}
-        className="w-full accent-accent cursor-pointer"
-        aria-label={label}
-      />
-    </div>
+    <SliderBar
+      label={label}
+      lead={
+        swatch && (
+          // A colour the row is ABOUT, ahead of its name so it reads in the
+          // same glance as the rows above and below.
+          <span aria-hidden="true" className="flex-none w-2.5 h-2.5 rounded-full border border-line" style={{ background: swatch }} />
+        )
+      }
+      value={value}
+      min={range.min}
+      max={range.max}
+      step={range.step}
+      reset={reset}
+      printed={printed ?? signed(value)}
+      onChange={onChange}
+    />
   );
 }
 

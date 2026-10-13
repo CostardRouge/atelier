@@ -1,6 +1,7 @@
 # Sliders under a finger, measured, and three faces for one rule
 
-**Status: a proposal awaiting his pick (2026-10-13).** Nothing is built. The
+**Status: he chose B the same day (2026-10-13, *«option b start the dev et
+autres petits controls après»*) — built, §6 says what is in.** The
 lab, the real rows (Trips' *On screen*, the Shades, a Develop slider) drawn
 today and in the three faces at four panel widths, finger or mouse, with the
 track's travel, the pixels per step and the grab height measured live:
@@ -107,8 +108,40 @@ grabs for the trim handles and curve points. Nothing changes under a mouse.
 
 ## 5. His questions
 
-1. A, B or C (recommended: A, desktop included)?
+1. A, B or C (recommended: A, desktop included)? **He chose B.**
 2. ~~Under a finger, a tap on the track: does nothing, or places the value?~~
    **Answered 2026-10-13: it places the value** (R3); the lab does so.
 3. The typed value: everywhere, or only on long ranges (durations, km)?
+   **Left to the build: everywhere** — but opened by a 500 ms HOLD or Enter,
+   not by a tap on the number, since in B the number sits inside the bar and
+   a tap there must place the maximum (R3).
 4. The other small targets: a pass right after the sliders, or later?
+   **After** («autres petits controls après»).
+
+## 6. Built (face B)
+
+- `shared/ui/slider-gesture.ts` (pure, tested): snap, tap, relative drag,
+  intent, the fill's origin, the typed value's unit.
+- `shared/ui/SliderBar.tsx`: the bar — 36 px, 44 px under a coarse pointer,
+  name inside at the left, value at the right, a wash filled from the reset
+  value (0 on a bipolar range), a 2 px accent edge, a dot and a ↺ once it
+  departs, double-click to reset, Shift + arrows, Enter or a hold to type.
+  The native range stays inside, transparent, for the keyboard and a reader.
+- `SliderRow` in `Inspector.tsx`: the bar, then `trailing` (pills, verbs) on
+  its own line, then the hint. `RangeField` and `.range-fill` are deleted.
+- 127 rows migrated by a codemod over the TypeScript tree (a `FieldRow`
+  holding one `RangeField`, plus any verb after it as `trailing`), the rest
+  by hand: *On screen*, the Shades' centre (two full-width bars under the
+  *Place on the picture* row, back to the middle at 50 %), the camera's
+  turning, the grouping distance, Atlas's `Slider` and Jitter. Develop's
+  `RangeSlider` is a `SliderBar` too, so every Develop slider follows.
+- Driven headless at 390 px with CDP touches in Atlas's Style tab: taps at
+  both ends and the middle, a relative drag from the left edge (51 → 66 %),
+  a vertical swipe (no change), a hold then `30` + Enter (→ 30 %).
+- Left as native ranges on purpose: the PLAYHEADS (Develop's transport, the
+  overlay page, LUT Studio, Compare, the making-of preview, the Composer's
+  seek) — a position in a clip, not a setting.
+- Next: the remaining raw setting ranges (look strength in the gallery and
+  the LUT picker, a layer's opacity, Deduce's grain and fine settings, the
+  road settings, the Composer's toolbar) and a lint rule; then the other
+  small targets of §4.

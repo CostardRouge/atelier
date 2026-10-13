@@ -13,16 +13,19 @@
  *   whether it is open is remembered per section;
  * - inside it, a `FieldRow` is a label at the left and ITS control at the
  *   right, on one line, with an optional sentence under the control;
- * - `RangeField`, `SelectField` and `ToggleField` are the three controls a
- *   row most often holds, so the sliders, the selects and the switches look
- *   the same in every panel.
+ * - `SelectField` and `ToggleField` are the controls a row most often holds,
+ *   so the selects and the switches look the same in every panel;
+ * - a slider is NOT a `FieldRow`: a `SliderRow` is the bar itself across the
+ *   whole width, its name inside it (`SliderBar.tsx`, 2026-10-13), because a
+ *   label column left the track what the readout and a pill did not take.
  *
  * A section is a rule and not a card on purpose: the inspector is one column,
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import InfoDot, { InfoDotButton } from './InfoDot';
+import SliderBar, { type SliderBarProps } from './SliderBar';
 import { Icons } from './icons';
 
 const OPEN_KEY = 'atelier.inspector.';
@@ -309,40 +312,37 @@ export function Readout({ children, muted = false }: { children: ReactNode; mute
   );
 }
 
-interface RangeFieldProps {
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-  /** How the value reads beside the track. */
-  format: (value: number) => string;
-  label: string;
-  disabled?: boolean;
+interface SliderRowProps extends Omit<SliderBarProps, 'after'> {
+  /** A sentence under the bar — what it will really do, or why it cannot. */
+  hint?: ReactNode;
+  /** The hint says a STATE, not a why: never folded behind a dot (`FoldHints`). */
+  hintShown?: boolean;
+  /**
+   * What the row says beside its number — an owner pill, a verb (`Auto`,
+   * `Max`, a re-roll) — on its own line under the bar, so it never takes a
+   * pixel of the track (`docs/slider-touch.md`, R1).
+   */
+  trailing?: ReactNode;
 }
 
-/** A slider with its value beside it — never inside the label, where it moved the row. */
-export function RangeField({ value, min, max, step, onChange, format, label, disabled }: RangeFieldProps) {
-  const clamped = Math.min(max, Math.max(min, value));
-  const fraction = max > min ? (clamped - min) / (max - min) : 0;
+/**
+ * A slider ROW: the bar across the whole width of the panel, its name inside
+ * it, never a label column beside it — a `FieldRow` gave its 104 px to the
+ * label and left the track to share what remained with the readout and
+ * whatever pill the row carried.
+ */
+export function SliderRow({ hint, hintShown = false, trailing, ...bar }: SliderRowProps) {
+  const { dot, visible, id } = useRowHint(hint, hintShown, bar.name ?? bar.label);
   return (
-    <>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label={label}
-        style={{ '--range-fraction': fraction } as CSSProperties}
-        className="range-fill flex-1 min-w-0 disabled:opacity-45"
-      />
-      <span className="flex-none min-w-[3.25rem] text-right whitespace-nowrap font-mono text-xs tabular-nums text-ink-soft">
-        {format(value)}
-      </span>
-    </>
+    <div className="flex flex-col gap-1.5 min-w-0">
+      <SliderBar {...bar} after={dot} />
+      {trailing && <div className="flex flex-wrap items-center gap-2 min-w-0">{trailing}</div>}
+      {visible && (
+        <div id={id} className="text-xs leading-relaxed text-muted [&>p]:m-0">
+          {hint}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -2,7 +2,7 @@ import type { DeliverySummary } from '../../shared/develop/roll-export';
 import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
 import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
-import { FieldRow, InspectorSection, LockSections, RangeField, Readout, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, LockSections, Readout, SelectField, SwitchRow, TextField, SliderRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
 import { targetFolder } from '../../shared/develop/export-targets';
@@ -315,28 +315,26 @@ export default function ExportPanel({
               onChange={(position) => onSettings({ watermark: { ...settings.watermark, position } })}
             />
           </FieldRow>
-          <FieldRow label="Size">
-            <RangeField
-              label="Watermark size"
-              min={WATERMARK_LIMITS.size.min}
-              max={WATERMARK_LIMITS.size.max}
-              step={0.5}
-              value={settings.watermark.size}
-              onChange={(size) => onSettings({ watermark: { ...settings.watermark, size } })}
-              format={(v) => `${v.toFixed(1)} %`}
-            />
-          </FieldRow>
-          <FieldRow label="Opacity">
-            <RangeField
-              label="Watermark opacity"
-              min={WATERMARK_LIMITS.opacity.min}
-              max={WATERMARK_LIMITS.opacity.max}
-              step={0.05}
-              value={settings.watermark.opacity}
-              onChange={(opacity) => onSettings({ watermark: { ...settings.watermark, opacity } })}
-              format={(v) => `${Math.round(v * 100)} %`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Size"
+            name="Watermark size"
+            min={WATERMARK_LIMITS.size.min}
+            max={WATERMARK_LIMITS.size.max}
+            step={0.5}
+            value={settings.watermark.size}
+            onChange={(size) => onSettings({ watermark: { ...settings.watermark, size } })}
+            format={(v) => `${v.toFixed(1)} %`}
+          />
+          <SliderRow
+            label="Opacity"
+            name="Watermark opacity"
+            min={WATERMARK_LIMITS.opacity.min}
+            max={WATERMARK_LIMITS.opacity.max}
+            step={0.05}
+            value={settings.watermark.opacity}
+            onChange={(opacity) => onSettings({ watermark: { ...settings.watermark, opacity } })}
+            format={(v) => `${Math.round(v * 100)} %`}
+          />
           <FieldRow label="Tone">
             <Segmented
               size="sm"

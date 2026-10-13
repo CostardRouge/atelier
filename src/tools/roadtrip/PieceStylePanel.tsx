@@ -2,7 +2,7 @@ import type { AnimPreset, AnimStep } from '../../shared/overlay/animation';
 import { defaultStep } from '../../shared/overlay/animation';
 import { CURVES, DEFAULT_STEPS, EASING_IDS, MAX_STEPS, MIN_STEPS } from '../../shared/motion/easing';
 import type { BadgePieceStyle } from '../../shared/roadtrip/badge-layout';
-import { FieldRow, RangeField, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import { FieldRow, SelectField, ToggleField, SliderRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 
 interface PieceStylePanelProps {
@@ -104,29 +104,27 @@ export function StepRows({
       </FieldRow>
       {step && (
         <>
-          <FieldRow label="Duration">
-            <RangeField
-              label={`${which} duration`}
+          <SliderRow
+            label="Duration"
+            name={`${which} duration`}
+            min={0}
+            max={2}
+            step={0.05}
+            value={step.duration}
+            onChange={(duration) => onChange({ ...step, duration })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
+          {which === 'In' && !hideDelay && (
+            <SliderRow
+              label="Delay"
+              name="In delay"
               min={0}
               max={2}
               step={0.05}
-              value={step.duration}
-              onChange={(duration) => onChange({ ...step, duration })}
+              value={step.delay ?? 0}
+              onChange={(delay) => onChange({ ...step, delay })}
               format={(v) => `${v.toFixed(2)} s`}
             />
-          </FieldRow>
-          {which === 'In' && !hideDelay && (
-            <FieldRow label="Delay">
-              <RangeField
-                label="In delay"
-                min={0}
-                max={2}
-                step={0.05}
-                value={step.delay ?? 0}
-                onChange={(delay) => onChange({ ...step, delay })}
-                format={(v) => `${v.toFixed(2)} s`}
-              />
-            </FieldRow>
           )}
           <FieldRow label="Easing">
             <SelectField
@@ -137,17 +135,16 @@ export function StepRows({
             />
           </FieldRow>
           {step.easing === 'steps' && (
-            <FieldRow label="Steps">
-              <RangeField
-                label={`${which} steps`}
-                min={MIN_STEPS}
-                max={MAX_STEPS}
-                step={1}
-                value={step.steps ?? DEFAULT_STEPS}
-                onChange={(steps) => onChange({ ...step, steps })}
-                format={(v) => `${v}`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Steps"
+              name={`${which} steps`}
+              min={MIN_STEPS}
+              max={MAX_STEPS}
+              step={1}
+              value={step.steps ?? DEFAULT_STEPS}
+              onChange={(steps) => onChange({ ...step, steps })}
+              format={(v) => `${v}`}
+            />
           )}
           {step.preset === 'slide' && (
             <FieldRow label="From">
@@ -208,40 +205,36 @@ export default function PieceStylePanel({ style, onChange }: PieceStylePanelProp
 
       {hasPanel && (
         <>
-          <FieldRow label="Padding">
-            <RangeField
-              label="Panel padding"
-              min={0.05}
-              max={1.2}
-              step={0.05}
-              value={style.boxPadFrac ?? 0.3}
-              onChange={(boxPadFrac) => patch({ boxPadFrac })}
+          <SliderRow
+            label="Padding"
+            name="Panel padding"
+            min={0.05}
+            max={1.2}
+            step={0.05}
+            value={style.boxPadFrac ?? 0.3}
+            onChange={(boxPadFrac) => patch({ boxPadFrac })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <SliderRow
+            label="Corners"
+            name="Panel corners"
+            min={0}
+            max={6}
+            step={0.1}
+            value={style.boxRadiusFrac ?? 0.5}
+            onChange={(boxRadiusFrac) => patch({ boxRadiusFrac })}
+            format={(v) => v.toFixed(1)}
+          />
+          {style.borderColor && (
+            <SliderRow
+              label="Border width"
+              min={0.01}
+              max={0.25}
+              step={0.005}
+              value={style.borderWidthFrac ?? 0.06}
+              onChange={(borderWidthFrac) => patch({ borderWidthFrac })}
               format={(v) => `${Math.round(v * 100)}%`}
             />
-          </FieldRow>
-          <FieldRow label="Corners">
-            <RangeField
-              label="Panel corners"
-              min={0}
-              max={6}
-              step={0.1}
-              value={style.boxRadiusFrac ?? 0.5}
-              onChange={(boxRadiusFrac) => patch({ boxRadiusFrac })}
-              format={(v) => v.toFixed(1)}
-            />
-          </FieldRow>
-          {style.borderColor && (
-            <FieldRow label="Border width">
-              <RangeField
-                label="Border width"
-                min={0.01}
-                max={0.25}
-                step={0.005}
-                value={style.borderWidthFrac ?? 0.06}
-                onChange={(borderWidthFrac) => patch({ borderWidthFrac })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
           )}
         </>
       )}

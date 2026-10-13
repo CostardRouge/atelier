@@ -12,7 +12,7 @@ import {
   type SlideCollage,
 } from '../../../shared/roadtrip/collage';
 import Button from '../../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, Readout, swatchClass } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, swatchClass, SliderRow } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
 import { refetchKey, refetchSummary } from '../collage-refetch';
 import type { SlideRecovery } from '../use-slide-library';
@@ -201,39 +201,33 @@ export default function LayoutSection({
         <>
           {entry.template.kind !== 'free' && (
             <>
-              <FieldRow label="Gap">
-                <RangeField
-                  label="Gap"
-                  min={0}
-                  max={0.06}
-                  step={0.002}
-                  value={collage.spacing.gap}
-                  onChange={(gap) => onChange({ ...collage, spacing: { ...collage.spacing, gap } })}
-                  format={(v) => `${(v * 100).toFixed(1)}%`}
-                />
-              </FieldRow>
-              <FieldRow label="Padding">
-                <RangeField
-                  label="Padding"
-                  min={0}
-                  max={0.1}
-                  step={0.002}
-                  value={collage.spacing.padding}
-                  onChange={(padding) => onChange({ ...collage, spacing: { ...collage.spacing, padding } })}
-                  format={(v) => `${(v * 100).toFixed(1)}%`}
-                />
-              </FieldRow>
-              <FieldRow label="Corners">
-                <RangeField
-                  label="Corners"
-                  min={0}
-                  max={0.08}
-                  step={0.002}
-                  value={collage.spacing.radius}
-                  onChange={(radius) => onChange({ ...collage, spacing: { ...collage.spacing, radius } })}
-                  format={(v) => `${(v * 100).toFixed(1)}%`}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Gap"
+                min={0}
+                max={0.06}
+                step={0.002}
+                value={collage.spacing.gap}
+                onChange={(gap) => onChange({ ...collage, spacing: { ...collage.spacing, gap } })}
+                format={(v) => `${(v * 100).toFixed(1)}%`}
+              />
+              <SliderRow
+                label="Padding"
+                min={0}
+                max={0.1}
+                step={0.002}
+                value={collage.spacing.padding}
+                onChange={(padding) => onChange({ ...collage, spacing: { ...collage.spacing, padding } })}
+                format={(v) => `${(v * 100).toFixed(1)}%`}
+              />
+              <SliderRow
+                label="Corners"
+                min={0}
+                max={0.08}
+                step={0.002}
+                value={collage.spacing.radius}
+                onChange={(radius) => onChange({ ...collage, spacing: { ...collage.spacing, radius } })}
+                format={(v) => `${(v * 100).toFixed(1)}%`}
+              />
             </>
           )}
           <FieldRow label="Behind" hint="Shows between the cells and in an empty one.">

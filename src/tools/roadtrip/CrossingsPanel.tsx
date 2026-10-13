@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { VEHICLE_MODELS } from '../../shared/roadtrip/hooks/vehicle-registry';
 import { CROSSING_LIMITS, DEFAULT_CROSSINGS, type TripCrossings } from '../../shared/roadtrip/vehicle-fleet';
-import { FieldRow, FoldHints, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
+import { FieldRow, FoldHints, SelectField, SwitchRow, SliderRow } from '../../shared/ui/Inspector';
 import { linkButton } from './panels/ui';
 
 const BOATS = VEHICLE_MODELS.filter((m) => m.kind === 'boat').map((m) => ({ id: m.id, label: m.name }));
@@ -50,32 +50,26 @@ export default function CrossingsPanel({
               </FieldRow>
               {fine ? (
                 <>
-                  <FieldRow
+                  <SliderRow
                     label="Bridge"
                     hint="Water shorter than this between two lands is a bridge or a causeway: the vehicle stays on the road."
-                  >
-                    <RangeField
-                      value={c.bridgeKm}
-                      {...CROSSING_LIMITS.bridgeKm}
-                      step={0.5}
-                      format={km}
-                      label="Bridge length"
-                      onChange={(bridgeKm) => set({ bridgeKm })}
-                    />
-                  </FieldRow>
-                  <FieldRow
+                    value={c.bridgeKm}
+                    {...CROSSING_LIMITS.bridgeKm}
+                    step={0.5}
+                    format={km}
+                    name="Bridge length"
+                    onChange={(bridgeKm) => set({ bridgeKm })}
+                  />
+                  <SliderRow
                     label="Shore"
                     hint="A stop this close to a coast is ashore — the map’s coast is coarse, and a harbour town can fall in its sea."
-                  >
-                    <RangeField
-                      value={c.shoreKm}
-                      {...CROSSING_LIMITS.shoreKm}
-                      step={1}
-                      format={km}
-                      label="Shore distance"
-                      onChange={(shoreKm) => set({ shoreKm })}
-                    />
-                  </FieldRow>
+                    value={c.shoreKm}
+                    {...CROSSING_LIMITS.shoreKm}
+                    step={1}
+                    format={km}
+                    name="Shore distance"
+                    onChange={(shoreKm) => set({ shoreKm })}
+                  />
                 </>
               ) : (
                 <div>

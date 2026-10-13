@@ -30,7 +30,7 @@ import {
 import { KIT_IDS, TICK_KITS } from '../../shared/roadtrip/hooks/tick-kits';
 import { timelapseScript, type TimelapseScript } from '../../shared/develop/timelapse-script';
 import Button from '../../shared/ui/Button';
-import { FieldRow, RangeField, SelectField, SwitchRow, TextField, swatchClass } from '../../shared/ui/Inspector';
+import { FieldRow, SelectField, SwitchRow, TextField, swatchClass, SliderRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
@@ -333,17 +333,16 @@ export default function TimelapseSheet({
                 />
               </FieldRow>
               {options.tease.show === 'hook' && (
-                <FieldRow label="Stays">
-                  <RangeField
-                    label="Tease stays"
-                    value={options.tease.hold}
-                    min={TIMELAPSE_LIMITS.teaseHold.min}
-                    max={TIMELAPSE_LIMITS.teaseHold.max}
-                    step={0.5}
-                    format={(v) => `${v} s`}
-                    onChange={(hold) => onOptions({ tease: { ...options.tease, hold } })}
-                  />
-                </FieldRow>
+                <SliderRow
+                  label="Stays"
+                  name="Tease stays"
+                  value={options.tease.hold}
+                  min={TIMELAPSE_LIMITS.teaseHold.min}
+                  max={TIMELAPSE_LIMITS.teaseHold.max}
+                  step={0.5}
+                  format={(v) => `${v} s`}
+                  onChange={(hold) => onOptions({ tease: { ...options.tease, hold } })}
+                />
               )}
               {options.tease.show !== 'off' && (
                 <FieldRow label="Line">
@@ -436,17 +435,16 @@ export default function TimelapseSheet({
                   options={TIMELAPSE_FONTS.map((f) => ({ id: f, label: f }))}
                 />
               </FieldRow>
-              <FieldRow label="Size" hint="every caption, the hook's words and the small print together; a block that would take more than three lines still steps down">
-                <RangeField
-                  label="Size"
-                  value={style.size}
-                  min={TIMELAPSE_STYLE_LIMITS.size.min}
-                  max={TIMELAPSE_STYLE_LIMITS.size.max}
-                  step={0.05}
-                  format={(v) => `${Math.round(v * 100)} %`}
-                  onChange={(size) => setStyle({ size })}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Size"
+                hint="every caption, the hook's words and the small print together; a block that would take more than three lines still steps down"
+                value={style.size}
+                min={TIMELAPSE_STYLE_LIMITS.size.min}
+                max={TIMELAPSE_STYLE_LIMITS.size.max}
+                step={0.05}
+                format={(v) => `${Math.round(v * 100)} %`}
+                onChange={(size) => setStyle({ size })}
+              />
               <SwitchRow label="Bold" name="Bold" checked={style.bold} onChange={(bold) => setStyle({ bold })} />
               <SwitchRow label="Capitals" name="Capitals" checked={style.uppercase} onChange={(uppercase) => setStyle({ uppercase })} />
               <FieldRow label="Behind" hint="a filled box, a drop shadow, or the words alone">
@@ -464,28 +462,25 @@ export default function TimelapseSheet({
               </FieldRow>
               {style.background === 'box' && (
                 <>
-                  <FieldRow label="Corners">
-                    <RangeField
-                      label="Corner radius"
-                      value={style.radius}
-                      min={TIMELAPSE_STYLE_LIMITS.radius.min}
-                      max={TIMELAPSE_STYLE_LIMITS.radius.max}
-                      step={0.25}
-                      format={(v) => (v === 0 ? 'square' : v >= TIMELAPSE_STYLE_LIMITS.radius.max ? 'pill' : `${Math.round((v / TIMELAPSE_STYLE_LIMITS.radius.max) * 100)} %`)}
-                      onChange={(radius) => setStyle({ radius })}
-                    />
-                  </FieldRow>
-                  <FieldRow label="Box opacity">
-                    <RangeField
-                      label="Box opacity"
-                      value={style.boxOpacity}
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      format={(v) => `${Math.round(v * 100)} %`}
-                      onChange={(boxOpacity) => setStyle({ boxOpacity })}
-                    />
-                  </FieldRow>
+                  <SliderRow
+                    label="Corners"
+                    name="Corner radius"
+                    value={style.radius}
+                    min={TIMELAPSE_STYLE_LIMITS.radius.min}
+                    max={TIMELAPSE_STYLE_LIMITS.radius.max}
+                    step={0.25}
+                    format={(v) => (v === 0 ? 'square' : v >= TIMELAPSE_STYLE_LIMITS.radius.max ? 'pill' : `${Math.round((v / TIMELAPSE_STYLE_LIMITS.radius.max) * 100)} %`)}
+                    onChange={(radius) => setStyle({ radius })}
+                  />
+                  <SliderRow
+                    label="Box opacity"
+                    value={style.boxOpacity}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    format={(v) => `${Math.round(v * 100)} %`}
+                    onChange={(boxOpacity) => setStyle({ boxOpacity })}
+                  />
                 </>
               )}
               <FieldRow label="Colours" hint="the words; the box or the shadow; the tease's accent — its box, or its words when there is no box">

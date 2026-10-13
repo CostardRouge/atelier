@@ -10,7 +10,7 @@ import {
 import { MAX_CARDS } from '../../../shared/media/motion-cards';
 import { MAX_FRAMING_SCALE, scaleFramingBy, type Framing } from '../../../shared/media/framing';
 import Button from '../../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, Readout, SelectField } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, SelectField, SliderRow } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
 import Segmented from '../../../shared/ui/Segmented';
 import { EASINGS } from '../PieceStylePanel';
@@ -233,18 +233,18 @@ export default function PanZoomSection({
         </FieldRow>
       )}
       {moving && (
-        <FieldRow label="Pause" hint={count < 2 ? 'A pause needs a second card.' : undefined}>
-          <RangeField
-            label="How long the view holds on each card"
-            min={0}
-            max={2}
-            step={0.05}
-            value={holdSeconds}
-            onChange={onHold}
-            format={(v) => `${v.toFixed(2)} s`}
-            disabled={count < 2}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Pause"
+          hint={count < 2 ? 'A pause needs a second card.' : undefined}
+          name="How long the view holds on each card"
+          min={0}
+          max={2}
+          step={0.05}
+          value={holdSeconds}
+          onChange={onHold}
+          format={(v) => `${v.toFixed(2)} s`}
+          disabled={count < 2}
+        />
       )}
       <FieldRow label="Quick move" align="start" hint={presetHint(presets)}>
         <div className="grid grid-cols-3 gap-1.5 w-full">
@@ -290,17 +290,16 @@ export default function PanZoomSection({
             />
           </FieldRow>
           {motion.easing === 'steps' && (
-            <FieldRow label="Steps">
-              <RangeField
-                label="Steps between two cards"
-                min={MIN_STEPS}
-                max={MAX_STEPS}
-                step={1}
-                value={motion.steps ?? DEFAULT_STEPS}
-                onChange={(steps) => onMotion({ ...motion, steps })}
-                format={(v) => `${v}`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Steps"
+              name="Steps between two cards"
+              min={MIN_STEPS}
+              max={MAX_STEPS}
+              step={1}
+              value={motion.steps ?? DEFAULT_STEPS}
+              onChange={(steps) => onMotion({ ...motion, steps })}
+              format={(v) => `${v}`}
+            />
           )}
           {openerSeconds > 0 && (
             <FieldRow label="Starts">
@@ -363,18 +362,18 @@ function TourRows({ tour, selected, onSelect }: { tour: TourProps; selected: num
           view can really centre at its zoom.
         </p>
       </div>
-      <FieldRow label="Zoom" hint={zoom === null ? 'Pick a card to zoom it.' : undefined}>
-        <RangeField
-          label="The picked card’s zoom"
-          min={1}
-          max={MAX_FRAMING_SCALE}
-          step={0.05}
-          value={zoom ?? 1}
-          onChange={tour.onZoom}
-          format={(v) => `${v.toFixed(2)}×`}
-          disabled={zoom === null}
-        />
-      </FieldRow>
+      <SliderRow
+        label="Zoom"
+        hint={zoom === null ? 'Pick a card to zoom it.' : undefined}
+        name="The picked card’s zoom"
+        min={1}
+        max={MAX_FRAMING_SCALE}
+        step={0.05}
+        value={zoom ?? 1}
+        onChange={tour.onZoom}
+        format={(v) => `${v.toFixed(2)}×`}
+        disabled={zoom === null}
+      />
     </>
   );
 }

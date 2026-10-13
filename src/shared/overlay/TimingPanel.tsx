@@ -12,7 +12,7 @@ import { CURVES, DEFAULT_STEPS, EASING_IDS, MAX_STEPS, MIN_STEPS } from '../moti
 import type { OverlayElement } from './overlay-types';
 import type { Scene } from './scenes';
 import Button from '../ui/Button';
-import { FieldRow, NumberField, RangeField, SelectField, ToggleField } from '../ui/Inspector';
+import { FieldRow, NumberField, SelectField, ToggleField, SliderRow } from '../ui/Inspector';
 
 interface TimingPanelProps {
   element: OverlayElement;
@@ -75,17 +75,16 @@ function StepControls({
       </FieldRow>
       {animated && (
         <>
-          <FieldRow label="Duration">
-            <RangeField
-              label={`${phase === 'in' ? 'Entrance' : 'Exit'} duration`}
-              min={0.05}
-              max={3}
-              step={0.05}
-              value={step.duration}
-              onChange={(duration) => onChange({ ...step, duration })}
-              format={(v) => `${v.toFixed(2)} s`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Duration"
+            name={`${phase === 'in' ? 'Entrance' : 'Exit'} duration`}
+            min={0.05}
+            max={3}
+            step={0.05}
+            value={step.duration}
+            onChange={(duration) => onChange({ ...step, duration })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
           <FieldRow label="Curve">
             <SelectField
               label="Curve"
@@ -95,17 +94,15 @@ function StepControls({
             />
           </FieldRow>
           {step.easing === 'steps' && (
-            <FieldRow label="Steps">
-              <RangeField
-                label="Steps"
-                min={MIN_STEPS}
-                max={MAX_STEPS}
-                step={1}
-                value={step.steps ?? DEFAULT_STEPS}
-                onChange={(steps) => onChange({ ...step, steps })}
-                format={(v) => `${v}`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Steps"
+              min={MIN_STEPS}
+              max={MAX_STEPS}
+              step={1}
+              value={step.steps ?? DEFAULT_STEPS}
+              onChange={(steps) => onChange({ ...step, steps })}
+              format={(v) => `${v}`}
+            />
           )}
           {step.preset === 'slide' && (
             <>
@@ -117,31 +114,28 @@ function StepControls({
                   options={DIRECTIONS.map((d) => ({ id: d.value, label: d.label }))}
                 />
               </FieldRow>
-              <FieldRow label="Travel">
-                <RangeField
-                  label="Travel"
-                  min={0.01}
-                  max={0.4}
-                  step={0.01}
-                  value={step.distanceFrac ?? 0.06}
-                  onChange={(distanceFrac) => onChange({ ...step, distanceFrac })}
-                  format={(v) => `${Math.round(v * 100)}%`}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Travel"
+                min={0.01}
+                max={0.4}
+                step={0.01}
+                value={step.distanceFrac ?? 0.06}
+                onChange={(distanceFrac) => onChange({ ...step, distanceFrac })}
+                format={(v) => `${Math.round(v * 100)}%`}
+              />
             </>
           )}
           {step.preset === 'scale' && (
-            <FieldRow label={phase === 'in' ? 'From' : 'To'}>
-              <RangeField
-                label={phase === 'in' ? 'Scale from' : 'Scale to'}
-                min={0.2}
-                max={2}
-                step={0.02}
-                value={step.scaleFrom ?? 0.86}
-                onChange={(scaleFrom) => onChange({ ...step, scaleFrom })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
+            <SliderRow
+              label={phase === 'in' ? 'From' : 'To'}
+              name={phase === 'in' ? 'Scale from' : 'Scale to'}
+              min={0.2}
+              max={2}
+              step={0.02}
+              value={step.scaleFrom ?? 0.86}
+              onChange={(scaleFrom) => onChange({ ...step, scaleFrom })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
           )}
         </>
       )}
@@ -251,17 +245,16 @@ export default function TimingPanel({
         }}
       />
       {anim.in && (
-        <FieldRow label="Wait">
-          <RangeField
-            label="Wait before it starts"
-            min={0}
-            max={5}
-            step={0.05}
-            value={anim.in.delay ?? 0}
-            onChange={(delay) => setStep('in', { ...anim.in!, delay })}
-            format={(v) => `${v.toFixed(2)} s`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Wait"
+          name="Wait before it starts"
+          min={0}
+          max={5}
+          step={0.05}
+          value={anim.in.delay ?? 0}
+          onChange={(delay) => setStep('in', { ...anim.in!, delay })}
+          format={(v) => `${v.toFixed(2)} s`}
+        />
       )}
       <StepControls
         phase="out"

@@ -36,6 +36,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 
 ## Decisions at a glance (details in the topic files)
 
+- A setting SLIDER is its own row, a bar with its name inside across the whole width (`SliderBar` / `SliderRow`, 2026-10-13, his pick B): a tap places, a drag is relative, a vertical swipe scrolls; a playhead stays a native range — `frontend.md`.
 - One tool registry drives nav, routes and the asset sidebar; adding a tool is one entry plus a component — `architecture.md`.
 - `shared/` never imports `tools/`; pure logic lives in DOM-free modules with unit tests beside them — `architecture.md`, `testing.md`.
 - One global asset library keyed by base name feeds every tool through capability matching — `architecture.md`.
@@ -317,7 +318,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-10-13 — **Flights come from Winnow too**: the picker's Span, Flight log facet, Logbook with tracks and *Logs only*, and the atlas's *From <instance>* door — driven headless against a stub only, never against his real instance (does it send `has_telemetry` and the `srt` sidecar on every row of a span as the client assumes?). Against his instance a span of 156 flights added 23: MEASURED there, 263 `.srt` rows for 156 clips, the 107 extra pointing at the folders his clips were moved out of (Winnow's relink keeps the dead row) and listed first — Atelier now takes the newest row and falls back on a 404 (`winnow-picker.md`), and skips and names a log no row can hand over; Winnow's relink dropping the dead rows, and whether it should KEEP sidecars in its own store, are his calls there — `winnow-picker.md`, `flight-atlas.md`.
 - 2026-10-12 — **Flight Atlas is BUILT as an EXPERIMENT** (`/atlas`, `flight-atlas.md`): every selected `.srt` drawn on one map and animated Perth-bus style — five choreographies, eight looks, seven motions, world/flights/place/zone/follow/free framing with an optional spotlight that dives on a drone, an overlay in the Studio's title styles (live statistics on odometers, date range, the aircraft read from the clip's MP4 metadata), a mount (border, text band, corners), toned opt-in OSM tiles, MP4/PNG/poster, in seven tabs. Driven headless on synthetic logs only; the MP4 encode, a real DJI MP4's model tag, his real flights and his phone are unmeasured, and whether it stays is his call.
 - 2026-10-13 — **The road's drive styles and the reworked Road pane are BUILT** (`trip-road-drive.md`, `trip-road.md`): the ribbon's defaults (100 m / 3 km) and its spike rule were set on the road-tremor lab's synthetic road and a synthetic 12 000 km loop, never on his Australia track; the pane was driven headless only. Open: open his real trip's Road pane, compare the three styles in Virée's follow camera on his Mac, and move the defaults if the track says so.
-- 2026-10-13 — **Sliders under a finger are MEASURED and three faces drawn, nothing built** (`docs/slider-touch.md`, lab https://claude.ai/artifact/BKMC8hS5Re6pFr3B59em3r, his report on Trips' *On screen* slider): a `RangeField` shares the label's line, so a row with a pill and a verb leaves ~35 px of track (< 1 px per 0.5 s step), and every slider's grab is 16 px tall with no `(pointer: coarse)` size. One rule (R1–R6: the track alone on its line at full width, a 44 px band under a finger, a tap that places the value and a drag that is relative (his answer the same day), a vertical gesture scrolls, the value typed, one component and a lint rule) and three faces — A two storeys (recommended, desktop too: Develop's `RangeSlider` already is it), B the bar, C one line when it fits. Also measured: the shared `sm` controls, switches, raw checkboxes, trim handles and curve points do not grow under a finger by themselves — proposed as the next pass. Three questions still his, §5.
+- 2026-10-13 — **Sliders are ONE BAR now, face B, his pick** (`docs/slider-touch.md` §6, lab https://claude.ai/artifact/BKMC8hS5Re6pFr3B59em3r): every inspector slider and every Develop slider is `SliderBar` — the row is the bar, full width, 44 px under a finger, a tap places, a drag is relative, a vertical swipe scrolls (`frontend.md`, «A slider IS its row»). Driven headless only, not on his phone. Open: the remaining raw SETTING ranges (look strength, a layer's opacity, Deduce, road settings, Composer) and a lint rule; then the pass on the other small targets (`sm` controls, switches, raw checkboxes, trim handles, curve points), which he wants AFTER.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -575,10 +576,10 @@ anything about media sources or document storage:
   chosen and built in five commits (§6). Read it
   before touching `Button.tsx`, `IconButton.tsx`, `Segmented.tsx`,
   `DevelopActionsGroup` or any verb that takes time.
-- **`docs/slider-touch.md`** — why a slider is unusable under a finger
-  (2026-10-13: a track sharing the label's line, a 16 px grab), the six rules
-  for every slider and three faces, with what is small elsewhere. Read it
-  before touching `RangeField`, `RangeSlider`, `.range-fill` in `index.css`
+- **`docs/slider-touch.md`** — why a slider was unusable under a finger
+  (2026-10-13: a track sharing the label's line, a 16 px grab), the six rules,
+  the three faces, his pick B and what is built (§6), with what is small
+  elsewhere. Read it before touching `SliderBar`, `SliderRow`, `RangeSlider`
   or adding any `type="range"`.
 - **`docs/progress-feedback.md`** — the proposal (2026-09-21) for saying that
   something is taking time, across the whole suite: one task registry
