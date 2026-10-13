@@ -24,6 +24,13 @@ already reads, a run is idempotent (a file already there is not fetched
 again), and no credential is ever written under the repository — a token
 comes from ``$WINNOW_TOKEN`` or a file outside it, a password from the
 terminal prompt, and the cookie lives in memory for the run.
+
+SLIM (``--slim``): an original is 40–75 MB and the trainer reads only the
+512 px cache, so each group is fetched, prepared into the cache
+(``ingest.prepare_group``) and its files DELETED before the next one, leaving
+the manifest and a ``slim`` block in ``winnow.json`` — the disk holds one
+group's files at a time. A group already on disk is slimmed in passing; a
+slim group whose cache is still there is not fetched again.
 """
 
 from __future__ import annotations
@@ -40,7 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .datasets.pairs import MANIFEST, manifest_text
+from .datasets.pairs import MANIFEST, manifest_text, slim_block
 from .imaging import RAW_EXTS, is_picture
 
 PAGE = 500  # Winnow's PAGE_MAX
@@ -229,10 +236,32 @@ def plan_import(client: WinnowClient, since: str | None = None, limit: int = 0,
     return plan
 
 
+@dataclass
+class Slim:
+    """What ``--slim`` needs from the trainer, injected so this module never decodes a picture:
+    ``prepare(folder)`` → ``{"prepared": [stem…], "skipped": {stem: reason}}``, and
+    ``ready(folder, block)`` — whether a slim group's prepared pairs are all still cached."""
+
+    prepare: Callable[[Path], dict[str, Any]]
+    ready: Callable[[Path, dict[str, Any]], bool]
+
+
+def _size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def _gigabytes(n: int) -> str:
+    return f"{n / 1e9:.1f} GB"
+
+
 def import_pairs(client: WinnowClient, out: Path, plan: ImportPlan, dry_run: bool = False,
-                 log: Callable[[str], None] = print) -> dict[str, int]:
-    """Write one group folder per original: the files (fetched once) and the manifest."""
-    counts = {"groups": 0, "fetched": 0, "kept": 0}
+                 log: Callable[[str], None] = print, slim: Slim | None = None) -> dict[str, int]:
+    """Write one group folder per original: the files (fetched once) and the manifest. With ``slim``,
+    each group is prepared into the cache and its files deleted before the next one is fetched."""
+    counts = {"groups": 0, "fetched": 0, "kept": 0, "prepared": 0, "freed": 0}
     for oid, group in sorted(plan.groups.items()):
         original, finals = group["original"], group["finals"]
         folder = out / f"winnow-{oid}"
@@ -248,6 +277,12 @@ def import_pairs(client: WinnowClient, out: Path, plan: ImportPlan, dry_run: boo
         if dry_run:
             log(f"  {folder.name}: {original_name} + {len(finals)} final(s)")
             continue
+        block = slim_block(folder) if slim else None
+        if slim and block and {int(f["id"]) for f in finals} <= set(block.get("finals", [])) \
+                and slim.ready(folder, block):
+            counts["kept"] += len(wanted)
+            counts["groups"] += 1
+            continue  # prepared on an earlier run, its cache intact: nothing to fetch
         for asset_id, dest in wanted:
             if dest.is_file() and dest.stat().st_size > 0:
                 counts["kept"] += 1
@@ -257,15 +292,33 @@ def import_pairs(client: WinnowClient, out: Path, plan: ImportPlan, dry_run: boo
         folder.mkdir(parents=True, exist_ok=True)
         title = original.get("captured_at") or original.get("capture_date") or None
         (folder / MANIFEST).write_text(manifest_text(original_name, edits, title=title), encoding="utf-8")
-        (folder / "winnow.json").write_text(json.dumps({
+        meta: dict[str, Any] = {
             "host": client.base_url,
             "original": {"id": int(original["id"]), "linked_id": oid, "filename": original.get("filename"),
                          "content_hash": original.get("content_hash"), "captured_at": original.get("captured_at")},
             "finals": [{"id": f["id"], "filename": f.get("filename"), "content_hash": f.get("content_hash")}
                        for f in finals],
-        }, indent=1), encoding="utf-8")
+        }
+        (folder / "winnow.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
         counts["groups"] += 1
-        log(f"  {folder.name}: {original_name} + {len(finals)} final(s)")
+        if slim is None:
+            log(f"  {folder.name}: {original_name} + {len(finals)} final(s)")
+            continue
+        # The slim block is written only once its pairs are in the cache, and the files deleted only after.
+        result = slim.prepare(folder)
+        freed = 0
+        for dest in [d for _, d in wanted] + list(folder.rglob("*.part")):  # a cut transfer's leftover too
+            freed += _size(dest)
+            dest.unlink(missing_ok=True)
+        if (folder / "finals").is_dir() and not any((folder / "finals").iterdir()):
+            (folder / "finals").rmdir()
+        meta["slim"] = {"finals": [int(f["id"]) for f in finals], "prepared": result["prepared"],
+                        "skipped": result["skipped"], "freed_bytes": freed}
+        (folder / "winnow.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+        counts["prepared"] += len(result["prepared"])
+        counts["freed"] += freed
+        skipped = f", {len(result['skipped'])} skipped" if result["skipped"] else ""
+        log(f"  {folder.name}: {len(result['prepared'])} pair(s) prepared{skipped}, {_gigabytes(freed)} freed")
     return counts
 
 

@@ -11,8 +11,9 @@ import pytest
 from atelier_training.cli import main
 from atelier_training.config import load_config
 from atelier_training.datasets.pairs import scan_pairs
-from atelier_training.imaging import save_image
-from atelier_training.winnow_import import WinnowClient, WinnowError, import_pairs, plan_import
+from atelier_training.imaging import RawSupportMissing, save_image
+from atelier_training.ingest import ingest
+from atelier_training.winnow_import import Slim, WinnowClient, WinnowError, import_pairs, plan_import
 
 
 def png_bytes(tmp_path, value):
@@ -141,7 +142,7 @@ def test_import_writes_groups_the_validator_reads_and_is_idempotent(stub, tmp_pa
     out = tmp_path / "pairs"
     plan = plan_import(client, log=lambda s: None)
     counts = import_pairs(client, out, plan, log=lambda s: None)
-    assert counts == {"groups": 2, "fetched": 5, "kept": 0}
+    assert counts == {"groups": 2, "fetched": 5, "kept": 0, "prepared": 0, "freed": 0}
     scan = scan_pairs(out, check_sizes=False)  # the stub's ARW is PNG bytes: no size check
     assert scan.issues == [] and scan.pair_count == 3
     g1 = out / "winnow-1"
@@ -157,7 +158,7 @@ def test_import_writes_groups_the_validator_reads_and_is_idempotent(stub, tmp_pa
         "id": 3, "linked_id": 2, "filename": "DSC02.ARW", "content_hash": "h3", "captured_at": "2026-08-01T10:00:00Z"}
 
     again = import_pairs(client, out, plan_import(client, log=lambda s: None), log=lambda s: None)
-    assert again == {"groups": 2, "fetched": 0, "kept": 5}
+    assert again == {"groups": 2, "fetched": 0, "kept": 5, "prepared": 0, "freed": 0}
 
 
 def test_cookie_login_and_refused_credentials(stub):
@@ -187,3 +188,64 @@ def test_cli_dry_run_and_token_file(stub, workspace, capsys, monkeypatch):
     assert scan_pairs(load_config().paths.pairs, check_sizes=False).pair_count == 1
     assert main(["winnow-import", "--host", stub, "--token", "bad"]) == 1
     assert "refused" in capsys.readouterr().out
+
+
+def _downloads():
+    return [p for p in Stub.seen if p.endswith("/download")]
+
+
+def test_slim_prepares_each_group_then_deletes_its_files_and_ingest_reuses_it(stub, workspace, monkeypatch, capsys):
+    monkeypatch.setenv("WINNOW_TOKEN", "wnw_secret")
+    # The fixture's ARW is PNG bytes under a RAW name: a decodable original for the one group taken here.
+    Stub.assets[1] = {**Stub.assets[1], "filename": "DSC01.png", "ext": "png"}
+    config = load_config()
+    g1 = config.paths.pairs / "winnow-1"
+
+    # A group fetched whole first, then slimmed in passing: nothing fetched again, its files deleted.
+    assert main(["winnow-import", "--host", stub, "--limit", "2"]) == 0
+    assert (g1 / "DSC01.png").is_file()
+    Stub.seen = []
+    assert main(["winnow-import", "--host", stub, "--limit", "2", "--slim"]) == 0
+    assert _downloads() == []
+    assert "2 pair(s) prepared" in capsys.readouterr().out
+    assert sorted(p.name for p in g1.iterdir()) == ["manifest.toml", "winnow.json"]
+    block = json.loads((g1 / "winnow.json").read_text())["slim"]
+    assert block["finals"] == [10, 11] and block["prepared"] == ["finals/DSC01", "finals/DSC01-bw"]
+    assert block["skipped"] == {} and block["freed_bytes"] > 0
+    for stem in block["prepared"]:
+        assert (config.paths.cache / "pairs" / "winnow-1" / stem / "input.npy").is_file()
+
+    # The validator and ingest read a slim group from its manifest and its cache alone.
+    scan = scan_pairs(config.paths.pairs)
+    assert scan.issues == [] and scan.pair_count == 2
+    report = ingest(config, sources=["pairs"], force=True)
+    assert (report.reused, report.written, report.skipped) == (2, 0, [])
+    assert len(report.entries) == 2
+
+    # Run again: a slim group whose cache is intact is not fetched.
+    Stub.seen = []
+    assert main(["winnow-import", "--host", stub, "--limit", "2", "--slim"]) == 0
+    assert _downloads() == []
+
+    # Its cache gone: ingest says how to get it back, and the import fetches it again.
+    import shutil
+    shutil.rmtree(config.paths.cache / "pairs" / "winnow-1")
+    report = ingest(config, sources=["pairs"])
+    assert len(report.skipped) == 2 and "winnow-import --slim" in report.skipped[0][1]
+    assert main(["winnow-import", "--host", stub, "--limit", "2", "--slim"]) == 0
+    assert len(_downloads()) == 3
+    assert ingest(config, sources=["pairs"]).reused == 2
+
+
+def test_slim_keeps_the_files_when_no_decoder_could_read_them(stub, tmp_path):
+    client = WinnowClient(stub, token="wnw_secret")
+    out = tmp_path / "pairs"
+
+    def no_raw(folder):
+        raise RawSupportMissing(folder / "DSC01.ARW")
+
+    with pytest.raises(RawSupportMissing):
+        import_pairs(client, out, plan_import(client, limit=2, log=lambda s: None), log=lambda s: None,
+                     slim=Slim(prepare=no_raw, ready=lambda folder, block: True))
+    assert (out / "winnow-1" / "DSC01.ARW").is_file()
+    assert "slim" not in json.loads((out / "winnow-1" / "winnow.json").read_text())

@@ -8,7 +8,9 @@ says how a run merges into it). A pair already cached and newer than its two
 files is not redone, so an ingest can be stopped and rerun. A pair whose aspect
 differs (a crop, a turn, a straightening) is ALIGNED through ``align.py`` — the
 original cut to the edit's frame — and skipped, said, only when the edit is not
-a cut of the original (``ingest.align``).
+a cut of the original (``ingest.align``). A SLIM group (``winnow-import --slim``)
+was prepared one group at a time by ``prepare_group`` and its files deleted: its
+cached pairs are reused as they are, never redone.
 """
 
 from __future__ import annotations
@@ -26,8 +28,16 @@ import numpy as np
 from .align import align_pair
 from .config import Config
 from .datasets.fivek import scan_fivek
-from .datasets.pairs import scan_pairs
-from .imaging import fit_long_edge, load_image, resize_to, save_image, to_uint16
+from .datasets.pairs import edit_stem, read_group, scan_pairs
+from .imaging import (
+    HeifSupportMissing,
+    RawSupportMissing,
+    fit_long_edge,
+    load_image,
+    resize_to,
+    save_image,
+    to_uint16,
+)
 
 SOURCES = ("fivek", "pairs", "synthetic")
 
@@ -40,6 +50,7 @@ class PairRef:
     input: Path
     target: Path
     label: str | None = None
+    slim: bool = False  # its files are gone: only its cache can serve it
 
 
 @dataclass
@@ -59,8 +70,9 @@ def _pairs_refs(source: str, root: Path, tolerance: float, report: IngestReport)
         assert group.original is not None
         for edit in group.edits:
             # The edit's path inside its group, suffix dropped: `x.jpg` and `edits/x.jpg` stay distinct.
-            stem = edit.file.relative_to(group.folder).with_suffix("").as_posix()
-            yield PairRef(f"{source}/{group.name}/{stem}", source, group.name, group.original, edit.file, edit.label)
+            stem = edit_stem(edit.file, group.folder)
+            yield PairRef(f"{source}/{group.name}/{stem}", source, group.name, group.original, edit.file, edit.label,
+                          slim=group.slim)
 
 
 def _fivek_refs(source: str, root: Path, ingest: dict, report: IngestReport) -> Iterator[PairRef]:
@@ -89,10 +101,16 @@ def collect(config: Config, sources: list[str], report: IngestReport) -> list[Pa
     return refs
 
 
+def _cached(folder: Path) -> bool:
+    return all((folder / n).is_file() for n in ("input.npy", "target.npy", "meta.json"))
+
+
 def _fresh(folder: Path, ref: PairRef) -> bool:
     files = [folder / "input.npy", folder / "target.npy", folder / "meta.json"]
-    if not all(f.is_file() for f in files):
+    if not _cached(folder):
         return False
+    if ref.slim:
+        return True  # nothing on disk to be newer than it
     newest_source = max(ref.input.stat().st_mtime, ref.target.stat().st_mtime)
     return min(f.stat().st_mtime for f in files) >= newest_source
 
@@ -168,11 +186,17 @@ def ingest(
     todo: list[int] = []
     for i, ref in enumerate(refs):
         folder = cache / ref.id
-        if not force and _fresh(folder, ref):
+        if (not force or ref.slim) and _fresh(folder, ref):
             metas[i] = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
             report.reused += 1
+        elif ref.slim:
+            report.skipped.append((ref.id, "its files were deleted once prepared (winnow-import --slim) and its "
+                                           "cache is gone: run `atelier-train winnow-import --slim` again"))
         else:
             todo.append(i)
+    if force and any(r.slim for r in refs):
+        report.notes.append("--force does not redo a slim group (its files are gone): delete its folder and run "
+                            "`atelier-train winnow-import --slim` again to prepare it anew")
 
     def done(i: int, outcome: tuple[str, dict | str]) -> None:
         status, value = outcome
@@ -235,3 +259,36 @@ def write_index(cache: Path, entries: list[dict], replaced: tuple[str, ...] | li
     tmp.write_text("".join(json.dumps(e) + "\n" for e in kept + entries), encoding="utf-8")
     tmp.replace(index)  # one rename, so a run stopped mid-write never leaves a half index
     return index
+
+
+def prepare_group(config: Config, folder: Path, source: str = "pairs") -> dict:
+    """Prepare every edit of ONE group into the cache, in this process — what ``winnow-import --slim`` runs
+    before deleting the group's files. Returns ``{"prepared": [stem…], "skipped": {stem: reason}}``. A
+    missing RAW or HEIF decoder RAISES: deleting files no pair was made from would lose them for nothing."""
+    ingest_cfg = config.section("ingest")
+    long_edge = int(ingest_cfg.get("long_edge", 512))
+    tol = float(ingest_cfg.get("aspect_tolerance", 0.01))
+    align = str(ingest_cfg.get("align", "auto"))
+    raw = config.section("raw")
+    issues: list = []
+    group = read_group(folder, issues)
+    if group.original is None or not group.edits:
+        raise ValueError("; ".join(i.message for i in issues) or f"{folder.name}: nothing to prepare")
+    out: dict = {"prepared": [], "skipped": {}}
+    for edit in group.edits:
+        stem = edit_stem(edit.file, folder)
+        ref = PairRef(f"{source}/{group.name}/{stem}", source, group.name, group.original, edit.file, edit.label)
+        try:
+            prepare_pair(ref, config.paths.cache / ref.id, long_edge, tol, raw, align)
+        except (RawSupportMissing, HeifSupportMissing):
+            raise
+        except Exception as e:  # noqa: BLE001 — a pair that cannot be made is listed, as ingest does
+            out["skipped"][stem] = str(e)
+            continue
+        out["prepared"].append(stem)
+    return out
+
+
+def group_prepared(config: Config, folder: Path, block: dict, source: str = "pairs") -> bool:
+    """Whether every pair a slim group says it prepared is still in the cache."""
+    return all(_cached(config.paths.cache / source / folder.name / stem) for stem in block.get("prepared", []))

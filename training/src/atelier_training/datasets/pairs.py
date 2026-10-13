@@ -20,12 +20,18 @@ Layout (documented for him in ``training/README.md``)::
     file = "edits/DSC01234-bw.jpg"
 
 A folder whose name starts with ``_`` or ``.`` is ignored (a place to park things).
+
+A SLIM group (``winnow-import --slim``) has been prepared into the cache and its
+files deleted to save the disk: its ``winnow.json`` carries a ``slim`` block
+listing the edits that were prepared. Its manifest is read as usual, its files
+are not required, and only the prepared edits are listed.
 The validator reports every problem at once, in plain words, and never moves or
 rewrites a file — except ``init_group``, on request, which only WRITES a manifest.
 """
 
 from __future__ import annotations
 
+import json
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,6 +54,7 @@ class Group:
     original: Path | None = None
     edits: list[Edit] = field(default_factory=list)
     title: str | None = None
+    slim: bool = False  # prepared into the cache, its files deleted: only the cache holds its pixels
 
 
 @dataclass(frozen=True)
@@ -102,8 +109,29 @@ def _inside(path: Path, folder: Path) -> bool:
         return False
 
 
+SLIM_META = "winnow.json"
+
+
+def slim_block(folder: Path) -> dict | None:
+    """The ``slim`` block of a group's ``winnow.json`` — ``{finals, prepared, skipped, freed_bytes}`` — or
+    None for a group whose files are on disk."""
+    try:
+        block = json.loads((folder / SLIM_META).read_text(encoding="utf-8")).get("slim")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return block if isinstance(block, dict) else None
+
+
+def edit_stem(edit: Path, folder: Path) -> str:
+    """An edit's path inside its group, suffix dropped — the last part of its cache id."""
+    return edit.relative_to(folder).with_suffix("").as_posix()
+
+
 def read_group(folder: Path, issues: list[Issue]) -> Group:
     group = Group(name=folder.name, folder=folder)
+    slim = slim_block(folder)
+    prepared = set(slim.get("prepared", [])) if slim else set()
+    group.slim = slim is not None
 
     def err(msg: str) -> None:
         issues.append(Issue("error", group.name, msg))
@@ -126,7 +154,7 @@ def read_group(folder: Path, issues: list[Issue]) -> Group:
         path = folder / original
         if not _inside(path, folder):
             err(f"the original {original!r} points outside the group's folder.")
-        elif not path.is_file():
+        elif not path.is_file() and not group.slim:
             err(f"the original {original!r} is not in the folder.")
         elif not is_picture(path):
             err(f"the original {original!r} is not a picture this tool reads (JPEG, PNG, TIFF or RAW).")
@@ -145,6 +173,11 @@ def read_group(folder: Path, issues: list[Issue]) -> Group:
         path = folder / entry["file"]
         if not _inside(path, folder):
             err(f"the edit {entry['file']!r} points outside the group's folder.")
+            continue
+        if group.slim:
+            if edit_stem(path, folder) in prepared:  # the others were skipped when it was prepared
+                label = entry.get("label") if isinstance(entry.get("label"), str) else None
+                group.edits.append(Edit(file=path, label=label))
             continue
         if not path.is_file():
             err(f"the edit {entry['file']!r} is not in the folder.")
@@ -166,7 +199,7 @@ def read_group(folder: Path, issues: list[Issue]) -> Group:
 
 def check_geometry(group: Group, issues: list[Issue], tolerance: float) -> None:
     """Warn where an edit cannot be compared pixel for pixel with its original."""
-    if group.original is None:
+    if group.original is None or group.slim:
         return
     try:
         ow, oh = image_size(group.original)
