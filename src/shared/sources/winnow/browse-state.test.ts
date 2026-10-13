@@ -78,6 +78,13 @@ describe('the browser\'s remembered place', () => {
     expect(readBrowseState('b.example')).toMatchObject({ view: 'day', chapterId: null });
   });
 
+  it('remembers the last span, and drops one that is not two dates in order', () => {
+    writeBrowseState('a.example', place({ view: 'span', span: { from: '2026-09-12', to: '2026-10-03' } }));
+    expect(readBrowseState('a.example')).toMatchObject({ view: 'span', span: { from: '2026-09-12', to: '2026-10-03' } });
+    localStorage.setItem(KEY, JSON.stringify({ 'b.example': { ...place(), span: { from: '2026-10-03', to: '2026-09-12' } } }));
+    expect(readBrowseState('b.example')?.span).toBeUndefined();
+  });
+
   it('rejects a month that is not one — it would build a calendar of nothing', () => {
     localStorage.setItem(KEY, JSON.stringify({ 'a.example': { ...place(), month: 'banana' } }));
     expect(readBrowseState('a.example')).toBeNull();

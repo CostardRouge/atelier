@@ -168,3 +168,26 @@ Space or looking unticks it; and the tile behind keeps the focus unless the
 look blurs it, so Enter would click that tile instead of ticking the picture
 on screen. While the lightbox is up the picker's Escape/Enter and its grid
 keys stand down (`useDialogKeys` takes `undefined`).
+
+## A SPAN scope beside Day and Folder (2026-10-13)
+
+**Decision.** The picker lists a SPAN of days as one scope (`picker/span.ts`,
+`SpanPicker.tsx`), his ask beside the Flight Atlas: the picker was day by day,
+and a trip or a season of flights is neither one day nor one Winnow session.
+**How to apply**:
+
+- **The request is the Day scope's own** (`allAssets({ dateFrom, dateTo })`)
+  with two different ends, capped at `SPAN_CAP` (3 000). A list that reaches
+  its scope's ceiling — Day, Span or Folder — is SAID on the status line
+  (`the first N only — narrow the span`), never cut in silence.
+- **Presets**: the host's own spans first (the anchor's leg, a multi-day
+  anchor), then the last 7 and 30 days, this month, this year, each ending
+  today; two `DateRangeField`s for the rest. A preset applies and closes.
+- **Where it opens**: `PickerHost.start.scope: 'span'` opens on it (with
+  `start.span`, else the last span used on this instance — `BrowseState.span`
+  —, else the month of the host's day up to today). Otherwise the picker still
+  opens on the host's DAY; Span is a click away and keeps its last span.
+- **The grid reads under day headings** in Span and Folder when ordered by
+  time: CONSECUTIVE runs of `capture_date` (`dayRuns`, `rowDay`), never
+  regrouped, so a ⇧-click, the tick verbs and the lightbox walk the order
+  drawn. Ordered by stars, the headings go away.

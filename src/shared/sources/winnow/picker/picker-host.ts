@@ -16,8 +16,13 @@ export interface PickerHost {
   title: string;
   /** Where the ticked media go, said in a pill beside the title: `Library`, `Roll · Whitsundays`. */
   destination: string;
-  /** Where it opens: always a day; a half when the host is looking at one (the sidebar). */
-  start: { day: string; half?: LibraryHalf | null };
+  /**
+   * Where it opens: a day, and a half when the host is looking at one (the
+   * sidebar). `scope: 'span'` opens on several days instead — `span` when the
+   * host names one, else the last span used on this instance
+   * (`picker/span.ts`, `openingSpan`).
+   */
+  start: { day: string; half?: LibraryHalf | null; scope?: 'day' | 'span'; span?: DaySpan | null };
   /** The host's own day and the span around it, marked in the month (the sidebar's anchor). */
   anchor?: PickerAnchor | null;
   /** Already where this host would put it — drawn but never ticked. */

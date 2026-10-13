@@ -12,7 +12,7 @@ import { readBrowseState, writeBrowseState } from '../browse-state';
 import DayPicker from '../DayPicker';
 import { describeCulling } from '../culling';
 import MediaLightbox, { type LightboxItem } from '../../../ui/MediaLightbox';
-import { formatIsoDate } from '../../../roadtrip/trip-days';
+import { formatIsoDate, todayIso } from '../../../roadtrip/trip-days';
 import Button from '../../../ui/Button';
 import IconButton from '../../../ui/IconButton';
 import Segmented from '../../../ui/Segmented';
@@ -24,6 +24,8 @@ import { Icons } from '../../../ui/icons';
 import useDialogKeys from '../../../ui/use-dialog-keys';
 import { useInViewport } from '../../../lib/use-in-viewport';
 import PickerRail from './PickerRail';
+import SpanPicker from './SpanPicker';
+import { dayHeading, dayRuns, openingSpan, rowDay, spanDays, spanPresets } from './span';
 import PickerTile, { type PileBadge } from './PickerTile';
 import {
   activeFacets,
@@ -55,10 +57,13 @@ import type { PickerAction, PickerHost } from './picker-host';
 /** How many rows a scope may bring: a day is a few hundred, a folder a few thousand. */
 const DAY_CAP = 600;
 const FOLDER_CAP = 2000;
+/** A span is weeks of an instance: its list stops here, and the status line says it did. */
+const SPAN_CAP = 3000;
 /** Tiles mounted per batch, the next as the end of the grid nears. */
 const BATCH = 240;
 
-type Scope = 'day' | 'session';
+type Scope = 'day' | 'span' | 'session';
+const CAP: Record<Scope, number> = { day: DAY_CAP, span: SPAN_CAP, session: FOLDER_CAP };
 
 const SWATCH: Record<string, string> = {
   pick: 'bg-ok',
@@ -93,8 +98,9 @@ function typing(target: EventTarget | null): boolean {
  * (`docs/winnow-day-sheet-verdicts.md` §7, his pick of the rail face).
  *
  * - **A scope**: a day, walked with the sidebar's own stepper and its month
- *   (bars or weeks, `DayPicker`), or a folder (a Winnow session), picked from
- *   a list under the same control. The library half narrows the scope on the
+ *   (bars or weeks, `DayPicker`), a SPAN of days (`span.ts` — a trip, a month
+ *   of flights, listed as one scope and grouped by day), or a folder (a
+ *   Winnow session), picked from a list under the same control. The library half narrows the scope on the
  *   server; everything else is the rail's, over the rows (`pick-filter.ts`).
  * - **Winnow's word on every tile** — flag, stars, label, a Gallery final —
  *   and a rail of facets with the scope's counts.
@@ -133,11 +139,14 @@ export default function WinnowPicker({
   const remembered = useMemo(() => readBrowseState(connection.id), [connection.id]);
 
   // --- the scope -------------------------------------------------------------
-  // Always opens on the host's day: the host knows what the person is looking
-  // at. The folder, the half (unless the host names one) and the rail come
-  // back from the last sitting on this instance.
-  const [scope, setScope] = useState<Scope>('day');
+  // Opens on the host's day (or its span, when it asks for one): the host
+  // knows what the person is looking at. The folder, the last span, the half
+  // (unless the host names one) and the rail come back from the last sitting
+  // on this instance.
+  const [scope, setScope] = useState<Scope>(host.start.scope === 'span' ? 'span' : 'day');
   const [day, setDay] = useState(host.start.day);
+  const today = todayIso();
+  const [span, setSpan] = useState(() => openingSpan(host.start.day, today, host.start.span, remembered?.span));
   const [half, setHalf] = useState<LibraryHalf | null>(() =>
     host.start.half !== undefined ? host.start.half : (remembered?.filter.half ?? null),
   );
@@ -165,9 +174,11 @@ export default function WinnowPicker({
     let cancelled = false;
     const narrowing = { ...(half ? { half } : {}), bursts: framesListed ? ('frames' as const) : ('fold' as const) };
     const ask =
-      scope === 'day'
-        ? client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, DAY_CAP, controller.signal)
-        : client.allAssets({ sessionId: sessionId!, ...narrowing }, FOLDER_CAP, controller.signal);
+      scope === 'session'
+        ? client.allAssets({ sessionId: sessionId!, ...narrowing }, FOLDER_CAP, controller.signal)
+        : scope === 'span'
+          ? client.allAssets({ dateFrom: span.from, dateTo: span.to, ...narrowing }, SPAN_CAP, controller.signal)
+          : client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, DAY_CAP, controller.signal);
     ask
       .then((all) => {
         if (!cancelled) setRows(all);
@@ -181,7 +192,7 @@ export default function WinnowPicker({
       cancelled = true;
       controller.abort();
     };
-  }, [client, connection.id, scope, day, sessionId, half, generation, framesListed]);
+  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, generation, framesListed]);
 
   // A folded pile's frames, asked for on its unfold where the scope's list
   // could not carry them. Forgotten with the scope.
@@ -257,11 +268,12 @@ export default function WinnowPicker({
       day,
       sessionId,
       chapterId: stored?.chapterId ?? null,
+      span,
       fidelity: stored?.fidelity ?? 'proxy',
       facets,
       sort,
     });
-  }, [connection.id, scope, day, half, sessionId, facets, sort]);
+  }, [connection.id, scope, day, span, half, sessionId, facets, sort]);
 
   // --- what the grid holds ---------------------------------------------------
   const items = useMemo<PickItem[]>(
@@ -454,6 +466,19 @@ export default function WinnowPicker({
   const active = activeFacets(facets);
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
   const asking = rows === null && problem === null && !(scope === 'session' && sessionId === null);
+  // A list that reached its scope's ceiling is a list cut short: said, never silent.
+  const capped = rows !== null && rows.length >= CAP[scope];
+  // The host's own spans first among the presets — its leg, its open span.
+  const presets = useMemo(() => {
+    const a = host.anchor;
+    const own = [
+      ...(a?.within ? [{ label: a.within.label, span: a.within.span }] : []),
+      ...(a && spanDays(a.span) > 1 ? [{ label: a.label, span: a.span }] : []),
+    ];
+    return spanPresets(today, own);
+  }, [host.anchor, today]);
+  // Several days in one grid read under day headings, in the list's own order.
+  const grouped = scope !== 'day' && sort === 'time';
 
   const pileBadge = (it: PickItem, inRow: boolean): PileBadge | null => {
     if (it.pileId === null) return null;
@@ -539,6 +564,7 @@ export default function WinnowPicker({
               onChange={(v) => setScope(v)}
               options={[
                 { id: 'day', label: 'Day' },
+                { id: 'span', label: 'Span', title: 'Several days as one list — a trip, a month' },
                 { id: 'session', label: 'Folder' },
               ]}
             />
@@ -555,6 +581,8 @@ export default function WinnowPicker({
                   filter={half ? { half } : undefined}
                   showLine={false}
                 />
+              ) : scope === 'span' ? (
+                <SpanPicker span={span} onSpan={setSpan} presets={presets} today={today} />
               ) : (
                 <FolderPicker
                   sessions={sessions}
@@ -580,7 +608,12 @@ export default function WinnowPicker({
                 ? `nothing here${host.accepts ? ' this host can take' : ''}`
                 : `${counts.total} media · ${photos} photo${photos === 1 ? '' : 's'}${clips ? ` · ${clips} clip${clips === 1 ? '' : 's'}` : ''}${
                     piles.size ? ` · ${piles.size} burst${piles.size === 1 ? '' : 's'}` : ''
-                  }${heldCount ? ` · ${heldCount} ${host.heldLabel}` : ''} · culled ${culled} %`}
+                  }${heldCount ? ` · ${heldCount} ${host.heldLabel}` : ''} · culled ${culled} %${
+                    scope === 'span' ? ` · ${spanDays(span)} days` : ''
+                  }`}
+          {capped && !asking && (
+            <span className="text-warn"> · the first {rows!.length} only — narrow the {scope === 'session' ? 'folder' : 'span'} to see the rest</span>
+          )}
           {problem && (
             <span className="text-danger">
               {' '}
@@ -714,37 +747,61 @@ export default function WinnowPicker({
                   )}
                 </p>
               ) : (
-                // Rows pinned in pixels: an `auto` row in a scrolling tile
-                // grid is clipped to a sliver (`frontend.md`).
-                <ul className={`m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`}>
-                  {shownItems.slice(0, limit).map((it) => {
-                    const pile = it.pileId === null ? undefined : piles.get(it.pileId);
-                    const row = pile && pile.coverId === it.id && unfolded.has(pile.id) ? framesUnder(items, pile) : null;
-                    return (
-                      <Fragment key={it.id}>
-                        {tile(it)}
-                        {row && (
-                          <li className="col-span-full row-span-1 min-w-0 rounded-paper border border-dashed border-line-strong bg-paper-2">
-                            <ul className="m-0 p-2 list-none flex gap-2 overflow-x-auto h-full items-center">
-                              {row.length ? (
-                                row.map((f) => tile(f, true))
-                              ) : (
-                                <li className="font-mono text-2xs text-muted px-2">
-                                  {pileAsking.has(pile!.id)
-                                    ? `asking ${connection.id} for the burst's frames…`
-                                    : `${pile!.size - 1} more frame${pile!.size === 2 ? '' : 's'} on ${connection.id}, not listed here`}
-                                </li>
-                              )}
-                            </ul>
-                          </li>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                  {limit < shownItems.length && (
+                (() => {
+                  const more = limit < shownItems.length && (
                     <MoreTiles key={limit} onVisible={() => setLimit((n) => n + BATCH)} />
-                  )}
-                </ul>
+                  );
+                  // Rows pinned in pixels: an `auto` row in a scrolling tile
+                  // grid is clipped to a sliver (`frontend.md`).
+                  const grid = `m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`;
+                  const cells = (list: PickItem[]) =>
+                    list.map((it) => {
+                      const pile = it.pileId === null ? undefined : piles.get(it.pileId);
+                      const row = pile && pile.coverId === it.id && unfolded.has(pile.id) ? framesUnder(items, pile) : null;
+                      return (
+                        <Fragment key={it.id}>
+                          {tile(it)}
+                          {row && (
+                            <li className="col-span-full row-span-1 min-w-0 rounded-paper border border-dashed border-line-strong bg-paper-2">
+                              <ul className="m-0 p-2 list-none flex gap-2 overflow-x-auto h-full items-center">
+                                {row.length ? (
+                                  row.map((f) => tile(f, true))
+                                ) : (
+                                  <li className="font-mono text-2xs text-muted px-2">
+                                    {pileAsking.has(pile!.id)
+                                      ? `asking ${connection.id} for the burst's frames…`
+                                      : `${pile!.size - 1} more frame${pile!.size === 2 ? '' : 's'} on ${connection.id}, not listed here`}
+                                  </li>
+                                )}
+                              </ul>
+                            </li>
+                          )}
+                        </Fragment>
+                      );
+                    });
+                  const batch = shownItems.slice(0, limit);
+                  if (!grouped) {
+                    return (
+                      <ul className={grid}>
+                        {cells(batch)}
+                        {more}
+                      </ul>
+                    );
+                  }
+                  const runs = dayRuns(batch, (it) => rowDay(it.row));
+                  return runs.map((run, k) => (
+                    <section key={`${run.day ?? 'undated'}-${k}`} aria-label={run.day ? dayHeading(run.day) : 'Undated'} className="mb-3">
+                      <h3 className="sticky top-0 z-[2] m-0 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
+                        {run.day ? dayHeading(run.day) : 'No date'}
+                        <span className="font-mono text-3xs font-normal text-muted tabular-nums">{run.items.length} media</span>
+                      </h3>
+                      <ul className={grid}>
+                        {cells(run.items)}
+                        {k === runs.length - 1 && more}
+                      </ul>
+                    </section>
+                  ));
+                })()
               )}
             </div>
           </div>

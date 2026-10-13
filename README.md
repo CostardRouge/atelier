@@ -2451,7 +2451,9 @@ twice is still refused: a variant is made from a picture already there.
 **Adding what you culled in Winnow.** *Add ▾ → A day on your Winnow…* opens
 the **Winnow picker**, the same one as the Library's *browse all*: a **day**,
 walked with the Library's own stepper and its month (a bar per day, or the
-weeks), or a **folder** as Winnow ingested it. Every tile wears Winnow's word —
+weeks), a **span** of days listed as one scope and grouped by day (your leg,
+the last 7 or 30 days, this month, this year, or two dates), or a **folder**
+as Winnow ingested it. Every tile wears Winnow's word —
 the pick or reject flag, the stars, a label, a *Gallery* chip when a final
 already links to it — and a rail of filters narrows the list: Incoming ·
 Gallery · All, the verdict, a star floor, photos or clips, the extension, the
@@ -2837,7 +2839,9 @@ makes it the active one; a tile already fetched is marked and only
 re-activates. Each tile also wears what you decided in Winnow — a flag for a
 pick or a reject, its stars. "Browse all" opens the **Winnow picker** where the
 tab is looking — its day and its half — to tick many at once: by day (the
-same stepper and month) or by folder, every tile with Winnow's verdict, a rail
+same stepper and month), by **span** (several days as one list, grouped by
+day — a whole trip at once; a very long span says where it was cut) or by
+folder, every tile with Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
 extension, body, tags, no final yet, not in the library), tick verbs over what
 is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
