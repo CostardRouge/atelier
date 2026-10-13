@@ -24,6 +24,10 @@ Today it ships ten tools, converging into a few editors:
   a DJI clip and export an MP4 with the telemetry burned in.
 - **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
   walk the aircraft along it (the base map is opt-in — see below).
+- **Flight Atlas** *(experimental)* — draw every drone flight you select on one
+  map and animate them together, the way the Perth bus map draws a city's day:
+  a faint network of every route, comets for what is in the air, a clock and a
+  count in the corner; export it as an MP4 or a PNG.
 - **Composer** — combine a clip, its flight map and a draggable telemetry
   readout into one framed composition (aspect, layout, LUT), preview it live,
   and export it to MP4.
@@ -40,8 +44,8 @@ Today it ships ten tools, converging into a few editors:
 > *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The **base map** under a flight path, in the Flight Map and the Composer,
->   under the map Trips' openers pick their stops on, and under a trip's map
+> - The **base map** under a flight path, in the Flight Map, the Composer and
+>   the Flight Atlas, under the map Trips' openers pick their stops on, and under a trip's map
 >   view (whose own coastline ships with the app): turning it on
 >   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
 >   tile server. The flight path, the stops, the legs and the towns always draw locally;
@@ -3233,6 +3237,67 @@ MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
 CSS): it stays out of the main bundle and downloads only when you open this
 tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
 coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
+
+## Flight Atlas tool (experimental)
+
+Every DJI flight selected in the Library — a clip with its `.srt`, or a loose
+`.srt` log — drawn together on one map and animated. Only the **GPS track** of
+each log is read (four fixes a second, timed by the log's own wall clock, so a
+time-lapse or a slow-motion clip runs at its real pace); of a clip beside it,
+only the few kilobytes of metadata that may name the aircraft. *Add .srt
+files* / *A folder* in the panel feed the Library directly. The panel has
+seven tabs:
+
+- **Flights.** Take-offs within 4 km of each other form a *place*, named
+  offline from the shipped city index; a place chip shows or hides its
+  flights (double-click: that place alone); hovering a flight singles it out.
+  **Drones**: the aircraft each clip's MP4 metadata names (QuickTime `©mdl`,
+  an `ilst`, Apple's `keys`; a DJI camera code such as `FC8482` becomes
+  *DJI Mini 4 Pro*) — renamable, and a name for the flights whose file says
+  nothing. Nothing is guessed from the flight itself.
+- **Style.** Looks (Transit, Aurora, Ember, Neon, Papier, Blueprint, Golden
+  hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
+  fade, ghost network, smoothing), drones (size, pulse, halo, take-off and
+  landing ripples, altitude drawn as height with a ground shadow and a thread),
+  colour (one, per flight, place, altitude, speed, date or hour, nine palettes,
+  glow, additive light) and the map (ground, shipped coastline, grid, vignette,
+  place names, and — only if switched on here — OpenStreetMap tiles toned
+  *night*, *grey*, *sepia* or *natural*, credited in every frame they appear
+  in; see "The network exceptions"; the switch is off every time the atlas
+  opens).
+- **Motion.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
+  day at the hour it was flown, slowed against the clock) or *Calendar* (in
+  the order flown, the idle between flights cut to a cap while the clock
+  races through it); total length, stagger, overlap, *equalize*, seeded
+  jitter, order, a tempo curve, a hold. Seven motion presets.
+- **Camera.** What the frame shows: the **world**, every **flight**, one
+  **place**, a **zone** (drawn as a rectangle on the map, or taken from the
+  view on screen), a camera that **follows** what is in the air (pulling out to
+  travel between places), or **free** (drag and zoom). Drift, bearing and tilt
+  on top. **Spotlight** (optional): now and then the camera dives on one
+  flight — at random, from the flights you star, the longest still flying or
+  the one that goes farthest — follows it at a chosen closeness while the
+  others fade, and comes back; on a place or a zone, only the flights it shows
+  are followed.
+- **Overlay.** Every word wears the **Studio's and Trips' title styles** (the
+  same presets and panel: font, case, colour, legibility, glow) plus an
+  accent. Pieces, each in one of six spots (corners, top, bottom): a title and
+  subtitle; **statistics** — flights, distance, airtime, highest, average
+  height (time-weighted), average and top speed, places — as a column or a
+  row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
+  or mi/ft; the **date range**; the **drones** (all shown, or those in the
+  air); a **card** for the drone in the spotlight (its name, day, aircraft,
+  live height, speed and distance); a clock, the count of what is flying, the
+  activity curve and the credits.
+- **Format.** Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
+  rate (30/60), and a **mount**: a border, a deeper band under the map for the
+  text, rounded corners, its colour, and whether the text sits on the map or
+  across the whole frame. The preview is letterboxed to it.
+- **Export.** The preview is drawn by the export's own painter: an MP4 (H.264,
+  no sound), the frame on screen as a PNG, or a *poster* with every route
+  drawn whole.
+
+The dials are remembered in this browser; nothing here is a document.
 
 ## Composer tool
 
