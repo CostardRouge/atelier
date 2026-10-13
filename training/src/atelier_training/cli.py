@@ -264,7 +264,9 @@ def cmd_export_develop(args: argparse.Namespace) -> int:
 def cmd_winnow_import(args: argparse.Namespace) -> int:
     import getpass
 
-    from .winnow_import import WinnowClient, WinnowError, import_pairs, plan_import, read_token
+    from .imaging import HeifSupportMissing, RawSupportMissing
+    from .ingest import group_prepared, prepare_group
+    from .winnow_import import Slim, WinnowClient, WinnowError, import_pairs, plan_import, read_token
 
     config = _config(args)
     out = Path(args.out) if args.out else config.paths.pairs
@@ -282,7 +284,12 @@ def cmd_winnow_import(args: argparse.Namespace) -> int:
             print("✗ No credential: pass --token-file <file>, set $WINNOW_TOKEN, or --login <username>.")
             return 1
         plan = plan_import(client, since=args.since, limit=args.limit)
-        counts = import_pairs(client, out, plan, dry_run=args.dry_run)
+        slim = Slim(prepare=lambda folder: prepare_group(config, folder),
+                    ready=lambda folder, block: group_prepared(config, folder, block)) if args.slim else None
+        counts = import_pairs(client, out, plan, dry_run=args.dry_run, slim=slim)
+    except (RawSupportMissing, HeifSupportMissing) as e:
+        print(f"✗ {e} Nothing of that group was deleted; run `make setup`, then the same command again.")
+        return 1
     except WinnowError as e:
         print(f"✗ {e}")
         return 1
@@ -294,7 +301,12 @@ def cmd_winnow_import(args: argparse.Namespace) -> int:
     else:
         print(f"\n{counts['groups']} group(s) in {out}: {counts['fetched']} file(s) fetched, "
               f"{counts['kept']} already there.")
-        print("Next: `atelier-train validate`, then `atelier-train ingest --source pairs`.")
+        if args.slim:
+            print(f"Slim: {counts['prepared']} pair(s) prepared into the cache, "
+                  f"{counts['freed'] / 1e9:.1f} GB of files deleted.")
+            print("Next: `atelier-train ingest --source pairs` (it reuses the prepared pairs), then train.")
+        else:
+            print("Next: `atelier-train validate`, then `atelier-train ingest --source pairs`.")
     return 0
 
 
@@ -408,6 +420,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=0, help="stop after this many pairs (0 = all)")
     p.add_argument("--out", help="where the groups land (default: paths.pairs)")
     p.add_argument("--dry-run", action="store_true", help="list what would be fetched, write nothing")
+    p.add_argument("--slim", action="store_true",
+                   help="prepare each group into the cache, then delete its files: one group on disk at a time "
+                        "(also slims the groups already fetched)")
     p.set_defaults(func=cmd_winnow_import)
 
     p = sub.add_parser("serve", parents=[common], help="open the local dashboard (actions, curves, image grids)")

@@ -222,6 +222,18 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   the discovery order whatever the finish order; a worker's exception is a
   skipped pair, never a crash. On the 96 px synthetic set the pool costs more
   than it saves (0.6 s → 1.0 s): the gain is on real files only.
+- 2026-10-13 — **`winnow-import --slim` keeps one group's files on disk at a
+  time**: his first real import filled 72 GB with 23 left, since an original
+  is 40–75 MB and the trainer reads only the 512 px cache. Each group is
+  fetched, prepared (`ingest.prepare_group`) and its files deleted; a `slim`
+  block in its `winnow.json` lists the prepared edit stems, and the pairs
+  reader and ingest then serve that group from its manifest and cache alone
+  (never redone, not even by `--force`). The slim block is written only once
+  the cache holds the pairs, and a missing RAW/HEIF decoder RAISES before any
+  delete — otherwise every RAW would be "skipped", deleted and marked done.
+  How to apply: anything new that reads a pair's FILES must handle a slim
+  group (`Group.slim`, `PairRef.slim`), and anything that changes how a pair
+  is prepared reaches slim groups only by re-fetching them.
 - In a cloud container, run uv with `UV_PYTHON=3.13` (the system Python):
   GitHub release downloads, where uv fetches 3.12 from, answered 403 through
   the proxy. On the Mac `make setup` lets uv fetch 3.12.

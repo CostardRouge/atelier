@@ -148,9 +148,26 @@ par original, avec le `manifest.toml` déjà prêt :
 ```bash
 export WINNOW_HOST=https://ton-instance        # une fois pour toutes dans ton ~/.zshrc
 uv run atelier-train winnow-import --dry-run   # liste ce qui serait rapatrié, n'écrit rien
-uv run atelier-train winnow-import             # rapatrie (reprend là où il s'est arrêté)
+uv run atelier-train winnow-import --slim      # rapatrie en gardant le disque léger (recommandé)
+uv run atelier-train winnow-import             # rapatrie et GARDE les fichiers entiers
 uv run atelier-train winnow-import --since 2026-01-01 --limit 50
 ```
+
+**Place sur le disque.** Un original pèse 40 à 75 Mo (un DNG de drone, un
+ARW), et tes ~1 900 paires dépassent largement 100 Go. Or l'entraînement ne
+lit que le cache : des vignettes de 512 px, quelques Mo par paire. Avec
+`--slim`, chaque dossier est rapatrié, **préparé** dans `data/cache/`, puis
+ses fichiers sont **supprimés** avant le suivant — le disque ne porte qu'un
+dossier à la fois. Il ne reste que le `manifest.toml` et le `winnow.json`
+(qui note ce qui a été préparé). Les dossiers déjà rapatriés en entier sont
+allégés au passage, sans rien retélécharger : c'est aussi la façon de
+récupérer la place si un import sans `--slim` a déjà rempli le disque.
+Ensuite `uv run atelier-train ingest --source pairs` les reprend tels quels.
+
+Le prix : une paire allégée ne peut pas être refaite à une autre taille
+(`ingest.long_edge`) ni avec `--force` ; pour cela, supprime son dossier et
+son cache, et relance `winnow-import --slim`, qui la retélécharge. Si son
+cache disparaît, `ingest` le dit et la même commande la retélécharge.
 
 **Identifiants** — trois façons, de la plus simple à la plus manuelle :
 `--login <utilisateur>` (le mot de passe est demandé au clavier, le cookie
@@ -174,7 +191,7 @@ pour qu'une relance ne refasse rien.
 | `make validate` | vérifie tes groupes de paires |
 | `make ingest` | prépare les paires pour l'entraînement (redimensionnées, en cache) |
 | `uv run atelier-train init-group <dossier>` | écrit un `manifest.toml` deviné |
-| `uv run atelier-train winnow-import` | rapatrie tes paires original → final depuis ton Winnow (lecture seule) |
+| `uv run atelier-train winnow-import --slim` | rapatrie tes paires original → final depuis ton Winnow (lecture seule), préparées puis supprimées une à une |
 | `make serve` | ouvre le tableau de bord dans le navigateur (boutons, courbes, grilles) |
 | `make bench` | chronomètre un pas d'entraînement sur ce Mac et estime la durée d'un run |
 | `make train` | entraîne le modèle sur les paires préparées |
