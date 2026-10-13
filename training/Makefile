@@ -2,16 +2,16 @@
 .DEFAULT_GOAL := help
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-EXTRAS := --extra torch --extra raw --extra heif --extra ui --extra mlx
+EXTRAS := --extra torch --extra raw --extra heif --extra ui --extra onnx --extra mlx
 else
-EXTRAS := --extra torch --extra raw --extra heif --extra ui
+EXTRAS := --extra torch --extra raw --extra heif --extra ui --extra onnx
 endif
 RUN := uv run atelier-train
 
 help: ## list the actions
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS=":.*## "} {printf "  make %-10s %s\n", $$1, $$2}'
 
-setup: ## install everything (Python, PyTorch, RAW support) into .venv
+setup: ## install everything (Python, PyTorch, RAW support, ONNX export) into .venv
 	uv sync $(EXTRAS)
 
 setup-light: ## install without PyTorch (reading data and tests only)

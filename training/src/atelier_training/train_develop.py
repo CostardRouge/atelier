@@ -197,7 +197,7 @@ def export_develop(run_folder: Path, out: Path | None = None, log: Callable[[str
     try:
         import onnx  # noqa: F401
     except ImportError as e:
-        raise RuntimeError("exporting needs the `onnx` extra: `uv sync --extra onnx`") from e
+        raise RuntimeError("exporting needs the `onnx` extra: run `make setup`") from e
     # The torch.export-based exporter (the default since 2.9; needs `onnxscript`), the TorchScript one as
     # the fallback where it refuses this graph — the browser runs one picture at a time, so no dynamic batch.
     # ONE file: the dynamo exporter writes the weights to a `.onnx.data` beside the model by default, and

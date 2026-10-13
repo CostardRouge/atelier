@@ -225,3 +225,9 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
 - In a cloud container, run uv with `UV_PYTHON=3.13` (the system Python):
   GitHub release downloads, where uv fetches 3.12 from, answered 403 through
   the proxy. On the Mac `make setup` lets uv fetch 3.12.
+- 2026-10-13 — **`make setup` installs EVERY extra the commands need,
+  `onnx` included.** `uv sync` makes the venv EXACTLY the extras it is given,
+  so a `uv sync --extra onnx` run after `make setup` uninstalled torch — the
+  path `make export-develop` asked him to take. How to apply: a new extra a
+  command needs goes into the Makefile's `EXTRAS`, never into an error
+  message telling him to sync it alone.

@@ -89,14 +89,14 @@ def machine_checks(config: Config) -> list[Check]:
         Check("RAW support", OK, "rawpy installed")
         if module_available("rawpy")
         else Check("RAW support", WARN, "rawpy missing — DNG / ARW files cannot be read",
-                   "Run `make setup` (or `uv sync --extra raw`).")
+                   "Run `make setup`.")
     )
 
     checks.append(
         Check("HEIF support", OK, "pillow-heif installed")
         if module_available("pillow_heif")
         else Check("HEIF support", WARN, "pillow-heif missing — a Sony .HIF or an iPhone .HEIC cannot be read",
-                   "Run `make setup` (or `uv sync --extra heif`).")
+                   "Run `make setup`.")
     )
     mem = total_memory_bytes()
     if mem is None:
