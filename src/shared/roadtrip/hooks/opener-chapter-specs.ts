@@ -53,7 +53,7 @@ export const DRIVE_CHAPTERS: readonly OpenerChapter[] = [
     id: 'road',
     title: 'Road',
     keys: ['path', 'ahead', 'trail', 'trailColor', 'aheadColor', 'lineWidth'],
-    words: ['Path', 'Curved', 'Straight', 'Ahead', 'Dashed', 'Faint', 'Hidden', 'Trail', 'Colours', 'Colour', 'Line', 'Width'],
+    words: ['Path', 'Curved', 'Straight', 'Ahead', 'Dashed', 'Faint', 'Hidden', 'Trail', 'Colours', 'Line', 'Width'],
     facts: [
       { key: 'path', say: say.one({ curved: 'Curved', straight: 'Straight' }) },
       { key: 'ahead', say: say.one({ dashed: 'dashed ahead', faint: 'faint ahead', hidden: 'nothing ahead' }) },
@@ -150,7 +150,7 @@ export const MAP_CHAPTERS: readonly OpenerChapter[] = [
     id: 'frame',
     title: 'Frame',
     keys: ['position', 'align', 'size', 'offsetX', 'offsetY', 'plate', 'plateOpacity', 'plateColor', 'graticule', 'basemap', 'basemapOpacity'],
-    words: ['Frame', 'Where', 'Top', 'Middle', 'Bottom', 'Align', 'Left', 'Centre', 'Right', 'Size', 'Moved', 'Put it back', 'Plate', 'Plate depth', 'Plate colour', 'Colour', 'Grid', 'OpenStreetMap', 'Background', 'Tiles'],
+    words: ['Frame', 'Where', 'Top', 'Middle', 'Bottom', 'Align', 'Left', 'Centre', 'Right', 'Size', 'Moved', 'Put it back', 'Plate', 'Plate depth', 'Plate colour', 'Grid', 'OpenStreetMap', 'Background', 'Tiles'],
     facts: [
       { key: 'position', say: say.one({ top: 'Top', middle: 'Middle', bottom: 'Bottom' }) },
       { key: 'align', say: say.one({ left: 'left', center: 'centre', right: 'right' }) },
@@ -161,7 +161,7 @@ export const MAP_CHAPTERS: readonly OpenerChapter[] = [
     id: 'path',
     title: 'Path',
     keys: ['lineWidth', 'curve', 'pathColor', 'aheadColor', 'aheadStyle', 'underlay'],
-    words: ['Path', 'Line', 'Width', 'Bow', 'Curve', 'Colours', 'Colour', 'Ahead', 'Dashed', 'Faint', 'Hidden', 'Underlay'],
+    words: ['Path', 'Line', 'Width', 'Bow', 'Curve', 'Colours', 'Ahead', 'Dashed', 'Faint', 'Hidden', 'Underlay'],
     facts: [
       { key: 'curve', say: say.num((n) => (n > 0 ? `bow ${Math.round(n * 100)}%` : 'Straight')) },
       { key: 'aheadStyle', say: say.one({ dashed: 'dashed ahead', faint: 'faint ahead', hidden: 'nothing ahead' }) },
@@ -244,7 +244,7 @@ export const SCRUB_CHAPTERS: readonly OpenerChapter[] = [
     id: 'tape',
     title: 'Tape',
     keys: ['tape', 'tapeWidth', 'edgeOffset', 'offsetX', 'offsetY', 'tickColor', 'passedColor', 'tickOpacity', 'tickHeight', 'tickGap', 'headStyle', 'headGlow', 'showTrack', 'tapeBackground', 'backgroundOpacity', 'edgeFade'],
-    words: ['Tape', 'Runs', 'Bottom', 'Top', 'Width', 'From edge', 'Colours', 'Colour', 'Opacity', 'Height', 'Spacing', 'Head', 'Bar', 'Dot', 'Needle', 'Glow', 'Track', 'Band', 'Band depth', 'Ends'],
+    words: ['Tape', 'Runs', 'Bottom', 'Top', 'Width', 'From edge', 'Colours', 'Opacity', 'Height', 'Spacing', 'Head', 'Bar', 'Dot', 'Needle', 'Glow', 'Track', 'Band', 'Band depth', 'Ends'],
     facts: [
       { key: 'tape', say: say.one({ bottom: 'Bottom', top: 'Top' }) },
       { key: 'headStyle', say: say.one({ bar: 'a bar', dot: 'a dot', needle: 'a needle' }) },

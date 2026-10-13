@@ -62,7 +62,27 @@ it may come back as a filter.
    opens the chapter, a drag still moves the opener.
 7. **Search** — over labels, choices and chapter titles, in the index's head.
 
-## 4. His to decide
+## Built (2026-10-12 → 13)
+
+He accepted the recommendations and asked for a compact picker instead of the
+lab's band: the six openers are a 3 × 2 grid of their own sketches (PR #304).
+Then the seven steps above, one commit each. Two departures from §3, both
+recorded in `docs/memory/roadtrip.md`:
+
+- **Step 5's tiles are glyphs, not renders by the painter**: `prepare()`
+  computes Virée's whole road on every call, so a tile per choice would run it
+  a dozen times per change. Easing curves are plotted from the engine's own
+  functions.
+- **Step 4 needed nothing of its own**: every opener's groups got their
+  chapters in step 1; opening each chapter in a harness found two wrong
+  summaries, fixed.
+
+The answers taken for §4: ★ whole; chapters numbered, rows not; the panel
+reopens on the last chapter open for that opener on this device; pins while
+the opener is selected — and, for Virée, which fills the frame and cannot be
+selected on the stage, while the Look tab is open.
+
+## 4. His to decide (answered above)
 
 1. Which face — ★ whole, or part of it (B alone is the cheapest step).
 2. How far numbers go — chapters only, or every row (`5.3 Ahead`) so the two of

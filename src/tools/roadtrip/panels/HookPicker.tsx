@@ -23,7 +23,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { PRESS_LOOK } from '../../../shared/ui/press';
 import { ChapterFoot, ChapterHead, ChapterIndex, type ChapterRow } from '../../../shared/ui/Chapters';
 import { ChapterScope } from '../../../shared/roadtrip/hooks/panel-ui';
-import { chapterChanged, chapterSummary, numbered, resetChapter } from '../../../shared/roadtrip/hooks/opener-chapters';
+import { chapterChanged, chapterSummary, numbered, resetChapter, searchChapters } from '../../../shared/roadtrip/hooks/opener-chapters';
 import { useOpenerChapter } from '../opener-chapter';
 import {
   DEFAULT_HOOK_ID,
@@ -176,6 +176,19 @@ export default function HookPicker({
       unmet: chapter.unmet?.(options ?? {}, ctx) ?? null,
     }));
   }, [current, chapters, options, ctx]);
+  // A search over the chapters' rows (step 7): «colour» or «ahead» names the
+  // chapter it lives in, with the words that matched. Only where there are
+  // enough chapters for searching to beat reading them.
+  const [query, setQuery] = useState('');
+  const searchable = rows.length >= 5;
+  const found = useMemo<ChapterRow[] | null>(() => {
+    if (!searchable || !chapters || !query.trim()) return null;
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return searchChapters(chapters, query).flatMap((hit) => {
+      const row = byId.get(hit.chapter.id);
+      return row ? [{ ...row, matched: hit.words }] : [];
+    });
+  }, [searchable, chapters, query, rows]);
   const openIndex = rows.findIndex((row) => row.id === openId);
   const openRow = openIndex >= 0 ? rows[openIndex] : null;
   const scope = useMemo(() => ({ open: openRow?.id ?? null, title: openRow?.title }), [openRow?.id, openRow?.title]);
@@ -258,7 +271,23 @@ export default function HookPicker({
               onOpen={setOpenId}
             />
           ) : (
-            <ChapterIndex rows={rows} onOpen={setOpenId} label={`${current?.name ?? 'Opener'} settings`} />
+            <>
+              {searchable && (
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search ${current?.name ?? 'the opener'}’s settings…`}
+                  aria-label={`Search ${current?.name ?? 'the opener'}’s settings`}
+                  className="w-full font-sans h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-sm text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              )}
+              {found && !found.length ? (
+                <p className="m-0 text-xs text-muted">Nothing called «{query.trim()}» — try colour, speed, names, camera.</p>
+              ) : (
+                <ChapterIndex rows={found ?? rows} onOpen={setOpenId} label={`${current?.name ?? 'Opener'} settings`} />
+              )}
+            </>
           )}
         </div>
       ) : (

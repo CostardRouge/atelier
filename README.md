@@ -1256,11 +1256,19 @@ the **trip**, not to the post: a badge that varies per post stops being the
 signature that makes a post recognisable in a feed.
 
 **The opener.** The badge is one way to open a piece; the Look tab's first
-section picks another from cards — a card you cannot feed (a route with no
-located place) is greyed with the reason, never hidden. Switching is never a
+section picks another from six drawn tiles on two rows, the chosen one's line
+said once under them — a tile you cannot feed (a route with no located place)
+is greyed, and touching it says why. Switching is never a
 loss: the opener you leave keeps everything you gave it — an Itinerary's stops,
 Virée's picked pictures, every setting — and switching back finds it exactly as
-it was, after a reload too. **Badge** is the plain
+it was, after a reload too. An opener's settings read as **numbered chapters**:
+an index of one line each (*2 · Road — Curved · dashed ahead · trail*, a dot
+where it departs from the defaults), one chapter open at a time with its own
+Reset and its neighbours at the foot, a search over every row («colour»,
+«ahead») and, on the picture, the same numbers pinned where they act — a tap
+on «2» over the road opens Road. The choices that change what you see are
+drawn as tiles, and on a phone the Look tab is a drawer, so the picture stays
+in view while you set it. **Badge** is the plain
 one. **Défilé** runs the trip past before landing on the day: a measuring tape
 of the whole trip sweeps to the day you are telling, decelerating like a
 mechanism coming to rest; every stop flashes a real picture as the head lands on
