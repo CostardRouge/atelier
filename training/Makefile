@@ -38,6 +38,9 @@ bench: ## time one training step on this machine and estimate a run
 train: ## fit the model on the prepared pairs
 	$(RUN) train
 
+finetune: ## fine-tune the FiveK run INIT=runs/<folder> on your pairs
+	$(RUN) train --config configs/finetune.toml --source pairs --init $(INIT)
+
 eval: ## score the latest run and draw the grids
 	$(RUN) eval
 

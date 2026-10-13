@@ -136,9 +136,17 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
         rows.append(s)
         if keep:
             keep(pid, a[0], b[0], out[0])
-    summary = {k: float(np.mean([r[k] for r in rows if np.isfinite(r[k])])) if rows else float("nan")
-               for k in ("psnr", "de76_mean", "de76_p95", "de2000_mean", "de2000_p95")}
+    keys = ("psnr", "de76_mean", "de76_p95", "de2000_mean", "de2000_p95")
+    summary = {k: float(np.mean([r[k] for r in rows if np.isfinite(r[k])])) if rows else float("nan") for k in keys}
     summary["pairs"] = rows
+    # Per GROUP (one original and its edits): where the model is far from his taste, worst first.
+    by_group: dict[str, list[dict]] = {}
+    for pair, row in zip(pairs, rows, strict=True):
+        by_group.setdefault(f"{pair.source}/{pair.group}", []).append(row)
+    groups = [{"group": g, "pairs": len(rs),
+               "psnr": float(np.mean([r["psnr"] for r in rs if np.isfinite(r["psnr"])] or [0])),
+               "de2000_mean": float(np.mean([r["de2000_mean"] for r in rs]))} for g, rs in by_group.items()]
+    summary["groups"] = sorted(groups, key=lambda g: -g["de2000_mean"])
     return summary
 
 
@@ -182,7 +190,10 @@ def train(
     if init is not None:
         model.load_state_dict(load_checkpoint(Path(init) / "best.pt" if Path(init).is_dir() else Path(init),
                                               device)["model"])
-    optimizer = torch.optim.AdamW(model.parameters(), lr=float(tcfg.get("learning_rate", 2e-4)),
+    if bool(tcfg.get("freeze_luts", False)):  # a fine-tune that keeps the pretrained looks and learns the weighing
+        model.luts.requires_grad_(False)
+    optimizer = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
+                                  lr=float(tcfg.get("learning_rate", 2e-4)),
                                   weight_decay=float(tcfg.get("weight_decay", 0.0)))
     start, best = 0, float("-inf")
     if state is not None:

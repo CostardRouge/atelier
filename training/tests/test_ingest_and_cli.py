@@ -46,6 +46,44 @@ def test_cli_commands_run_without_real_data(workspace, capsys):
     assert "FiveK: no folder" in out
 
 
+def test_a_cropped_edit_is_aligned_into_its_original(workspace):
+    from atelier_training.datasets.pairs import manifest_text
+    from atelier_training.imaging import save_image
+    from atelier_training.synthetic import apply_transform, make_picture
+
+    config = load_config(overrides=["ingest.long_edge=96"])
+    g = config.paths.pairs / "g"
+    original = make_picture(np.random.default_rng(11), 240, 160)
+    save_image(original, g / "orig.png")
+    crop = apply_transform("warm", original[20:140, 50:230])  # 180 × 120, a 3:2 cut of a 3:2 picture
+    save_image(crop, g / "crop.png")
+    square = apply_transform("faded", original[0:160, 40:200])  # 160 × 160: the aspect differs
+    save_image(square, g / "square.png")
+    (g / "manifest.toml").write_text(manifest_text("orig.png", [("crop.png", None), ("square.png", None)]),
+                                     encoding="utf-8")
+
+    report = ingest(config, sources=["pairs"], workers=1)
+    assert report.skipped == [] and report.written == 2
+    by_id = {e["id"]: e for e in report.entries}
+    sq = json.loads((config.paths.cache / by_id["pairs/g/square"]["folder"] / "meta.json").read_text())
+    assert sq["alignment"]["score"] > 0.9 and abs(sq["alignment"]["x0"] - 40) <= 3 and sq["width"] == 96
+    a = np.load(config.paths.cache / by_id["pairs/g/square"]["folder"] / "input.npy") / 65535.0
+    b = np.load(config.paths.cache / by_id["pairs/g/square"]["folder"] / "target.npy") / 65535.0
+    assert np.abs(apply_transform("faded", a.astype(np.float32)) - b).mean() < 0.03  # the same pixels, graded
+    same_aspect = json.loads((config.paths.cache / by_id["pairs/g/crop"]["folder"] / "meta.json").read_text())
+    assert same_aspect["alignment"] is None  # auto: a matching aspect is trusted as is
+
+    forced = ingest(load_config(overrides=["ingest.long_edge=96", "ingest.align=always"]), sources=["pairs"],
+                    workers=1, force=True)
+    assert forced.skipped == []
+    crop_meta = json.loads((config.paths.cache / "pairs/g/crop" / "meta.json").read_text())
+    assert crop_meta["alignment"]["score"] > 0.9 and abs(crop_meta["alignment"]["x0"] - 50) <= 3
+
+    never = ingest(load_config(overrides=["ingest.long_edge=96", "ingest.align=never"]), sources=["pairs"],
+                   workers=1, force=True)
+    assert [pid for pid, _ in never.skipped] == ["pairs/g/square"]
+
+
 def test_parallel_ingest_gives_the_same_result_as_sequential(synthetic):
     config = load_config(overrides=["ingest.long_edge=24"])
     sequential = ingest(config, sources=["synthetic"], workers=1)

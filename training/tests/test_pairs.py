@@ -58,7 +58,7 @@ def test_a_cropped_edit_is_a_warning_not_an_error(tmp_path):
                                      encoding="utf-8")
     scan = scan_pairs(tmp_path / "pairs")
     assert scan.errors == []
-    assert len(scan.warnings) == 1 and "cropped or rotated" in scan.warnings[0].message
+    assert len(scan.warnings) == 1 and "cropped or turned" in scan.warnings[0].message
     assert scan.pair_count == 2
 
 

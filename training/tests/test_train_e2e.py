@@ -74,6 +74,34 @@ def test_training_recovers_the_synthetic_look(workspace):
     assert [m["epoch"] for m in metrics][-3:] == [60, 61, 62]
 
 
+def test_finetune_from_a_run_with_frozen_luts_and_per_group_eval(workspace):
+    from atelier_training.synthetic import generate
+    from atelier_training.train import load_model
+
+    config = load_config(overrides=TINY)
+    generate(config.paths.synthetic, groups=4, size=(48, 32), edits_per_group=1, fivek_photos=3, seed=5,
+             lut_size=9, style="warm")
+    ingest(config, sources=["synthetic"], workers=1)
+    assert main(["train", "--source", "synthetic", "--name", "base", "--epochs", "8", *SET]) == 0
+    base = sorted(config.paths.runs.iterdir())[0]
+    model_before, _ = load_model(base)
+
+    # A fine-tune that keeps the basis LUTs: only the weighing CNN moves.
+    assert main(["train", "--source", "synthetic", "--name", "tuned", "--init", str(base), "--epochs", "4",
+                 "--set", "train.freeze_luts=true", *SET]) == 0
+    tuned = [r for r in sorted(config.paths.runs.iterdir()) if r.name.endswith("-tuned")][0]
+    model_after, run = load_model(tuned)
+    assert torch.equal(model_before.luts, model_after.luts)
+    assert not all(torch.equal(a, b) for a, b in zip(model_before.weights.parameters(),
+                                                     model_after.weights.parameters(), strict=True))
+
+    assert main(["eval", "--run", str(tuned), "--split", "all", "--grids", "1", *SET]) == 0
+    summary = json.loads((tuned / "eval" / "all.json").read_text())
+    groups = summary["groups"]
+    assert len(groups) == 7 and groups == sorted(groups, key=lambda g: -g["de2000_mean"])
+    assert sum(g["pairs"] for g in groups) == len(summary["pairs"])
+
+
 def test_bench_and_missing_run_messages(synthetic, capsys):
     config = load_config(overrides=TINY)
     assert main(["bench", "--steps", "1", *SET]) == 0

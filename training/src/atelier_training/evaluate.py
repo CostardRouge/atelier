@@ -65,6 +65,9 @@ def evaluate(
     log(f"{which_split}: {len(chosen)} pairs — PSNR {summary['psnr']:.2f} dB, "
         f"ΔE2000 mean {summary['de2000_mean']:.2f} (95th pct {summary['de2000_p95']:.2f}), "
         f"ΔE76 mean {summary['de76_mean']:.2f}")
+    worst = summary.get("groups", [])[:5]
+    if len(summary.get("groups", [])) > 1:
+        log("worst groups: " + ", ".join(f"{g['group']} ΔE {g['de2000_mean']:.2f}" for g in worst))
     log(f"grids: {min(grids, len(chosen))} written to {grids_dir}")
     return summary
 

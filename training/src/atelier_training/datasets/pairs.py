@@ -185,7 +185,7 @@ def check_geometry(group: Group, issues: list[Issue], tolerance: float) -> None:
         if abs(ew / eh - ow / oh) > tolerance * (ow / oh):
             issues.append(
                 Issue("warning", group.name, f"{edit.file.name} is {ew}×{eh} against an original of {ow}×{oh}: "
-                      "it looks cropped or rotated, so it is skipped for now (aligning pairs comes in M5).")
+                      "it looks cropped or turned; ingest will look for it inside the original.")
             )
 
 

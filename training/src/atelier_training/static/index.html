@@ -146,6 +146,7 @@
 
   <section class="span" id="gallery">
     <h2>Pictures · <span id="gallery-run" class="muted">no run selected</span></h2>
+    <table class="runs" id="groups" hidden><thead><tr><th>group (worst ΔE first)</th><th>pairs</th><th>ΔE2000</th><th>PSNR</th></tr></thead><tbody></tbody></table>
     <div class="legend-3"><span>input</span><span>his edit</span><span>model</span></div>
     <div class="grids" id="grids"><p class="muted">Run “Eval” on a run to draw its grids, worst ΔE first.</p></div>
   </section>
@@ -365,7 +366,13 @@
     $('#gallery-run').textContent = name ? short(name) : 'no run selected';
     const el = $('#grids');
     const ev = d && d.evals && (d.evals.validation || d.evals.all || d.evals.train || Object.values(d.evals)[0]);
-    if (!ev || !ev.grids || !ev.grids.length) { el.innerHTML = '<p class="muted">Run “Eval” on this run to draw its grids, worst ΔE first.</p>'; return; }
+    if (!ev || !ev.grids || !ev.grids.length) { $('#groups').hidden = true; el.innerHTML = '<p class="muted">Run “Eval” on this run to draw its grids, worst ΔE first.</p>'; return; }
+    const gt = $('#groups');
+    if (ev.groups && ev.groups.length > 1) {
+      gt.hidden = false;
+      gt.querySelector('tbody').innerHTML = ev.groups.slice(0, 12).map(g =>
+        `<tr><td class="num">${esc(g.group)}</td><td class="num">${g.pairs}</td><td class="num">${g.de2000_mean.toFixed(2)}</td><td class="num">${g.psnr.toFixed(1)}</td></tr>`).join('');
+    } else gt.hidden = true;
     const rows = Object.fromEntries((ev.pairs || []).map(p => [p.id, p]));
     el.innerHTML = ev.grids.map(id => {
       const file = id.replace(/\//g, '__') + '.jpg';

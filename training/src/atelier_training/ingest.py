@@ -6,7 +6,9 @@ long edge ≤ ``ingest.long_edge``) and a ``preview.jpg`` (input | edit) for the
 dashboard of M3. ``<cache>/index.jsonl`` lists one pair per line (``write_index``
 says how a run merges into it). A pair already cached and newer than its two
 files is not redone, so an ingest can be stopped and rerun. A pair whose aspect
-differs (a crop, a rotation) is SKIPPED and said: aligning those is M5's work.
+differs (a crop, a turn, a straightening) is ALIGNED through ``align.py`` — the
+original cut to the edit's frame — and skipped, said, only when the edit is not
+a cut of the original (``ingest.align``).
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .align import align_pair
 from .config import Config
 from .datasets.fivek import scan_fivek
 from .datasets.pairs import scan_pairs
@@ -94,11 +97,19 @@ def _fresh(folder: Path, ref: PairRef) -> bool:
     return min(f.stat().st_mtime for f in files) >= newest_source
 
 
-def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw: dict) -> dict:
-    src = load_image(ref.input, raw, long_edge=long_edge)
+def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw: dict, align: str = "auto") -> dict:
+    """``align``: ``auto`` finds the edit's crop in the original when the aspects differ, ``always`` searches
+    every pair (an edit cropped to the same aspect), ``never`` skips a mismatched pair as M1 did."""
+    src = load_image(ref.input, raw, long_edge=None if align != "never" else long_edge)
     dst = load_image(ref.target, raw, long_edge=long_edge)
     (h, w), (th, tw) = src.shape[:2], dst.shape[:2]
-    if abs(tw / th - w / h) > tolerance * (w / h):
+    alignment = None
+    mismatch = abs(tw / th - w / h) > tolerance * (w / h)
+    if align == "always" or (align == "auto" and mismatch):
+        src, found = align_pair(src, dst)  # ValueError when the edit is not a cut of the original: skipped, said
+        alignment = found.as_dict()
+        (h, w) = src.shape[:2]
+    elif mismatch:
         raise ValueError(f"aspect differs ({w}×{h} vs {tw}×{th}): cropped or rotated")
     width, height = fit_long_edge(w, h, long_edge)
     a = resize_to(src, width, height)
@@ -107,7 +118,7 @@ def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw:
     np.save(out / "input.npy", to_uint16(a))
     np.save(out / "target.npy", to_uint16(b))
     save_image(np.concatenate([a, b], axis=1), out / "preview.jpg", quality=85)
-    meta = {"width": width, "height": height, "input_size": [w, h], "target_size": [tw, th]}
+    meta = {"width": width, "height": height, "input_size": [w, h], "target_size": [tw, th], "alignment": alignment}
     (out / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return meta
 
@@ -117,12 +128,12 @@ def default_workers() -> int:
     return max(1, min(8, (os.cpu_count() or 2) // 2))
 
 
-def _prepare_job(job: tuple[PairRef, Path, int, float, dict]) -> tuple[str, dict | str]:
+def _prepare_job(job: tuple[PairRef, Path, int, float, dict, str]) -> tuple[str, dict | str]:
     """Pool entry point (top level so it pickles): ``("ok", meta)`` or ``("error", message)`` —
     one bad file never raises across the process boundary and never stops the run."""
-    ref, folder, long_edge, tol, raw = job
+    ref, folder, long_edge, tol, raw, align = job
     try:
-        return "ok", prepare_pair(ref, folder, long_edge, tol, raw)
+        return "ok", prepare_pair(ref, folder, long_edge, tol, raw, align)
     except Exception as e:  # noqa: BLE001
         return "error", str(e)
 
@@ -144,6 +155,9 @@ def ingest(
     tol = float(ingest_cfg.get("aspect_tolerance", 0.01))
     raw = config.section("raw")
     n_workers = int(ingest_cfg.get("workers", 0) if workers is None else workers) or default_workers()
+    align = str(ingest_cfg.get("align", "auto"))
+    if align not in ("auto", "always", "never"):
+        raise ValueError(f"ingest.align must be auto, always or never (got {align!r})")
     report = IngestReport()
     refs = collect(config, sources, report)
     if limit:
@@ -168,7 +182,7 @@ def ingest(
         else:
             report.skipped.append((refs[i].id, str(value)))
 
-    jobs = [(refs[i], cache / refs[i].id, long_edge, tol, raw) for i in todo]
+    jobs = [(refs[i], cache / refs[i].id, long_edge, tol, raw, align) for i in todo]
     finished = len(refs) - len(todo)
     if n_workers <= 1 or len(jobs) <= 1:
         for i, job in zip(todo, jobs, strict=True):
