@@ -32,4 +32,20 @@ His second ask, the same night: statistics in the overlay, title/subtitle «styl
 - Driven headless only, on SYNTHETIC logs (37 flights at Perth, Fremantle, Byron Bay, Guadeloupe — `scratchpad` generator, not in the repo); never on his real SRT folder, his Mac or his phone.
 - The MP4 path could not be encoded here (no H.264 in headless Chromium); the PNG still and poster were. A failure says so and points at the PNGs.
 - DJI logs in the old `GPS(...)` format parse to nothing (the shared parser's limit) and are listed as «without a GPS track».
-- Ideas left for his verdict, not built: free placement of overlay pieces by drag, a flight-path heatmap/density mode, slowing time while the spotlight follows, per-flight colour overrides, saving named presets, reading tracks from Winnow (only `geoDays()` exists there — one position a day, not a track).
+- Ideas left for his verdict, not built: free placement of overlay pieces by drag, a flight-path heatmap/density mode, slowing time while the spotlight follows, per-flight colour overrides, saving named presets.
+
+## Flights from Winnow: the picker, logs only (2026-10-13)
+
+**Decision.** The Flights tab's **From <instance>** (`AtlasWinnow.tsx`) is the
+shared Winnow picker with an atlas HOST, not a screen of its own: it opens on
+a SPAN (the last one used on that instance), lists only clips with a `.srt`
+(`accepts` + `narrow: { mediaType: 'video' }` so the server's cap counts
+clips), in the Logbook with tracks read, everything ticked, and adds with
+`materialize(…, { fidelity: 'log' })` — the `.srt` alone, never the video,
+reusing the logs the Logbook already read. **Why**: his ask after the first
+round — the Winnow modal was day by day and mostly photos and videos; the
+pair (clip + log) was on every row already. **How to apply**: the logs land
+in the Library like any file and `addFiles` SELECTS them, which is what makes
+the atlas draw them at once; a flight whose log is in the Library is drawn
+*in library* and cannot be ticked twice. The picker side is
+`winnow-picker.md` (Span, Flight log facet, Logs only, Logbook).

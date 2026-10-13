@@ -20,7 +20,7 @@
 import type { FilterQuery } from './client';
 import { readFacets, type PickFacets, type PickSort } from './picker/pick-filter';
 
-export type BrowseView = 'day' | 'session' | 'chapter';
+export type BrowseView = 'day' | 'span' | 'session' | 'chapter';
 
 export interface BrowseState {
   view: BrowseView;
@@ -33,7 +33,10 @@ export interface BrowseState {
   sessionId: number | null;
   /** The open timeline chapter's id, or null. */
   chapterId: string | null;
-  fidelity: 'proxy' | 'original';
+  /** The last SPAN the picker listed (`picker/span.ts`), both ends inclusive. Absent before it. */
+  span?: { from: string; to: string } | null;
+  /** What the Library's *browse all* brings: proxies, originals, or a clip's flight log alone. */
+  fidelity: 'proxy' | 'original' | 'log';
   /**
    * The picker's rail (`picker/pick-filter.ts`) — shared by every host of
    * the picker on this instance, so a narrowing set in Develop is there when
@@ -77,7 +80,7 @@ export function readBrowseState(sourceId: string): BrowseState | null {
   const filter = typeof s.filter === 'object' && s.filter !== null ? s.filter : {};
   const f = filter as Record<string, unknown>;
   return {
-    view: s.view === 'session' || s.view === 'chapter' ? s.view : 'day',
+    view: s.view === 'session' || s.view === 'chapter' || s.view === 'span' ? s.view : 'day',
     filter: {
       ...(f.mediaType === 'photo' || f.mediaType === 'video'
         ? { mediaType: f.mediaType }
@@ -92,10 +95,19 @@ export function readBrowseState(sourceId: string): BrowseState | null {
       ? s.sessionId
       : null,
     chapterId: typeof s.chapterId === 'string' && s.chapterId ? s.chapterId : null,
-    fidelity: s.fidelity === 'original' ? 'original' : 'proxy',
+    ...(readSpan(s.span) ? { span: readSpan(s.span) } : {}),
+    fidelity: s.fidelity === 'original' || s.fidelity === 'log' ? s.fidelity : 'proxy',
     facets: readFacets(s.facets),
     sort: s.sort === 'stars' ? 'stars' : 'time',
   };
+}
+
+function readSpan(raw: unknown): { from: string; to: string } | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { from, to } = raw as Record<string, unknown>;
+  return typeof from === 'string' && typeof to === 'string' && DAY_RE.test(from) && DAY_RE.test(to) && from <= to
+    ? { from, to }
+    : null;
 }
 
 /** Remember this instance's place. Storage failure is silently fine. */

@@ -144,6 +144,28 @@ describe('materialize', () => {
     });
   });
 
+  it('brings the flight log ALONE for log, filed under the instance, never the video', async () => {
+    const c = clientServing({ '/api/assets/42/proxy': 10, '/api/sidecars/7/download': 3 });
+    expect(plannedFiles(c, row(), 'log')).toEqual([
+      { url: `${BASE}/api/sidecars/7/download`, name: 'DJI_0001.SRT', type: 'text/plain' },
+    ]);
+    const [log, ...rest] = await materialize(c, 'winnow.example', row(), { fidelity: 'log' });
+    expect(rest).toEqual([]);
+    expect(log.name).toBe('DJI_0001.SRT');
+    expect(log.lastModified).toBe(Date.parse('2025-07-09T08:30:00.000Z'));
+    expect(knownIdentity(log)).toMatchObject({ assetId: 'winnow.example/42', hash: 'abc123' });
+    expect(mediaOrigin(log)).toMatchObject({ sourceId: 'winnow.example', fidelity: 'original', name: 'DJI_0001.SRT' });
+    expect(mediaOrigin(log)?.fetchOriginal).toBeUndefined();
+  });
+
+  it('brings nothing for a clip with no log, and reuses a log already read', async () => {
+    const c = clientServing({});
+    expect(await materialize(c, 'winnow.example', row({ sidecars: [] }), { fidelity: 'log' })).toEqual([]);
+    const held = new File(['1'], 'DJI_0001.SRT', { type: 'text/plain' });
+    const [log] = await materialize(c, 'winnow.example', row(), { fidelity: 'log', reuse: () => held });
+    expect(log).toBe(held);
+  });
+
   it('surfaces a missing rendition as an error instead of a silent gap', async () => {
     const c = clientServing({});
     await expect(

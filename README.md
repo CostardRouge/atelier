@@ -2451,14 +2451,21 @@ twice is still refused: a variant is made from a picture already there.
 **Adding what you culled in Winnow.** *Add ▾ → A day on your Winnow…* opens
 the **Winnow picker**, the same one as the Library's *browse all*: a **day**,
 walked with the Library's own stepper and its month (a bar per day, or the
-weeks), or a **folder** as Winnow ingested it. Every tile wears Winnow's word —
+weeks), a **span** of days listed as one scope and grouped by day (your leg,
+the last 7 or 30 days, this month, this year, or two dates), or a **folder**
+as Winnow ingested it. Every tile wears Winnow's word —
 the pick or reject flag, the stars, a label, a *Gallery* chip when a final
 already links to it — and a rail of filters narrows the list: Incoming ·
-Gallery · All, the verdict, a star floor, photos or clips, the extension, the
-body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
-The grid's ⋯ orders it by capture time or by stars, sets the tiles small,
-medium or large, and folds the rail away on a wide screen (both remembered on
-this device). A
+Gallery · All, the verdict, a star floor, photos or clips, clips **with or
+without a flight log** (a DJI `.srt`, marked `SRT` on the tile), the extension,
+the body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
+The grid's ⋯ shows it as a grid of thumbnails or as a **Logbook** — one line
+per media, read like a pilot's logbook: take-off time, place, length, body,
+file —, orders it by capture time or by stars, sets the tiles small, medium or
+large, and folds the rail away on a wide screen (all remembered on this
+device). **Read tracks** fetches the shown clips' flight logs (a small text
+download each, once per session) and draws each flight's own track where its
+thumbnail was, with its distance and highest point. A
 **culled day opens with its picks ticked**, so taking what you kept is one
 click on *Add N to the roll*; an unculled day ticks everything the roll lacks
 but the rejects. The bar ticks among what is shown — **All**, **None**,
@@ -2837,14 +2844,19 @@ makes it the active one; a tile already fetched is marked and only
 re-activates. Each tile also wears what you decided in Winnow — a flag for a
 pick or a reject, its stars. "Browse all" opens the **Winnow picker** where the
 tab is looking — its day and its half — to tick many at once: by day (the
-same stepper and month) or by folder, every tile with Winnow's verdict, a rail
+same stepper and month), by **span** (several days as one list, grouped by
+day — a whole trip at once; a very long span says where it was cut) or by
+folder, every tile with Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
-extension, body, tags, no final yet, not in the library), tick verbs over what
+flight log, extension, body, tags, no final yet, not in the library), tick verbs over what
 is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
 to look at a tile large. Nothing is ticked when it opens — an add downloads —
 and the files come as **proxies**, or as **originals** with their weight shown
-first; a Cancel stops the download and keeps what landed. A DJI clip brings its
-flight log along either way.
+first, or — **Logs only** — as each DJI clip's `.srt` flight log alone, a few
+hundred kilobytes of text instead of a video (what Flight Atlas reads; a clip
+with no log is skipped and the bar says how many). A Cancel stops the download
+and keeps what landed. A DJI clip brings its flight log along either way, and a
+clip whose log came alone can still be added later and joins it.
 
 When the Winnow serves its **timeline** (media grouped into legs by place and
 date), a trip can be seeded from it: the legs become the trip's stages — span, places, order — and nothing
@@ -3245,8 +3257,11 @@ Every DJI flight selected in the Library — a clip with its `.srt`, or a loose
 each log is read (four fixes a second, timed by the log's own wall clock, so a
 time-lapse or a slow-motion clip runs at its real pace); of a clip beside it,
 only the few kilobytes of metadata that may name the aircraft. *Add .srt
-files* / *A folder* in the panel feed the Library directly. The panel has
-seven tabs:
+files* / *A folder* in the panel feed the Library directly, and with a Winnow
+connected, **From <instance>** opens the Winnow picker set for flights: a span
+of days, only the clips that carry a log, the Logbook with every flight's track
+drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
+alone, never its video. The panel has seven tabs:
 
 - **Flights.** Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
