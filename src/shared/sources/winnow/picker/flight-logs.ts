@@ -12,9 +12,11 @@
  * flights is a few tens of megabytes of text at most.
  */
 
+import { isAbortError } from '../../fetch-options';
 import type { WinnowAssetRow, WinnowClient } from '../client';
-import { captureMtime } from '../materialize';
+import { captureMtime, materialize } from '../materialize';
 import { flightTrackFromSrt, type FlightTrack } from './flight-track';
+import { logFailureOf, logFailureText, type FailedLog } from './log-failures';
 import { srtSidecars } from './pick-filter';
 
 export interface ReadLog {
@@ -70,4 +72,45 @@ export function readFlightLog(client: WinnowClient, row: WinnowAssetRow): Promis
 /** A log already read at `url`, for `materialize`'s `reuse`. */
 export function heldLog(url: string): File | null {
   return files.get(url) ?? null;
+}
+
+/**
+ * *Logs only*: each row's `.srt` alone, one after the other, handed to `add`
+ * once at the end (also when stopped half-way: what landed is worth having).
+ * A log the instance cannot hand over is SKIPPED, never the end of the run —
+ * one clip whose drive is unplugged used to stop the whole add at the first
+ * miss — and the misses are thrown afterwards as one sentence
+ * (`log-failures.ts`), so the picker says it and keeps them ticked.
+ *
+ * Resolves true when every log landed, false when stopped.
+ */
+export async function addFlightLogs(
+  client: WinnowClient,
+  sourceId: string,
+  rows: readonly WinnowAssetRow[],
+  add: (files: File[]) => void,
+  { signal, progress }: { signal: AbortSignal; progress: (line: string) => void },
+): Promise<boolean> {
+  const files: File[] = [];
+  const failed: FailedLog[] = [];
+  let added = 0;
+  try {
+    for (const [i, row] of rows.entries()) {
+      if (signal.aborted) break;
+      progress(`${i + 1}/${rows.length} · ${row.filename}${failed.length ? ` · ${failed.length} missed` : ''}`);
+      try {
+        const got = await materialize(client, sourceId, row, { fidelity: 'log', signal, reuse: heldLog });
+        files.push(...got);
+        if (got.length) added += 1;
+      } catch (err) {
+        if (isAbortError(err) || signal.aborted) break;
+        failed.push({ filename: row.filename, why: logFailureOf(err), message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  } finally {
+    if (files.length) add(files);
+  }
+  if (signal.aborted) return false;
+  if (failed.length) throw new Error(logFailureText(failed, added, sourceId));
+  return true;
 }

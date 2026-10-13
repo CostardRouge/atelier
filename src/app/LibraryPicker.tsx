@@ -8,7 +8,7 @@ import type { PickerAnchor, PickerHost } from '../shared/sources/winnow/picker/p
 import Segmented from '../shared/ui/Segmented';
 import { formatBytes } from '../shared/lib/format';
 import { logStateOf } from '../shared/sources/winnow/picker/pick-filter';
-import { heldLog } from '../shared/sources/winnow/picker/flight-logs';
+import { addFlightLogs } from '../shared/sources/winnow/picker/flight-logs';
 
 const withLog = (rows: readonly WinnowAssetRow[]) => rows.filter((r) => logStateOf(r) === 'with');
 
@@ -109,14 +109,15 @@ export default function LibraryPicker({
           },
           enabled: (rows) => fidelity !== 'log' || withLog(rows).length > 0,
           run: async (ticked, { signal, progress }) => {
+            // A clip with no log has nothing to bring when only logs are asked,
+            // and a log the instance cannot reach is skipped, not the end of the run.
+            if (fidelity === 'log') return addFlightLogs(client, connection.id, withLog(ticked), onAdd, { signal, progress });
             const files: File[] = [];
-            // A clip with no log has nothing to bring when only logs are asked.
-            const rows = fidelity === 'log' ? withLog(ticked) : ticked;
             try {
-              for (const [i, row] of rows.entries()) {
+              for (const [i, row] of ticked.entries()) {
                 if (signal.aborted) break;
-                progress(`${i + 1}/${rows.length} · ${row.filename}`);
-                files.push(...(await materialize(client, connection.id, row, { fidelity, signal, reuse: heldLog })));
+                progress(`${i + 1}/${ticked.length} · ${row.filename}`);
+                files.push(...(await materialize(client, connection.id, row, { fidelity, signal })));
               }
             } finally {
               // Stopped or failed half-way: what landed is still worth having,

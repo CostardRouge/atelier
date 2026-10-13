@@ -8,6 +8,7 @@ import { Icons } from '../../../ui/icons';
 import type { FlightTrack } from './flight-track';
 import type { PickItem } from './pick-filter';
 import { dayHeading, dayRuns, rowDay } from './span';
+import type { LogFailure } from './log-failures';
 import TrackGlyph from './TrackGlyph';
 
 const head = 'sticky top-0 z-[2] bg-surface px-2 max-[820px]:px-1 py-1.5 font-mono text-3xs font-normal uppercase tracking-[0.1em] text-muted text-left';
@@ -32,6 +33,7 @@ export default function PickerLogbook({
   focusId,
   heldLabel,
   tracks,
+  missing,
   reading,
   onToggle,
   onLook,
@@ -46,6 +48,8 @@ export default function PickerLogbook({
   heldLabel: string;
   /** Tracks read so far, by row id; null for a log that holds no fix. */
   tracks: ReadonlyMap<number, FlightTrack | null>;
+  /** Logs the instance could not hand over (`log-failures.ts`). */
+  missing: ReadonlyMap<number, LogFailure>;
   /** Whether tracks are being read for the rows drawn. */
   reading: boolean;
   onToggle: (it: PickItem, e: MouseEvent) => void;
@@ -85,7 +89,8 @@ export default function PickerLogbook({
           ) : null,
           ...run.items.map((it) => {
             const on = ticked.has(it.id);
-            const track = tracks.get(it.id);
+            const lost = missing.get(it.id);
+            const track = lost ? undefined : tracks.get(it.id);
             const { row } = it;
             return (
               <tr
@@ -130,8 +135,17 @@ export default function PickerLogbook({
                       <>
                         <WinnowThumb client={client} id={row.id} label={row.ext || it.kind} box="w-full h-full" />
                         {it.log === 'with' && (
-                          <span className="absolute right-1 bottom-1 px-1 rounded-sm bg-surface/85 text-ink font-mono text-3xs leading-[14px]">
-                            {track === null ? 'no fix' : reading ? '…' : 'SRT'}
+                          <span
+                            className={`absolute right-1 bottom-1 px-1 rounded-sm bg-surface/85 font-mono text-3xs leading-[14px] ${lost ? 'text-danger' : 'text-ink'}`}
+                            title={
+                              lost === 'unreachable'
+                                ? 'The instance lists this log but cannot read it on its disk — is the drive the clip was ingested from plugged in?'
+                                : lost
+                                  ? 'The instance did not hand this log over'
+                                  : undefined
+                            }
+                          >
+                            {lost === 'unreachable' ? 'not on disk' : lost ? 'failed' : track === null ? 'no fix' : reading ? '…' : 'SRT'}
                           </span>
                         )}
                       </>
