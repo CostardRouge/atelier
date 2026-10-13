@@ -71,26 +71,30 @@ And the medium stops being a third *Auto*: it becomes a sentence — «Video, be
 ## 5. The model B asks for
 
 ```ts
-// shared/roadtrip/slide-length.ts (pure)
+// shared/roadtrip/slide-length.ts (pure) — BUILT, commit 2
 type SlideLength =
   | { owner: 'opener'; pace: number; hold: number } // pace in [floor, 1], hold ≥ 0
-  | { owner: 'fixed'; seconds: number; over: 'fit' | 'cut' };
+  | { owner: 'fixed'; over: 'fit' | 'cut' };          // the seconds are the slide's own field
 
 interface ResolvedLength {
   seconds: number;        // what the slide lasts
-  natural: number;        // what the opener needs on its own, NEVER the squeezed one (H6)
-  span: number;           // what it occupies on the slide
-  scale: number;          // span / natural; 1 when not sped up
+  natural: number;        // what the opener needs at its own pace, NEVER the sped-up one (H6)
+  span: number;           // what it occupies on the slide (natural × scale)
+  scale: number;          // the pace it runs at; 1 when not sped up
   hold: number;           // the picture after it
-  cut: number;            // seconds cut — only ever under { fixed, over: 'cut' }
-  floored: boolean;       // the pace the author asked for was under the floor
+  cut: number;            // seconds of the (sped-up) opener the slide's end cuts off
+  floored: boolean;       // the pace asked for was faster than the floor
+  floor: number;          // the fastest pace this opener may run at
 }
 ```
 
-- A slide WITHOUT an opener has only `fixed` (its seconds, as today's still); a CLIP's length stays its cut (`clipSlice`, unchanged) and its stepper writes the out point.
-- The floor is the opener's own (`shortestBeat` → `FIT_FLOOR_SECONDS`), now reported to the slide by the prepared render (`HookRender.shortestBeat`), so the deck can floor a pace without knowing the opener.
-- **Migration (v32), every stored piece keeping its length to the frame**: `auto: true` → `{ opener, pace: 1, hold: 0.5 }`; set + the opener's `fit: true` → `{ fixed, seconds, over: 'fit' }`; set otherwise → `{ fixed, seconds, over: 'cut' }` (today's behaviour exactly, said now instead of silent); a slide with no opener → `{ fixed, seconds }`. The opener's `fit` option is read once by the migration and then ignored; `FitRow` leaves the openers' panels.
-- `deckSlides` prepares each opener ONCE unscaled (its `natural`), resolves the length, then hands the opener its `scale` — `fitRender` survives as the one way a render is scaled.
+- **A fixed length's seconds are NOT in the union** (rev. at build): they stay the slide's own `hookSeconds` / `seconds`, the very field the band's grips, a clip's cut and its speed already write. A second copy would be a second truth to keep in step — the class of bug this brief is about.
+- **Fixed is fixed.** Under *Speed it up* an opener longer than the slide runs at `seconds / natural`; where that is faster than the floor it runs AT the floor and the slide's end cuts the rest — said as a cut, the length never growing behind the author's back. Under *The opener decides* nothing is cut but by a bound (a clip's end, the 60 s ceiling).
+- A slide with no opener lasts its stored seconds whoever owns it (rule D's Auto did the same); a CLIP's length stays its cut (`clipSlice`, unchanged).
+- The floor is the opener's own (`shortestBeat` → `FIT_FLOOR_SECONDS`, `paceFloor`), bounded by `MIN_PACE` (a tenth) for an opener that reports no beat; the prepared render will report it (`HookRender.shortestBeat`) so the deck floors a pace without knowing the opener.
+- **Migration (v33 — v32 went to the trip's road), every stored slide keeping its length to the frame** (`lengthFromLegacy`, its spec runs every case against rule D's `slideTiming`): `auto: true` → `{ opener, pace: 1, hold: 0.5 }`; set + the opener's `fit: true` → `{ fixed, over: 'fit' }`; set otherwise → `{ fixed, over: 'cut' }`. One case PLAYS differently at the same length: a fit the floor refused used to leave the opener at its own pace and cut it, and now runs it at the floor and cuts later. The opener's `fit` option is read once by the migration and then ignored; `FitRow` leaves the openers' panels.
+- `negotiate(total, natural, beat, magnet)` reads the band's one number back as a pace and a hold: past the natural end the hold, inside it the pace down to the floor (`stopped`), a magnet on the natural end; it round-trips through `resolveLength`.
+- The scale is applied ONCE, where the opener is resolved (`resolveHook`), so the stage, the deck, every export and the Studio bridge play the same opener — `fitRender` survives as the one way a render is scaled.
 
 ## 6. The plan, in commits
 
@@ -99,8 +103,8 @@ Each is one commit, verified by typecheck, lint, the tests and a headless drive 
 1. ~~**The deck timed with the coastline**~~ — built (H9).
 *Order against the slider work*: §4 of `docs/slider-touch.md` — its component, the drag maths and the typed value (its commits 1–3) — lands BEFORE commit 4 below, which builds the Slide section on it directly; its commit 5 then has no *On screen* to migrate. Commits 2–3 here touch no control and may run in parallel with it.
 
-2. **`slide-length.ts`, pure, with its spec** — the union, `resolveLength`, `negotiate(total)` (band ↔ pace and hold, the magnet, the floor), the migration's mapping. No caller yet.
-3. **v32 and the deck** — `PostBadge.length` / `PostSlide.length`, the migration, `deckSlides` resolving through it, `DeckSlide.natural` / `.scale` / `.hold` / `.cut`, openers handed their scale instead of reading `fit`, `HookRender.shortestBeat`. The exports, the Studio bridge, `run-edits.ts`, `export-plan.ts` and the agent commands (`trips.piece` reports the parts; `trips.pieceSettings` takes `pace`, `hold`, `seconds`) follow in the same commit, because the field they read changes.
+2. ~~**`slide-length.ts`, pure, with its spec**~~ — built: the union, `resolveLength`, `negotiate`, `paceFloor`, `lengthFromLegacy`, `readSlideLength`. No caller yet.
+3. **v33 and the deck** — `PostBadge.length` / `PostSlide.length`, the migration, `deckSlides` resolving through it, `DeckSlide.natural` / `.scale` / `.hold` / `.cut`, openers handed their scale instead of reading `fit`, `HookRender.shortestBeat`. The exports, the Studio bridge, `run-edits.ts`, `export-plan.ts` and the agent commands (`trips.piece` reports the parts; `trips.pieceSettings` takes `pace`, `hold`, `seconds`) follow in the same commit, because the field they read changes.
 4. **The *Slide* section** — the sum line, the owner `Segmented`, Pace and Hold (or Seconds + *If Virée is longer*), steppers with a typed field, the medium as a sentence and one verb; `SlideDelivery`'s slider, pill and inserted buttons go, `FitRow` leaves the openers' panels, the Counter's own cut warning reads the new resolution.
 5. **The band** — the open cell draws its parts (opener span, sailing stripe, hold, the natural end), one grip with two zones, the stop and its bubble at the floor; grips 14 px beside a mouse and 20 on a phone; pressing a grip while playing PAUSES rather than the grip being hidden.
 6. **The badge's exit** — lands on the slide's end only while the slide outlasts its entrance plus one second; under that it lands on the hold's start, so a short slide never flashes its badge (H10).
@@ -109,6 +113,6 @@ Each is one commit, verified by typecheck, lint, the tests and a headless drive 
 ## 7. What is his
 
 1. ~~**A, B or C**~~ — **B, his pick (2026-10-13).**
-2. **The default answer when a fixed length is shorter than the opener** — *Speed it up* recommended (nothing cut unless asked); *Cut it* is today's behaviour.
-3. **Pace as three steps (`½× · ¾× · 1×`) or a free value** — steps in the inspector and a free value from the band recommended.
-4. **Whether *Fixed* should exist at all on a slide with an opener** — kept, for a reel cut to a beat; dropping it simplifies the panel to Pace and Hold.
+2. ~~**The default answer when a fixed length is shorter than the opener**~~ — **Speed it up** (his «vas-y avec tes recommandations», 2026-10-13): a slide turned *Fixed* by hand starts on `over: 'fit'`; only a migrated set slide whose opener had no Fit keeps `cut`, its old behaviour.
+3. ~~**Pace as three steps or a free value**~~ — **both**: `½× · ¾× · 1×` in the inspector (`PACE_STEPS`), any value between the floor and 1 from the band.
+4. ~~**Whether *Fixed* should exist on a slide with an opener**~~ — **kept**, for a reel cut to a beat.
