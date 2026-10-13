@@ -176,6 +176,18 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    from .device import module_available
+
+    if not module_available("fastapi") or not module_available("uvicorn"):
+        print("✗ The dashboard needs FastAPI: run `make setup` (or `uv sync --extra ui`) first.")
+        return 2
+    from .serve import serve
+
+    serve(_config(args), host=args.host, port=args.port, open_browser=not args.no_browser)
+    return 0
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     if not _needs_torch():
         return 2
@@ -239,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", help="where to write the .cube (default: inside the run folder)")
     p.add_argument("--limit", type=int, default=0, help="average the style over this many training pairs (0 = all)")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("serve", parents=[common], help="open the local dashboard (actions, curves, image grids)")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--host", default="127.0.0.1", help="keep it local: 127.0.0.1")
+    p.add_argument("--no-browser", action="store_true", help="do not open the page in the browser")
+    p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("bench", parents=[common], help="time one training step here and estimate a whole run")
     p.add_argument("--steps", type=int, default=5)

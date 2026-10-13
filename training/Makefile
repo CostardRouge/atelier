@@ -2,9 +2,9 @@
 .DEFAULT_GOAL := help
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-EXTRAS := --extra torch --extra raw --extra mlx
+EXTRAS := --extra torch --extra raw --extra ui --extra mlx
 else
-EXTRAS := --extra torch --extra raw
+EXTRAS := --extra torch --extra raw --extra ui
 endif
 RUN := uv run atelier-train
 
@@ -28,6 +28,9 @@ validate: ## check your groups of pairs
 
 ingest: ## prepare the training pairs
 	$(RUN) ingest
+
+serve: ## open the dashboard in the browser (actions, curves, image grids)
+	$(RUN) serve
 
 bench: ## time one training step on this machine and estimate a run
 	$(RUN) bench
