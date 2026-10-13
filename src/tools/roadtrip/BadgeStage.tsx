@@ -87,6 +87,14 @@ export interface StagePlayback {
  */
 export const HOOK_ID = 'hook';
 
+/** One numbered chapter pinned on the opener's drawing, in frame pixels. */
+export interface HookPin {
+  n: number;
+  chapter: string;
+  x: number;
+  y: number;
+}
+
 /**
  * How long a REPLACED source is kept before its bitmap is closed.
  *
@@ -203,6 +211,13 @@ interface BadgeStageProps {
   hookRectFor?: ((frame: { width: number; height: number }) => FrameRect | null) | null;
   /** A drag of the opener: fractions of the frame, incremental. */
   onMoveHook?: (dx: number, dy: number) => void;
+  /**
+   * The opener's chapters pinned on its drawing (`HookVariant.parts`), each
+   * with its number, at the stage's own pixel size — drawn whenever given
+   * (the editor decides when), a tap on one opening that chapter of its panel.
+   */
+  hookPinsFor?: ((frame: { width: number; height: number }) => readonly HookPin[]) | null;
+  onOpenChapter?: (chapter: string) => void;
   /**
    * A shade whose CENTRE is being placed (a band's line or a radial's pool),
    * in frame fractions, and the axis it may move on. While given, a press
@@ -322,6 +337,8 @@ export default function BadgeStage({
   onMoveText,
   hookRectFor = null,
   onMoveHook,
+  hookPinsFor = null,
+  onOpenChapter,
   shadeHandle = null,
   onMoveShadeCentre,
   collage = null,
@@ -576,6 +593,17 @@ export default function BadgeStage({
   selectedRef.current = selectedId;
   const hookRectForRef = useRef(hookRectFor);
   hookRectForRef.current = hookRectFor;
+  const hookPinsForRef = useRef(hookPinsFor);
+  hookPinsForRef.current = hookPinsFor;
+  const onOpenChapterRef = useRef(onOpenChapter);
+  onOpenChapterRef.current = onOpenChapter;
+  /** The opener's pins at the canvas's CURRENT size, and the radius they are drawn at. */
+  const hookPinsNow = useCallback((): { pins: readonly HookPin[]; r: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hookPinsForRef.current) return { pins: [], r: 0 };
+    const r = Math.max(10, Math.min(canvas.width, canvas.height) * 0.03);
+    return { pins: hookPinsForRef.current({ width: canvas.width, height: canvas.height }), r };
+  }, []);
   /** The opener's rect at the canvas's CURRENT size, or null. */
   const hookRectNow = useCallback((): FrameRect | null => {
     const canvas = canvasRef.current;
@@ -699,6 +727,30 @@ export default function BadgeStage({
       ctx.stroke();
       ctx.restore();
     }
+    // The opener's chapters, numbered where they are drawn: the index's own
+    // numbers, so «2» on the road is «2 · Road» in the panel.
+    const { pins, r } = hookPinsNow();
+    for (const pin of pins) {
+      const x = Math.min(w - r * 1.2, Math.max(r * 1.2, pin.x));
+      const y = Math.min(h - r * 1.2, Math.max(r * 1.2, pin.y));
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = r * 0.5;
+      ctx.fillStyle = '#d9442a';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#f4f0e7';
+      ctx.lineWidth = Math.max(1.5, r * 0.16);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${r * 1.35}px 'Instrument Serif', Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(pin.n), x, y + r * 0.08);
+      ctx.restore();
+    }
     const sel = selectedRef.current;
     if (!sel) return;
     // The opener is outlined from the rect the variant reports, elements from
@@ -715,7 +767,10 @@ export default function BadgeStage({
     ctx.setLineDash([h * 0.012, h * 0.012]);
     ctx.strokeRect(box.x, box.y, box.w, box.h);
     ctx.restore();
-  }, [hookRectNow]);
+  }, [hookRectNow, hookPinsNow]);
+  // The pins come and go with the editor's say (the Look tab, a selection),
+  // which repaints nothing else.
+  useEffect(() => drawChrome(), [hookPinsFor, drawChrome]);
 
   // One grader, kept across repaints and re-made only when the LUT or the
   // source's pixel size changes. A grader is a WebGL2 context; making one per
@@ -1212,6 +1267,22 @@ export default function BadgeStage({
       // default action is to move focus — onto the body, away from the field
       // the selection is about to focus.
       e.preventDefault();
+      // A numbered pin on the selected opener opens its chapter: it is the
+      // one target drawn ON TOP of everything, so it is asked first.
+      const { pins, r } = hookPinsNow();
+      const canvasNow = canvasRef.current;
+      const hit = canvasNow
+        ? pins.find((pin) => {
+            const x = Math.min(canvasNow.width - r * 1.2, Math.max(r * 1.2, pin.x));
+            const y = Math.min(canvasNow.height - r * 1.2, Math.max(r * 1.2, pin.y));
+            return Math.hypot(pt.px - x, pt.py - y) <= r * 1.5;
+          })
+        : undefined;
+      if (hit) {
+        press.current = null;
+        onOpenChapterRef.current?.(hit.chapter);
+        return;
+      }
       const id = hitTest(boxesRef.current, pt.px, pt.py);
       if (id) {
         onSelect(id);

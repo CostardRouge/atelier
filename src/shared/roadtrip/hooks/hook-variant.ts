@@ -499,6 +499,13 @@ export interface HookPictureStatus {
 }
 
 /** What a variant's own options panel is handed. */
+/** One chapter's pin on the opener's drawing, in frame pixels. */
+export interface OpenerPart {
+  chapter: string;
+  x: number;
+  y: number;
+}
+
 export interface HookPanelProps {
   options: HookOptions;
   onChange: (options: HookOptions) => void;
@@ -577,6 +584,14 @@ export interface HookVariant {
    * with a `frameBox` and no `moveBy` can be selected but not moved.
    */
   moveBy?(options: HookOptions, dx: number, dy: number): HookOptions;
+  /**
+   * Where the stage may pin each chapter's NUMBER on the drawing (2026-10-12,
+   * step 6 of `docs/opener-inspector-redesign.md`): a tap on «2» over the
+   * road opens chapter 2, Road. Frame pixels at the asked size, the drawing
+   * at rest; a chapter with nothing to point at (the timing, the sound) has
+   * no pin and is reached from the index. Editor-only, like `frameBox`.
+   */
+  parts?(options: HookOptions, ctx: HookContext, frame: FrameBox): readonly OpenerPart[];
   /**
    * The picker card's little drawing. It says what the variant DOES — it is
    * not a render of this piece: the stage sits beside the picker showing the

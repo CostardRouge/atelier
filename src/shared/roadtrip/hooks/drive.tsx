@@ -50,6 +50,8 @@ import {
   driveScore,
   driveShortestBeat,
   driveWants,
+  applyView,
+  viewAt,
   type DriveOptions,
   type DrivePlan,
   type DriveRoute,
@@ -59,7 +61,7 @@ import { loadLook } from './look-text';
 import { NEW_CARD, badgeMoment, badgeWindowFor, cardScene } from './summary-card';
 import { SummaryCardRows } from './summary-card-panel';
 import { AHEAD_GLYPHS, DRIVE_LABEL_GLYPHS, DRIVE_PICTURE_GLYPHS, GROUND_GLYPHS, PATH_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
-import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
+import { CAR_PX, driveBasemap, driveBox, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
 import { GroupRows } from './group-rows';
@@ -1078,6 +1080,36 @@ export const driveVariant: HookVariant = {
     if (o.ground !== 'tiles') return [];
     const plan = planOf(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, ctx);
     return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())?.wants ?? [] : [];
+  },
+  // The chapters' numbers pinned on the drawing at rest: the first stop, the
+  // road between two, the vehicle where it ends, a stop's prints, the map's
+  // corner, the camera's. Under a following camera the road is not where the
+  // whole view puts it, so only the corners are pinned.
+  parts(options, ctx, frame) {
+    const o = driveOptions(options);
+    const box = driveBox(frame.width, frame.height, o.position, o.size);
+    const corners = [
+      { chapter: 'map', x: box.x + box.width, y: box.y },
+      { chapter: 'camera', x: frame.width * 0.07, y: frame.height * 0.07 },
+    ];
+    if (o.camera === 'follow') return corners;
+    const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null);
+    const plan = planOf(route, o, ctx);
+    if (!plan || !plan.points.length) return corners;
+    const margin = CAR_PX * (frame.width / 1080) * o.carSize * 0.7;
+    const view = viewAt(plan, box, margin, { camera: 'whole', followZoom: o.followZoom }, plan.at(0));
+    const at = plan.points.map((p) => applyView(view, p));
+    const last = at[at.length - 1];
+    const k = Math.max(0, Math.floor((at.length - 1) / 2));
+    const mid = at.length > 1 ? { x: (at[k].x + at[k + 1].x) / 2, y: (at[k].y + at[k + 1].y) / 2 } : at[0];
+    const shot = o.pictures === 'none' ? -1 : route.stops.findIndex((stop) => stop.pictures.length > 0);
+    return [
+      { chapter: 'stops', ...at[0] },
+      ...(at.length > 1 ? [{ chapter: 'road', ...mid }] : []),
+      ...(shot >= 0 ? [{ chapter: 'pictures', x: at[shot].x, y: at[shot].y - frame.height * 0.05 }] : []),
+      { chapter: 'vehicle', ...last },
+      ...corners,
+    ];
   },
   prepare(options, ctx) {
     const o = driveOptions(options);

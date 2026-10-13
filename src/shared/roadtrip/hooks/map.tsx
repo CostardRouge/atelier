@@ -43,6 +43,8 @@ import {
   mapCameraPatch,
   mapCameraTrack,
   mapBox,
+  mapFit,
+  fitProjection,
   mapMoved,
   mapOptions,
   mapScore,
@@ -889,6 +891,26 @@ export const mapVariant: HookVariant = {
   },
   moveBy(options, dx, dy) {
     return { ...moveMap(mapOptions(options), dx, dy) };
+  },
+  // The chapters' numbers on the drawing at rest: the map's corner, its first
+  // stop, the line's first hop, the last stop's name, a picture, the compass.
+  parts(options, ctx, frame) {
+    const o = drawnOptions(options, ctx);
+    if (!o.stops.length) return [];
+    const box = mapBox(frame.width, frame.height, o);
+    const project = fitProjection(mapFit(o), box, 8 * (frame.width / 1080)).project;
+    const at = o.stops.map((stop) => project(stop));
+    const last = at[at.length - 1];
+    const shot = o.media === 'off' ? -1 : o.stops.findIndex((stop) => !!stop.picture);
+    return [
+      { chapter: 'frame', x: box.x, y: box.y },
+      { chapter: 'stops', ...at[0] },
+      ...(at.length > 1 ? [{ chapter: 'path', x: (at[0].x + at[1].x) / 2, y: (at[0].y + at[1].y) / 2 }] : []),
+      ...(at.length > 1 ? [{ chapter: 'places', ...last }] : []),
+      ...(shot >= 0 ? [{ chapter: 'pictures', x: at[shot].x, y: at[shot].y - frame.height * 0.05 }] : []),
+      ...(o.compass ? [{ chapter: 'extras', x: box.x + box.width, y: box.y }] : []),
+      ...(o.draw && at.length > 1 ? [{ chapter: 'camera', x: frame.width * 0.07, y: frame.height * 0.07 }] : []),
+    ];
   },
   prepare(options, ctx) {
     const o = drawnOptions(options, ctx);

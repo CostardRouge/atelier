@@ -126,6 +126,7 @@ import {
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
+import { openOpenerChapter } from './opener-chapter';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import GarageModal from './GarageModal';
@@ -1956,6 +1957,29 @@ export default function PostEditor({
   // the badge piece the Content and Style tabs edit, which survives a click
   // on the empty picture. Both come from `selectElement`, never set apart.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * The opener's chapters pinned on its drawing (`HookVariant.parts`), with
+   * the index's numbers. Shown while the opener is selected — or, for one
+   * that fills the frame and cannot be pointed at (Virée), while the Look tab
+   * is open — and a tap opens that chapter of the panel.
+   */
+  const pinsShown =
+    !!openVariant?.parts && !!openVariant.chapters && (selectedId === HOOK_ID || (tab === 'look' && !openVariant.frameBox));
+  const hookPinsFor = useMemo(() => {
+    if (!pinsShown || !openVariant?.parts || !openVariant.chapters) return null;
+    const numbers = new Map(openVariant.chapters.map((c, i) => [c.id, i + 1]));
+    return (frame: { width: number; height: number }) =>
+      (openVariant.parts?.(openOptions, openCtx, frame) ?? []).flatMap((part) => {
+        const n = numbers.get(part.chapter);
+        return n ? [{ ...part, n }] : [];
+      });
+  }, [pinsShown, openVariant, openOptions, openCtx]);
+  const openChapter = (chapter: string) => {
+    if (!openVariant) return;
+    openOpenerChapter(openVariant.id, chapter);
+    setTab('look');
+    if (compact) setInspectorOpen(true);
+  };
   // The width the picture takes from the height it is given — the stage
   // measures it and the column wears it as a cap, so the rail sits against
   // the picture instead of against the edge of the section.
@@ -2471,6 +2495,8 @@ export default function PostEditor({
             // Any slide may hold an opener, and it is pointed at where it draws.
             hookRectFor={isCta ? null : hookRectFor}
             onMoveHook={!isCta && openVariant?.moveBy ? moveHook : undefined}
+            hookPinsFor={isCta ? null : hookPinsFor}
+            onOpenChapter={openChapter}
             shadeHandle={shadeHandle}
             onMoveShadeCentre={shadeHandle ? moveShadeCentre : undefined}
             // Each picture as it stands at the needle: the stage draws what it is

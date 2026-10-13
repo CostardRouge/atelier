@@ -82,3 +82,41 @@ describe('opener chapters', () => {
     expect([...named].sort()).toEqual([...declared].sort());
   });
 });
+
+describe('opener pins', () => {
+  const frame = { width: 1080, height: 1350 };
+  const places = [
+    { name: 'Cairns', lat: -16.92, lon: 145.77 },
+    { name: 'Port Douglas', lat: -16.48, lon: 145.46 },
+    { name: 'Cooktown', lat: -15.47, lon: 145.25 },
+  ];
+  const ctx = {
+    aspect: 0.8,
+    date: '2026-07-14',
+    calendar: ['2026-07-12', '2026-07-13', '2026-07-14'],
+    stages: [{ id: 's1', name: 'North', start: '2026-07-12', end: '2026-07-14', places }],
+  } as never;
+
+  it.each([
+    ['drive', {}],
+    ['map', { stops: places, compass: true }],
+  ])('%s pins only declared chapters, inside the frame', (id, options) => {
+    const variant = HOOK_VARIANTS.find((v) => v.id === id)!;
+    const parts = variant.parts!(options, ctx, frame);
+    const declared = new Set(variant.chapters!.map((c) => c.id));
+    expect(parts.length).toBeGreaterThan(2);
+    for (const part of parts) {
+      expect(declared.has(part.chapter), part.chapter).toBe(true);
+      expect(part.x).toBeGreaterThanOrEqual(0);
+      expect(part.x).toBeLessThanOrEqual(frame.width);
+      expect(part.y).toBeGreaterThanOrEqual(0);
+      expect(part.y).toBeLessThanOrEqual(frame.height);
+    }
+    expect(parts.map((p) => p.chapter)).toContain('stops');
+  });
+
+  it('pins only the corners while Virée’s camera follows', () => {
+    const drive = HOOK_VARIANTS.find((v) => v.id === 'drive')!;
+    expect(drive.parts!({ camera: 'follow' }, ctx, frame).map((p) => p.chapter)).toEqual(['map', 'camera']);
+  });
+});
