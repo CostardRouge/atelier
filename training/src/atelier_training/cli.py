@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -176,6 +177,43 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_winnow_import(args: argparse.Namespace) -> int:
+    import getpass
+
+    from .winnow_import import WinnowClient, WinnowError, import_pairs, plan_import, read_token
+
+    config = _config(args)
+    out = Path(args.out) if args.out else config.paths.pairs
+    if not args.host:
+        print("✗ Which instance? Pass --host https://… or set $WINNOW_HOST.")
+        return 1
+    try:
+        # A flag, then a file, then the environment — so a token typed for this run wins over a standing one.
+        token = read_token(args.token, Path(args.token_file) if args.token_file else None) \
+            or (os.environ.get("WINNOW_TOKEN") or "").strip() or None
+        client = WinnowClient(args.host, token=token)
+        if args.login:
+            client.login(args.login, getpass.getpass(f"Winnow password for {args.login}: "))
+        elif not token:
+            print("✗ No credential: pass --token-file <file>, set $WINNOW_TOKEN, or --login <username>.")
+            return 1
+        plan = plan_import(client, since=args.since, limit=args.limit)
+        counts = import_pairs(client, out, plan, dry_run=args.dry_run)
+    except WinnowError as e:
+        print(f"✗ {e}")
+        return 1
+    for sid, why in plan.skipped[:10]:
+        print(f"  · #{sid}: {why}")
+    if args.dry_run:
+        print(f"\nDry run: {len(plan.groups)} group(s), {plan.pair_count} pair(s) would land in {out} "
+              "— nothing written.")
+    else:
+        print(f"\n{counts['groups']} group(s) in {out}: {counts['fetched']} file(s) fetched, "
+              f"{counts['kept']} already there.")
+        print("Next: `atelier-train validate`, then `atelier-train ingest --source pairs`.")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from .device import module_available
 
@@ -251,6 +289,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", help="where to write the .cube (default: inside the run folder)")
     p.add_argument("--limit", type=int, default=0, help="average the style over this many training pairs (0 = all)")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("winnow-import", parents=[common],
+                       help="fetch your original → final pairs from your Winnow into the pairs folder (read-only)")
+    p.add_argument("--host", default=os.environ.get("WINNOW_HOST"),
+                   help="the instance, e.g. https://winnow.example.com (default: $WINNOW_HOST)")
+    p.add_argument("--token",
+                   help="an app token (prefer --token-file or $WINNOW_TOKEN: a flag shows in the shell history)")
+    p.add_argument("--token-file", help="a file holding the app token, kept OUTSIDE the repository")
+    p.add_argument("--login", metavar="USERNAME", help="log in with a password asked at the prompt instead of a token")
+    p.add_argument("--since", metavar="YYYY-MM-DD", help="only pairs captured on or after this day")
+    p.add_argument("--limit", type=int, default=0, help="stop after this many pairs (0 = all)")
+    p.add_argument("--out", help="where the groups land (default: paths.pairs)")
+    p.add_argument("--dry-run", action="store_true", help="list what would be fetched, write nothing")
+    p.set_defaults(func=cmd_winnow_import)
 
     p = sub.add_parser("serve", parents=[common], help="open the local dashboard (actions, curves, image grids)")
     p.add_argument("--port", type=int, default=8765)

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from atelier_training.imaging import fit_long_edge, image_size, load_image, resize_to, save_image
 
@@ -30,6 +31,19 @@ def test_resize_keeps_a_flat_colour():
     out = resize_to(img, 20, 15)
     assert out.shape == (15, 20, 3)
     assert np.abs(out - 0.25).max() < 1e-4
+
+
+def test_heif_reads_through_pillow_heif_when_installed(tmp_path):
+    pillow_heif = pytest.importorskip("pillow_heif")
+    from PIL import Image
+
+    pillow_heif.register_heif_opener()
+    img = np.zeros((16, 24, 3), np.float32)
+    img[..., 1] = 0.6
+    Image.fromarray((img * 255).round().astype(np.uint8)).save(tmp_path / "a.HIF", format="HEIF", quality=95)
+    back = load_image(tmp_path / "a.HIF")
+    assert back.shape == (16, 24, 3) and abs(back[..., 1].mean() - 0.6) < 0.03
+    assert image_size(tmp_path / "a.HIF") == (24, 16)
 
 
 def test_jpeg_is_decoded_near_the_hint_not_whole(tmp_path):

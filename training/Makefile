@@ -2,9 +2,9 @@
 .DEFAULT_GOAL := help
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-EXTRAS := --extra torch --extra raw --extra ui --extra mlx
+EXTRAS := --extra torch --extra raw --extra heif --extra ui --extra mlx
 else
-EXTRAS := --extra torch --extra raw --extra ui
+EXTRAS := --extra torch --extra raw --extra heif --extra ui
 endif
 RUN := uv run atelier-train
 

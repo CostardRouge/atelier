@@ -22,6 +22,8 @@ torch = ["torch>=2.5"]
 mlx = ["mlx>=0.20; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 # RAW decoding (FiveK's DNG, the maintainer's ARW / DNG originals).
 raw = ["rawpy>=0.23"]
+# HEIF decoding (a Sony .HIF, an iPhone .HEIC) through libheif.
+heif = ["pillow-heif>=0.18"]
 # The local dashboard (`atelier-train serve`): one small API over the run folders and one static page.
 ui = ["fastapi>=0.115", "uvicorn>=0.30"]
 

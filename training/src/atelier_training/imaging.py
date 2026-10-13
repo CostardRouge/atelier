@@ -15,6 +15,8 @@ import numpy as np
 from PIL import Image, ImageOps
 
 IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff"})
+# A camera's HEIF (Sony `.HIF`, Apple `.HEIC`): read through pillow-heif, an OPTIONAL extra.
+HEIF_EXTS = frozenset({".heic", ".heif", ".hif"})
 RAW_EXTS = frozenset(
     {".dng", ".arw", ".cr2", ".cr3", ".nef", ".raf", ".orf", ".rw2", ".nrw", ".pef", ".srw"}
 )
@@ -30,13 +32,36 @@ class RawSupportMissing(RuntimeError):
         )
 
 
+class HeifSupportMissing(RuntimeError):
+    """A HEIF file was asked for and pillow-heif is not installed."""
+
+    def __init__(self, path: Path):
+        super().__init__(
+            f"{path.name} is a HEIF file and HEIF support is not installed. "
+            "Run `make setup` (or `uv sync --extra heif`) and try again."
+        )
+
+
+def _heif_opener(path: Path) -> None:
+    """Teach Pillow the HEIF container, once, or say what is missing."""
+    try:
+        import pillow_heif
+    except ImportError as err:
+        raise HeifSupportMissing(path) from err
+    pillow_heif.register_heif_opener()
+
+
 def is_raw(path: Path) -> bool:
     return path.suffix.lower() in RAW_EXTS
 
 
+def is_heif(path: Path) -> bool:
+    return path.suffix.lower() in HEIF_EXTS
+
+
 def is_picture(path: Path) -> bool:
     ext = path.suffix.lower()
-    return ext in IMAGE_EXTS or ext in RAW_EXTS
+    return ext in IMAGE_EXTS or ext in RAW_EXTS or ext in HEIF_EXTS
 
 
 def _to_float_rgb(array: np.ndarray) -> np.ndarray:
@@ -76,7 +101,9 @@ def load_image(
         import tifffile
 
         return _to_float_rgb(np.asarray(tifffile.imread(path)))
-    if ext not in IMAGE_EXTS:
+    if ext in HEIF_EXTS:
+        _heif_opener(path)
+    elif ext not in IMAGE_EXTS:
         raise ValueError(f"{path.name}: unsupported file type {ext!r}")
     with Image.open(path) as im:
         if long_edge and im.format == "JPEG":
@@ -124,6 +151,8 @@ def image_size(path: Path | str) -> tuple[int, int]:
         if len(shape) == 3 and shape[0] in (3, 4) and shape[-1] not in (3, 4):
             return shape[2], shape[1]
         return shape[1], shape[0]
+    if ext in HEIF_EXTS:
+        _heif_opener(path)
     with Image.open(path) as im:
         w, h = im.size
         orientation = im.getexif().get(0x0112, 1)

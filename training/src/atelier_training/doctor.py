@@ -92,6 +92,12 @@ def machine_checks(config: Config) -> list[Check]:
                    "Run `make setup` (or `uv sync --extra raw`).")
     )
 
+    checks.append(
+        Check("HEIF support", OK, "pillow-heif installed")
+        if module_available("pillow_heif")
+        else Check("HEIF support", WARN, "pillow-heif missing — a Sony .HIF or an iPhone .HEIC cannot be read",
+                   "Run `make setup` (or `uv sync --extra heif`).")
+    )
     mem = total_memory_bytes()
     if mem is None:
         checks.append(Check("Memory", INFO, "could not be read"))

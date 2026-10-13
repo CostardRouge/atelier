@@ -30,7 +30,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..imaging import RawSupportMissing, image_size, is_picture, is_raw
+from ..imaging import HeifSupportMissing, RawSupportMissing, image_size, is_picture, is_raw
 
 MANIFEST = "manifest.toml"
 
@@ -170,11 +170,8 @@ def check_geometry(group: Group, issues: list[Issue], tolerance: float) -> None:
         return
     try:
         ow, oh = image_size(group.original)
-    except RawSupportMissing:
-        issues.append(
-            Issue("warning", group.name, f"{group.original.name} is a RAW and RAW support is not installed "
-                  "(`make setup`); its size could not be checked.")
-        )
+    except (RawSupportMissing, HeifSupportMissing) as e:
+        issues.append(Issue("warning", group.name, f"{e} Its size could not be checked."))
         return
     except Exception as e:  # noqa: BLE001 — any unreadable file is reported, never raised
         issues.append(Issue("error", group.name, f"the original {group.original.name} cannot be read: {e}"))
