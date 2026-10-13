@@ -999,7 +999,7 @@ export default function WinnowPicker({
                   const runs = dayRuns(batch, (it) => rowDay(it.row));
                   return runs.map((run, k) => (
                     <section key={`${run.day ?? 'undated'}-${k}`} aria-label={run.day ? dayHeading(run.day) : 'Undated'} className="mb-3">
-                      <h3 data-day={run.day ?? undefined} className="sticky top-0 z-[2] m-0 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
+                      <h3 data-day={run.day ?? undefined} className="sticky top-0 z-[2] m-0 px-1 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
                         {run.day ? dayHeading(run.day) : 'No date'}
                         <span className="font-mono text-3xs font-normal text-muted tabular-nums">{run.items.length} media</span>
                       </h3>
