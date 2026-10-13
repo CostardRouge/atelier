@@ -218,6 +218,21 @@ export function passes(it: PickItem, f: PickFacets): boolean {
   return true;
 }
 
+/**
+ * The facets a SPAN sends to the server, so weeks of an instance are asked
+ * for only in what the rail keeps: a media type — the one kind ticked, or
+ * clips whenever the flight log is (a log rides with a clip, never a photo)
+ * — and the bodies ticked, as Winnow's own comma lists (`media_type`,
+ * `device`, its `csv` filters). The rail still filters the rows it gets; the
+ * server only stops sending what it would throw away. The extension stays
+ * the rail's alone: its stored spelling is not certain enough to ask by.
+ */
+export function serverFacets(f: PickFacets): { mediaType?: MediaKind; device?: string } {
+  const mediaType = f.kinds.length === 1 ? f.kinds[0] : f.logs.length > 0 && !f.kinds.includes('photo') ? 'video' : undefined;
+  const device = f.devices.length ? f.devices.join(',') : undefined;
+  return { ...(mediaType ? { mediaType } : {}), ...(device ? { device } : {}) };
+}
+
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((v) => b.includes(v));
 

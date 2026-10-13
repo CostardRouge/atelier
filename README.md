@@ -2855,8 +2855,11 @@ re-activates. Each tile also wears what you decided in Winnow — a flag for a
 pick or a reject, its stars. "Browse all" opens the **Winnow picker** where the
 tab is looking — its day and its half — to tick many at once: by day (the
 same stepper and month), by **span** (several days as one list, grouped by
-day — a whole trip at once; a very long span says where it was cut) or by
-folder, every tile with Winnow's verdict, a rail
+day — a whole trip or a whole year at once, loaded in parts as you look, with
+a strip of the months to jump to any of them; the type, the flight log and
+the body ticked in the rail are asked of the instance itself, so a year of
+one drone's flights loads only those clips; past 20 000 media it says where
+it stopped) or by folder, every tile with Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
 flight log, extension, body, tags, no final yet, not in the library), tick verbs over what
 is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
@@ -2864,7 +2867,10 @@ to look at a tile large. Nothing is ticked when it opens — an add downloads �
 and the files come as **proxies**, or as **originals** with their weight shown
 first, or — **Logs only** — as each DJI clip's `.srt` flight log alone, a few
 hundred kilobytes of text instead of a video (what Flight Atlas reads; a clip
-with no log is skipped and the bar says how many). A Cancel stops the download
+with no log is skipped and the bar says how many; a log the Winnow lists but
+cannot read on its disk — usually a drive that is not plugged in — is skipped
+too, marked *not on disk* in the Logbook and named after the add, which keeps
+the rest). A Cancel stops the download
 and keeps what landed. A DJI clip brings its flight log along either way, and a
 clip whose log came alone can still be added later and joins it.
 

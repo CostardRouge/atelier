@@ -16,6 +16,7 @@ import {
   pilesOf,
   rangeTicked,
   readFacets,
+  serverFacets,
   SHOW_ALL,
   shown,
   surfaced,
@@ -177,6 +178,18 @@ describe('facets', () => {
     expect(facetCounts(clips).logs).toEqual({ with: 2, without: 1 });
     expect(activeFacets(f({ logs: ['with'] }))).toBe(1);
     expect(readFacets({ logs: ['with', 'maybe'] }).logs).toEqual(['with']);
+  });
+
+  it('asks the server only for what the rail keeps: one kind, clips for a log, the bodies', () => {
+    expect(serverFacets(DEFAULT_FACETS)).toEqual({});
+    expect(serverFacets(f({ kinds: ['photo'] }))).toEqual({ mediaType: 'photo' });
+    expect(serverFacets(f({ kinds: ['photo', 'video'] }))).toEqual({});
+    expect(serverFacets(f({ logs: ['with'] }))).toEqual({ mediaType: 'video' });
+    expect(serverFacets(f({ logs: ['with'], kinds: ['photo', 'video'] }))).toEqual({});
+    expect(serverFacets(f({ logs: ['with'], devices: ['DJI Mini 4 Pro', 'DJI Air 3S'] }))).toEqual({
+      mediaType: 'video',
+      device: 'DJI Mini 4 Pro,DJI Air 3S',
+    });
   });
 
   it('counts the scope, filters ignored', () => {

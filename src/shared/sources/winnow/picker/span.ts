@@ -126,3 +126,71 @@ export function dayRuns<T>(items: readonly T[], dayOf: (item: T) => IsoDate | nu
   }
   return out;
 }
+
+/** One part of a span asked for in one walk of pages: whole days, contiguous with the next. */
+export interface SpanChunk {
+  from: IsoDate;
+  to: IsoDate;
+  /** What the instance's calendar counted in it. */
+  count: number;
+}
+
+/**
+ * A span cut into parts of about `budget` media, from the instance's own day
+ * counts (`client.calendar`, one request): whole days, in order, the first
+ * starting on the span's first day and the last ending on its last, each the
+ * day after the one before — so every day is asked for once and none is
+ * skipped. A day heavier than the budget is a part of its own. A span the
+ * calendar counts nothing in has no parts.
+ *
+ * Why parts at all: the list is asked oldest first, so a span asked in one
+ * capped walk showed only its first weeks — a year read as its October.
+ */
+export function spanChunks(
+  days: readonly { date: string; count: number }[],
+  span: DaySpan,
+  budget: number,
+): SpanChunk[] {
+  const inside = days.filter((d) => d.date >= span.from && d.date <= span.to && d.count > 0).sort((a, b) => (a.date < b.date ? -1 : 1));
+  if (inside.length === 0) return [];
+  const out: SpanChunk[] = [];
+  let start = span.from;
+  let count = 0;
+  let last: IsoDate | null = null;
+  for (const d of inside) {
+    if (count > 0 && count + d.count > budget && last) {
+      out.push({ from: start, to: last, count });
+      start = addDays(last, 1) ?? d.date;
+      count = 0;
+    }
+    count += d.count;
+    last = d.date;
+  }
+  out.push({ from: start, to: span.to, count });
+  return out;
+}
+
+/**
+ * The span's months with what the calendar counted in each, empty months
+ * included so the strip reads as a time axis — the jump bar above a long
+ * span's grid.
+ */
+export function spanMonths(days: readonly { date: string; count: number }[], span: DaySpan): { month: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const d of days) if (d.date >= span.from && d.date <= span.to) counts.set(d.date.slice(0, 7), (counts.get(d.date.slice(0, 7)) ?? 0) + d.count);
+  const out: { month: string; count: number }[] = [];
+  let y = Number(span.from.slice(0, 4));
+  let m = Number(span.from.slice(5, 7));
+  const endY = Number(span.to.slice(0, 4));
+  const endM = Number(span.to.slice(5, 7));
+  while (y < endY || (y === endY && m <= endM)) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    out.push({ month: key, count: counts.get(key) ?? 0 });
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}

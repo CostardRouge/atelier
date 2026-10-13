@@ -1,10 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { assetRemoteId, splitAssetsBySource } from '../../shared/library/asset-source';
-import { materialize } from '../../shared/sources/winnow/materialize';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import WinnowPicker from '../../shared/sources/winnow/picker/WinnowPicker';
-import { heldLog } from '../../shared/sources/winnow/picker/flight-logs';
+import { addFlightLogs } from '../../shared/sources/winnow/picker/flight-logs';
 import { logStateOf } from '../../shared/sources/winnow/picker/pick-filter';
 import type { PickerHost } from '../../shared/sources/winnow/picker/picker-host';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -59,19 +58,7 @@ export default function AtlasWinnow({ onAdd }: { onAdd: (files: File[]) => void 
               {
                 key: 'add',
                 label: (n) => (n ? `Add ${n} flight${n === 1 ? '' : 's'}` : 'Add flights'),
-                run: async (rows, { signal, progress }) => {
-                  const files: File[] = [];
-                  try {
-                    for (const [i, row] of rows.entries()) {
-                      if (signal.aborted) break;
-                      progress(`${i + 1}/${rows.length} · ${row.filename}`);
-                      files.push(...(await materialize(client, connection.id, row, { fidelity: 'log', signal, reuse: heldLog })));
-                    }
-                  } finally {
-                    if (files.length) onAddRef.current(files);
-                  }
-                  return !signal.aborted;
-                },
+                run: (rows, ctx) => addFlightLogs(client, connection.id, rows, (files) => onAddRef.current(files), ctx),
               },
             ],
           }
