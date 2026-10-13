@@ -174,9 +174,38 @@ vignette as shot + the record) as another source.
 **Verify.** Synthetic groups with a known crop/rotation for the aligner; his
 Mac for the real fine-tune.
 
-## M6 — parameter predictor → `DevelopSettings`, and the Atelier side
+## M6 — parameter predictor → `DevelopSettings`, and the Atelier side — BUILT on the training side (2026-10-13)
 
-**Delivers.** A second model: thumbnail (+ the as-shot stats Atelier already
+`records.py` reads the file Atelier writes (`atelier/training-pairs` v1,
+`src/shared/develop/training-dump.ts`): the vignette, the histogram
+resampled to 64 bins + the three linear means, five camera facts on a log
+scale, the eleven sliders; records an agent wrote are left out by default,
+untouched pictures kept. `model/develop_net.py`: the LUT model's CNN stack
+on the vignette joined with the stats and EXIF, eleven outputs squashed to
+their slider's range (`tanh × range`), starting on "do nothing".
+`train_develop.py`: `train-develop` (runs under `runs/<date>-develop-…`,
+MAE per slider in its own units against the MAE of predicting nothing),
+`eval-develop`, `export-develop` → `develop-net.onnx` (torch.export-based
+exporter, the TorchScript one as the fallback) + `develop-net.json` (input
+names and scales, slider order and ranges), run back through onnxruntime
+against torch. The dashboard lists these runs with their MAE. The CPU test
+trains on a synthetic file whose sliders follow the picture and beats
+"nothing" by a wide margin; `records` / `train-develop` / `eval-develop` /
+`export-develop` are wired.
+
+**What is LEFT, and is his call** (B4 of `docs/auto-develop.md`): the
+Atelier side. Option 1 needs nothing: the `.cube` of M2 goes through "Upload
+.cube" today. Option 2 is a browser verb *Auto · my own*: `onnxruntime-web`
+from our own origin, `public/models/develop-net.onnx` + its sidecar, the
+vignette and `SourceStats` Atelier already measures (`shot-record.ts`) fed
+as the sidecar says, the eleven numbers written through the same `patch` as
+the Auto verbs, journaled `via: 'auto'`. Cost: ONNX Runtime's wasm in
+`dist/` (14–28 MB measured in `docs/mask-ui-redesign.md`) — to weigh before
+building; a separate PR on `src/` when he says so. The RECOVERY of a record
+for a pair without one (his Winnow finals) was not built: it needs
+Atelier's own engine (TS), as `auto-develop.md` §6 B3 says, not a Python twin.
+
+**Delivered as planned:** A second model: thumbnail (+ the as-shot stats Atelier already
 measures, `SourceStats`) → the slider vector of `DevelopSettings`
 (`src/shared/develop/develop.ts`: exposure, brightness, contrast, the four
 bands, temperature, tint, saturation, vibrance; curves later). Targets come

@@ -152,6 +152,33 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   pairs: his groups are one original + one final today, but a group of
   several edits would otherwise leak across the sides.
 
+## M6 — the develop predictor (2026-10-13)
+
+- **The dataset is Atelier's own training file**, never a Python re-read of
+  rolls: `records.py` unpacks `atelier/training-pairs` v1 as
+  `training-dump.ts` writes it; a change of that format is a `version`
+  bump on both sides. An agent's record is left out by default
+  (`--include-agent` keeps it); an untouched picture is kept as a zero
+  vector — "nothing" is an answer the model must learn too.
+- **Inputs are what Atelier already measures at bake** (`shot-record.ts`):
+  the 256 px vignette, `SourceStats` (histogram resampled to 64 fractions +
+  three linear means), five EXIF facts on log scales. The sidecar
+  `develop-net.json` names the scaling so the browser feeds the same
+  numbers; never add an input Atelier cannot compute at the same moment.
+- **Outputs are squashed to each slider's range** (`tanh × range`), so a
+  predicted record is always one Atelier accepts; the loss is a smooth L1 on
+  ranges normalised to ±1, so exposure (±3) and a band (±100) weigh alike;
+  the bar is the MAE of predicting nothing, logged beside every validation.
+- **ONNX export goes through the torch.export exporter** (`dynamo=True`,
+  opset 18, needs `onnxscript`), the TorchScript one only as a fallback —
+  in PyTorch 2.14 the legacy path raises a `DeprecationWarning` the tests
+  treat as an error. The file is run back through onnxruntime against torch
+  before it is called exported; batch is fixed at one (the browser's case).
+- **The Atelier side (B4) is NOT built here** — his call between importing
+  the M2 `.cube` (free) and a browser verb over `onnxruntime-web` (14–28 MB
+  of wasm in `dist/`, measured earlier); a record's RECOVERY for a Winnow
+  pair stays Atelier's engine's job, not a Python twin's.
+
 ## Traps
 
 - Pillow reads a 48-bit PNG as 8 bits per channel: 16-bit material goes

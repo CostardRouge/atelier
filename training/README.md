@@ -180,6 +180,8 @@ pour qu'une relance ne refasse rien.
 | `make train` | entraîne le modèle sur les paires préparées |
 | `make eval` | mesure le dernier run (PSNR, ΔE) et dessine les grilles origine \| retouche \| modèle |
 | `make export` | écrit le look appris en `.cube` |
+| `make records FILE=…` | déballe le fichier d'entraînement écrit par Atelier (Develop → Learning) |
+| `make train-develop` / `make export-develop` | entraîne le prédicteur de curseurs Develop, l'exporte en ONNX |
 | `make test` | lance les tests |
 
 `make ingest` lit les sources de `ingest.sources` (FiveK et tes paires par
@@ -248,6 +250,32 @@ redressement jusqu'à ±6°) et la paire est préparée sur les mêmes pixels. U
 retouche qui n'est pas une découpe de l'original (perspective corrigée,
 contenu déplacé) est ignorée et dite. `ingest.align = "always"` cherche aussi
 dans les paires de même format (un recadrage qui garde le 3:2).
+
+## 6 bis. Le second modèle : tes réglages Develop
+
+Le premier modèle sort une LUT. Le second prédit **les onze curseurs de
+Develop** (exposition, luminosité, contraste, hautes lumières, ombres,
+blancs, noirs, température, teinte, saturation, vibrance) à partir de la
+photo telle qu'elle sort du boîtier. Ses données, c'est Atelier qui les
+produit : dans Develop, *Réglages → Learning → Training file* écrit un `.json`
+avec, pour chaque photo, sa vignette telle que décodée, ses statistiques et
+tes réglages. Un réglage écrit par un agent est laissé de côté (le modèle
+apprend ton goût, pas celui d'une machine).
+
+```bash
+make records FILE=~/Downloads/atelier-training-pairs.json   # déballe le fichier dans data/records
+make train-develop                                           # entraîne le prédicteur
+uv run atelier-train eval-develop                            # erreur moyenne par curseur, contre « ne rien faire »
+make export-develop                                          # runs/<run>/develop-net.onnx + develop-net.json
+```
+
+`eval-develop` donne l'erreur moyenne de chaque curseur dans son unité
+(± stops pour l'exposition, ± points pour les autres) et la compare à celle
+d'un modèle qui ne toucherait à rien : tant que la seconde n'est pas battue
+nettement, il manque des paires. Le fichier ONNX exporté est celui
+qu'Atelier chargera dans le navigateur (`onnxruntime-web`, depuis son propre
+domaine) — ce branchement côté Atelier est la dernière étape, décrite dans
+[`PLAN.md`](PLAN.md).
 
 ## 7. Le tableau de bord
 
