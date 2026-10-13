@@ -37,6 +37,7 @@ export default function PickerTile({
   onToggle,
   onLook,
   track,
+  logMissing = false,
   className = '',
 }: {
   item: PickItem;
@@ -51,6 +52,8 @@ export default function PickerTile({
   onLook: () => void;
   /** The flight's track, once its log is read — drawn over the thumbnail. */
   track?: FlightTrack | null;
+  /** The instance could not hand over this clip's log (`log-failures.ts`). */
+  logMissing?: boolean;
   /** The cell's own size, where it is not a grid cell (a pile's row). */
   className?: string;
 }) {
@@ -118,8 +121,11 @@ export default function PickerTile({
         </span>
         <span className="absolute left-1.5 right-1.5 bottom-1.5 flex items-center justify-end gap-1 overflow-hidden" aria-hidden="true">
           {item.log === 'with' && (
-            <span className={chip} title="A DJI flight log (.srt) rides with this clip">
-              {track?.km != null ? `${track.km.toFixed(1)} km` : 'SRT'}
+            <span
+              className={chip}
+              title={logMissing ? 'The instance lists this flight log (.srt) but could not hand it over — is its drive plugged in?' : 'A DJI flight log (.srt) rides with this clip'}
+            >
+              {logMissing ? 'SRT ✕' : track?.km != null ? `${track.km.toFixed(1)} km` : 'SRT'}
             </span>
           )}
           <span className={`${chip} uppercase`}>{kindChip}</span>

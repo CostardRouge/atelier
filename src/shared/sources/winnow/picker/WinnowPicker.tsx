@@ -28,6 +28,7 @@ import { useInViewport } from '../../../lib/use-in-viewport';
 import PickerLogbook from './PickerLogbook';
 import PickerRail from './PickerRail';
 import { readFlightLog } from './flight-logs';
+import { logFailureOf, type LogFailure } from './log-failures';
 import type { FlightTrack } from './flight-track';
 import SpanPicker from './SpanPicker';
 import { dayHeading, dayRuns, openingSpan, rowDay, spanChunks, spanDays, spanMonths, spanPresets } from './span';
@@ -399,6 +400,9 @@ export default function WinnowPicker({
   // the grid DRAWS, once per session (`flight-logs.ts`).
   const [tracksOn, setTracksOn] = useState(host.start.tracks ?? false);
   const [tracks, setTracks] = useState<ReadonlyMap<number, FlightTrack | null>>(new Map());
+  // Logs the instance could not hand over — never drawn as a flight with no
+  // fix, which is what hid a drive that was not plugged in (`log-failures.ts`).
+  const [missing, setMissing] = useState<ReadonlyMap<number, LogFailure>>(new Map());
 
   // --- ticks -----------------------------------------------------------------
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
@@ -585,16 +589,29 @@ export default function WinnowPicker({
       if (it.log !== 'with') continue;
       readFlightLog(client, it.row)
         ?.then((log) => {
-          if (alive) setTracks((cur) => (cur.get(it.id) === log.track ? cur : new Map(cur).set(it.id, log.track)));
+          if (!alive) return;
+          setTracks((cur) => (cur.get(it.id) === log.track ? cur : new Map(cur).set(it.id, log.track)));
+          setMissing((cur) => {
+            if (!cur.has(it.id)) return cur;
+            const next = new Map(cur);
+            next.delete(it.id);
+            return next;
+          });
         })
-        .catch(() => {
-          if (alive) setTracks((cur) => (cur.has(it.id) ? cur : new Map(cur).set(it.id, null)));
+        .catch((err: unknown) => {
+          const why = logFailureOf(err);
+          if (alive) setMissing((cur) => (cur.get(it.id) === why ? cur : new Map(cur).set(it.id, why)));
         });
     }
     return () => {
       alive = false;
     };
   }, [tracksOn, shownItems, limit, client]);
+
+  // `Tracks · read/with a log`, and what the instance could not hand over.
+  const withLogs = shownItems.filter((it) => it.log === 'with');
+  const missed = withLogs.filter((it) => missing.has(it.id)).length;
+  const tracksLabel = `Tracks · ${withLogs.filter((it) => tracks.has(it.id) && !missing.has(it.id)).length}/${withLogs.length}${missed ? ` · ${missed} missing` : ''}`;
 
   const [railOpen, setRailOpen] = useState(false);
   // The grid's own view, per device (the panel's tiles and the rail's
@@ -674,6 +691,7 @@ export default function WinnowPicker({
       onToggle={(e) => toggle(it, e)}
       onLook={() => look(it.id)}
       track={tracksOn ? tracks.get(it.id) : undefined}
+      logMissing={tracksOn && missing.has(it.id)}
       className={inRow ? 'w-32 h-24 shrink-0' : ''}
     />
   );
@@ -841,11 +859,13 @@ export default function WinnowPicker({
                   onClick={() => setTracksOn((on) => !on)}
                   title={
                     tracksOn
-                      ? 'Stop reading the flight logs (those read stay drawn)'
+                      ? `Stop reading the flight logs (those read stay drawn)${
+                          missed ? ` · ${missed} could not be read: ${connection.id} lists those clips but cannot hand over their .srt — usually a drive they were ingested from that is not plugged in` : ''
+                        }`
                       : "Read the shown clips' flight logs — a small download each — and draw each flight's track"
                   }
                 >
-                  {tracksOn ? `Tracks · ${shownItems.filter((it) => it.log === 'with' && tracks.has(it.id)).length}/${shownItems.filter((it) => it.log === 'with').length}` : 'Read tracks'}
+                  {tracksOn ? tracksLabel : 'Read tracks'}
                 </Button>
               )}
 <SettingsMenu
@@ -981,6 +1001,7 @@ export default function WinnowPicker({
                         focusId={focusId}
                         heldLabel={host.heldLabel}
                         tracks={tracksOn ? tracks : new Map()}
+                        missing={tracksOn ? missing : new Map()}
                         reading={tracksOn}
                         onToggle={toggle}
                         onLook={look}

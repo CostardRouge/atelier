@@ -255,6 +255,18 @@ apply**:
   the picker's `held` reads the one its fidelity fills.
 - `reuse(url)` hands back a log already read (the Logbook's tracks), so it is
   never fetched twice.
+- **A log the instance cannot hand over is SKIPPED, never the end of the run**
+  (2026-10-13, his "156 added, 23 shown"). Winnow streams a sidecar from the
+  clip's SOURCE folder (`/api/sidecars/:id/download` reads `abs_path`, 404
+  "Sidecar file is not reachable" when it is gone) while the thumbnail and
+  proxy come from its own cache — so a clip ingested from an unplugged drive
+  lists as "with a log" and its `.srt` cannot be read. The add stopped at the
+  first miss and kept only what came before; `addFlightLogs`
+  (`flight-logs.ts`, both the Library's *Logs only* and the atlas door) now
+  goes on, adds what landed, then throws ONE sentence (`log-failures.ts`: a 404
+  is `unreachable`, said as "not on <host>'s disk") so the picker keeps the
+  misses ticked. A failed READ is `missing`, never a track of `null`: the
+  Logbook drew it as "no fix", which hid the drive.
 
 ## The LOGBOOK view, and a flight's track as its thumbnail (2026-10-13)
 
