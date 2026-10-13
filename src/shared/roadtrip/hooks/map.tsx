@@ -19,6 +19,7 @@
  * what it cannot do, and its panel.
  */
 
+import { MAP_CHAPTERS } from './opener-chapter-specs';
 import Segmented from '../../ui/Segmented';
 import {
   FieldRow,
@@ -29,6 +30,7 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import { EASINGS, EASING_IDS } from './easing';
+import { AHEAD_GLYPHS, ALIGN_GLYPHS, MAP_LABEL_GLYPHS, MAP_MEDIA_GLYPHS, PEN_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
 import type { HookContext, HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { paintMap } from './map-paint';
 import {
@@ -41,6 +43,8 @@ import {
   mapCameraPatch,
   mapCameraTrack,
   mapBox,
+  mapFit,
+  fitProjection,
   mapMoved,
   mapOptions,
   mapScore,
@@ -159,7 +163,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
       <p className="m-0 text-xs text-ink-soft">{summary}</p>
 
-      <Group title="Stops">
+      <Group title="Stops" chapter="stops">
         <StopSourceRows
           value={o}
           onChange={set}
@@ -195,7 +199,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Pictures">
+      <Group title="Pictures" chapter="pictures">
         <FieldRow
           label="Shown as"
           align="start"
@@ -211,16 +215,18 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
                     : 'Every stop’s picture in a row along the edge; the ones still ahead are held back.'
           }
         >
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="How a stop’s picture is presented"
             value={o.media}
             onChange={(media) => set({ media })}
             options={[
-              { id: 'off', label: 'Not at all' },
-              { id: 'pin', label: 'Pinned at the stop' },
-              { id: 'card', label: 'On a card under the map' },
-              { id: 'backdrop', label: 'Filling the frame behind' },
-              { id: 'strip', label: 'A strip along the edge' },
+              { id: 'off', label: 'None', title: 'Not at all', icon: MAP_MEDIA_GLYPHS.off },
+              { id: 'pin', label: 'Pinned', title: 'Pinned at the stop', icon: MAP_MEDIA_GLYPHS.pin },
+              { id: 'card', label: 'Card', title: 'On a card under the map', icon: MAP_MEDIA_GLYPHS.card },
+              { id: 'backdrop', label: 'Behind', title: 'Filling the frame behind', icon: MAP_MEDIA_GLYPHS.backdrop },
+              { id: 'strip', label: 'Strip', title: 'A strip along the edge', icon: MAP_MEDIA_GLYPHS.strip },
             ]}
           />
         </FieldRow>
@@ -323,18 +329,19 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Frame">
+      <Group title="Frame" chapter="frame">
         <FieldRow label="Where">
           <Segmented
             size="sm"
             fill
             label="Where the map sits"
+            tiles
             value={o.position}
             onChange={(position) => set({ position })}
             options={[
-              { id: 'top', label: 'Top' },
-              { id: 'middle', label: 'Middle' },
-              { id: 'bottom', label: 'Bottom' },
+              { id: 'top', label: 'Top', icon: POSITION_GLYPHS.top },
+              { id: 'middle', label: 'Middle', icon: POSITION_GLYPHS.middle },
+              { id: 'bottom', label: 'Bottom', icon: POSITION_GLYPHS.bottom },
             ]}
           />
         </FieldRow>
@@ -343,12 +350,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="Which side the map keeps to"
+            tiles
             value={o.align}
             onChange={(align) => set({ align })}
             options={[
-              { id: 'left', label: 'Left' },
-              { id: 'center', label: 'Centre' },
-              { id: 'right', label: 'Right' },
+              { id: 'left', label: 'Left', icon: ALIGN_GLYPHS.left },
+              { id: 'center', label: 'Centre', icon: ALIGN_GLYPHS.center },
+              { id: 'right', label: 'Right', icon: ALIGN_GLYPHS.right },
             ]}
           />
         </FieldRow>
@@ -434,7 +442,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Path">
+      <Group title="Path" chapter="path">
         <FieldRow label="Width">
           <RangeField
             label="Line width"
@@ -495,11 +503,12 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             fill
             label="How what is still ahead is drawn"
             value={o.aheadStyle}
+            tiles
             onChange={(aheadStyle) => set({ aheadStyle })}
             options={[
-              { id: 'dashed', label: 'Dashed' },
-              { id: 'faint', label: 'Faint' },
-              { id: 'hidden', label: 'Hidden' },
+              { id: 'dashed', label: 'Dashed', icon: AHEAD_GLYPHS.dashed },
+              { id: 'faint', label: 'Faint', icon: AHEAD_GLYPHS.faint },
+              { id: 'hidden', label: 'Hidden', icon: AHEAD_GLYPHS.hidden },
             ]}
           />
         </FieldRow>
@@ -510,7 +519,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Places">
+      <Group title="Places" chapter="places">
         <FieldRow label="Dots">
           <ToggleField label="A dot at every stop" checked={o.dots} onChange={(dots) => set({ dots })}>
             A dot at every stop
@@ -546,16 +555,18 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
                 : 'The names you gave the stops. One that would sit on another name, or on a picture, is left out.'
           }
         >
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="Which stops carry their name"
             value={o.labels}
             onChange={(labels) => set({ labels })}
             options={[
-              { id: 'none', label: 'None' },
-              { id: 'ends', label: 'The first and the last' },
-              { id: 'current', label: 'Where the pen is' },
-              { id: 'passed', label: 'Everywhere it has been' },
-              { id: 'all', label: 'Every stop' },
+              { id: 'none', label: 'None', icon: MAP_LABEL_GLYPHS.none },
+              { id: 'ends', label: 'Ends', title: 'The first and the last', icon: MAP_LABEL_GLYPHS.ends },
+              { id: 'current', label: 'Pen', title: 'Where the pen is', icon: MAP_LABEL_GLYPHS.current },
+              { id: 'passed', label: 'Passed', title: 'Everywhere it has been', icon: MAP_LABEL_GLYPHS.passed },
+              { id: 'all', label: 'All', title: 'Every stop', icon: MAP_LABEL_GLYPHS.all },
             ]}
           />
         </FieldRow>
@@ -593,7 +604,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Motion">
+      <Group title="Motion" chapter="motion">
         <SwitchRow
           label="Travel the itinerary, stop by stop"
           name="Draw the journey"
@@ -645,11 +656,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
         {o.draw && (
           <FieldRow label="Motion" hint={`${EASINGS[o.easing].hint} — on every hop.`}>
-            <SelectField
+            <Segmented
+              size="sm"
+              tiles
               label="How the pen travels each hop"
               value={o.easing}
               onChange={(easing) => set({ easing })}
-              options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
+              options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
             />
           </FieldRow>
         )}
@@ -672,12 +685,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
               size="sm"
               fill
               label="What travels along the path"
+              tiles
               value={o.pen}
               onChange={(pen) => set({ pen })}
               options={[
-                { id: 'dot', label: 'A dot' },
-                { id: 'plane', label: 'A plane' },
-                { id: 'none', label: 'Bare line' },
+                { id: 'dot', label: 'A dot', icon: PEN_GLYPHS.dot },
+                { id: 'plane', label: 'A plane', icon: PEN_GLYPHS.plane },
+                { id: 'none', label: 'Bare line', icon: PEN_GLYPHS.none },
               ]}
             />
           </FieldRow>
@@ -685,7 +699,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       {o.draw && stops.length > 1 && (
-        <Group title="Camera">
+        <Group title="Camera" chapter="camera">
           <CameraRows
             o={mapCamera(o)}
             set={(patch) => set(mapCameraPatch(patch))}
@@ -700,7 +714,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </Group>
       )}
 
-      <Group title="Extras">
+      <Group title="Extras" chapter="extras">
         <FieldRow label="Compass" hint={o.compass ? 'North is up because the projection is; the arrow says so.' : undefined}>
           <ToggleField label="A north arrow" checked={o.compass} onChange={(compass) => set({ compass })}>
             A north arrow
@@ -745,7 +759,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Sound">
+      <Group title="Sound" chapter="sound">
         <SwitchRow
           label="Tick at every stop the pen reaches"
           name="Tick at every stop"
@@ -878,6 +892,26 @@ export const mapVariant: HookVariant = {
   moveBy(options, dx, dy) {
     return { ...moveMap(mapOptions(options), dx, dy) };
   },
+  // The chapters' numbers on the drawing at rest: the map's corner, its first
+  // stop, the line's first hop, the last stop's name, a picture, the compass.
+  parts(options, ctx, frame) {
+    const o = drawnOptions(options, ctx);
+    if (!o.stops.length) return [];
+    const box = mapBox(frame.width, frame.height, o);
+    const project = fitProjection(mapFit(o), box, 8 * (frame.width / 1080)).project;
+    const at = o.stops.map((stop) => project(stop));
+    const last = at[at.length - 1];
+    const shot = o.media === 'off' ? -1 : o.stops.findIndex((stop) => !!stop.picture);
+    return [
+      { chapter: 'frame', x: box.x, y: box.y },
+      { chapter: 'stops', ...at[0] },
+      ...(at.length > 1 ? [{ chapter: 'path', x: (at[0].x + at[1].x) / 2, y: (at[0].y + at[1].y) / 2 }] : []),
+      ...(at.length > 1 ? [{ chapter: 'places', ...last }] : []),
+      ...(shot >= 0 ? [{ chapter: 'pictures', x: at[shot].x, y: at[shot].y - frame.height * 0.05 }] : []),
+      ...(o.compass ? [{ chapter: 'extras', x: box.x + box.width, y: box.y }] : []),
+      ...(o.draw && at.length > 1 ? [{ chapter: 'camera', x: frame.width * 0.07, y: frame.height * 0.07 }] : []),
+    ];
+  },
   prepare(options, ctx) {
     const o = drawnOptions(options, ctx);
     if (o.stops.length === 0) return { seconds: 0 };
@@ -915,5 +949,6 @@ export const mapVariant: HookVariant = {
     return o.fit ? fitRender(render, ctx.screenSeconds, mapShortestBeat(timing)).render : render;
   },
   Sketch: MapSketch,
+  chapters: MAP_CHAPTERS,
   Panel: MapPanel,
 };

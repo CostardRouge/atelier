@@ -2,10 +2,12 @@
  * The bits of panel a hook variant's options share. A variant's panel mounts
  * INSIDE the picker's "Opener" section, so it cannot open sections of its own
  * — the inspector's grammar is sections of rows — and groups its rows under a
- * small mono legend instead.
+ * small mono legend instead. Since 2026-10-12 each group names its CHAPTER
+ * (`opener-chapters.ts`), and the picker shows one chapter at a time through
+ * {@link ChapterScope}.
  */
 
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { FieldRow, Readout } from '../../ui/Inspector';
 
 /** An underlined text verb that puts one value back. */
@@ -38,11 +40,22 @@ export function MovedRow({
   );
 }
 
+/**
+ * Which chapter of the panel is on screen. Absent (no provider: a test, a
+ * host without chapters) every group is drawn; `open: null` is the index,
+ * where no group is; otherwise only the open chapter's groups are, and a
+ * group named like the chapter drops its legend, the pane's head saying it.
+ */
+export const ChapterScope = createContext<{ open: string | null; title?: string } | undefined>(undefined);
+
 /** A small mono legend over a group of rows — a panel's sub-sections. */
-export function Group({ title, children }: { title: string; children: ReactNode }) {
+export function Group({ title, chapter, children }: { title: string; chapter?: string; children: ReactNode }) {
+  const scope = useContext(ChapterScope);
+  if (scope && chapter !== undefined && chapter !== scope.open) return null;
+  const legend = !(scope && scope.title === title);
   return (
     <div className="flex flex-col gap-2.5">
-      <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">{title}</span>
+      {legend && <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">{title}</span>}
       {children}
     </div>
   );

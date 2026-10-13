@@ -74,7 +74,7 @@ import type { DriveRoad, RoadCrossing, RoadTransition } from './vehicle-plan';
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
 /** The vehicle's length in 1080-units at size 1. */
-const CAR_PX = 118;
+export const CAR_PX = 118;
 /** On the trip's road, the vehicle's direction is read over this many of its own lengths on screen. */
 const HEADING_LENGTHS = 2;
 /** A card's long edge in 1080-units at size 1. */

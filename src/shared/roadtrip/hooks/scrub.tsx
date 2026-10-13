@@ -16,6 +16,8 @@
  * ticks to be mixed in (`mixWithClip`, see `audio-plan.ts`).
  */
 
+import { easingGlyph } from './choice-glyphs';
+import { SCRUB_CHAPTERS } from './opener-chapter-specs';
 import { useCallback } from 'react';
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
@@ -208,7 +210,7 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </p>
       )}
 
-      <Group title="Stops">
+      <Group title="Stops" chapter="stops">
         <FieldRow
           label="Stops on"
           align="start"
@@ -349,7 +351,7 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
         />
       </Group>
 
-      <Group title="Sweep">
+      <Group title="Sweep" chapter="sweep">
         <FieldRow label="Length">
           <RangeField
             label="Sweep length"
@@ -371,11 +373,13 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="How the head travels"
             value={o.easing}
             onChange={(easing) => set({ easing })}
-            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
+            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
           />
         </FieldRow>
         <FieldRow
@@ -398,7 +402,7 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Tape">
+      <Group title="Tape" chapter="tape">
         <FieldRow label="Runs">
           <Segmented
             size="sm"
@@ -551,7 +555,7 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Sound">
+      <Group title="Sound" chapter="sound">
         <SwitchRow
           label="Tick at every day it lands on"
           name="Tick at every landing"
@@ -708,5 +712,6 @@ export const scrubVariant: HookVariant = {
     return { ...moveTape(scrubOptions(options), dx, dy) };
   },
   Sketch: ScrubSketch,
+  chapters: SCRUB_CHAPTERS,
   Panel: ScrubPanel,
 };

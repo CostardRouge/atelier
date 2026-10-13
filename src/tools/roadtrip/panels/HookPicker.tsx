@@ -1,15 +1,17 @@
 /**
  * Choosing the piece's OPENER — which hook variant draws its first slide.
  *
- * Cards, never a dropdown: the rule the title styles already settled is that a
- * look you cannot see before adopting is a look you adopt by trial. Each row
- * carries the variant's own sketch of what it DOES, its name and its line; the
- * variant's own options mount underneath, so the panel below the picker always
- * belongs to the card above it.
+ * Tiles, never a dropdown: the rule the title styles already settled is that a
+ * look you cannot see before adopting is a look you adopt by trial. Six tiles on
+ * two rows of three (2026-10-12, as the summary card's faces and looks), each
+ * the variant's own sketch of what it DOES under its name; the chosen one's
+ * line is said once under the grid, and the variant's own options mount
+ * underneath, so the panel below the picker always belongs to the tile above.
  *
- * A variant a piece cannot feed is greyed **with the reason on the card**, not
- * hidden — the counter modes' rule: say what it would draw, or say why it
- * cannot. A variant you cannot find is a feature that does not exist.
+ * A variant a piece cannot feed is greyed **with its reason one touch away**
+ * (`aria-disabled`, the reason said under the grid), not hidden — the counter
+ * modes' rule: say what it would draw, or say why it cannot. A variant you
+ * cannot find is a feature that does not exist.
  *
  * The picker is also the variant panel's HOST: a panel may not open the
  * Library or ask an instance itself (`hook-variant.ts`), so the things it may
@@ -18,6 +20,11 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { PRESS_LOOK } from '../../../shared/ui/press';
+import { ChapterFoot, ChapterHead, ChapterIndex, type ChapterRow } from '../../../shared/ui/Chapters';
+import { ChapterScope } from '../../../shared/roadtrip/hooks/panel-ui';
+import { chapterChanged, chapterSummary, numbered, resetChapter, searchChapters } from '../../../shared/roadtrip/hooks/opener-chapters';
+import { useOpenerChapter } from '../opener-chapter';
 import {
   DEFAULT_HOOK_ID,
   setHookOptions,
@@ -91,6 +98,8 @@ export default function HookPicker({
   const current: HookVariant | undefined = HOOK_VARIANTS.find((v) => v.id === currentId);
   const Panel = current?.Panel;
 
+  // A refused tile the author touched: its reason is shown, nothing is picked.
+  const [said, setSaid] = useState<string | null>(null);
   const [choosing, setChoosing] = useState<ChooseRequest | null>(null);
   const choosePictures = useCallback(
     (selected: readonly HookPickedPicture[], choice: HookPictureChoice = {}) =>
@@ -145,55 +154,145 @@ export default function HookPicker({
     setPlacing(null);
   };
 
+  // The touched tile's reason, only while it still holds (the context moves).
+  const saidVariant = said ? HOOK_VARIANTS.find((v) => v.id === said) : undefined;
+  const shownUnmet = saidVariant ? hookUnmet(saidVariant, ctx) : null;
+  const shown = shownUnmet ? saidVariant : current;
+  const noneHere = (variant: HookVariant) => slideOpener && variant.id === DEFAULT_HOOK_ID;
+
+  // The panel as numbered CHAPTERS (`opener-chapters.ts`): an index, then one
+  // chapter at a time — the one last open on this device, «All» a tap away.
+  const [openId, setOpenId] = useOpenerChapter(currentId);
+  const chapters = current?.chapters;
+  const rows = useMemo<ChapterRow[]>(() => {
+    if (!current || !chapters) return [];
+    const read = { ...current.defaults, ...(options ?? {}) };
+    return numbered(chapters).map(({ n, chapter }) => ({
+      id: chapter.id,
+      n,
+      title: chapter.title,
+      summary: chapterSummary(chapter, read),
+      changed: chapterChanged(chapter, options ?? {}, current.defaults),
+      unmet: chapter.unmet?.(options ?? {}, ctx) ?? null,
+    }));
+  }, [current, chapters, options, ctx]);
+  // A search over the chapters' rows (step 7): «colour» or «ahead» names the
+  // chapter it lives in, with the words that matched. Only where there are
+  // enough chapters for searching to beat reading them.
+  const [query, setQuery] = useState('');
+  const searchable = rows.length >= 5;
+  const found = useMemo<ChapterRow[] | null>(() => {
+    if (!searchable || !chapters || !query.trim()) return null;
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return searchChapters(chapters, query).flatMap((hit) => {
+      const row = byId.get(hit.chapter.id);
+      return row ? [{ ...row, matched: hit.words }] : [];
+    });
+  }, [searchable, chapters, query, rows]);
+  const openIndex = rows.findIndex((row) => row.id === openId);
+  const openRow = openIndex >= 0 ? rows[openIndex] : null;
+  const scope = useMemo(() => ({ open: openRow?.id ?? null, title: openRow?.title }), [openRow?.id, openRow?.title]);
+  const resetOpen = () => {
+    const chapter = chapters?.find((c) => c.id === openRow?.id);
+    if (!chapter || !current) return;
+    onChange(setHookOptions(layers, resetChapter(chapter, options ?? {}, current.defaults)));
+  };
+
   return (
     <div className="flex flex-col gap-2">
-
-      <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Opener">
         {HOOK_VARIANTS.map((variant) => {
           const active = variant.id === currentId;
           const unmet = hookUnmet(variant, ctx);
           const Sketch = variant.Sketch;
-          const none = slideOpener && variant.id === DEFAULT_HOOK_ID;
+          const none = noneHere(variant);
           return (
             <button
               key={variant.id}
               type="button"
-              disabled={!!unmet}
+              // A grey tile stays reachable and gives its reason (`aria-disabled`,
+              // never `disabled`): a refused opener must say why, not vanish.
+              aria-disabled={unmet ? true : undefined}
+              aria-pressed={active}
+              title={unmet ?? undefined}
               onClick={() => {
+                if (unmet) {
+                  setSaid(variant.id);
+                  return;
+                }
+                setSaid(null);
                 const next = switchHookVariant(layers, shelf, variant, current);
                 // On a slide's own opener the badge card is NONE: the slide
                 // keeps no opener, and what it drew is shelved all the same,
                 // so coming back to it finds its stops.
                 onChange(none ? [] : next.hook, next.shelf);
               }}
-              aria-pressed={active}
-              className={`flex items-center gap-3 px-3 py-2 rounded-paper border text-left transition-colors ${
+              className={`flex flex-col items-stretch gap-1 p-1 pb-1.5 rounded-[10px] border text-center font-sans cursor-pointer select-none transition-[background-color,color,box-shadow,border-color,translate] duration-150 ease-paper ${PRESS_LOOK} focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
                 unmet
-                  ? 'border-line bg-paper opacity-55 cursor-default'
+                  ? 'border-line bg-paper-2 text-ink-soft opacity-50 cursor-default'
                   : active
-                    ? 'border-accent bg-accent-wash cursor-pointer'
-                    : 'border-line bg-paper hover:border-line-strong cursor-pointer'
+                    ? 'border-accent bg-surface text-ink shadow-[0_0_0_1px_var(--color-accent)]'
+                    : 'border-line bg-paper-2 text-ink-soft hover:border-line-strong'
               }`}
             >
-              <span className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-frame overflow-hidden">
+              <span className="grid place-items-center w-full aspect-[46/24] rounded-[4px] bg-frame overflow-hidden">
                 {Sketch && !none ? <Sketch /> : null}
               </span>
-              <span className="min-w-0">
-                <span className="block font-semibold text-sm">{none ? 'None' : variant.name}</span>
-                <span
-                  className={`block text-2xs truncate ${
-                    unmet ? 'text-accent-ink' : 'text-muted'
-                  }`}
-                >
-                  {unmet ?? (none ? 'The picture, and whatever this slide says over it' : variant.tagline)}
-                </span>
-              </span>
+              <span className="text-xs font-semibold leading-tight">{none ? 'None' : variant.name}</span>
             </button>
           );
         })}
       </div>
+      {shown && (
+        // The chosen opener's line is said ONCE, under the grid; touching a
+        // refused tile puts its reason here instead, and picks nothing.
+        <p
+          role="status"
+          className={`m-0 min-h-[1.4em] text-2xs leading-snug ${shownUnmet ? 'text-accent-ink' : 'text-muted'}`}
+        >
+          <b className={`font-semibold ${shownUnmet ? '' : 'text-ink'}`}>
+            {noneHere(shown) ? 'None' : shown.name}
+          </b>
+          {' · '}
+          {shownUnmet ?? (noneHere(shown) ? 'The picture, and whatever this slide says over it' : shown.tagline)}
+        </p>
+      )}
 
-      {panel}
+      {chapters && rows.length ? (
+        <div className="flex flex-col gap-3">
+          {openRow && (
+            <ChapterHead row={openRow} of={rows.length} onBack={() => setOpenId(null)} onReset={resetOpen} />
+          )}
+          <ChapterScope.Provider value={scope}>{panel}</ChapterScope.Provider>
+          {openRow ? (
+            <ChapterFoot
+              prev={rows[openIndex - 1] ?? null}
+              next={rows[openIndex + 1] ?? null}
+              onOpen={setOpenId}
+            />
+          ) : (
+            <>
+              {searchable && (
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search ${current?.name ?? 'the opener'}’s settings…`}
+                  aria-label={`Search ${current?.name ?? 'the opener'}’s settings`}
+                  className="w-full font-sans h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-sm text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              )}
+              {found && !found.length ? (
+                <p className="m-0 text-xs text-muted">Nothing called «{query.trim()}» — try colour, speed, names, camera.</p>
+              ) : (
+                <ChapterIndex rows={found ?? rows} onOpen={setOpenId} label={`${current?.name ?? 'Opener'} settings`} />
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        panel
+      )}
 
       {choosing && (
         <HookPicturesModal
