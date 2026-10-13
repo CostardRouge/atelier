@@ -90,7 +90,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         if n == 1 or n == total or n % 25 == 0:
             print(f"  {n}/{total}  {ref.id}")
 
-    report = ingest(config, sources=args.source or None, force=args.force, limit=args.limit, progress=progress)
+    report = ingest(config, sources=args.source or None, force=args.force, limit=args.limit, progress=progress,
+                    workers=args.workers)
     for note in report.notes:
         print(f"  ! {note}")
     for pid, why in report.skipped[:20]:
@@ -137,6 +138,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="which data to prepare (repeatable; default: ingest.sources)")
     p.add_argument("--force", action="store_true", help="redo pairs already prepared")
     p.add_argument("--limit", type=int, default=0, help="stop after this many pairs (0 = all)")
+    p.add_argument("--workers", type=int, default=None,
+                   help="pairs prepared at once (default: ingest.workers; 0 = automatic, 1 = no parallelism)")
     p.set_defaults(func=cmd_ingest)
 
     for name in NOT_YET:

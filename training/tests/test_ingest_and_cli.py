@@ -47,6 +47,30 @@ def test_cli_commands_run_without_real_data(workspace, capsys):
     assert "FiveK: no folder" in out
 
 
+def test_parallel_ingest_gives_the_same_result_as_sequential(synthetic):
+    config = load_config(overrides=["ingest.long_edge=24"])
+    sequential = ingest(config, sources=["synthetic"], workers=1)
+    index = config.paths.cache / "index.jsonl"
+    reference = index.read_text()
+    reference_input = {e["id"]: (config.paths.cache / e["folder"] / "input.npy").read_bytes()
+                       for e in sequential.entries}
+
+    parallel = ingest(config, sources=["synthetic"], workers=3, force=True)
+    assert parallel.written == sequential.written == 9 and parallel.skipped == []
+    assert index.read_text() == reference  # same entries, same order
+    for e in parallel.entries:
+        assert (config.paths.cache / e["folder"] / "input.npy").read_bytes() == reference_input[e["id"]]
+
+
+def test_a_bad_file_is_listed_not_fatal_in_a_worker(synthetic):
+    config = load_config()
+    (config.paths.synthetic / "pairs" / "group-002" / "original.png").write_bytes(b"not a png")
+    report = ingest(config, sources=["synthetic"], workers=2)
+    assert report.written == 7 and len(report.skipped) == 2
+    assert {pid.split("/")[1] for pid, _ in report.skipped} == {"group-002"}
+    assert len(report.entries) == 7
+
+
 def test_a_limited_run_keeps_the_rest_of_the_index_and_a_whole_run_replaces_it(synthetic):
     config = load_config()
     full = ingest(config, sources=["synthetic"])

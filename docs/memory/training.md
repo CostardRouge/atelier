@@ -70,6 +70,12 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   the file is written through a rename, never in place.
 - A pair's id is the edit's path INSIDE its group without suffix
   (`pairs/<group>/edits/x`): two edits named alike in two sub-folders stay two.
+- Ingest runs in a `ProcessPoolExecutor` with the `spawn` context (macOS's
+  default, safe beside LibRaw/libtiff), half the cores capped at 8 — a RAW
+  decode holds hundreds of MB, so more workers is not faster. The index keeps
+  the discovery order whatever the finish order; a worker's exception is a
+  skipped pair, never a crash. On the 96 px synthetic set the pool costs more
+  than it saves (0.6 s → 1.0 s): the gain is on real files only.
 - In a cloud container, run uv with `UV_PYTHON=3.13` (the system Python):
   GitHub release downloads, where uv fetches 3.12 from, answered 403 through
   the proxy. On the Mac `make setup` lets uv fetch 3.12.

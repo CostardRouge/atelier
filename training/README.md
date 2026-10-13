@@ -151,7 +151,9 @@ ignorée pour l'instant : aligner ces paires, c'est M5).
 
 `make ingest` lit les sources de `ingest.sources` (FiveK et tes paires par
 défaut) ; `--source synthetic` pour le jeu artificiel, `--limit 50` pour un
-essai rapide, `--force` pour tout refaire. Le résultat va dans
+essai rapide, `--force` pour tout refaire. Les paires sont préparées **en
+parallèle** sur la moitié des cœurs du Mac (`--workers 8` pour forcer, `1` pour
+désactiver ; `ingest.workers` dans la config). Le résultat va dans
 `data/cache/` : pour chaque paire, l'origine et la retouche à la même taille
 (512 px sur le grand côté par défaut, en 16 bits) et un aperçu côte à côte
 (`preview.jpg`). Une paire déjà préparée n'est pas refaite : on peut

@@ -22,6 +22,7 @@ fivek_expert = "C"            # A..E — C is the usual target in the literature
 fivek_limit = 0               # 0 = every photo
 # Which file to use as a FiveK INPUT when several exist for one photo (first found wins).
 fivek_input_prefer = ["tif", "tiff", "png", "jpg", "jpeg", "dng"]
+workers = 0                   # pairs prepared at once, in separate processes; 0 = automatic (half the cores, 1 to 8), 1 = no parallelism
 aspect_tolerance = 0.01       # an edit whose aspect differs more is treated as cropped and skipped (until M5)
 
 [raw]

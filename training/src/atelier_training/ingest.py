@@ -12,8 +12,11 @@ differs (a crop, a rotation) is SKIPPED and said: aligning those is M5's work.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable, Iterator
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
+from multiprocessing import get_context
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +24,7 @@ import numpy as np
 from .config import Config
 from .datasets.fivek import scan_fivek
 from .datasets.pairs import scan_pairs
-from .imaging import RawSupportMissing, fit_long_edge, load_image, resize_to, save_image, to_uint16
+from .imaging import fit_long_edge, load_image, resize_to, save_image, to_uint16
 
 SOURCES = ("fivek", "pairs", "synthetic")
 
@@ -109,43 +112,91 @@ def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw:
     return meta
 
 
+def default_workers() -> int:
+    """Half the cores, between 1 and 8: a RAW decode holds hundreds of MB, so more is not faster."""
+    return max(1, min(8, (os.cpu_count() or 2) // 2))
+
+
+def _prepare_job(job: tuple[PairRef, Path, int, float, dict]) -> tuple[str, dict | str]:
+    """Pool entry point (top level so it pickles): ``("ok", meta)`` or ``("error", message)`` —
+    one bad file never raises across the process boundary and never stops the run."""
+    ref, folder, long_edge, tol, raw = job
+    try:
+        return "ok", prepare_pair(ref, folder, long_edge, tol, raw)
+    except Exception as e:  # noqa: BLE001
+        return "error", str(e)
+
+
 def ingest(
     config: Config,
     sources: list[str] | None = None,
     force: bool = False,
     limit: int = 0,
     progress: Callable[[int, int, PairRef], None] | None = None,
+    workers: int | None = None,
 ) -> IngestReport:
+    """Prepare the pairs of ``sources``. ``workers`` (default ``ingest.workers``, 0 = automatic) pairs
+    are decoded at once in separate processes; 1 runs in this process. The index lists pairs in the
+    order they were found, whatever order they finish in."""
     ingest_cfg = config.section("ingest")
     sources = sources or list(ingest_cfg.get("sources", ["fivek", "pairs"]))
     long_edge = int(ingest_cfg.get("long_edge", 512))
     tol = float(ingest_cfg.get("aspect_tolerance", 0.01))
     raw = config.section("raw")
+    n_workers = int(ingest_cfg.get("workers", 0) if workers is None else workers) or default_workers()
     report = IngestReport()
     refs = collect(config, sources, report)
     if limit:
         refs = refs[:limit]
     cache = config.paths.cache
-    for n, ref in enumerate(refs, 1):
-        if progress:
-            progress(n, len(refs), ref)
+
+    metas: dict[int, dict] = {}
+    todo: list[int] = []
+    for i, ref in enumerate(refs):
         folder = cache / ref.id
-        try:
-            if not force and _fresh(folder, ref):
-                meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
-                report.reused += 1
-            else:
-                meta = prepare_pair(ref, folder, long_edge, tol, raw)
-                report.written += 1
-        except RawSupportMissing as e:
-            report.skipped.append((ref.id, str(e)))
-            continue
-        except Exception as e:  # noqa: BLE001 — one bad file never stops the run; it is listed
-            report.skipped.append((ref.id, str(e)))
+        if not force and _fresh(folder, ref):
+            metas[i] = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+            report.reused += 1
+        else:
+            todo.append(i)
+
+    def done(i: int, outcome: tuple[str, dict | str]) -> None:
+        status, value = outcome
+        if status == "ok":
+            metas[i] = value  # type: ignore[assignment]
+            report.written += 1
+        else:
+            report.skipped.append((refs[i].id, str(value)))
+
+    jobs = [(refs[i], cache / refs[i].id, long_edge, tol, raw) for i in todo]
+    finished = len(refs) - len(todo)
+    if n_workers <= 1 or len(jobs) <= 1:
+        for i, job in zip(todo, jobs, strict=True):
+            finished += 1
+            if progress:
+                progress(finished, len(refs), refs[i])
+            done(i, _prepare_job(job))
+    else:
+        # "spawn" is macOS's default and the safe one beside native decoders (LibRaw, libtiff).
+        with ProcessPoolExecutor(max_workers=min(n_workers, len(jobs)), mp_context=get_context("spawn")) as pool:
+            futures = {pool.submit(_prepare_job, job): i for i, job in zip(todo, jobs, strict=True)}
+            for fut in as_completed(futures):
+                i = futures[fut]
+                finished += 1
+                if progress:
+                    progress(finished, len(refs), refs[i])
+                try:
+                    done(i, fut.result())
+                except Exception as e:  # noqa: BLE001 — a worker that died (out of memory) is listed, not fatal
+                    report.skipped.append((refs[i].id, f"worker failed: {e}"))
+
+    for i, ref in enumerate(refs):
+        if i not in metas:
             continue
         entry = {k: (str(v) if isinstance(v, Path) else v) for k, v in asdict(ref).items()}
-        entry.update(width=meta["width"], height=meta["height"], folder=str(folder.relative_to(cache)))
+        entry.update(width=metas[i]["width"], height=metas[i]["height"], folder=ref.id)
         report.entries.append(entry)
+    report.skipped.sort()
 
     write_index(cache, report.entries, replaced=() if limit else sources)
     return report
