@@ -49,8 +49,13 @@ cliquable»*.
 - **R2** A 44 px grab band under a finger, 28 px under a mouse, decided by
   `(pointer: coarse)` and never by width (the C5 rule of `press-feedback.md`);
   thumb 24 / 16 px, track 4 px; the fill's `calc` reads the thumb's size.
-- **R3** Under a finger the grab is RELATIVE: anywhere in the band, the thumb
-  follows the movement and never jumps; a mouse click still places the value.
+- **R3** Tap to place, drag to adjust (his answer to §5.2, 2026-10-13: *«si
+  je clique au début ou à la fin, ça aurait dû me mettre au minimum ou au
+  maximum»*). Under a finger, a TAP — lifted before 6 px of travel — places
+  the value where it landed, the ends included; a DRAG, from anywhere in the
+  band, is relative: the thumb follows the movement and never jumps under the
+  finger, which keeps the precision. A scroll still changes nothing, having
+  moved past 6 px before its lift. A mouse keeps today's click and drag.
 - **R4** A vertical gesture scrolls the panel: the slider claims the pointer
   only after 6 px of horizontal travel (`touch-action: pan-y`), the rule
   `frontend.md` already states for drag surfaces in a scroll box.
@@ -103,7 +108,7 @@ grabs for the trim handles and curve points. Nothing changes under a mouse.
 ## 5. His questions
 
 1. A, B or C (recommended: A, desktop included)?
-2. Under a finger, a tap on the track: does nothing (recommended — a tap while
-   scrolling never changes a value) or places the value as a mouse does?
+2. ~~Under a finger, a tap on the track: does nothing, or places the value?~~
+   **Answered 2026-10-13: it places the value** (R3); the lab does so.
 3. The typed value: everywhere, or only on long ranges (durations, km)?
 4. The other small targets: a pass right after the sliders, or later?
