@@ -43,6 +43,12 @@ export interface PickerHost {
   /** The rows this host can take at all; the others are not listed. Absent: every row. */
   accepts?: (row: WinnowAssetRow) => boolean;
   /**
+   * A narrowing sent to the SERVER with every scope — what `accepts` would
+   * throw away anyway, asked for less so a long span is not cut short by the
+   * cap before the host's rows (Flight Atlas: clips only).
+   */
+  narrow?: { mediaType?: 'photo' | 'video' };
+  /**
    * Controls drawn in the bar before the actions — the Library's *Proxies ·
    * Originals* and the weight it would download. Handed the ticked rows.
    */

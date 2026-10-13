@@ -168,6 +168,7 @@ export default function WinnowPicker({
   // An instance that predates it folds piles, and a pile's frames are asked
   // for when it is unfolded (`burstId`).
   const framesListed = listsBurstFrames(connection.capabilities);
+  const mediaType = host.narrow?.mediaType;
 
   // The scope's rows, every page. A change of scope forgets the last answer
   // first, so a new day never shows the previous one's pictures for a frame.
@@ -177,7 +178,11 @@ export default function WinnowPicker({
     if (scope === 'session' && sessionId === null) return;
     const controller = new AbortController();
     let cancelled = false;
-    const narrowing = { ...(half ? { half } : {}), bursts: framesListed ? ('frames' as const) : ('fold' as const) };
+    const narrowing = {
+      ...(half ? { half } : {}),
+      ...(mediaType ? { mediaType } : {}),
+      bursts: framesListed ? ('frames' as const) : ('fold' as const),
+    };
     const ask =
       scope === 'session'
         ? client.allAssets({ sessionId: sessionId!, ...narrowing }, FOLDER_CAP, controller.signal)
@@ -197,7 +202,7 @@ export default function WinnowPicker({
       cancelled = true;
       controller.abort();
     };
-  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, generation, framesListed]);
+  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, generation, framesListed]);
 
   // A folded pile's frames, asked for on its unfold where the scope's list
   // could not carry them. Forgotten with the scope.
@@ -617,7 +622,7 @@ export default function WinnowPicker({
                   count={rows?.length ?? null}
                   client={client}
                   connectionId={connection.id}
-                  filter={half ? { half } : undefined}
+                  filter={half || mediaType ? { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}) } : undefined}
                   showLine={false}
                 />
               ) : scope === 'span' ? (
@@ -645,7 +650,7 @@ export default function WinnowPicker({
               ? `asking ${connection.id}…`
               : counts.total === 0 && !problem
                 ? `nothing here${host.accepts ? ' this host can take' : ''}`
-                : `${counts.total} media · ${photos} photo${photos === 1 ? '' : 's'}${clips ? ` · ${clips} clip${clips === 1 ? '' : 's'}` : ''}${
+                : `${counts.total} media${photos || !clips ? ` · ${photos} photo${photos === 1 ? '' : 's'}` : ''}${clips ? ` · ${clips} clip${clips === 1 ? '' : 's'}` : ''}${
                     piles.size ? ` · ${piles.size} burst${piles.size === 1 ? '' : 's'}` : ''
                   }${heldCount ? ` · ${heldCount} ${host.heldLabel}` : ''} · culled ${culled} %${
                     scope === 'span' ? ` · ${spanDays(span)} days` : ''

@@ -243,3 +243,11 @@ the host opens with it; only the batch drawn is read; *Logs only* then reuses
 the files read (`heldLog`), so adding costs no second request. The Logbook
 hides place, highest, body and file under 820px so the table never scrolls
 sideways and its headers stay sticky.
+
+## A host can narrow the request (2026-10-13)
+
+`PickerHost.narrow` (`{ mediaType }`) is sent to the SERVER with every scope
+and the month's marks — for what the host's `accepts` would throw away anyway,
+so a long span is not cut by `SPAN_CAP` before the host's rows. The rail's
+counts then describe the narrowed scope (an atlas picker says `0 photos`
+nowhere: a status line drops the photo count when there are clips and none).

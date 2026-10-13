@@ -3257,8 +3257,11 @@ Every DJI flight selected in the Library — a clip with its `.srt`, or a loose
 each log is read (four fixes a second, timed by the log's own wall clock, so a
 time-lapse or a slow-motion clip runs at its real pace); of a clip beside it,
 only the few kilobytes of metadata that may name the aircraft. *Add .srt
-files* / *A folder* in the panel feed the Library directly. The panel has
-seven tabs:
+files* / *A folder* in the panel feed the Library directly, and with a Winnow
+connected, **From <instance>** opens the Winnow picker set for flights: a span
+of days, only the clips that carry a log, the Logbook with every flight's track
+drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
+alone, never its video. The panel has seven tabs:
 
 - **Flights.** Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its

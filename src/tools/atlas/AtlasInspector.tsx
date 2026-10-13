@@ -10,6 +10,7 @@ import { TILES_IN_OPENER_NOTICE } from '../../shared/map/osm-tiles';
 import { dayKey, type AtlasFlight } from './atlas-flight';
 import { flightTone, PALETTES, paletteById, samplePalette, toHex } from './atlas-colour';
 import type { AtlasPlace } from './atlas-places';
+import AtlasWinnow from './AtlasWinnow';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -231,7 +232,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         id="atlas.flights"
         title="Flights"
         badge={<span className="font-mono text-2xs text-muted tabular-nums">{shown}/{p.flights.length}</span>}
-        info="Every DJI telemetry log (.srt) selected in the Library becomes a flight. Only the GPS track is read — never the video. Hover a flight to single it out on the map."
+        info="Every DJI telemetry log (.srt) selected in the Library becomes a flight. Only the GPS track is read — never the video. From a connected Winnow, only each clip's .srt is downloaded. Hover a flight to single it out on the map."
       >
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-1.5">
@@ -241,6 +242,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             <Button size="sm" variant="ghost" onClick={() => folderRef.current?.click()}>
               {Icons.folder} A folder
             </Button>
+            <AtlasWinnow onAdd={p.onAddFiles} />
             <input
               ref={fileRef}
               type="file"
