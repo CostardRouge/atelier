@@ -9,11 +9,7 @@ from pathlib import Path
 from . import __version__
 from .config import Config, load_config
 
-NOT_YET = {
-    "train": "Training arrives in M2 (the image-adaptive 3D LUT model) — see PLAN.md.",
-    "eval": "Evaluation (ΔE in Lab, PSNR, image grids) arrives in M2 — see PLAN.md.",
-    "export": "Exporting a learned .cube arrives in M2 — see PLAN.md.",
-}
+TORCH_MISSING = "PyTorch is not installed: run `make setup` (or `uv sync --extra torch`) first."
 
 
 def _config(args: argparse.Namespace) -> Config:
@@ -46,6 +42,7 @@ def cmd_synth(args: argparse.Namespace) -> int:
         edits_per_group=int(s.get("edits_per_group", 3)),
         fivek_photos=int(s.get("fivek_photos", 8)),
         seed=int(s.get("seed", 7)),
+        style=str(s.get("style") or "") or None,
         lut_size=int(config.section("model").get("lut_size", 33)),
     )
     print(f"Synthetic set written to {out}: {len(truth['pairs'])} groups, {len(truth['fivek'])} FiveK-like photos.")
@@ -105,9 +102,87 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     return 0 if report.entries or not (report.skipped or report.notes) else 1
 
 
-def cmd_not_yet(args: argparse.Namespace) -> int:
-    print(NOT_YET[args.command])
-    return 2
+def _needs_torch() -> bool:
+    from .device import module_available
+
+    if module_available("torch"):
+        return True
+    print(f"✗ {TORCH_MISSING}")
+    return False
+
+
+def _run_folder(args: argparse.Namespace, config: Config) -> Path | None:
+    """``--run`` as given, else the most recent run folder."""
+    from .train import latest_run
+
+    if args.run:
+        folder = Path(args.run)
+        if not folder.is_dir():
+            folder = config.paths.runs / args.run
+        return folder if (folder / "config.toml").is_file() else None
+    return latest_run(config.paths.runs)
+
+
+def cmd_train(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .train import train
+
+    config = _config(args)
+    try:
+        run = train(config, sources=args.source or None, name=args.name,
+                    resume=Path(args.resume) if args.resume else None,
+                    init=Path(args.init) if args.init else None, epochs=args.epochs)
+    except (RuntimeError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
+    print(f"\nRun {run.folder.name} done → {run.folder}")
+    print("Next: `atelier-train eval` for the numbers and the grids, `atelier-train export` for the .cube.")
+    return 0
+
+
+def cmd_eval(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .evaluate import evaluate
+
+    config = _config(args)
+    folder = _run_folder(args, config)
+    if folder is None:
+        print("✗ no run found: train one first, or pass --run <folder>.")
+        return 1
+    try:
+        evaluate(config, folder, which_split=args.split, grids=args.grids, sources=args.source or None)
+    except (RuntimeError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .export import export_for_image, export_style
+
+    config = _config(args)
+    folder = _run_folder(args, config)
+    if folder is None:
+        print("✗ no run found: train one first, or pass --run <folder>.")
+        return 1
+    if args.image:
+        export_for_image(config, folder, Path(args.image), Path(args.out) if args.out else None)
+    else:
+        export_style(config, folder, limit=args.limit)
+    return 0
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .train import bench
+
+    bench(_config(args), steps=args.steps)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -142,8 +217,32 @@ def build_parser() -> argparse.ArgumentParser:
                    help="pairs prepared at once (default: ingest.workers; 0 = automatic, 1 = no parallelism)")
     p.set_defaults(func=cmd_ingest)
 
-    for name in NOT_YET:
-        sub.add_parser(name, parents=[common], help=NOT_YET[name].split(" — ")[0]).set_defaults(func=cmd_not_yet)
+    p = sub.add_parser("train", parents=[common], help="fit the adaptive LUT on the prepared pairs")
+    p.add_argument("--source", action="append", choices=["fivek", "pairs", "synthetic"],
+                   help="which prepared pairs to train on (repeatable; default: ingest.sources)")
+    p.add_argument("--name", help="a word for the run folder")
+    p.add_argument("--epochs", type=int, help="override train.epochs")
+    p.add_argument("--resume", metavar="RUN", help="continue this run from its last checkpoint")
+    p.add_argument("--init", metavar="RUN", help="start a new run from this run's best weights (fine-tuning)")
+    p.set_defaults(func=cmd_train)
+
+    p = sub.add_parser("eval", parents=[common], help="score a run (PSNR, ΔE) and draw input | edit | model grids")
+    p.add_argument("--run", help="the run folder (default: the most recent)")
+    p.add_argument("--split", choices=["validation", "train", "all"], default="validation")
+    p.add_argument("--grids", type=int, default=24, help="how many grids to draw, worst ΔE first")
+    p.add_argument("--source", action="append", choices=["fivek", "pairs", "synthetic"])
+    p.set_defaults(func=cmd_eval)
+
+    p = sub.add_parser("export", parents=[common], help="write the learned look as a .cube Atelier loads")
+    p.add_argument("--run", help="the run folder (default: the most recent)")
+    p.add_argument("--image", help="a picture: export the LUT the model predicts for it")
+    p.add_argument("--out", help="where to write the .cube (default: inside the run folder)")
+    p.add_argument("--limit", type=int, default=0, help="average the style over this many training pairs (0 = all)")
+    p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("bench", parents=[common], help="time one training step here and estimate a whole run")
+    p.add_argument("--steps", type=int, default=5)
+    p.set_defaults(func=cmd_bench)
     return parser
 
 

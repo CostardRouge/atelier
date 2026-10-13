@@ -35,18 +35,25 @@ size = [96, 64]       # width, height of each generated picture
 edits_per_group = 3
 fivek_photos = 8
 seed = 7
+style = ""            # one transform for EVERY edit ("teal-orange", "warm"…); empty = several at random per group
 
-# ---- Read from M2 on; written here now so one file describes a whole run. ----
+# ---- The model and its training (M2). ----
 [model]
-kind = "adaptive-3dlut"  # Zeng et al. 2020
-lut_size = 33
-basis = 3
-thumb = 256
+kind = "adaptive-3dlut"  # Zeng et al. 2020: a small CNN on a thumbnail weighs a few learned basis LUTs
+lut_size = 33            # nodes per axis of every LUT (33 is what Atelier's looks use)
+basis = 3                # learned basis LUTs (the first starts as the identity)
+thumb = 256              # the thumbnail the CNN looks at, in pixels (square)
+width = 16               # channels of the CNN's first layer; the rest doubles up to 8× this
 
 [train]
-epochs = 400
-batch_size = 1
-learning_rate = 1e-4
-smooth_weight = 1e-4
-monotonic_weight = 10.0
+name = ""                # a word for the run folder, runs/<date>-<name>; empty = the sources' names
+epochs = 200
+batch_size = 8           # the paper trains at 1; 8 to 16 is ~5× faster for a near-identical result
+crop = 256               # training crop on the prepared pairs (the LUT applies to it; the CNN sees the thumbnail)
+learning_rate = 2e-4
+weight_decay = 0.0
+smooth_weight = 1e-4     # keeps every LUT smooth between neighbouring nodes
+monotonic_weight = 10.0  # keeps every LUT increasing along its own channel, so no tone reversal
+val_fraction = 0.1       # groups held out for validation (split by GROUP, never by pair)
 seed = 1
+eval_every = 5           # epochs between two validations

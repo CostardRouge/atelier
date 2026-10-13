@@ -39,7 +39,6 @@ def test_cli_commands_run_without_real_data(workspace, capsys):
     assert main(["synth", "--set", "synthetic.groups=2", "--set", "synthetic.size=[32, 24]"]) == 0
     assert main(["validate", str(load_config().paths.synthetic / "pairs")]) == 0
     assert main(["ingest", "--source", "synthetic"]) == 0
-    assert main(["train"]) == 2
     code = main(["doctor"])
     out = capsys.readouterr().out
     assert code == 0

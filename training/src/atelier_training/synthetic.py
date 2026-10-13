@@ -103,21 +103,33 @@ def generate(
     fivek_photos: int = 8,
     seed: int = 7,
     lut_size: int = 33,
+    style: str | None = None,
 ) -> dict:
-    """Write the synthetic set under ``out`` and return what ``truth.json`` says."""
+    """Write the synthetic set under ``out`` and return what ``truth.json`` says.
+
+    With no ``style`` each group gets ``edits_per_group`` DIFFERENT transforms drawn at random — a
+    set that exercises the readers, and that no model can learn from the input alone (one original,
+    several answers). With ``style`` every edit is that one transform: one consistent "photographer",
+    what the end-to-end training test needs.
+    """
     rng = np.random.default_rng(seed)
     width, height = size
     names = list(TRANSFORMS)
-    truth: dict = {"seed": seed, "transforms": names, "pairs": {}, "fivek": {}}
+    if style is not None and style not in TRANSFORMS:
+        raise ValueError(f"unknown style {style!r} (one of {', '.join(names)})")
+    truth: dict = {"seed": seed, "transforms": names, "style": style, "pairs": {}, "fivek": {}}
 
     for g in range(groups):
         folder = out / "pairs" / f"group-{g + 1:03d}"
         original = make_picture(rng, width, height)
         save_image(original, folder / "original.png")
-        chosen = rng.choice(len(names), size=min(edits_per_group, len(names)), replace=False)
+        if style is None:
+            picks = rng.choice(len(names), size=min(edits_per_group, len(names)), replace=False)
+            chosen = [names[int(k)] for k in picks]
+        else:
+            chosen = [style]
         edits: list[tuple[str, str | None]] = []
-        for k in chosen:
-            name = names[int(k)]
+        for name in chosen:
             file = f"edit-{name}.png"
             save_image(apply_transform(name, original), folder / file)
             edits.append((file, name))
@@ -125,7 +137,7 @@ def generate(
         truth["pairs"][folder.name] = [label for _, label in edits]
 
     # FiveK-shaped: 16-bit TIFF inputs, expert C's edits all made by one transform (one "expert style").
-    expert_style = "teal-orange"
+    expert_style = style or "teal-orange"
     for i in range(fivek_photos):
         pid = f"a{i + 1:04d}"
         picture = make_picture(rng, width, height)

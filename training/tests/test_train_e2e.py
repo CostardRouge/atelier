@@ -1,0 +1,84 @@
+"""Training on CPU on the synthetic set must RECOVER the known transform: the end-to-end test of M2."""
+
+import json
+
+import numpy as np
+import pytest
+
+torch = pytest.importorskip("torch")
+
+from atelier_training import lut  # noqa: E402
+from atelier_training.cli import main  # noqa: E402
+from atelier_training.config import load_config  # noqa: E402
+from atelier_training.data import is_validation, read_index, split  # noqa: E402
+from atelier_training.ingest import ingest  # noqa: E402
+from atelier_training.metrics import psnr  # noqa: E402
+from atelier_training.synthetic import apply_transform, make_picture  # noqa: E402
+
+TINY = [
+    "model.lut_size=9", "model.basis=2", "model.thumb=16", "model.width=4",
+    "train.epochs=60", "train.batch_size=4", "train.crop=32", "train.learning_rate=0.01",
+    "train.eval_every=20", "train.val_fraction=0.34", "train.smooth_weight=0.0001",
+]
+SET = [arg for o in TINY for arg in ("--set", o)]
+
+
+def test_split_is_stable_and_by_group(synthetic):
+    config = load_config()
+    ingest(config, sources=["synthetic"], workers=1)
+    pairs = read_index(config.paths.cache, ["synthetic"])
+    train, val = split(pairs, 0.34, seed=1)
+    assert train and val and len(train) + len(val) == len(pairs)
+    assert not ({p.group for p in train} & {p.group for p in val})
+    assert split(pairs, 0.34, seed=1) == (train, val)
+    assert is_validation("g", 0.5, 7) == is_validation("g", 0.5, 7)
+    assert split(pairs, 0.0, seed=1) == (pairs, [])
+
+
+def test_training_recovers_the_synthetic_look(workspace):
+    from atelier_training.synthetic import generate
+
+    config = load_config(overrides=TINY)
+    # One consistent "photographer": every edit of the set is teal-orange, in both halves.
+    generate(config.paths.synthetic, groups=4, size=(48, 32), edits_per_group=1, fivek_photos=4, seed=3,
+             lut_size=9, style="teal-orange")
+    ingest(config, sources=["synthetic"], workers=1)
+    assert main(["train", "--source", "synthetic", "--name", "e2e", *SET]) == 0
+    runs = sorted(config.paths.runs.iterdir())
+    assert len(runs) == 1 and runs[0].name.endswith("-e2e")
+    run = runs[0]
+    metrics = [json.loads(line) for line in (run / "metrics.jsonl").read_text().splitlines()]
+    assert len(metrics) == 60 and (run / "best.pt").is_file() and (run / "last.pt").is_file()
+    assert metrics[-1]["fit"] < metrics[0]["fit"] / 10  # it learned the look
+
+    # eval writes the summary and the grids
+    assert main(["eval", "--run", str(run), "--split", "all", "--grids", "3", *SET]) == 0
+    summary = json.loads((run / "eval" / "all.json").read_text())
+    assert summary["psnr"] > 30 and len(list((run / "eval" / "grids").glob("*.jpg"))) == 3
+
+    # export writes a .cube that, applied by the NUMPY path, brings a fresh picture close to the edit
+    assert main(["export", "--run", str(run), *SET]) == 0
+    cube = lut.read_cube(run / "style.cube")
+    assert cube.size == 9 and cube.title.startswith("Atelier style")
+    fresh = make_picture(np.random.default_rng(99), 48, 32)
+    target = apply_transform("teal-orange", fresh)
+    got = psnr(lut.apply(cube, fresh), target)
+    assert got > psnr(fresh, target) + 5 and got > 38, got  # identity sits at ~33.6 dB on this look
+
+    # a per-picture export, then resume for a few more epochs
+    picture = config.paths.synthetic / "pairs" / "group-001" / "original.png"
+    assert main(["export", "--run", str(run), "--image", str(picture), *SET]) == 0
+    assert (run / "original.cube").is_file()
+    assert main(["train", "--resume", str(run), "--epochs", "62", *SET]) == 0
+    metrics = [json.loads(line) for line in (run / "metrics.jsonl").read_text().splitlines()]
+    assert [m["epoch"] for m in metrics][-3:] == [60, 61, 62]
+
+
+def test_bench_and_missing_run_messages(synthetic, capsys):
+    config = load_config(overrides=TINY)
+    assert main(["bench", "--steps", "1", *SET]) == 0
+    assert "ms per step" in capsys.readouterr().out
+    assert main(["eval"]) == 1
+    assert "no run found" in capsys.readouterr().out
+    assert main(["train", "--source", "pairs"]) == 1  # nothing ingested under pairs
+    assert config.paths.runs.exists() is False or not list(config.paths.runs.iterdir())
