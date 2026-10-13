@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import {
   listsBurstFrames,
   WinnowError,
@@ -23,7 +23,10 @@ import LoadingState from '../../../ui/LoadingState';
 import { Icons } from '../../../ui/icons';
 import useDialogKeys from '../../../ui/use-dialog-keys';
 import { useInViewport } from '../../../lib/use-in-viewport';
+import PickerLogbook from './PickerLogbook';
 import PickerRail from './PickerRail';
+import { readFlightLog } from './flight-logs';
+import type { FlightTrack } from './flight-track';
 import SpanPicker from './SpanPicker';
 import { dayHeading, dayRuns, openingSpan, rowDay, spanDays, spanPresets } from './span';
 import PickerTile, { type PileBadge } from './PickerTile';
@@ -115,6 +118,8 @@ type TileSize = 's' | 'm' | 'l';
 const readTiles = (raw: string | null): TileSize => (raw === 's' || raw === 'l' ? raw : 'm');
 const tilesPref = localPref<TileSize>('atelier.winnow.picker.tiles', readTiles, (v) => (v === 'm' ? null : v));
 const railPref = localPref<boolean>('atelier.winnow.picker.rail', (raw) => raw !== 'folded', (v) => (v ? null : 'folded'));
+type GridView = 'grid' | 'book';
+const viewPref = localPref<GridView>('atelier.winnow.picker.view', (raw) => (raw === 'book' ? 'book' : 'grid'), (v) => (v === 'grid' ? null : v));
 /**
  * Rows pinned in pixels: an `auto` row in a scrolling tile grid is clipped
  * to a sliver (`frontend.md`). Whole strings, so Tailwind sees each class.
@@ -306,6 +311,12 @@ export default function WinnowPicker({
     [drawnItems, client],
   );
 
+  // --- flight tracks ---------------------------------------------------------
+  // Read on request (each log is a download, however small), for the clips
+  // the grid DRAWS, once per session (`flight-logs.ts`).
+  const [tracksOn, setTracksOn] = useState(host.start.tracks ?? false);
+  const [tracks, setTracks] = useState<ReadonlyMap<number, FlightTrack | null>>(new Map());
+
   // --- ticks -----------------------------------------------------------------
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
   const [anchorId, setAnchorId] = useState<number | null>(null);
@@ -457,11 +468,37 @@ export default function WinnowPicker({
   const [limit, setLimit] = useState(BATCH);
   useEffect(() => setLimit(BATCH), [rows, facets, sort]);
 
+  useEffect(() => {
+    if (!tracksOn) return;
+    let alive = true;
+    for (const it of shownItems.slice(0, limit)) {
+      if (it.log !== 'with') continue;
+      readFlightLog(client, it.row)
+        ?.then((log) => {
+          if (alive) setTracks((cur) => (cur.get(it.id) === log.track ? cur : new Map(cur).set(it.id, log.track)));
+        })
+        .catch(() => {
+          if (alive) setTracks((cur) => (cur.has(it.id) ? cur : new Map(cur).set(it.id, null)));
+        });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [tracksOn, shownItems, limit, client]);
+
   const [railOpen, setRailOpen] = useState(false);
   // The grid's own view, per device (the panel's tiles and the rail's
   // column); a phone's rail is a sheet and never a column.
   const [tiles, setTiles] = useLocalPref(tilesPref, 'm');
   const [railShown, setRailShown] = useLocalPref(railPref, true);
+  // Grid or Logbook: the device's choice, unless the host opened on one.
+  const [prefView, setPrefView] = useLocalPref(viewPref, 'grid');
+  const [hostView, setHostView] = useState<GridView | null>(host.start.view ?? null);
+  const view = hostView ?? prefView;
+  const pickView = (v: GridView) => {
+    setHostView(null);
+    setPrefView(v);
+  };
   const phone = useIsCompact();
   const openFilters = () => (phone ? setRailOpen(true) : setRailShown(true));
   const active = activeFacets(facets);
@@ -523,6 +560,7 @@ export default function WinnowPicker({
       pile={pileBadge(it, inRow)}
       onToggle={(e) => toggle(it, e)}
       onLook={() => look(it.id)}
+      track={tracksOn ? tracks.get(it.id) : undefined}
       className={inRow ? 'w-32 h-24 shrink-0' : ''}
     />
   );
@@ -674,9 +712,36 @@ export default function WinnowPicker({
                 {shownItems.length} shown of {counts.total}
               </span>
               <span className="flex-1" />
+              {counts.logs.with > 0 && (
+                <Button
+                  variant={tracksOn ? 'default' : 'ghost'}
+                  size="sm"
+                  aria-pressed={tracksOn}
+                  icon={Icons.map}
+                  onClick={() => setTracksOn((on) => !on)}
+                  title={
+                    tracksOn
+                      ? 'Stop reading the flight logs (those read stay drawn)'
+                      : "Read the shown clips' flight logs — a small download each — and draw each flight's track"
+                  }
+                >
+                  {tracksOn ? `Tracks · ${shownItems.filter((it) => it.log === 'with' && tracks.has(it.id)).length}/${shownItems.filter((it) => it.log === 'with').length}` : 'Read tracks'}
+                </Button>
+              )}
 <SettingsMenu
-                label="The grid: order, tile size, filters"
+                label="The grid: view, order, tile size, filters"
                 sections={[
+                  {
+                    kind: 'choice',
+                    id: 'view',
+                    label: 'View',
+                    value: view,
+                    onPick: (v) => pickView(v === 'book' ? 'book' : 'grid'),
+                    options: [
+                      { id: 'grid', icon: Icons.grid, label: 'Grid of thumbnails' },
+                      { id: 'book', icon: Icons.rows, label: 'Logbook — one line each, with the flight' },
+                    ],
+                  },
                   {
                     kind: 'choice',
                     id: 'sort',
@@ -750,7 +815,7 @@ export default function WinnowPicker({
               ) : (
                 (() => {
                   const more = limit < shownItems.length && (
-                    <MoreTiles key={limit} onVisible={() => setLimit((n) => n + BATCH)} />
+                    <MoreTiles key={limit} as={view === 'book' ? 'div' : 'li'} onVisible={() => setLimit((n) => n + BATCH)} />
                   );
                   // Rows pinned in pixels: an `auto` row in a scrolling tile
                   // grid is clipped to a sliver (`frontend.md`).
@@ -781,6 +846,23 @@ export default function WinnowPicker({
                       );
                     });
                   const batch = shownItems.slice(0, limit);
+                  if (view === 'book') {
+                    return (
+                      <PickerLogbook
+                        items={batch}
+                        grouped={grouped}
+                        client={client}
+                        ticked={ticked}
+                        focusId={focusId}
+                        heldLabel={host.heldLabel}
+                        tracks={tracksOn ? tracks : new Map()}
+                        reading={tracksOn}
+                        onToggle={toggle}
+                        onLook={look}
+                        more={more}
+                      />
+                    );
+                  }
                   if (!grouped) {
                     return (
                       <ul className={grid}>
@@ -925,15 +1007,19 @@ export default function WinnowPicker({
 }
 
 /** The end of the grid: once it nears the viewport, one more batch is mounted. */
-function MoreTiles({ onVisible }: { onVisible: () => void }) {
-  const [ref, inView] = useInViewport<HTMLLIElement>();
+function MoreTiles({ onVisible, as = 'li' }: { onVisible: () => void; as?: 'li' | 'div' }) {
+  const [ref, inView] = useInViewport<HTMLElement>();
   const fired = useRef(false);
   useEffect(() => {
     if (!inView || fired.current) return;
     fired.current = true;
     onVisible();
   }, [inView, onVisible]);
-  return <li ref={ref} className="col-span-full h-px" aria-hidden />;
+  return as === 'li' ? (
+    <li ref={ref as Ref<HTMLLIElement>} className="col-span-full h-px" aria-hidden />
+  ) : (
+    <div ref={ref as Ref<HTMLDivElement>} className="h-px" aria-hidden />
+  );
 }
 
 /**

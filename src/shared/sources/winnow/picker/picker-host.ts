@@ -22,7 +22,16 @@ export interface PickerHost {
    * host names one, else the last span used on this instance
    * (`picker/span.ts`, `openingSpan`).
    */
-  start: { day: string; half?: LibraryHalf | null; scope?: 'day' | 'span'; span?: DaySpan | null };
+  start: {
+    day: string;
+    half?: LibraryHalf | null;
+    scope?: 'day' | 'span';
+    span?: DaySpan | null;
+    /** Open on the Logbook rather than the device's own choice of view. */
+    view?: 'grid' | 'book';
+    /** Read the drawn clips' flight logs at once, to draw their tracks. */
+    tracks?: boolean;
+  };
   /** The host's own day and the span around it, marked in the month (the sidebar's anchor). */
   anchor?: PickerAnchor | null;
   /** Already where this host would put it — drawn but never ticked. */

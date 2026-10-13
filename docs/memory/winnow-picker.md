@@ -225,3 +225,21 @@ apply**:
   the picker's `held` reads the one its fidelity fills.
 - `reuse(url)` hands back a log already read (the Logbook's tracks), so it is
   never fetched twice.
+
+## The LOGBOOK view, and a flight's track as its thumbnail (2026-10-13)
+
+**Decision.** The grid's ⋯ offers **Grid · Logbook** (`PickerLogbook.tsx`,
+per device in `atelier.winnow.picker.view`; a host may open on one —
+`start.view`): one line per row, take-off clock (`localClock`), place, length,
+distance, highest point, body, file. **Read tracks** (a toggle, `start.tracks`
+for a host that wants it on) fetches the DRAWN clips' logs through
+`flight-logs.ts` — once per session per URL, four at a time, 600 kept — and
+`flight-track.ts` turns each into a flat glyph (metres around the take-off,
+thinned to ~96 points) plus `flightSummary`'s numbers, drawn by `TrackGlyph`
+in the Logbook and over a grid tile. **Why**: a log is text, so the picker can
+show the FLIGHT, which a drone clip's thumbnail (sky, sea) rarely does.
+**How to apply**: never read a log nobody asked for — the toggle is off unless
+the host opens with it; only the batch drawn is read; *Logs only* then reuses
+the files read (`heldLog`), so adding costs no second request. The Logbook
+hides place, highest, body and file under 820px so the table never scrolls
+sideways and its headers stay sticky.

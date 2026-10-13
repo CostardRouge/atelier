@@ -2459,9 +2459,13 @@ already links to it — and a rail of filters narrows the list: Incoming ·
 Gallery · All, the verdict, a star floor, photos or clips, clips **with or
 without a flight log** (a DJI `.srt`, marked `SRT` on the tile), the extension,
 the body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
-The grid's ⋯ orders it by capture time or by stars, sets the tiles small,
-medium or large, and folds the rail away on a wide screen (both remembered on
-this device). A
+The grid's ⋯ shows it as a grid of thumbnails or as a **Logbook** — one line
+per media, read like a pilot's logbook: take-off time, place, length, body,
+file —, orders it by capture time or by stars, sets the tiles small, medium or
+large, and folds the rail away on a wide screen (all remembered on this
+device). **Read tracks** fetches the shown clips' flight logs (a small text
+download each, once per session) and draws each flight's own track where its
+thumbnail was, with its distance and highest point. A
 **culled day opens with its picks ticked**, so taking what you kept is one
 click on *Add N to the roll*; an unculled day ticks everything the roll lacks
 but the rejects. The bar ticks among what is shown — **All**, **None**,

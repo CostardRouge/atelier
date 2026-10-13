@@ -8,6 +8,7 @@ import type { PickerAnchor, PickerHost } from '../shared/sources/winnow/picker/p
 import Segmented from '../shared/ui/Segmented';
 import { formatBytes } from '../shared/lib/format';
 import { logStateOf } from '../shared/sources/winnow/picker/pick-filter';
+import { heldLog } from '../shared/sources/winnow/picker/flight-logs';
 
 const withLog = (rows: readonly WinnowAssetRow[]) => rows.filter((r) => logStateOf(r) === 'with');
 
@@ -115,7 +116,7 @@ export default function LibraryPicker({
               for (const [i, row] of rows.entries()) {
                 if (signal.aborted) break;
                 progress(`${i + 1}/${rows.length} · ${row.filename}`);
-                files.push(...(await materialize(client, connection.id, row, { fidelity, signal })));
+                files.push(...(await materialize(client, connection.id, row, { fidelity, signal, reuse: heldLog })));
               }
             } finally {
               // Stopped or failed half-way: what landed is still worth having,
