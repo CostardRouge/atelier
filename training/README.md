@@ -205,7 +205,7 @@ make bench                       # combien de temps prendra un run sur ce Mac ?
 make train                       # entraîne sur ingest.sources (FiveK + tes paires)
 uv run atelier-train train --source fivek --name fivek-c   # une source, un nom de run
 uv run atelier-train train --resume runs/<dossier>          # reprend un run interrompu
-uv run atelier-train train --init runs/<run FiveK> --source pairs --name moi   # affinage (M5)
+make finetune INIT=runs/<run FiveK>   # affinage sur TES paires, depuis le run FiveK (configs/finetune.toml)
 make eval                        # le dernier run : PSNR, ΔE2000, grilles d'images
 make export                      # runs/<dossier>/style.cube — le look moyen appris
 uv run atelier-train export --image photo.jpg   # la LUT que le modèle prédit pour UNE photo
@@ -232,6 +232,22 @@ se rapproche de tes retouches.
 
 Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.
+
+**L'affinage sur tes paires** (`make finetune INIT=runs/<run FiveK>`) repart
+des poids FiveK avec un pas dix fois plus petit (`configs/finetune.toml`) et
+garde un cinquième des **groupes** pour vérifier — jamais une retouche d'un
+original dont une autre retouche a servi à apprendre. `freeze_luts = true`
+dans ce fichier garde les looks appris sur FiveK et n'apprend que la façon
+de les doser par photo : utile avec peu de paires. `make eval` liste ensuite
+les groupes où le modèle est le plus loin de toi (tableau « worst groups »,
+aussi dans le tableau de bord).
+
+**Une retouche recadrée, tournée ou redressée** est retrouvée dans son
+original par `ingest` (`align.py`, par corrélation de luminance ; un
+redressement jusqu'à ±6°) et la paire est préparée sur les mêmes pixels. Une
+retouche qui n'est pas une découpe de l'original (perspective corrigée,
+contenu déplacé) est ignorée et dite. `ingest.align = "always"` cherche aussi
+dans les paires de même format (un recadrage qui garde le 3:2).
 
 ## 7. Le tableau de bord
 

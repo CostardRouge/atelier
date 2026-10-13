@@ -143,9 +143,27 @@ Keychain, NEVER written to the repo or a config file under git; GET only.
 code, not guessed — the timeline import was once written against a guess and
 broke on every key, MEMORY.md 2026-09-03). His Winnow: only he can.
 
-## M5 — fine-tuning on his pairs, per-group validation
+## M5 — fine-tuning on his pairs, per-group validation — BUILT (2026-10-13)
 
-**Delivers.** `train --init runs/<fivek run>` fine-tunes on `pairs` (lower LR,
+`configs/finetune.toml` + `make finetune INIT=…` (`train --init`, a tenth of
+the learning rate, a fifth of the groups held out, `train.freeze_luts` to
+keep the FiveK basis LUTs and learn the weighing alone), per-group ΔE/PSNR
+in every eval summary (`groups`, worst first) printed by `eval` and drawn as
+a table in the dashboard, and **`align.py`**: a cropped, turned, mirrored or
+straightened (±6°) edit found inside its original by normalised
+cross-correlation of luminance over turns × crop scales × angles (two
+stages, pure numpy FFT), the original cut to the edit's frame at its own
+density; wired into ingest as `ingest.align = auto | always | never`, the
+alignment written in `meta.json`. Tests: the whole picture, a 60 % crop
+graded, four turns, a 3° straightening within a degree, an unrelated picture
+refused; a frozen fine-tune leaves the LUTs bit-identical; the group table.
+
+Not verified here: the aligner on real photographs (synthetic gradients
+only — a real edit with a heavy vignette or local dodging may score under
+0.8 and be skipped: lower `MIN_SCORE` if `ingest` skips too many), the
+fine-tune's quality on his 1 890 pairs.
+
+**Delivered as planned:** `train --init runs/<fivek run>` fine-tunes on `pairs` (lower LR,
 fewer epochs, optionally frozen basis LUTs), a split by group, per-group ΔE in
 the eval report and the grids, and ALIGNMENT for cropped/rotated edits
 (feature matching or an ECC affine on downscaled luminance) so the pairs M1

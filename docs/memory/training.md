@@ -131,6 +131,27 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   transfer leaves nothing half-written and a rerun fetches only what is
   missing.
 
+## M5 — fine-tuning and alignment (2026-10-13)
+
+- **His instance holds ~1 890 original → final pairs** (dry run of
+  2026-10-13: 1 803 ARW, 77 HIF, 4 DNG, 3 HEIC, 2 JPG originals; one final
+  per original) — far above the few-hundred floor `docs/auto-develop.md`
+  named. The finals are JPEGs; ingest decodes the ARW through rawpy with the
+  camera white balance and no auto-brightening (`[raw]`), which is NOT what
+  Capture One rendered: the model learns from rawpy's rendering to his
+  export, so the `.cube` it yields is meant for a RAW developed the same way
+  (Atelier's sensor base), and a FiveK pretrain stays the colour prior.
+- **An edit is aligned by NCC of luminance, two stages** (`align.py`):
+  turns × a coarse crop ladder at angle 0, then angles and finer scales
+  around the best; NCC is blind to the tone change an edit IS. Thresholds
+  set on synthetic pictures: `MIN_SCORE 0.8` (a real pair scores > 0.9 at
+  128 px), `MAX_CROP 3` (a finer crop scores by chance on smooth content —
+  0.74 on two UNRELATED synthetic pictures at 1/5). Re-measure both on his
+  pairs before trusting a skip count.
+- **The split for a fine-tune is a fifth of the GROUPS**, never of the
+  pairs: his groups are one original + one final today, but a group of
+  several edits would otherwise leak across the sides.
+
 ## Traps
 
 - Pillow reads a 48-bit PNG as 8 bits per channel: 16-bit material goes
