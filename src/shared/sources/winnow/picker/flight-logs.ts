@@ -14,7 +14,7 @@
 
 import { isAbortError } from '../../fetch-options';
 import type { WinnowAssetRow, WinnowClient } from '../client';
-import { captureMtime, materialize } from '../materialize';
+import { fetchLog, materialize } from '../materialize';
 import { flightTrackFromSrt, type FlightTrack } from './flight-track';
 import { logFailureOf, logFailureText, type FailedLog } from './log-failures';
 import { srtSidecars } from './pick-filter';
@@ -29,6 +29,8 @@ const KEEP = 600;
 const AT_ONCE = 4;
 const held = new Map<string, Promise<ReadLog>>();
 const files = new Map<string, File>();
+/** The URL each held read's file is kept under, when it is not its key. */
+const answeredAt = new Map<string, string>();
 
 let active = 0;
 const waiting: (() => void)[] = [];
@@ -47,26 +49,32 @@ async function slot<T>(work: () => Promise<T>): Promise<T> {
 export function readFlightLog(client: WinnowClient, row: WinnowAssetRow): Promise<ReadLog> | null {
   const sidecar = srtSidecars(row)[0];
   if (!sidecar) return null;
+  // Keyed by the newest row's URL; the file is kept under the URL that
+  // ANSWERED (an older row when the newest is dead), which is the one
+  // `materialize` asks `heldLog` about on its way down the same list.
   const url = client.sidecarUrl(sidecar.id);
   const known = held.get(url);
   if (known) return known;
   const reading = slot(async () => {
-    const file = await client.fetchFile(url, sidecar.filename, 'text/plain', captureMtime(row));
-    files.set(url, file);
-    return { file, track: flightTrackFromSrt(await file.text()) };
+    const got = await fetchLog(client, row);
+    if (!got) throw new Error(`${row.filename} carries no flight log`);
+    if (got.url !== url) answeredAt.set(url, got.url);
+    files.set(got.url, got.file);
+    return { file: got.file, track: flightTrackFromSrt(await got.file.text()) };
   });
   // A failed read is forgotten, so the next look asks again.
-  reading.catch(() => {
-    held.delete(url);
-    files.delete(url);
-  });
+  reading.catch(() => forget(url));
   held.set(url, reading);
   while (held.size > KEEP) {
-    const oldest = held.keys().next().value as string;
-    held.delete(oldest);
-    files.delete(oldest);
+    forget(held.keys().next().value as string);
   }
   return reading;
+}
+
+function forget(url: string): void {
+  held.delete(url);
+  files.delete(answeredAt.get(url) ?? url);
+  answeredAt.delete(url);
 }
 
 /** A log already read at `url`, for `materialize`'s `reuse`. */

@@ -3,6 +3,7 @@ import { WinnowClient, type WinnowAssetRow } from './client';
 import {
   captureMtime,
   companionOf,
+  fetchLog,
   identityFor,
   materialize,
   plannedFiles,
@@ -164,6 +165,52 @@ describe('materialize', () => {
     const held = new File(['1'], 'DJI_0001.SRT', { type: 'text/plain' });
     const [log] = await materialize(c, 'winnow.example', row(), { fidelity: 'log', reuse: () => held });
     expect(log).toBe(held);
+  });
+
+  it('takes a moved clip\'s log from its newest row, the dead older one as a fallback', async () => {
+    // His instance: a clip moved into a sub-folder keeps its old .srt row
+    // (id 7, file gone) beside the new one (id 9) — Winnow sends them oldest first.
+    const moved = row({
+      sidecars: [
+        { id: 7, kind: 'srt', filename: 'DJI_0001.SRT' },
+        { id: 9, kind: 'srt', filename: 'DJI_0001.SRT' },
+      ],
+    });
+    const live = clientServing({ '/api/assets/42/proxy': 10, '/api/sidecars/9/download': 3 });
+    expect(plannedFiles(live, moved, 'log')).toEqual([
+      {
+        url: `${BASE}/api/sidecars/9/download`,
+        name: 'DJI_0001.SRT',
+        type: 'text/plain',
+        or: [{ url: `${BASE}/api/sidecars/7/download`, name: 'DJI_0001.SRT' }],
+      },
+    ]);
+    const [log] = await materialize(live, 'winnow.example', moved, { fidelity: 'log' });
+    expect(log.size).toBe(3);
+    // One log per clip, whatever the rows: the clip and ONE .srt for a proxy.
+    expect(await materialize(live, 'winnow.example', moved, { fidelity: 'proxy' })).toHaveLength(2);
+    // The other way round (only the older row answers), the fallback answers.
+    const old = clientServing({ '/api/sidecars/7/download': 5 });
+    expect((await fetchLog(old, moved))).toMatchObject({ url: `${BASE}/api/sidecars/7/download` });
+    expect((await fetchLog(old, moved))?.file.size).toBe(5);
+  });
+
+  it('stops at a log no row can hand over, and at any error but a 404', async () => {
+    const two = row({
+      sidecars: [
+        { id: 7, kind: 'srt', filename: 'DJI_0001.SRT' },
+        { id: 9, kind: 'srt', filename: 'DJI_0001.SRT' },
+      ],
+    });
+    await expect(fetchLog(clientServing({}), two)).rejects.toMatchObject({ kind: 'notfound' });
+    let asked = 0;
+    const failing = new WinnowClient({ baseUrl: BASE, auth: { mode: 'cookie' } }, async () => {
+      asked += 1;
+      return new Response('', { status: 500 });
+    });
+    await expect(fetchLog(failing, two)).rejects.toMatchObject({ kind: 'protocol' });
+    expect(asked).toBe(1);
+    expect(await fetchLog(clientServing({}), row({ sidecars: [] }))).toBeNull();
   });
 
   it('surfaces a missing rendition as an error instead of a silent gap', async () => {

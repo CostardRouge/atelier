@@ -60,9 +60,17 @@ export type MediaKind = 'photo' | 'video';
 export type LogState = 'with' | 'without';
 export const LOG_STATES: readonly LogState[] = ['with', 'without'];
 
-/** The `.srt` sidecars a row carries — the flight log of a DJI clip. */
+/**
+ * The `.srt` sidecars a row carries — the flight log of a DJI clip — NEWEST
+ * FIRST. One clip can carry several: when its folder is moved, Winnow's relink
+ * records the log at the new path and keeps the old row, whose file is gone
+ * (on his instance, 263 rows for 156 clips, 107 of them dead). Winnow sends
+ * them by id, oldest first, so taking the first one asked the dead path. The
+ * newest is the likeliest to answer; the others stay as fallbacks
+ * (`fetchLog`).
+ */
 export function srtSidecars(row: WinnowAssetRow): WinnowAssetRow['sidecars'] {
-  return (row.sidecars ?? []).filter((s) => s.kind === 'srt');
+  return (row.sidecars ?? []).filter((s) => s.kind === 'srt').sort((a, b) => b.id - a.id);
 }
 
 export function logStateOf(row: WinnowAssetRow): LogState | null {

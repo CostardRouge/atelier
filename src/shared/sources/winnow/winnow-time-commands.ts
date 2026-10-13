@@ -15,6 +15,7 @@ import { flightSummary } from '../../telemetry/flight-summary';
 import { parseSrt } from '../../telemetry/srt-parser';
 import { gearOf } from './capture-moment';
 import { firstsBy, sameDayAcrossYears, type KeyedItem } from './firsts';
+import { fetchLog } from './materialize';
 import { libraryStats, type LibraryStats } from './stats';
 import { statsCardImage } from './stats-card';
 import { ASSET_QUERY_PARAMS, askFromParams, keepAsk, winnowHost, type WinnowCommandDeps } from './winnow-commands';
@@ -145,10 +146,11 @@ export function winnowTimeCommands(deps: Pick<WinnowCommandDeps, 'winnow'>): Com
         const sample = rows.slice(0, 20);
         const flights = await Promise.all(
           sample.map(async (r) => {
-            const srt = r.sidecars.find((x) => x.kind === 'srt')!;
             try {
-              const file = await c.fetchFile(c.sidecarUrl(srt.id), srt.filename, 'text/plain', 0);
-              const summary = flightSummary(parseSrt(await file.text()));
+              // Newest row first, a moved clip's dead rows as fallbacks (`srtSidecars`).
+              const got = await fetchLog(c, r);
+              if (!got) throw new Error('no flight log');
+              const summary = flightSummary(parseSrt(await got.file.text()));
               return { id: r.id, file: r.filename, at: r.captured_at, ...summary };
             } catch (err) {
               return { id: r.id, file: r.filename, at: r.captured_at, unreadable: err instanceof Error ? err.message : String(err) };

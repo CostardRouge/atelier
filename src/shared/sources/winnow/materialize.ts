@@ -42,7 +42,7 @@ import {
 import type { SavedMediaRef } from '../../projects/project-types';
 import { trackedFetch } from '../../tasks/tracked';
 import type { FetchOptions } from '../fetch-options';
-import type { WinnowAssetRow, WinnowClient } from './client';
+import { WinnowError, type WinnowAssetRow, type WinnowClient } from './client';
 import { exifFromRow } from './exif-from-row';
 import { srtSidecars } from './picker/pick-filter';
 
@@ -90,13 +90,72 @@ function baseName(filename: string): string {
   return dot > 0 ? filename.slice(0, dot) : filename;
 }
 
-/** What to fetch, and what to call it, for one rendition of one asset. */
-export function plannedFiles(
+/** One file to fetch; `or` lists where else the same file may be, tried in order on a 404. */
+export interface PlannedFile {
+  url: string;
+  name: string;
+  type: string;
+  or?: { url: string; name: string }[];
+}
+
+/**
+ * The clip's flight log as ONE planned file: its newest `.srt` row, the older
+ * ones as fallbacks — a moved clip keeps a dead row beside the live one
+ * (`srtSidecars`), and both are the same log.
+ */
+function plannedLog(client: WinnowClient, row: WinnowAssetRow): PlannedFile | null {
+  const [first, ...rest] = srtSidecars(row).map((s) => ({ url: client.sidecarUrl(s.id), name: s.filename }));
+  if (!first) return null;
+  return { ...first, type: 'text/plain', ...(rest.length ? { or: rest } : {}) };
+}
+
+/**
+ * `item` fetched from the first place that answers: a 404 tries the next one
+ * (a dead row of a moved clip), anything else stops at once. `reuse` hands
+ * back a file already held for a URL. Throws the last 404 when none answers.
+ */
+async function fetchPlanned(
+  client: WinnowClient,
+  item: PlannedFile,
+  lastModified: number,
+  opts: FetchOptions,
+  reuse?: (url: string) => File | null,
+): Promise<{ file: File; url: string }> {
+  let miss: unknown = null;
+  for (const at of [{ url: item.url, name: item.name }, ...(item.or ?? [])]) {
+    const held = reuse?.(at.url);
+    if (held) return { file: held, url: at.url };
+    try {
+      return { file: await client.fetchFile(at.url, at.name, item.type, lastModified, opts), url: at.url };
+    } catch (err) {
+      if (!(err instanceof WinnowError && err.kind === 'notfound')) throw err;
+      miss = err;
+    }
+  }
+  throw miss;
+}
+
+/**
+ * A clip's flight log, from the first of its `.srt` rows that answers, with
+ * the URL that did; null when the clip carries none. For a reader that wants
+ * the text only (the Logbook's tracks, an agent's flights) — the Library's
+ * files go through `materialize`.
+ */
+export async function fetchLog(
   client: WinnowClient,
   row: WinnowAssetRow,
-  fidelity: Fidelity,
-): { url: string; name: string; type: string }[] {
-  const srt = srtSidecars(row).map((s) => ({ url: client.sidecarUrl(s.id), name: s.filename, type: 'text/plain' }));
+  opts: FetchOptions & { reuse?: (url: string) => File | null } = {},
+): Promise<{ file: File; url: string } | null> {
+  const log = plannedLog(client, row);
+  if (!log) return null;
+  const { reuse, ...fetchOpts } = opts;
+  return fetchPlanned(client, log, captureMtime(row), fetchOpts, reuse);
+}
+
+/** What to fetch, and what to call it, for one rendition of one asset. */
+export function plannedFiles(client: WinnowClient, row: WinnowAssetRow, fidelity: Fidelity): PlannedFile[] {
+  const log = plannedLog(client, row);
+  const srt = log ? [log] : [];
   if (fidelity === 'log') return srt;
   const base = baseName(row.filename);
   const main =
@@ -239,7 +298,7 @@ export async function materialize(
   // it; the original's is the row's.
   const bring = async (opts: FetchOptions = {}) => {
     for (const [i, item] of plan.entries()) {
-      const file = await client.fetchFile(item.url, item.name, item.type, lastModified, {
+      const { file } = await fetchPlanned(client, item, lastModified, {
         signal: eitherSignal(opts.signal, options.signal),
         onProgress: i === 0 ? opts.onProgress : undefined,
       });
@@ -273,7 +332,7 @@ export async function materialize(
 async function materializeLogs(
   client: WinnowClient,
   sourceId: string,
-  plan: { url: string; name: string; type: string }[],
+  plan: PlannedFile[],
   lastModified: number,
   identity: KnownIdentity,
   options: MaterializeOptions,
@@ -281,15 +340,16 @@ async function materializeLogs(
   const files: File[] = [];
   const bring = async (opts: FetchOptions = {}) => {
     for (const [i, item] of plan.entries()) {
-      const file =
-        options.reuse?.(item.url) ??
-        (await client.fetchFile(item.url, item.name, item.type, lastModified, {
-          signal: eitherSignal(opts.signal, options.signal),
-          onProgress: i === 0 ? opts.onProgress : undefined,
-        }));
+      const { file } = await fetchPlanned(
+        client,
+        item,
+        lastModified,
+        { signal: eitherSignal(opts.signal, options.signal), onProgress: i === 0 ? opts.onProgress : undefined },
+        options.reuse,
+      );
       registerMediaIdentity(file, {
         ...identity,
-        origin: { sourceId, fidelity: 'original', width: null, height: null, name: item.name, bytes: null },
+        origin: { sourceId, fidelity: 'original', width: null, height: null, name: file.name, bytes: null },
       });
       files.push(file);
       options.onFile?.(file, i + 1, plan.length);

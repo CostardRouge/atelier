@@ -255,18 +255,28 @@ apply**:
   the picker's `held` reads the one its fidelity fills.
 - `reuse(url)` hands back a log already read (the Logbook's tracks), so it is
   never fetched twice.
+- **A clip may carry SEVERAL `.srt` rows, and the newest is the live one**
+  (2026-10-13, his "156 added, 23 shown", MEASURED on his instance: 263 srt
+  rows for 156 clips, the 107 extra all pointing at the folder the clips were
+  moved OUT of). Winnow's relink re-records a moved clip's sidecars at the new
+  path and keeps the old rows; its list sends them by id, OLDEST first, and
+  Atelier took the first — a dead path. `srtSidecars` now sorts newest first
+  and every reader goes through ONE fetch (`fetchLog` / `materialize`'s
+  `fetchPlanned`): a 404 falls through to the next row, anything else stops,
+  and a clip brings ONE log whatever its rows. The cure upstream (relink
+  dropping the dead rows) is Winnow's.
 - **A log the instance cannot hand over is SKIPPED, never the end of the run**
-  (2026-10-13, his "156 added, 23 shown"). Winnow streams a sidecar from the
-  clip's SOURCE folder (`/api/sidecars/:id/download` reads `abs_path`, 404
-  "Sidecar file is not reachable" when it is gone) while the thumbnail and
-  proxy come from its own cache — so a clip ingested from an unplugged drive
-  lists as "with a log" and its `.srt` cannot be read. The add stopped at the
-  first miss and kept only what came before; `addFlightLogs`
+  (2026-10-13). Winnow streams a sidecar from the clip's SOURCE folder
+  (`/api/sidecars/:id/download` reads `abs_path`, 404 "Sidecar file is not
+  reachable" when it is gone) while the thumbnail and proxy come from its own
+  cache — so a clip whose every row is dead lists as "with a log" and its
+  `.srt` cannot be read. The add stopped at the first miss and kept only what
+  came before; `addFlightLogs`
   (`flight-logs.ts`, both the Library's *Logs only* and the atlas door) now
   goes on, adds what landed, then throws ONE sentence (`log-failures.ts`: a 404
   is `unreachable`, said as "not on <host>'s disk") so the picker keeps the
   misses ticked. A failed READ is `missing`, never a track of `null`: the
-  Logbook drew it as "no fix", which hid the drive.
+  Logbook drew it as "no fix", which hid the cause.
 
 ## The LOGBOOK view, and a flight's track as its thumbnail (2026-10-13)
 

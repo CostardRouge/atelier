@@ -5,11 +5,12 @@
  * A Winnow lists a clip from its database and draws it from its own cache
  * (the thumbnail, the proxy), but streams a SIDECAR from the clip's source
  * folder on disk (`/api/sidecars/:id/download` reads `abs_path`, and answers
- * 404 "Sidecar file is not reachable" when that file is gone). So a clip
- * ingested from a drive that is no longer mounted lists, plays and reads as
- * "with a log" — and its `.srt` cannot be read. One such log used to stop a
- * whole *Logs only* add at the first miss (156 flights ticked, 23 landed) and
- * was drawn in the Logbook as a flight with "no fix".
+ * 404 "Sidecar file is not reachable" when that file is gone). Every row of a
+ * clip is tried first, newest first (`fetchLog`: a moved clip keeps a dead row
+ * beside its live one); a clip whose rows are ALL dead — a drive unplugged, a
+ * file deleted — lists, plays and reads as "with a log", and its `.srt` cannot
+ * be read. One such log used to stop a whole *Logs only* add at the first miss
+ * and was drawn in the Logbook as a flight with "no fix".
  */
 
 import { WinnowError } from '../client';

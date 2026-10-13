@@ -2868,9 +2868,9 @@ and the files come as **proxies**, or as **originals** with their weight shown
 first, or — **Logs only** — as each DJI clip's `.srt` flight log alone, a few
 hundred kilobytes of text instead of a video (what Flight Atlas reads; a clip
 with no log is skipped and the bar says how many; a log the Winnow lists but
-cannot read on its disk — usually a drive that is not plugged in — is skipped
-too, marked *not on disk* in the Logbook and named after the add, which keeps
-the rest). A Cancel stops the download
+cannot read on its disk is skipped too, marked *not on disk* in the Logbook
+and named after the add, which keeps the rest; a clip whose folder was moved
+carries an old, dead log beside the live one, and the live one is taken). A Cancel stops the download
 and keeps what landed. A DJI clip brings its flight log along either way, and a
 clip whose log came alone can still be added later and joins it.
 
