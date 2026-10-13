@@ -80,8 +80,9 @@ import {
 // a value both ways is the cycle that left `day-badge.ts` half-loaded.
 import { DEFAULT_PLACE_STYLE } from './place-style';
 import { readTripRoad, type TripRoad } from './road-track';
+import { defaultSlideLength, lengthFromLegacy, readSlideLength, type SlideLength } from './slide-length';
 
-export const TRIP_DOC_VERSION = 32;
+export const TRIP_DOC_VERSION = 33;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -361,13 +362,12 @@ export interface PostBadge {
    */
   hookSeconds: number;
   /**
-   * The hook slide's length is AUTO (2026-10-07, `slide-timing.ts`): it
-   * follows its opener plus a short hold, and `hookSeconds` above is only
-   * what the author last set. Absent or false = set by hand, so no piece
-   * written before the rule changes length; a new piece is born in Auto and
-   * leaves it the moment a grip or the slider is dragged.
+   * Who decides how long the first slide is (v33, `slide-length.ts`): its
+   * opener at a pace then a hold, or the `hookSeconds` above, fixed. No
+   * gesture changes the owner — a drag under the opener's rule writes its
+   * pace and hold, a fixed one its seconds.
    */
-  hookAuto?: boolean;
+  length: SlideLength;
   /**
    * The darkening laid over the picture, under the badge — up to a handful of
    * layers. Replaces the old single vignette + single scrim, which were the
@@ -505,8 +505,8 @@ export interface HookDefaults {
   /** How the hook is delivered, and how long it is on screen — see `PostBadge`. */
   medium: SlideMedium;
   hookSeconds: number;
-  /** Whether that length followed the opener (`PostBadge.hookAuto`); absent reads as Auto for a new piece. */
-  hookAuto?: boolean;
+  /** Who decided that length — see `PostBadge.length`. */
+  length: SlideLength;
   layout: BadgeLayout;
   pieceStyles: BadgePieceStyles;
   /** The one entrance the pieces share, cascaded — see `PostBadge.cascade`. */
@@ -530,7 +530,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     durationSeconds: badge.durationSeconds,
     medium: badge.medium,
     hookSeconds: badge.hookSeconds,
-    hookAuto: badge.hookAuto === true,
+    length: { ...badge.length },
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
     cascade: badge.cascade ? structuredClone(badge.cascade) : null,
@@ -571,9 +571,9 @@ export function defaultPostBadge(
     hookSeconds:
       defaults?.hookSeconds ??
       defaultHookSeconds(defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION),
-    // A new piece follows its opener unless the defaults it starts from were
-    // saved from a piece whose length was set by hand.
-    hookAuto: defaults?.hookAuto ?? true,
+    // A new piece's opener decides, unless the defaults it starts from were
+    // saved from a piece whose length was fixed.
+    length: defaults?.length ? { ...defaults.length } : defaultSlideLength(),
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
@@ -626,8 +626,8 @@ export interface PostSlide {
   medium: SlideMedium;
   /** How long it is on screen when it is delivered as a video. */
   seconds: number;
-  /** Its length follows its opener — `PostBadge.hookAuto`'s twin, same rules. */
-  auto?: boolean;
+  /** Who decides its length — `PostBadge.length`'s twin, `seconds` above being the fixed one. */
+  length: SlideLength;
   /**
    * An OPENER on this slide — the same list `PostBadge.hook` holds — or null
    * for none. A slide's position no longer decides what it may hold
@@ -669,9 +669,9 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
-    // Born in Auto: with nothing on it the slide keeps its 3 s, and an opener
-    // given to it later is followed rather than cut.
-    auto: true,
+    // The opener decides: with nothing on it the slide keeps its 3 s, and an
+    // opener given to it later sets its length rather than being cut.
+    length: defaultSlideLength(),
     // A new slide holds its picture and nothing else: an opener, a badge, a
     // shade or a line of text is a choice, never a default.
     hook: null,
@@ -1654,8 +1654,75 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     migrated.road = readTripRoad(migrated.road);
   }
 
+  if (migrated.version < 33) {
+    // A slide's length gets an OWNER (`slide-length.ts`). Rule D's `auto` and
+    // each opener's own *Fit to the slide* are read once and folded into it,
+    // every slide keeping its length to the frame (`lengthFromLegacy`); both
+    // keys are then deleted, never left for a reader to misread.
+    migrated.posts = (migrated.posts ?? []).map((post) => {
+      const { hookAuto, ...badge } = post.badge as PostBadge & { hookAuto?: boolean };
+      return {
+        ...post,
+        badge: {
+          ...badge,
+          length: lengthFromLegacy(hookAuto, openersFit(badge.hook)),
+          hook: withoutFit(badge.hook) ?? [],
+          ...(badge.hookShelf ? { hookShelf: shelfWithoutFit(badge.hookShelf) } : {}),
+        },
+        slides: (post.slides ?? []).map((stored) => {
+          const { auto, ...slide } = stored as PostSlide & { auto?: boolean };
+          return {
+            ...slide,
+            length: lengthFromLegacy(auto, openersFit(slide.hook)),
+            hook: withoutFit(slide.hook),
+            ...(slide.hookShelf ? { hookShelf: shelfWithoutFit(slide.hookShelf) } : {}),
+          };
+        }),
+      };
+    });
+    // A saved look's length: absent `hookAuto` read as Auto there, as a new piece did.
+    migrated.hookDefaults = Object.fromEntries(
+      Object.entries(migrated.hookDefaults ?? {}).map(([kind, defaults]) => {
+        const { hookAuto, ...rest } = defaults as HookDefaults & { hookAuto?: boolean };
+        return [kind, { ...rest, length: lengthFromLegacy(hookAuto ?? true, openersFit(rest.hook)), hook: withoutFit(rest.hook) ?? [] }];
+      }),
+    );
+  }
+
   migrated.version = TRIP_DOC_VERSION;
   return migrated;
+}
+
+/** Rule D's *Fit to the slide* was on for one of these openers (read by the v33 migration alone). */
+function openersFit(layers: readonly HookLayer[] | null | undefined): boolean {
+  return (layers ?? []).some((layer) => (layer.options as Record<string, unknown> | undefined)?.fit === true);
+}
+
+/** Openers with rule D's `fit` option taken out — the slide owns that choice since v33. */
+function withoutFit<T extends readonly HookLayer[] | null | undefined>(layers: T): T {
+  if (!layers) return layers;
+  return layers.map((layer) => {
+    if (!layer.options || !('fit' in layer.options)) return layer;
+    const options: Record<string, unknown> = { ...layer.options };
+    delete options.fit;
+    return { ...layer, options };
+  }) as unknown as T;
+}
+
+function shelfWithoutFit(shelf: HookShelf): HookShelf {
+  return Object.fromEntries(
+    Object.entries(shelf).map(([id, options]) => {
+      if (!options || !('fit' in options)) return [id, options];
+      const rest: Record<string, unknown> = { ...options };
+      delete rest.fit;
+      return [id, rest];
+    }),
+  );
+}
+
+/** A stored length read back; a document that carries none (an import from elsewhere) gets a new slide's. */
+export function lengthOf(value: unknown): SlideLength {
+  return readSlideLength(value) ?? defaultSlideLength();
 }
 
 const PLACE_STYLES: readonly PlaceStyle[] = ['code', 'full', 'paren', 'name'];

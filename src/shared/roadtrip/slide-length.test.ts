@@ -4,13 +4,22 @@ import {
   DEFAULT_HOLD_SECONDS,
   MIN_PACE,
   defaultSlideLength,
+  fixedFrom,
+  lengthByHand,
   lengthFromLegacy,
   negotiate,
   paceFloor,
   readSlideLength,
   resolveLength,
 } from './slide-length';
-import { AUTO_TAIL_SECONDS, FIT_FLOOR_SECONDS, slideTiming } from './slide-timing';
+import { AUTO_TAIL_SECONDS, FIT_FLOOR_SECONDS } from './slide-timing';
+
+/** Rule D's own arithmetic (2026-10-07), kept here as the reference the migration must match. */
+function ruleD(auto: boolean, stored: number, opener: number): number {
+  const clampLen = (v: number) => Math.min(MAX_HOOK_SECONDS, Math.max(MIN_HOOK_SECONDS, v));
+  if (auto) return clampLen(opener > 0 ? opener + AUTO_TAIL_SECONDS : stored);
+  return clampLen(stored);
+}
 
 // The lab's Virée: 9.3 s on its own, its shortest dwell 0.9 s → a floor of 0.35 / 0.9.
 const VIREE = 9.3;
@@ -97,26 +106,46 @@ describe('resolveLength — fixed', () => {
 
 describe('negotiate — the band’s one grip', () => {
   it('past the natural end the drag is the hold', () => {
-    expect(negotiate(VIREE + 1.26, VIREE, BEAT)).toEqual({ pace: 1, hold: 1.3, stopped: false });
+    expect(negotiate(VIREE + 1.26, VIREE, FLOOR)).toEqual({ pace: 1, hold: 1.3, stopped: false });
   });
 
   it('inside it the drag is the pace, and it stops at the floor', () => {
-    expect(negotiate(VIREE / 2, VIREE, BEAT)).toEqual({ pace: 0.5, hold: 0, stopped: false });
-    const stopped = negotiate(1, VIREE, BEAT);
+    expect(negotiate(VIREE / 2, VIREE, FLOOR)).toEqual({ pace: 0.5, hold: 0, stopped: false });
+    const stopped = negotiate(1, VIREE, FLOOR);
     expect(stopped.stopped).toBe(true);
     expect(stopped.pace).toBeCloseTo(FLOOR, 9);
   });
 
   it('rests on the natural end inside the magnet', () => {
-    expect(negotiate(VIREE + 0.1, VIREE, BEAT, 0.15)).toEqual({ pace: 1, hold: 0, stopped: false });
-    expect(negotiate(VIREE - 0.1, VIREE, BEAT, 0.15)).toEqual({ pace: 1, hold: 0, stopped: false });
+    expect(negotiate(VIREE + 0.1, VIREE, FLOOR, 0.15)).toEqual({ pace: 1, hold: 0, stopped: false });
+    expect(negotiate(VIREE - 0.1, VIREE, FLOOR, 0.15)).toEqual({ pace: 1, hold: 0, stopped: false });
   });
 
   it('round-trips through resolveLength', () => {
     for (const total of [4, 6.5, VIREE, 11.2]) {
-      const { pace, hold } = negotiate(total, VIREE, BEAT);
+      const { pace, hold } = negotiate(total, VIREE, FLOOR);
       expect(resolveLength({ owner: 'opener', pace, hold }, 3, VIREE, BEAT).seconds).toBeCloseTo(total, 1);
     }
+  });
+});
+
+describe('lengthByHand / fixedFrom — a gesture never changes the owner', () => {
+  const timing = resolveLength(defaultSlideLength(), 3, VIREE, BEAT);
+
+  it('negotiates a pace and a hold under the opener’s rule, and writes no seconds', () => {
+    expect(lengthByHand(defaultSlideLength(), timing, VIREE + 2)).toEqual({ length: { owner: 'opener', pace: 1, hold: 2 } });
+    expect(lengthByHand(defaultSlideLength(), timing, VIREE / 2)).toEqual({ length: { owner: 'opener', pace: 0.5, hold: 0 } });
+  });
+
+  it('writes the seconds of a fixed length, or of a slide with nothing that plays', () => {
+    const fixed = { owner: 'fixed', over: 'cut' } as const;
+    expect(lengthByHand(fixed, timing, 4)).toEqual({ length: fixed, seconds: 4 });
+    expect(lengthByHand(defaultSlideLength(), { natural: 0, floor: MIN_PACE }, 4)).toEqual({ length: defaultSlideLength(), seconds: 4 });
+  });
+
+  it('fixes a clip at its cut, keeping a fixed length’s answer', () => {
+    expect(fixedFrom(defaultSlideLength())).toEqual({ owner: 'fixed', over: 'fit' });
+    expect(fixedFrom({ owner: 'fixed', over: 'cut' })).toEqual({ owner: 'fixed', over: 'cut' });
   });
 });
 
@@ -128,7 +157,7 @@ describe('lengthFromLegacy — every stored slide keeps its length', () => {
     expect(lengthFromLegacy(true, false)).toEqual({ owner: 'opener', pace: 1, hold: AUTO_TAIL_SECONDS });
     for (const o of openers) {
       for (const s of stored) {
-        expect(resolveLength(lengthFromLegacy(true, false), s, o, BEAT).seconds).toBeCloseTo(slideTiming(true, s, o).seconds, 9);
+        expect(resolveLength(lengthFromLegacy(true, false), s, o, BEAT).seconds).toBeCloseTo(ruleD(true, s, o), 9);
       }
     }
   });
@@ -139,7 +168,7 @@ describe('lengthFromLegacy — every stored slide keeps its length', () => {
     for (const fit of [true, false]) {
       for (const o of openers) {
         for (const s of stored) {
-          expect(resolveLength(lengthFromLegacy(false, fit), s, o, BEAT).seconds).toBe(slideTiming(false, s, o).seconds);
+          expect(resolveLength(lengthFromLegacy(false, fit), s, o, BEAT).seconds).toBe(ruleD(false, s, o));
         }
       }
     }

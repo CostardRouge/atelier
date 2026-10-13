@@ -162,20 +162,49 @@ export interface Negotiated {
 /**
  * One number on the band — the slide's total — read back as a pace and a
  * hold: past the opener's natural end the drag is HOLD, inside it the drag is
- * PACE, down to the floor where it stops. Within `magnet` seconds of the
- * natural end it rests ON it (pace 1, no hold), so the end can be found by
- * hand. Hold in tenths, pace in hundredths.
+ * PACE, down to `floor` (the resolution's own, `paceFloor`) where it stops.
+ * Within `magnet` seconds of the natural end it rests ON it (pace 1, no hold),
+ * so the end can be found by hand. Hold in tenths, pace in hundredths.
  */
-export function negotiate(total: number, natural: number, shortestBeat: number, magnet = 0): Negotiated {
+export function negotiate(total: number, natural: number, floor: number, magnet = 0): Negotiated {
   const t = Number.isFinite(total) ? Math.max(0, total) : 0;
   const n = Number.isFinite(natural) ? Math.max(0, natural) : 0;
   if (n <= 0) return { pace: 1, hold: round(Math.min(t, MAX_HOOK_SECONDS), 10), stopped: false };
   if (Math.abs(t - n) <= magnet) return { pace: 1, hold: 0, stopped: false };
   if (t >= n) return { pace: 1, hold: round(Math.min(t - n, MAX_HOOK_SECONDS), 10), stopped: false };
-  const floor = paceFloor(shortestBeat);
+  const lo = Math.min(1, Math.max(MIN_PACE, floor));
   const pace = t / n;
-  if (pace <= floor) return { pace: floor, hold: 0, stopped: true };
-  return { pace: Math.max(floor, round(pace, 100)), hold: 0, stopped: false };
+  if (pace <= lo) return { pace: lo, hold: 0, stopped: true };
+  return { pace: Math.max(lo, round(pace, 100)), hold: 0, stopped: false };
+}
+
+/** What a gesture on a slide's length writes: its owner kept, and the seconds only where they are the length. */
+export interface LengthEdit {
+  length: SlideLength;
+  /** The slide's stored seconds — written only under a fixed length, or with no opener on the slide. */
+  seconds?: number;
+}
+
+/**
+ * A length set by hand — a grip released, a slider moved — WITHOUT changing
+ * who owns it (rule 1 of `docs/slide-length.md`): under the opener's rule the
+ * total is negotiated into a pace and a hold; a fixed length, or a slide with
+ * no opener, takes the seconds.
+ */
+export function lengthByHand(length: SlideLength, timing: Pick<ResolvedLength, 'natural' | 'floor'>, total: number, magnet = 0): LengthEdit {
+  if (length.owner === 'opener' && timing.natural > 0) {
+    const { pace, hold } = negotiate(total, timing.natural, timing.floor, magnet);
+    return { length: { owner: 'opener', pace, hold } };
+  }
+  return { length, seconds: total };
+}
+
+/**
+ * A clip's cut IS its length: trimming a clip slide fixes it at the cut,
+ * keeping a fixed length's answer to a longer opener (speed it up, by default).
+ */
+export function fixedFrom(length: SlideLength): SlideLength {
+  return length.owner === 'fixed' ? length : { owner: 'fixed', over: 'fit' };
 }
 
 function round(value: number, per: number): number {

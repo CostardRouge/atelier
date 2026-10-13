@@ -1544,3 +1544,63 @@ describe('migrateTripDoc — v30 → v31, the car becomes a fleet', () => {
     }
   });
 });
+
+describe('migrateTripDoc — v32 → v33, a slide’s length has an owner', () => {
+  /** A v32 piece: rule D's marks on the badge and a slide, Fit on the slide's opener only. */
+  const v32 = () => {
+    const doc = createTripDoc('Tasmanie', '2026-01-01', '2026-01-10');
+    const post = createTripPost('carousel', '2026-01-03', '');
+    const legacyBadge = post.badge as unknown as Record<string, unknown>;
+    delete legacyBadge.length;
+    legacyBadge.hookAuto = true;
+    legacyBadge.hook = [{ id: 'drive', options: { stopsOn: 'custom', fit: false } }];
+    const slide = createPostSlide() as unknown as Record<string, unknown>;
+    delete slide.length;
+    slide.seconds = 4;
+    slide.hook = [{ id: 'map', options: { fit: true } }];
+    const set = createPostSlide() as unknown as Record<string, unknown>;
+    delete set.length;
+    set.auto = false;
+    set.seconds = 6;
+    set.hook = [{ id: 'map', options: {} }];
+    const defaults = hookDefaultsFrom(post.badge) as unknown as Record<string, unknown>;
+    delete defaults.length;
+    return {
+      ...doc,
+      version: 32,
+      hookDefaults: { reel: defaults },
+      posts: [{ ...post, slides: [slide, set] }],
+    } as unknown as TripDoc;
+  };
+
+  it('turns Auto into the opener deciding with rule D’s hold, and a set length into a fixed one', () => {
+    const doc = migrateTripDoc(v32());
+    const [post] = doc.posts;
+    expect(post.badge.length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+    // No mark was "set by hand": fixed, its opener sped up where Fit was on, cut where it was not.
+    expect(post.slides[0].length).toEqual({ owner: 'fixed', over: 'fit' });
+    expect(post.slides[0].seconds).toBe(4);
+    expect(post.slides[1].length).toEqual({ owner: 'fixed', over: 'cut' });
+    expect(post.slides[1].seconds).toBe(6);
+  });
+
+  it('deletes rule D’s keys and every opener’s own Fit', () => {
+    const doc = migrateTripDoc(v32());
+    const [post] = doc.posts;
+    expect('hookAuto' in post.badge).toBe(false);
+    expect('auto' in post.slides[1]).toBe(false);
+    expect(post.badge.hook[0].options).toEqual({ stopsOn: 'custom' });
+    expect(post.slides[0].hook?.[0].options).toEqual({});
+  });
+
+  it('reads a saved look with no mark as the opener deciding, as a new piece did', () => {
+    const doc = migrateTripDoc(v32());
+    expect(doc.hookDefaults.reel?.length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+    expect('hookAuto' in (doc.hookDefaults.reel ?? {})).toBe(false);
+  });
+
+  it('gives a new piece and a new slide to their opener', () => {
+    expect(defaultPostBadge('reel').length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+    expect(createPostSlide().length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+  });
+});

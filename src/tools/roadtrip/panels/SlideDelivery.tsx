@@ -9,7 +9,7 @@ import {
   MIN_HOOK_SECONDS,
   screenSecondsCeiling,
 } from '../../../shared/roadtrip/hook-video';
-import { AUTO_TAIL_SECONDS, autoSeconds } from '../../../shared/roadtrip/slide-timing';
+import { DEFAULT_HOLD_SECONDS } from '../../../shared/roadtrip/slide-length';
 import type { TrimRange } from '../../../shared/media/trim';
 import { formatTimecode } from '../../../shared/lib/format';
 import { FieldRow, Readout, SliderRow } from '../../../shared/ui/Inspector';
@@ -21,9 +21,9 @@ import Segmented from '../../../shared/ui/Segmented';
 export interface SlideOpener {
   /** Its name on screen — «Virée», «Itinerary», «Défilé». */
   name: string;
-  /** What it occupies on its own (already fitted, when it is). */
+  /** What it needs at its own pace — never the sped-up length. */
   seconds: number;
-  /** Its *Fit to the slide* setting is on. */
+  /** A fixed length speeds it up rather than cutting it. */
   fit: boolean;
 }
 
@@ -36,13 +36,13 @@ interface SlideDeliveryProps {
   /** The open clip's stretch and speed, when the slide is a clip — the same numbers the bar under the picture edits. */
   clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
   onMedium: (medium: SlideMedium) => void;
-  /** A length set by hand — the slide leaves Auto. */
+  /** A length moved by hand — written without changing who owns it (`lengthByHand`). */
   onSeconds: (seconds: number) => void;
-  /** Back to following the opener (or the badge's life), or out of it. */
-  onAuto: (auto: boolean) => void;
+  /** Hand the length back to the opener, at its own pace with a new slide's hold. */
+  onFollow: () => void;
   /** The slide's opener, or null for none. */
   opener: SlideOpener | null;
-  /** Turn the opener's *Fit to the slide* on; null when there is no opener to fit. */
+  /** Fix the length and speed a longer opener up to it; null when there is no opener. */
   onFit: (() => void) | null;
 }
 
@@ -120,7 +120,7 @@ export default function SlideDelivery({
   clip,
   onMedium,
   onSeconds,
-  onAuto,
+  onFollow,
   opener,
   onFit,
 }: SlideDeliveryProps) {
@@ -130,10 +130,14 @@ export default function SlideDelivery({
   // about the file it will write.
   const ceiling = screenSecondsCeiling(slide.videoTimeSeconds, slide.speed, clipSeconds);
   const seconds = Math.min(slide.seconds, ceiling);
-  const overflow = opener ? Math.max(0, opener.seconds - seconds) : 0;
-  const cut = overflow > 0.05;
-  // What Auto would give — the verb's own number, so it says what it does.
-  const autoWould = Math.min(autoSeconds(opener?.seconds ?? 0, slide.seconds), ceiling);
+  // Who owns the length is a word (`slide-length.ts`); a slide with nothing
+  // that plays lasts its own seconds whoever owns it.
+  const follows = slide.length.owner === 'opener' && opener !== null;
+  const timing = slide.timing;
+  const cut = timing.cut > 0.05;
+  // What handing the length back to the opener gives — the verb's own number.
+  const followWould = Math.min(opener ? opener.seconds + DEFAULT_HOLD_SECONDS : slide.seconds, ceiling);
+  const pace = timing.scale < 0.999 ? ` at ${Math.round(timing.scale * 100)} %` : '';
 
   return (
     <>
@@ -181,12 +185,10 @@ export default function SlideDelivery({
         label="On screen"
         name="How long this slide stays on screen"
         hint={
-          slide.auto
-            ? opener
-              ? cut
-                ? `Follows ${opener.name}, but the clip ends first: ${opener.name} is cut at ${seconds.toFixed(1)}s.`
-                : `Follows ${opener.name}: its ${opener.seconds.toFixed(1)}s and a ${AUTO_TAIL_SECONDS}s hold. Drag the slider, or the cell’s ends on the band, to set it yourself.`
-              : 'Follows the badge: its life and a beat after. Drag the slider, or the cell’s ends on the band, to set it yourself.'
+          follows && opener
+            ? cut
+              ? `${opener.name} decides, but the clip ends first: ${opener.name} is cut at ${seconds.toFixed(1)}s.`
+              : `${opener.name} decides: its ${timing.span.toFixed(1)}s${pace}, then ${timing.hold.toFixed(1)}s on the picture. Moving the length here or on the band changes its pace or the hold, never who decides.`
             : slide.medium === 'video'
               ? clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS
                 ? `At most ${ceiling.toFixed(1)}s of the clip is left after its in point${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}.`
@@ -202,32 +204,32 @@ export default function SlideDelivery({
         trailing={
           <>
             <span
-              className={`${pill} ${slide.auto ? 'border-accent text-accent-ink bg-accent-wash' : 'border-line-strong text-muted bg-paper'}`}
-              title={slide.auto ? 'The length follows what the slide holds' : 'The length was set by hand'}
+              className={`${pill} ${follows ? 'border-accent text-accent-ink bg-accent-wash' : 'border-line-strong text-muted bg-paper'}`}
+              title={follows ? 'The opener sets the length: its pace, then a hold' : 'The slide lasts the seconds set here'}
             >
-              {slide.auto ? `Auto${opener ? ` · ${opener.name}` : ''}` : 'Set by you'}
+              {follows && opener ? `${opener.name} decides` : 'Fixed'}
             </span>
-            {!slide.auto && !cut && (
-              <Button size="sm" onClick={() => onAuto(true)} title={`Follow ${opener ? opener.name : 'the badge'} again: ${autoWould.toFixed(1)} s`}>
-                Auto
+            {!follows && opener && !cut && (
+              <Button size="sm" onClick={onFollow} title={`Let ${opener.name} decide: ${followWould.toFixed(1)} s`}>
+                Follow
               </Button>
             )}
           </>
         }
       />
-      {!slide.auto && cut && opener && (
+      {!follows && cut && opener && (
         <div className="flex flex-col gap-1.5">
           <p className="m-0 text-xs text-accent-ink">
-            {opener.name} takes {opener.seconds.toFixed(1)} s — its last {overflow.toFixed(1)} s would be cut.
-            {opener.fit ? ' Fit to the slide is on and refused: the opener’s panel says why.' : ''}
+            {opener.name} takes {opener.seconds.toFixed(1)} s{pace ? `, run${pace}` : ''} — its last {timing.cut.toFixed(1)} s are cut.
+            {timing.floored ? ' Faster would show a picture for less than the time it takes to see one.' : ''}
           </p>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" onClick={() => onAuto(true)}>
-              Use {autoWould.toFixed(1)} s
+            <Button size="sm" onClick={onFollow}>
+              Use {followWould.toFixed(1)} s
             </Button>
             {onFit && !opener.fit && (
               <Button size="sm" onClick={onFit}>
-                Fit {opener.name} to {seconds.toFixed(1)} s
+                Speed {opener.name} up to {seconds.toFixed(1)} s
               </Button>
             )}
           </div>

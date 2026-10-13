@@ -118,7 +118,7 @@ export function slideRender(
   const layers = isFirst ? post.badge.hook : slide.hook;
   const timing = isFirst
     ? pieceHookTiming(post)
-    : slideHookTiming({ seconds: slide.seconds, auto: slide.auto, badge: slide.badge });
+    : slideHookTiming({ seconds: slide.seconds, length: slide.length, badge: slide.badge });
   const hook = layers
     ? resolveHook(layers, hookContextFor(trip, post, aspect, content, pictures, timing))
     : null;

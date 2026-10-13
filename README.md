@@ -1619,21 +1619,20 @@ let go (the Content tab's *On screen* slider is the same number). `⋯` moves th
 closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
 
-**How long a slide lasts.** A slide's length has an owner, and the *On screen*
-row says which. A new slide is **Auto**: it lasts what it carries — an opener
-(Itinerary, Virée, Défilé) plus a half-second hold, else its own seconds — and
-follows the opener when its settings change, so nothing is ever cut; the band
-writes `· auto` on its cell. Drag a grip, the slider or a clip's cut and the
-length is **Set by you**, with an *Auto* button to hand it back. A set slide
-shorter than its opener shows the cut **hatched** at the end of its cell and,
-under the slider, two verbs: *Use 10.4 s* (back to Auto) or *Fit Virée to
-5.0 s*. **Fit to the slide** is a setting of the opener, kept with it in its own
-panel under its length: the opener's clock is scaled so it rests when the slide
-ends — content, drawing and ticks on one scaled clock — and it follows the
-slide's length when that changes later, under a floor: a picture never shows
-for less than 0.35 s, below which the fit is refused and the panel says why. A
-slide may last up to a minute. Pieces made before this rule keep their stored
-length, set by hand, and are offered the same two verbs.
+**How long a slide lasts.** A slide's length has an owner, said in a word on
+the *On screen* row, and no gesture changes it. On a new slide **the opener
+decides** (Itinerary, Virée, Défilé): the slide is the opener at its pace, then
+a short hold on the picture — so when the opener grows (a ferry crossing, a
+stop, the recap's beats) the slide grows with it. Dragging a grip or the slider
+there changes the opener's **pace** or the **hold**, never who decides; the
+opener is never run faster than the time it takes to see a picture (0.35 s on
+its shortest beat), and the band says its pace on the cell when it is sped up.
+A slide can instead be **Fixed** at a number of seconds — for a reel cut to a
+beat — and then asks one question of a longer opener: **speed it up** to end
+with the slide (the default), or **cut** it, shown hatched at the end of its
+cell. A clip's cut is its length, so trimming a clip fixes it. A slide may last
+up to a minute. Pieces made before this rule keep their length to the frame. The
+section's own controls are being redrawn (`docs/slide-length.md`).
 
 **Any slide can hold what the hook holds.** Being first is what makes a slide
 the hook; what it *carries* is each slide's own. Open a content slide and the

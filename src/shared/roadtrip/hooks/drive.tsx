@@ -56,9 +56,7 @@ import { SummaryCardRows } from './summary-card-panel';
 import { AHEAD_GLYPHS, DRIVE_LABEL_GLYPHS, DRIVE_PICTURE_GLYPHS, GROUND_GLYPHS, PATH_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
 import { CAR_PX, driveBasemap, driveBox, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
-import { FitRow } from './fit-row';
 import { GroupRows } from './group-rows';
-import { fitRender } from '../slide-timing';
 import { CAMERA_PRESETS } from './map-camera';
 import { CameraRows } from './camera-rows';
 import { EASINGS, EASING_IDS } from './easing';
@@ -804,15 +802,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           onChange={(driveSeconds) => set({ driveSeconds })}
           format={(v) => `${v.toFixed(1)}s`}
         />
-        {plan && (
-          <FitRow
-            seconds={plan.seconds}
-            screenSeconds={ctx.screenSeconds}
-            shortestBeat={driveShortestBeat(plan, o)}
-            fit={o.fit}
-            onChange={(fit) => set({ fit })}
-          />
-        )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
           <Segmented
             size="sm"
@@ -1170,7 +1159,8 @@ export const driveVariant: HookVariant = {
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
-    return o.fit ? fitRender(render, ctx.screenSeconds, driveShortestBeat(plan, o)).render : render;
+    // Its shortest beat at its own pace: the floor a slide may speed it to (`slide-length.ts`).
+    return { ...render, shortestBeat: driveShortestBeat(plan, o) };
   },
   Sketch: DriveSketch,
   chapters: DRIVE_CHAPTERS,

@@ -233,8 +233,6 @@ export interface DriveOptions extends CardOptions {
    */
   dayTicks: boolean;
   mixWithClip: boolean;
-  /** FIT the drive into a shorter slide — `MapOptions.fit`, the same rule. */
-  fit: boolean;
 }
 
 export const DRIVE_DEFAULTS: DriveOptions = {
@@ -309,7 +307,6 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   shutter: true,
   dayTicks: true,
   mixWithClip: false,
-  fit: false,
 };
 
 /** The bounds each option is clamped to — a stored value is never trusted. */
@@ -444,7 +441,6 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     shutter: o.shutter !== false,
     dayTicks: o.dayTicks !== false,
     mixWithClip: o.mixWithClip === true,
-    fit: o.fit === true,
   };
 }
 

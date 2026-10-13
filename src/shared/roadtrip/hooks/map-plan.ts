@@ -222,13 +222,6 @@ export interface MapOptions {
   // --- extras --------------------------------------------------------------
   compass: boolean;
   distance: MapDistance;
-  /**
-   * FIT the journey into the slide when the slide is shorter — its clock
-   * scaled so the pen rests when the slide ends, under the readability floor
-   * (`slide-timing.ts`). Stored with the opener, so it follows the slide's
-   * length when that changes later. Nothing under an Auto slide.
-   */
-  fit: boolean;
   // --- sound ---------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -293,7 +286,6 @@ export const MAP_DEFAULTS: MapOptions = {
   nameInBadge: false,
   compass: false,
   distance: 'off',
-  fit: false,
   sound: false,
   kit: 'ratchet',
   tickPitch: 1,
@@ -398,7 +390,6 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     nameInBadge: o.nameInBadge === true,
     compass: o.compass === true,
     distance: oneOf(o.distance, ['off', 'km', 'mi'], d.distance),
-    fit: o.fit === true,
     sound: o.sound === true,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),
@@ -1189,7 +1180,6 @@ export function mapFromRoute(
     tickPitch: raw.tickPitch,
     tickVolume: raw.tickVolume,
     mixWithClip: raw.mixWithClip,
-    fit: false,
     groupKm: 0,
     groupVisits: 'consecutive',
     groupName: 'town',

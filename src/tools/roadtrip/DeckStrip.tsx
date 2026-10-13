@@ -681,7 +681,8 @@ export default function DeckStrip({
                 (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
                 (holds ? ` ${holds}` : '') +
                 ` ${seconds(drawn[i] ?? 0)}` +
-                (s.auto && !sizing ? ' · auto' : '') +
+                // The pace the opener runs at, when the slide speeds it up.
+                (s.timing.scale < 0.999 && !sizing ? ` · ${Math.round(s.timing.scale * 100)}%` : '') +
                 (s.speed !== 1 ? ` · ${s.speed}×` : '');
               const gripped = grips && i === index;
               // Two grips never cover more than two thirds of a short cell.

@@ -30,7 +30,7 @@ import type {
 import type { ExifData } from '../../../shared/exif/exif-parser';
 import CameraPanel from './CameraPanel';
 import SlideDelivery from './SlideDelivery';
-import { autoSeconds } from '../../../shared/roadtrip/slide-timing';
+import { DEFAULT_HOLD_SECONDS, defaultSlideLength, lengthByHand } from '../../../shared/roadtrip/slide-length';
 import { MAX_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
 import { hookVariantById } from '../../../shared/roadtrip/hooks/registry';
 import { inputClass, linkButton } from './ui';
@@ -66,7 +66,7 @@ interface ContentTabProps {
   /** The camera credit names a body on the TRIP, once for every piece. */
   onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
-  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds' | 'auto' | 'hook'>>) => void;
+  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds' | 'length' | 'hook'>>) => void;
   /** Write the open slide's OWN badge — another slide's words, counter and line. */
   patchSlideBadge: (patch: Partial<SlideBadge>) => void;
   /** The open slide's lines of free text, and where they are written. */
@@ -124,9 +124,13 @@ export default function ContentTab({
   /** The open slide's opener — the piece's on the first slide, the slide's own elsewhere — as the band and the deck read it. */
   const openerLayers = isHook ? post.badge.hook : (post.slides.find((s) => s.id === slide.slideId)?.hook ?? null);
   const openerVariant = openerLayers?.[0] ? hookVariantById(openerLayers[0].id) : undefined;
-  const opener = openerVariant && slide.openerSeconds > 0
-    ? { name: openerVariant.name, seconds: slide.openerSeconds, fit: openerLayers?.[0]?.options?.fit === true }
+  // What the opener NEEDS at its own pace — never the sped-up length — and
+  // whether a fixed length speeds it up rather than cutting it.
+  const opener = openerVariant && slide.natural > 0
+    ? { name: openerVariant.name, seconds: slide.natural, fit: slide.length.owner === 'fixed' && slide.length.over === 'fit' }
     : null;
+  /** Back to the opener deciding, at its own pace with a new slide's hold. */
+  const followOpener = () => (isHook ? patchBadge({ length: defaultSlideLength() }) : patchSlide({ length: defaultSlideLength() }));
   /**
    * The badge this slide's words are written to: the piece's on the first
    * slide, the slide's own elsewhere, none where the slide draws no badge.
@@ -297,19 +301,18 @@ export default function ContentTab({
             clipSeconds={clipSeconds}
             clip={clip}
             onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
-            // The slider sets the length by hand: the slide leaves Auto.
-            onSeconds={(seconds) =>
-              isHook ? patchBadge({ hookSeconds: seconds, hookAuto: false }) : patchSlide({ seconds, auto: false })
-            }
-            onAuto={(auto) => (isHook ? patchBadge({ hookAuto: auto }) : patchSlide({ auto }))}
+            // The slider never changes who owns the length: under the opener's
+            // rule it writes a pace and a hold, a fixed one its seconds.
+            onSeconds={(seconds) => {
+              const edit = lengthByHand(slide.length, slide.timing, seconds);
+              if (isHook) patchBadge({ length: edit.length, ...(edit.seconds !== undefined ? { hookSeconds: edit.seconds } : {}) });
+              else patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) });
+            }}
+            onFollow={followOpener}
             opener={opener}
             onFit={
-              openerLayers?.length
-                ? () => {
-                    const fitted = openerLayers.map((layer, i) => (i === 0 ? { ...layer, options: { ...layer.options, fit: true } } : layer));
-                    if (isHook) patchBadge({ hook: fitted });
-                    else patchSlide({ hook: fitted });
-                  }
+              opener
+                ? () => (isHook ? patchBadge({ length: { owner: 'fixed', over: 'fit' } }) : patchSlide({ length: { owner: 'fixed', over: 'fit' } }))
                 : null
             }
           />
@@ -547,18 +550,18 @@ export default function ContentTab({
             />
           </FieldRow>
           {/* A counter that follows the drive adds the recap's beats to the
-              opener: on a length set by hand they would be cut, so it is said
+              opener: on a fixed length that cuts it they would be lost, so it is said
               HERE, where the change was made, and not only in the Slide section. */}
-          {badge.mode.startsWith('drive-') && opener && !slide.auto && opener.seconds - slide.seconds > 0.05 && (
+          {badge.mode.startsWith('drive-') && opener && slide.timing.cut > 0.05 && (
             <FieldRow label="">
               <div className="flex flex-col gap-1.5 min-w-0">
                 <p className="m-0 text-xs text-accent-ink">
-                  With this counter {opener.name} takes {opener.seconds.toFixed(1)} s; the slide’s {slide.seconds.toFixed(1)} s set
-                  by hand cut its last {(opener.seconds - slide.seconds).toFixed(1)} s.
+                  With this counter {opener.name} takes {opener.seconds.toFixed(1)} s; the slide’s {slide.seconds.toFixed(1)} s
+                  cut its last {slide.timing.cut.toFixed(1)} s.
                 </p>
                 <div>
-                  <Button size="sm" onClick={() => (isHook ? patchBadge({ hookAuto: true }) : patchSlide({ auto: true }))}>
-                    Use {Math.min(autoSeconds(opener.seconds, slide.seconds), MAX_HOOK_SECONDS).toFixed(1)} s
+                  <Button size="sm" onClick={followOpener}>
+                    Use {Math.min(opener.seconds + DEFAULT_HOLD_SECONDS, MAX_HOOK_SECONDS).toFixed(1)} s
                   </Button>
                 </div>
               </div>
