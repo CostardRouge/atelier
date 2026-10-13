@@ -335,8 +335,58 @@ export default function PostEditor({
   );
   usePublishMediaScope(mediaScope);
 
+  // An opener that names a GROUP of places by its town needs the shipped
+  // index (`stop-clusters.ts`): asked for here, once, and the context rebuilt
+  // when it lands — `hookContextFor` reads it, so the stage, the rail and
+  // the exports then name the same groups.
+  const [townsTick, setTownsTick] = useState(0);
+  const deckLayersForTowns = useMemo(
+    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
+    [post.badge.hook, post.slides],
+  );
+  useEffect(() => {
+    if (!wantsTowns(deckLayersForTowns) || townsIfLoaded()) return;
+    let alive = true;
+    loadTowns()
+      .then(() => {
+        if (alive) setTownsTick((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [deckLayersForTowns]);
+
+  // A Virée under the trip's water rule reads the shipped coastline to tell a
+  // crossing from a road (`terrain.ts`): asked for here, once, and the context
+  // rebuilt when it lands — until then the road is driven whole.
+  const [landTick, setLandTick] = useState(0);
+  const drivesUnderWaterRule = trip.crossings?.auto === true && deckLayersForTowns.some((layer) => layer.id === 'drive');
+  useEffect(() => {
+    if (!drivesUnderWaterRule || landIfLoaded()) return;
+    let alive = true;
+    loadLandIndex()
+      .then(() => {
+        if (alive) setLandTick((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [drivesUnderWaterRule]);
+
   // --- the deck: the hook, any content pictures, and the closing card ------
-  const slides = useMemo(() => deckSlides(trip, post), [trip, post]);
+  // Rebuilt when the town index or the coastline lands, like the stage's own
+  // context: the deck prepares every opener to learn its length, and an Auto
+  // slide lasts that length — a Virée whose ferry crossings are only found
+  // once the coastline is read was timed WITHOUT them, so the slide ended
+  // before the car was off the boat while the stage drew it whole.
+  const slides = useMemo(
+    () => deckSlides(trip, post),
+    // `townsTick` and `landTick` are not read: they rebuild the deck once
+    // `hookContextFor`'s synchronous readers have something to return.
+    [trip, post, townsTick, landTick],
+  );
   const slideIndex = Math.min(selected, slides.length - 1);
   const slide = slides[slideIndex];
   const isHook = slide.kind === 'hook';
@@ -666,46 +716,6 @@ export default function PostEditor({
     () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
     [content, post.badge.layout, aspect],
   );
-
-  // An opener that names a GROUP of places by its town needs the shipped
-  // index (`stop-clusters.ts`): asked for here, once, and the context rebuilt
-  // when it lands — `hookContextFor` reads it, so the stage, the rail and
-  // the exports then name the same groups.
-  const [townsTick, setTownsTick] = useState(0);
-  const deckLayersForTowns = useMemo(
-    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
-    [post.badge.hook, post.slides],
-  );
-  useEffect(() => {
-    if (!wantsTowns(deckLayersForTowns) || townsIfLoaded()) return;
-    let alive = true;
-    loadTowns()
-      .then(() => {
-        if (alive) setTownsTick((n) => n + 1);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [deckLayersForTowns]);
-
-  // A Virée under the trip's water rule reads the shipped coastline to tell a
-  // crossing from a road (`terrain.ts`): asked for here, once, and the context
-  // rebuilt when it lands — until then the road is driven whole.
-  const [landTick, setLandTick] = useState(0);
-  const drivesUnderWaterRule = trip.crossings?.auto === true && deckLayersForTowns.some((layer) => layer.id === 'drive');
-  useEffect(() => {
-    if (!drivesUnderWaterRule || landIfLoaded()) return;
-    let alive = true;
-    loadLandIndex()
-      .then(() => {
-        if (alive) setLandTick((n) => n + 1);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [drivesUnderWaterRule]);
 
   // What every hook variant is prepared against — built by the one function
   // the deck, the rail and the exports use too — and what the picker hands to a
