@@ -45,6 +45,7 @@ import {
   openingTicks,
   pickItem,
   pilesOf,
+  serverFacets,
   rangeTicked,
   shown,
   SHOW_ALL,
@@ -182,11 +183,16 @@ export default function WinnowPicker({
   // An instance that predates it folds piles, and a pile's frames are asked
   // for when it is unfolded (`burstId`).
   const framesListed = listsBurstFrames(connection.capabilities);
-  const mediaType = host.narrow?.mediaType;
+  // A span asks the server for only what the rail keeps (`serverFacets`): a
+  // year of everything is tens of thousands of rows, a year of one drone's
+  // clips a few hundred. The host's own narrowing wins over the rail's.
+  const asked = scope === 'span' ? serverFacets(facets) : {};
+  const mediaType = host.narrow?.mediaType ?? asked.mediaType;
+  const device = asked.device;
 
   // What names the scope being listed: every reset keys on it, never on the
   // rows, which a span receives part by part.
-  const scopeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${mediaType}|${generation}`;
+  const scopeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${mediaType}|${device}|${generation}`;
 
   // The scope's rows, every page. A change of scope forgets the last answer
   // first, so a new day never shows the previous one's pictures for a frame.
@@ -200,7 +206,7 @@ export default function WinnowPicker({
     const controller = new AbortController();
     const { signal } = controller;
     let cancelled = false;
-    const filter = { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}) };
+    const filter = { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}), ...(device ? { device } : {}) };
     const narrowing = { ...filter, bursts: framesListed ? ('frames' as const) : ('fold' as const) };
     const fail = (err: unknown) => {
       if (cancelled) return;
@@ -253,7 +259,7 @@ export default function WinnowPicker({
       cancelled = true;
       controller.abort();
     };
-  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, generation, framesListed]);
+  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, device, generation, framesListed]);
 
   // A folded pile's frames, asked for on its unfold where the scope's list
   // could not carry them. Forgotten with the scope.
@@ -346,6 +352,27 @@ export default function WinnowPicker({
   const surfacedItems = useMemo(() => surfaced(items, piles, unfolded), [items, piles, unfolded]);
   // Counted with every pile folded, so unfolding one never moves a number.
   const counts = useMemo(() => facetCounts(surfaced(items, piles, new Set())), [items, piles]);
+  // A span narrowed to some bodies on the server holds no row of the others,
+  // so the rail lists the instance's bodies beside them (at zero) — ticking
+  // another one asks for it, unticking them all asks for everything again.
+  const [bodies, setBodies] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (scope !== 'span' || bodies) return;
+    let cancelled = false;
+    client
+      .facets()
+      .then((f) => !cancelled && setBodies(f.devices.map((d) => String(d.value))))
+      .catch(() => !cancelled && setBodies([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, bodies, client]);
+  const railCounts = useMemo(() => {
+    if (!device || !bodies?.length) return counts;
+    const devices = new Map(counts.devices);
+    for (const b of bodies) if (!devices.has(b)) devices.set(b, 0);
+    return { ...counts, devices };
+  }, [counts, device, bodies]);
   const shownItems = useMemo(() => shown(surfacedItems, facets, sort), [surfacedItems, facets, sort]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
   // What the lightbox draws for each drawn tile: the proxy over the thumbnail,
@@ -775,7 +802,7 @@ export default function WinnowPicker({
             } ${railShown ? '' : 'min-[821px]:hidden'}`}
           >
             <PickerRail
-              counts={counts}
+              counts={railCounts}
               facets={facets}
               onFacets={setFacets}
               half={half}

@@ -2846,7 +2846,9 @@ pick or a reject, its stars. "Browse all" opens the **Winnow picker** where the
 tab is looking — its day and its half — to tick many at once: by day (the
 same stepper and month), by **span** (several days as one list, grouped by
 day — a whole trip or a whole year at once, loaded in parts as you look, with
-a strip of the months to jump to any of them; past 20 000 media it says where
+a strip of the months to jump to any of them; the type, the flight log and
+the body ticked in the rail are asked of the instance itself, so a year of
+one drone's flights loads only those clips; past 20 000 media it says where
 it stopped) or by folder, every tile with Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
 flight log, extension, body, tags, no final yet, not in the library), tick verbs over what

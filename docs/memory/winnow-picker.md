@@ -190,6 +190,20 @@ and a trip or a season of flights is neither one day nor one Winnow session.
   every reset (ticks, unfolded piles, the batch) keys on `scopeKey`, never on
   `rows`, which a span receives part by part; the opening ticks are seeded once
   the list is WHOLE (`loaded`) and added to what was ticked meanwhile.
+- **A span asks the server for only what the rail keeps** (2026-10-13, his
+  «quand les filtres … et que l'appareil est sélectionné, il faut que le filtre
+  soit appliqué sur les médias venant du drone»): `serverFacets` sends the one
+  kind ticked, or clips whenever the flight log is ticked, and the bodies ticked
+  as Winnow's comma lists (`media_type`, `device` — its `csv` filters, read in
+  its `lib/filter.ts`), to the calendar and every part alike; the host's own
+  `narrow` wins. A year of everything (13 762 on the stub) becomes a year of one
+  drone's clips (4 152). The rail still filters what arrives; the extension
+  stays the rail's alone (its stored spelling, with or without a dot, is not
+  certain). A ticked body narrows the span, so the rail lists the instance's
+  other bodies beside it at zero (`/api/facets`, once per sitting) — ticking one
+  asks for it. This REVISES P1's rule «only the half goes to the server», whose
+  premise (Winnow's `ext`/`device` single-valued) is false for `device`, and
+  for a SPAN only: Day and Folder are small and keep it.
 - **A month strip** (`MonthStrip`, `spanMonths`) above a span's grid ordered by
   time: one bar per month from the calendar's counts, faint while its rows have
   not landed, a click growing the batch to reach that month and scrolling to
