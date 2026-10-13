@@ -204,3 +204,24 @@ section shows only when the scope holds a clip, with a bar of the share that
 carries a log. Server-side filtering by log is Winnow's to add
 (`has_telemetry=1`), and would matter only for a span long enough to hit the
 cap.
+
+## *Logs only* — a clip's flight log without its video (2026-10-13)
+
+**Decision.** The Library's *browse all* brings **Proxies · Originals · Logs
+only**; `materialize(…, { fidelity: 'log' })` fetches each clip's `.srt` and
+nothing else, and a row with no log brings nothing (the bar says how many are
+skipped; the verb counts and is enabled on the rows WITH a log —
+`PickerAction.label(n, rows)` and `enabled(rows)`). **Why**: a flight is a few
+hundred kB of text, its 720p proxy a video — taking a season of flights for
+Flight Atlas fetched every proxy only to read the log beside it. **How to
+apply**:
+
+- The `.srt` is vouched for with the CLIP's identity and an origin naming the
+  log (`fidelity: 'original'`, no `fetchOriginal`), so the Library files it
+  under its instance. Adding the clip later groups both by base name; the
+  duplicate `.srt` the clip brings is the same name/size/date and is ignored.
+- A log alone does NOT hold its clip: the sidebar splits `inLibrary` (an asset
+  with a picture or a clip) from `logsInLibrary` (any asset with a log), and
+  the picker's `held` reads the one its fidelity fills.
+- `reuse(url)` hands back a log already read (the Logbook's tracks), so it is
+  never fetched twice.

@@ -60,8 +60,10 @@ export interface PickerActionContext {
 
 export interface PickerAction {
   key: string;
-  /** The verb for `n` ticked media — `Add 12 to library`. */
-  label: (n: number) => string;
+  /** The verb for `n` ticked media — `Add 12 to library`; handed the rows for a verb that counts only some. */
+  label: (n: number, rows: readonly WinnowAssetRow[]) => string;
+  /** Whether the verb can act on these rows; absent, on any ticked row. */
+  enabled?: (rows: readonly WinnowAssetRow[]) => boolean;
   /**
    * Do it. Resolve `true` to close the picker (the add landed), anything else
    * to stay open — a failure the host has said, or a run that was stopped.

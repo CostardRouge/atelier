@@ -35,7 +35,8 @@ export interface BrowseState {
   chapterId: string | null;
   /** The last SPAN the picker listed (`picker/span.ts`), both ends inclusive. Absent before it. */
   span?: { from: string; to: string } | null;
-  fidelity: 'proxy' | 'original';
+  /** What the Library's *browse all* brings: proxies, originals, or a clip's flight log alone. */
+  fidelity: 'proxy' | 'original' | 'log';
   /**
    * The picker's rail (`picker/pick-filter.ts`) — shared by every host of
    * the picker on this instance, so a narrowing set in Develop is there when
@@ -95,7 +96,7 @@ export function readBrowseState(sourceId: string): BrowseState | null {
       : null,
     chapterId: typeof s.chapterId === 'string' && s.chapterId ? s.chapterId : null,
     ...(readSpan(s.span) ? { span: readSpan(s.span) } : {}),
-    fidelity: s.fidelity === 'original' ? 'original' : 'proxy',
+    fidelity: s.fidelity === 'original' || s.fidelity === 'log' ? s.fidelity : 'proxy',
     facets: readFacets(s.facets),
     sort: s.sort === 'stars' ? 'stars' : 'time',
   };

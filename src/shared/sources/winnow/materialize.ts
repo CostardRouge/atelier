@@ -14,6 +14,9 @@
  *   editing, and for a photo post it already exceeds 1080×1920.
  * - **original**: the full file, for a final render. Heavy through a tunnel;
  *   the caller shows that cost, it does not hide it.
+ * - **log**: a DJI clip's `.srt` ALONE — the flight, never the video. What
+ *   Flight Atlas reads, and a few hundred kilobytes of text where the proxy
+ *   is a video. A row with no log brings nothing.
  *
  * A DJI clip's `.srt` comes along whichever fidelity was chosen: Atelier's
  * founding case is the flight log, and Winnow serves it as a first-class
@@ -41,8 +44,9 @@ import { trackedFetch } from '../../tasks/tracked';
 import type { FetchOptions } from '../fetch-options';
 import type { WinnowAssetRow, WinnowClient } from './client';
 import { exifFromRow } from './exif-from-row';
+import { srtSidecars } from './picker/pick-filter';
 
-export type Fidelity = 'proxy' | 'original';
+export type Fidelity = 'proxy' | 'original' | 'log';
 
 export interface MaterializeOptions {
   fidelity: Fidelity;
@@ -53,6 +57,11 @@ export interface MaterializeOptions {
    * picture), and a task inside a task would say the same thing twice.
    */
   quiet?: boolean;
+  /**
+   * A file already fetched for this URL (a flight log the picker read to draw
+   * its track), handed back instead of a second request. `log` only.
+   */
+  reuse?: (url: string) => File | null;
   /**
    * Stop the fetch in flight — the browser's Cancel, which used to close the
    * sheet while the files went on downloading and landed in the Library after
@@ -87,6 +96,8 @@ export function plannedFiles(
   row: WinnowAssetRow,
   fidelity: Fidelity,
 ): { url: string; name: string; type: string }[] {
+  const srt = srtSidecars(row).map((s) => ({ url: client.sidecarUrl(s.id), name: s.filename, type: 'text/plain' }));
+  if (fidelity === 'log') return srt;
   const base = baseName(row.filename);
   const main =
     fidelity === 'original'
@@ -94,9 +105,6 @@ export function plannedFiles(
       : row.media_type === 'video'
         ? { url: client.proxyUrl(row.id), name: `${base}.mp4`, type: 'video/mp4' }
         : { url: client.proxyUrl(row.id), name: `${base}.webp`, type: 'image/webp' };
-  const srt = row.sidecars
-    .filter((s) => s.kind === 'srt')
-    .map((s) => ({ url: client.sidecarUrl(s.id), name: s.filename, type: 'text/plain' }));
   return [main, ...srt];
 }
 
@@ -195,8 +203,10 @@ export async function materialize(
   options: MaterializeOptions,
 ): Promise<File[]> {
   const plan = plannedFiles(client, row, options.fidelity);
+  if (plan.length === 0) return [];
   const lastModified = captureMtime(row);
   const identity = identityFor(sourceId, row);
+  if (options.fidelity === 'log') return materializeLogs(client, sourceId, plan, lastModified, identity, options);
   // Where this came from, so the export can say what it is holding and fetch
   // the capture when it is time to deliver. Only on the MAIN file: fetching
   // "the original" of a `.srt` would hand back the video.
@@ -250,4 +260,42 @@ export async function materialize(
     },
     bring,
   );
+}
+
+/**
+ * A clip's flight log alone. The `.srt` is vouched for with the CLIP's
+ * identity and an origin naming the log itself — so the Library files it under
+ * the instance it came from — and nothing else: no proxy, no original to
+ * fetch, no companion. Fetched as the source's own file (`original`), which a
+ * sidecar is. Adding the clip later groups both under one asset by base name,
+ * as a folder would.
+ */
+async function materializeLogs(
+  client: WinnowClient,
+  sourceId: string,
+  plan: { url: string; name: string; type: string }[],
+  lastModified: number,
+  identity: KnownIdentity,
+  options: MaterializeOptions,
+): Promise<File[]> {
+  const files: File[] = [];
+  const bring = async (opts: FetchOptions = {}) => {
+    for (const [i, item] of plan.entries()) {
+      const file =
+        options.reuse?.(item.url) ??
+        (await client.fetchFile(item.url, item.name, item.type, lastModified, {
+          signal: eitherSignal(opts.signal, options.signal),
+          onProgress: i === 0 ? opts.onProgress : undefined,
+        }));
+      registerMediaIdentity(file, {
+        ...identity,
+        origin: { sourceId, fidelity: 'original', width: null, height: null, name: item.name, bytes: null },
+      });
+      files.push(file);
+      options.onFile?.(file, i + 1, plan.length);
+    }
+    return files;
+  };
+  if (options.quiet) return bring();
+  return trackedFetch({ label: `Fetching ${plan[0].name}`, scope: identity.assetId ?? null, bytes: null }, bring);
 }

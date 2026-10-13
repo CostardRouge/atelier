@@ -380,8 +380,9 @@ export default function WinnowPicker({
   // an action in flight rather than letting it land later.
   useEffect(() => () => controller.current?.abort(), []);
 
+  const can = (action: PickerAction) => tickedRows.length > 0 && (action.enabled?.(tickedRows) ?? true);
   const run = async (action: PickerAction) => {
-    if (!tickedRows.length || running) return;
+    if (!can(action) || running) return;
     const c = new AbortController();
     controller.current = c;
     setRunning(action.key);
@@ -419,7 +420,7 @@ export default function WinnowPicker({
   // While a picture is looked at large, Escape and Enter are the lightbox's.
   useDialogKeys({
     onCancel: peek === null ? close : undefined,
-    onConfirm: peek === null && primary && tickedRows.length && !running ? () => void run(primary) : null,
+    onConfirm: peek === null && primary && can(primary) && !running ? () => void run(primary) : null,
   });
 
   // The grid's own keys: the bulk verbs, Winnow-style. A field keeps its keys,
@@ -860,11 +861,11 @@ export default function WinnowPicker({
                 key={action.key}
                 variant={last ? 'primary' : 'default'}
                 icon={last ? Icons.plus : undefined}
-                disabled={!tickedRows.length || running !== null}
+                disabled={!can(action) || running !== null}
                 onClick={() => void run(action)}
                 className={last ? 'max-[820px]:flex-1 max-[820px]:basis-full' : ''}
               >
-                {action.label(tickedRows.length)}
+                {action.label(tickedRows.length, tickedRows)}
               </Button>
             );
           })}
