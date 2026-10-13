@@ -75,9 +75,24 @@ hundred CPU steps — that is the end-to-end test, run in pytest with a tiny
 config. **Verify (his Mac).** `make train` on FiveK expert C on MPS; the
 paper's numbers (~25 dB PSNR on FiveK C at 480p) are the sanity bar.
 
-## M3 — the local dashboard
+## M3 — the local dashboard — BUILT (2026-10-13)
 
-**Delivers.** `atelier-train serve` → `http://127.0.0.1:<port>` only, a
+`serve.py` + `static/index.html`: `atelier-train serve` on `127.0.0.1:8765`,
+a FastAPI app (extra `ui`) over the run folders and one static page in plain
+JS with hand-drawn SVG charts — actions as subprocesses of the CLI itself
+(one at a time, output streamed by SSE, logs kept in `runs/dashboard/`), the
+machine's checks, the runs table (tick up to four to compare), three
+one-axis charts (loss, val PSNR, val ΔE2000) with a crosshair tooltip, stat
+tiles, the eval grids worst-ΔE first, the prepared pairs. Studio Papier
+tokens, light and dark; the series palette validated with the dataviz
+checks on both surfaces. Rendered headless at 1280 and 390 px in both
+themes, no console error. Tests through FastAPI's TestClient, including a
+real `doctor` subprocess and its stream.
+
+Not verified here: the page in Safari on his Mac, `webbrowser.open` there,
+a long training run streamed for hours.
+
+**Delivered as planned:** `atelier-train serve` → `http://127.0.0.1:<port>` only, a
 FastAPI app (optional extra `ui`) serving ONE static HTML page (no build
 step, no npm: plain JS + a small chart lib vendored or written by hand) with:
 actions (doctor, ingest, train, stop, eval, export) run as subprocesses with

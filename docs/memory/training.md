@@ -80,6 +80,31 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   ≈ 33.6 dB, the exported mean cube ≈ 40 dB; `fit` falls by > 10× in 60
   tiny epochs. Not a quality bar for real data.
 
+## M3 — the dashboard (2026-10-13)
+
+- **FastAPI + ONE static page, localhost only**, over the files the CLI
+  already writes; Streamlit/Gradio/TensorBoard declined (heavy, no actions,
+  no pair grids), a page inside Atelier declined (no backend by rule). The
+  `ui` extra keeps fastapi/uvicorn out of the core; `serve.py` imports them
+  lazily; `httpx` sits in the dev group for the TestClient.
+- **An action is the CLI run as a SUBPROCESS** (`python -m
+  atelier_training.cli …`, `ATELIER_TRAINING_ROOT` passed), never an import:
+  the page does exactly what the Terminal does, a crash never takes it down,
+  one job at a time, the log kept under `runs/dashboard/`. Arguments are
+  checked against `ALLOWED_FLAGS`; the page is single-user and local, so
+  that is the whole of its security.
+- **Charts are hand-drawn SVG, one metric per chart, one axis**, series =
+  the ticked runs (≤ 4) in the dataviz reference palette's first four slots
+  — validated on the paper surfaces light (`#fbf8f1`: two slots under 3 : 1,
+  hence direct labels + the table) and dark (`#2a251c`: all pass). Text wears
+  ink tokens, never the series colour.
+- **Trap**: a `display: inline-block` on a class beats the UA's `[hidden]`;
+  the page carries `[hidden] { display: none !important }`.
+- **Trap**: with `from __future__ import annotations`, a Pydantic model
+  defined INSIDE `create_app` is a string FastAPI cannot resolve (it then
+  reads the parameter as a query and answers 422); the body is taken as
+  `dict = Body(...)` instead.
+
 ## Traps
 
 - Pillow reads a 48-bit PNG as 8 bits per channel: 16-bit material goes

@@ -12,10 +12,11 @@ Rien n'est envoyé nulle part : pas de service en ligne, pas de compte. Les
 photos, le jeu FiveK et les modèles entraînés restent dans `training/data/` et
 `training/runs/`, que git ignore.
 
-> **État actuel : M2.** Installer, vérifier la machine, préparer les données,
-> **entraîner** le modèle, le mesurer et exporter un `.cube` : tout se fait
-> depuis le Terminal. Le tableau de bord (courbes, grilles d'images, boutons)
-> arrive en M3 — voir [`PLAN.md`](PLAN.md).
+> **État actuel : M3.** Installer, vérifier la machine, préparer les données,
+> **entraîner** le modèle, le mesurer, exporter un `.cube`, et tout piloter
+> depuis un **tableau de bord** local (`make serve`). La suite — l'import
+> depuis Winnow, l'affinage sur tes paires, les réglages Develop — est dans
+> [`PLAN.md`](PLAN.md).
 
 ---
 
@@ -147,6 +148,7 @@ ignorée pour l'instant : aligner ces paires, c'est M5).
 | `make validate` | vérifie tes groupes de paires |
 | `make ingest` | prépare les paires pour l'entraînement (redimensionnées, en cache) |
 | `uv run atelier-train init-group <dossier>` | écrit un `manifest.toml` deviné |
+| `make serve` | ouvre le tableau de bord dans le navigateur (boutons, courbes, grilles) |
 | `make bench` | chronomètre un pas d'entraînement sur ce Mac et estime la durée d'un run |
 | `make train` | entraîne le modèle sur les paires préparées |
 | `make eval` | mesure le dernier run (PSNR, ΔE) et dessine les grilles origine \| retouche \| modèle |
@@ -204,7 +206,31 @@ se rapproche de tes retouches.
 Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.
 
-## 7. Les réglages
+## 7. Le tableau de bord
+
+Pour piloter sans le Terminal :
+
+```bash
+make serve        # ouvre http://127.0.0.1:8765 dans ton navigateur
+```
+
+La page montre, de haut en bas : l'état de la machine (les mêmes lignes que
+`doctor`), les **boutons** (Doctor, Synthetic set, Ingest, Bench, Train avec
+sa source, son nom et ses époques, Eval, Export, Stop) dont la sortie défile
+en direct dans le cadre noir ; les **runs** avec leurs chiffres (époques, PSNR
+et ΔE2000 de validation, les `.cube` à télécharger) et, pour ceux que tu
+coches — jusqu'à quatre —, trois **courbes** sur une seule échelle chacune
+(perte, PSNR, ΔE2000 ; survole pour lire les valeurs) ; les **grilles** du
+run sélectionné (`origine | ta retouche | modèle`, les pires ΔE en premier) ;
+et un aperçu des paires préparées.
+
+Chaque bouton lance exactement la commande du Terminal, dans un processus à
+part : un entraînement qui plante ne ferme pas la page, et son journal est
+gardé dans `runs/dashboard/`. Une seule action à la fois (un entraînement,
+c'est toute la puce graphique). La page n'écoute que sur `127.0.0.1` : rien
+ne sort du Mac. Elle suit le thème clair ou sombre du système.
+
+## 8. Les réglages
 
 Tous les paramètres sont dans `configs/default.toml`, commentés. Pour un essai :
 
@@ -217,7 +243,7 @@ uv run atelier-train ingest --set ingest.long_edge=768   # un seul réglage, pon
 Les chemins peuvent pointer ailleurs, par exemple un disque externe :
 `--set paths.fivek=/Volumes/Photos/fivek`.
 
-## 8. Ce qui reste privé
+## 9. Ce qui reste privé
 
 `training/.gitignore` exclut `data/`, `runs/`, les checkpoints et `.venv/`.
 FiveK, tes photos et tes modèles ne partent jamais dans git. La suite (M3 à M6),
