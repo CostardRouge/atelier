@@ -30,6 +30,7 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import { EASINGS, EASING_IDS } from './easing';
+import { AHEAD_GLYPHS, ALIGN_GLYPHS, MAP_LABEL_GLYPHS, MAP_MEDIA_GLYPHS, PEN_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
 import type { HookContext, HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { paintMap } from './map-paint';
 import {
@@ -212,16 +213,18 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
                     : 'Every stop’s picture in a row along the edge; the ones still ahead are held back.'
           }
         >
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="How a stop’s picture is presented"
             value={o.media}
             onChange={(media) => set({ media })}
             options={[
-              { id: 'off', label: 'Not at all' },
-              { id: 'pin', label: 'Pinned at the stop' },
-              { id: 'card', label: 'On a card under the map' },
-              { id: 'backdrop', label: 'Filling the frame behind' },
-              { id: 'strip', label: 'A strip along the edge' },
+              { id: 'off', label: 'None', title: 'Not at all', icon: MAP_MEDIA_GLYPHS.off },
+              { id: 'pin', label: 'Pinned', title: 'Pinned at the stop', icon: MAP_MEDIA_GLYPHS.pin },
+              { id: 'card', label: 'Card', title: 'On a card under the map', icon: MAP_MEDIA_GLYPHS.card },
+              { id: 'backdrop', label: 'Behind', title: 'Filling the frame behind', icon: MAP_MEDIA_GLYPHS.backdrop },
+              { id: 'strip', label: 'Strip', title: 'A strip along the edge', icon: MAP_MEDIA_GLYPHS.strip },
             ]}
           />
         </FieldRow>
@@ -330,12 +333,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="Where the map sits"
+            tiles
             value={o.position}
             onChange={(position) => set({ position })}
             options={[
-              { id: 'top', label: 'Top' },
-              { id: 'middle', label: 'Middle' },
-              { id: 'bottom', label: 'Bottom' },
+              { id: 'top', label: 'Top', icon: POSITION_GLYPHS.top },
+              { id: 'middle', label: 'Middle', icon: POSITION_GLYPHS.middle },
+              { id: 'bottom', label: 'Bottom', icon: POSITION_GLYPHS.bottom },
             ]}
           />
         </FieldRow>
@@ -344,12 +348,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="Which side the map keeps to"
+            tiles
             value={o.align}
             onChange={(align) => set({ align })}
             options={[
-              { id: 'left', label: 'Left' },
-              { id: 'center', label: 'Centre' },
-              { id: 'right', label: 'Right' },
+              { id: 'left', label: 'Left', icon: ALIGN_GLYPHS.left },
+              { id: 'center', label: 'Centre', icon: ALIGN_GLYPHS.center },
+              { id: 'right', label: 'Right', icon: ALIGN_GLYPHS.right },
             ]}
           />
         </FieldRow>
@@ -496,11 +501,12 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             fill
             label="How what is still ahead is drawn"
             value={o.aheadStyle}
+            tiles
             onChange={(aheadStyle) => set({ aheadStyle })}
             options={[
-              { id: 'dashed', label: 'Dashed' },
-              { id: 'faint', label: 'Faint' },
-              { id: 'hidden', label: 'Hidden' },
+              { id: 'dashed', label: 'Dashed', icon: AHEAD_GLYPHS.dashed },
+              { id: 'faint', label: 'Faint', icon: AHEAD_GLYPHS.faint },
+              { id: 'hidden', label: 'Hidden', icon: AHEAD_GLYPHS.hidden },
             ]}
           />
         </FieldRow>
@@ -547,16 +553,18 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
                 : 'The names you gave the stops. One that would sit on another name, or on a picture, is left out.'
           }
         >
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="Which stops carry their name"
             value={o.labels}
             onChange={(labels) => set({ labels })}
             options={[
-              { id: 'none', label: 'None' },
-              { id: 'ends', label: 'The first and the last' },
-              { id: 'current', label: 'Where the pen is' },
-              { id: 'passed', label: 'Everywhere it has been' },
-              { id: 'all', label: 'Every stop' },
+              { id: 'none', label: 'None', icon: MAP_LABEL_GLYPHS.none },
+              { id: 'ends', label: 'Ends', title: 'The first and the last', icon: MAP_LABEL_GLYPHS.ends },
+              { id: 'current', label: 'Pen', title: 'Where the pen is', icon: MAP_LABEL_GLYPHS.current },
+              { id: 'passed', label: 'Passed', title: 'Everywhere it has been', icon: MAP_LABEL_GLYPHS.passed },
+              { id: 'all', label: 'All', title: 'Every stop', icon: MAP_LABEL_GLYPHS.all },
             ]}
           />
         </FieldRow>
@@ -646,11 +654,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
         {o.draw && (
           <FieldRow label="Motion" hint={`${EASINGS[o.easing].hint} — on every hop.`}>
-            <SelectField
+            <Segmented
+              size="sm"
+              tiles
               label="How the pen travels each hop"
               value={o.easing}
               onChange={(easing) => set({ easing })}
-              options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
+              options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
             />
           </FieldRow>
         )}
@@ -673,12 +683,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
               size="sm"
               fill
               label="What travels along the path"
+              tiles
               value={o.pen}
               onChange={(pen) => set({ pen })}
               options={[
-                { id: 'dot', label: 'A dot' },
-                { id: 'plane', label: 'A plane' },
-                { id: 'none', label: 'Bare line' },
+                { id: 'dot', label: 'A dot', icon: PEN_GLYPHS.dot },
+                { id: 'plane', label: 'A plane', icon: PEN_GLYPHS.plane },
+                { id: 'none', label: 'Bare line', icon: PEN_GLYPHS.none },
               ]}
             />
           </FieldRow>

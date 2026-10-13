@@ -16,6 +16,7 @@
  * ticks to be mixed in (`mixWithClip`, see `audio-plan.ts`).
  */
 
+import { easingGlyph } from './choice-glyphs';
 import { SCRUB_CHAPTERS } from './opener-chapter-specs';
 import { useCallback } from 'react';
 import Button from '../../ui/Button';
@@ -372,11 +373,13 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="How the head travels"
             value={o.easing}
             onChange={(easing) => set({ easing })}
-            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
+            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
           />
         </FieldRow>
         <FieldRow

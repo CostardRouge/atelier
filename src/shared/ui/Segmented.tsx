@@ -37,6 +37,12 @@ interface SegmentedProps<T extends string> {
    * Implies `fill`.
    */
   columns?: number;
+  /**
+   * Draw each option as a TILE: its `icon` — a little drawing of what the
+   * choice does — above a short word (the openers' choices, 2026-10-12).
+   * Implies `fill`.
+   */
+  tiles?: boolean;
   /** Names the group for assistive tech. */
   label?: string;
   className?: string;
@@ -55,17 +61,18 @@ export default function Segmented<T extends string>({
   size = 'md',
   fill = false,
   columns,
+  tiles = false,
   label,
   className = '',
 }: SegmentedProps<T>) {
   const grid = columns !== undefined && columns > 0;
-  const stretch = fill || grid;
+  const stretch = fill || grid || tiles;
   return (
     <div
       role="group"
       aria-label={label}
       className={`${grid ? 'grid w-full' : 'inline-flex items-center'} p-0.5 gap-0.5 rounded-control border border-line bg-paper-2 ${
-        fill && !grid ? 'flex w-full' : ''
+        (fill || tiles) && !grid ? 'flex w-full' : ''
       } ${className}`}
       style={grid ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
     >
@@ -80,16 +87,20 @@ export default function Segmented<T extends string>({
             disabled={disabled}
             title={typeof option.disabled === 'string' ? option.disabled : option.title}
             onClick={() => onChange(option.id)}
-            className={`inline-flex items-center justify-center whitespace-nowrap rounded-[8px] border font-sans cursor-pointer select-none transition-[background-color,color,box-shadow,border-color,translate] duration-150 ease-paper ${PRESS_LOOK} focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-45 disabled:cursor-default ${
-              SEG_SIZES[size]
-            } ${stretch ? 'flex-1 min-w-0' : ''} ${
+            className={`${
+              tiles
+                ? 'flex flex-col items-center justify-center gap-0.5 py-1 px-0.5 text-2xs leading-tight text-center'
+                : `inline-flex items-center justify-center whitespace-nowrap ${SEG_SIZES[size]}`
+            } rounded-[8px] border font-sans cursor-pointer select-none transition-[background-color,color,box-shadow,border-color,translate] duration-150 ease-paper ${PRESS_LOOK} focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-45 disabled:cursor-default ${stretch ? 'flex-1 min-w-0' : ''} ${
               on
                 ? 'bg-surface text-ink font-semibold border-line-strong shadow-[0_1px_3px_rgba(27,24,19,0.12)]'
                 : 'bg-transparent text-ink-soft font-medium border-transparent hover:text-ink data-pressed:bg-line data-pressed:text-ink'
             }`}
           >
             {option.icon && (
-              <span className="inline-flex shrink-0 [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{option.icon}</span>
+              <span className={`inline-flex shrink-0 ${tiles ? '[&>svg]:w-10 [&>svg]:h-6' : '[&>svg]:w-[1.1em] [&>svg]:h-[1.1em]'}`}>
+                {option.icon}
+              </span>
             )}
             {option.label}
           </button>

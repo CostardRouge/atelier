@@ -58,6 +58,7 @@ import { driveRibbon } from './drive-ribbon';
 import { loadLook } from './look-text';
 import { NEW_CARD, badgeMoment, badgeWindowFor, cardScene } from './summary-card';
 import { SummaryCardRows } from './summary-card-panel';
+import { AHEAD_GLYPHS, DRIVE_LABEL_GLYPHS, DRIVE_PICTURE_GLYPHS, GROUND_GLYPHS, PATH_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
 import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
@@ -365,11 +366,12 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="The shape of the road"
+            tiles
             value={o.path}
             onChange={(path) => set({ path })}
             options={[
-              { id: 'curved', label: 'Curved' },
-              { id: 'straight', label: 'Straight' },
+              { id: 'curved', label: 'Curved', icon: PATH_GLYPHS.curved },
+              { id: 'straight', label: 'Straight', icon: PATH_GLYPHS.straight },
             ]}
           />
         </FieldRow>
@@ -378,12 +380,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="How the road ahead is drawn"
+            tiles
             value={o.ahead}
             onChange={(ahead) => set({ ahead })}
             options={[
-              { id: 'dashed', label: 'Dashed' },
-              { id: 'faint', label: 'Faint' },
-              { id: 'hidden', label: 'Hidden' },
+              { id: 'dashed', label: 'Dashed', icon: AHEAD_GLYPHS.dashed },
+              { id: 'faint', label: 'Faint', icon: AHEAD_GLYPHS.faint },
+              { id: 'hidden', label: 'Hidden', icon: AHEAD_GLYPHS.hidden },
             ]}
           />
         </FieldRow>
@@ -431,13 +434,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="How the pictures are shown"
+            tiles
             value={o.pictures}
             onChange={(pictures) => set({ pictures })}
             options={[
-              { id: 'cards', label: 'Prints' },
-              { id: 'fill', label: 'Fill' },
-              { id: 'backdrop', label: 'Behind' },
-              { id: 'none', label: 'None' },
+              { id: 'cards', label: 'Prints', icon: DRIVE_PICTURE_GLYPHS.cards },
+              { id: 'fill', label: 'Fill', icon: DRIVE_PICTURE_GLYPHS.fill },
+              { id: 'backdrop', label: 'Behind', icon: DRIVE_PICTURE_GLYPHS.backdrop },
+              { id: 'none', label: 'None', icon: DRIVE_PICTURE_GLYPHS.none },
             ]}
           />
         </FieldRow>
@@ -643,10 +647,11 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               if (ground === 'tiles') allowTiles(true);
               set({ ground });
             }}
+            tiles
             options={[
-              { id: 'paper', label: 'Paper' },
-              { id: 'tiles', label: 'OSM map' },
-              { id: 'picture', label: 'Picture' },
+              { id: 'paper', label: 'Paper', icon: GROUND_GLYPHS.paper },
+              { id: 'tiles', label: 'OSM map', icon: GROUND_GLYPHS.tiles },
+              { id: 'picture', label: 'Picture', icon: GROUND_GLYPHS.picture },
             ]}
           />
         </FieldRow>
@@ -699,12 +704,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="Where the route sits in the frame"
+            tiles
             value={o.position}
             onChange={(position) => set({ position })}
             options={[
-              { id: 'top', label: 'Top' },
-              { id: 'middle', label: 'Middle' },
-              { id: 'bottom', label: 'Bottom' },
+              { id: 'top', label: 'Top', icon: POSITION_GLYPHS.top },
+              { id: 'middle', label: 'Middle', icon: POSITION_GLYPHS.middle },
+              { id: 'bottom', label: 'Bottom', icon: POSITION_GLYPHS.bottom },
             ]}
           />
         </FieldRow>
@@ -736,14 +742,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   : 'The day each stop was shot on. A name that would sit on another, or on a print, is left out.'
           }
         >
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="Which stops carry a name"
             value={o.labels}
             onChange={(labels) => set({ labels })}
             options={[
-              { id: 'none', label: 'None' },
-              { id: 'ends', label: 'The two ends' },
-              { id: 'all', label: 'Every stop' },
+              { id: 'none', label: 'None', icon: DRIVE_LABEL_GLYPHS.none },
+              { id: 'ends', label: 'The ends', title: 'The two ends', icon: DRIVE_LABEL_GLYPHS.ends },
+              { id: 'all', label: 'Every stop', icon: DRIVE_LABEL_GLYPHS.all },
             ]}
           />
         </FieldRow>
@@ -821,11 +829,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="How the vehicle pulls away and stops"
             value={o.easing}
             onChange={(easing) => set({ easing })}
-            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
+            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
           />
         </FieldRow>
         <FieldRow label="Hold first" hint={o.delaySeconds > 0 ? 'The vehicle sits at the first stop this long before it moves.' : undefined}>

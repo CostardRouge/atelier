@@ -5,6 +5,7 @@
  * opener has a heading, the wide shots, and the fine settings behind a link.
  */
 
+import { CAMERA_GLYPHS, ORIENTATION_GLYPHS } from './choice-glyphs';
 import { useState } from 'react';
 import Button from '../../ui/Button';
 import { FieldRow, RangeField, ToggleField } from '../../ui/Inspector';
@@ -72,9 +73,10 @@ export function CameraRows({ o, set, viewKm, fresh, words, heading }: CameraRows
           // A piece that never chose a width starts Follow on Calm; one
           // stored with a look keeps it.
           onChange={(camera) => set(camera === 'follow' && fresh ? { camera, ...presetValues('calm', keys) } : { camera })}
+          tiles
           options={[
-            { id: 'whole', label: words.whole },
-            { id: 'follow', label: words.follow },
+            { id: 'whole', label: words.whole, icon: CAMERA_GLYPHS.whole },
+            { id: 'follow', label: words.follow, icon: CAMERA_GLYPHS.follow },
           ]}
         />
       </FieldRow>
@@ -148,9 +150,10 @@ export function CameraRows({ o, set, viewKm, fresh, words, heading }: CameraRows
                 label="Which way is up"
                 value={o.orientation}
                 onChange={(orientation) => set({ orientation })}
+                tiles
                 options={[
-                  { id: 'north', label: 'North up' },
-                  { id: 'heading', label: 'Heading up' },
+                  { id: 'north', label: 'North up', icon: ORIENTATION_GLYPHS.north },
+                  { id: 'heading', label: 'Heading up', icon: ORIENTATION_GLYPHS.heading },
                 ]}
               />
             </FieldRow>
