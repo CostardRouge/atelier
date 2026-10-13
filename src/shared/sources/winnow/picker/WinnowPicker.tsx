@@ -941,8 +941,10 @@ export default function WinnowPicker({
                     <MoreTiles key={limit} as={view === 'book' ? 'div' : 'li'} onVisible={() => setLimit((n) => n + BATCH)} />
                   );
                   // Rows pinned in pixels: an `auto` row in a scrolling tile
-                  // grid is clipped to a sliver (`frontend.md`).
-                  const grid = `m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`;
+                  // grid is clipped to a sliver (`frontend.md`). The padding is
+                  // the focused tile's ring (2 px out, 2 px wide): without it the
+                  // scroller clips the ring on the grid's outer edges.
+                  const grid = `m-0 p-1 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`;
                   const cells = (list: PickItem[]) =>
                     list.map((it) => {
                       const pile = it.pileId === null ? undefined : piles.get(it.pileId);
