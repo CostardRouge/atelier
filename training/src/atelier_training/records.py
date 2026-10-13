@@ -147,38 +147,65 @@ def read_records(out: Path) -> list[dict[str, Any]]:
     return rows
 
 
+_LUMA = np.array([0.2126, 0.7152, 0.0722], np.float32)
+_SPREAD = 0.22  # the luma deviation the synthetic taste calls "enough contrast"
+
+
+def _synthetic_develop(img: np.ndarray) -> dict[str, float]:
+    """The sliders the synthetic taste writes over a picture: exposure lifts a dark one, contrast
+    answers a flat one, temperature answers the blue–red balance, the eight others stay at rest."""
+    luma = img @ _LUMA
+    mean = img.reshape(-1, 3).mean(axis=0)
+    return {
+        "exposure": round(float(np.clip((0.5 - luma.mean()) * 3.0, -3, 3)), 3),
+        "contrast": round(float(np.clip((_SPREAD - luma.std()) * 200.0, -60, 60)), 2),
+        "temperature": round(float(np.clip((mean[2] - mean[0]) * 150.0, -100, 100)), 2),
+        "brightness": 0.0, "highlights": 0.0, "shadows": 0.0, "whites": 0.0, "blacks": 0.0,
+        "tint": 0.0, "saturation": 0.0, "vibrance": 0.0,
+    }
+
+
+def _needing_nothing(img: np.ndarray, rounds: int = 6) -> np.ndarray:
+    """Bend a picture until the synthetic taste would leave it alone (mean luma 0.5, the asked spread,
+    red and blue balanced) — so an untouched record's zeros are the picture's own answer, not noise."""
+    for _ in range(rounds):
+        luma = img @ _LUMA
+        img = np.clip(img, 1e-4, 1) ** (np.log(0.5) / np.log(max(float(luma.mean()), 1e-3)))
+        mean = img.reshape(-1, 3).mean(axis=0)
+        img = np.clip(img * (mean.mean() / np.maximum(mean, 1e-3)), 0, 1)
+        spread = float((img @ _LUMA).std())
+        img = np.clip(0.5 + (img - 0.5) * (_SPREAD / max(spread, 1e-3)), 0, 1)
+    return img.astype(np.float32)
+
+
 def synthetic_training_file(path: Path, count: int = 40, seed: int = 3, size: int = 64) -> Path:
-    """An Atelier training file whose sliders FOLLOW the picture, so a model can be checked to learn it:
-    exposure lifts a dark picture, temperature answers the blue–red balance, contrast is a taste constant."""
+    """An Atelier training file whose sliders FOLLOW the picture in every record, so a model can be checked
+    to learn it (``_synthetic_develop``); every fifth picture is untouched and MADE to need nothing."""
     from .synthetic import make_picture
 
     rng = np.random.default_rng(seed)
     pairs = []
     for i in range(count):
         img = make_picture(rng, size, size) ** float(rng.uniform(0.6, 1.8))  # vary the brightness
-        luma = float((img @ np.array([0.2126, 0.7152, 0.0722], np.float32)).mean())
+        touched = i % 5 != 0
+        if not touched:
+            img = _needing_nothing(img)
         mean = img.reshape(-1, 3).mean(axis=0)
-        develop = {
-            "exposure": round(float(np.clip((0.5 - luma) * 3.0, -3, 3)), 3),
-            "contrast": 20.0,
-            "temperature": round(float(np.clip((mean[2] - mean[0]) * 150.0, -100, 100)), 2),
-            "brightness": 0.0, "highlights": 0.0, "shadows": 0.0, "whites": 0.0, "blacks": 0.0,
-            "tint": 0.0, "saturation": 0.0, "vibrance": 0.0,
-        }
+        develop = _synthetic_develop(img) if touched else dict.fromkeys(SLIDERS, 0.0)
         buf = io.BytesIO()
         Image.fromarray((img * 255).round().astype(np.uint8)).save(buf, format="JPEG", quality=92)
         data_url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-        hist, _ = np.histogram(img @ np.array([0.2126, 0.7152, 0.0722], np.float32), bins=256, range=(0, 1))
+        hist, _ = np.histogram(img @ _LUMA, bins=256, range=(0, 1))
         pairs.append({
             "roll": {"id": "synthetic", "name": "Synthetic"},
             "picture": {"id": f"p{i:03d}", "name": f"p{i:03d}.jpg", "size": 0, "hash": None, "variant": None},
-            "edits": ["develop"] if i % 5 else [],
+            "edits": ["develop"] if touched else [],
             "agent": i % 17 == 0,
             "shot": {"vignette": data_url, "aspect": 1.0, "natural": None, "viaRawPreview": False,
                      "stats": {"bins": hist.tolist(), "total": int(hist.sum()),
                                "linearMean": [float(v) for v in mean], "counted": int(hist.sum())},
                      "exif": {"iso": 400, "exposureTime": 1 / 250, "fNumber": 2.8, "focalLength35": 35}},
-            "record": {"develop": develop if i % 5 else dict.fromkeys(SLIDERS, 0.0)},
+            "record": {"develop": develop},
         })
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"kind": KIND, "version": 1, "exportedAt": "2026-10-13T00:00:00Z", "pairs": pairs}),

@@ -174,6 +174,18 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   in PyTorch 2.14 the legacy path raises a `DeprecationWarning` the tests
   treat as an error. The file is run back through onnxruntime against torch
   before it is called exported; batch is fixed at one (the browser's case).
+- **The synthetic training file's sliders follow the picture in EVERY
+  record** (`_synthetic_develop`: exposure from the mean luma, contrast from
+  its spread, temperature from the blue–red balance), and an untouched
+  record's picture is BENT until that taste would leave it alone
+  (`_needing_nothing`). The first version wrote zeros over pictures that
+  called for an edit: label noise, on which the e2e bar (MAE < 0.6 of
+  predicting nothing) was a coin toss across seeds and CPUs — 0.47–0.73
+  measured, CI failed at 0.61 where the same torch wheel passed here at
+  0.600. The test now trains 120 records for 120 epochs (a second of
+  training; the cost of the test is the PNGs and the ONNX run-back) and
+  measures 0.22–0.35 on six seeds. A threshold on a learning curve needs
+  that margin, never a seed that happens to pass.
 - **The Atelier side (B4) is NOT built here** — his call between importing
   the M2 `.cube` (free) and a browser verb over `onnxruntime-web` (14–28 MB
   of wasm in `dist/`, measured earlier); a record's RECOVERY for a Winnow

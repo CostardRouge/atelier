@@ -20,7 +20,10 @@ from atelier_training.records import (  # noqa: E402
     unpack,
 )
 
-TINY = ["develop.thumb=32", "develop.width=4", "develop.hidden=32", "develop.epochs=40", "develop.batch_size=8",
+# 120 records and 120 epochs: the training itself costs a second (0.02 s an epoch), and with 60 × 40 the
+# bar below was a coin toss across seeds and CPUs (0.47–0.73 measured; CI failed at 0.61); here it measures
+# 0.22–0.35 on six seeds.
+TINY = ["develop.thumb=32", "develop.width=4", "develop.hidden=32", "develop.epochs=120", "develop.batch_size=8",
         "develop.learning_rate=0.003", "develop.val_fraction=0.2", "develop.eval_every=10"]
 SET = [arg for o in TINY for arg in ("--set", o)]
 
@@ -58,7 +61,7 @@ def test_a_fresh_model_predicts_nothing_within_the_ranges():
 
 def test_training_beats_predicting_nothing_and_exports(workspace, capsys):
     config = load_config(overrides=TINY)
-    file = synthetic_training_file(workspace / "pairs.json", count=60, size=32, seed=8)
+    file = synthetic_training_file(workspace / "pairs.json", count=120, size=32, seed=8)
     assert main(["records", str(file), *SET]) == 0
     assert main(["train-develop", "--name", "e2e", *SET]) == 0
     runs = [r for r in sorted(config.paths.runs.iterdir()) if "-develop-" in r.name]
