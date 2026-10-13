@@ -13,6 +13,7 @@ import { daysBetween, formatIsoDate, type IsoDate } from '../../shared/roadtrip/
 import {
   dialAngles,
   dialRadius,
+  framedPoints,
   placeLabels,
   pathMidpoint,
   progressIndex,
@@ -65,34 +66,6 @@ interface TripMapViewProps {
    * in place of the straight strokes between them. Empty: those strokes.
    */
   road?: RoadLine;
-}
-
-/**
- * The places, and the road's points inside their box grown by its own size
- * on every side (two degrees at least) — so a road bowing past the places is framed, while
- * the far end of a flight the track carries is not.
- */
-function framedPoints(places: readonly { lat: number; lon: number }[], road: RoadLine): { lat: number; lon: number }[] {
-  if (!places.length || !road.pieces.length) return [...places];
-  let west = Infinity;
-  let east = -Infinity;
-  let south = Infinity;
-  let north = -Infinity;
-  for (const p of places) {
-    west = Math.min(west, p.lon);
-    east = Math.max(east, p.lon);
-    south = Math.min(south, p.lat);
-    north = Math.max(north, p.lat);
-  }
-  const dx = Math.max(2, east - west);
-  const dy = Math.max(2, north - south);
-  const out = [...places];
-  for (const piece of road.pieces) {
-    for (const f of piece) {
-      if (f.lon >= west - dx && f.lon <= east + dx && f.lat >= south - dy && f.lat <= north + dy) out.push(f);
-    }
-  }
-  return out;
 }
 
 // --- the map's picture -------------------------------------------------------
@@ -200,7 +173,7 @@ export default function TripMapView({
   const onRoad = road.pieces.length > 0;
   // What the trip is framed on: its places, and the road where it runs near
   // them — never the far end of a flight home the track may carry.
-  const framed = useMemo(() => framedPoints(model.stages.flatMap((s) => s.places), road), [model.stages, road]);
+  const framed = useMemo(() => framedPoints(model.stages.flatMap((s) => s.places), road.pieces), [model.stages, road]);
   // Each stage's tinted path laid on the road, found once per trip and road —
   // never per frame: the hops search the whole line.
   const stageLines = useMemo(() => stageRoads(model.stages, road), [model.stages, road]);

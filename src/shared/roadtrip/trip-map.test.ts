@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  framedPoints,
   stageRoads,
   dialAngles,
   dialRadius,
@@ -113,6 +114,38 @@ describe('tripMap', () => {
     expect(map.stages[0].places.map((p) => p.name)).toEqual(['Perth']);
     expect(map.stages[0].anchor).toMatchObject({ lat: -31.95, lon: 115.86 });
     expect(map.offMap.unplaced).toEqual([]);
+  });
+});
+
+describe('framedPoints', () => {
+  // Australia, and a day at home in France before the flight.
+  const home = [
+    { lat: 48.85, lon: 2.35 },
+    { lat: 48.86, lon: 2.36 },
+  ];
+  const drive = [
+    { lat: -31.95, lon: 115.86 },
+    { lat: -32.5, lon: 117 },
+    { lat: -33.8, lon: 121.9 },
+    { lat: -34.9, lon: 138.6 },
+  ];
+  const box = (pts: readonly { lat: number; lon: number }[]) => ({
+    west: Math.min(...pts.map((p) => p.lon)),
+    east: Math.max(...pts.map((p) => p.lon)),
+  });
+
+  it('frames the places and the road near them, never the far end of a flight', () => {
+    const places = [drive[0], drive[3]];
+    const out = framedPoints(places, [home, drive]);
+    expect(box(out).west).toBeGreaterThan(100);
+    expect(out).toEqual(expect.arrayContaining([drive[1], drive[2]]));
+  });
+
+  it('frames the longest piece of road when the trip has no place yet', () => {
+    const out = framedPoints([], [home, drive]);
+    expect(out.length).toBe(drive.length);
+    expect(box(out)).toEqual({ west: 115.86, east: 138.6 });
+    expect(framedPoints([], [])).toEqual([]);
   });
 });
 

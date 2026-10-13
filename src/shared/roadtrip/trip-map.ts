@@ -227,6 +227,47 @@ export function stageRoads(stages: readonly MapStage[], road: RoadLine): Map<str
 }
 
 /**
+ * What a map of the trip's road is FRAMED on (the overview's Map, Trip
+ * settings → Road): the places, and the road's points inside their box grown
+ * by its own size on every side (two degrees at least) — so a road bowing
+ * past the places is framed, while the far end of a flight the track carries
+ * (home, the day before the trip) is not. With no place, the same rule
+ * around the LONGEST piece of road: framing every fix put the whole Earth on
+ * screen for a trip whose track began at home (2026-10-13).
+ */
+export function framedPoints(places: readonly MapPoint[], pieces: readonly (readonly MapPoint[])[]): MapPoint[] {
+  const longest = pieces.reduce<readonly MapPoint[] | null>((best, p) => (!best || roughKm(p) > roughKm(best) ? p : best), null);
+  const anchor = places.length ? places : (longest ?? []);
+  if (!anchor.length || !pieces.length) return [...places];
+  let west = Infinity;
+  let east = -Infinity;
+  let south = Infinity;
+  let north = -Infinity;
+  for (const p of anchor) {
+    west = Math.min(west, p.lon);
+    east = Math.max(east, p.lon);
+    south = Math.min(south, p.lat);
+    north = Math.max(north, p.lat);
+  }
+  const dx = Math.max(2, east - west);
+  const dy = Math.max(2, north - south);
+  const out = [...places];
+  for (const piece of pieces) {
+    for (const f of piece) {
+      if (f.lon >= west - dx && f.lon <= east + dx && f.lat >= south - dy && f.lat <= north + dy) out.push(f);
+    }
+  }
+  return out;
+}
+
+/** A piece's length in degrees, near enough to say which is longest. */
+function roughKm(piece: readonly MapPoint[]): number {
+  let d = 0;
+  for (let i = 1; i < piece.length; i++) d += Math.hypot(piece[i].lat - piece[i - 1].lat, (piece[i].lon - piece[i - 1].lon) * Math.cos((piece[i].lat * Math.PI) / 180));
+  return d;
+}
+
+/**
  * Where the open day sits in the story, as an index into `stages` (lived
  * order): the stage covering the day — the LAST one on a travel day, as
  * `stageAt` resolves it — else the last one ended before it; −1 before the

@@ -52,7 +52,7 @@ import { driveBasemap, driveTrack } from './drive-paint';
 import { groundNote, type BasemapSet } from './basemap-strip';
 import { STREAM_DECODED, STRIP_TILES } from '../../map/tile-strip';
 import { TILE_PX, planTiles } from '../../map/tile-math';
-import { distanceKm, roadLine, type RoadFix } from '../road-track';
+import { DEFAULT_ROAD_DRIVE, distanceKm, roadLine, type RoadFix } from '../road-track';
 
 /** The pyramid's tiles as rasters would be described: zoom, region, size. */
 const patchesOf = (set: BasemapSet) =>
@@ -1505,7 +1505,7 @@ describe('the trip’s road — the vehicle drives it and the counter counts it'
   });
 
   it('drives a STEERED road round its corners, and still counts the road', () => {
-    const steered = roadLine(fixes, 'raw', 0, { lookM: 3000, radiusM: 500 });
+    const steered = roadLine(fixes, 'raw', 0, { ...DEFAULT_ROAD_DRIVE, style: 'driver', lookM: 3000, radiusM: 500 });
     const plain = drivePlan(route, o, true, false, undefined, road)!;
     const plan = drivePlan(route, o, true, false, undefined, steered)!;
     expect(plan.roadHops).toBe(1);

@@ -9,18 +9,23 @@ import {
   lineKm,
   makeTripRoad,
   NO_ROAD,
+  readRoadDrive,
   readRoadSteer,
   readTripRoad,
   roadBetween,
   roadHops,
   roadKms,
   roadLine,
-  roadSteerOf,
+  roadDriveOf,
   simplify,
   steerRoad,
   thin,
+  tripRoadFixes,
   tripRoadLine,
+  primeTripRoadLine,
   withoutStays,
+  DEFAULT_ROAD_DRIVE,
+  type RoadDrive,
   type RoadFix,
 } from './road-track';
 
@@ -311,7 +316,7 @@ describe('steering', () => {
 
   it('steers the line it draws, never what it counts', () => {
     const plain = roadLine(noisy, 'raw', 0);
-    const steered = roadLine(noisy, 'raw', 0, { lookM: 500, radiusM: 50 });
+    const steered = roadLine(noisy, 'raw', 0, { ...DEFAULT_ROAD_DRIVE, style: 'driver', lookM: 500, radiusM: 50 });
     expect(steered.km).toBe(plain.km);
     expect(steered.points).toBe(plain.points);
     expect(steered.pieces[0]).not.toEqual(plain.pieces[0]);
@@ -323,26 +328,96 @@ describe('steering', () => {
     expect(hopSteered.km).toBeLessThan(hopPlain.km * 1.02);
   });
 
-  it('is read from a stored road, junk as no steering', () => {
-    expect(readRoadSteer({ lookM: 500, radiusM: 50 })).toEqual({ lookM: 500, radiusM: 50 });
+  it('never leaves the road for good: a stay’s cloud or a turn too tight puts it back on the line', () => {
+    // East, then a parked phone writing for three hours around one spot, then east again.
+    const before = drive({ lat: -31.5, lon: 128 }, 1, 80, 1);
+    const at = before[before.length - 1];
+    const cloud: RoadFix[] = [];
+    for (let k = 1; k <= 40; k++) {
+      cloud.push({ t: at.t + k * 270, lat: at.lat + Math.sin(k * 2.1) * 0.0006, lon: at.lon + Math.cos(k * 1.7) * 0.0006 });
+    }
+    const after = drive({ lat: at.lat, lon: at.lon }, 1, 80, 1, at.t + 41 * 270).slice(1);
+    const fixes = [...before, ...cloud, ...after];
+    for (const look of [300, 500]) {
+      const steered = steerRoad(fixes, { lookM: look, radiusM: 25 });
+      // It drives the second hour too: points all along it, none far off the road.
+      const east = after[after.length - 1].lon;
+      expect(steered.filter((p) => p.lon > at.lon + 0.3 && p.lon < east - 0.05).length).toBeGreaterThan(5);
+      for (const p of steered) expect(Math.abs(p.lat + 31.5)).toBeLessThan(0.01);
+    }
+  });
+});
+
+describe('the drive', () => {
+  const span = { startDate: '2025-06-30', endDate: '2025-07-01' };
+  const ZIG = 0.000585;
+  const noisy = drive({ lat: -31.5, lon: 128 }, 2, 80, 1).map((f, i) => ({ ...f, lat: f.lat + (i % 2 ? ZIG : -ZIG) }));
+
+  it('is read from a stored road, each setting on its default where it is junk', () => {
+    expect(readRoadDrive({ style: 'ribbon', withinM: 50, smoothM: 5000, lookM: 750, radiusM: 25 })).toEqual({
+      style: 'ribbon',
+      withinM: 50,
+      smoothM: 5000,
+      lookM: 750,
+      radiusM: 25,
+    });
+    expect(readRoadDrive({ style: 'ribbon', withinM: 7 })).toEqual({ ...DEFAULT_ROAD_DRIVE, style: 'ribbon' });
+    expect(readRoadDrive({ style: 'fly' })).toBeUndefined();
+    expect(readRoadDrive('fast')).toBeUndefined();
     expect(readRoadSteer({ lookM: 500, radiusM: 7 })).toEqual({ lookM: 500, radiusM: 50 });
     expect(readRoadSteer({ lookM: 42, radiusM: 50 })).toBeNull();
-    expect(readRoadSteer('fast')).toBeNull();
-    // On by default, a road kept before steering existed included; null is off.
-    const road = makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, null, 1)!;
-    expect(road.steer).toBeUndefined();
-    expect(roadSteerOf(road)).toEqual({ lookM: 500, radiusM: 50 });
-    expect(roadSteerOf(readTripRoad(JSON.parse(JSON.stringify(road))))).toEqual({ lookM: 500, radiusM: 50 });
+  });
+
+  it('is the ribbon by default, a road kept before the drive existed included', () => {
+    const road = makeTripRoad(noisy, span, null, 1)!;
+    expect(road.drive).toBeUndefined();
+    expect(roadDriveOf(road)).toEqual(DEFAULT_ROAD_DRIVE);
+    expect(DEFAULT_ROAD_DRIVE.style).toBe('ribbon');
+    expect(roadDriveOf(readTripRoad(JSON.parse(JSON.stringify(road))))).toEqual(DEFAULT_ROAD_DRIVE);
+  });
+
+  it('reads the older steer as the driver it chose, or point to point where it was off', () => {
+    const road = makeTripRoad(noisy, span, null, 1)!;
     const off = readTripRoad(JSON.parse(JSON.stringify({ ...road, steer: null })))!;
-    expect(roadSteerOf(off)).toBeNull();
-    expect(roadSteerOf(readTripRoad({ ...road, steer: { lookM: 42 } }))).toEqual({ lookM: 500, radiusM: 50 });
-    expect(makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, off, 2)!.steer).toBeNull();
-    const every = { ...road, detail: 0 };
-    expect(tripRoadLine(every).pieces[0]).not.toEqual(tripRoadLine({ ...every, steer: null }).pieces[0]);
-    expect(tripRoadLine(every).km).toBe(tripRoadLine({ ...every, steer: null }).km);
-    const steering = { ...road, steer: { lookM: 750, radiusM: 25 } };
-    expect(readTripRoad(JSON.parse(JSON.stringify(steering)))!.steer).toEqual({ lookM: 750, radiusM: 25 });
-    // A re-import keeps how the author steers.
-    expect(makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, steering, 2)!.steer).toEqual({ lookM: 750, radiusM: 25 });
+    expect(roadDriveOf(off).style).toBe('fixes');
+    const steering = readTripRoad(JSON.parse(JSON.stringify({ ...road, steer: { lookM: 750, radiusM: 25 } })))!;
+    expect(roadDriveOf(steering)).toEqual({ ...DEFAULT_ROAD_DRIVE, style: 'driver', lookM: 750, radiusM: 25 });
+    // Junk steering is no choice at all: the default.
+    expect(roadDriveOf(readTripRoad({ ...road, steer: { lookM: 42 } }))).toEqual(DEFAULT_ROAD_DRIVE);
+    // A drive wins over an older steer.
+    const both = readTripRoad({ ...road, steer: null, drive: { ...DEFAULT_ROAD_DRIVE, style: 'driver' } })!;
+    expect(roadDriveOf(both).style).toBe('driver');
+  });
+
+  it('survives a re-import, and switching keeps every style’s own settings', () => {
+    const road = makeTripRoad(noisy, span, null, 1)!;
+    const mine: RoadDrive = { style: 'driver', lookM: 750, radiusM: 25, withinM: 50, smoothM: 5000 };
+    const kept = makeTripRoad(noisy, span, { ...road, drive: mine }, 2)!;
+    expect(kept.drive).toEqual(mine);
+    const back = readTripRoad(JSON.parse(JSON.stringify({ ...kept, drive: { ...mine, style: 'ribbon' } })))!;
+    expect(back.drive).toEqual({ ...mine, style: 'ribbon' });
+  });
+
+  it('draws differently by style, and counts the same whatever drives it', () => {
+    const road = { ...makeTripRoad(noisy, span, null, 1)!, detail: 0 };
+    const lines = (['fixes', 'driver', 'ribbon'] as const).map((style) => tripRoadLine({ ...road, drive: { ...DEFAULT_ROAD_DRIVE, style } }));
+    expect(lines[0].pieces[0]).toHaveLength(noisy.length);
+    expect(lines[1].pieces[0]).not.toEqual(lines[0].pieces[0]);
+    expect(lines[2].pieces[0]).not.toEqual(lines[0].pieces[0]);
+    for (const l of lines) {
+      expect(l.km).toBe(lines[0].km);
+      expect(l.points).toBe(lines[0].points);
+    }
+  });
+
+  it('takes a line computed elsewhere for the very road it was computed for', () => {
+    const road = makeTripRoad(noisy, span, null, 1)!;
+    const line = roadLine(tripRoadFixes(road), road.mode, road.detail, roadDriveOf(road));
+    primeTripRoadLine(road, line);
+    expect(tripRoadLine(road)).toBe(line);
+    // As the crow flies there is nothing to keep.
+    const crow = { ...road, mode: 'crow' as const };
+    primeTripRoadLine(crow, line);
+    expect(tripRoadLine(crow)).toBe(NO_ROAD);
   });
 });

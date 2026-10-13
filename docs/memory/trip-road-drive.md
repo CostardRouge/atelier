@@ -1,7 +1,7 @@
 # A trip's ROAD as the openers drive and draw it
 
-Read when you touch `roadHops` / `roadBetween` / `steerRoad` / `roadKms` in
-`shared/roadtrip/road-track.ts`, how Virée (`drive-plan.ts`, `drive-paint.ts`)
+Read when you touch `roadHops` / `roadBetween` / `steerRoad` / `roadKms` /
+`RoadDrive` in `shared/roadtrip/road-track.ts`, `road-ribbon.ts`, how Virée (`drive-plan.ts`, `drive-paint.ts`)
 or the Itinerary (`map-plan.ts`, `map.tsx`) lays a hop on the road, the
 vehicle's heading, or the overview's map of the road. What the road IS (the
 modes, the detail, `TripDoc.road`, the panel, GPX) is in `trip-road.md`.
@@ -18,40 +18,51 @@ road, a flight between, an order never driven — keeps its curve. A flight
 ferry (slow, over water) stays a straight hop. Verified on his track:
 Streaky Bay → Esperance follows the Eyre Highway for 1 557 km.
 
-## The vehicle STEERS the road (2026-10-09, his pick of option B)
+## The vehicle DRIVES the road: three styles, the RIBBON by default (2026-10-13)
 
-His report: on a Polarsteps road the car trembled — it drove straight from
-fix to fix, so each fix's GPS scatter was a turn of the wheel. The lab
-(https://claude.ai/artifact/EDJB8AfqbKStpfRKnEevcQ) weighed four cures: a
-smoothing spline with a passing precision (A), a driver aiming ahead (B),
-more sliders on the points (C: Douglas–Peucker KEEPS the noisiest fix, and a
-polygon of fewer points still turns at each one) and the heading alone (D:
-the car slid instead). He chose **B with several sliders**. `steerRoad` is
-pure pursuit on each piece after the detail: from the first point the
-vehicle aims at the MEAN of the recorded line between ½ and 1½ look-ahead
-(a fix to one side is outvoted; averaging only helps once the look-ahead
-exceeds the fixes' spacing), turns no tighter than the radius, steps along
-ARCS (a sixth of the look-ahead, the radius where it turns its tightest) and
-keeps a point when the arc strays 5 m from its chord, turns 10° or runs
-2 km — no Douglas–Peucker afterwards (324 ms of a 22 000 km year's 525). A
-year of minute fixes with ±65 m noise: 157–250 ms at 500 m / 50 m, measured
-headless; cached per stored road like the rest of `tripRoadLine`. **The
-line drawn is the line driven** (Virée, the Itinerary, the overview's map),
-but **what is counted is the road as recorded**: every steered point carries
-`km` along the recorded piece, `roadKms` reads it between two such points,
-so `RoadLine.km`, a hop's km, the counter and the Itinerary's readout never
-lose the 1–5 % the rounded corners shorten. **ON by default at 500 m / 50 m**
-(2026-10-09, his call): `TripRoad.steer` ABSENT is the default — so a road
-kept before steering existed steers too, with no version bump —, `null` is
-off by the author, an object his setting; read through `roadSteerOf` and
-never `road.steer` raw (junk reads as the default, a re-import keeps what
-he set). Two sliders under Detail — Look ahead (0 = off, then `ROAD_LOOKS`
-200 m–3 km) and Turn radius (`ROAD_RADII` 10–500 m, greyed when off) —, the
-reason behind the panel's ⓘ. A hand-placed point is on the RECORDED line;
-the steered one passes near it, not through it. The panel's per-mode km and Deduce's offer read the line
-with `steer: null` (the same km, without a drive's cost). The Road pane's map
-(`RoadMap`) is fed the line the same way, UNSTEERED: a hand point goes on
-the line as recorded, and the steered one passes near it.
+His report on the driver (option B of the road-tremor lab,
+https://claude.ai/artifact/EDJB8AfqbKStpfRKnEevcQ, his pick of 10-09): the
+car «flotte et tremblote», and he wanted to switch between the lab's options.
+**Decision**: `TripRoad.drive` (`RoadDrive`) — `fixes` (point to point),
+`driver` (`steerRoad`, B) and `ribbon` (`road-ribbon.ts`, the lab's A made
+local) — every style's settings kept side by side so a switch loses nothing;
+absent = `DEFAULT_ROAD_DRIVE`, the ribbon at 100 m / 3 km. The older `steer`
+is READ only: `null` → `fixes`, an object → `driver` with its values, absent →
+the default (so a road he never tuned moves to the ribbon; one he tuned stays
+on the driver until he switches). Read through `roadDriveOf`, never raw.
+**The ribbon**: fixes nearer than the corridor merged into their mean, a
+weighted cubic smoothing spline over arc length (Reinsch, one pentadiagonal
+system, weights = the road a fix stands for so dense and sparse fixes smooth
+alike, λ from `smoothM` as a half-power wavelength) in Mercator km (a
+conformal frame: the corridor stays round), then every fix still outside the
+corridor pulls (weight × (r/T)²) until the curve passes within it; the
+corridor WIDENS to 2× the fixes' local scatter (median over ±6 knots against
+a 2 km-scale curve) — no fix says where the road was better than its own
+noise, and holding each one in a town was a zigzag. Sampled by the spline's
+own bend (a cubic's bend peaks at its knots), kept at 2 m / 4° / 2 km —
+finer than the driver's 5 m / 10°, whose polygon corners are a twitch.
+**Measured** on the lab's synthetic road (5 draws, `moves`, GPS 45 m): bend
+jerk ×1.3 the true road's (driver ×1.7, point to point ×5.0), 64 m mean from
+the true road (driver 73), ≤ 92 m from any fix (driver 267); `raw`: driver
+342 m, ribbon 129 m. A 37 000 km synthetic year: ribbon 140–190 ms, driver
+340–440 ms. **Spikes — what was tried**: a fit residual misses them (a spike
+stretches the line's arc length, so any curve follows it); a leave-one-out
+residual alone dropped real sparse bends (a highway bend's middle fix sits
+as far from its neighbours' chord as a 400 m error: worst stray 87 → 350 m);
+the base-width rule alone dropped a dead end's tip (Cairns, 6.4 km cut). An
+error is now ALL of: ≥ max(4 × corridor, 300 m) from where its neighbours put
+it, they near theirs, further than they are apart, AND reached at ≥ 1.8× the
+neighbouring stretches' speed. A spike between sparse fixes is KEPT as a
+smooth bulge, on purpose. **The driver's own fixes**: it gave up at a stay's
+cloud (aim within 5 m → `break` → a straight line to the piece's end) and
+could orbit kilometres off with a tight radius; it now looks past the cloud
+and is put back on the line when further off than it aims or stalled 60 steps.
+**The line drawn is the line driven** (Virée, the Itinerary, the overview's
+map, the Road pane). **What is counted never depends on the drive**: every driven point carries
+`km` along the line at the detail (`countedKm`), `roadKms` reads it. The
+ribbon reads EVERY fix the mode kept, never the Douglas–Peucker line (which
+keeps a bend's noisiest fix). `roadHops`' `visits` skips 64-point blocks by
+bounding box — a ribbon year is ~50 000 points.
 
 ## Virée drives the road (2026-10-09)
 
