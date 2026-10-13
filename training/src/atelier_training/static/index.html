@@ -152,7 +152,12 @@
   </section>
 
   <section class="span">
-    <details><summary>Prepared pairs (input | edit), the first 24</summary><div class="pairs" id="pairs-grid" style="margin-top:10px"></div></details>
+    <details><summary>Prepared pairs (input | edit), the first 24</summary>
+      <div class="actions" style="margin-top:10px">
+        <label class="muted">from <select id="pairs-source"></select></label>
+        <label class="muted" title="Only the edits found inside their original (cropped, turned or straightened): left and right must show the same frame."><input type="checkbox" id="pairs-aligned"> aligned only</label>
+      </div>
+      <div class="pairs" id="pairs-grid" style="margin-top:10px"></div></details>
   </section>
 </main>
 <div class="tip" id="tip"></div>
@@ -397,11 +402,24 @@
 
   // ---- pairs ----
   async function loadPairs() {
-    const pairs = await api('/api/pairs?limit=24');
+    const sources = await api('/api/pairs/sources');
+    const select = $('#pairs-source'), was = select.value;
+    // Your own pairs first: the synthetic set is a test, and it sits at the head of the index.
+    const pick = was && sources.some(s => s.source === was) ? was
+      : (sources.find(s => s.source !== 'synthetic') || sources[0] || {}).source || '';
+    select.innerHTML = sources.map(s => `<option value="${esc(s.source)}">${esc(s.source)} (${s.count})</option>`).join('');
+    select.value = pick;
+    const q = new URLSearchParams({ limit: '24' });
+    if (pick) q.set('source', pick);
+    if ($('#pairs-aligned').checked) q.set('aligned', 'true');
+    const pairs = await api(`/api/pairs?${q}`);
     $('#pairs-grid').innerHTML = pairs.map(p =>
       `<figure><img loading="lazy" src="/api/pairs/preview?folder=${encodeURIComponent(p.folder)}" alt="${esc(p.id)}"><figcaption title="${esc(p.id)}">${esc(p.id)}</figcaption></figure>`
     ).join('') || '<p class="muted">Nothing prepared yet.</p>';
   }
+
+  $('#pairs-source').addEventListener('change', () => loadPairs().catch(e => logLine(`✗ ${e.message}`, true)));
+  $('#pairs-aligned').addEventListener('change', () => loadPairs().catch(e => logLine(`✗ ${e.message}`, true)));
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   async function refresh() { await Promise.all([loadStatus(), loadRuns(), loadPairs()]).catch(e => logLine(`✗ ${e.message}`, true)); }
