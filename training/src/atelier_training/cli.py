@@ -10,7 +10,7 @@ from pathlib import Path
 from . import __version__
 from .config import Config, load_config
 
-TORCH_MISSING = "PyTorch is not installed: run `make setup` (or `uv sync --extra torch`) first."
+TORCH_MISSING = "PyTorch is not installed: run `make setup` first."
 
 
 def _config(args: argparse.Namespace) -> Config:
@@ -302,7 +302,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from .device import module_available
 
     if not module_available("fastapi") or not module_available("uvicorn"):
-        print("✗ The dashboard needs FastAPI: run `make setup` (or `uv sync --extra ui`) first.")
+        print("✗ The dashboard needs FastAPI: run `make setup` first.")
         return 2
     from .serve import serve
 

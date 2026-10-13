@@ -1,7 +1,7 @@
 """Reading and writing pictures as float32 RGB in [0, 1], whatever the file.
 
 JPEG, PNG and TIFF (8 or 16 bit, through tifffile) are first-class. A RAW goes
-through rawpy, an OPTIONAL extra (`uv sync --extra raw`): without it a RAW is
+through rawpy, an OPTIONAL extra (installed by `make setup`): without it a RAW is
 reported, never silently skipped. Pillow reads a 48-bit PNG as 8 bits per
 channel — use TIFF when the precision matters.
 """
@@ -28,7 +28,7 @@ class RawSupportMissing(RuntimeError):
     def __init__(self, path: Path):
         super().__init__(
             f"{path.name} is a RAW file and RAW support is not installed. "
-            "Run `make setup` (or `uv sync --extra raw`) and try again."
+            "Run `make setup` and try again."
         )
 
 
@@ -38,7 +38,7 @@ class HeifSupportMissing(RuntimeError):
     def __init__(self, path: Path):
         super().__init__(
             f"{path.name} is a HEIF file and HEIF support is not installed. "
-            "Run `make setup` (or `uv sync --extra heif`) and try again."
+            "Run `make setup` and try again."
         )
 
 

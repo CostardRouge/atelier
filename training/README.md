@@ -35,9 +35,11 @@ make setup
 ```
 
 `make setup` installe Python 3.12, PyTorch (qui utilise la puce graphique du
-Mac, « MPS »), la lecture des RAW (rawpy) et MLX (optionnel). Compte quelques
-minutes la première fois. Tout va dans `training/.venv/` ; pour tout effacer,
-supprime ce dossier.
+Mac, « MPS »), la lecture des RAW (rawpy), l'export ONNX du second modèle et
+MLX (optionnel). Compte quelques minutes la première fois. Tout va dans
+`training/.venv/` ; pour tout effacer, supprime ce dossier. Pour réinstaller,
+repasse toujours par `make setup` : un `uv sync` à la main avec un seul
+`--extra` désinstalle les autres (PyTorch compris).
 
 ## 2. Premier lancement
 
