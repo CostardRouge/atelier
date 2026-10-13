@@ -229,14 +229,22 @@ export default function AssetSidebar({
     () => (connection ? (split.remote.get(connection.id) ?? []) : []),
     [split, connection],
   );
-  /** `"<host>/<id>"` → the Library asset id it became. */
-  const inLibrary = useMemo(() => {
-    const m = new Map<string, string>();
+  /**
+   * `"<host>/<id>"` → the Library asset id it became — the media itself, its
+   * picture or its clip. A flight log taken ALONE (*Logs only*) does not hold
+   * its clip, which can still be fetched and joins the log by base name; it
+   * is in `logsInLibrary` instead.
+   */
+  const { inLibrary, logsInLibrary } = useMemo(() => {
+    const media = new Map<string, string>();
+    const logs = new Set<string>();
     for (const a of remoteAssets) {
       const rid = assetRemoteId(a);
-      if (rid) m.set(rid, a.id);
+      if (!rid) continue;
+      if (a.parts.srt) logs.add(rid);
+      if (a.parts.video || a.parts.image) media.set(rid, a.id);
     }
-    return m;
+    return { inLibrary: media, logsInLibrary: logs };
   }, [remoteAssets]);
   /** Pool assets from the instance that the current span does not list. */
   const outOfScope = useMemo(() => {
@@ -910,6 +918,7 @@ export default function AssetSidebar({
           half={half}
           anchor={dayAnchor}
           inLibrary={inLibrary}
+          logsInLibrary={logsInLibrary}
           onAdd={addPicked}
           onClose={() => setBrowsing(false)}
         />

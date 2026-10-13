@@ -156,8 +156,8 @@ export default function AtlasTool() {
             {empties && (
               <div className="absolute inset-0 grid place-items-center p-6 pointer-events-none">
                 <p className="m-0 max-w-sm text-center text-sm text-on-media bg-black/55 px-4 py-3 rounded-paper">
-                  Select DJI clips — or loose <code className="font-mono">.srt</code> logs — in the Library, or add them from the panel: every
-                  flight&rsquo;s GPS track is drawn here, never its video.
+                  Select DJI clips — or loose <code className="font-mono">.srt</code> logs — in the Library, or add them from the panel (files,
+                  a folder, or your Winnow&rsquo;s logs alone): every flight&rsquo;s GPS track is drawn here, never its video.
                 </p>
               </div>
             )}

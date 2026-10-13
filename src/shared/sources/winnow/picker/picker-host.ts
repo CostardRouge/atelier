@@ -16,8 +16,22 @@ export interface PickerHost {
   title: string;
   /** Where the ticked media go, said in a pill beside the title: `Library`, `Roll · Whitsundays`. */
   destination: string;
-  /** Where it opens: always a day; a half when the host is looking at one (the sidebar). */
-  start: { day: string; half?: LibraryHalf | null };
+  /**
+   * Where it opens: a day, and a half when the host is looking at one (the
+   * sidebar). `scope: 'span'` opens on several days instead — `span` when the
+   * host names one, else the last span used on this instance
+   * (`picker/span.ts`, `openingSpan`).
+   */
+  start: {
+    day: string;
+    half?: LibraryHalf | null;
+    scope?: 'day' | 'span';
+    span?: DaySpan | null;
+    /** Open on the Logbook rather than the device's own choice of view. */
+    view?: 'grid' | 'book';
+    /** Read the drawn clips' flight logs at once, to draw their tracks. */
+    tracks?: boolean;
+  };
   /** The host's own day and the span around it, marked in the month (the sidebar's anchor). */
   anchor?: PickerAnchor | null;
   /** Already where this host would put it — drawn but never ticked. */
@@ -28,6 +42,12 @@ export interface PickerHost {
   openTicks: OpeningTicks;
   /** The rows this host can take at all; the others are not listed. Absent: every row. */
   accepts?: (row: WinnowAssetRow) => boolean;
+  /**
+   * A narrowing sent to the SERVER with every scope — what `accepts` would
+   * throw away anyway, asked for less so a long span is not cut short by the
+   * cap before the host's rows (Flight Atlas: clips only).
+   */
+  narrow?: { mediaType?: 'photo' | 'video' };
   /**
    * Controls drawn in the bar before the actions — the Library's *Proxies ·
    * Originals* and the weight it would download. Handed the ticked rows.
@@ -55,8 +75,10 @@ export interface PickerActionContext {
 
 export interface PickerAction {
   key: string;
-  /** The verb for `n` ticked media — `Add 12 to library`. */
-  label: (n: number) => string;
+  /** The verb for `n` ticked media — `Add 12 to library`; handed the rows for a verb that counts only some. */
+  label: (n: number, rows: readonly WinnowAssetRow[]) => string;
+  /** Whether the verb can act on these rows; absent, on any ticked row. */
+  enabled?: (rows: readonly WinnowAssetRow[]) => boolean;
   /**
    * Do it. Resolve `true` to close the picker (the add landed), anything else
    * to stay open — a failure the host has said, or a run that was stopped.

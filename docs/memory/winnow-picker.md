@@ -168,3 +168,86 @@ Space or looking unticks it; and the tile behind keeps the focus unless the
 look blurs it, so Enter would click that tile instead of ticking the picture
 on screen. While the lightbox is up the picker's Escape/Enter and its grid
 keys stand down (`useDialogKeys` takes `undefined`).
+
+## A SPAN scope beside Day and Folder (2026-10-13)
+
+**Decision.** The picker lists a SPAN of days as one scope (`picker/span.ts`,
+`SpanPicker.tsx`), his ask beside the Flight Atlas: the picker was day by day,
+and a trip or a season of flights is neither one day nor one Winnow session.
+**How to apply**:
+
+- **The request is the Day scope's own** (`allAssets({ dateFrom, dateTo })`)
+  with two different ends, capped at `SPAN_CAP` (3 000). A list that reaches
+  its scope's ceiling — Day, Span or Folder — is SAID on the status line
+  (`the first N only — narrow the span`), never cut in silence.
+- **Presets**: the host's own spans first (the anchor's leg, a multi-day
+  anchor), then the last 7 and 30 days, this month, this year, each ending
+  today; two `DateRangeField`s for the rest. A preset applies and closes.
+- **Where it opens**: `PickerHost.start.scope: 'span'` opens on it (with
+  `start.span`, else the last span used on this instance — `BrowseState.span`
+  —, else the month of the host's day up to today). Otherwise the picker still
+  opens on the host's DAY; Span is a click away and keeps its last span.
+- **The grid reads under day headings** in Span and Folder when ordered by
+  time: CONSECUTIVE runs of `capture_date` (`dayRuns`, `rowDay`), never
+  regrouped, so a ⇧-click, the tick verbs and the lightbox walk the order
+  drawn. Ordered by stars, the headings go away.
+
+## A FLIGHT LOG facet, read off the row (2026-10-13)
+
+**Decision.** The rail filters clips *With a log* / *Clips without*
+(`PickFacets.logs`, `logStateOf`), and a tile wears `SRT` when its clip's log
+rides with it. **Why**: Winnow already PAIRS a DJI clip with its `.srt` — the
+row carries `has_telemetry` and an `srt` sidecar — so finding the flights costs
+no request; until now nothing said which clip had one. **How to apply**: a
+photo has no log and is NEITHER (it passes only while the facet is empty); the
+section shows only when the scope holds a clip, with a bar of the share that
+carries a log. Server-side filtering by log is Winnow's to add
+(`has_telemetry=1`), and would matter only for a span long enough to hit the
+cap.
+
+## *Logs only* — a clip's flight log without its video (2026-10-13)
+
+**Decision.** The Library's *browse all* brings **Proxies · Originals · Logs
+only**; `materialize(…, { fidelity: 'log' })` fetches each clip's `.srt` and
+nothing else, and a row with no log brings nothing (the bar says how many are
+skipped; the verb counts and is enabled on the rows WITH a log —
+`PickerAction.label(n, rows)` and `enabled(rows)`). **Why**: a flight is a few
+hundred kB of text, its 720p proxy a video — taking a season of flights for
+Flight Atlas fetched every proxy only to read the log beside it. **How to
+apply**:
+
+- The `.srt` is vouched for with the CLIP's identity and an origin naming the
+  log (`fidelity: 'original'`, no `fetchOriginal`), so the Library files it
+  under its instance. Adding the clip later groups both by base name; the
+  duplicate `.srt` the clip brings is the same name/size/date and is ignored.
+- A log alone does NOT hold its clip: the sidebar splits `inLibrary` (an asset
+  with a picture or a clip) from `logsInLibrary` (any asset with a log), and
+  the picker's `held` reads the one its fidelity fills.
+- `reuse(url)` hands back a log already read (the Logbook's tracks), so it is
+  never fetched twice.
+
+## The LOGBOOK view, and a flight's track as its thumbnail (2026-10-13)
+
+**Decision.** The grid's ⋯ offers **Grid · Logbook** (`PickerLogbook.tsx`,
+per device in `atelier.winnow.picker.view`; a host may open on one —
+`start.view`): one line per row, take-off clock (`localClock`), place, length,
+distance, highest point, body, file. **Read tracks** (a toggle, `start.tracks`
+for a host that wants it on) fetches the DRAWN clips' logs through
+`flight-logs.ts` — once per session per URL, four at a time, 600 kept — and
+`flight-track.ts` turns each into a flat glyph (metres around the take-off,
+thinned to ~96 points) plus `flightSummary`'s numbers, drawn by `TrackGlyph`
+in the Logbook and over a grid tile. **Why**: a log is text, so the picker can
+show the FLIGHT, which a drone clip's thumbnail (sky, sea) rarely does.
+**How to apply**: never read a log nobody asked for — the toggle is off unless
+the host opens with it; only the batch drawn is read; *Logs only* then reuses
+the files read (`heldLog`), so adding costs no second request. The Logbook
+hides place, highest, body and file under 820px so the table never scrolls
+sideways and its headers stay sticky.
+
+## A host can narrow the request (2026-10-13)
+
+`PickerHost.narrow` (`{ mediaType }`) is sent to the SERVER with every scope
+and the month's marks — for what the host's `accepts` would throw away anyway,
+so a long span is not cut by `SPAN_CAP` before the host's rows. The rail's
+counts then describe the narrowed scope (an atlas picker says `0 photos`
+nowhere: a status line drops the photo count when there are clips and none).

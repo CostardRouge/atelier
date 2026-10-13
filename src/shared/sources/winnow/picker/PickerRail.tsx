@@ -7,6 +7,7 @@ import {
   BUCKET_LABEL,
   BUCKETS,
   DEFAULT_FACETS,
+  LOG_STATES,
   facetValues,
   toggled,
   type Bucket,
@@ -35,7 +36,8 @@ const HALVES: { id: HalfKey; label: string; title: string }[] = [
 
 /**
  * The picker's filters, in one column (his pick, face B of the brief):
- * the library half, Winnow's verdict, a star floor, the type, the extension,
+ * the library half, Winnow's verdict, a star floor, the type, the flight log
+ * (shown when the scope holds a clip), the extension,
  * the body, the tags, and two states. Every count is the SCOPE's — a facet
  * ticked elsewhere never moves it (`facetCounts`).
  *
@@ -67,6 +69,7 @@ export default function PickerRail({
   const exts = facetValues(new Map([...counts.exts].map(([k, v]) => [k, v.count])), facets.exts);
   const devices = facetValues(counts.devices, facets.devices);
   const tags = facetValues(counts.tags, facets.tags);
+  const clips = counts.logs.with + counts.logs.without;
 
   return (
     <div className="flex flex-col gap-4 min-w-0">
@@ -149,6 +152,29 @@ export default function PickerRail({
           </Row>
         ))}
       </section>
+
+      {clips > 0 && (
+        <section>
+          <p className={legend}>Flight log</p>
+          {LOG_STATES.map((k) => (
+            <Row
+              key={k}
+              on={facets.logs.includes(k)}
+              count={counts.logs[k]}
+              onClick={() => set({ logs: toggled(facets.logs, k) })}
+              title={k === 'with' ? 'Clips Winnow keeps a DJI .srt flight log beside' : 'Clips with no flight log'}
+            >
+              {k === 'with' ? 'With a log' : 'Clips without'}
+            </Row>
+          ))}
+          <div className="mt-1 mx-1.5 h-1 rounded-full bg-line overflow-hidden" aria-hidden="true">
+            <span className="block h-full bg-accent" style={{ width: `${(counts.logs.with / clips) * 100}%` }} />
+          </div>
+          <p className="m-0 mt-1 px-1.5 font-mono text-3xs text-muted tabular-nums">
+            {counts.logs.with} of {clips} clip{clips === 1 ? '' : 's'} carry a .srt
+          </p>
+        </section>
+      )}
 
       {exts.length > 0 && (
         <section>

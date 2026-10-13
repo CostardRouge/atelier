@@ -4,7 +4,9 @@ import CullMark from '../CullMark';
 import WinnowThumb from '../WinnowThumb';
 import { formatDuration } from '../../../lib/format';
 import { Icons } from '../../../ui/icons';
+import type { FlightTrack } from './flight-track';
 import type { PickItem } from './pick-filter';
+import TrackGlyph from './TrackGlyph';
 
 /** A chip ON the picture: its ground flips with its ink (`frontend.md`). */
 const chip =
@@ -18,7 +20,8 @@ export interface PileBadge {
 
 /**
  * One media of the picker's grid: the instance's thumbnail, Winnow's word on
- * it (`CullMark` — flag, stars, label), what kind of file it is, and its tick.
+ * it (`CullMark` — flag, stars, label), what kind of file it is (with `SRT`
+ * when a clip's flight log rides with it), and its tick.
  *
  * A held media (already on the roll, already in the Library) is drawn dimmed
  * with its host's word along the bottom and cannot be ticked — the same rule
@@ -33,6 +36,7 @@ export default function PickerTile({
   pile,
   onToggle,
   onLook,
+  track,
   className = '',
 }: {
   item: PickItem;
@@ -45,6 +49,8 @@ export default function PickerTile({
   onToggle: (e: MouseEvent) => void;
   /** Open it large (a double click; Space on the focused tile). */
   onLook: () => void;
+  /** The flight's track, once its log is read — drawn over the thumbnail. */
+  track?: FlightTrack | null;
   /** The cell's own size, where it is not a grid cell (a pile's row). */
   className?: string;
 }) {
@@ -84,6 +90,11 @@ export default function PickerTile({
         } ${focused ? 'outline-2 outline-offset-2 outline-ink' : ''}`}
       >
         <WinnowThumb client={client} id={row.id} label={row.ext || item.kind} box="w-full h-full" />
+        {track && (
+          <span className="absolute inset-0 bg-[rgba(13,12,10,0.45)] p-2" aria-hidden="true">
+            <TrackGlyph track={track} line={2} className="w-full h-full text-on-media" />
+          </span>
+        )}
         {!item.held && (
           <span
             aria-hidden="true"
@@ -106,6 +117,11 @@ export default function PickerTile({
           <CullMark culling={item.culling ?? undefined} onMedia />
         </span>
         <span className="absolute left-1.5 right-1.5 bottom-1.5 flex items-center justify-end gap-1 overflow-hidden" aria-hidden="true">
+          {item.log === 'with' && (
+            <span className={chip} title="A DJI flight log (.srt) rides with this clip">
+              {track?.km != null ? `${track.km.toFixed(1)} km` : 'SRT'}
+            </span>
+          )}
           <span className={`${chip} uppercase`}>{kindChip}</span>
         </span>
         {item.held && (

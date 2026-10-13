@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import {
   listsBurstFrames,
   WinnowError,
@@ -12,7 +12,7 @@ import { readBrowseState, writeBrowseState } from '../browse-state';
 import DayPicker from '../DayPicker';
 import { describeCulling } from '../culling';
 import MediaLightbox, { type LightboxItem } from '../../../ui/MediaLightbox';
-import { formatIsoDate } from '../../../roadtrip/trip-days';
+import { formatIsoDate, todayIso } from '../../../roadtrip/trip-days';
 import Button from '../../../ui/Button';
 import IconButton from '../../../ui/IconButton';
 import Segmented from '../../../ui/Segmented';
@@ -23,7 +23,12 @@ import LoadingState from '../../../ui/LoadingState';
 import { Icons } from '../../../ui/icons';
 import useDialogKeys from '../../../ui/use-dialog-keys';
 import { useInViewport } from '../../../lib/use-in-viewport';
+import PickerLogbook from './PickerLogbook';
 import PickerRail from './PickerRail';
+import { readFlightLog } from './flight-logs';
+import type { FlightTrack } from './flight-track';
+import SpanPicker from './SpanPicker';
+import { dayHeading, dayRuns, openingSpan, rowDay, spanDays, spanPresets } from './span';
 import PickerTile, { type PileBadge } from './PickerTile';
 import {
   activeFacets,
@@ -55,10 +60,13 @@ import type { PickerAction, PickerHost } from './picker-host';
 /** How many rows a scope may bring: a day is a few hundred, a folder a few thousand. */
 const DAY_CAP = 600;
 const FOLDER_CAP = 2000;
+/** A span is weeks of an instance: its list stops here, and the status line says it did. */
+const SPAN_CAP = 3000;
 /** Tiles mounted per batch, the next as the end of the grid nears. */
 const BATCH = 240;
 
-type Scope = 'day' | 'session';
+type Scope = 'day' | 'span' | 'session';
+const CAP: Record<Scope, number> = { day: DAY_CAP, span: SPAN_CAP, session: FOLDER_CAP };
 
 const SWATCH: Record<string, string> = {
   pick: 'bg-ok',
@@ -93,8 +101,9 @@ function typing(target: EventTarget | null): boolean {
  * (`docs/winnow-day-sheet-verdicts.md` §7, his pick of the rail face).
  *
  * - **A scope**: a day, walked with the sidebar's own stepper and its month
- *   (bars or weeks, `DayPicker`), or a folder (a Winnow session), picked from
- *   a list under the same control. The library half narrows the scope on the
+ *   (bars or weeks, `DayPicker`), a SPAN of days (`span.ts` — a trip, a month
+ *   of flights, listed as one scope and grouped by day), or a folder (a
+ *   Winnow session), picked from a list under the same control. The library half narrows the scope on the
  *   server; everything else is the rail's, over the rows (`pick-filter.ts`).
  * - **Winnow's word on every tile** — flag, stars, label, a Gallery final —
  *   and a rail of facets with the scope's counts.
@@ -109,6 +118,8 @@ type TileSize = 's' | 'm' | 'l';
 const readTiles = (raw: string | null): TileSize => (raw === 's' || raw === 'l' ? raw : 'm');
 const tilesPref = localPref<TileSize>('atelier.winnow.picker.tiles', readTiles, (v) => (v === 'm' ? null : v));
 const railPref = localPref<boolean>('atelier.winnow.picker.rail', (raw) => raw !== 'folded', (v) => (v ? null : 'folded'));
+type GridView = 'grid' | 'book';
+const viewPref = localPref<GridView>('atelier.winnow.picker.view', (raw) => (raw === 'book' ? 'book' : 'grid'), (v) => (v === 'grid' ? null : v));
 /**
  * Rows pinned in pixels: an `auto` row in a scrolling tile grid is clipped
  * to a sliver (`frontend.md`). Whole strings, so Tailwind sees each class.
@@ -133,11 +144,14 @@ export default function WinnowPicker({
   const remembered = useMemo(() => readBrowseState(connection.id), [connection.id]);
 
   // --- the scope -------------------------------------------------------------
-  // Always opens on the host's day: the host knows what the person is looking
-  // at. The folder, the half (unless the host names one) and the rail come
-  // back from the last sitting on this instance.
-  const [scope, setScope] = useState<Scope>('day');
+  // Opens on the host's day (or its span, when it asks for one): the host
+  // knows what the person is looking at. The folder, the last span, the half
+  // (unless the host names one) and the rail come back from the last sitting
+  // on this instance.
+  const [scope, setScope] = useState<Scope>(host.start.scope === 'span' ? 'span' : 'day');
   const [day, setDay] = useState(host.start.day);
+  const today = todayIso();
+  const [span, setSpan] = useState(() => openingSpan(host.start.day, today, host.start.span, remembered?.span));
   const [half, setHalf] = useState<LibraryHalf | null>(() =>
     host.start.half !== undefined ? host.start.half : (remembered?.filter.half ?? null),
   );
@@ -154,6 +168,7 @@ export default function WinnowPicker({
   // An instance that predates it folds piles, and a pile's frames are asked
   // for when it is unfolded (`burstId`).
   const framesListed = listsBurstFrames(connection.capabilities);
+  const mediaType = host.narrow?.mediaType;
 
   // The scope's rows, every page. A change of scope forgets the last answer
   // first, so a new day never shows the previous one's pictures for a frame.
@@ -163,11 +178,17 @@ export default function WinnowPicker({
     if (scope === 'session' && sessionId === null) return;
     const controller = new AbortController();
     let cancelled = false;
-    const narrowing = { ...(half ? { half } : {}), bursts: framesListed ? ('frames' as const) : ('fold' as const) };
+    const narrowing = {
+      ...(half ? { half } : {}),
+      ...(mediaType ? { mediaType } : {}),
+      bursts: framesListed ? ('frames' as const) : ('fold' as const),
+    };
     const ask =
-      scope === 'day'
-        ? client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, DAY_CAP, controller.signal)
-        : client.allAssets({ sessionId: sessionId!, ...narrowing }, FOLDER_CAP, controller.signal);
+      scope === 'session'
+        ? client.allAssets({ sessionId: sessionId!, ...narrowing }, FOLDER_CAP, controller.signal)
+        : scope === 'span'
+          ? client.allAssets({ dateFrom: span.from, dateTo: span.to, ...narrowing }, SPAN_CAP, controller.signal)
+          : client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, DAY_CAP, controller.signal);
     ask
       .then((all) => {
         if (!cancelled) setRows(all);
@@ -181,7 +202,7 @@ export default function WinnowPicker({
       cancelled = true;
       controller.abort();
     };
-  }, [client, connection.id, scope, day, sessionId, half, generation, framesListed]);
+  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, generation, framesListed]);
 
   // A folded pile's frames, asked for on its unfold where the scope's list
   // could not carry them. Forgotten with the scope.
@@ -257,11 +278,12 @@ export default function WinnowPicker({
       day,
       sessionId,
       chapterId: stored?.chapterId ?? null,
+      span,
       fidelity: stored?.fidelity ?? 'proxy',
       facets,
       sort,
     });
-  }, [connection.id, scope, day, half, sessionId, facets, sort]);
+  }, [connection.id, scope, day, span, half, sessionId, facets, sort]);
 
   // --- what the grid holds ---------------------------------------------------
   const items = useMemo<PickItem[]>(
@@ -293,6 +315,12 @@ export default function WinnowPicker({
       })),
     [drawnItems, client],
   );
+
+  // --- flight tracks ---------------------------------------------------------
+  // Read on request (each log is a download, however small), for the clips
+  // the grid DRAWS, once per session (`flight-logs.ts`).
+  const [tracksOn, setTracksOn] = useState(host.start.tracks ?? false);
+  const [tracks, setTracks] = useState<ReadonlyMap<number, FlightTrack | null>>(new Map());
 
   // --- ticks -----------------------------------------------------------------
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
@@ -368,8 +396,9 @@ export default function WinnowPicker({
   // an action in flight rather than letting it land later.
   useEffect(() => () => controller.current?.abort(), []);
 
+  const can = (action: PickerAction) => tickedRows.length > 0 && (action.enabled?.(tickedRows) ?? true);
   const run = async (action: PickerAction) => {
-    if (!tickedRows.length || running) return;
+    if (!can(action) || running) return;
     const c = new AbortController();
     controller.current = c;
     setRunning(action.key);
@@ -407,7 +436,7 @@ export default function WinnowPicker({
   // While a picture is looked at large, Escape and Enter are the lightbox's.
   useDialogKeys({
     onCancel: peek === null ? close : undefined,
-    onConfirm: peek === null && primary && tickedRows.length && !running ? () => void run(primary) : null,
+    onConfirm: peek === null && primary && can(primary) && !running ? () => void run(primary) : null,
   });
 
   // The grid's own keys: the bulk verbs, Winnow-style. A field keeps its keys,
@@ -444,16 +473,55 @@ export default function WinnowPicker({
   const [limit, setLimit] = useState(BATCH);
   useEffect(() => setLimit(BATCH), [rows, facets, sort]);
 
+  useEffect(() => {
+    if (!tracksOn) return;
+    let alive = true;
+    for (const it of shownItems.slice(0, limit)) {
+      if (it.log !== 'with') continue;
+      readFlightLog(client, it.row)
+        ?.then((log) => {
+          if (alive) setTracks((cur) => (cur.get(it.id) === log.track ? cur : new Map(cur).set(it.id, log.track)));
+        })
+        .catch(() => {
+          if (alive) setTracks((cur) => (cur.has(it.id) ? cur : new Map(cur).set(it.id, null)));
+        });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [tracksOn, shownItems, limit, client]);
+
   const [railOpen, setRailOpen] = useState(false);
   // The grid's own view, per device (the panel's tiles and the rail's
   // column); a phone's rail is a sheet and never a column.
   const [tiles, setTiles] = useLocalPref(tilesPref, 'm');
   const [railShown, setRailShown] = useLocalPref(railPref, true);
+  // Grid or Logbook: the device's choice, unless the host opened on one.
+  const [prefView, setPrefView] = useLocalPref(viewPref, 'grid');
+  const [hostView, setHostView] = useState<GridView | null>(host.start.view ?? null);
+  const view = hostView ?? prefView;
+  const pickView = (v: GridView) => {
+    setHostView(null);
+    setPrefView(v);
+  };
   const phone = useIsCompact();
   const openFilters = () => (phone ? setRailOpen(true) : setRailShown(true));
   const active = activeFacets(facets);
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
   const asking = rows === null && problem === null && !(scope === 'session' && sessionId === null);
+  // A list that reached its scope's ceiling is a list cut short: said, never silent.
+  const capped = rows !== null && rows.length >= CAP[scope];
+  // The host's own spans first among the presets — its leg, its open span.
+  const presets = useMemo(() => {
+    const a = host.anchor;
+    const own = [
+      ...(a?.within ? [{ label: a.within.label, span: a.within.span }] : []),
+      ...(a && spanDays(a.span) > 1 ? [{ label: a.label, span: a.span }] : []),
+    ];
+    return spanPresets(today, own);
+  }, [host.anchor, today]);
+  // Several days in one grid read under day headings, in the list's own order.
+  const grouped = scope !== 'day' && sort === 'time';
 
   const pileBadge = (it: PickItem, inRow: boolean): PileBadge | null => {
     if (it.pileId === null) return null;
@@ -497,6 +565,7 @@ export default function WinnowPicker({
       pile={pileBadge(it, inRow)}
       onToggle={(e) => toggle(it, e)}
       onLook={() => look(it.id)}
+      track={tracksOn ? tracks.get(it.id) : undefined}
       className={inRow ? 'w-32 h-24 shrink-0' : ''}
     />
   );
@@ -539,6 +608,7 @@ export default function WinnowPicker({
               onChange={(v) => setScope(v)}
               options={[
                 { id: 'day', label: 'Day' },
+                { id: 'span', label: 'Span', title: 'Several days as one list — a trip, a month' },
                 { id: 'session', label: 'Folder' },
               ]}
             />
@@ -552,9 +622,11 @@ export default function WinnowPicker({
                   count={rows?.length ?? null}
                   client={client}
                   connectionId={connection.id}
-                  filter={half ? { half } : undefined}
+                  filter={half || mediaType ? { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}) } : undefined}
                   showLine={false}
                 />
+              ) : scope === 'span' ? (
+                <SpanPicker span={span} onSpan={setSpan} presets={presets} today={today} />
               ) : (
                 <FolderPicker
                   sessions={sessions}
@@ -578,9 +650,14 @@ export default function WinnowPicker({
               ? `asking ${connection.id}…`
               : counts.total === 0 && !problem
                 ? `nothing here${host.accepts ? ' this host can take' : ''}`
-                : `${counts.total} media · ${photos} photo${photos === 1 ? '' : 's'}${clips ? ` · ${clips} clip${clips === 1 ? '' : 's'}` : ''}${
+                : `${counts.total} media${photos || !clips ? ` · ${photos} photo${photos === 1 ? '' : 's'}` : ''}${clips ? ` · ${clips} clip${clips === 1 ? '' : 's'}` : ''}${
                     piles.size ? ` · ${piles.size} burst${piles.size === 1 ? '' : 's'}` : ''
-                  }${heldCount ? ` · ${heldCount} ${host.heldLabel}` : ''} · culled ${culled} %`}
+                  }${heldCount ? ` · ${heldCount} ${host.heldLabel}` : ''} · culled ${culled} %${
+                    scope === 'span' ? ` · ${spanDays(span)} days` : ''
+                  }`}
+          {capped && !asking && (
+            <span className="text-warn"> · the first {rows!.length} only — narrow the {scope === 'session' ? 'folder' : 'span'} to see the rest</span>
+          )}
           {problem && (
             <span className="text-danger">
               {' '}
@@ -640,9 +717,36 @@ export default function WinnowPicker({
                 {shownItems.length} shown of {counts.total}
               </span>
               <span className="flex-1" />
+              {counts.logs.with > 0 && (
+                <Button
+                  variant={tracksOn ? 'default' : 'ghost'}
+                  size="sm"
+                  aria-pressed={tracksOn}
+                  icon={Icons.map}
+                  onClick={() => setTracksOn((on) => !on)}
+                  title={
+                    tracksOn
+                      ? 'Stop reading the flight logs (those read stay drawn)'
+                      : "Read the shown clips' flight logs — a small download each — and draw each flight's track"
+                  }
+                >
+                  {tracksOn ? `Tracks · ${shownItems.filter((it) => it.log === 'with' && tracks.has(it.id)).length}/${shownItems.filter((it) => it.log === 'with').length}` : 'Read tracks'}
+                </Button>
+              )}
 <SettingsMenu
-                label="The grid: order, tile size, filters"
+                label="The grid: view, order, tile size, filters"
                 sections={[
+                  {
+                    kind: 'choice',
+                    id: 'view',
+                    label: 'View',
+                    value: view,
+                    onPick: (v) => pickView(v === 'book' ? 'book' : 'grid'),
+                    options: [
+                      { id: 'grid', icon: Icons.grid, label: 'Grid of thumbnails' },
+                      { id: 'book', icon: Icons.rows, label: 'Logbook — one line each, with the flight' },
+                    ],
+                  },
                   {
                     kind: 'choice',
                     id: 'sort',
@@ -714,37 +818,78 @@ export default function WinnowPicker({
                   )}
                 </p>
               ) : (
-                // Rows pinned in pixels: an `auto` row in a scrolling tile
-                // grid is clipped to a sliver (`frontend.md`).
-                <ul className={`m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`}>
-                  {shownItems.slice(0, limit).map((it) => {
-                    const pile = it.pileId === null ? undefined : piles.get(it.pileId);
-                    const row = pile && pile.coverId === it.id && unfolded.has(pile.id) ? framesUnder(items, pile) : null;
+                (() => {
+                  const more = limit < shownItems.length && (
+                    <MoreTiles key={limit} as={view === 'book' ? 'div' : 'li'} onVisible={() => setLimit((n) => n + BATCH)} />
+                  );
+                  // Rows pinned in pixels: an `auto` row in a scrolling tile
+                  // grid is clipped to a sliver (`frontend.md`).
+                  const grid = `m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`;
+                  const cells = (list: PickItem[]) =>
+                    list.map((it) => {
+                      const pile = it.pileId === null ? undefined : piles.get(it.pileId);
+                      const row = pile && pile.coverId === it.id && unfolded.has(pile.id) ? framesUnder(items, pile) : null;
+                      return (
+                        <Fragment key={it.id}>
+                          {tile(it)}
+                          {row && (
+                            <li className="col-span-full row-span-1 min-w-0 rounded-paper border border-dashed border-line-strong bg-paper-2">
+                              <ul className="m-0 p-2 list-none flex gap-2 overflow-x-auto h-full items-center">
+                                {row.length ? (
+                                  row.map((f) => tile(f, true))
+                                ) : (
+                                  <li className="font-mono text-2xs text-muted px-2">
+                                    {pileAsking.has(pile!.id)
+                                      ? `asking ${connection.id} for the burst's frames…`
+                                      : `${pile!.size - 1} more frame${pile!.size === 2 ? '' : 's'} on ${connection.id}, not listed here`}
+                                  </li>
+                                )}
+                              </ul>
+                            </li>
+                          )}
+                        </Fragment>
+                      );
+                    });
+                  const batch = shownItems.slice(0, limit);
+                  if (view === 'book') {
                     return (
-                      <Fragment key={it.id}>
-                        {tile(it)}
-                        {row && (
-                          <li className="col-span-full row-span-1 min-w-0 rounded-paper border border-dashed border-line-strong bg-paper-2">
-                            <ul className="m-0 p-2 list-none flex gap-2 overflow-x-auto h-full items-center">
-                              {row.length ? (
-                                row.map((f) => tile(f, true))
-                              ) : (
-                                <li className="font-mono text-2xs text-muted px-2">
-                                  {pileAsking.has(pile!.id)
-                                    ? `asking ${connection.id} for the burst's frames…`
-                                    : `${pile!.size - 1} more frame${pile!.size === 2 ? '' : 's'} on ${connection.id}, not listed here`}
-                                </li>
-                              )}
-                            </ul>
-                          </li>
-                        )}
-                      </Fragment>
+                      <PickerLogbook
+                        items={batch}
+                        grouped={grouped}
+                        client={client}
+                        ticked={ticked}
+                        focusId={focusId}
+                        heldLabel={host.heldLabel}
+                        tracks={tracksOn ? tracks : new Map()}
+                        reading={tracksOn}
+                        onToggle={toggle}
+                        onLook={look}
+                        more={more}
+                      />
                     );
-                  })}
-                  {limit < shownItems.length && (
-                    <MoreTiles key={limit} onVisible={() => setLimit((n) => n + BATCH)} />
-                  )}
-                </ul>
+                  }
+                  if (!grouped) {
+                    return (
+                      <ul className={grid}>
+                        {cells(batch)}
+                        {more}
+                      </ul>
+                    );
+                  }
+                  const runs = dayRuns(batch, (it) => rowDay(it.row));
+                  return runs.map((run, k) => (
+                    <section key={`${run.day ?? 'undated'}-${k}`} aria-label={run.day ? dayHeading(run.day) : 'Undated'} className="mb-3">
+                      <h3 className="sticky top-0 z-[2] m-0 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
+                        {run.day ? dayHeading(run.day) : 'No date'}
+                        <span className="font-mono text-3xs font-normal text-muted tabular-nums">{run.items.length} media</span>
+                      </h3>
+                      <ul className={grid}>
+                        {cells(run.items)}
+                        {k === runs.length - 1 && more}
+                      </ul>
+                    </section>
+                  ));
+                })()
               )}
             </div>
           </div>
@@ -803,11 +948,11 @@ export default function WinnowPicker({
                 key={action.key}
                 variant={last ? 'primary' : 'default'}
                 icon={last ? Icons.plus : undefined}
-                disabled={!tickedRows.length || running !== null}
+                disabled={!can(action) || running !== null}
                 onClick={() => void run(action)}
                 className={last ? 'max-[820px]:flex-1 max-[820px]:basis-full' : ''}
               >
-                {action.label(tickedRows.length)}
+                {action.label(tickedRows.length, tickedRows)}
               </Button>
             );
           })}
@@ -867,15 +1012,19 @@ export default function WinnowPicker({
 }
 
 /** The end of the grid: once it nears the viewport, one more batch is mounted. */
-function MoreTiles({ onVisible }: { onVisible: () => void }) {
-  const [ref, inView] = useInViewport<HTMLLIElement>();
+function MoreTiles({ onVisible, as = 'li' }: { onVisible: () => void; as?: 'li' | 'div' }) {
+  const [ref, inView] = useInViewport<HTMLElement>();
   const fired = useRef(false);
   useEffect(() => {
     if (!inView || fired.current) return;
     fired.current = true;
     onVisible();
   }, [inView, onVisible]);
-  return <li ref={ref} className="col-span-full h-px" aria-hidden />;
+  return as === 'li' ? (
+    <li ref={ref as Ref<HTMLLIElement>} className="col-span-full h-px" aria-hidden />
+  ) : (
+    <div ref={ref as Ref<HTMLDivElement>} className="h-px" aria-hidden />
+  );
 }
 
 /**
