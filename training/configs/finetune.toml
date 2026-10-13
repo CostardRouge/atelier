@@ -1,0 +1,12 @@
+# Fine-tuning on YOUR pairs, starting from a run pretrained on FiveK:
+#   uv run atelier-train train --config configs/finetune.toml --init runs/<the FiveK run> --source pairs
+# Only what differs from configs/default.toml is written here.
+
+[train]
+name = "mine"
+epochs = 60
+batch_size = 8
+learning_rate = 5e-5     # a tenth of the pretraining rate: the look moves, the weights do not forget
+val_fraction = 0.2       # a fifth of the GROUPS held out — with few pairs, every group counts
+eval_every = 2
+freeze_luts = false      # true: keep the FiveK basis LUTs, learn only how to weigh them per picture

@@ -10,7 +10,7 @@ import {
   type LevelChannel,
   type Levels,
 } from './curves';
-import type { AutoVerb } from './auto-slots';
+import type { AutoState, AutoVerb } from './auto-slots';
 import AutoSwitch from './AutoSwitch';
 import type { AutoMemory } from './use-auto-memory';
 import type { AutoAllVerb } from './use-auto-all';
@@ -23,6 +23,17 @@ const ALL_HINT =
 
 const SWITCH_HINT =
   'Each one is a switch: a second click puts back what its own sliders held before it, and leaves the others alone. Lit, it still holds its answer; dashed, it found nothing to change; half-lit, you moved its sliders since. Colour and Pick grey share the white balance — the newer replaces the older, and turning it off gives back the balance from before either.';
+
+const OWN_HINT =
+  'My own asks the model learned from your rolls (Settings › Learning) for the eleven sliders at once — exposure to vibrance, as your hand would set them on this picture — and writes them as one switch, so a second click puts the eleven back. It reads the picture as shot, its light and the camera’s facts, the same three things the training file carries; the runtime is fetched from this site the first time it is pressed, and nothing leaves.';
+
+/** The verb of his own model, as the host runs it (`own-model-run.ts`); absent, no model is loaded. */
+export interface OwnModelVerb {
+  state: AutoState;
+  /** `20261013-091200-develop-mine` — the run that answers, for the title. */
+  run: string;
+  onClick: () => Promise<void>;
+}
 
 const LEVELS_HINT =
   'Where the range is read FROM: everything at or under black becomes black, everything at or over white becomes white, and gamma bends what is between them. Auto tone writes these three; the curve’s own end points do the same thing by hand.';
@@ -69,6 +80,7 @@ export function DevelopAutoSection({
   stats,
   auto,
   all,
+  own,
   picking,
   onPicking,
   echo = null,
@@ -78,6 +90,8 @@ export function DevelopAutoSection({
   auto: AutoMemory;
   /** The one `Auto` running the plan's steps (`use-auto-all.ts`); omitted, the row is its verbs alone. */
   all?: AutoAllVerb;
+  /** His own model's verb; omitted, this device holds no model and the switch is not drawn. */
+  own?: OwnModelVerb;
   /** Whether the eyedropper is armed; omitted, no dropper is drawn. */
   picking?: boolean;
   onPicking?: (on: boolean) => void;
@@ -109,6 +123,7 @@ export function DevelopAutoSection({
         <>
           {all && <p>{ALL_HINT}</p>}
           <p>{AUTO_HINT}</p>
+          {own && <p>{OWN_HINT}</p>}
           <p>{SWITCH_HINT}</p>
         </>
       }
@@ -138,6 +153,17 @@ export function DevelopAutoSection({
             </AutoSwitch>
           );
         })}
+        {own && (
+          <AutoSwitch
+            state={own.state}
+            disabled={!ready && own.state === 'off'}
+            hint={ready ? `The eleven sliders as your model (${own.run}) would set them` : notRead}
+            echo={echo}
+            onClick={own.onClick}
+          >
+            My own
+          </AutoSwitch>
+        )}
         {onPicking && (
           <AutoSwitch
             state={pickState}

@@ -1,0 +1,15 @@
+# Everything a run reads or writes stays on this machine (see README.md).
+/data/
+/runs/
+/checkpoints/
+*.ckpt
+*.pt
+*.safetensors
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/

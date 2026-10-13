@@ -1,0 +1,60 @@
+name: Training
+
+# The Python workspace under training/ (see training/README.md). Two jobs, both
+# CPU only and path-filtered so they run only when training/ changes:
+#   - check: ruff + the data-layer tests, without PyTorch — a few seconds;
+#   - check-torch: the model, training, eval and export tests on the synthetic
+#     set, with PyTorch's CPU wheel from its own index — about a minute.
+on:
+  push:
+    branches: [main]
+    paths: ['training/**', '.github/workflows/training.yml']
+  pull_request:
+    paths: ['training/**', '.github/workflows/training.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: training-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: training
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install (core + dev, locked)
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Test (without PyTorch — the model tests skip)
+        run: uv run pytest
+
+  check-torch:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: training
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install (with the PyTorch CPU and ONNX extras, locked)
+        run: uv sync --locked --extra torch --extra onnx
+
+      - name: Test (model, training, eval, export on the synthetic set; the ONNX export run back)
+        run: uv run pytest -W error::DeprecationWarning

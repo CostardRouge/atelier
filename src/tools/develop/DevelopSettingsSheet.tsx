@@ -1,8 +1,11 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { DEVICE_CLASS_KEY, deviceClass, deviceClassFor, readDeviceFacts } from '../../shared/lib/device-class';
 import { AUTO_STEPS, DEFAULT_AUTO_PLAN, autoPlanPref, describeSteps, withStep } from '../../shared/develop/auto-plan';
 import { clearRollShots, listRollShots, listRolls, rollShotsFootprint } from '../../shared/develop/roll-store';
 import { SHOT_LONG_EDGE, shotsPref } from '../../shared/develop/shot-record';
+import { addOwnModel, forgetOwnModel } from '../../shared/develop/own-model-vault';
+import { dropOwnSession } from '../../shared/develop/own-model-run';
+import { useOwnModel } from '../../shared/develop/use-own-model';
 import { buildTrainingDump, serializeTrainingFile, trainingFileName } from '../../shared/develop/training-dump';
 import { downloadBlob } from '../../shared/media/save';
 import { blobToDataUrl } from '../../shared/media/data-url';
@@ -477,7 +480,90 @@ function Learning() {
       />
     </Row>
     <TrainingFile kept={footprint ? footprint.count : null} />
+    <OwnModel />
     </>
+  );
+}
+
+/**
+ * The model of his own (B4 of `docs/auto-develop.md` §6): the `.onnx` and
+ * its `.json` sidecar `training/`'s `export-develop` wrote, kept on THIS
+ * device (`own-model-vault.ts`) and answering as *My own* in the Auto row.
+ * One model; loading another replaces it.
+ */
+function OwnModel() {
+  const size = useFingerSize();
+  const model = useOwnModel();
+  const input = useRef<HTMLInputElement | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = async (files: File[]) => {
+    setBusy(true);
+    try {
+      const added = await addOwnModel(files);
+      if (added.ok) {
+        dropOwnSession();
+        setSaid(null);
+      } else setSaid(added.reason);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const state =
+    model === undefined
+      ? 'Looking…'
+      : model
+        ? `${model.fileName} · ${model.sidecar.run || 'run unnamed'} · ${model.sidecar.thumb} px · ${formatBytes(model.bytes)} — My own in the Auto row, and a step Auto may run`
+        : 'None on this device: train one in training/, then load develop-net.onnx with its develop-net.json';
+  return (
+    <Row
+      label="Your model"
+      state={said ? <span className="text-warn">{said}</span> : state}
+      info={
+        <>
+          <p>
+            The trainer’s <code>export-develop</code> writes two files in the run folder: the model and a sidecar saying
+            what it reads and in which order it answers. Load both; they stay on this device, in their own store —
+            never on a roll, a preset or a paste, never shipped with the site.
+          </p>
+          <p>
+            It answers the eleven sliders at once from the picture as shot, its light and the camera’s facts — the
+            three things the training file carries. The runtime that runs it (ONNX Runtime, about 14 MB) is fetched
+            from this site the first time the verb is pressed, and nothing leaves.
+          </p>
+        </>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size={size} icon={Icons.import} disabled={busy} onClick={() => input.current?.click()}>
+          {busy ? 'Reading…' : model ? 'Replace…' : 'Load…'}
+        </Button>
+        {model && (
+          <Button
+            size={size}
+            onClick={() => {
+              dropOwnSession();
+              void forgetOwnModel();
+              setSaid(null);
+            }}
+          >
+            Forget
+          </Button>
+        )}
+        <input
+          ref={input}
+          type="file"
+          accept=".onnx,.json"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = '';
+            if (files.length) void load(files);
+          }}
+        />
+      </div>
+    </Row>
   );
 }
 

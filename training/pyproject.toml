@@ -1,0 +1,67 @@
+[project]
+name = "atelier-training"
+version = "0.1.0"
+description = "Local training of a model that imitates the maintainer's photo-editing style, for Atelier. Nothing leaves the machine."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+# The core installs everywhere (Linux CI included) and carries no ML framework:
+# reading the data, the synthetic set, the .cube writer and the doctor need
+# nothing heavier than numpy.
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.4",
+    "tifffile>=2024.8.30",
+]
+
+[project.optional-dependencies]
+# The training backend. On a Mac this is PyPI's build, which carries MPS; on
+# Linux it is routed to PyTorch's CPU index below so no CUDA wheel is pulled.
+torch = ["torch>=2.5"]
+# Optional second backend, Apple Silicon only: the marker keeps Linux and CI installable.
+mlx = ["mlx>=0.20; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+# RAW decoding (FiveK's DNG, the maintainer's ARW / DNG originals).
+raw = ["rawpy>=0.23"]
+# HEIF decoding (a Sony .HIF, an iPhone .HEIC) through libheif.
+heif = ["pillow-heif>=0.18"]
+# The local dashboard (`atelier-train serve`): one small API over the run folders and one static page.
+ui = ["fastapi>=0.115", "uvicorn>=0.30"]
+# Exporting the develop predictor as ONNX, what the browser's onnxruntime-web loads (M6).
+onnx = ["onnx>=1.17", "onnxscript>=0.2", "onnxruntime>=1.20"]
+
+[project.scripts]
+atelier-train = "atelier_training.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.6", "httpx>=0.27"]  # httpx: FastAPI's TestClient
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/atelier_training"]  # static/index.html ships inside the package
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # Starlette's TestClient warns about httpx until httpx2 ships; not ours to fix.
+    "ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
