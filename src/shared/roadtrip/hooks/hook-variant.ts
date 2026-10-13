@@ -34,6 +34,7 @@ import type { LandIndex } from '../../map/terrain';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
+import type { OpenerChapter } from './opener-chapters';
 import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
 import type { StyleTheme } from '../../overlay/title-styles';
@@ -498,6 +499,13 @@ export interface HookPictureStatus {
 }
 
 /** What a variant's own options panel is handed. */
+/** One chapter's pin on the opener's drawing, in frame pixels. */
+export interface OpenerPart {
+  chapter: string;
+  x: number;
+  y: number;
+}
+
 export interface HookPanelProps {
   options: HookOptions;
   onChange: (options: HookOptions) => void;
@@ -577,12 +585,27 @@ export interface HookVariant {
    */
   moveBy?(options: HookOptions, dx: number, dy: number): HookOptions;
   /**
+   * Where the stage may pin each chapter's NUMBER on the drawing (2026-10-12,
+   * step 6 of `docs/opener-inspector-redesign.md`): a tap on «2» over the
+   * road opens chapter 2, Road. Frame pixels at the asked size, the drawing
+   * at rest; a chapter with nothing to point at (the timing, the sound) has
+   * no pin and is reached from the index. Editor-only, like `frameBox`.
+   */
+  parts?(options: HookOptions, ctx: HookContext, frame: FrameBox): readonly OpenerPart[];
+  /**
    * The picker card's little drawing. It says what the variant DOES — it is
    * not a render of this piece: the stage sits beside the picker showing the
    * real thing, and a live render per card would cost a decode and a WebGL
    * context each to repeat it worse.
    */
   Sketch?: ComponentType;
+  /**
+   * The panel's groups as numbered CHAPTERS, in the panel's order
+   * (`opener-chapters.ts`): the picker draws an index of them and opens one
+   * at a time, each `Group` of the panel naming the chapter it belongs to.
+   * Absent, the panel is drawn whole, as it always was.
+   */
+  chapters?: readonly OpenerChapter[];
   /** The variant's own options, mounted under the picker. Absent = none. */
   Panel?: ComponentType<HookPanelProps>;
 }

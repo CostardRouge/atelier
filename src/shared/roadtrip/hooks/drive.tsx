@@ -18,6 +18,7 @@
  * needs, its sketch, and its options.
  */
 
+import { DRIVE_CHAPTERS } from './opener-chapter-specs';
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import {
@@ -49,6 +50,8 @@ import {
   driveScore,
   driveShortestBeat,
   driveWants,
+  applyView,
+  viewAt,
   type DriveOptions,
   type DrivePlan,
   type DriveRoute,
@@ -57,7 +60,8 @@ import { driveRibbon } from './drive-ribbon';
 import { loadLook } from './look-text';
 import { NEW_CARD, badgeMoment, badgeWindowFor, cardScene } from './summary-card';
 import { SummaryCardRows } from './summary-card-panel';
-import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
+import { AHEAD_GLYPHS, DRIVE_LABEL_GLYPHS, DRIVE_PICTURE_GLYPHS, GROUND_GLYPHS, PATH_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
+import { CAR_PX, driveBasemap, driveBox, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
 import { GroupRows } from './group-rows';
@@ -331,7 +335,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </p>
       )}
 
-      <Group title="Road">
+      <Group title="Stops" chapter="stops">
         <StopSourceRows
           value={o}
           onChange={set}
@@ -356,16 +360,20 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           count={{ stops: ungrouped, halts: route.stops.length }}
           townsReady={Boolean(ctx.towns?.length)}
         />
+      </Group>
+
+      <Group title="Road" chapter="road">
         <FieldRow label="Path">
           <Segmented
             size="sm"
             fill
             label="The shape of the road"
+            tiles
             value={o.path}
             onChange={(path) => set({ path })}
             options={[
-              { id: 'curved', label: 'Curved' },
-              { id: 'straight', label: 'Straight' },
+              { id: 'curved', label: 'Curved', icon: PATH_GLYPHS.curved },
+              { id: 'straight', label: 'Straight', icon: PATH_GLYPHS.straight },
             ]}
           />
         </FieldRow>
@@ -374,12 +382,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="How the road ahead is drawn"
+            tiles
             value={o.ahead}
             onChange={(ahead) => set({ ahead })}
             options={[
-              { id: 'dashed', label: 'Dashed' },
-              { id: 'faint', label: 'Faint' },
-              { id: 'hidden', label: 'Hidden' },
+              { id: 'dashed', label: 'Dashed', icon: AHEAD_GLYPHS.dashed },
+              { id: 'faint', label: 'Faint', icon: AHEAD_GLYPHS.faint },
+              { id: 'hidden', label: 'Hidden', icon: AHEAD_GLYPHS.hidden },
             ]}
           />
         </FieldRow>
@@ -410,7 +419,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Pictures">
+      <Group title="Pictures" chapter="pictures">
         <FieldRow
           label="Shown as"
           hint={
@@ -427,13 +436,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="How the pictures are shown"
+            tiles
             value={o.pictures}
             onChange={(pictures) => set({ pictures })}
             options={[
-              { id: 'cards', label: 'Prints' },
-              { id: 'fill', label: 'Fill' },
-              { id: 'backdrop', label: 'Behind' },
-              { id: 'none', label: 'None' },
+              { id: 'cards', label: 'Prints', icon: DRIVE_PICTURE_GLYPHS.cards },
+              { id: 'fill', label: 'Fill', icon: DRIVE_PICTURE_GLYPHS.fill },
+              { id: 'backdrop', label: 'Behind', icon: DRIVE_PICTURE_GLYPHS.backdrop },
+              { id: 'none', label: 'None', icon: DRIVE_PICTURE_GLYPHS.none },
             ]}
           />
         </FieldRow>
@@ -501,7 +511,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Vehicle">
+      <Group title="Vehicle" chapter="vehicle">
         <FieldRow
           label="Drives"
           hint={
@@ -617,7 +627,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Map">
+      <Group title="Map" chapter="map">
         <FieldRow
           label="Ground"
           hint={
@@ -639,10 +649,11 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               if (ground === 'tiles') allowTiles(true);
               set({ ground });
             }}
+            tiles
             options={[
-              { id: 'paper', label: 'Paper' },
-              { id: 'tiles', label: 'OSM map' },
-              { id: 'picture', label: 'Picture' },
+              { id: 'paper', label: 'Paper', icon: GROUND_GLYPHS.paper },
+              { id: 'tiles', label: 'OSM map', icon: GROUND_GLYPHS.tiles },
+              { id: 'picture', label: 'Picture', icon: GROUND_GLYPHS.picture },
             ]}
           />
         </FieldRow>
@@ -695,12 +706,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             size="sm"
             fill
             label="Where the route sits in the frame"
+            tiles
             value={o.position}
             onChange={(position) => set({ position })}
             options={[
-              { id: 'top', label: 'Top' },
-              { id: 'middle', label: 'Middle' },
-              { id: 'bottom', label: 'Bottom' },
+              { id: 'top', label: 'Top', icon: POSITION_GLYPHS.top },
+              { id: 'middle', label: 'Middle', icon: POSITION_GLYPHS.middle },
+              { id: 'bottom', label: 'Bottom', icon: POSITION_GLYPHS.bottom },
             ]}
           />
         </FieldRow>
@@ -732,14 +744,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   : 'The day each stop was shot on. A name that would sit on another, or on a print, is left out.'
           }
         >
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="Which stops carry a name"
             value={o.labels}
             onChange={(labels) => set({ labels })}
             options={[
-              { id: 'none', label: 'None' },
-              { id: 'ends', label: 'The two ends' },
-              { id: 'all', label: 'Every stop' },
+              { id: 'none', label: 'None', icon: DRIVE_LABEL_GLYPHS.none },
+              { id: 'ends', label: 'The ends', title: 'The two ends', icon: DRIVE_LABEL_GLYPHS.ends },
+              { id: 'all', label: 'Every stop', icon: DRIVE_LABEL_GLYPHS.all },
             ]}
           />
         </FieldRow>
@@ -788,7 +802,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Motion">
+      <Group title="Motion" chapter="motion">
         <FieldRow
           label="Driving"
           hint={
@@ -817,11 +831,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
-          <SelectField
+          <Segmented
+            size="sm"
+            tiles
             label="How the vehicle pulls away and stops"
             value={o.easing}
             onChange={(easing) => set({ easing })}
-            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
+            options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
           />
         </FieldRow>
         <FieldRow label="Hold first" hint={o.delaySeconds > 0 ? 'The vehicle sits at the first stop this long before it moves.' : undefined}>
@@ -873,7 +889,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Camera">
+      <Group title="Camera" chapter="camera">
         <CameraRows
           o={o}
           set={set}
@@ -885,7 +901,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       {ctx.counterMode !== undefined && (
-        <Group title="Recap">
+        <Group title="Recap" chapter="recap">
           {!count ? (
             <p className="m-0 text-xs text-muted">
               To make the badge’s number count with the vehicle — the day of the trip, the distance, the stops, or the
@@ -965,12 +981,12 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       )}
 
       {count && o.summary && (
-        <Group title="Summary card">
+        <Group title="Summary card" chapter="recap">
           <SummaryCardRows o={o} set={set} plan={plan} ctx={ctx} />
         </Group>
       )}
 
-      <Group title="Sound">
+      <Group title="Sound" chapter="sound">
         <SwitchRow
           label="Tick at every stop the vehicle reaches"
           name="Tick at every stop"
@@ -1065,6 +1081,36 @@ export const driveVariant: HookVariant = {
     const plan = planOf(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, ctx);
     return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())?.wants ?? [] : [];
   },
+  // The chapters' numbers pinned on the drawing at rest: the first stop, the
+  // road between two, the vehicle where it ends, a stop's prints, the map's
+  // corner, the camera's. Under a following camera the road is not where the
+  // whole view puts it, so only the corners are pinned.
+  parts(options, ctx, frame) {
+    const o = driveOptions(options);
+    const box = driveBox(frame.width, frame.height, o.position, o.size);
+    const corners = [
+      { chapter: 'map', x: box.x + box.width, y: box.y },
+      { chapter: 'camera', x: frame.width * 0.07, y: frame.height * 0.07 },
+    ];
+    if (o.camera === 'follow') return corners;
+    const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null);
+    const plan = planOf(route, o, ctx);
+    if (!plan || !plan.points.length) return corners;
+    const margin = CAR_PX * (frame.width / 1080) * o.carSize * 0.7;
+    const view = viewAt(plan, box, margin, { camera: 'whole', followZoom: o.followZoom }, plan.at(0));
+    const at = plan.points.map((p) => applyView(view, p));
+    const last = at[at.length - 1];
+    const k = Math.max(0, Math.floor((at.length - 1) / 2));
+    const mid = at.length > 1 ? { x: (at[k].x + at[k + 1].x) / 2, y: (at[k].y + at[k + 1].y) / 2 } : at[0];
+    const shot = o.pictures === 'none' ? -1 : route.stops.findIndex((stop) => stop.pictures.length > 0);
+    return [
+      { chapter: 'stops', ...at[0] },
+      ...(at.length > 1 ? [{ chapter: 'road', ...mid }] : []),
+      ...(shot >= 0 ? [{ chapter: 'pictures', x: at[shot].x, y: at[shot].y - frame.height * 0.05 }] : []),
+      { chapter: 'vehicle', ...last },
+      ...corners,
+    ];
+  },
   prepare(options, ctx) {
     const o = driveOptions(options);
     const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null);
@@ -1148,5 +1194,6 @@ export const driveVariant: HookVariant = {
     return o.fit ? fitRender(render, ctx.screenSeconds, driveShortestBeat(plan, o)).render : render;
   },
   Sketch: DriveSketch,
+  chapters: DRIVE_CHAPTERS,
   Panel: DrivePanel,
 };

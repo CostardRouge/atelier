@@ -17,6 +17,7 @@
  * drawing `showcase-paint.ts`; this file is the variant's face.
  */
 
+import { SHOWCASE_CHAPTERS } from './opener-chapter-specs';
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import { FieldRow, SelectField, TextField, swatchClass } from '../../ui/Inspector';
@@ -101,7 +102,7 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
           : 'It leaves the road and stops on flat ground.';
   return (
     <div className="flex flex-col gap-4">
-      <Group title="Start from">
+      <Group title="Start from" chapter="start">
         <div className="flex flex-wrap gap-1.5">
           {SHOWCASE_RECIPES.map((r) => (
             <Button key={r.id} size="sm" onClick={() => onChange({ ...applyRecipe(o, r.patch) })}>
@@ -111,7 +112,7 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </div>
       </Group>
 
-      <Group title="Place">
+      <Group title="Place" chapter="place">
         <FieldRow label="Place">
           <SelectField
             value={place.id}
@@ -155,7 +156,7 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Motion">
+      <Group title="Motion" chapter="motion">
         <FieldRow label="Entrance" hint={entry.hint}>
           <SelectField value={o.entry} options={ENTRIES.map((e) => ({ id: e.id, label: e.label }))} onChange={(id) => set({ entry: id })} label="Entrance" />
         </FieldRow>
@@ -186,7 +187,7 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Vehicle">
+      <Group title="Vehicle" chapter="vehicle">
         <FieldRow
           label="Stages"
           hint={
@@ -249,7 +250,7 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Words">
+      <Group title="Words" chapter="words">
         <FieldRow label="Place line" hint="Said by the badge in place of the day’s place while the opener plays — a crossing, a road’s name. Empty, the badge says its own.">
           <TextField value={o.caption} onChange={(caption) => set({ caption })} placeholder="Algeciras → Tanger Med" label="Place line" />
         </FieldRow>
@@ -293,5 +294,6 @@ export const showcaseVariant: HookVariant = {
     return render;
   },
   Sketch: ShowcaseSketch,
+  chapters: SHOWCASE_CHAPTERS,
   Panel: ShowcasePanel,
 };

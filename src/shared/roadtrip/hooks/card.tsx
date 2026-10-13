@@ -13,6 +13,7 @@
  * slide.
  */
 
+import { CARD_CHAPTERS } from './opener-chapter-specs';
 import { DRIVE_DEFAULTS, driveOptions, drivePlan, driveRoute, driveWants } from './drive-plan';
 import { readStopSource, sourceStops, type StopSourcePatch } from './stop-source';
 import { StopSourceRows } from './stop-source-rows';
@@ -64,7 +65,7 @@ function CardPanel({ options, onChange, ctx, host }: HookPanelProps) {
           ? `The trip’s road up to this piece’s day: ${plan.route.stops.length} places ${from}. The badge is hidden on this slide.`
           : 'Fewer than two located places to tell — choose where the stops come from below.'}
       </p>
-      <Group title="Stops">
+      <Group title="Stops" chapter="stops">
         <StopSourceRows
           value={source}
           onChange={set}
@@ -84,7 +85,7 @@ function CardPanel({ options, onChange, ctx, host }: HookPanelProps) {
           }}
         />
       </Group>
-      <Group title="Summary card">
+      <Group title="Summary card" chapter="card">
         <SummaryCardRows o={{ ...o, ...card }} set={set} plan={plan} ctx={ctx} badge={false} />
       </Group>
     </div>
@@ -135,5 +136,6 @@ export const cardVariant: HookVariant = {
     return render;
   },
   Sketch: CardSketch,
+  chapters: CARD_CHAPTERS,
   Panel: CardPanel,
 };

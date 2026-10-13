@@ -126,6 +126,7 @@ import {
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
+import { openOpenerChapter } from './opener-chapter';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import GarageModal from './GarageModal';
@@ -1956,6 +1957,29 @@ export default function PostEditor({
   // the badge piece the Content and Style tabs edit, which survives a click
   // on the empty picture. Both come from `selectElement`, never set apart.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * The opener's chapters pinned on its drawing (`HookVariant.parts`), with
+   * the index's numbers. Shown while the opener is selected — or, for one
+   * that fills the frame and cannot be pointed at (Virée), while the Look tab
+   * is open — and a tap opens that chapter of the panel.
+   */
+  const pinsShown =
+    !!openVariant?.parts && !!openVariant.chapters && (selectedId === HOOK_ID || (tab === 'look' && !openVariant.frameBox));
+  const hookPinsFor = useMemo(() => {
+    if (!pinsShown || !openVariant?.parts || !openVariant.chapters) return null;
+    const numbers = new Map(openVariant.chapters.map((c, i) => [c.id, i + 1]));
+    return (frame: { width: number; height: number }) =>
+      (openVariant.parts?.(openOptions, openCtx, frame) ?? []).flatMap((part) => {
+        const n = numbers.get(part.chapter);
+        return n ? [{ ...part, n }] : [];
+      });
+  }, [pinsShown, openVariant, openOptions, openCtx]);
+  const openChapter = (chapter: string) => {
+    if (!openVariant) return;
+    openOpenerChapter(openVariant.id, chapter);
+    setTab('look');
+    if (compact) setInspectorOpen(true);
+  };
   // The width the picture takes from the height it is given — the stage
   // measures it and the column wears it as a cap, so the rail sits against
   // the picture instead of against the edge of the section.
@@ -2072,15 +2096,9 @@ export default function PostEditor({
     if (placingShade && !shadeHandle) setPlacingShade(null);
   }, [placingShade, shadeHandle]);
   useEffect(() => setPlacingShade(null), [post.id, slideIndex]);
-  const placeShade = useCallback(
-    (id: string | null) => {
-      setPlacingShade(id);
-      // On a phone the inspector is a sheet over the very picture the centre
-      // is placed on: it steps aside, and the Look cell brings it back.
-      if (id && compact) setInspectorOpen(false);
-    },
-    [compact],
-  );
+  // On a phone the Look tab is a drawer under the picture (2026-10-12), so
+  // placing a shade's centre no longer has a sheet to send away.
+  const placeShade = useCallback((id: string | null) => setPlacingShade(id), []);
   const moveShadeCentre = (x: number, y: number) =>
     setOpenShades(openShades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)));
 
@@ -2418,8 +2436,8 @@ export default function PostEditor({
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
           // The clearance above the bar is the column's while the column is
-          // last; with the Picture drawer up under it, the drawer is.
-          compact ? (inspectorOpen && tab === 'picture' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
+          // last; with the Picture or Look drawer up under it, the drawer is.
+          compact ? (inspectorOpen && (tab === 'picture' || tab === 'look') ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
         }`}
       >
         <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
@@ -2477,6 +2495,8 @@ export default function PostEditor({
             // Any slide may hold an opener, and it is pointed at where it draws.
             hookRectFor={isCta ? null : hookRectFor}
             onMoveHook={!isCta && openVariant?.moveBy ? moveHook : undefined}
+            hookPinsFor={isCta ? null : hookPinsFor}
+            onOpenChapter={openChapter}
             shadeHandle={shadeHandle}
             onMoveShadeCentre={shadeHandle ? moveShadeCentre : undefined}
             // Each picture as it stands at the needle: the stage draws what it is
@@ -2519,12 +2539,15 @@ export default function PostEditor({
 
       <PanelHost
         asSheet={compact}
-        // The Picture tab is a DRAWER on a phone, never the sheet: what it
-        // sets — the framing, the cards of a move, the develop — is judged on
-        // the picture above it, and a sheet's wash over that picture is a
-        // lie about it (`frontend.md`, Develop's rule). The three other tabs
-        // are picked FROM and keep the sheet, which gives them the height.
-        compactAs={tab === 'picture' ? 'drawer' : 'sheet'}
+        // The Picture and Look tabs are DRAWERS on a phone, never the sheet:
+        // what they set — the framing, the cards of a move, the develop, the
+        // opener, the style, the shades — is judged on the picture above
+        // them, and a sheet's wash over that picture is a lie about it
+        // (`frontend.md`, Develop's rule). The Look tab was a sheet until
+        // 2026-10-12: an opener of 103 settings was set blind, then closed to
+        // be seen. Content and Export are picked FROM and keep the sheet,
+        // which gives them the height.
+        compactAs={tab === 'picture' || tab === 'look' ? 'drawer' : 'sheet'}
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title={TABS.find((t) => t.id === tab)?.label ?? 'Piece'}
