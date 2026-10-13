@@ -41,7 +41,9 @@ Three rules hold in every face:
 
 1. **A gesture never changes who owns the length.** The owner is a word the author picks (*Virée decides* · *Fixed*); a grip, a stepper or a slider writes inside the owner chosen. (Closes H4.)
 2. **Nothing is CUT unless the author said "cut".** Shortening under the opener speeds it up, down to the floor, where the control stops and says why. Cut is a deliberate answer to one question, on a fixed length only. (Closes H7, and makes a 1 s slide over a 9 s opener impossible by accident.)
-3. **Controls never move under the pointer.** Steppers with a typed field (± 0.5 s, any value typed) replace the 1–60 s slider; every verb is always drawn, greyed with a reason when it does nothing. (Closes H2, H3.)
+3. **Controls never move under the pointer.** Every verb is always drawn, greyed with a reason when it does nothing; the numbers are set with the suite's ONE slider of `docs/slider-touch.md` (rev. 2026-10-13, below) — never a 1–60 s track sharing its line. (Closes H2, H3.)
+
+**Rev. 2026-10-13 — the steppers yield to the suite's slider.** The lab drew ± steppers with a typed field because today's `RangeField` cannot be trusted on a line it shares. A parallel brief, `docs/slider-touch.md` (branch `claude/wizardly-hamilton-76dk6o`), fixes the slider itself for all 135 of them: the track alone on its line across the panel, a 44 px grab under a finger, a tap that places and a drag that stays relative, a vertical gesture left to the scroll, a typed value, ONE component behind a lint rule. With it a stepper would be a second numeric control for one section only. So Hold, Pace and Seconds are three of that component's rows (Hold 0–10 s by 0.1, Pace from the floor to 1×, Seconds 1–60 s with the typed value doing the precise work); the owner `Segmented` and the *If Virée is longer* question stay as drawn. The band's grip is a gesture of its own, not a slider, and keeps §4's two zones; it takes the same coarse-pointer sizing rule (R2).
 
 And the medium stops being a third *Auto*: it becomes a sentence — «Video, because Virée moves» — with one verb to deliver a still instead (the `settled` case). (Closes H1.)
 
@@ -95,6 +97,8 @@ interface ResolvedLength {
 Each is one commit, verified by typecheck, lint, the tests and a headless drive of the editor; the order lets him stop anywhere.
 
 1. ~~**The deck timed with the coastline**~~ — built (H9).
+*Order against the slider work*: §4 of `docs/slider-touch.md` — its component, the drag maths and the typed value (its commits 1–3) — lands BEFORE commit 4 below, which builds the Slide section on it directly; its commit 5 then has no *On screen* to migrate. Commits 2–3 here touch no control and may run in parallel with it.
+
 2. **`slide-length.ts`, pure, with its spec** — the union, `resolveLength`, `negotiate(total)` (band ↔ pace and hold, the magnet, the floor), the migration's mapping. No caller yet.
 3. **v32 and the deck** — `PostBadge.length` / `PostSlide.length`, the migration, `deckSlides` resolving through it, `DeckSlide.natural` / `.scale` / `.hold` / `.cut`, openers handed their scale instead of reading `fit`, `HookRender.shortestBeat`. The exports, the Studio bridge, `run-edits.ts`, `export-plan.ts` and the agent commands (`trips.piece` reports the parts; `trips.pieceSettings` takes `pace`, `hold`, `seconds`) follow in the same commit, because the field they read changes.
 4. **The *Slide* section** — the sum line, the owner `Segmented`, Pace and Hold (or Seconds + *If Virée is longer*), steppers with a typed field, the medium as a sentence and one verb; `SlideDelivery`'s slider, pill and inserted buttons go, `FitRow` leaves the openers' panels, the Counter's own cut warning reads the new resolution.
@@ -104,7 +108,7 @@ Each is one commit, verified by typecheck, lint, the tests and a headless drive 
 
 ## 7. What is his
 
-1. **A, B or C** — B recommended.
+1. ~~**A, B or C**~~ — **B, his pick (2026-10-13).**
 2. **The default answer when a fixed length is shorter than the opener** — *Speed it up* recommended (nothing cut unless asked); *Cut it* is today's behaviour.
 3. **Pace as three steps (`½× · ¾× · 1×`) or a free value** — steps in the inspector and a free value from the band recommended.
 4. **Whether *Fixed* should exist at all on a slide with an opener** — kept, for a reel cut to a beat; dropping it simplifies the panel to Pace and Hold.
