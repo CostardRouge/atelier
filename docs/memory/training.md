@@ -186,10 +186,18 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   training; the cost of the test is the PNGs and the ONNX run-back) and
   measures 0.22–0.35 on six seeds. A threshold on a learning curve needs
   that margin, never a seed that happens to pass.
-- **The Atelier side (B4) is NOT built here** — his call between importing
-  the M2 `.cube` (free) and a browser verb over `onnxruntime-web` (14–28 MB
-  of wasm in `dist/`, measured earlier); a record's RECOVERY for a Winnow
-  pair stays Atelier's engine's job, not a Python twin's.
+- **The export writes ONE file** (`external_data=False`): the dynamo
+  exporter otherwise puts the weights in a `.onnx.data` beside the model,
+  and Atelier's vault takes the model whole or not at all.
+- **The Atelier side (B4) IS built** (2026-10-13, `docs/memory/develop-roll.md`,
+  «A model of his OWN»): the two files load into a per-device vault, the
+  wasm backend of `onnxruntime-web` (14.2 MB, served from our origin, fetched
+  on first press) runs them as the verb *My own*; the input vectors are
+  ported bit for bit (`own-model.ts`, pinned to numpy). A change of the
+  sidecar or of `stats_vector` / `exif_vector` is a change on BOTH sides.
+  The M2 `.cube` still goes through "Upload .cube" with nothing to build. A
+  record's RECOVERY for a Winnow pair stays Atelier's engine's job, not a
+  Python twin's.
 
 ## Traps
 

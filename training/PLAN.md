@@ -193,16 +193,17 @@ trains on a synthetic file whose sliders follow the picture and beats
 "nothing" by a wide margin; `records` / `train-develop` / `eval-develop` /
 `export-develop` are wired.
 
-**What is LEFT, and is his call** (B4 of `docs/auto-develop.md`): the
-Atelier side. Option 1 needs nothing: the `.cube` of M2 goes through "Upload
-.cube" today. Option 2 is a browser verb *Auto · my own*: `onnxruntime-web`
-from our own origin, `public/models/develop-net.onnx` + its sidecar, the
-vignette and `SourceStats` Atelier already measures (`shot-record.ts`) fed
-as the sidecar says, the eleven numbers written through the same `patch` as
-the Auto verbs, journaled `via: 'auto'`. Cost: ONNX Runtime's wasm in
-`dist/` (14–28 MB measured in `docs/mask-ui-redesign.md`) — to weigh before
-building; a separate PR on `src/` when he says so. The RECOVERY of a record
-for a pair without one (his Winnow finals) was not built: it needs
+**The Atelier side is BUILT too (2026-10-13, B4 of `docs/auto-develop.md`)**,
+with one change from the plan: the model is NOT under `public/models/` —
+it is HIS, loaded from the run folder's two files into a per-device vault
+(Settings › Learning → *Your model*), never shipped. `onnxruntime-web`'s
+wasm backend (14.2 MB) is an asset of the build served from our origin and
+fetched on first press; the verb *My own* in the Auto row writes the eleven
+sliders as one switch, and `own` is a step of Auto's plan. The export now
+writes ONE `.onnx` (`external_data=False`). Option 1 still holds: the
+`.cube` of M2 goes through "Upload .cube". Rules and what was driven:
+`docs/memory/develop-roll.md`, «A model of his OWN». The RECOVERY of a
+record for a pair without one (his Winnow finals) is not built: it needs
 Atelier's own engine (TS), as `auto-develop.md` §6 B3 says, not a Python twin.
 
 **Delivered as planned:** A second model: thumbnail (+ the as-shot stats Atelier already

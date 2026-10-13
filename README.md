@@ -1849,9 +1849,16 @@ been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
 Pick grey share the white balance — the newer replaces the older, and turning
 it off gives back the balance from before either. The switches remember
 their clicks for the session only: after a reload they are off and the values
-stay. And one **Auto**, first in the row, runs your recipe: the steps ticked
-in Settings › Automatic (tone, bands and detail until you say otherwise;
-colour, level and upright when you tick them), in a fixed order, each
+stay. **My own**, drawn in the row once this device holds a model learned
+from your rolls (Settings › Learning → *Your model*, the two files
+`training/` exports), writes the eleven sliders at once as your hand would
+set them on this picture — from the picture as shot, its light and the
+camera's facts, the three things the training file carries — as one switch;
+the runtime that runs it (ONNX Runtime, about 14 MB) is fetched from this
+site the first time it is pressed, and nothing leaves. And one **Auto**,
+first in the row, runs your recipe: the steps ticked in Settings › Automatic
+(tone, bands and detail until you say otherwise; colour, *my own*, level
+and upright when you tick them), in a fixed order, each
 through its own switch — so any one can be taken back alone afterwards, and
 a second click on Auto takes them all back. With *When a picture opens →
 Auto*, an untouched photograph gets it the first time it opens, once per
@@ -2318,9 +2325,12 @@ whether a picture gets it as it opens —, and *Learning* — whether each
 photograph is kept AS SHOT beside its develop (a 256 px picture, its light
 and its camera's facts, a few kilobytes on this device, pruned with the
 picture, never a position or a word; kept until you say no, and Off drops
-them), and the *Training file*: every pair of every roll written into one
+them), the *Training file*: every pair of every roll written into one
 JSON file on your click, the records normalised, for a trainer outside the
-browser to learn your hand from — nothing leaves by itself. A change reaches
+browser to learn your hand from — nothing leaves by itself —, and *Your
+model*: the `develop-net.onnx` and its `develop-net.json` that trainer
+exports, loaded together and kept on this device only (never on a roll,
+never shipped), answering as *My own* in the Auto row. A change reaches
 the picture open behind the sheet at once.
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them

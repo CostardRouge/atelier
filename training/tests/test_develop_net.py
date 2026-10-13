@@ -79,6 +79,7 @@ def test_training_beats_predicting_nothing_and_exports(workspace, capsys):
     pytest.importorskip("onnx")
     assert main(["export-develop", "--run", str(run), *SET]) == 0
     assert (run / "develop-net.onnx").is_file()
+    assert not (run / "develop-net.onnx.data").exists()  # one file, the weights inside it
     sidecar = json.loads((run / "develop-net.json").read_text())
     assert sidecar["output"]["sliders"] == list(SLIDERS) and sidecar["thumb"] == 32
     ort = pytest.importorskip("onnxruntime")

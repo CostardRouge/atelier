@@ -200,9 +200,11 @@ def export_develop(run_folder: Path, out: Path | None = None, log: Callable[[str
         raise RuntimeError("exporting needs the `onnx` extra: `uv sync --extra onnx`") from e
     # The torch.export-based exporter (the default since 2.9; needs `onnxscript`), the TorchScript one as
     # the fallback where it refuses this graph — the browser runs one picture at a time, so no dynamic batch.
+    # ONE file: the dynamo exporter writes the weights to a `.onnx.data` beside the model by default, and
+    # a model in two files is a model Atelier's vault cannot take whole.
     try:
         torch.onnx.export(model, example, str(target), input_names=["vignette", "stats", "exif"],
-                          output_names=["sliders"], dynamo=True, opset_version=18)
+                          output_names=["sliders"], dynamo=True, opset_version=18, external_data=False)
     except Exception as first:  # noqa: BLE001
         import warnings
 

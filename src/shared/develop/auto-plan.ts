@@ -16,12 +16,15 @@ import type { AutoState } from './auto-slots';
 import { localPref } from '../ui/local-pref';
 
 /** The verbs `Auto` may run, in the order it runs them. */
-export type AutoStep = 'tone' | 'colour' | 'bands' | 'detail' | 'level' | 'upright';
+export type AutoStep = 'tone' | 'colour' | 'bands' | 'own' | 'detail' | 'level' | 'upright';
 
 export const AUTO_STEPS: readonly { id: AutoStep; label: string; hint: string }[] = [
   { id: 'tone', label: 'Tone', hint: 'A black point, a white point and a gamma, as levels' },
   { id: 'colour', label: 'Colour', hint: 'The average cast neutralised — wrong on a sunset, so off by default' },
   { id: 'bands', label: 'Bands', hint: 'Shadows lifted and highlights pulled where the picture leans' },
+  // After the three heuristics so its answer, the whole record of his own
+  // hand, is what stands where they overlap; before detail, which it never writes.
+  { id: 'own', label: 'My own', hint: 'The eleven sliders as the model learned from your rolls would set them — needs a model loaded in Settings › Learning' },
   { id: 'detail', label: 'Detail', hint: 'Noise reduction from the ISO, sharpening from what the picture is developed from' },
   { id: 'level', label: 'Level', hint: 'The horizon straightened — a tilted composition is tilted on purpose, so off by default' },
   { id: 'upright', label: 'Upright', hint: 'Converging verticals and horizontals stood up, the zoom hiding the corners' },
@@ -37,7 +40,8 @@ export interface AutoPlan {
 /**
  * What runs until the author says otherwise: the three that are almost
  * always an improvement. Colour, level and upright each have a picture they
- * are exactly wrong on, so they wait for a tick.
+ * are exactly wrong on, so they wait for a tick; his own model waits for a
+ * model, and for his tick — its answer is his hand, not a safe default.
  */
 export const DEFAULT_AUTO_PLAN: Readonly<AutoPlan> = Object.freeze({ steps: ['tone', 'bands', 'detail'] as AutoStep[], onOpen: false });
 

@@ -272,10 +272,14 @@ make export-develop                                          # runs/<run>/develo
 `eval-develop` donne l'erreur moyenne de chaque curseur dans son unité
 (± stops pour l'exposition, ± points pour les autres) et la compare à celle
 d'un modèle qui ne toucherait à rien : tant que la seconde n'est pas battue
-nettement, il manque des paires. Le fichier ONNX exporté est celui
-qu'Atelier chargera dans le navigateur (`onnxruntime-web`, depuis son propre
-domaine) — ce branchement côté Atelier est la dernière étape, décrite dans
-[`PLAN.md`](PLAN.md).
+nettement, il manque des paires. Les deux fichiers exportés, `develop-net.onnx`
+et `develop-net.json`, se chargent **ensemble** dans Atelier : Develop →
+⚙ → *Learning* → *Your model* → *Load…*. Ils restent sur cet appareil
+(jamais sur un roll, jamais sur le site) et le verbe **My own** apparaît dans
+la rangée Auto : un clic écrit les onze curseurs d'un coup, un second les
+remet comme avant ; dans *Automatic*, l'étape *My own* le fait courir avec
+Auto. Le moteur qui l'exécute (ONNX Runtime, 14 Mo) est servi par le site
+lui-même et chargé au premier clic — rien ne sort.
 
 ## 7. Le tableau de bord
 

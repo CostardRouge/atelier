@@ -222,10 +222,16 @@ original is nearest the export, at 256 px, through the real engine — fifteen
 parameters, a render a millisecond; the look and the crop complicate, do not
 prevent). That recovery is a later brick, not a commit here.
 
-**B4 — Inference in the browser.** `onnxruntime-web` from our own origin, the
-model under `public/models/`, loaded on first ask like the segmenter; a verb
-*Auto · my own* beside the three of §5 that writes the predicted record
-through the same `patch`. Local-first unchanged.
+**B4 — Inference in the browser — BUILT 2026-10-13** (`own-model.ts`,
+`own-model-vault.ts`, `own-model-run.ts`, the *Your model* row of Settings
+› Learning, *My own* in the Auto row, an `own` step of the plan). As
+planned but for one thing: the model is never under `public/` — it is his,
+loaded from the two files `training/`'s `export-develop` writes into a
+per-device vault, like a `.dcp`. `onnxruntime-web`'s wasm backend is served
+from our own origin as an asset of the build and fetched on first press;
+the eleven sliders are written as ONE value switch. B3 is the `training/`
+workspace (M6). Local-first unchanged. Rules and what was driven:
+`docs/memory/develop-roll.md`, «A model of his OWN».
 
 ## 7. Approach 3 — the assistant, when decided
 

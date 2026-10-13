@@ -1814,6 +1814,65 @@ journal's three steps `via: auto`, the stored levels' gamma 0.55. Drive trap:
 a module edited after the dev server started is a SECOND instance under
 `evaluate`'s `import()` (Vite's HMR serves the app a `?t=` copy), so a module
 STORE must be driven through the real control, never by importing it.
+## A model of his OWN answers in the Auto row (2026-10-13, B4 of `docs/auto-develop.md` §6)
+
+**Decision** (his «fais tout» over the stack of `training/` PRs): the develop
+predictor `training/` exports (`develop-net.onnx` + `develop-net.json`,
+M6) runs IN the browser as the verb *My own* — `shared/develop/own-model.ts`
+(pure: the sidecar reader, the two input vectors, the clamp to each slider's
+reach and step, the told line), `own-model-vault.ts` (ONE model per device
+in its own IndexedDB database, the `.dcp` vault's shape), `own-model-run.ts`
+(ONNX Runtime's wasm backend), `use-own-model.ts`, the *Your model* row of
+Settings › Learning, and an `own` step of the plan. Rules:
+
+- **The model is HIS, never the site's**: loaded from the two files the run
+  folder holds (both at once, either order), kept on THIS device, never on a
+  roll, a preset or a paste, and `public/` carries none — a model learned
+  from his photographs is as personal as a purchased look. One model;
+  loading another replaces it; *Forget* drops it and its session.
+- **The runtime is served from OUR origin and fetched on first press**:
+  `onnxruntime-web/wasm` behind a dynamic import, its `.wasm` (14.2 MB) and
+  loader `.mjs` as two `?url` assets of the build (`dist/assets/ort-wasm-
+  simd-threaded-*.wasm`), `wasmPaths` set to their ABSOLUTE urls (a relative
+  `?url` is resolved against the page — the override wants absolutes), ONE
+  thread (`numThreads = 1`: GitHub Pages sends no COOP/COEP, so no
+  SharedArrayBuffer; a net this small answers in milliseconds anyway). The
+  entry chunk did not move (478 kB). Measured headless in dev: the first
+  press 0.7 s with the wasm cold, the second 2 ms; the session is kept for
+  the visit, keyed on the model's hash.
+- **The inputs are the TRAINER's, bit for bit where it can be**: the
+  as-shot sample at `SHOT_LONG_EDGE` (`asShotSample(256)`, the shot bake's
+  own size) squashed to the sidecar's square as `DevelopNet.thumbnail`
+  squashes it; `statsVector` is `records.stats_vector` (the cumulative
+  histogram interpolated at the new edges — pinned to numpy's numbers in the
+  spec) and `exifVector` is `records.exif_vector`. What differs: the
+  browser's JPEG decode and canvas resample against Pillow's and
+  `F.interpolate(antialias=True)` — a few codes, never measured against a
+  real model yet.
+- **The answer is ONE value switch over the eleven sliders**
+  (`use-value-switch.ts`, verb `own`): clamped to each slider's reach,
+  rounded to its step (`slidersFromOutput`), a slider the sidecar does not
+  name left alone; a second click puts the eleven back, an undo lights and
+  dims it by itself, and `Auto` runs it as its `own` step — placed AFTER
+  tone, colour and bands (so where they overlap on temperature or the
+  bands, his hand's whole record is what stands) and BEFORE detail, which
+  it never writes; unticked by default, drawn only while a model is held,
+  never on a clip. The told line names the moved sliders by their share of
+  reach (four at most) and the run that answered.
+- **The export writes ONE file**: the dynamo exporter puts the weights in a
+  `.onnx.data` beside the model by default, which the vault cannot take
+  whole — `external_data=False` in `train_develop.py`, pinned by its spec.
+- The Trips/Studio `DevelopSheet` does not draw the verb yet: it has the
+  stats but no as-shot sample at the trainer's size.
+
+Driven headless against the dev server (`probe-own.mjs`, a synthetic model
+from a 30-epoch run): the vault took the two files, the runtime's wasm came
+from `127.0.0.1:5199/atelier/node_modules/onnxruntime-web/dist/…`, a dark
+warm gradient was answered `exposure +0.85 · temperature -13 · contrast
++5` (the synthetic taste: lift and cool), *Forget* emptied the vault, no
+console error. NOT driven: the Auto row's button and the settings row as
+clicked (the modules were imported directly), a real model of his, Safari.
+
 ## A swipe pages the roll when A/B is off (2026-10-07)
 
 **The maintainer: *"In develop: when A/B compare is not active let's have

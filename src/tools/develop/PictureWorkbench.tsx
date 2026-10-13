@@ -79,6 +79,11 @@ import { isDefaultKeystone, sameKeystone, type Keystone } from '../../shared/ren
 import { UPRIGHT_SAMPLE_EDGE, describeUpright, measureUpright, uprightKeystone } from '../../shared/develop/auto-keystone';
 import { LEVEL_SAMPLE_EDGE, describeTilt, levelFine, lumaOf, measureTilt } from '../../shared/develop/auto-level';
 import { DEFAULT_AUTO_PLAN, autoPlanPref } from '../../shared/develop/auto-plan';
+import { describeOwnAnswer, sameSliders, slidersFromOutput, slidersOf, type DevelopSliders as OwnSliders } from '../../shared/develop/own-model';
+import { predictOwn } from '../../shared/develop/own-model-run';
+import { useOwnModel } from '../../shared/develop/use-own-model';
+import { SHOT_LONG_EDGE, shotExifOf } from '../../shared/develop/shot-record';
+import type { OwnModelVerb } from '../../shared/develop/DevelopAuto';
 import { runAutoVerb } from '../../shared/develop/DevelopAuto';
 import { firstOpen, useAutoAll, type AutoAllStep } from '../../shared/develop/use-auto-all';
 import { WRITE_DELAY_MS } from '../../shared/develop/use-write-through';
@@ -2400,13 +2405,63 @@ export default function PictureWorkbench({
     };
   }, [uprightSwitch, picture, keystoneDraft, source, tell]);
 
+  // --- My own: the model learned from his rolls (`own-model-run.ts`, B4) ----
+  // The eleven sliders at once, as ONE value switch over the record's sliders
+  // (`use-value-switch.ts`), so a second click puts the eleven back and an
+  // undo lights and dims it by itself. Asked on the picture AS SHOT — the
+  // trainer's own 256 px sample —, its stats and the camera's facts, the very
+  // three things the training file carries. Drawn only while this device
+  // holds a model; a clip is never asked (it has no "as shot" pair).
+  const ownModel = useOwnModel();
+  const stats = picture.stats;
+  const ownSliders = useMemo(() => slidersOf(draft.draft), [draft.draft]);
+  const writeOwnSliders = useCallback((value: OwnSliders) => draft.patch(value), [draft]);
+  const ownSwitch = useValueSwitch<OwnSliders>({
+    pictureKey: entry.id,
+    verb: 'own',
+    value: ownSliders,
+    same: sameSliders,
+    write: writeOwnSliders,
+    onTold: tell,
+    label: 'my own',
+    words: 'the eleven sliders',
+  });
+  const ownSlidersRef = useRef(ownSliders);
+  ownSlidersRef.current = ownSliders;
+  const autoOwnVerb = useMemo<(OwnModelVerb & { apply: () => Promise<void>; turnOff: () => boolean }) | null>(() => {
+    if (!ownModel || clip) return null;
+    const apply = async () => {
+      const sample = picture.asShotSample(SHOT_LONG_EDGE);
+      if (!sample || !stats || stats.total <= 0) {
+        tell('my own · the picture has not been read yet');
+        return;
+      }
+      const answer = await predictOwn({ sample, stats, exif: shotExifOf(shotExif), scope: taskScope });
+      if (!answer.ok) {
+        tell(`my own · ${answer.reason}`);
+        return;
+      }
+      const before = ownSlidersRef.current;
+      const next = slidersFromOutput(answer.output, answer.info.sidecar, before);
+      ownSwitch.record(next, `my own · ${describeOwnAnswer(before, next)} · ${answer.info.sidecar.run || answer.info.fileName}`);
+    };
+    return {
+      state: ownSwitch.state,
+      run: ownModel.sidecar.run || ownModel.fileName,
+      apply,
+      turnOff: ownSwitch.turnOff,
+      onClick: async () => {
+        if (!ownSwitch.turnOff()) await apply();
+      },
+    };
+  }, [ownModel, clip, picture, stats, shotExif, taskScope, ownSwitch, tell]);
+
   // --- the one `Auto` (`auto-plan.ts`, `use-auto-all.ts`) -----------------------
   // Every step the plan may tick, as THIS picture can run it: the Auto row's
-  // three over the stats, the Detail tab's, the Crop tab's two — a clip has
-  // the develop alone. Each runs through its own switch, so each lights and
-  // each can be taken back alone after.
+  // three over the stats, his own model's, the Detail tab's, the Crop tab's
+  // two — a clip has the develop alone. Each runs through its own switch, so
+  // each lights and each can be taken back alone after.
   const [autoPlan] = useLocalPref(autoPlanPref, DEFAULT_AUTO_PLAN);
-  const stats = picture.stats;
   const autoSteps = useMemo<AutoAllStep[]>(() => {
     const develop = (id: 'tone' | 'colour' | 'bands'): AutoAllStep => ({
       id,
@@ -2417,13 +2472,14 @@ export default function PictureWorkbench({
       turnOff: () => auto.turnOff(id),
     });
     const steps: AutoAllStep[] = [develop('tone'), develop('colour'), develop('bands')];
+    if (autoOwnVerb) steps.push({ id: 'own', state: autoOwnVerb.state, apply: autoOwnVerb.apply, turnOff: autoOwnVerb.turnOff });
     if (!clip) {
       steps.push({ id: 'detail', state: autoDetailVerb.state, apply: autoDetailVerb.apply, turnOff: autoDetailVerb.turnOff });
       steps.push({ id: 'level', state: cropSwitches.state('level'), apply: runAutoLevel, turnOff: () => cropSwitches.turnOff('level') });
       steps.push({ id: 'upright', state: autoUprightVerb.state, apply: autoUprightVerb.apply, turnOff: autoUprightVerb.turnOff });
     }
     return steps;
-  }, [auto, stats, clip, autoDetailVerb, cropSwitches, runAutoLevel, autoUprightVerb]);
+  }, [auto, stats, clip, autoOwnVerb, autoDetailVerb, cropSwitches, runAutoLevel, autoUprightVerb]);
   const autoAll = useAutoAll({ plan: autoPlan, steps: autoSteps, onTold: tell });
   // Run as the picture OPENS, when the device asks: an untouched photograph
   // (never a clip), once per picture per session, the moment its stats are
@@ -2521,9 +2577,9 @@ export default function PictureWorkbench({
       id: 'develop.auto',
       title: 'Automatic verbs',
       description:
-        'Run the Auto row’s verbs on the open picture, measured on the picture as shot: tone (levels: black point, white point, gamma), colour (white balance), bands (highlights/shadows/whites/blacks), detail (noise and sharpening from the ISO), level (straighten the horizon), upright (converging verticals). A clip takes tone, colour and bands only. Each is a switch: run on a picture where it is already on, it stays on. Answers what each said.',
+        'Run the Auto row’s verbs on the open picture, measured on the picture as shot: tone (levels: black point, white point, gamma), colour (white balance), bands (highlights/shadows/whites/blacks), own (the eleven sliders from the model learned from the author’s rolls — only while this device holds one), detail (noise and sharpening from the ISO), level (straighten the horizon), upright (converging verticals). A clip takes tone, colour and bands only. Each is a switch: run on a picture where it is already on, it stays on. Answers what each said.',
       params: {
-        steps: { type: 'strings', description: 'Any of tone, colour, bands, detail, level, upright; all of them when absent.', optional: true },
+        steps: { type: 'strings', description: 'Any of tone, colour, bands, own, detail, level, upright; all of them when absent.', optional: true },
       },
       available: () => (agentView.current.statsReady ? true : 'the open picture is still being measured'),
       run: (p) =>
@@ -3015,6 +3071,7 @@ export default function PictureWorkbench({
                 stats={picture.stats}
                 auto={auto}
                 all={autoAll}
+                own={autoOwnVerb ?? undefined}
                 picking={picture.picking}
                 onPicking={picture.setPicking}
                 echo={taskScope}
