@@ -176,10 +176,26 @@ keys stand down (`useDialogKeys` takes `undefined`).
 and a trip or a season of flights is neither one day nor one Winnow session.
 **How to apply**:
 
-- **The request is the Day scope's own** (`allAssets({ dateFrom, dateTo })`)
-  with two different ends, capped at `SPAN_CAP` (3 000). A list that reaches
-  its scope's ceiling — Day, Span or Folder — is SAID on the status line
-  (`the first N only — narrow the span`), never cut in silence.
+- **A span is asked for WHOLE, in PARTS** (rev. 2026-10-13, his report the
+  same day: *«du 1er octobre 2025 au 13 octobre 2026 … n'affiche que les
+  médias du mois d'octobre 2025»*). The first build asked a span in ONE capped
+  walk (3 000), and since the list comes oldest first a dense year showed only
+  its first weeks — reproduced on a stub, 13 762 media → 1 Oct to mid-Dec. Now:
+  `client.calendar(from, to, filter)` (Winnow's `/api/assets/calendar`, one
+  request, the same filters) gives the day counts, `spanChunks` cuts them into
+  parts of ~2 000 media (whole days, contiguous, a heavy day alone), and each
+  part is walked in pages of 500 (Winnow's `PAGE_MAX`), the grid filling as it
+  lands, up to `SPAN_CAP` 20 000. A list that reaches its scope's ceiling — Day,
+  Span or Folder — is SAID on the status line, never cut in silence. **Trap**:
+  every reset (ticks, unfolded piles, the batch) keys on `scopeKey`, never on
+  `rows`, which a span receives part by part; the opening ticks are seeded once
+  the list is WHOLE (`loaded`) and added to what was ticked meanwhile.
+- **A month strip** (`MonthStrip`, `spanMonths`) above a span's grid ordered by
+  time: one bar per month from the calendar's counts, faint while its rows have
+  not landed, a click growing the batch to reach that month and scrolling to
+  its first day heading (`data-day`, `revealInScroller`). Winnow paginates
+  correctly — read in its `api/assets/route.ts`: keyset on `(captured_at, id)`,
+  timestamps kept as text so the cursor round-trips — so the fault was ours.
 - **Presets**: the host's own spans first (the anchor's leg, a multi-day
   anchor), then the last 7 and 30 days, this month, this year, each ending
   today; two `DateRangeField`s for the rest. A preset applies and closes.

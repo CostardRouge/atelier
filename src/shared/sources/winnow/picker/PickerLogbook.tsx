@@ -74,7 +74,7 @@ export default function PickerLogbook({
       <tbody>
         {runs.map((run, k) => [
           grouped ? (
-            <tr key={`day-${k}`}>
+            <tr key={`day-${k}`} data-day={run.day ?? undefined}>
               <th colSpan={9} className="px-2 pt-3 pb-1 text-left text-xs font-semibold border-b border-line-strong">
                 {run.day ? dayHeading(run.day) : 'No date'}
                 <span className="ml-2 font-mono text-3xs font-normal text-muted tabular-nums">

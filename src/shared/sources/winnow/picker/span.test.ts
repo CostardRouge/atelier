@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WinnowAssetRow } from '../client';
-import { dayHeading, dayRuns, normalSpan, openingSpan, rowDay, spanDays, spanLabel, spanPresets } from './span';
+import { dayHeading, dayRuns, normalSpan, openingSpan, rowDay, spanChunks, spanDays, spanLabel, spanMonths, spanPresets } from './span';
 
 describe('a span', () => {
   it('orders its two ends and refuses what is not a date', () => {
@@ -63,5 +63,41 @@ describe('days in the grid', () => {
       { day: 'a', items: ['a3'] },
       { day: null, items: ['x'] },
     ]);
+  });
+});
+
+describe('a span asked for in parts', () => {
+  const span = { from: '2025-10-01', to: '2026-10-13' };
+  const days = [
+    { date: '2025-10-02', count: 900 },
+    { date: '2025-10-03', count: 900 },
+    { date: '2025-10-20', count: 900 },
+    { date: '2026-03-05', count: 2500 },
+    { date: '2026-08-01', count: 10 },
+    { date: '2027-01-01', count: 99 },
+  ];
+
+  it('covers every day once, in parts of about the budget, a heavy day alone', () => {
+    const parts = spanChunks(days, span, 2000);
+    expect(parts).toEqual([
+      { from: '2025-10-01', to: '2025-10-03', count: 1800 },
+      { from: '2025-10-04', to: '2025-10-20', count: 900 },
+      { from: '2025-10-21', to: '2026-03-05', count: 2500 },
+      { from: '2026-03-06', to: '2026-10-13', count: 10 },
+    ]);
+  });
+
+  it('has no part where the calendar counted nothing', () => {
+    expect(spanChunks([], span, 2000)).toEqual([]);
+    expect(spanChunks([{ date: '2027-01-01', count: 5 }], span, 2000)).toEqual([]);
+  });
+
+  it('lists every month of the span, the empty ones too', () => {
+    const months = spanMonths(days, span);
+    expect(months).toHaveLength(13);
+    expect(months[0]).toEqual({ month: '2025-10', count: 2700 });
+    expect(months[1]).toEqual({ month: '2025-11', count: 0 });
+    expect(months[5]).toEqual({ month: '2026-03', count: 2500 });
+    expect(months[12]).toEqual({ month: '2026-10', count: 0 });
   });
 });
