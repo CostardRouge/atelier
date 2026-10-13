@@ -162,6 +162,23 @@ describe('facets', () => {
     expect(pass({ notHeld: true })).toEqual([1, 3]);
   });
 
+  it('finds the clips that carry a flight log, from the row alone', () => {
+    const clips = items([
+      row(10, { media_type: 'video', ext: 'mp4', sidecars: [{ id: 7, kind: 'srt', filename: 'DJI_0010.SRT' }] }),
+      row(11, { media_type: 'video', ext: 'mp4', has_telemetry: true }),
+      row(12, { media_type: 'video', ext: 'mp4', sidecars: [{ id: 8, kind: 'xml', filename: 'C0001M01.XML' }] }),
+      row(13),
+    ]);
+    expect(clips.map((it) => it.log)).toEqual(['with', 'with', 'without', null]);
+    const pass = (over: Partial<PickFacets>) => ids(clips.filter((it) => passes(it, f(over))));
+    expect(pass({ logs: ['with'] })).toEqual([10, 11]);
+    expect(pass({ logs: ['without'] })).toEqual([12]);
+    expect(pass({ logs: ['with', 'without'] })).toEqual([10, 11, 12]);
+    expect(facetCounts(clips).logs).toEqual({ with: 2, without: 1 });
+    expect(activeFacets(f({ logs: ['with'] }))).toBe(1);
+    expect(readFacets({ logs: ['with', 'maybe'] }).logs).toEqual(['with']);
+  });
+
   it('counts the scope, filters ignored', () => {
     const c = facetCounts(list);
     expect(c.buckets).toEqual({ pick: 1, star: 1, unrated: 1, skip: 0, reject: 1 });

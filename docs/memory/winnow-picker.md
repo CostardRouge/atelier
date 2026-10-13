@@ -191,3 +191,16 @@ and a trip or a season of flights is neither one day nor one Winnow session.
   time: CONSECUTIVE runs of `capture_date` (`dayRuns`, `rowDay`), never
   regrouped, so a ⇧-click, the tick verbs and the lightbox walk the order
   drawn. Ordered by stars, the headings go away.
+
+## A FLIGHT LOG facet, read off the row (2026-10-13)
+
+**Decision.** The rail filters clips *With a log* / *Clips without*
+(`PickFacets.logs`, `logStateOf`), and a tile wears `SRT` when its clip's log
+rides with it. **Why**: Winnow already PAIRS a DJI clip with its `.srt` — the
+row carries `has_telemetry` and an `srt` sidecar — so finding the flights costs
+no request; until now nothing said which clip had one. **How to apply**: a
+photo has no log and is NEITHER (it passes only while the facet is empty); the
+section shows only when the scope holds a clip, with a bar of the share that
+carries a log. Server-side filtering by log is Winnow's to add
+(`has_telemetry=1`), and would matter only for a span long enough to hit the
+cap.

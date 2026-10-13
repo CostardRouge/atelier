@@ -10,8 +10,8 @@
  *   and sorted into five BUCKETS: picks, starred without a flag, unrated,
  *   skipped, rejected. A star on a pick is still a pick: the flag is the
  *   stronger statement.
- * - **The facets** — buckets, stars at least, type, extension, device, tags,
- *   no final yet, not already held — are multi-select and filtered HERE over
+ * - **The facets** — buckets, stars at least, type, flight log, extension,
+ *   device, tags, no final yet, not already held — are multi-select and filtered HERE over
  *   the scope's rows. Only the library half goes to the server (it is a
  *   scope, and a capped list filtered afterwards loses rows). Their counts
  *   are the SCOPE's, so ticking one facet never moves another's numbers.
@@ -51,6 +51,25 @@ export function bucketOf(c: Culling | null): Bucket {
 
 export type MediaKind = 'photo' | 'video';
 
+/**
+ * Whether a CLIP carries a DJI flight log: `with` when Winnow keeps a `.srt`
+ * beside it (`has_telemetry`, or an `srt` sidecar on the row — the pair is
+ * already on the wire, no request), `without` for any other clip. A photo has
+ * no log to carry and is neither.
+ */
+export type LogState = 'with' | 'without';
+export const LOG_STATES: readonly LogState[] = ['with', 'without'];
+
+/** The `.srt` sidecars a row carries — the flight log of a DJI clip. */
+export function srtSidecars(row: WinnowAssetRow): WinnowAssetRow['sidecars'] {
+  return (row.sidecars ?? []).filter((s) => s.kind === 'srt');
+}
+
+export function logStateOf(row: WinnowAssetRow): LogState | null {
+  if (row.media_type !== 'video') return null;
+  return row.has_telemetry || srtSidecars(row).length > 0 ? 'with' : 'without';
+}
+
 export interface PickItem {
   row: WinnowAssetRow;
   id: number;
@@ -58,6 +77,8 @@ export interface PickItem {
   bucket: Bucket;
   star: number;
   kind: MediaKind;
+  /** A clip's flight log (`logStateOf`); null for a photo. */
+  log: LogState | null;
   /** Lowercase, no dot — as Winnow stores it. */
   ext: string;
   /** The other half of a RAW+JPEG pair, lowercase; null otherwise. */
@@ -82,6 +103,7 @@ export function pickItem(row: WinnowAssetRow, held: boolean): PickItem {
     bucket: bucketOf(culling),
     star: culling?.star ?? 0,
     kind: row.media_type === 'video' ? 'video' : 'photo',
+    log: logStateOf(row),
     ext: (row.ext ?? '').toLowerCase().replace(/^\./, ''),
     pairExt: companion ? companion.replace(/^\./, '') : null,
     device: row.device?.trim() || row.camera_model?.trim() || null,
@@ -157,6 +179,8 @@ export interface PickFacets {
   /** 0 is no floor. */
   minStar: number;
   kinds: MediaKind[];
+  /** Clips with or without a flight log; a photo passes only while this is empty. */
+  logs: LogState[];
   exts: string[];
   devices: string[];
   tags: string[];
@@ -170,6 +194,7 @@ export const DEFAULT_FACETS: PickFacets = {
   buckets: ['pick', 'star', 'unrated', 'skip'],
   minStar: 0,
   kinds: [],
+  logs: [],
   exts: [],
   devices: [],
   tags: [],
@@ -184,6 +209,7 @@ export function passes(it: PickItem, f: PickFacets): boolean {
   if (!f.buckets.includes(it.bucket)) return false;
   if (f.minStar > 0 && it.star < f.minStar) return false;
   if (f.kinds.length && !f.kinds.includes(it.kind)) return false;
+  if (f.logs.length && (it.log === null || !f.logs.includes(it.log))) return false;
   if (f.exts.length && !f.exts.includes(it.ext)) return false;
   if (f.devices.length && (it.device === null || !f.devices.includes(it.device))) return false;
   if (f.tags.length && !it.tags.some((t) => f.tags.includes(t))) return false;
@@ -201,6 +227,7 @@ export function activeFacets(f: PickFacets): number {
     (sameSet(f.buckets, DEFAULT_FACETS.buckets) ? 0 : 1) +
     (f.minStar > 0 ? 1 : 0) +
     f.kinds.length +
+    f.logs.length +
     f.exts.length +
     f.devices.length +
     f.tags.length +
@@ -227,6 +254,7 @@ export function readFacets(raw: unknown): PickFacets {
     buckets: buckets.length ? buckets : DEFAULT_FACETS.buckets,
     minStar,
     kinds: strings(r.kinds).filter((k): k is MediaKind => k === 'photo' || k === 'video'),
+    logs: strings(r.logs).filter((k): k is LogState => k === 'with' || k === 'without'),
     exts: strings(r.exts),
     devices: strings(r.devices),
     tags: strings(r.tags),
@@ -243,6 +271,8 @@ export interface FacetCounts {
   /** `starsAtLeast[k]` — rows with k stars or more, k from 1 to 5; index 0 is the total. */
   starsAtLeast: number[];
   kinds: Map<MediaKind, number>;
+  /** Clips with and without a flight log. */
+  logs: Record<LogState, number>;
   /** By extension, with the pair's other half when the files are paired. */
   exts: Map<string, { count: number; pair: string | null }>;
   devices: Map<string, number>;
@@ -258,6 +288,7 @@ export function facetCounts(items: readonly PickItem[]): FacetCounts {
     buckets: { pick: 0, star: 0, unrated: 0, skip: 0, reject: 0 },
     starsAtLeast: [items.length, 0, 0, 0, 0, 0],
     kinds: new Map(),
+    logs: { with: 0, without: 0 },
     exts: new Map(),
     devices: new Map(),
     tags: new Map(),
@@ -268,6 +299,7 @@ export function facetCounts(items: readonly PickItem[]): FacetCounts {
     out.buckets[it.bucket] += 1;
     for (let k = 1; k <= Math.min(5, it.star); k++) out.starsAtLeast[k] += 1;
     out.kinds.set(it.kind, (out.kinds.get(it.kind) ?? 0) + 1);
+    if (it.log) out.logs[it.log] += 1;
     const ext = out.exts.get(it.ext);
     if (ext) {
       ext.count += 1;

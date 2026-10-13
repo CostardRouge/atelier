@@ -2456,8 +2456,9 @@ the last 7 or 30 days, this month, this year, or two dates), or a **folder**
 as Winnow ingested it. Every tile wears Winnow's word —
 the pick or reject flag, the stars, a label, a *Gallery* chip when a final
 already links to it — and a rail of filters narrows the list: Incoming ·
-Gallery · All, the verdict, a star floor, photos or clips, the extension, the
-body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
+Gallery · All, the verdict, a star floor, photos or clips, clips **with or
+without a flight log** (a DJI `.srt`, marked `SRT` on the tile), the extension,
+the body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
 The grid's ⋯ orders it by capture time or by stars, sets the tiles small,
 medium or large, and folds the rail away on a wide screen (both remembered on
 this device). A
@@ -2843,7 +2844,7 @@ same stepper and month), by **span** (several days as one list, grouped by
 day — a whole trip at once; a very long span says where it was cut) or by
 folder, every tile with Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
-extension, body, tags, no final yet, not in the library), tick verbs over what
+flight log, extension, body, tags, no final yet, not in the library), tick verbs over what
 is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
 to look at a tile large. Nothing is ticked when it opens — an add downloads —
 and the files come as **proxies**, or as **originals** with their weight shown

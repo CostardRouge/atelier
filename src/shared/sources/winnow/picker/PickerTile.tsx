@@ -18,7 +18,8 @@ export interface PileBadge {
 
 /**
  * One media of the picker's grid: the instance's thumbnail, Winnow's word on
- * it (`CullMark` — flag, stars, label), what kind of file it is, and its tick.
+ * it (`CullMark` — flag, stars, label), what kind of file it is (with `SRT`
+ * when a clip's flight log rides with it), and its tick.
  *
  * A held media (already on the roll, already in the Library) is drawn dimmed
  * with its host's word along the bottom and cannot be ticked — the same rule
@@ -106,6 +107,11 @@ export default function PickerTile({
           <CullMark culling={item.culling ?? undefined} onMedia />
         </span>
         <span className="absolute left-1.5 right-1.5 bottom-1.5 flex items-center justify-end gap-1 overflow-hidden" aria-hidden="true">
+          {item.log === 'with' && (
+            <span className={chip} title="A DJI flight log (.srt) rides with this clip">
+              SRT
+            </span>
+          )}
           <span className={`${chip} uppercase`}>{kindChip}</span>
         </span>
         {item.held && (
