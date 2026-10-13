@@ -4,6 +4,7 @@ import {
   WinnowError,
   type LibraryHalf,
   type WinnowAssetRow,
+  type WinnowCalendarDay,
   type WinnowClient,
   type WinnowSession,
 } from '../client';
@@ -22,13 +23,14 @@ import { useIsCompact } from '../../../ui/use-layout-mode';
 import LoadingState from '../../../ui/LoadingState';
 import { Icons } from '../../../ui/icons';
 import useDialogKeys from '../../../ui/use-dialog-keys';
+import { revealInScroller } from '../../../ui/reveal';
 import { useInViewport } from '../../../lib/use-in-viewport';
 import PickerLogbook from './PickerLogbook';
 import PickerRail from './PickerRail';
 import { readFlightLog } from './flight-logs';
 import type { FlightTrack } from './flight-track';
 import SpanPicker from './SpanPicker';
-import { dayHeading, dayRuns, openingSpan, rowDay, spanDays, spanPresets } from './span';
+import { dayHeading, dayRuns, openingSpan, rowDay, spanChunks, spanDays, spanMonths, spanPresets } from './span';
 import PickerTile, { type PileBadge } from './PickerTile';
 import {
   activeFacets,
@@ -43,6 +45,7 @@ import {
   openingTicks,
   pickItem,
   pilesOf,
+  serverFacets,
   rangeTicked,
   shown,
   SHOW_ALL,
@@ -60,13 +63,20 @@ import type { PickerAction, PickerHost } from './picker-host';
 /** How many rows a scope may bring: a day is a few hundred, a folder a few thousand. */
 const DAY_CAP = 600;
 const FOLDER_CAP = 2000;
-/** A span is weeks of an instance: its list stops here, and the status line says it did. */
-const SPAN_CAP = 3000;
+/**
+ * A span is asked for in PARTS of about this many media (`spanChunks`, from
+ * the instance's own day counts), oldest first, the grid filling as each
+ * lands — never one capped walk, which showed a year as its first weeks.
+ */
+const SPAN_CHUNK = 2000;
+/** What one span may hold before it stops, said on the status line. */
+const SPAN_CAP = 20_000;
+/** Pages of the most the instance serves (its `PAGE_MAX`): a span is many of them. */
+const SPAN_PAGE = 500;
 /** Tiles mounted per batch, the next as the end of the grid nears. */
 const BATCH = 240;
 
 type Scope = 'day' | 'span' | 'session';
-const CAP: Record<Scope, number> = { day: DAY_CAP, span: SPAN_CAP, session: FOLDER_CAP };
 
 const SWATCH: Record<string, string> = {
   pick: 'bg-ok',
@@ -160,6 +170,11 @@ export default function WinnowPicker({
   const [sort, setSort] = useState<PickSort>(remembered?.sort ?? 'time');
 
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
+  // The scope's list is whole (every part landed), and whether it stopped at its cap.
+  const [loaded, setLoaded] = useState(false);
+  const [truncated, setTruncated] = useState(false);
+  // A span's day counts, as the instance's calendar answered them.
+  const [spanCounts, setSpanCounts] = useState<WinnowCalendarDay[] | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [generation, setGeneration] = useState(0);
   // Every frame of a pile, where the instance says it can list them (Winnow
@@ -168,41 +183,83 @@ export default function WinnowPicker({
   // An instance that predates it folds piles, and a pile's frames are asked
   // for when it is unfolded (`burstId`).
   const framesListed = listsBurstFrames(connection.capabilities);
-  const mediaType = host.narrow?.mediaType;
+  // A span asks the server for only what the rail keeps (`serverFacets`): a
+  // year of everything is tens of thousands of rows, a year of one drone's
+  // clips a few hundred. The host's own narrowing wins over the rail's.
+  const asked = scope === 'span' ? serverFacets(facets) : {};
+  const mediaType = host.narrow?.mediaType ?? asked.mediaType;
+  const device = asked.device;
+
+  // What names the scope being listed: every reset keys on it, never on the
+  // rows, which a span receives part by part.
+  const scopeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${mediaType}|${device}|${generation}`;
 
   // The scope's rows, every page. A change of scope forgets the last answer
   // first, so a new day never shows the previous one's pictures for a frame.
   useEffect(() => {
     setRows(null);
+    setLoaded(false);
+    setTruncated(false);
+    setSpanCounts(null);
     setProblem(null);
     if (scope === 'session' && sessionId === null) return;
     const controller = new AbortController();
+    const { signal } = controller;
     let cancelled = false;
-    const narrowing = {
-      ...(half ? { half } : {}),
-      ...(mediaType ? { mediaType } : {}),
-      bursts: framesListed ? ('frames' as const) : ('fold' as const),
+    const filter = { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}), ...(device ? { device } : {}) };
+    const narrowing = { ...filter, bursts: framesListed ? ('frames' as const) : ('fold' as const) };
+    const fail = (err: unknown) => {
+      if (cancelled) return;
+      setRows((cur) => cur ?? []);
+      setLoaded(true);
+      setProblem(explain(err, client, connection.id));
     };
-    const ask =
-      scope === 'session'
-        ? client.allAssets({ sessionId: sessionId!, ...narrowing }, FOLDER_CAP, controller.signal)
-        : scope === 'span'
-          ? client.allAssets({ dateFrom: span.from, dateTo: span.to, ...narrowing }, SPAN_CAP, controller.signal)
-          : client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, DAY_CAP, controller.signal);
-    ask
-      .then((all) => {
-        if (!cancelled) setRows(all);
-      })
-      .catch((err: unknown) => {
+    if (scope !== 'span') {
+      const cap = scope === 'session' ? FOLDER_CAP : DAY_CAP;
+      const ask =
+        scope === 'session'
+          ? client.allAssets({ sessionId: sessionId!, ...narrowing }, cap, signal)
+          : client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, cap, signal);
+      ask
+        .then((all) => {
+          if (cancelled) return;
+          setRows(all);
+          setTruncated(all.length >= cap);
+          setLoaded(true);
+        })
+        .catch(fail);
+    } else {
+      // A span: its day counts first (one request), then its parts in order,
+      // each one shown as it lands.
+      void (async () => {
+        const calendar = await client.calendar(span.from, span.to, filter, signal);
         if (cancelled) return;
-        setRows([]);
-        setProblem(explain(err, client, connection.id));
-      });
+        setSpanCounts(calendar.days);
+        const all: WinnowAssetRow[] = [];
+        for (const part of spanChunks(calendar.days, { from: span.from, to: span.to }, SPAN_CHUNK)) {
+          const got = await client.allAssets(
+            { dateFrom: part.from, dateTo: part.to, ...narrowing, limit: SPAN_PAGE },
+            SPAN_CAP - all.length,
+            signal,
+          );
+          if (cancelled) return;
+          all.push(...got);
+          setRows([...all]);
+          if (all.length >= SPAN_CAP) {
+            setTruncated(true);
+            break;
+          }
+        }
+        if (cancelled) return;
+        setRows([...all]);
+        setLoaded(true);
+      })().catch(fail);
+    }
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, generation, framesListed]);
+  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, device, generation, framesListed]);
 
   // A folded pile's frames, asked for on its unfold where the scope's list
   // could not carry them. Forgotten with the scope.
@@ -211,7 +268,7 @@ export default function WinnowPicker({
   useEffect(() => {
     setPileRows(new Map());
     setPileAsking(new Set());
-  }, [rows]);
+  }, [scopeKey]);
   const askPile = (pileId: number) => {
     setPileAsking((cur) => new Set(cur).add(pileId));
     client
@@ -295,6 +352,27 @@ export default function WinnowPicker({
   const surfacedItems = useMemo(() => surfaced(items, piles, unfolded), [items, piles, unfolded]);
   // Counted with every pile folded, so unfolding one never moves a number.
   const counts = useMemo(() => facetCounts(surfaced(items, piles, new Set())), [items, piles]);
+  // A span narrowed to some bodies on the server holds no row of the others,
+  // so the rail lists the instance's bodies beside them (at zero) — ticking
+  // another one asks for it, unticking them all asks for everything again.
+  const [bodies, setBodies] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (scope !== 'span' || bodies) return;
+    let cancelled = false;
+    client
+      .facets()
+      .then((f) => !cancelled && setBodies(f.devices.map((d) => String(d.value))))
+      .catch(() => !cancelled && setBodies([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, bodies, client]);
+  const railCounts = useMemo(() => {
+    if (!device || !bodies?.length) return counts;
+    const devices = new Map(counts.devices);
+    for (const b of bodies) if (!devices.has(b)) devices.set(b, 0);
+    return { ...counts, devices };
+  }, [counts, device, bodies]);
   const shownItems = useMemo(() => shown(surfacedItems, facets, sort), [surfacedItems, facets, sort]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
   // What the lightbox draws for each drawn tile: the proxy over the thumbnail,
@@ -326,22 +404,25 @@ export default function WinnowPicker({
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
   const [anchorId, setAnchorId] = useState<number | null>(null);
   const [focusId, setFocusId] = useState<number | null>(null);
-  // Re-seeded when a scope's rows ARRIVE, never on a facet or a tick: the
-  // opening rule describes a scope, not a view of it.
-  const latest = useRef({ host, piles });
-  latest.current = { host, piles };
+  // Seeded once a scope's list is WHOLE (a span lands part by part), never
+  // on a facet or a tick: the opening rule describes a scope, not a view of
+  // it. What was ticked while the parts landed is kept.
+  const latest = useRef({ host, piles, rows });
+  latest.current = { host, piles, rows };
   useEffect(() => {
     setUnfolded(new Set());
     setAnchorId(null);
     setFocusId(null);
-    if (!rows) {
-      setTicked(new Set());
-      return;
-    }
-    const { host: h } = latest.current;
-    const list = rows.filter((r) => !h.accepts || h.accepts(r)).map((r) => pickItem(r, h.held(r)));
-    setTicked(openingTicks(h.openTicks, surfaced(list, pilesOf(list), new Set())));
-  }, [rows]);
+    setTicked(new Set());
+  }, [scopeKey]);
+  useEffect(() => {
+    if (!loaded) return;
+    const { host: h, rows: all } = latest.current;
+    if (!all) return;
+    const list = all.filter((r) => !h.accepts || h.accepts(r)).map((r) => pickItem(r, h.held(r)));
+    const open = openingTicks(h.openTicks, surfaced(list, pilesOf(list), new Set()));
+    setTicked((cur) => (open.size ? new Set([...cur, ...open]) : cur));
+  }, [loaded, scopeKey]);
 
   const byId = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
   const tickedRows = useMemo(
@@ -471,7 +552,31 @@ export default function WinnowPicker({
 
   // --- the grid's batches ----------------------------------------------------
   const [limit, setLimit] = useState(BATCH);
-  useEffect(() => setLimit(BATCH), [rows, facets, sort]);
+  useEffect(() => setLimit(BATCH), [scopeKey, facets, sort]);
+
+  // A long span's months, and a jump to one: the batch grows to reach the
+  // month's first row, then the grid scrolls to its first day heading.
+  const months = useMemo(
+    () => (spanCounts ? spanMonths(spanCounts, { from: span.from, to: span.to }) : []),
+    [spanCounts, span.from, span.to],
+  );
+  const landedThrough = rows?.length ? rowDay(rows[rows.length - 1]) : null;
+  const gridBox = useRef<HTMLDivElement>(null);
+  const [jump, setJump] = useState<string | null>(null);
+  const jumpTo = (month: string) => {
+    const at = shownItems.findIndex((it) => (rowDay(it.row) ?? '') >= month);
+    if (at < 0) return;
+    setLimit((n) => Math.max(n, at + BATCH));
+    setJump(rowDay(shownItems[at].row));
+  };
+  useEffect(() => {
+    if (!jump) return;
+    const el = gridBox.current?.querySelector<HTMLElement>(`[data-day="${jump}"]`);
+    if (el) {
+      revealInScroller(el, { block: 'start', scroller: gridBox.current });
+      setJump(null);
+    }
+  });
 
   useEffect(() => {
     if (!tracksOn) return;
@@ -510,7 +615,10 @@ export default function WinnowPicker({
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
   const asking = rows === null && problem === null && !(scope === 'session' && sessionId === null);
   // A list that reached its scope's ceiling is a list cut short: said, never silent.
-  const capped = rows !== null && rows.length >= CAP[scope];
+  const capped = truncated;
+  // A span still landing: how much of what the calendar counted is here.
+  const spanTotal = spanCounts ? spanCounts.reduce((n, d) => n + d.count, 0) : null;
+  const landing = scope === 'span' && !loaded && rows !== null && problem === null;
   // The host's own spans first among the presets — its leg, its open span.
   const presets = useMemo(() => {
     const a = host.anchor;
@@ -655,6 +763,13 @@ export default function WinnowPicker({
                   }${heldCount ? ` · ${heldCount} ${host.heldLabel}` : ''} · culled ${culled} %${
                     scope === 'span' ? ` · ${spanDays(span)} days` : ''
                   }`}
+          {landing && (
+            <span>
+              {' '}
+              · loading {rows!.length}
+              {spanTotal !== null ? ` of about ${spanTotal}` : ''}…
+            </span>
+          )}
           {capped && !asking && (
             <span className="text-warn"> · the first {rows!.length} only — narrow the {scope === 'session' ? 'folder' : 'span'} to see the rest</span>
           )}
@@ -687,7 +802,7 @@ export default function WinnowPicker({
             } ${railShown ? '' : 'min-[821px]:hidden'}`}
           >
             <PickerRail
-              counts={counts}
+              counts={railCounts}
               facets={facets}
               onFacets={setFacets}
               half={half}
@@ -785,6 +900,9 @@ export default function WinnowPicker({
                 ]}
               />
             </div>
+            {grouped && scope === 'span' && months.length > 1 && (
+              <MonthStrip months={months} landedThrough={loaded ? null : landedThrough} onJump={jumpTo} />
+            )}
             {/* The verdict mix, drawn once: a hidden bucket is dimmed, never removed. */}
             {counts.total > 0 && (
               <div className="flex-none flex h-1.5 gap-0.5 rounded-full overflow-hidden bg-paper-2" aria-hidden="true">
@@ -799,7 +917,7 @@ export default function WinnowPicker({
                 )}
               </div>
             )}
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <div ref={gridBox} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {asking ? (
                 <LoadingState label={`Asking ${connection.id}…`} />
               ) : scope === 'session' && sessionId === null ? (
@@ -879,7 +997,7 @@ export default function WinnowPicker({
                   const runs = dayRuns(batch, (it) => rowDay(it.row));
                   return runs.map((run, k) => (
                     <section key={`${run.day ?? 'undated'}-${k}`} aria-label={run.day ? dayHeading(run.day) : 'Undated'} className="mb-3">
-                      <h3 className="sticky top-0 z-[2] m-0 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
+                      <h3 data-day={run.day ?? undefined} className="sticky top-0 z-[2] m-0 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
                         {run.day ? dayHeading(run.day) : 'No date'}
                         <span className="font-mono text-3xs font-normal text-muted tabular-nums">{run.items.length} media</span>
                       </h3>
@@ -1121,6 +1239,53 @@ function FolderPicker({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A long span's months as one strip of bars, the height of each its share of
+ * what the calendar counted: the year at a glance, and a jump to any month.
+ * A month whose rows have not landed yet is drawn faint.
+ */
+function MonthStrip({
+  months,
+  landedThrough,
+  onJump,
+}: {
+  months: readonly { month: string; count: number }[];
+  /** The last day whose rows are here while a span lands; null once it is whole. */
+  landedThrough: string | null;
+  onJump: (month: string) => void;
+}) {
+  const max = Math.max(1, ...months.map((m) => m.count));
+  const NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return (
+    <div className="flex-none flex items-end gap-0.5" role="group" aria-label="Jump to a month of the span">
+      {months.map((m) => {
+        const name = NAMES[Number(m.month.slice(5, 7)) - 1];
+        const waiting = landedThrough !== null && m.month > landedThrough.slice(0, 7);
+        return (
+          <button
+            key={m.month}
+            type="button"
+            disabled={m.count === 0}
+            onClick={() => onJump(m.month)}
+            title={`${name} ${m.month.slice(0, 4)} · ${m.count} media${waiting ? ' · still loading' : ''}`}
+            className="flex-1 min-w-0 flex flex-col items-stretch gap-0.5 p-0 border-0 bg-transparent cursor-pointer disabled:cursor-default group"
+          >
+            <span className="relative h-6 flex items-end">
+              <span
+                className={`w-full rounded-t-[2px] ${m.count ? 'bg-accent group-hover:bg-accent-ink' : 'bg-line'} ${waiting ? 'opacity-35' : ''}`}
+                style={{ height: `${m.count ? Math.max(12, (m.count / max) * 100) : 6}%` }}
+              />
+            </span>
+            <span className="font-mono text-3xs text-muted truncate text-center">
+              {name === 'Jan' || m === months[0] ? `${name} ${m.month.slice(2, 4)}` : name}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
