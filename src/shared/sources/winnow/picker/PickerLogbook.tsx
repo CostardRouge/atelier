@@ -10,7 +10,7 @@ import type { PickItem } from './pick-filter';
 import { dayHeading, dayRuns, rowDay } from './span';
 import TrackGlyph from './TrackGlyph';
 
-const head = 'sticky top-0 z-[2] bg-surface px-2 py-1.5 font-mono text-3xs font-normal uppercase tracking-[0.1em] text-muted text-left';
+const head = 'sticky top-0 z-[2] bg-surface px-2 max-[820px]:px-1 py-1.5 font-mono text-3xs font-normal uppercase tracking-[0.1em] text-muted text-left';
 const num = 'font-mono tabular-nums text-right';
 
 /**
@@ -61,7 +61,7 @@ export default function PickerLogbook({
           <th className={`${head} w-8`}>
             <span className="sr-only">Ticked</span>
           </th>
-          <th className={`${head} w-24`}>Track</th>
+          <th className={`${head} w-24 max-[820px]:w-16`}>Track</th>
           <th className={head}>Take-off</th>
           <th className={`${head} max-[820px]:hidden`}>Place</th>
           <th className={`${head} text-right`}>Length</th>
@@ -96,7 +96,7 @@ export default function PickerLogbook({
                   on ? 'bg-accent-wash' : 'hover:bg-paper-2'
                 } ${focusId === it.id ? 'outline-2 -outline-offset-2 outline-ink' : ''}`}
               >
-                <td className="px-2 py-1">
+                <td className="px-2 max-[820px]:px-1 py-1">
                   <button
                     type="button"
                     disabled={it.held}
@@ -122,8 +122,8 @@ export default function PickerLogbook({
                     {Icons.check}
                   </button>
                 </td>
-                <td className="px-2 py-1">
-                  <span className="relative block w-20 h-11 rounded-[6px] overflow-hidden bg-paper-2">
+                <td className="px-2 max-[820px]:px-1 py-1">
+                  <span className="relative block w-20 h-11 max-[820px]:w-14 max-[820px]:h-9 rounded-[6px] overflow-hidden bg-paper-2">
                     {track ? (
                       <TrackGlyph track={track} className="w-full h-full text-accent" />
                     ) : (
@@ -138,24 +138,24 @@ export default function PickerLogbook({
                     )}
                   </span>
                 </td>
-                <td className="px-2 py-1 font-mono tabular-nums whitespace-nowrap">
+                <td className="px-2 max-[820px]:px-1 py-1 font-mono tabular-nums whitespace-nowrap">
                   {localClock(row) ?? '—'}
-                  {it.held && <span className="ml-1.5 text-3xs text-muted">{heldLabel}</span>}
+                  {it.held && <span className="ml-1.5 text-3xs text-muted max-[820px]:hidden">{heldLabel}</span>}
                 </td>
-                <td className="px-2 py-1 max-[820px]:hidden truncate max-w-[10rem]">
+                <td className="px-2 max-[820px]:px-1 py-1 max-[820px]:hidden truncate max-w-[10rem]">
                   {row.place_city ?? row.place_region ?? <span className="text-faint">—</span>}
                 </td>
-                <td className={`px-2 py-1 ${num} whitespace-nowrap`}>
+                <td className={`px-2 max-[820px]:px-1 py-1 ${num} whitespace-nowrap`}>
                   {it.kind === 'video' ? (row.duration_s ? formatDuration(row.duration_s) : '—') : <span className="text-faint uppercase">{it.ext}</span>}
                 </td>
-                <td className={`px-2 py-1 ${num} whitespace-nowrap`}>
+                <td className={`px-2 max-[820px]:px-1 py-1 ${num} whitespace-nowrap`}>
                   {track?.km != null ? `${track.km.toFixed(2)} km` : <span className="text-faint">—</span>}
                 </td>
-                <td className={`px-2 py-1 ${num} whitespace-nowrap max-[820px]:hidden`}>
+                <td className={`px-2 max-[820px]:px-1 py-1 ${num} whitespace-nowrap max-[820px]:hidden`}>
                   {track?.maxHeightM != null ? `${Math.round(track.maxHeightM)} m` : <span className="text-faint">—</span>}
                 </td>
-                <td className="px-2 py-1 max-[820px]:hidden truncate max-w-[9rem] text-ink-soft">{it.device ?? '—'}</td>
-                <td className="px-2 py-1 max-[820px]:hidden">
+                <td className="px-2 max-[820px]:px-1 py-1 max-[820px]:hidden truncate max-w-[9rem] text-ink-soft">{it.device ?? '—'}</td>
+                <td className="px-2 max-[820px]:px-1 py-1 max-[820px]:hidden">
                   <span className="flex items-center gap-1.5 min-w-0">
                     <span className="font-mono text-2xs truncate">{row.filename}</span>
                     <CullMark culling={it.culling ?? undefined} />
