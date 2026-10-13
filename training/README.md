@@ -139,6 +139,32 @@ Chaque problème est listé en clair : manifest absent, fichier introuvable,
 fichier présent mais pas listé, retouche **recadrée ou tournée** (elle est
 ignorée pour l'instant : aligner ces paires, c'est M5).
 
+## 4 bis. Tes paires depuis Winnow
+
+Winnow relie chaque export de ta Galerie à l'original dont il vient. Cette
+commande lit ces liens et range les fichiers dans `data/pairs/`, un dossier
+par original, avec le `manifest.toml` déjà prêt :
+
+```bash
+export WINNOW_HOST=https://ton-instance        # une fois pour toutes dans ton ~/.zshrc
+uv run atelier-train winnow-import --dry-run   # liste ce qui serait rapatrié, n'écrit rien
+uv run atelier-train winnow-import             # rapatrie (reprend là où il s'est arrêté)
+uv run atelier-train winnow-import --since 2026-01-01 --limit 50
+```
+
+**Identifiants** — trois façons, de la plus simple à la plus manuelle :
+`--login <utilisateur>` (le mot de passe est demandé au clavier, le cookie
+vit le temps de la commande), un jeton d'application de Winnow (créé dans ta
+page de compte) dans `$WINNOW_TOKEN`, ou `--token-file <fichier>` — un fichier
+**hors du dépôt** (`~/.config/atelier-training/winnow.token`, `chmod 600`).
+Rien n'est jamais écrit sous `training/`.
+
+Ce que la commande fait : **lecture seule** (des GET, plus le login), un
+original dont Winnow ne connaît pas de retouche est ignoré, une vidéo aussi.
+Une capture Sony listée par son `.HIF` est rapatriée par son `.ARW` compagnon
+(le RAW apprend mieux). Chaque dossier garde un `winnow.json` (ids, empreintes)
+pour qu'une relance ne refasse rien.
+
 ## 5. Les commandes
 
 | Commande | Ce qu'elle fait |
@@ -148,6 +174,7 @@ ignorée pour l'instant : aligner ces paires, c'est M5).
 | `make validate` | vérifie tes groupes de paires |
 | `make ingest` | prépare les paires pour l'entraînement (redimensionnées, en cache) |
 | `uv run atelier-train init-group <dossier>` | écrit un `manifest.toml` deviné |
+| `uv run atelier-train winnow-import` | rapatrie tes paires original → final depuis ton Winnow (lecture seule) |
 | `make serve` | ouvre le tableau de bord dans le navigateur (boutons, courbes, grilles) |
 | `make bench` | chronomètre un pas d'entraînement sur ce Mac et estime la durée d'un run |
 | `make train` | entraîne le modèle sur les paires préparées |

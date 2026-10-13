@@ -105,6 +105,32 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   reads the parameter as a query and answers 422); the body is taken as
   `dict = Body(...)` instead.
 
+## M4 — the Winnow import (2026-10-13)
+
+- **Every route was READ in Winnow's code, never guessed** (the lesson of
+  `docs/winnow-timeline.md`): `GET /api/assets?kind=final&limit≤500&cursor`
+  (`src/app/api/assets/route.ts`, `src/lib/api.ts`), rows = `a.*` +
+  `original_asset_id` / `companion_*` / `group_kind` (`src/lib/assetQuery.ts`),
+  `GET /api/assets/:id` and `/download` (streams the file), credentials =
+  cookie `winnow_session` from `POST /api/auth/login {username, password}` or
+  `Authorization: Bearer wnw_…` (`src/lib/auth.ts`, migration 0045). The
+  public repo is cloned read-only at `/home/user/costardrouge/winnow` in a
+  cloud session when needed; never attached, never written.
+- **A Sony capture is listed by its `.HIF`**, the `.ARW` being the
+  companion (`group_kind: raw_jpeg`) in NO list: the import fetches the
+  companion's own row and file instead, and `winnow.json` keeps both ids
+  (`id` the file fetched, `linked_id` what the final points at). HEIF itself
+  reads through the `heif` extra (pillow-heif) when no RAW rides along.
+- **Credential precedence is flag > file > environment**: the cloud
+  container's environment carries `WINNOW_HOST` and a real `WINNOW_TOKEN`,
+  which silently beat a test's token file until the order was fixed; the
+  tests `delenv` it. Nothing credential-shaped is ever written under
+  `training/`; a password is a `getpass` prompt and the cookie lives in memory.
+- **Read-only by construction**: GET plus the login POST, nothing else; a
+  `.part` file is renamed into place after the whole stream, so a cut
+  transfer leaves nothing half-written and a rerun fetches only what is
+  missing.
+
 ## Traps
 
 - Pillow reads a 48-bit PNG as 8 bits per channel: 16-bit material goes

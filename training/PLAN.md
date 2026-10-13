@@ -112,9 +112,26 @@ exported run, never start one). Bind to localhost only; no auth needed.
 opened headless (Playwright is in the container) to check it renders. His
 Mac: does it feel usable.
 
-## M4 — import original → final pairs from his Winnow (read-only)
+## M4 — import original → final pairs from his Winnow (read-only) — BUILT (2026-10-13)
 
-**Delivers.** `atelier-train winnow-import --host <url> --since <date>`:
+`winnow_import.py` + `atelier-train winnow-import`: the Gallery half listed
+page by page (`GET /api/assets?kind=final`, read in Winnow's own route), the
+finals grouped by `original_asset_id`, each original's row fetched once, a
+Sony pair's `.ARW` companion standing in for the listed `.HIF`, the files
+streamed from `/download` into `data/pairs/winnow-<id>/` with a
+`manifest.toml` and a `winnow.json` (ids, hashes); `--dry-run`, `--since`,
+`--limit`; credentials from `--login` (prompt, cookie in memory), `--token`,
+`--token-file` or `$WINNOW_TOKEN`, host from `--host` or `$WINNOW_HOST`.
+HEIF reading added as the `heif` extra (pillow-heif). Tested against a stub
+answering those routes; **a dry run was also made against his real instance
+from this session** (the environment carried the host and a token): it
+listed his gallery and found the pairs, the HIF originals resolved to their
+ARW companions.
+
+Not verified here: a real download of his files (dry run only), a Winnow
+whose finals link to videos or to HEIC originals without a RAW companion.
+
+**Delivered as planned:** `atelier-train winnow-import --host <url> --since <date>`:
 lists his finals that carry `original_asset_id` (Winnow `src/lib/reconcile.ts`,
 `edit_count`; Atelier's client `src/shared/sources/winnow/client.ts` is the
 reference for routes and auth), downloads original + final(s) into
