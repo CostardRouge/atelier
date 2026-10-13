@@ -177,6 +177,90 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_records(args: argparse.Namespace) -> int:
+    from .records import unpack
+
+    config = _config(args)
+    try:
+        report = unpack(Path(args.file), config.paths.data / "records", include_agent=args.include_agent)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
+    for pid, why in report.skipped[:10]:
+        print(f"  · {pid}: {why}")
+    print("Next: `atelier-train train-develop`.")
+    return 0 if report.kept else 1
+
+
+def _develop_run(args: argparse.Namespace, config: Config) -> Path | None:
+    from .train import latest_run
+
+    if args.run:
+        folder = Path(args.run)
+        if not folder.is_dir():
+            folder = config.paths.runs / args.run
+        return folder if (folder / "config.toml").is_file() else None
+    runs = config.paths.runs
+    if not runs.is_dir():
+        return None
+    develop_runs = sorted(p for p in runs.iterdir()
+                          if p.is_dir() and "-develop-" in p.name and (p / "config.toml").is_file())
+    return develop_runs[-1] if develop_runs else latest_run(runs)
+
+
+def cmd_train_develop(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .train_develop import train_develop
+
+    config = _config(args)
+    try:
+        run = train_develop(config, name=args.name, epochs=args.epochs,
+                            resume=Path(args.resume) if args.resume else None)
+    except (RuntimeError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
+    print(f"\nRun {run.folder.name} done → {run.folder}")
+    print("Next: `atelier-train eval-develop`, then `atelier-train export-develop` for the ONNX file.")
+    return 0
+
+
+def cmd_eval_develop(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .train_develop import eval_develop
+
+    config = _config(args)
+    folder = _develop_run(args, config)
+    if folder is None:
+        print("✗ no develop run found: `atelier-train train-develop` first, or pass --run <folder>.")
+        return 1
+    try:
+        eval_develop(config, folder, which_split=args.split)
+    except (RuntimeError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
+    return 0
+
+
+def cmd_export_develop(args: argparse.Namespace) -> int:
+    if not _needs_torch():
+        return 2
+    from .train_develop import export_develop
+
+    config = _config(args)
+    folder = _develop_run(args, config)
+    if folder is None:
+        print("✗ no develop run found: `atelier-train train-develop` first, or pass --run <folder>.")
+        return 1
+    try:
+        export_develop(folder, Path(args.out) if args.out else None)
+    except RuntimeError as e:
+        print(f"✗ {e}")
+        return 1
+    return 0
+
+
 def cmd_winnow_import(args: argparse.Namespace) -> int:
     import getpass
 
@@ -289,6 +373,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", help="where to write the .cube (default: inside the run folder)")
     p.add_argument("--limit", type=int, default=0, help="average the style over this many training pairs (0 = all)")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("records", parents=[common],
+                       help="unpack Atelier's training file (Settings → Learning) into data/records")
+    p.add_argument("file", help="the .json Atelier wrote")
+    p.add_argument("--include-agent", action="store_true", help="keep records an agent wrote (left out by default)")
+    p.set_defaults(func=cmd_records)
+
+    p = sub.add_parser("train-develop", parents=[common], help="fit the sliders predictor on the records")
+    p.add_argument("--name", help="a word for the run folder")
+    p.add_argument("--epochs", type=int, help="override develop.epochs")
+    p.add_argument("--resume", metavar="RUN", help="continue this run from its last checkpoint")
+    p.set_defaults(func=cmd_train_develop)
+
+    p = sub.add_parser("eval-develop", parents=[common], help="score the sliders predictor (MAE per slider)")
+    p.add_argument("--run", help="the run folder (default: the most recent develop run)")
+    p.add_argument("--split", choices=["validation", "train", "all"], default="validation")
+    p.set_defaults(func=cmd_eval_develop)
+
+    p = sub.add_parser("export-develop", parents=[common], help="write the sliders predictor as ONNX + its sidecar")
+    p.add_argument("--run", help="the run folder (default: the most recent develop run)")
+    p.add_argument("--out", help="where to write develop-net.onnx (default: inside the run folder)")
+    p.set_defaults(func=cmd_export_develop)
 
     p = sub.add_parser("winnow-import", parents=[common],
                        help="fetch your original → final pairs from your Winnow into the pairs folder (read-only)")

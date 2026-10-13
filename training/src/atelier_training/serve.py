@@ -116,15 +116,21 @@ def run_summary(folder: Path) -> dict[str, Any]:
     run = load_run(folder)
     metrics = run.read_metrics()
     last = metrics[-1] if metrics else None
-    best = max((m for m in metrics if "val_psnr" in m), key=lambda m: m["val_psnr"], default=None)
+    develop = run.config.get("develop", {}).get("kind") == "develop-net"
+    if develop:
+        best = min((m for m in metrics if "val_mae" in m), key=lambda m: m["val_mae"], default=None)
+    else:
+        best = max((m for m in metrics if "val_psnr" in m), key=lambda m: m["val_psnr"], default=None)
     evals = sorted((folder / "eval").glob("*.json")) if (folder / "eval").is_dir() else []
     return {
         "name": folder.name,
-        "sources": run.sources,
-        "epochs": int(run.config.get("train", {}).get("epochs", 0)),
+        "kind": "develop" if develop else "lut",
+        "sources": run.sources if not develop else ["records"],
+        "epochs": int((run.config.get("develop", {}) if develop else run.config.get("train", {})).get("epochs", 0)),
         "done_epochs": last["epoch"] if last else 0,
         "last": last,
-        "best": {k: best[k] for k in ("epoch", "val_psnr", "val_de2000_mean")} if best else None,
+        "best": ({k: best[k] for k in ("epoch", "val_mae")} if develop
+                 else {k: best[k] for k in ("epoch", "val_psnr", "val_de2000_mean")}) if best else None,
         "has_best": (folder / "best.pt").is_file(),
         "has_last": (folder / "last.pt").is_file(),
         "cubes": sorted(p.name for p in folder.glob("*.cube")),

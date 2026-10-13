@@ -53,8 +53,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install (with the PyTorch CPU extra, locked)
-        run: uv sync --locked --extra torch
+      - name: Install (with the PyTorch CPU and ONNX extras, locked)
+        run: uv sync --locked --extra torch --extra onnx
 
-      - name: Test (model, training, eval, export on the synthetic set)
+      - name: Test (model, training, eval, export on the synthetic set; the ONNX export run back)
         run: uv run pytest -W error::DeprecationWarning

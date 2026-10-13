@@ -58,3 +58,17 @@ monotonic_weight = 10.0  # keeps every LUT increasing along its own channel, so 
 val_fraction = 0.1       # groups held out for validation (split by GROUP, never by pair)
 seed = 1
 eval_every = 5           # epochs between two validations
+
+# ---- The develop predictor (M6): the picture as shot → DevelopSettings' eleven sliders. ----
+[develop]
+name = ""                # a word for the run folder, runs/<date>-develop-<name>
+thumb = 128              # the vignette is 256 px; the network looks at it at this size
+width = 16               # channels of the first layer
+hidden = 128             # the head's hidden width
+epochs = 60
+batch_size = 16
+learning_rate = 3e-4
+weight_decay = 1e-4
+val_fraction = 0.15      # records held out, by picture id
+eval_every = 2
+seed = 1

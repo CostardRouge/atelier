@@ -258,8 +258,11 @@
       const i = state.selected.indexOf(r.name);
       const sw = i >= 0 ? `<span class="swatch" style="background:${SERIES[i]}"></span>` : '';
       if (r.error) return `<tr><td></td><td colspan="6" class="muted">${esc(r.name)} — ${esc(r.error)}</td></tr>`;
-      const best = r.best ? `<span class="num">${r.best.val_psnr.toFixed(2)}</span> <small class="muted">dB @${r.best.epoch}</small>` : '<span class="muted">—</span>';
-      const de = r.best ? `<span class="num">${r.best.val_de2000_mean.toFixed(2)}</span>` : '<span class="muted">—</span>';
+      const dev = r.kind === 'develop';
+      const best = !r.best ? '<span class="muted">—</span>'
+        : dev ? `<span class="num">MAE ${r.best.val_mae.toFixed(4)}</span> <small class="muted">@${r.best.epoch}</small>`
+        : `<span class="num">${r.best.val_psnr.toFixed(2)}</span> <small class="muted">dB @${r.best.epoch}</small>`;
+      const de = r.best && !dev ? `<span class="num">${r.best.val_de2000_mean.toFixed(2)}</span>` : '<span class="muted">—</span>';
       const files = r.cubes.map(c => `<a href="/api/runs/${encodeURIComponent(r.name)}/cube/${encodeURIComponent(c)}">${esc(c)}</a>`).join(' ');
       return `<tr class="${i >= 0 ? 'selected' : ''}"><td><input type="checkbox" data-run="${esc(r.name)}" ${i >= 0 ? 'checked' : ''}></td>` +
         `<td>${sw}<span class="num">${esc(r.name)}</span></td><td>${esc(r.sources.join(', '))}</td>` +
@@ -280,6 +283,15 @@
     const last = d.last || {};
     const best = d.best;
     const ev = d.evals && (d.evals.validation || d.evals.all || Object.values(d.evals)[0]);
+    if (d.kind === 'develop') {
+      el.innerHTML = [
+        tile('epochs', `${d.done_epochs}<small>/ ${d.epochs}</small>`),
+        tile('training loss', last.loss != null ? last.loss.toExponential(2) : '—'),
+        tile('best val MAE', best ? best.val_mae.toFixed(4) : '—'),
+        tile('MAE of “nothing”', last.val_zero_mae != null ? last.val_zero_mae.toFixed(4) : '—'),
+      ].join('');
+      return;
+    }
     el.innerHTML = [
       tile('epochs', `${d.done_epochs}<small>/ ${d.epochs}</small>`),
       tile('training loss', last.fit != null ? last.fit.toExponential(2) : '—'),
@@ -299,6 +311,7 @@
       { key: 'fit', title: 'Training loss (MSE)', log: true },
       { key: 'val_psnr', title: 'Validation PSNR (dB)' },
       { key: 'val_de2000_mean', title: 'Validation ΔE2000 (mean)' },
+      { key: 'val_mae', title: 'Validation MAE (fraction of the slider range)' },
     ];
     el.innerHTML = '';
     for (const spec of specs) {

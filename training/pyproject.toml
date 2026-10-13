@@ -26,6 +26,8 @@ raw = ["rawpy>=0.23"]
 heif = ["pillow-heif>=0.18"]
 # The local dashboard (`atelier-train serve`): one small API over the run folders and one static page.
 ui = ["fastapi>=0.115", "uvicorn>=0.30"]
+# Exporting the develop predictor as ONNX, what the browser's onnxruntime-web loads (M6).
+onnx = ["onnx>=1.17", "onnxscript>=0.2", "onnxruntime>=1.20"]
 
 [project.scripts]
 atelier-train = "atelier_training.cli:main"

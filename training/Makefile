@@ -47,6 +47,15 @@ eval: ## score the latest run and draw the grids
 export: ## write the latest run's look as a .cube
 	$(RUN) export
 
+records: ## unpack Atelier's training file FILE=<path.json> into data/records
+	$(RUN) records $(FILE)
+
+train-develop: ## fit the sliders predictor on the records
+	$(RUN) train-develop
+
+export-develop: ## write the sliders predictor as ONNX for Atelier
+	$(RUN) export-develop
+
 test: ## run the tests
 	uv run pytest
 
