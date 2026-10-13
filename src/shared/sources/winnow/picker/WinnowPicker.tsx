@@ -941,8 +941,10 @@ export default function WinnowPicker({
                     <MoreTiles key={limit} as={view === 'book' ? 'div' : 'li'} onVisible={() => setLimit((n) => n + BATCH)} />
                   );
                   // Rows pinned in pixels: an `auto` row in a scrolling tile
-                  // grid is clipped to a sliver (`frontend.md`).
-                  const grid = `m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`;
+                  // grid is clipped to a sliver (`frontend.md`). The padding is
+                  // the focused tile's ring (2 px out, 2 px wide): without it the
+                  // scroller clips the ring on the grid's outer edges.
+                  const grid = `m-0 p-1 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`;
                   const cells = (list: PickItem[]) =>
                     list.map((it) => {
                       const pile = it.pileId === null ? undefined : piles.get(it.pileId);
@@ -997,7 +999,7 @@ export default function WinnowPicker({
                   const runs = dayRuns(batch, (it) => rowDay(it.row));
                   return runs.map((run, k) => (
                     <section key={`${run.day ?? 'undated'}-${k}`} aria-label={run.day ? dayHeading(run.day) : 'Undated'} className="mb-3">
-                      <h3 data-day={run.day ?? undefined} className="sticky top-0 z-[2] m-0 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
+                      <h3 data-day={run.day ?? undefined} className="sticky top-0 z-[2] m-0 px-1 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
                         {run.day ? dayHeading(run.day) : 'No date'}
                         <span className="font-mono text-3xs font-normal text-muted tabular-nums">{run.items.length} media</span>
                       </h3>
