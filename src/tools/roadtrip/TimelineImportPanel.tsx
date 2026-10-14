@@ -239,13 +239,16 @@ export default function TimelineImportPanel({
               <ul className="m-0 p-0 list-none flex flex-col max-h-[14rem] overflow-auto pr-1 border border-line rounded-paper px-3">
                 {chapters.map((c) => (
                   <li key={c.id} className={row}>
-                    <input
-                      type="checkbox"
-                      className={check}
-                      checked={picked.has(c.id)}
-                      onChange={() => setSelected(toggle(picked, c.id))}
-                      aria-label={`Include ${chapterName(c)}`}
-                    />
+                    {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+                    <label className="touch-halo flex-none inline-grid place-items-center">
+                      <input
+                        type="checkbox"
+                        className={check}
+                        checked={picked.has(c.id)}
+                        onChange={() => setSelected(toggle(picked, c.id))}
+                        aria-label={`Include ${chapterName(c)}`}
+                      />
+                    </label>
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium truncate">{chapterName(c)}</span>
                       <span className="block font-mono text-2xs text-muted tabular-nums">

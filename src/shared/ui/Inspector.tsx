@@ -395,17 +395,21 @@ interface ToggleFieldProps {
   children?: ReactNode;
 }
 
-/** A switch, for a setting that is on or off. */
+/**
+ * A switch, for a setting that is on or off. Under a finger its line is 44 px
+ * tall and the switch is grabbed on 44 × 44 (`touch-halo`) inside that line,
+ * never over the row above or below.
+ */
 export function ToggleField({ checked, onChange, label, children }: ToggleFieldProps) {
   return (
-    <label className="inline-flex items-center gap-2 min-w-0 cursor-pointer select-none">
+    <label className="inline-flex items-center gap-2 min-w-0 pointer-coarse:min-h-11 cursor-pointer select-none">
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
-        className={`relative flex-none w-9 h-5 p-0 border-0 rounded-full cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+        className={`touch-halo relative flex-none w-9 h-5 p-0 border-0 rounded-full cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
           checked ? 'bg-accent' : 'bg-line-strong'
         }`}
       >
@@ -569,8 +573,15 @@ export function SwitchRow({ label, name, checked, onChange, hint, hintShown = fa
   const { dot, visible, id } = useRowHint(hint, hintShown, label);
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-ink-soft leading-tight">
+      <div className="flex items-center gap-3 pointer-coarse:min-h-11">
+        {/* The phrase is the switch too (`docs/touch-targets.md` T3) — not
+            its ⓘ, which is a button of its own. */}
+        <span
+          onClick={(e) => {
+            if (!(e.target as Element).closest('button')) onChange(!checked);
+          }}
+          className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-ink-soft leading-tight cursor-pointer select-none"
+        >
           <span className="min-w-0">{label}</span>
           {dot}
         </span>

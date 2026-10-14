@@ -495,6 +495,23 @@ html[data-surface='darkroom'] {
 }
 
 /*
+  A checkbox under a finger (`docs/touch-targets.md` T3): the box is drawn at
+  22 px whatever size its caller gave it, and the label it lives in is a
+  44 px line — the label is the target, its words included. A box with no
+  words around it sits in a `touch-halo` label of its own. Unlayered, like
+  the rule above, so it outranks a caller's `w-[15px]`.
+*/
+@media (pointer: coarse) {
+  input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+  label:has(input[type='checkbox']) {
+    min-height: 44px;
+  }
+}
+
+/*
   A target under a FINGER is grabbed on 44 px both ways (2026-10-14, face C
   of `docs/touch-targets.md`). The zone is an `::after`, so the drawing never
   moves; it exists only under a coarse pointer, so a mouse sees nothing new.

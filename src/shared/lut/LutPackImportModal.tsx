@@ -670,13 +670,16 @@ function LookRow({
       className="flex items-center gap-2 text-xs text-ink-soft"
       style={{ paddingLeft: `${depth * 0.9}rem` }}
     >
-      <input
-        id={id}
-        type="checkbox"
-        className="accent-accent flex-none"
-        checked={!hidden}
-        onChange={onToggle}
-      />
+      {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+      <label className="touch-halo flex-none inline-grid place-items-center">
+        <input
+          id={id}
+          type="checkbox"
+          className="accent-accent flex-none"
+          checked={!hidden}
+          onChange={onToggle}
+        />
+      </label>
       <label htmlFor={id} className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer">
         <span className="flex-1 min-w-0 truncate text-muted">{look.label}</span>
         <span

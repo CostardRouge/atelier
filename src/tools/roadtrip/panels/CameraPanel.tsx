@@ -298,13 +298,16 @@ export default function CameraPanel({ trip, post, exif, patchBadge, onChangeTrip
                       picked ? '' : 'opacity-65'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      id={`camera-field-${f.id}`}
-                      checked={picked}
-                      onChange={(e) => toggleField(f.id, e.target.checked)}
-                      className="flex-none accent-[var(--color-accent)]"
-                    />
+                    {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+                    <label className="touch-halo flex-none inline-grid place-items-center">
+                      <input
+                        type="checkbox"
+                        id={`camera-field-${f.id}`}
+                        checked={picked}
+                        onChange={(e) => toggleField(f.id, e.target.checked)}
+                        className="flex-none accent-[var(--color-accent)]"
+                      />
+                    </label>
                     <label htmlFor={`camera-field-${f.id}`} className="flex flex-col min-w-0 flex-1 cursor-pointer">
                       <span className="text-xs text-ink leading-tight">{f.label}</span>
                       <span
