@@ -23,6 +23,8 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from .metrics import structure
+
 
 @dataclass(frozen=True)
 class Pair:
@@ -71,6 +73,17 @@ def split(pairs: list[Pair], fraction: float, seed: int = 0) -> tuple[list[Pair]
 def load_pair_u16(pair: Pair) -> tuple[np.ndarray, np.ndarray]:
     """Both halves as stored: ``(H, W, 3)`` uint16."""
     return np.load(pair.folder / "input.npy"), np.load(pair.folder / "target.npy")
+
+
+def pair_structure(pair: Pair) -> float:
+    """How well the pair's two halves line up (``metrics.structure``): the value ingest wrote, else measured
+    from the cache (a pair aligned before ingest started writing it). NaN for a pair too flat to judge."""
+    meta_file = pair.folder / "meta.json"
+    if meta_file.is_file():
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        if "structure" in meta:
+            return float("nan") if meta["structure"] is None else float(meta["structure"])
+    return structure(*load_pair(pair))
 
 
 def load_pair(pair: Pair) -> tuple[np.ndarray, np.ndarray]:

@@ -255,9 +255,16 @@ se rapproche de tes retouches.
 contre ta retouche) : c'est la barre à battre, un modèle qui en reste proche
 n'a rien appris. Et il liste les paires **qui ne se superposent pas** (une
 retouche tournée, retournée ou recadrée ailleurs que ce qu'a trouvé
-l'alignement), avec leur grille : une paire pareille n'apprend que du bruit,
-mets son dossier de côté (renomme-le avec un `_` devant) et relance `ingest`.
-Le seuil (0,5) est une estimation, pas une mesure sur tes photos.
+l'alignement), avec leur grille : une paire pareille n'apprend que du bruit.
+`train` les laisse de côté tout seul (`train.skip_misaligned`, activé par
+défaut) et les liste dans `split.json` sous `left_out` ; la validation les
+garde, pour que deux runs restent comparables. Le seuil (0,5) est une
+estimation, pas une mesure sur tes photos.
+
+Pour savoir si le modèle est trop petit ou s'il apprend par cœur, compare
+`eval --split train` à la validation : à peu près pareil, il manque de
+capacité (`--set model.basis=8 --set model.width=32`) ; nettement meilleur en
+train, il apprend par cœur (plus de paires, FiveK).
 
 Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.

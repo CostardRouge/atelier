@@ -25,7 +25,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 
 from .config import Config, merge
-from .data import Pair, PairDataset, read_index, split
+from .data import Pair, PairDataset, pair_structure, read_index, split
 from .device import pick_device
 from .metrics import STRUCTURE_FLOOR, best_global_map, coarse, delta_e2000, score, srgb_to_lab, structure
 from .model.lut3d import AdaptiveLUT
@@ -208,10 +208,20 @@ def train(
         state = None
 
     train_pairs, val_pairs = split(pairs, float(tcfg.get("val_fraction", 0.1)), int(tcfg.get("seed", 1)))
+    left_out: list[Pair] = []
+    if bool(tcfg.get("skip_misaligned", True)):
+        # An edit that is not a picture of its input (a neighbouring frame of a burst, a composite) teaches a
+        # wrong colour map, and a squared loss weighs its ΔE 40 heavily. Validation keeps them, so runs compare.
+        left_out = [p for p in train_pairs if pair_structure(p) < MISALIGNED]
+        train_pairs = [p for p in train_pairs if p not in left_out]
     (run.folder / "split.json").write_text(
-        json.dumps({"train": [p.id for p in train_pairs], "validation": [p.id for p in val_pairs]}, indent=1),
+        json.dumps({"train": [p.id for p in train_pairs], "validation": [p.id for p in val_pairs],
+                    "left_out": [p.id for p in left_out]}, indent=1),
         encoding="utf-8",
     )
+    if left_out:
+        log(f"left out {len(left_out)} training pair(s) whose edit does not line up with its input "
+            f"(structure < {MISALIGNED}), listed in split.json")
 
     model = build_model(cfg, device)
     if init is not None:
