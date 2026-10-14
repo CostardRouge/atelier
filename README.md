@@ -935,19 +935,32 @@ them. **Trip settings → Road** chooses how it is read, each choice with the ki
 flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
-apart from them thins the line from every point up to 2 km. **Look ahead**
-(500 m by default, 200 m to 3 km, or off) steers the vehicle like a driver instead of a
-pen through every fix: it aims at the road that far ahead and turns no tighter
-than its **Turn radius** (50 m by default), so the GPS's scatter becomes a bend rather than a
-twitch. The line drawn is the line driven, and the kilometres stay the road's
-as recorded. *Forget the road* takes it off the trip. **Add a GPX…** merges the timed points of one or
+apart from them thins the line from every point up to 2 km. How the vehicle
+**drives** that line is a second choice, each style keeping its own settings
+when you switch: *Point to point* goes straight from fix to fix (every scatter
+of the GPS a turn of the wheel); *Driver* aims at the road a **Look ahead**
+away and turns no tighter than its **Turn radius** — calm, but it cuts bends
+and leaves the road the tiles draw; *Ribbon*, the default, draws the smoothest
+line that stays **within** 100 m of every fix (or within the fixes' own
+scatter where they spread wider, in a town or round a parked phone), ironing
+out wiggles shorter than its **Smoothness** (3 km): no corner anywhere, and
+never off the road by more than you set. A lone fix that only a burst of speed
+could have reached is taken for the GPS error it is and left out. The line
+drawn is the line driven, and the kilometres stay the road's as recorded,
+whatever drives it. Every slider answers at once: the line is drawn off the
+page (the map's top edge and its chip say *drawing the road…* meanwhile) and
+written to the trip when you let go, one ⌘Z each. *Forget the road* takes it off the trip. **Add a GPX…** merges the timed points of one or
 more `.gpx` files (a GPS logger, a car's navigation, Strava…) into the road
 within the trip's dates, or makes the road from them alone — the same instant
 once, the reading kept; a planned route with no times is refused, since it
 cannot be put on the trip's clock. Below them, the section's pane is the
-**map of the road** as the chosen mode reads it (the crow's straight line
-between the places when it reads none), every stretch over 20 km the track
-skipped (the phone off for a day) drawn dashed. With **✎ Place road points**
+**map of the road** as it will be driven, over the line as recorded and, once
+zoomed in, the fixes themselves as dots (the crow's straight line between the
+places when it reads none), framed on the trip and not on every fix — a track
+that began at home no longer puts the whole Earth on screen — with a chip
+saying how far the drive passes from the fixes on average and at worst, and
+every stretch over 20 km the track skipped (the phone off for a day) drawn
+dashed. ⟲ frames the road again. With **✎ Place road points**
 on, a click puts a point of road on the nearest stretch, at the time that far
 along it, and the road goes through it; a click on one of yours takes it back.
 A road point is never a place, and never named. **Virée drives that road**: between two stops the

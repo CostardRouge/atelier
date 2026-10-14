@@ -16,7 +16,7 @@ import {
   type DraftOutcome,
 } from '../../../shared/roadtrip/deduce-draft';
 import { addPolarstepsFiles, sourcesOf, type PolarstepsExport } from '../../../shared/roadtrip/polarsteps';
-import { fixesFrom, makeTripRoad, roadSourceText, tripRoadLine, DEFAULT_ROAD_MODE, type RoadSource } from '../../../shared/roadtrip/road-track';
+import { AS_RECORDED, fixesFrom, makeTripRoad, roadSourceText, tripRoadLine, DEFAULT_ROAD_MODE, type RoadSource } from '../../../shared/roadtrip/road-track';
 import type { TripDoc } from '../../../shared/roadtrip/trip-types';
 import { filesFromDataTransfer } from '../../../shared/sources/file-sources';
 import type { WinnowConnection } from '../../../shared/sources/winnow/store';
@@ -141,7 +141,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
     // Measured within the trip's span, as the trip reads it (as the crow
     // flies reads nothing, so the default reading is said instead).
     const mode = road.mode === 'crow' ? DEFAULT_ROAD_MODE : road.mode;
-    const line = tripRoadLine({ ...road, mode, steer: null });
+    const line = tripRoadLine({ ...road, mode, drive: AS_RECORDED });
     return { fixes: road.fixes, km: line.km, read: mode === 'stages' ? 'between stays' : mode === 'moves' ? 'every move' : 'raw' };
   }, [polarsteps, trip, roadSource]);
   const writesRoad = keepRoad && roadOffer !== null;

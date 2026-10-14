@@ -37,7 +37,6 @@ import TripDeduceSection, { DEDUCE_ABOUT } from './TripDeduceSection';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel, { PLACES_ABOUT } from './PlacesSettingsPanel';
 import RoadSettingsPanel, { ROAD_ABOUT } from './RoadSettingsPanel';
-import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE, roadSteerOf } from '../../shared/roadtrip/road-track';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
@@ -491,12 +490,6 @@ export default function TripSettingsModal({
             {open === 'road' && (
               <RoadSettingsPanel
                 road={trip.road}
-                mode={trip.road?.mode ?? DEFAULT_ROAD_MODE}
-                detail={trip.road?.detail ?? DEFAULT_ROAD_DETAIL}
-                onMode={(mode) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, mode } })}
-                steer={roadSteerOf(trip.road)}
-                onDetail={(detail) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, detail } })}
-                onSteer={(steer) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, steer } })}
                 onForget={() => onChangeTrip({ ...trip, road: null })}
                 onNested={setRoadNested}
                 onRoad={(road) => onChangeTrip({ ...trip, road })}

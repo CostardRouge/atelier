@@ -15,9 +15,8 @@
 import {
   FLIGHT_KMH,
   FLIGHT_MIN_KM,
-  cleanFixes,
-  decodeTrack,
   distanceKm,
+  tripRoadFixes,
   type LatLon,
   type RoadFix,
   type TripRoad,
@@ -42,10 +41,7 @@ function flies(a: RoadFix, b: RoadFix, km: number): boolean {
 }
 
 /** The track with the hand-placed points merged in, in time — what every reading of the road starts from. */
-export function roadFixes(road: TripRoad): RoadFix[] {
-  const track = decodeTrack(road.track);
-  return road.added.length ? cleanFixes([...track, ...road.added]) : track;
-}
+export const roadFixes: (road: TripRoad) => RoadFix[] = tripRoadFixes;
 
 /** The stretches longer than `minKm` that are not flights: where the road has a hole. */
 export function roadGaps(fixes: readonly RoadFix[], minKm = GAP_KM): RoadStretch[] {

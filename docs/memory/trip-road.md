@@ -1,7 +1,8 @@
 # A trip's ROAD — the GPS track kept beside the places
 
 Read when you touch `shared/roadtrip/road-track.ts`, `TripDoc.road`, the Road
-section of Trip settings, Deduce's road or the GPX import. How the openers
+section of Trip settings (`RoadSettingsPanel`, `RoadMap`, `road-preview.ts`
+and its worker), Deduce's road or the GPX import. How the openers
 DRIVE and DRAW the road — hops, steering, the heading, the Itinerary and the
 overview's map — is in `trip-road-drive.md`.
 
@@ -50,22 +51,45 @@ and Write works with only the road to write. `makeTripRoad` keeps the fixes
 within the trip's span plus a day each side, and a re-import replaces the
 fixes while keeping the mode, the detail and the hand-placed points.
 
-## Trip settings → Road, one panel in both sheets (2026-10-09)
+## Trip settings → Road, one panel in both sheets (2026-10-09, rev. 2026-10-13)
 
 `RoadSettingsPanel.tsx` is the Road section of the ONE Trip settings sheet
-(`roadtrip.md`, «ONE Trip settings sheet»), written live like every section. Each mode shows the km it
-would count at the current detail, so the choice is made on the numbers; the
-detail slider walks `ROAD_DETAILS` and is greyed under Crow flies (nothing to
-smooth). With no road the panel says where one comes from (Deduce) rather
-than hiding — the overview's sheet is where he looks for it.
+(`roadtrip.md`, «ONE Trip settings sheet»). Each mode shows the km it would
+count at the current detail, so the choice is made on the numbers; then the
+DRIVE style (`trip-road-drive.md`) with that style's two sliders. With no
+road the panel says where one comes from (Deduce) rather than hiding.
+**Live, never on the main thread** (his report: «super buggée et super
+lente»): the reading is a DRAFT in the panel, previewed by
+`road-preview-worker.ts` (`RoadPreviewer` keeps the decoded track and each
+mode/detail's line between asks; latest ask wins), handed back in typed
+arrays; written to the trip once the preview answers the draft AND no
+slider is held (pointerdown → pointerup), the line `primeTripRoadLine`d onto
+the written road so the overview and the openers never recompute it. While
+it computes, an ECHO task draws on the map's top edge and the chip says
+*drawing the road…*. Measured headless on a 12 000 km synthetic road, a
+Detail drag: 4.2 s of main-thread long tasks → 1.1 s (the rest is this
+container's software GPU drawing the map); each map source is re-`setData`
+only when its content changed. **Trap**: the draft carries the road it is a
+draft OF, reset DURING render when another road arrives — reset in an
+effect, the write effect saw the stale draft first and put an undone
+reading straight back (two writes per ⌘Z). `Segmented` names itself through
+`label`, an `aria-label` prop is silently dropped.
 
 ## Road points placed by hand, on the map IN the Road pane (2026-10-09)
 
 `road-points.ts` + `RoadMap.tsx`, the map filling the Road section's pane
 (his «dans ce grand espace, on pourrait directement mettre la map»; the
-separate sheet is gone). It draws the road as the CHOSEN mode reads it, the
-crow's dashed straight line between the trip's places when it reads none,
-the raw track's holes and the hand points. Placing is a MODE (*✎ Place road
+separate sheet is gone). It draws the line DRIVEN over the line as recorded
+(until 2026-10-13 it drew the recorded line only, so no drive setting
+changed it) and the mode's fixes as dots from zoom 8, the crow's dashed
+straight line between the trip's places when it reads none, the raw track's
+holes and the hand points, with a chip saying the drive's stray from the
+fixes (`strayOf`, matched by counted km ±5 km — a window by point count lost
+its place on out-and-back roads, and two distance formulas summed over a
+year drift kilometres apart). It is FRAMED by `framedPoints` (`trip-map.ts`,
+shared with the overview): the places and the road near them, else around
+the longest piece — every fix framed his home day before the flight, the
+whole Earth; it follows the reading until the hand moves it, ⟲ re-frames. Placing is a MODE (*✎ Place road
 points* / *Done placing*) so a drag that pans never drops a point; every
 click writes at once (⌘Z), *Take the points back* clears them. Trap met
 again: MapLibre's `position: relative` undid `absolute inset-0` on its
