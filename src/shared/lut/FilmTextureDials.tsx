@@ -5,7 +5,7 @@ import {
   grainShowable,
   type FilmTexture,
 } from '../film/film-texture';
-import { FieldRow, RangeField, SwitchRow } from '../ui/Inspector';
+import { SwitchRow, SliderRow } from '../ui/Inspector';
 
 interface FilmTextureDialsProps {
   texture: FilmTexture | null;
@@ -72,17 +72,16 @@ export default function FilmTextureDials({
       />
       {on && (
         <>
-          <FieldRow label="Grain">
-            <RangeField
-              label="Grain amount"
-              min={TEXTURE_RANGES.grain.min}
-              max={TEXTURE_RANGES.grain.max}
-              step={TEXTURE_RANGES.grain.step}
-              value={t.grain}
-              onChange={(v) => patch({ grain: v })}
-              format={pct}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Grain"
+            name="Grain amount"
+            min={TEXTURE_RANGES.grain.min}
+            max={TEXTURE_RANGES.grain.max}
+            step={TEXTURE_RANGES.grain.step}
+            value={t.grain}
+            onChange={(v) => patch({ grain: v })}
+            format={pct}
+          />
           {!previewDraws && (
             <p className="m-0 text-2xs leading-relaxed text-warn">
               This stage does not draw the texture — every export does. Dial it in Develop, where
@@ -98,77 +97,73 @@ export default function FilmTextureDials({
                 : `Finer than this preview can show (${shown.cellPixels.toFixed(1)} px a cell) — it will be there in the export.`}
             </p>
           )}
-          <FieldRow label="Cell" hint="A fraction of the frame's HEIGHT, so the export's grain is this one, resampled — never a size in pixels.">
-            <RangeField
-              label="Grain size"
-              min={TEXTURE_RANGES.grainSize.min}
-              max={TEXTURE_RANGES.grainSize.max}
-              step={TEXTURE_RANGES.grainSize.step}
-              value={t.grainSize}
-              onChange={(v) => patch({ grainSize: v })}
-              format={(v) => `h/${Math.round(1 / v)}`}
-            />
-          </FieldRow>
-          <FieldRow label="Chroma" hint="0 moves every channel together — a silver screen door. 1 gives each its own field, which is the digital look.">
-            <RangeField
-              label="Grain chroma"
-              min={TEXTURE_RANGES.grainChroma.min}
-              max={TEXTURE_RANGES.grainChroma.max}
-              step={TEXTURE_RANGES.grainChroma.step}
-              value={t.grainChroma}
-              onChange={(v) => patch({ grainChroma: v })}
-              format={pct}
-            />
-          </FieldRow>
-          <FieldRow
+          <SliderRow
+            label="Cell"
+            hint="A fraction of the frame's HEIGHT, so the export's grain is this one, resampled — never a size in pixels."
+            name="Grain size"
+            min={TEXTURE_RANGES.grainSize.min}
+            max={TEXTURE_RANGES.grainSize.max}
+            step={TEXTURE_RANGES.grainSize.step}
+            value={t.grainSize}
+            onChange={(v) => patch({ grainSize: v })}
+            format={(v) => `h/${Math.round(1 / v)}`}
+          />
+          <SliderRow
+            label="Chroma"
+            hint="0 moves every channel together — a silver screen door. 1 gives each its own field, which is the digital look."
+            name="Grain chroma"
+            min={TEXTURE_RANGES.grainChroma.min}
+            max={TEXTURE_RANGES.grainChroma.max}
+            step={TEXTURE_RANGES.grainChroma.step}
+            value={t.grainChroma}
+            onChange={(v) => patch({ grainChroma: v })}
+            format={pct}
+          />
+          <SliderRow
             label="Re-rolls"
             hint="On a clip, how often the field is drawn again, per second of the SOURCE. Real film re-rolls once per photographed frame; 60 a second is the boiling. Frozen leaves a still, and a Ken-Burns move, with one field."
-          >
-            <RangeField
-              label="Grain cadence"
-              min={TEXTURE_RANGES.grainFps.min}
-              max={TEXTURE_RANGES.grainFps.max}
-              step={TEXTURE_RANGES.grainFps.step}
-              value={t.grainFps}
-              onChange={(v) => patch({ grainFps: v })}
-              format={(v) => (v <= 0 ? 'Frozen' : `${Math.round(v)}/s`)}
-            />
-          </FieldRow>
-          <FieldRow label="Halation" hint="The warm bleed a bright highlight leaves through the film base. Resolution-independent by construction: the blur is the same over the same small buffer at every size.">
-            <RangeField
-              label="Halation amount"
-              min={TEXTURE_RANGES.halation.min}
-              max={TEXTURE_RANGES.halation.max}
-              step={TEXTURE_RANGES.halation.step}
-              value={t.halation}
-              onChange={(v) => patch({ halation: v })}
-              format={pct}
-            />
-          </FieldRow>
+            name="Grain cadence"
+            min={TEXTURE_RANGES.grainFps.min}
+            max={TEXTURE_RANGES.grainFps.max}
+            step={TEXTURE_RANGES.grainFps.step}
+            value={t.grainFps}
+            onChange={(v) => patch({ grainFps: v })}
+            format={(v) => (v <= 0 ? 'Frozen' : `${Math.round(v)}/s`)}
+          />
+          <SliderRow
+            label="Halation"
+            hint="The warm bleed a bright highlight leaves through the film base. Resolution-independent by construction: the blur is the same over the same small buffer at every size."
+            name="Halation amount"
+            min={TEXTURE_RANGES.halation.min}
+            max={TEXTURE_RANGES.halation.max}
+            step={TEXTURE_RANGES.halation.step}
+            value={t.halation}
+            onChange={(v) => patch({ halation: v })}
+            format={pct}
+          />
           {t.halation > 0 && (
             <>
-              <FieldRow label="Bleed">
-                <RangeField
-                  label="Halation radius"
-                  min={TEXTURE_RANGES.halationRadius.min}
-                  max={TEXTURE_RANGES.halationRadius.max}
-                  step={TEXTURE_RANGES.halationRadius.step}
-                  value={t.halationRadius}
-                  onChange={(v) => patch({ halationRadius: v })}
-                  format={(v) => `h/${Math.round(1 / v)}`}
-                />
-              </FieldRow>
-              <FieldRow label="From" hint="The luminance a highlight has to reach before it bleeds.">
-                <RangeField
-                  label="Halation threshold"
-                  min={TEXTURE_RANGES.halationThreshold.min}
-                  max={TEXTURE_RANGES.halationThreshold.max}
-                  step={TEXTURE_RANGES.halationThreshold.step}
-                  value={t.halationThreshold}
-                  onChange={(v) => patch({ halationThreshold: v })}
-                  format={pct}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Bleed"
+                name="Halation radius"
+                min={TEXTURE_RANGES.halationRadius.min}
+                max={TEXTURE_RANGES.halationRadius.max}
+                step={TEXTURE_RANGES.halationRadius.step}
+                value={t.halationRadius}
+                onChange={(v) => patch({ halationRadius: v })}
+                format={(v) => `h/${Math.round(1 / v)}`}
+              />
+              <SliderRow
+                label="From"
+                hint="The luminance a highlight has to reach before it bleeds."
+                name="Halation threshold"
+                min={TEXTURE_RANGES.halationThreshold.min}
+                max={TEXTURE_RANGES.halationThreshold.max}
+                step={TEXTURE_RANGES.halationThreshold.step}
+                value={t.halationThreshold}
+                onChange={(v) => patch({ halationThreshold: v })}
+                format={pct}
+              />
             </>
           )}
         </>

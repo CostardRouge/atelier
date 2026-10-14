@@ -2,6 +2,7 @@ import { GRAINS, grainAt, grainIndex } from '../../../shared/roadtrip/deduce-gra
 import type { Proposal } from '../../../shared/roadtrip/deduce-draft';
 import Button from '../../../shared/ui/Button';
 import OverflowMenu from '../../../shared/ui/OverflowMenu';
+import SliderBar from '../../../shared/ui/SliderBar';
 import { useElementSize } from '../../../shared/ui/use-element-width';
 import DeduceFrieze from './DeduceFrieze';
 import DeduceMap from './DeduceMap';
@@ -105,17 +106,15 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
             ]}
           />
         </div>
-        <input
-          type="range"
+        <SliderBar
+          label="Grain"
+          name="The grain of the stages"
           min={0}
           max={GRAINS.length - 1}
           step={1}
           value={grainIndex(settings.grain)}
-          onChange={(e) => actions.setSettings({ grain: grainAt(Number(e.target.value)) })}
-          aria-label="The grain of the stages"
-          aria-valuetext={grain.label.replace('%d', String(settings.bigDays))}
-          title={grain.label.replace('%d', String(settings.bigDays))}
-          className="w-full accent-accent"
+          onChange={(i) => actions.setSettings({ grain: grainAt(i) })}
+          printed={grain.short}
         />
         <div className="grid grid-cols-4 text-2xs text-muted">
           {GRAINS.map((g, i) => (

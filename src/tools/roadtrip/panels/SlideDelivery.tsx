@@ -12,7 +12,7 @@ import {
 import { AUTO_TAIL_SECONDS, autoSeconds } from '../../../shared/roadtrip/slide-timing';
 import type { TrimRange } from '../../../shared/media/trim';
 import { formatTimecode } from '../../../shared/lib/format';
-import { FieldRow, RangeField, Readout } from '../../../shared/ui/Inspector';
+import { FieldRow, Readout, SliderRow } from '../../../shared/ui/Inspector';
 import type { SlideMedium } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import Segmented from '../../../shared/ui/Segmented';
@@ -177,9 +177,9 @@ export default function SlideDelivery({
         </>
       )}
 
-      <FieldRow
+      <SliderRow
         label="On screen"
-        align="start"
+        name="How long this slide stays on screen"
         hint={
           slide.auto
             ? opener
@@ -193,18 +193,14 @@ export default function SlideDelivery({
                 : undefined
               : 'How long this picture holds the screen when the piece plays.'
         }
-      >
-        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 min-w-0">
-            <RangeField
-              label="How long this slide stays on screen"
-              min={MIN_HOOK_SECONDS}
-              max={ceiling}
-              step={0.5}
-              value={seconds}
-              onChange={onSeconds}
-              format={(v) => `${v.toFixed(1)} s`}
-            />
+        min={MIN_HOOK_SECONDS}
+        max={ceiling}
+        step={0.5}
+        value={seconds}
+        onChange={onSeconds}
+        format={(v) => `${v.toFixed(1)} s`}
+        trailing={
+          <>
             <span
               className={`${pill} ${slide.auto ? 'border-accent text-accent-ink bg-accent-wash' : 'border-line-strong text-muted bg-paper'}`}
               title={slide.auto ? 'The length follows what the slide holds' : 'The length was set by hand'}
@@ -216,27 +212,27 @@ export default function SlideDelivery({
                 Auto
               </Button>
             )}
+          </>
+        }
+      />
+      {!slide.auto && cut && opener && (
+        <div className="flex flex-col gap-1.5">
+          <p className="m-0 text-xs text-accent-ink">
+            {opener.name} takes {opener.seconds.toFixed(1)} s — its last {overflow.toFixed(1)} s would be cut.
+            {opener.fit ? ' Fit to the slide is on and refused: the opener’s panel says why.' : ''}
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" onClick={() => onAuto(true)}>
+              Use {autoWould.toFixed(1)} s
+            </Button>
+            {onFit && !opener.fit && (
+              <Button size="sm" onClick={onFit}>
+                Fit {opener.name} to {seconds.toFixed(1)} s
+              </Button>
+            )}
           </div>
-          {!slide.auto && cut && opener && (
-            <div className="flex flex-col gap-1.5">
-              <p className="m-0 text-xs text-accent-ink">
-                {opener.name} takes {opener.seconds.toFixed(1)} s — its last {overflow.toFixed(1)} s would be cut.
-                {opener.fit ? ' Fit to the slide is on and refused: the opener’s panel says why.' : ''}
-              </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button size="sm" onClick={() => onAuto(true)}>
-                  Use {autoWould.toFixed(1)} s
-                </Button>
-                {onFit && !opener.fit && (
-                  <Button size="sm" onClick={onFit}>
-                    Fit {opener.name} to {seconds.toFixed(1)} s
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
         </div>
-      </FieldRow>
+      )}
     </>
   );
 }

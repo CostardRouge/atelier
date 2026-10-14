@@ -22,7 +22,7 @@ import type { SlideRecovery } from '../use-slide-library';
 import type { GradeScope, TripGradeBinding } from '../use-trip-grade';
 import FrameStrip from '../FrameStrip';
 import Button from '../../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, Readout } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, SliderRow } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
 import Segmented, { type SegmentedOption } from '../../../shared/ui/Segmented';
 
@@ -386,28 +386,24 @@ export default function PictureTab({
               className="flex-1 min-w-0"
             />
           </FieldRow>
-          <FieldRow label="Zoom">
-            <RangeField
-              label="Zoom"
-              min={1}
-              max={MAX_FRAMING_SCALE}
-              step={0.01}
-              value={framing.scale}
-              onChange={(scale) => onFraming({ ...framing, scale })}
-              format={(v) => `${v.toFixed(2)}×`}
-            />
-          </FieldRow>
-          <FieldRow label="Rotation">
-            <RangeField
-              label="Rotation"
-              min={-180}
-              max={180}
-              step={0.5}
-              value={framing.rotation}
-              onChange={(rotation) => onFraming({ ...framing, rotation })}
-              format={(v) => `${Math.round(v)}°`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Zoom"
+            min={1}
+            max={MAX_FRAMING_SCALE}
+            step={0.01}
+            value={framing.scale}
+            onChange={(scale) => onFraming({ ...framing, scale })}
+            format={(v) => `${v.toFixed(2)}×`}
+          />
+          <SliderRow
+            label="Rotation"
+            min={-180}
+            max={180}
+            step={0.5}
+            value={framing.rotation}
+            onChange={(rotation) => onFraming({ ...framing, rotation })}
+            format={(v) => `${Math.round(v)}°`}
+          />
           <FieldRow label="Turn">
             <Button
               size="sm"

@@ -472,63 +472,6 @@ html[data-surface='darkroom'] {
     background: var(--color-line-strong);
     border-radius: 999px;
   }
-
-  /* `RangeField` (`shared/ui/Inspector.tsx`) additionally reports how far the
-     value has travelled, as a hard-stop gradient computed from its own
-     props — repainting the track loses the browser's built-in fill. A raw
-     `fraction * 100%` stop does not land on the thumb: the native thumb's
-     OWN travel is inset by half its width at each end, so the stop and the
-     thumb disagree most right where that inset is a large share of the
-     track — a small value drew a full circle sitting past a vertical seam.
-     The thumb is sized here too (14px) so the stop can be placed at the
-     thumb's own centre (`--range-fraction`, a plain 0–1 number) instead of
-     guessing at the UA's own, unknown, thumb width. */
-  input[type='range'].range-fill {
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-  }
-  input[type='range'].range-fill::-webkit-slider-runnable-track {
-    height: 3px;
-    background: linear-gradient(
-      to right,
-      var(--color-accent) 0,
-      var(--color-accent) calc((100% - 14px) * var(--range-fraction, 0) + 7px),
-      var(--color-line-strong) 0
-    );
-  }
-  input[type='range'].range-fill::-moz-range-track {
-    height: 3px;
-    background: linear-gradient(
-      to right,
-      var(--color-accent) 0,
-      var(--color-accent) calc((100% - 14px) * var(--range-fraction, 0) + 7px),
-      var(--color-line-strong) 0
-    );
-  }
-  input[type='range'].range-fill::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    margin-top: -5.5px;
-    border-radius: 999px;
-    background: var(--color-accent);
-    cursor: pointer;
-  }
-  input[type='range'].range-fill::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border: none;
-    border-radius: 999px;
-    background: var(--color-accent);
-    cursor: pointer;
-  }
-  input[type='range'].range-fill:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 3px;
-    border-radius: 999px;
-  }
 }
 
 /*
@@ -548,5 +491,57 @@ html[data-surface='darkroom'] {
   select,
   textarea {
     font-size: max(1rem, 1em);
+  }
+}
+
+/*
+  A checkbox under a finger (`docs/touch-targets.md` T3): the box is drawn at
+  22 px whatever size its caller gave it, and the label it lives in is a
+  44 px line — the label is the target, its words included. A box with no
+  words around it sits in a `touch-halo` label of its own. Unlayered, like
+  the rule above, so it outranks a caller's `w-[15px]`.
+*/
+@media (pointer: coarse) {
+  input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+  label:has(input[type='checkbox']) {
+    min-height: 44px;
+  }
+}
+
+/*
+  A target under a FINGER is grabbed on 44 px both ways (2026-10-14, face C
+  of `docs/touch-targets.md`). The zone is an `::after`, so the drawing never
+  moves; it exists only under a coarse pointer, so a mouse sees nothing new.
+  - `.touch-row`: a control that lives in a ROW (a button, a segment, a ⋯) —
+    its zone grows to 44 in HEIGHT only, so it never reaches over the
+    neighbour beside it.
+  - `.touch-halo`: an isolated MARK (an ⓘ, a ↺, a swatch, a switch) — 44 both
+    ways around its drawing.
+  In `components`, under the utilities, so a caller's `absolute` still wins
+  over the `relative` the zone needs.
+*/
+@layer components {
+  @media (pointer: coarse) {
+    .touch-row,
+    .touch-halo {
+      position: relative;
+    }
+    .touch-row::after,
+    .touch-halo::after {
+      content: '';
+      position: absolute;
+    }
+    .touch-row::after {
+      left: 0;
+      right: 0;
+      top: min(0px, calc((100% - 44px) / 2));
+      bottom: min(0px, calc((100% - 44px) / 2));
+    }
+    .touch-halo::after {
+      inset: min(0px, calc((100% - 44px) / 2));
+    }
   }
 }

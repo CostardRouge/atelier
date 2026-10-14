@@ -10,7 +10,7 @@
 
 import Segmented from '../../ui/Segmented';
 import { PRESS_LOOK } from '../../ui/press';
-import { FieldRow, RangeField, SelectField, TextField } from '../../ui/Inspector';
+import { FieldRow, SelectField, TextField, SliderRow } from '../../ui/Inspector';
 import { FacePicker, LookPicker } from './card-thumbs';
 import type { DriveOptions, DrivePlan } from './drive-plan';
 import {
@@ -190,17 +190,16 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
       )}
       {roadNames && o.cardLabels === 'groups' && (
         <>
-          <FieldRow label="Within">
-            <RangeField
-              label="Places this close are one name"
-              min={CARD_LIMITS.cardLabelKm.min}
-              max={CARD_LIMITS.cardLabelKm.max}
-              step={10}
-              value={o.cardLabelKm}
-              onChange={(cardLabelKm) => set({ cardLabelKm })}
-              format={(v) => `${Math.round(v)} km`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Within"
+            name="Places this close are one name"
+            min={CARD_LIMITS.cardLabelKm.min}
+            max={CARD_LIMITS.cardLabelKm.max}
+            step={10}
+            value={o.cardLabelKm}
+            onChange={(cardLabelKm) => set({ cardLabelKm })}
+            format={(v) => `${Math.round(v)} km`}
+          />
           <FieldRow label="Named" hint={o.cardLabelName === 'town' && !ctx.towns ? 'The town index is still loading: the first place names a group meanwhile.' : undefined}>
             <SelectField
               label="What names a group of places"

@@ -21,14 +21,7 @@ import { SCRUB_CHAPTERS } from './opener-chapter-specs';
 import { useCallback } from 'react';
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
-import {
-  FieldRow,
-  RangeField,
-  SelectField,
-  SwitchRow,
-  ToggleField,
-  swatchClass,
-} from '../../ui/Inspector';
+import { FieldRow, SelectField, SwitchRow, ToggleField, swatchClass, SliderRow } from '../../ui/Inspector';
 import type {
   HookPanelProps,
   HookPicture,
@@ -256,30 +249,27 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {!picked && o.mode === 'run-up' && (
-          <FieldRow label="Days back">
-            <RangeField
-              label="Told days before this one"
-              min={SCRUB_LIMITS.runUpDays.min}
-              max={SCRUB_LIMITS.runUpDays.max}
-              step={1}
-              value={o.runUpDays}
-              onChange={(runUpDays) => set({ runUpDays })}
-              format={(v) => `${v} days`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Days back"
+            name="Told days before this one"
+            min={SCRUB_LIMITS.runUpDays.min}
+            max={SCRUB_LIMITS.runUpDays.max}
+            step={1}
+            value={o.runUpDays}
+            onChange={(runUpDays) => set({ runUpDays })}
+            format={(v) => `${v} days`}
+          />
         )}
         {!picked && (
-          <FieldRow label="Most stops">
-            <RangeField
-              label="Most stops"
-              min={SCRUB_LIMITS.maxStops.min}
-              max={SCRUB_LIMITS.maxStops.max}
-              step={1}
-              value={o.maxStops}
-              onChange={(maxStops) => set({ maxStops })}
-              format={(v) => `≤ ${v}`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Most stops"
+            min={SCRUB_LIMITS.maxStops.min}
+            max={SCRUB_LIMITS.maxStops.max}
+            step={1}
+            value={o.maxStops}
+            onChange={(maxStops) => set({ maxStops })}
+            format={(v) => `≤ ${v}`}
+          />
         )}
 
         {flashing.length > 0 && (
@@ -352,17 +342,16 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       <Group title="Sweep" chapter="sweep">
-        <FieldRow label="Length">
-          <RangeField
-            label="Sweep length"
-            min={SCRUB_LIMITS.sweepSeconds.min}
-            max={SCRUB_LIMITS.sweepSeconds.max}
-            step={0.1}
-            value={o.sweepSeconds}
-            onChange={(sweepSeconds) => set({ sweepSeconds })}
-            format={(v) => `${v.toFixed(1)}s`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Length"
+          name="Sweep length"
+          min={SCRUB_LIMITS.sweepSeconds.min}
+          max={SCRUB_LIMITS.sweepSeconds.max}
+          step={0.1}
+          value={o.sweepSeconds}
+          onChange={(sweepSeconds) => set({ sweepSeconds })}
+          format={(v) => `${v.toFixed(1)}s`}
+        />
         {plan && plan.endSeconds > 0 && (
           <FitRow
             seconds={plan.endSeconds}
@@ -382,24 +371,21 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
             options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
           />
         </FieldRow>
-        <FieldRow
+        <SliderRow
           label="Hold first"
           hint={
             o.delaySeconds > 0
               ? 'The frame sits on the first stop this long before the head moves.'
               : undefined
           }
-        >
-          <RangeField
-            label="Hold on the first stop"
-            min={SCRUB_LIMITS.delaySeconds.min}
-            max={SCRUB_LIMITS.delaySeconds.max}
-            step={0.1}
-            value={o.delaySeconds}
-            onChange={(delaySeconds) => set({ delaySeconds })}
-            format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
-          />
-        </FieldRow>
+          name="Hold on the first stop"
+          min={SCRUB_LIMITS.delaySeconds.min}
+          max={SCRUB_LIMITS.delaySeconds.max}
+          step={0.1}
+          value={o.delaySeconds}
+          onChange={(delaySeconds) => set({ delaySeconds })}
+          format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+        />
       </Group>
 
       <Group title="Tape" chapter="tape">
@@ -416,28 +402,26 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
-        <FieldRow label="Width">
-          <RangeField
-            label="Tape width"
-            min={SCRUB_LIMITS.tapeWidth.min}
-            max={SCRUB_LIMITS.tapeWidth.max}
-            step={0.02}
-            value={o.tapeWidth}
-            onChange={(tapeWidth) => set({ tapeWidth })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
-        <FieldRow label="From edge">
-          <RangeField
-            label="Distance from the frame's edge"
-            min={SCRUB_LIMITS.edgeOffset.min}
-            max={SCRUB_LIMITS.edgeOffset.max}
-            step={0.005}
-            value={o.edgeOffset}
-            onChange={(edgeOffset) => set({ edgeOffset })}
-            format={(v) => `${(v * 100).toFixed(1)}%`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Width"
+          name="Tape width"
+          min={SCRUB_LIMITS.tapeWidth.min}
+          max={SCRUB_LIMITS.tapeWidth.max}
+          step={0.02}
+          value={o.tapeWidth}
+          onChange={(tapeWidth) => set({ tapeWidth })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+        <SliderRow
+          label="From edge"
+          name="Distance from the frame's edge"
+          min={SCRUB_LIMITS.edgeOffset.min}
+          max={SCRUB_LIMITS.edgeOffset.max}
+          step={0.005}
+          value={o.edgeOffset}
+          onChange={(edgeOffset) => set({ edgeOffset })}
+          format={(v) => `${(v * 100).toFixed(1)}%`}
+        />
         {tapeMoved(o) && (
           <MovedRow offsetX={o.offsetX} offsetY={o.offsetY} onReset={() => set({ offsetX: 0, offsetY: 0 })} />
         )}
@@ -466,42 +450,37 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
             </button>
           )}
         </FieldRow>
-        <FieldRow label="Opacity">
-          <RangeField
-            label="Ticks opacity"
-            min={SCRUB_LIMITS.tickOpacity.min}
-            max={SCRUB_LIMITS.tickOpacity.max}
-            step={0.05}
-            value={o.tickOpacity}
-            onChange={(tickOpacity) => set({ tickOpacity })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
-        <FieldRow label="Height">
-          <RangeField
-            label="Ticks height"
-            min={SCRUB_LIMITS.tickHeight.min}
-            max={SCRUB_LIMITS.tickHeight.max}
-            step={0.1}
-            value={o.tickHeight}
-            onChange={(tickHeight) => set({ tickHeight })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
-        <FieldRow
+        <SliderRow
+          label="Opacity"
+          name="Ticks opacity"
+          min={SCRUB_LIMITS.tickOpacity.min}
+          max={SCRUB_LIMITS.tickOpacity.max}
+          step={0.05}
+          value={o.tickOpacity}
+          onChange={(tickOpacity) => set({ tickOpacity })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+        <SliderRow
+          label="Height"
+          name="Ticks height"
+          min={SCRUB_LIMITS.tickHeight.min}
+          max={SCRUB_LIMITS.tickHeight.max}
+          step={0.1}
+          value={o.tickHeight}
+          onChange={(tickHeight) => set({ tickHeight })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+        <SliderRow
           label="Spacing"
           hint="The least room between two ticks. A long trip thins its ticks to keep it; a leg's start and the trip's ends always draw."
-        >
-          <RangeField
-            label="Least room between ticks"
-            min={SCRUB_LIMITS.tickGap.min}
-            max={SCRUB_LIMITS.tickGap.max}
-            step={1}
-            value={o.tickGap}
-            onChange={(tickGap) => set({ tickGap })}
-            format={(v) => (v <= 5 ? 'fine' : v <= 12 ? 'normal' : 'coarse')}
-          />
-        </FieldRow>
+          name="Least room between ticks"
+          min={SCRUB_LIMITS.tickGap.min}
+          max={SCRUB_LIMITS.tickGap.max}
+          step={1}
+          value={o.tickGap}
+          onChange={(tickGap) => set({ tickGap })}
+          format={(v) => (v <= 5 ? 'fine' : v <= 12 ? 'normal' : 'coarse')}
+        />
         <FieldRow label="Head">
           <Segmented
             size="sm"
@@ -536,17 +515,16 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </ToggleField>
         </FieldRow>
         {o.tapeBackground && (
-          <FieldRow label="Band depth">
-            <RangeField
-              label="Band opacity"
-              min={SCRUB_LIMITS.backgroundOpacity.min}
-              max={SCRUB_LIMITS.backgroundOpacity.max}
-              step={0.05}
-              value={o.backgroundOpacity}
-              onChange={(backgroundOpacity) => set({ backgroundOpacity })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Band depth"
+            name="Band opacity"
+            min={SCRUB_LIMITS.backgroundOpacity.min}
+            max={SCRUB_LIMITS.backgroundOpacity.max}
+            step={0.05}
+            value={o.backgroundOpacity}
+            onChange={(backgroundOpacity) => set({ backgroundOpacity })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         <FieldRow label="Ends" hint={o.edgeFade ? 'Ticks, track and band fade out over the tape’s two ends.' : undefined}>
           <ToggleField label="Fade the tape's ends" checked={o.edgeFade} onChange={(edgeFade) => set({ edgeFade })}>
@@ -574,17 +552,16 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.sound && (
-          <FieldRow label="Pitch">
-            <RangeField
-              label="Ticks pitch"
-              min={SCRUB_LIMITS.tickPitch.min}
-              max={SCRUB_LIMITS.tickPitch.max}
-              step={0.05}
-              value={o.tickPitch}
-              onChange={(tickPitch) => set({ tickPitch })}
-              format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Pitch"
+            name="Ticks pitch"
+            min={SCRUB_LIMITS.tickPitch.min}
+            max={SCRUB_LIMITS.tickPitch.max}
+            step={0.05}
+            value={o.tickPitch}
+            onChange={(tickPitch) => set({ tickPitch })}
+            format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
+          />
         )}
         {o.sound && (
           <FieldRow
@@ -610,20 +587,17 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.sound && (
-          <FieldRow
+          <SliderRow
             label="Volume"
             hint={o.tickVolume === 0 ? 'At 0% no sound track is written for the ticks at all.' : undefined}
-          >
-            <RangeField
-              label="Ticks volume"
-              min={SCRUB_LIMITS.tickVolume.min}
-              max={SCRUB_LIMITS.tickVolume.max}
-              step={0.05}
-              value={o.tickVolume}
-              onChange={(tickVolume) => set({ tickVolume })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+            name="Ticks volume"
+            min={SCRUB_LIMITS.tickVolume.min}
+            max={SCRUB_LIMITS.tickVolume.max}
+            step={0.05}
+            value={o.tickVolume}
+            onChange={(tickVolume) => set({ tickVolume })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.sound && (
           <FieldRow

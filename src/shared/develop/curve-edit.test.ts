@@ -8,6 +8,7 @@ import {
   MIN_GAP,
   moveCurvePoint,
   pointAt,
+  grabRadiusFor,
   removeCurvePoint,
 } from './curve-edit';
 import { makeCurve, normaliseCurve, type Curve } from './curves';
@@ -179,5 +180,28 @@ describe('curvePath and the words', () => {
       { x: 1, y: 1 },
     ];
     expect(curveToEdit(s)).toBe(s);
+  });
+});
+
+describe('grabRadiusFor', () => {
+  it('keeps the mouse’s radius in curve units', () => {
+    expect(grabRadiusFor(200, false)).toBe(GRAB_RADIUS);
+  });
+
+  it('gives a finger 22 px whatever the box', () => {
+    expect(grabRadiusFor(200, true)).toBeCloseTo(0.11);
+    expect(grabRadiusFor(176, true) * 176).toBeCloseTo(22);
+  });
+
+  it('never gives a finger less than the mouse, nor reads a box with no size', () => {
+    expect(grabRadiusFor(2000, true)).toBe(GRAB_RADIUS);
+    expect(grabRadiusFor(0, true)).toBe(GRAB_RADIUS);
+  });
+
+  it('takes the point a finger landed 15 px from, where the mouse’s radius added one', () => {
+    const three = [{ x: 0, y: 0 }, { x: 0.5, y: 0.5 }, { x: 1, y: 1 }];
+    const x = 0.5 + 15 / 200;
+    expect(pointAt(three, x, 0.5)).toBe(-1);
+    expect(pointAt(three, x, 0.5, grabRadiusFor(200, true))).toBe(1);
   });
 });

@@ -1326,13 +1326,16 @@ function AssetRow({
         drag.lifted ? LIFTED : ''
       }`}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={onToggle}
-        className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
-        aria-label={`Select ${asset.baseName}`}
-      />
+      {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+      <label className="touch-halo flex-none inline-grid place-items-center">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          className="flex-none w-[15px] h-[15px] accent-ink cursor-pointer"
+          aria-label={`Select ${asset.baseName}`}
+        />
+      </label>
       {/* The cover is its own click target — looking at a picture and putting
           it to work are two different verbs, and a button inside a button is
           not markup. Same 80×56 for every row, always: this is the frame the

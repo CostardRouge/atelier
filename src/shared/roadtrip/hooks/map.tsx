@@ -21,14 +21,7 @@
 
 import { MAP_CHAPTERS } from './opener-chapter-specs';
 import Segmented from '../../ui/Segmented';
-import {
-  FieldRow,
-  RangeField,
-  SelectField,
-  SwitchRow,
-  ToggleField,
-  swatchClass,
-} from '../../ui/Inspector';
+import { FieldRow, SelectField, SwitchRow, ToggleField, swatchClass, SliderRow } from '../../ui/Inspector';
 import { EASINGS, EASING_IDS } from './easing';
 import { AHEAD_GLYPHS, ALIGN_GLYPHS, MAP_LABEL_GLYPHS, MAP_MEDIA_GLYPHS, PEN_GLYPHS, POSITION_GLYPHS, easingGlyph } from './choice-glyphs';
 import type { HookContext, HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
@@ -253,33 +246,29 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             </p>
           )}
         {o.media !== 'off' && o.media !== 'backdrop' && (
-          <FieldRow label="Size">
-            <RangeField
-              label="Picture size"
-              min={MAP_LIMITS.mediaSize.min}
-              max={MAP_LIMITS.mediaSize.max}
-              step={0.05}
-              value={o.mediaSize}
-              onChange={(mediaSize) => set({ mediaSize })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Size"
+            name="Picture size"
+            min={MAP_LIMITS.mediaSize.min}
+            max={MAP_LIMITS.mediaSize.max}
+            step={0.05}
+            value={o.mediaSize}
+            onChange={(mediaSize) => set({ mediaSize })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.media !== 'off' && (
-          <FieldRow
+          <SliderRow
             label="Arrival"
             hint={o.mediaFade === 0 ? 'A picture appears on the frame the pen lands.' : undefined}
-          >
-            <RangeField
-              label="How long a picture takes to arrive"
-              min={MAP_LIMITS.mediaFade.min}
-              max={MAP_LIMITS.mediaFade.max}
-              step={0.05}
-              value={o.mediaFade}
-              onChange={(mediaFade) => set({ mediaFade })}
-              format={(v) => (v === 0 ? 'at once' : `${v.toFixed(2)}s`)}
-            />
-          </FieldRow>
+            name="How long a picture takes to arrive"
+            min={MAP_LIMITS.mediaFade.min}
+            max={MAP_LIMITS.mediaFade.max}
+            step={0.05}
+            value={o.mediaFade}
+            onChange={(mediaFade) => set({ mediaFade })}
+            format={(v) => (v === 0 ? 'at once' : `${v.toFixed(2)}s`)}
+          />
         )}
         {(o.media === 'pin' || o.media === 'card' || o.media === 'strip') && (
           <FieldRow label="Mount" hint={o.mediaFrame === 'paper' ? 'Paper around the picture — and where a card’s name goes.' : undefined}>
@@ -315,17 +304,17 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.media === 'backdrop' && (
-          <FieldRow label="Dim" hint="How far the picture behind is darkened, so the line stays legible over it.">
-            <RangeField
-              label="Backdrop dim"
-              min={MAP_LIMITS.mediaDim.min}
-              max={MAP_LIMITS.mediaDim.max}
-              step={0.05}
-              value={o.mediaDim}
-              onChange={(mediaDim) => set({ mediaDim })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Dim"
+            hint="How far the picture behind is darkened, so the line stays legible over it."
+            name="Backdrop dim"
+            min={MAP_LIMITS.mediaDim.min}
+            max={MAP_LIMITS.mediaDim.max}
+            step={0.05}
+            value={o.mediaDim}
+            onChange={(mediaDim) => set({ mediaDim })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
       </Group>
 
@@ -360,17 +349,16 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
-        <FieldRow label="Size">
-          <RangeField
-            label="Map size"
-            min={MAP_LIMITS.size.min}
-            max={MAP_LIMITS.size.max}
-            step={0.05}
-            value={o.size}
-            onChange={(size) => set({ size })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Size"
+          name="Map size"
+          min={MAP_LIMITS.size.min}
+          max={MAP_LIMITS.size.max}
+          step={0.05}
+          value={o.size}
+          onChange={(size) => set({ size })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
         {mapMoved(o) && (
           <MovedRow offsetX={o.offsetX} offsetY={o.offsetY} onReset={() => set({ offsetX: 0, offsetY: 0 })} />
         )}
@@ -380,17 +368,16 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </ToggleField>
         </FieldRow>
         {o.plate && (
-          <FieldRow label="Plate depth">
-            <RangeField
-              label="Plate opacity"
-              min={MAP_LIMITS.plateOpacity.min}
-              max={MAP_LIMITS.plateOpacity.max}
-              step={0.05}
-              value={o.plateOpacity}
-              onChange={(plateOpacity) => set({ plateOpacity })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Plate depth"
+            name="Plate opacity"
+            min={MAP_LIMITS.plateOpacity.min}
+            max={MAP_LIMITS.plateOpacity.max}
+            step={0.05}
+            value={o.plateOpacity}
+            onChange={(plateOpacity) => set({ plateOpacity })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.plate && (
           <FieldRow label="Plate colour">
@@ -443,28 +430,27 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       <Group title="Path" chapter="path">
-        <FieldRow label="Width">
-          <RangeField
-            label="Line width"
-            min={MAP_LIMITS.lineWidth.min}
-            max={MAP_LIMITS.lineWidth.max}
-            step={0.05}
-            value={o.lineWidth}
-            onChange={(lineWidth) => set({ lineWidth })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
-        <FieldRow label="Bow" hint={o.curve === 0 ? 'Straight lines between the stops.' : 'Each hop bows away from the straight line — a travel map’s idiom, and what keeps a there-and-back from drawing one line twice.'}>
-          <RangeField
-            label="How far a hop bows"
-            min={MAP_LIMITS.curve.min}
-            max={MAP_LIMITS.curve.max}
-            step={0.02}
-            value={o.curve}
-            onChange={(curve) => set({ curve })}
-            format={(v) => (v === 0 ? 'straight' : `${Math.round(v * 100)}%`)}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Width"
+          name="Line width"
+          min={MAP_LIMITS.lineWidth.min}
+          max={MAP_LIMITS.lineWidth.max}
+          step={0.05}
+          value={o.lineWidth}
+          onChange={(lineWidth) => set({ lineWidth })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+        <SliderRow
+          label="Bow"
+          hint={o.curve === 0 ? 'Straight lines between the stops.' : 'Each hop bows away from the straight line — a travel map’s idiom, and what keeps a there-and-back from drawing one line twice.'}
+          name="How far a hop bows"
+          min={MAP_LIMITS.curve.min}
+          max={MAP_LIMITS.curve.max}
+          step={0.02}
+          value={o.curve}
+          onChange={(curve) => set({ curve })}
+          format={(v) => (v === 0 ? 'straight' : `${Math.round(v * 100)}%`)}
+        />
         <FieldRow label="Colours" hint="The path travelled, then the stops still ahead.">
           <input
             type="color"
@@ -526,17 +512,15 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </ToggleField>
         </FieldRow>
         {o.dots && (
-          <FieldRow label="Dot size">
-            <RangeField
-              label="Dot size"
-              min={MAP_LIMITS.dotSize.min}
-              max={MAP_LIMITS.dotSize.max}
-              step={0.1}
-              value={o.dotSize}
-              onChange={(dotSize) => set({ dotSize })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Dot size"
+            min={MAP_LIMITS.dotSize.min}
+            max={MAP_LIMITS.dotSize.max}
+            step={0.1}
+            value={o.dotSize}
+            onChange={(dotSize) => set({ dotSize })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.dots && (
           <FieldRow label="Numbers" hint={o.numbers ? 'Each dot carries its place in the order.' : undefined}>
@@ -574,17 +558,15 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           <StopStyleRow value={o.placeStyle} writing={ctx.writing} onChange={(placeStyle) => set({ placeStyle })} />
         )}
         {o.labels !== 'none' && (
-          <FieldRow label="Name size">
-            <RangeField
-              label="Name size"
-              min={MAP_LIMITS.labelSize.min}
-              max={MAP_LIMITS.labelSize.max}
-              step={0.1}
-              value={o.labelSize}
-              onChange={(labelSize) => set({ labelSize })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Name size"
+            min={MAP_LIMITS.labelSize.min}
+            max={MAP_LIMITS.labelSize.max}
+            step={0.1}
+            value={o.labelSize}
+            onChange={(labelSize) => set({ labelSize })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         <FieldRow
           label="Trip’s places"
@@ -613,17 +595,17 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           hint={o.draw ? undefined : 'The whole itinerary is there from the first frame, and the hook takes no time of its own.'}
         />
         {o.draw && (
-          <FieldRow label="Travel" hint="Shared out by distance, so the pen keeps one pace — a long hop takes longer than a short one.">
-            <RangeField
-              label="Travelling time"
-              min={MAP_LIMITS.drawSeconds.min}
-              max={MAP_LIMITS.drawSeconds.max}
-              step={0.1}
-              value={o.drawSeconds}
-              onChange={(drawSeconds) => set({ drawSeconds })}
-              format={(v) => `${v.toFixed(1)}s`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Travel"
+            hint="Shared out by distance, so the pen keeps one pace — a long hop takes longer than a short one."
+            name="Travelling time"
+            min={MAP_LIMITS.drawSeconds.min}
+            max={MAP_LIMITS.drawSeconds.max}
+            step={0.1}
+            value={o.drawSeconds}
+            onChange={(drawSeconds) => set({ drawSeconds })}
+            format={(v) => `${v.toFixed(1)}s`}
+          />
         )}
         {o.draw && (
           <FitRow
@@ -635,24 +617,21 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         {o.draw && (
-          <FieldRow
+          <SliderRow
             label="Wait"
             hint={
               o.dwellSeconds === 0
                 ? 'The pen does not stop — with pictures on, each one is on screen only while the next hop runs.'
                 : 'The pen waits at each stop it reaches, including the last, which is what gives a picture time to be looked at.'
             }
-          >
-            <RangeField
-              label="Wait at each stop"
-              min={MAP_LIMITS.dwellSeconds.min}
-              max={MAP_LIMITS.dwellSeconds.max}
-              step={0.05}
-              value={o.dwellSeconds}
-              onChange={(dwellSeconds) => set({ dwellSeconds })}
-              format={(v) => (v === 0 ? 'none' : `${v.toFixed(2)}s`)}
-            />
-          </FieldRow>
+            name="Wait at each stop"
+            min={MAP_LIMITS.dwellSeconds.min}
+            max={MAP_LIMITS.dwellSeconds.max}
+            step={0.05}
+            value={o.dwellSeconds}
+            onChange={(dwellSeconds) => set({ dwellSeconds })}
+            format={(v) => (v === 0 ? 'none' : `${v.toFixed(2)}s`)}
+          />
         )}
         {o.draw && (
           <FieldRow label="Motion" hint={`${EASINGS[o.easing].hint} — on every hop.`}>
@@ -667,17 +646,17 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.draw && (
-          <FieldRow label="Hold first" hint={o.delaySeconds > 0 ? 'The map sits on its first stop this long before the pen leaves.' : undefined}>
-            <RangeField
-              label="Hold on the first stop"
-              min={MAP_LIMITS.delaySeconds.min}
-              max={MAP_LIMITS.delaySeconds.max}
-              step={0.1}
-              value={o.delaySeconds}
-              onChange={(delaySeconds) => set({ delaySeconds })}
-              format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Hold first"
+            hint={o.delaySeconds > 0 ? 'The map sits on its first stop this long before the pen leaves.' : undefined}
+            name="Hold on the first stop"
+            min={MAP_LIMITS.delaySeconds.min}
+            max={MAP_LIMITS.delaySeconds.max}
+            step={0.1}
+            value={o.delaySeconds}
+            onChange={(delaySeconds) => set({ delaySeconds })}
+            format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+          />
         )}
         {o.draw && (
           <FieldRow label="Pen">
@@ -782,30 +761,29 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.sound && (
-          <FieldRow label="Pitch">
-            <RangeField
-              label="Ticks pitch"
-              min={MAP_LIMITS.tickPitch.min}
-              max={MAP_LIMITS.tickPitch.max}
-              step={0.05}
-              value={o.tickPitch}
-              onChange={(tickPitch) => set({ tickPitch })}
-              format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Pitch"
+            name="Ticks pitch"
+            min={MAP_LIMITS.tickPitch.min}
+            max={MAP_LIMITS.tickPitch.max}
+            step={0.05}
+            value={o.tickPitch}
+            onChange={(tickPitch) => set({ tickPitch })}
+            format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
+          />
         )}
         {o.sound && (
-          <FieldRow label="Volume" hint={o.tickVolume === 0 ? 'At 0% no sound track is written for the ticks at all.' : undefined}>
-            <RangeField
-              label="Ticks volume"
-              min={MAP_LIMITS.tickVolume.min}
-              max={MAP_LIMITS.tickVolume.max}
-              step={0.05}
-              value={o.tickVolume}
-              onChange={(tickVolume) => set({ tickVolume })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Volume"
+            hint={o.tickVolume === 0 ? 'At 0% no sound track is written for the ticks at all.' : undefined}
+            name="Ticks volume"
+            min={MAP_LIMITS.tickVolume.min}
+            max={MAP_LIMITS.tickVolume.max}
+            step={0.05}
+            value={o.tickVolume}
+            onChange={(tickVolume) => set({ tickVolume })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.sound && (
           <FieldRow

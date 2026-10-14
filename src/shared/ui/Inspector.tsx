@@ -13,16 +13,19 @@
  *   whether it is open is remembered per section;
  * - inside it, a `FieldRow` is a label at the left and ITS control at the
  *   right, on one line, with an optional sentence under the control;
- * - `RangeField`, `SelectField` and `ToggleField` are the three controls a
- *   row most often holds, so the sliders, the selects and the switches look
- *   the same in every panel.
+ * - `SelectField` and `ToggleField` are the controls a row most often holds,
+ *   so the selects and the switches look the same in every panel;
+ * - a slider is NOT a `FieldRow`: a `SliderRow` is the bar itself across the
+ *   whole width, its name inside it (`SliderBar.tsx`, 2026-10-13), because a
+ *   label column left the track what the readout and a pill did not take.
  *
  * A section is a rule and not a card on purpose: the inspector is one column,
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import InfoDot, { InfoDotButton } from './InfoDot';
+import SliderBar, { type SliderBarProps } from './SliderBar';
 import { Icons } from './icons';
 
 const OPEN_KEY = 'atelier.inspector.';
@@ -127,6 +130,8 @@ export function InspectorSection({
   // note it unfolds, a menu portalled out of an action — is not the band's.
   // The title stays the real button, so the keyboard and a screen reader keep
   // one control with `aria-expanded`; its click bubbles here like any other.
+  // Under a finger the band is 44 px tall and the title takes its height; the
+  // gap opens to 14 px so the ⓘ's 44 px zone stops short of the title.
   const onBandClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!foldable) return;
     const band = e.currentTarget;
@@ -142,7 +147,7 @@ export function InspectorSection({
     <section className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
       <div
         onClick={onBandClick}
-        className={`group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 ${foldable ? 'cursor-pointer' : ''}`}
+        className={`group/band flex flex-wrap items-center gap-x-2 pointer-coarse:gap-x-3.5 gap-y-0 min-h-7 pointer-coarse:min-h-11 ${foldable ? 'cursor-pointer' : ''}`}
       >
         {foldable ? (
           <button
@@ -150,7 +155,7 @@ export function InspectorSection({
             data-fold
             aria-expanded={open}
             aria-controls={bodyId}
-            className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
+            className="min-w-0 pointer-coarse:self-stretch p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
           >
             {title}
           </button>
@@ -309,40 +314,37 @@ export function Readout({ children, muted = false }: { children: ReactNode; mute
   );
 }
 
-interface RangeFieldProps {
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-  /** How the value reads beside the track. */
-  format: (value: number) => string;
-  label: string;
-  disabled?: boolean;
+interface SliderRowProps extends Omit<SliderBarProps, 'after'> {
+  /** A sentence under the bar — what it will really do, or why it cannot. */
+  hint?: ReactNode;
+  /** The hint says a STATE, not a why: never folded behind a dot (`FoldHints`). */
+  hintShown?: boolean;
+  /**
+   * What the row says beside its number — an owner pill, a verb (`Auto`,
+   * `Max`, a re-roll) — on its own line under the bar, so it never takes a
+   * pixel of the track (`docs/slider-touch.md`, R1).
+   */
+  trailing?: ReactNode;
 }
 
-/** A slider with its value beside it — never inside the label, where it moved the row. */
-export function RangeField({ value, min, max, step, onChange, format, label, disabled }: RangeFieldProps) {
-  const clamped = Math.min(max, Math.max(min, value));
-  const fraction = max > min ? (clamped - min) / (max - min) : 0;
+/**
+ * A slider ROW: the bar across the whole width of the panel, its name inside
+ * it, never a label column beside it — a `FieldRow` gave its 104 px to the
+ * label and left the track to share what remained with the readout and
+ * whatever pill the row carried.
+ */
+export function SliderRow({ hint, hintShown = false, trailing, ...bar }: SliderRowProps) {
+  const { dot, visible, id } = useRowHint(hint, hintShown, bar.name ?? bar.label);
   return (
-    <>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label={label}
-        style={{ '--range-fraction': fraction } as CSSProperties}
-        className="range-fill flex-1 min-w-0 disabled:opacity-45"
-      />
-      <span className="flex-none min-w-[3.25rem] text-right whitespace-nowrap font-mono text-xs tabular-nums text-ink-soft">
-        {format(value)}
-      </span>
-    </>
+    <div className="flex flex-col gap-1.5 min-w-0">
+      <SliderBar {...bar} after={dot} />
+      {trailing && <div className="flex flex-wrap items-center gap-2 min-w-0">{trailing}</div>}
+      {visible && (
+        <div id={id} className="text-xs leading-relaxed text-muted [&>p]:m-0">
+          {hint}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -393,17 +395,21 @@ interface ToggleFieldProps {
   children?: ReactNode;
 }
 
-/** A switch, for a setting that is on or off. */
+/**
+ * A switch, for a setting that is on or off. Under a finger its line is 44 px
+ * tall and the switch is grabbed on 44 × 44 (`touch-halo`) inside that line,
+ * never over the row above or below.
+ */
 export function ToggleField({ checked, onChange, label, children }: ToggleFieldProps) {
   return (
-    <label className="inline-flex items-center gap-2 min-w-0 cursor-pointer select-none">
+    <label className="inline-flex items-center gap-2 min-w-0 pointer-coarse:min-h-11 cursor-pointer select-none">
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
-        className={`relative flex-none w-9 h-5 p-0 border-0 rounded-full cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+        className={`touch-halo relative flex-none w-9 h-5 p-0 border-0 rounded-full cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
           checked ? 'bg-accent' : 'bg-line-strong'
         }`}
       >
@@ -418,6 +424,9 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
   );
 }
 
+// Under a finger a field and a select are 44 px tall, iOS's own form height
+// (`docs/touch-targets.md` T1): a replaced element draws no `::after`, so its
+// zone can only be its box.
 // `max-[820px]:text-base` on every typed field and select: below 16px iOS
 // zooms the page the moment the control is focused, and on a tool screen the
 // document is locked so it never zooms back (`frontend.md`, «Touch sizing»).
@@ -426,9 +435,9 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
 // breakpoint still belongs — and because these are recipe strings, not
 // components.
 export const fieldClass =
-  'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
+  'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] pointer-coarse:h-11 px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
 const selectClass =
-  'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+  'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pointer-coarse:h-11 pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 
 interface NumberFieldProps {
   /** `null` draws an empty field — with `onClear`, for a value that may be absent. */
@@ -511,9 +520,9 @@ export function TextField({ value, onChange, label, placeholder, disabled }: Tex
   );
 }
 
-/** The colour swatch every row uses. */
+/** The colour swatch every row uses — 44 px under a finger: an `<input type="color">` draws no `::after` to grow a zone with. */
 export const swatchClass =
-  'flex-none w-8 h-8 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer disabled:opacity-40 disabled:cursor-default';
+  'flex-none w-8 h-8 pointer-coarse:w-11 pointer-coarse:h-11 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer disabled:opacity-40 disabled:cursor-default';
 
 interface NativeSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
@@ -564,8 +573,15 @@ export function SwitchRow({ label, name, checked, onChange, hint, hintShown = fa
   const { dot, visible, id } = useRowHint(hint, hintShown, label);
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-ink-soft leading-tight">
+      <div className="flex items-center gap-3 pointer-coarse:min-h-11">
+        {/* The phrase is the switch too (`docs/touch-targets.md` T3) — not
+            its ⓘ, which is a button of its own. */}
+        <span
+          onClick={(e) => {
+            if (!(e.target as Element).closest('button')) onChange(!checked);
+          }}
+          className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-ink-soft leading-tight cursor-pointer select-none"
+        >
           <span className="min-w-0">{label}</span>
           {dot}
         </span>

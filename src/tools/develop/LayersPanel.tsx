@@ -3,6 +3,7 @@ import SectionLegend from '../../shared/ui/SectionLegend';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu from '../../shared/ui/OverflowMenu';
+import SliderBar from '../../shared/ui/SliderBar';
 import { Icons } from '../../shared/ui/icons';
 import { developLines } from '../../shared/develop/develop';
 import { MAX_LAYERS, type AdjustLayer } from '../../shared/develop/layer';
@@ -295,18 +296,19 @@ export default function LayersPanel({
                     </>
                   )}
                 </div>
-                <div className="col-start-2 col-span-4 flex h-3.5 items-center gap-1.5">
-                  <input
-                    type="range"
+                <div className="col-start-2 col-span-4 min-w-0">
+                  <SliderBar
+                    label="Opacity"
+                    name={`Opacity of ${name}`}
                     min={0}
                     max={1}
                     step={0.01}
+                    reset={1}
+                    origin={0}
                     value={layer.opacity}
-                    aria-label={`Opacity of ${name}`}
-                    onChange={(e) => onPatch(layer.id, { opacity: Number(e.target.value) })}
-                    className="h-3.5 flex-1 accent-ink cursor-pointer"
+                    onChange={(opacity) => onPatch(layer.id, { opacity })}
+                    format={(v) => `${Math.round(v * 100)} %`}
                   />
-                  <output className="w-9 text-right font-mono text-3xs tabular-nums text-muted">{Math.round(layer.opacity * 100)} %</output>
                 </div>
               </li>
             );

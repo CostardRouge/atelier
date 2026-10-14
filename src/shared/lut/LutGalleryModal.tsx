@@ -88,6 +88,7 @@ import { InfoDotButton } from '../ui/InfoDot';
 import { FieldRow } from '../ui/Inspector';
 import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import Segmented, { type SegmentedOption } from '../ui/Segmented';
+import SliderBar from '../ui/SliderBar';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { useAtLeast, useIsCompact } from '../ui/use-layout-mode';
 import { loadBuiltinThumbs } from './builtin-thumbs';
@@ -237,7 +238,6 @@ export default function LutGalleryModal({
   /** The standing explanation, behind the ⓘ beside the title. */
   const [aboutOpen, setAboutOpen] = useState(false);
   const aboutId = useId();
-  const strengthId = useId();
 
   /**
    * THE SCENE — the aimed look on the host's own picture.
@@ -647,26 +647,21 @@ export default function LutGalleryModal({
    */
   const noLook = !aimedItem || aimedItem.id === 'none';
   const strengthSlider = (
-    <>
-      <input
-        id={strengthId}
-        type="range"
-        min={0}
-        max={MAX_LAYER_INTENSITY}
-        step={0.05}
-        value={strength}
-        disabled={noLook}
-        onChange={(e) => setStrength(Number(e.target.value))}
-        // The one gesture that says "as authored" without hunting for 100.
-        onDoubleClick={() => setStrength(1)}
-        aria-label="How strongly the look is applied"
-        title="How strongly the look is applied (double-click for 100%)"
-        className="flex-1 min-w-0 accent-accent disabled:opacity-40"
-      />
-      <span className="font-mono text-2xs tabular-nums text-muted min-w-[3.4ch] text-right">
-        {Math.round(strength * 100)}%
-      </span>
-    </>
+    <SliderBar
+      label="Strength"
+      name="How strongly the look is applied"
+      min={0}
+      max={MAX_LAYER_INTENSITY}
+      step={0.05}
+      // Double-click or ↺: the one gesture that says "as authored" without
+      // hunting for 100.
+      reset={1}
+      origin={0}
+      value={strength}
+      disabled={noLook}
+      onChange={setStrength}
+      format={(v) => `${Math.round(v * 100)}%`}
+    />
   );
 
   /** The families as a swipeable line — a phone's rail, and a tablet's. */
@@ -939,7 +934,7 @@ export default function LutGalleryModal({
                       {aimedItem?.name ?? 'Your picture, as it is'}
                     </span>
                   ) : (
-                    strengthSlider
+                    <div className="flex-1 min-w-0">{strengthSlider}</div>
                   )}
                   {note && (
                     <span className="shrink-0 w-2 h-2 rounded-full bg-warn" title={note} aria-label={note} />
@@ -1046,9 +1041,7 @@ export default function LutGalleryModal({
                         </span>
                       )}
                     </FieldRow>
-                    <FieldRow label="Strength" htmlFor={strengthId}>
-                      {strengthSlider}
-                    </FieldRow>
+                    {strengthSlider}
                     <FieldRow label="Compare">
                       <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
                       <span className="min-w-0 truncate text-xs text-muted">

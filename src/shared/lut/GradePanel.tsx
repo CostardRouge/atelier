@@ -26,7 +26,7 @@ import { useBandPreference } from '../render/use-band-preference';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import Segmented from '../ui/Segmented';
-import { FieldRow, NativeSelect, RangeField, SelectField, ToggleField } from '../ui/Inspector';
+import { FieldRow, NativeSelect, SelectField, ToggleField, SliderRow } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
 
 /** What each choice does to a picture past 12 megapixels, behind the row's dot. */
@@ -301,18 +301,17 @@ export default function GradePanel({
                 <span className="text-xs text-warn">{layer.missing}</span>
               </FieldRow>
             ) : (
-              <FieldRow label="Strength">
-                <RangeField
-                  label={`${layer.name} strength`}
-                  min={0}
-                  max={MAX_LAYER_INTENSITY}
-                  step={0.05}
-                  value={layer.intensity}
-                  disabled={!layer.enabled}
-                  onChange={(v) => stack.setIntensity(layer.id, v)}
-                  format={(v) => `${Math.round(v * 100)}%`}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Strength"
+                name={`${layer.name} strength`}
+                min={0}
+                max={MAX_LAYER_INTENSITY}
+                step={0.05}
+                value={layer.intensity}
+                disabled={!layer.enabled}
+                onChange={(v) => stack.setIntensity(layer.id, v)}
+                format={(v) => `${Math.round(v * 100)}%`}
+              />
             )}
             {isFilmLayer(layer) && !layer.missing && (
               <FilmLayer

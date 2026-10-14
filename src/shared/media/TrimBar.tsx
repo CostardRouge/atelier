@@ -169,8 +169,15 @@ export default function TrimBar({
   // parks the playhead on the handle it moved.
   const RAIL_BAND = 22;
 
+  // Under a finger (`docs/touch-targets.md`, T1/T4) the drawing stays and the
+  // two bands grow AWAY from each other: the bar is 64 px tall, a handle is
+  // grabbed on 44 × 44 reaching OUTWARD from the kept span and up from the
+  // rail's band (-8 → 36), the head on 44 × 44 down from its own (36 → 80) —
+  // so the three zones never overlap, whatever the times.
+  const handleZone =
+    "pointer-coarse:after:content-[''] pointer-coarse:after:absolute pointer-coarse:after:top-[-8px] pointer-coarse:after:h-11 pointer-coarse:after:w-11";
   const handleClass =
-    'absolute top-0 h-[22px] w-[15px] -ml-[7.5px] flex items-center justify-center cursor-ew-resize touch-none focus:outline-none group';
+    `absolute top-0 h-[22px] w-[15px] -ml-[7.5px] flex items-center justify-center cursor-ew-resize touch-none focus:outline-none group ${handleZone}`;
   const handleBar =
     'w-[3px] h-[16px] rounded-[2px] bg-accent-ink transition-[height,background-color] duration-150 ease-paper group-hover:h-[20px] group-focus-visible:h-[20px] group-focus-visible:bg-accent';
 
@@ -178,7 +185,7 @@ export default function TrimBar({
 
   return (
     <div
-      className="relative flex-1 h-9 touch-none select-none"
+      className="relative flex-1 h-9 pointer-coarse:h-16 touch-none select-none"
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
@@ -222,7 +229,7 @@ export default function TrimBar({
           aria-valuemax={range.end}
           aria-valuenow={range.start}
           aria-valuetext={formatTimecode(range.start)}
-          className={handleClass}
+          className={`${handleClass} pointer-coarse:after:right-0`}
           style={{ left: `${pct(range.start)}%` }}
           onPointerDown={(e) => beginDrag(e, 'start')}
           onKeyDown={(e) => onKey(e, 'start')}
@@ -237,7 +244,7 @@ export default function TrimBar({
           aria-valuemax={duration}
           aria-valuenow={range.end}
           aria-valuetext={formatTimecode(range.end)}
-          className={handleClass}
+          className={`${handleClass} pointer-coarse:after:left-0`}
           style={{ left: `${pct(range.end)}%` }}
           onPointerDown={(e) => beginDrag(e, 'end')}
           onKeyDown={(e) => onKey(e, 'end')}
@@ -260,7 +267,7 @@ export default function TrimBar({
           aria-valuemax={range.end}
           aria-valuenow={head}
           aria-valuetext={formatTimecode(head)}
-          className="absolute bottom-0 h-[14px] w-[17px] -ml-[8.5px] flex items-end justify-center cursor-grab active:cursor-grabbing touch-none focus:outline-none group"
+          className="absolute bottom-0 h-[14px] w-[17px] -ml-[8.5px] flex items-end justify-center cursor-grab active:cursor-grabbing touch-none focus:outline-none group pointer-coarse:after:content-[''] pointer-coarse:after:absolute pointer-coarse:after:top-[-14px] pointer-coarse:after:h-11 pointer-coarse:after:w-11 pointer-coarse:after:left-1/2 pointer-coarse:after:-translate-x-1/2"
           style={{ left: `${pct(head)}%` }}
           onPointerDown={(e) => beginDrag(e, 'seek')}
           onKeyDown={(e) => onKey(e, 'seek')}

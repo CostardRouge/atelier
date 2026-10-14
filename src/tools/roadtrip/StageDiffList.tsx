@@ -141,14 +141,17 @@ export default function StageDiffList({
         const note = noteFor?.(e) ?? null;
         return (
           <li key={e.key} className={`${row} ${inert ? 'text-muted' : ''}`}>
-            <input
-              type="checkbox"
-              className={check}
-              checked={!inert && ticked.has(e.key)}
-              disabled={inert}
-              onChange={() => onToggle(e.key)}
-              aria-label={describe(e)}
-            />
+            {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+            <label className="touch-halo flex-none inline-grid place-items-center">
+              <input
+                type="checkbox"
+                className={check}
+                checked={!inert && ticked.has(e.key)}
+                disabled={inert}
+                onChange={() => onToggle(e.key)}
+                aria-label={describe(e)}
+              />
+            </label>
             <span className="min-w-0 flex-1">
               <span
                 className={`font-mono text-3xs tracking-[0.1em] uppercase mr-2 ${

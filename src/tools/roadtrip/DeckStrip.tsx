@@ -630,7 +630,7 @@ export default function DeckStrip({
       </div>
 
       {clip && trimming ? (
-        <div className="h-14 flex items-center px-3 rounded-[10px] bg-paper-2 border border-line">
+        <div className="h-14 pointer-coarse:h-[5.5rem] flex items-center px-3 rounded-[10px] bg-paper-2 border border-line">
           <TrimBar
             duration={clip.duration}
             time={clip.playhead}

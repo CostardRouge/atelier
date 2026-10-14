@@ -26,7 +26,7 @@ import {
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import Segmented from '../ui/Segmented';
-import { FieldRow, RangeField, ToggleField } from '../ui/Inspector';
+import { FieldRow, Readout, SliderRow, ToggleField } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
 
 interface ShadesPanelProps {
@@ -173,49 +173,44 @@ export default function ShadesPanel({
             >
               <ShadeDirectionPicker direction={direction} onPick={pick} label={`Shade ${i + 1}`} />
             </FieldRow>
-            <FieldRow label="Strength">
-              <RangeField
-                label={`Shade ${i + 1} strength`}
-                min={0}
-                max={1}
-                step={0.02}
-                value={shade.strength}
-                disabled={!on}
-                onChange={(strength) => patch(shade.id, { strength })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
-            <FieldRow label={round ? 'Radius' : 'Reach'}>
-              <RangeField
-                label={`Shade ${i + 1} ${round ? 'radius' : 'reach'}`}
-                min={0}
-                max={1}
-                step={0.02}
-                value={shade.reach}
-                disabled={!on || !reachLive}
-                onChange={(reach) => patch(shade.id, { reach })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
-            <FieldRow
+            <SliderRow
+              label="Strength"
+              name={`Shade ${i + 1} strength`}
+              min={0}
+              max={1}
+              step={0.02}
+              value={shade.strength}
+              disabled={!on}
+              onChange={(strength) => patch(shade.id, { strength })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
+            <SliderRow
+              label={round ? 'Radius' : 'Reach'}
+              name={`Shade ${i + 1} ${round ? 'radius' : 'reach'}`}
+              min={0}
+              max={1}
+              step={0.02}
+              value={shade.reach}
+              disabled={!on || !reachLive}
+              onChange={(reach) => patch(shade.id, { reach })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
+            <SliderRow
               label="Core"
               hint={
                 core > 0
                   ? `Full strength over ${pct(core)} of the ${round ? 'radius' : 'reach'}, then the fade.`
                   : undefined
               }
-            >
-              <RangeField
-                label={`Shade ${i + 1} core`}
-                min={0}
-                max={MAX_CORE}
-                step={0.02}
-                value={core}
-                disabled={!on}
-                onChange={(next) => patch(shade.id, { core: next })}
-                format={pct}
-              />
-            </FieldRow>
+              name={`Shade ${i + 1} core`}
+              min={0}
+              max={MAX_CORE}
+              step={0.02}
+              value={core}
+              disabled={!on}
+              onChange={(next) => patch(shade.id, { core: next })}
+              format={pct}
+            />
             <FieldRow
               label="Falloff"
               hint={SHADE_FALLOFFS.find((f) => f.id === falloff)?.hint}
@@ -228,69 +223,69 @@ export default function ShadesPanel({
               />
             </FieldRow>
             {movable && (
-              <FieldRow
-                label="Centre"
-                align="start"
-                hint={
-                  placing === shade.id ? (
-                    <p>
-                      Press or drag on the picture to move the{' '}
-                      {movable === 'both' ? 'centre' : 'band'}.
-                    </p>
-                  ) : centred ? undefined : (
-                    <button
-                      type="button"
-                      className="p-0 bg-transparent border-0 text-xs text-accent-ink underline underline-offset-2 cursor-pointer"
-                      onClick={() => patch(shade.id, { center: undefined })}
-                    >
-                      Back to the middle
-                    </button>
-                  )
-                }
-              >
-                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                  {onPlace && (
+              <>
+                <FieldRow
+                  label="Centre"
+                  hint={
+                    placing === shade.id ? (
+                      <p>
+                        Press or drag on the picture to move the{' '}
+                        {movable === 'both' ? 'centre' : 'band'}.
+                      </p>
+                    ) : centred ? undefined : (
+                      <button
+                        type="button"
+                        className="p-0 bg-transparent border-0 text-xs text-accent-ink underline underline-offset-2 cursor-pointer"
+                        onClick={() => patch(shade.id, { center: undefined })}
+                      >
+                        Back to the middle
+                      </button>
+                    )
+                  }
+                >
+                  {onPlace ? (
                     <Button
                       size="sm"
                       variant={placing === shade.id ? 'primary' : 'default'}
                       aria-pressed={placing === shade.id}
                       disabled={!on}
-                      className="self-start"
                       onClick={() => onPlace(placing === shade.id ? null : shade.id)}
                     >
                       {placing === shade.id ? 'Done placing' : 'Place on the picture'}
                     </Button>
+                  ) : (
+                    <Readout muted>{centred ? 'In the middle' : `${pct(centre.x)} · ${pct(centre.y)}`}</Readout>
                   )}
-                  {movable !== 'y' && (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <RangeField
-                        label={`Shade ${i + 1} centre across`}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={centre.x}
-                        disabled={!on}
-                        onChange={(x) => patch(shade.id, { center: { ...centre, x } })}
-                        format={(v) => `${pct(v)} →`}
-                      />
-                    </div>
-                  )}
-                  {movable !== 'x' && (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <RangeField
-                        label={`Shade ${i + 1} centre down`}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={centre.y}
-                        disabled={!on}
-                        onChange={(y) => patch(shade.id, { center: { ...centre, y } })}
-                        format={(v) => `${pct(v)} ↓`}
-                      />
-                    </div>
-                  )}
-                </div>
-              </FieldRow>
+                </FieldRow>
+                {movable !== 'y' && (
+                  <SliderRow
+                    label="Across"
+                    name={`Shade ${i + 1} centre across`}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    reset={0.5}
+                    value={centre.x}
+                    disabled={!on}
+                    onChange={(x) => patch(shade.id, { center: { ...centre, x } })}
+                    format={(v) => `${pct(v)} →`}
+                  />
+                )}
+                {movable !== 'x' && (
+                  <SliderRow
+                    label="Down"
+                    name={`Shade ${i + 1} centre down`}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    reset={0.5}
+                    value={centre.y}
+                    disabled={!on}
+                    onChange={(y) => patch(shade.id, { center: { ...centre, y } })}
+                    format={(v) => `${pct(v)} ↓`}
+                  />
+                )}
+              </>
             )}
             <FieldRow label="Invert">
               <ToggleField

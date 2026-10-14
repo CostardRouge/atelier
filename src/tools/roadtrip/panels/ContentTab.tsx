@@ -36,14 +36,7 @@ import { hookVariantById } from '../../../shared/roadtrip/hooks/registry';
 import { inputClass, linkButton } from './ui';
 import { DateField } from '../../../shared/ui/DateField';
 import Button from '../../../shared/ui/Button';
-import {
-  FieldRow,
-  InspectorSection,
-  RangeField,
-  Readout,
-  SelectField,
-  ToggleField,
-} from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, SelectField, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
 import type { TrimRange } from '../../../shared/media/trim';
 
 interface ContentTabProps {
@@ -361,17 +354,16 @@ export default function ContentTab({
                     {Icons.trash}
                   </IconButton>
                 </FieldRow>
-                <FieldRow label="Size">
-                  <RangeField
-                    label={`Line ${i + 1} size`}
-                    min={0.02}
-                    max={0.3}
-                    step={0.005}
-                    value={el.sizeFrac}
-                    onChange={(sizeFrac) => write({ sizeFrac })}
-                    format={(v) => `${Math.round(v * 100)}%`}
-                  />
-                </FieldRow>
+                <SliderRow
+                  label="Size"
+                  name={`Line ${i + 1} size`}
+                  min={0.02}
+                  max={0.3}
+                  step={0.005}
+                  value={el.sizeFrac}
+                  onChange={(sizeFrac) => write({ sizeFrac })}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
                 <KnockoutRows
                   label={`Line ${i + 1}`}
                   value={el.knockout}

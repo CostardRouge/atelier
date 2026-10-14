@@ -10,7 +10,7 @@ import {
 import { FILM_STOCKS, filmSettingsFor, filmStock, onStock, type FilmStockId } from '../film/stocks';
 import Button from '../ui/Button';
 import Segmented from '../ui/Segmented';
-import { FieldRow, RangeField, SelectField, ToggleField } from '../ui/Inspector';
+import { FieldRow, SelectField, ToggleField, SliderRow } from '../ui/Inspector';
 
 interface FilmDialsProps {
   settings: FilmSettings;
@@ -93,33 +93,30 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
         </FieldRow>
       )}
 
-      <FieldRow label="Coupling" hint="How much each dye layer also sees its neighbours' light: hue shifts, a little less purity.">
-        <RangeField
-          label="Coupling"
-          {...RESPONSE_RANGES.coupling}
-          value={r.coupling}
-          onChange={(v) => patch({ coupling: v })}
-          format={(v) => `${Math.round(v)}%`}
-        />
-      </FieldRow>
-      <FieldRow label="Rolloff" hint="Coupler inhibition: a saturated colour melts toward neutral instead of clipping to a flat patch.">
-        <RangeField
-          label="Rolloff"
-          {...RESPONSE_RANGES.inhibition}
-          value={r.inhibition}
-          onChange={(v) => patch({ inhibition: v })}
-          format={(v) => `${Math.round(v)}%`}
-        />
-      </FieldRow>
-      <FieldRow label="Dye">
-        <RangeField
-          label="Dye saturation"
-          {...RESPONSE_RANGES.dye}
-          value={r.dye}
-          onChange={(v) => patch({ dye: v })}
-          format={(v) => signed(v)}
-        />
-      </FieldRow>
+      <SliderRow
+        label="Coupling"
+        hint="How much each dye layer also sees its neighbours' light: hue shifts, a little less purity."
+        {...RESPONSE_RANGES.coupling}
+        value={r.coupling}
+        onChange={(v) => patch({ coupling: v })}
+        format={(v) => `${Math.round(v)}%`}
+      />
+      <SliderRow
+        label="Rolloff"
+        hint="Coupler inhibition: a saturated colour melts toward neutral instead of clipping to a flat patch."
+        {...RESPONSE_RANGES.inhibition}
+        value={r.inhibition}
+        onChange={(v) => patch({ inhibition: v })}
+        format={(v) => `${Math.round(v)}%`}
+      />
+      <SliderRow
+        label="Dye"
+        name="Dye saturation"
+        {...RESPONSE_RANGES.dye}
+        value={r.dye}
+        onChange={(v) => patch({ dye: v })}
+        format={(v) => signed(v)}
+      />
 
       <FieldRow
         label="Print"
@@ -134,15 +131,13 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
         </ToggleField>
       </FieldRow>
       {r.print && (
-        <FieldRow label="Paper grade">
-          <RangeField
-            label="Paper grade"
-            {...RESPONSE_RANGES.paperGrade}
-            value={r.paperGrade}
-            onChange={(v) => patch({ paperGrade: v })}
-            format={(v) => v.toFixed(1)}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Paper grade"
+          {...RESPONSE_RANGES.paperGrade}
+          value={r.paperGrade}
+          onChange={(v) => patch({ paperGrade: v })}
+          format={(v) => v.toFixed(1)}
+        />
       )}
 
       <FieldRow
@@ -165,15 +160,15 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
         />
       </FieldRow>
       {CURVE_DIALS.map(({ key, label, format }) => (
-        <FieldRow key={key} label={label}>
-          <RangeField
-            label={`${label} (${channel === 'rgb' ? 'all channels' : channel.toUpperCase()})`}
-            {...CURVE_RANGES[key]}
-            value={shown[key]}
-            onChange={(v) => patchCurve(key, v)}
-            format={format}
-          />
-        </FieldRow>
+        <SliderRow
+          key={key}
+          label={label}
+          name={`${label} (${channel === 'rgb' ? 'all channels' : channel.toUpperCase()})`}
+          {...CURVE_RANGES[key]}
+          value={shown[key]}
+          onChange={(v) => patchCurve(key, v)}
+          format={format}
+        />
       ))}
     </div>
   );

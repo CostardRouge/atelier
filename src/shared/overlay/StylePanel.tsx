@@ -10,7 +10,7 @@ import {
 import { previewTextStyle } from './style-preview';
 import { useState, type ReactNode } from 'react';
 import IconButton from '../ui/IconButton';
-import { FieldRow, RangeField, Readout, SelectField, ToggleField } from '../ui/Inspector';
+import { FieldRow, Readout, SelectField, ToggleField, SliderRow } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
 
 /**
@@ -135,28 +135,26 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
       {theme && (
         <div className="flex flex-col gap-2.5">
           {/* The bave slider: one amount drives the four glow layers. */}
-          <FieldRow label="Glow" hint="Matte → fluo.">
-            <RangeField
-              label="Glow"
-              min={0}
-              max={1}
-              step={0.01}
-              value={theme.style.glowAmount}
-              onChange={(glowAmount) => patchStyle({ glowAmount })}
-              format={(v) => `${Math.round(v * 100)}`}
-            />
-          </FieldRow>
-          <FieldRow label="Warmth" hint="Halation drift.">
-            <RangeField
-              label="Warmth"
-              min={0}
-              max={1}
-              step={0.05}
-              value={theme.style.glowWarmth}
-              onChange={(glowWarmth) => patchStyle({ glowWarmth })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Glow"
+            hint="Matte → fluo."
+            min={0}
+            max={1}
+            step={0.01}
+            value={theme.style.glowAmount}
+            onChange={(glowAmount) => patchStyle({ glowAmount })}
+            format={(v) => `${Math.round(v * 100)}`}
+          />
+          <SliderRow
+            label="Warmth"
+            hint="Halation drift."
+            min={0}
+            max={1}
+            step={0.05}
+            value={theme.style.glowWarmth}
+            onChange={(glowWarmth) => patchStyle({ glowWarmth })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
           <FieldRow label="Ink">
             <input
               type="color"
@@ -199,28 +197,26 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
               AA
             </ToggleField>
           </FieldRow>
-          <FieldRow label="Spacing">
-            <RangeField
-              label="Letter spacing"
-              min={-0.05}
-              max={0.2}
-              step={0.005}
-              value={theme.style.letterSpacingEm}
-              onChange={(letterSpacingEm) => patchStyle({ letterSpacingEm })}
-              format={(v) => (v * 100).toFixed(0)}
-            />
-          </FieldRow>
-          <FieldRow label="Size">
-            <RangeField
-              label="Size scale"
-              min={0.5}
-              max={2}
-              step={0.05}
-              value={theme.style.sizeScale}
-              onChange={(sizeScale) => patchStyle({ sizeScale })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Spacing"
+            name="Letter spacing"
+            min={-0.05}
+            max={0.2}
+            step={0.005}
+            value={theme.style.letterSpacingEm}
+            onChange={(letterSpacingEm) => patchStyle({ letterSpacingEm })}
+            format={(v) => (v * 100).toFixed(0)}
+          />
+          <SliderRow
+            label="Size"
+            name="Size scale"
+            min={0.5}
+            max={2}
+            step={0.05}
+            value={theme.style.sizeScale}
+            onChange={(sizeScale) => patchStyle({ sizeScale })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
           <FieldRow label="Legibility">
             <SelectField
               label="Legibility"
@@ -245,19 +241,18 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
           {advanced && layers && derived && (
             <>
               {ADVANCED_FIELDS.map((f) => (
-                <FieldRow key={f.key} label={f.label}>
-                  <RangeField
-                    label={f.label}
-                    min={0}
-                    max={f.max}
-                    step={f.step}
-                    value={layers[f.key]}
-                    onChange={(v) =>
-                      patchStyle({ glowLayers: { ...theme.style.glowLayers, [f.key]: v } })
-                    }
-                    format={(v) => v.toFixed(3)}
-                  />
-                  {theme.style.glowLayers?.[f.key] != null && (
+                <SliderRow
+                  key={f.key}
+                  label={f.label}
+                  min={0}
+                  max={f.max}
+                  step={f.step}
+                  value={layers[f.key]}
+                  onChange={(v) =>
+                    patchStyle({ glowLayers: { ...theme.style.glowLayers, [f.key]: v } })
+                  }
+                  format={(v) => v.toFixed(3)}
+                  trailing={theme.style.glowLayers?.[f.key] != null && (
                     <IconButton
                       size="sm"
                       variant="ghost"
@@ -271,7 +266,7 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
                       {Icons.reset}
                     </IconButton>
                   )}
-                </FieldRow>
+                />
               ))}
               <p className="m-0 text-xs text-muted leading-relaxed">
                 Layers follow the glow slider until you touch one; the reset hands a layer back

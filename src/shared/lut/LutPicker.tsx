@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BUILTIN_LUTS, LUT_GROUPS, UNGROUPED_LUTS } from './builtin-luts';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
 import IconButton from '../ui/IconButton';
+import SliderBar from '../ui/SliderBar';
 import { Icons } from '../ui/icons';
 
 interface LutPickerProps {
@@ -120,28 +121,22 @@ export default function LutPicker({
       </button>
 
       {/* LUT strength — 0% (original) → 100% (as authored) → 300% (over-applied).
-          Only meaningful with a LUT active. Double-click the slider to reset. */}
+          Only meaningful with a LUT active. Double-click the bar to reset. */}
       {selected !== 'none' && (
-        <label className="flex items-center gap-2 min-w-0 pl-1.5">
-          <span className="font-mono text-2xs tracking-[0.16em] uppercase text-muted select-none">
-            Intensity
-          </span>
-          <input
-            type="range"
-            className="w-[6.5rem] accent-accent cursor-pointer"
+        <div className="flex-[1_1_14rem] min-w-0">
+          <SliderBar
+            label="Intensity"
+            name="LUT intensity"
             min={0}
             max={3}
             step={0.01}
+            reset={1}
+            origin={0}
             value={intensity}
-            onChange={(e) => onIntensityChange(Number(e.target.value))}
-            onDoubleClick={() => onIntensityChange(1)}
-            aria-label="LUT intensity"
-            title="LUT strength (double-click to reset to 100%)"
+            onChange={onIntensityChange}
+            format={(v) => `${Math.round(v * 100)}%`}
           />
-          <span className="font-mono text-xs tabular-nums text-ink-soft min-w-[3.2ch] text-right">
-            {Math.round(intensity * 100)}%
-          </span>
-        </label>
+        </div>
       )}
 
       {gallery && (

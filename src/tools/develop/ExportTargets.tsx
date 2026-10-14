@@ -13,7 +13,7 @@ import {
   type SizeMode,
   type ExportFormat,
 } from '../../shared/develop/export-targets';
-import { FieldRow, RangeField, Readout, SelectField, SwitchRow, TextField, fieldClass } from '../../shared/ui/Inspector';
+import { FieldRow, Readout, SelectField, SwitchRow, TextField, fieldClass, SliderRow } from '../../shared/ui/Inspector';
 import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
 import { chromaWords } from '../../shared/media/jpeg-chroma';
 import Button from '../../shared/ui/Button';
@@ -106,20 +106,23 @@ function QualityRow({ quality, onQuality }: { quality: number; onQuality: (quali
     hint = `${chroma} · ${chromaWords(chroma)}${until}`;
   }
   return (
-    <FieldRow label="Quality" hint={hint} hintShown>
-      <RangeField
-        label="JPEG quality"
-        min={QUALITY_LIMITS.min}
-        max={QUALITY_LIMITS.max}
-        step={0.01}
-        value={quality}
-        onChange={onQuality}
-        format={(v) => `${Math.round(v * 100)} %`}
-      />
-      <Button size="sm" aria-pressed={max} variant={max ? 'default' : 'ghost'} title="Quality 100 %" onClick={() => onQuality(QUALITY_LIMITS.max)}>
-        Max
-      </Button>
-    </FieldRow>
+    <SliderRow
+      label="Quality"
+      hint={hint}
+      hintShown
+      name="JPEG quality"
+      min={QUALITY_LIMITS.min}
+      max={QUALITY_LIMITS.max}
+      step={0.01}
+      value={quality}
+      onChange={onQuality}
+      format={(v) => `${Math.round(v * 100)} %`}
+      trailing={
+        <Button size="sm" aria-pressed={max} variant={max ? 'default' : 'ghost'} title="Quality 100 %" onClick={() => onQuality(QUALITY_LIMITS.max)}>
+          Max
+        </Button>
+      }
+    />
   );
 }
 

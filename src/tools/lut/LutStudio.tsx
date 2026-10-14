@@ -530,6 +530,7 @@ export default function LutStudio() {
               </span>
               <input
                 type="range"
+                data-playhead
                 className="flex-1 accent-accent cursor-pointer"
                 min={0}
                 max={duration || 0}

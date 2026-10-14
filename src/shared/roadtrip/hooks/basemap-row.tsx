@@ -12,7 +12,7 @@
  */
 
 import Button from '../../ui/Button';
-import { FieldRow, RangeField } from '../../ui/Inspector';
+import { SliderRow } from '../../ui/Inspector';
 import { TILES_IN_OPENER_NOTICE, allowTiles, useTilesAllowed } from '../../map/osm-tiles';
 import { useStreamProgress } from '../../map/tile-stream';
 import { clearTiles, useTileCacheSize } from '../../map/tile-cache';
@@ -83,17 +83,17 @@ export function BasemapStatus({ want, set, ctx, status, opacity, onOpacity, limi
           {line}
         </p>
       )}
-      <FieldRow label="Map strength" hint={note}>
-        <RangeField
-          label="How strongly the map background shows"
-          min={limits.min}
-          max={limits.max}
-          step={0.05}
-          value={opacity}
-          onChange={onOpacity}
-          format={(v) => `${Math.round(v * 100)}%`}
-        />
-      </FieldRow>
+      <SliderRow
+        label="Map strength"
+        hint={note}
+        name="How strongly the map background shows"
+        min={limits.min}
+        max={limits.max}
+        step={0.05}
+        value={opacity}
+        onChange={onOpacity}
+        format={(v) => `${Math.round(v * 100)}%`}
+      />
       <p className="m-0 text-2xs text-faint">{TILES_IN_OPENER_NOTICE}</p>
       {allowed && <KeptTiles />}
     </div>

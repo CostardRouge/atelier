@@ -8,7 +8,7 @@
 import { CAMERA_GLYPHS, ORIENTATION_GLYPHS } from './choice-glyphs';
 import { useState } from 'react';
 import Button from '../../ui/Button';
-import { FieldRow, RangeField, ToggleField } from '../../ui/Inspector';
+import { FieldRow, SliderRow, ToggleField } from '../../ui/Inspector';
 import Segmented from '../../ui/Segmented';
 import {
   CAMERA_LIMITS,
@@ -91,17 +91,16 @@ export function CameraRows({ o, set, viewKm, fresh, words, heading }: CameraRows
               ))}
             </div>
           </FieldRow>
-          <FieldRow label="View width" hint={`Kilometres across the map while the camera follows ${words.subject}.`}>
-            <RangeField
-              label="View width"
-              min={Math.log10(CAMERA_LIMITS.viewKm.min)}
-              max={Math.log10(CAMERA_LIMITS.viewKm.max)}
-              step={0.01}
-              value={Math.log10(Math.max(CAMERA_LIMITS.viewKm.min, Math.min(CAMERA_LIMITS.viewKm.max, viewKm)))}
-              onChange={(v) => set({ viewKm: roundKm(10 ** v) })}
-              format={(v) => `${roundKm(10 ** v)} km`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="View width"
+            hint={`Kilometres across the map while the camera follows ${words.subject}.`}
+            min={Math.log10(CAMERA_LIMITS.viewKm.min)}
+            max={Math.log10(CAMERA_LIMITS.viewKm.max)}
+            step={0.01}
+            value={Math.log10(Math.max(CAMERA_LIMITS.viewKm.min, Math.min(CAMERA_LIMITS.viewKm.max, viewKm)))}
+            onChange={(v) => set({ viewKm: roundKm(10 ** v) })}
+            format={(v) => `${roundKm(10 ** v)} km`}
+          />
           <FieldRow
             label="Zoom"
             hint={
@@ -123,17 +122,16 @@ export function CameraRows({ o, set, viewKm, fresh, words, heading }: CameraRows
             />
           </FieldRow>
           {o.zoom === 'pull-back' && (
-            <FieldRow label="Pull back">
-              <RangeField
-                label="Pull-back strength"
-                min={CAMERA_LIMITS.pullBack.min}
-                max={CAMERA_LIMITS.pullBack.max}
-                step={0.05}
-                value={o.pullBack}
-                onChange={(pullBack) => set({ pullBack })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Pull back"
+              name="Pull-back strength"
+              min={CAMERA_LIMITS.pullBack.min}
+              max={CAMERA_LIMITS.pullBack.max}
+              step={0.05}
+              value={o.pullBack}
+              onChange={(pullBack) => set({ pullBack })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
           )}
           {heading && (
             <FieldRow
@@ -173,51 +171,49 @@ export function CameraRows({ o, set, viewKm, fresh, words, heading }: CameraRows
           </button>
           {fine && (
             <>
-              <FieldRow label="Smoothing" hint={`A window centred on ${words.subject} — the journey is known ahead, so the camera never trails it.`}>
-                <RangeField
-                  label="Camera smoothing"
-                  min={CAMERA_LIMITS.smoothing.min}
-                  max={CAMERA_LIMITS.smoothing.max}
-                  step={0.1}
-                  value={o.smoothing}
-                  onChange={(smoothing) => set({ smoothing })}
-                  format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
-                />
-              </FieldRow>
-              <FieldRow label="Look ahead" hint={`The camera reads ${words.subject} this far ahead of now.`}>
-                <RangeField
-                  label="Look ahead"
-                  min={CAMERA_LIMITS.lookAhead.min}
-                  max={CAMERA_LIMITS.lookAhead.max}
-                  step={0.1}
-                  value={o.lookAhead}
-                  onChange={(lookAhead) => set({ lookAhead })}
-                  format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Smoothing"
+                hint={`A window centred on ${words.subject} — the journey is known ahead, so the camera never trails it.`}
+                name="Camera smoothing"
+                min={CAMERA_LIMITS.smoothing.min}
+                max={CAMERA_LIMITS.smoothing.max}
+                step={0.1}
+                value={o.smoothing}
+                onChange={(smoothing) => set({ smoothing })}
+                format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+              />
+              <SliderRow
+                label="Look ahead"
+                hint={`The camera reads ${words.subject} this far ahead of now.`}
+                min={CAMERA_LIMITS.lookAhead.min}
+                max={CAMERA_LIMITS.lookAhead.max}
+                step={0.1}
+                value={o.lookAhead}
+                onChange={(lookAhead) => set({ lookAhead })}
+                format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+              />
               {heading && o.orientation === 'heading' && (
-                <FieldRow label="Turning" hint={`The heading is weighed by how far ${words.subject} moves, so a halt never turns the map; then it turns no faster than the limit.`}>
-                  <div className="flex flex-col gap-1.5">
-                    <RangeField
-                      label="Turn smoothing"
-                      min={CAMERA_LIMITS.turnSmoothing.min}
-                      max={CAMERA_LIMITS.turnSmoothing.max}
-                      step={0.1}
-                      value={o.turnSmoothing}
-                      onChange={(turnSmoothing) => set({ turnSmoothing })}
-                      format={(v) => (v === 0 ? 'sharp' : `${v.toFixed(1)}s`)}
-                    />
-                    <RangeField
-                      label="Max turn speed"
-                      min={CAMERA_LIMITS.maxTurn.min}
-                      max={CAMERA_LIMITS.maxTurn.max}
-                      step={5}
-                      value={o.maxTurn}
-                      onChange={(maxTurn) => set({ maxTurn })}
-                      format={(v) => `${Math.round(v)}°/s`}
-                    />
-                  </div>
-                </FieldRow>
+                <>
+                  <SliderRow
+                    label="Turn smoothing"
+                    hint={`The heading is weighed by how far ${words.subject} moves, so a halt never turns the map; then it turns no faster than the limit.`}
+                    min={CAMERA_LIMITS.turnSmoothing.min}
+                    max={CAMERA_LIMITS.turnSmoothing.max}
+                    step={0.1}
+                    value={o.turnSmoothing}
+                    onChange={(turnSmoothing) => set({ turnSmoothing })}
+                    format={(v) => (v === 0 ? 'sharp' : `${v.toFixed(1)}s`)}
+                  />
+                  <SliderRow
+                    label="Max turn speed"
+                    min={CAMERA_LIMITS.maxTurn.min}
+                    max={CAMERA_LIMITS.maxTurn.max}
+                    step={5}
+                    value={o.maxTurn}
+                    onChange={(maxTurn) => set({ maxTurn })}
+                    format={(v) => `${Math.round(v)}°/s`}
+                  />
+                </>
               )}
             </>
           )}

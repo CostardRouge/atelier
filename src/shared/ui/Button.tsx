@@ -29,13 +29,17 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 // `disabled` swallows it.
 const BASE =
   'inline-flex items-center justify-center shrink-0 whitespace-nowrap font-sans font-medium ' +
-  'rounded-control border cursor-pointer select-none ' +
+  'touch-row rounded-control border cursor-pointer select-none ' +
   'transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ' +
   `${PRESS_LOOK} disabled:opacity-45 disabled:pointer-events-none aria-disabled:opacity-45 aria-disabled:cursor-default ` +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
+// Under a finger a `sm` button is drawn at `md`'s 34 px and every size is
+// GRABBED on 44 (`touch-row`, `docs/touch-targets.md` T2): 355 small
+// buttons were 28 px under a thumb, and the size belongs to the hand, never
+// to the caller.
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 gap-1 text-xs',
+  sm: 'h-7 pointer-coarse:h-[2.125rem] gap-1 text-xs',
   md: 'h-[2.125rem] gap-1.5 text-sm',
   lg: 'h-10 gap-2 text-sm',
 };

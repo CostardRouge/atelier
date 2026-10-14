@@ -21,14 +21,7 @@
 import { DRIVE_CHAPTERS } from './opener-chapter-specs';
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
-import {
-  FieldRow,
-  RangeField,
-  SelectField,
-  SwitchRow,
-  ToggleField,
-  swatchClass,
-} from '../../ui/Inspector';
+import { FieldRow, SelectField, SwitchRow, ToggleField, swatchClass, SliderRow } from '../../ui/Inspector';
 import { DEFAULT_VEHICLE, vehicleLine, carriesVehicles, describeVehicle, vehicleFor, type VehicleSpec, type VehicleChoice } from '../vehicle-spec';
 import { fleetOf, mainVehicle } from '../vehicle-fleet';
 import { driveRoad, driveVehicles, ferryDocks, refModel, type DriveVehicles, type RoadInput } from './vehicle-plan';
@@ -406,17 +399,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             </button>
           )}
         </FieldRow>
-        <FieldRow label="Width">
-          <RangeField
-            label="Line width"
-            min={DRIVE_LIMITS.lineWidth.min}
-            max={DRIVE_LIMITS.lineWidth.max}
-            step={0.05}
-            value={o.lineWidth}
-            onChange={(lineWidth) => set({ lineWidth })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Width"
+          name="Line width"
+          min={DRIVE_LIMITS.lineWidth.min}
+          max={DRIVE_LIMITS.lineWidth.max}
+          step={0.05}
+          value={o.lineWidth}
+          onChange={(lineWidth) => set({ lineWidth })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
       </Group>
 
       <Group title="Pictures" chapter="pictures">
@@ -472,30 +464,28 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         {o.pictures !== 'none' && (
-          <FieldRow label="Per picture" hint="How long the vehicle halts for each picture at a stop.">
-            <RangeField
-              label="Seconds per picture"
-              min={DRIVE_LIMITS.secondsPerPicture.min}
-              max={DRIVE_LIMITS.secondsPerPicture.max}
-              step={0.1}
-              value={o.secondsPerPicture}
-              onChange={(secondsPerPicture) => set({ secondsPerPicture })}
-              format={(v) => `${v.toFixed(1)}s`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Per picture"
+            hint="How long the vehicle halts for each picture at a stop."
+            name="Seconds per picture"
+            min={DRIVE_LIMITS.secondsPerPicture.min}
+            max={DRIVE_LIMITS.secondsPerPicture.max}
+            step={0.1}
+            value={o.secondsPerPicture}
+            onChange={(secondsPerPicture) => set({ secondsPerPicture })}
+            format={(v) => `${v.toFixed(1)}s`}
+          />
         )}
         {o.pictures === 'cards' && (
-          <FieldRow label="Print size">
-            <RangeField
-              label="Print size"
-              min={DRIVE_LIMITS.cardSize.min}
-              max={DRIVE_LIMITS.cardSize.max}
-              step={0.05}
-              value={o.cardSize}
-              onChange={(cardSize) => set({ cardSize })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Print size"
+            min={DRIVE_LIMITS.cardSize.min}
+            max={DRIVE_LIMITS.cardSize.max}
+            step={0.05}
+            value={o.cardSize}
+            onChange={(cardSize) => set({ cardSize })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.pictures === 'cards' && (
           <FieldRow label="Afterwards" hint={o.cardsStay ? 'The prints stay on the map once the vehicle has gone: a collage by the end.' : 'The prints fade as the vehicle leaves.'}>
@@ -603,28 +593,27 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         ) : (
           <p className="m-0 text-xs text-muted">The vehicle is set for the whole trip, in its settings.</p>
         )}
-        <FieldRow label="Size">
-          <RangeField
-            label="Vehicle size"
-            min={DRIVE_LIMITS.carSize.min}
-            max={DRIVE_LIMITS.carSize.max}
-            step={0.05}
-            value={o.carSize}
-            onChange={(carSize) => set({ carSize })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
-        <FieldRow label="Camera" hint="How steeply the camera looks down at the vehicle: 90° is the map’s own view, lower shows its sides.">
-          <RangeField
-            label="Camera elevation"
-            min={DRIVE_LIMITS.tilt.min}
-            max={DRIVE_LIMITS.tilt.max}
-            step={1}
-            value={o.tilt}
-            onChange={(tilt) => set({ tilt })}
-            format={(v) => `${Math.round(v)}°`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Size"
+          name="Vehicle size"
+          min={DRIVE_LIMITS.carSize.min}
+          max={DRIVE_LIMITS.carSize.max}
+          step={0.05}
+          value={o.carSize}
+          onChange={(carSize) => set({ carSize })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+        <SliderRow
+          label="Camera"
+          hint="How steeply the camera looks down at the vehicle: 90° is the map’s own view, lower shows its sides."
+          name="Camera elevation"
+          min={DRIVE_LIMITS.tilt.min}
+          max={DRIVE_LIMITS.tilt.max}
+          step={1}
+          value={o.tilt}
+          onChange={(tilt) => set({ tilt })}
+          format={(v) => `${Math.round(v)}°`}
+        />
       </Group>
 
       <Group title="Map" chapter="map">
@@ -716,17 +705,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
-        <FieldRow label="Size">
-          <RangeField
-            label="Route size"
-            min={DRIVE_LIMITS.size.min}
-            max={DRIVE_LIMITS.size.max}
-            step={0.05}
-            value={o.size}
-            onChange={(size) => set({ size })}
-            format={(v) => `${Math.round(v * 100)}%`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Size"
+          name="Route size"
+          min={DRIVE_LIMITS.size.min}
+          max={DRIVE_LIMITS.size.max}
+          step={0.05}
+          value={o.size}
+          onChange={(size) => set({ size })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
         <FieldRow label="Dots">
           <ToggleField label="A dot at every stop" checked={o.dots} onChange={(dots) => set({ dots })}>
             A dot at every stop
@@ -761,17 +749,15 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           <StopStyleRow value={o.placeStyle} writing={ctx.writing} onChange={(placeStyle) => set({ placeStyle })} />
         )}
         {o.labels !== 'none' && (
-          <FieldRow label="Name size">
-            <RangeField
-              label="Name size"
-              min={DRIVE_LIMITS.labelSize.min}
-              max={DRIVE_LIMITS.labelSize.max}
-              step={0.1}
-              value={o.labelSize}
-              onChange={(labelSize) => set({ labelSize })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Name size"
+            min={DRIVE_LIMITS.labelSize.min}
+            max={DRIVE_LIMITS.labelSize.max}
+            step={0.1}
+            value={o.labelSize}
+            onChange={(labelSize) => set({ labelSize })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         <FieldRow label="Furniture" align="start">
           <div className="flex flex-col gap-1.5">
@@ -803,24 +789,21 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       <Group title="Motion" chapter="motion">
-        <FieldRow
+        <SliderRow
           label="Driving"
           hint={
             plan && o.driveSeconds < plan.schedule.roadFloor - 1e-9
               ? `${plan.schedule.phases.filter((p) => p.kind === 'run').length} hops in ${o.driveSeconds.toFixed(1)} s: each is shorter than a third of a second. Give the road ${Math.ceil(plan.schedule.roadFloor)} s, or group nearby places.`
               : `The time on the road${count ? ', stays at the places included' : ''}, shared between the stops by distance${count ? ' and days' : ''}; halts${count && o.summary ? ' and the summary card' : ''} come on top.`
           }
-        >
-          <RangeField
-            label="Driving length"
-            min={DRIVE_LIMITS.driveSeconds.min}
-            max={DRIVE_LIMITS.driveSeconds.max}
-            step={0.5}
-            value={o.driveSeconds}
-            onChange={(driveSeconds) => set({ driveSeconds })}
-            format={(v) => `${v.toFixed(1)}s`}
-          />
-        </FieldRow>
+          name="Driving length"
+          min={DRIVE_LIMITS.driveSeconds.min}
+          max={DRIVE_LIMITS.driveSeconds.max}
+          step={0.5}
+          value={o.driveSeconds}
+          onChange={(driveSeconds) => set({ driveSeconds })}
+          format={(v) => `${v.toFixed(1)}s`}
+        />
         {plan && (
           <FitRow
             seconds={plan.seconds}
@@ -840,28 +823,28 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label, icon: easingGlyph(id) }))}
           />
         </FieldRow>
-        <FieldRow label="Hold first" hint={o.delaySeconds > 0 ? 'The vehicle sits at the first stop this long before it moves.' : undefined}>
-          <RangeField
-            label="Hold on the first stop"
-            min={DRIVE_LIMITS.delaySeconds.min}
-            max={DRIVE_LIMITS.delaySeconds.max}
-            step={0.1}
-            value={o.delaySeconds}
-            onChange={(delaySeconds) => set({ delaySeconds })}
-            format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
-          />
-        </FieldRow>
-        <FieldRow label="At the end" hint="A beat at rest once the vehicle has arrived, after its last pictures.">
-          <RangeField
-            label="Rest on arrival"
-            min={DRIVE_LIMITS.arriveSeconds.min}
-            max={DRIVE_LIMITS.arriveSeconds.max}
-            step={0.1}
-            value={o.arriveSeconds}
-            onChange={(arriveSeconds) => set({ arriveSeconds })}
-            format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Hold first"
+          hint={o.delaySeconds > 0 ? 'The vehicle sits at the first stop this long before it moves.' : undefined}
+          name="Hold on the first stop"
+          min={DRIVE_LIMITS.delaySeconds.min}
+          max={DRIVE_LIMITS.delaySeconds.max}
+          step={0.1}
+          value={o.delaySeconds}
+          onChange={(delaySeconds) => set({ delaySeconds })}
+          format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+        />
+        <SliderRow
+          label="At the end"
+          hint="A beat at rest once the vehicle has arrived, after its last pictures."
+          name="Rest on arrival"
+          min={DRIVE_LIMITS.arriveSeconds.min}
+          max={DRIVE_LIMITS.arriveSeconds.max}
+          step={0.1}
+          value={o.arriveSeconds}
+          onChange={(arriveSeconds) => set({ arriveSeconds })}
+          format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+        />
         <FieldRow
           label="Then"
           hint={o.end === 'reveal' ? 'The map fades away and the piece’s own picture is left under the badge.' : 'The map stays; the piece’s picture is never shown on this slide.'}
@@ -917,24 +900,21 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   {route.undated === 1 ? 'it' : 'them'}.{o.stopsOn === 'custom' ? ' A stop put on one of the trip’s places, or given a picture, takes its date.' : ''}
                 </p>
               )}
-              <FieldRow
+              <SliderRow
                 label="Pace"
                 hint={
                   o.pace === 0
                     ? 'The road time is shared by distance alone; the vehicle never waits, a place’s days running while it drives on.'
                     : 'This much of the road time goes to the days and the rest to the kilometres: the vehicle slows past a place that took days.'
                 }
-              >
-                <RangeField
-                  label="Calendar against road"
-                  min={DRIVE_LIMITS.pace.min}
-                  max={DRIVE_LIMITS.pace.max}
-                  step={0.05}
-                  value={o.pace}
-                  onChange={(pace) => set({ pace })}
-                  format={(v) => (v === 0 ? 'road' : v === 1 ? 'calendar' : `${Math.round(v * 100)}% calendar`)}
-                />
-              </FieldRow>
+                name="Calendar against road"
+                min={DRIVE_LIMITS.pace.min}
+                max={DRIVE_LIMITS.pace.max}
+                step={0.05}
+                value={o.pace}
+                onChange={(pace) => set({ pace })}
+                format={(v) => (v === 0 ? 'road' : v === 1 ? 'calendar' : `${Math.round(v * 100)}% calendar`)}
+              />
               {o.pace > 0 && (
                 <FieldRow
                   label="Long stays"
@@ -1019,30 +999,29 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.sound && (
-          <FieldRow label="Pitch">
-            <RangeField
-              label="Ticks pitch"
-              min={DRIVE_LIMITS.tickPitch.min}
-              max={DRIVE_LIMITS.tickPitch.max}
-              step={0.05}
-              value={o.tickPitch}
-              onChange={(tickPitch) => set({ tickPitch })}
-              format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Pitch"
+            name="Ticks pitch"
+            min={DRIVE_LIMITS.tickPitch.min}
+            max={DRIVE_LIMITS.tickPitch.max}
+            step={0.05}
+            value={o.tickPitch}
+            onChange={(tickPitch) => set({ tickPitch })}
+            format={(v) => (v === 1 ? 'as designed' : `${v < 1 ? '' : '+'}${Math.round(12 * Math.log2(v))} st`)}
+          />
         )}
         {o.sound && (
-          <FieldRow label="Volume" hint={o.tickVolume === 0 ? 'At 0% no sound track is written for the ticks at all.' : undefined}>
-            <RangeField
-              label="Ticks volume"
-              min={DRIVE_LIMITS.tickVolume.min}
-              max={DRIVE_LIMITS.tickVolume.max}
-              step={0.05}
-              value={o.tickVolume}
-              onChange={(tickVolume) => set({ tickVolume })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Volume"
+            hint={o.tickVolume === 0 ? 'At 0% no sound track is written for the ticks at all.' : undefined}
+            name="Ticks volume"
+            min={DRIVE_LIMITS.tickVolume.min}
+            max={DRIVE_LIMITS.tickVolume.max}
+            step={0.05}
+            value={o.tickVolume}
+            onChange={(tickVolume) => set({ tickVolume })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
         )}
         {o.sound && (
           <FieldRow label="Mix in" hint="Off, a clip that has sound keeps it bit-for-bit and goes out without the ticks. On, its sound is decoded, the ticks are added, and it is re-encoded.">

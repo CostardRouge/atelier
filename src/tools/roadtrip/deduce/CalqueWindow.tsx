@@ -133,13 +133,16 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
             return (
               <li key={p.key} data-key={p.key} onMouseEnter={() => actions.setHot(p.key)} onMouseLeave={() => actions.setHot(null)} className={`border-b border-line last:border-b-0 ${flash === p.key ? 'shadow-[inset_0_0_0_2px_var(--color-accent)] rounded-md' : ''}`}>
                 <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-2.5 items-center py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 accent-ink"
-                    checked={on}
-                    onChange={(e) => actions.answer(p.key, e.target.checked ? tickedVerb(intent, p) : 'skip')}
-                    aria-label={sentence(p, draft, trip)}
-                  />
+                  {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+                  <label className="touch-halo flex-none inline-grid place-items-center">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-ink"
+                      checked={on}
+                      onChange={(e) => actions.answer(p.key, e.target.checked ? tickedVerb(intent, p) : 'skip')}
+                      aria-label={sentence(p, draft, trip)}
+                    />
+                  </label>
                   <span className={`min-w-0 ${on ? '' : 'opacity-50'}`}>
                     {sentence(p, draft, trip)}
                     <span className={`block ${mono} normal-case`}>

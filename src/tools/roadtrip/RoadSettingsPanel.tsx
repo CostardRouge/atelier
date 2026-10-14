@@ -23,6 +23,7 @@ import { useRoadPreview } from './use-road-preview';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import Segmented from '../../shared/ui/Segmented';
+import SliderBar from '../../shared/ui/SliderBar';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { buttonClass } from '../../shared/ui/Button';
 import { dangerLink, smallButton } from './panels/ui';
@@ -428,33 +429,34 @@ interface StepSliderProps<T extends number> {
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
-  /** The value as said beside the slider, in a slot of fixed width so nothing moves as it changes. */
-  shown: ReactNode;
+  /** The value as said at the bar's right. */
+  shown: string;
   /** The hand took the slider: its steps are previewed and written once it is let go. */
   onHold: () => void;
-  /** A value of a few characters ("100 m"), two sliders to a row. */
+  /** A value of a few characters ("100 m"): a narrower cell, two bars to a row. */
   short?: boolean;
 }
 
-/** A labelled slider over a list of stops. */
+/**
+ * A slider over a list of stops — the suite's bar (`SliderBar`), its name
+ * inside and its value at the right. The hand is announced on the CAPTURE
+ * phase, before the bar reads it, so a tap's value is already held.
+ */
 function StepSlider<T extends number>({ label, aria, steps, value, onChange, disabled, shown, onHold, short }: StepSliderProps<T>) {
   const index = Math.max(0, steps.indexOf(value));
   return (
-    <label className={`${short ? 'flex-[1_1_13rem]' : 'flex-[1_1_16rem]'} flex items-center gap-x-3 text-xs text-muted`}>
-      <span className="flex-none">{label}</span>
-      <input
-        type="range"
+    <div className={`${short ? 'flex-[1_1_13rem]' : 'flex-[1_1_16rem]'} min-w-0`} onPointerDownCapture={onHold}>
+      <SliderBar
+        label={label}
+        name={aria}
         min={0}
         max={steps.length - 1}
         step={1}
         value={index}
-        onPointerDown={onHold}
-        onChange={(e) => onChange(steps[Number(e.target.value)])}
+        onChange={(i) => onChange(steps[i])}
         disabled={disabled}
-        aria-label={aria}
-        className="flex-1 min-w-[6rem] accent-[var(--color-accent)]"
+        printed={shown}
       />
-      <span className={`font-mono text-ink-soft text-right max-[820px]:min-w-0 ${short ? 'min-w-[3.5rem]' : 'min-w-[7.5rem]'}`}>{shown}</span>
-    </label>
+    </div>
   );
 }

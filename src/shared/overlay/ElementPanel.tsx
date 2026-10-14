@@ -20,15 +20,7 @@ import { BLEND_MODES, type BlendMode } from './blend';
 import { canMask } from './knockout';
 import KnockoutRows from './KnockoutRows';
 import Button from '../ui/Button';
-import {
-  FieldRow,
-  NativeSelect,
-  RangeField,
-  SwitchRow,
-  TextField,
-  ToggleField,
-  swatchClass,
-} from '../ui/Inspector';
+import { FieldRow, NativeSelect, SwitchRow, TextField, ToggleField, swatchClass, SliderRow } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
 
 const SPEED_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set(['gnd_speed', 'vert_speed']);
@@ -219,28 +211,24 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             Viewfinder brackets in the frame's four corners. It spans the whole frame, so it isn't
             dragged — tune its geometry here.
           </p>
-          <FieldRow label="Arm length">
-            <RangeField
-              label="Arm length"
-              min={0.01}
-              max={0.2}
-              step={0.005}
-              value={element.sizeFrac}
-              onChange={(v) => change({ sizeFrac: v })}
-              format={() => `${Math.round(element.sizeFrac * 100)}%`}
-            />
-          </FieldRow>
-          <FieldRow label="Inset">
-            <RangeField
-              label="Inset"
-              min={0}
-              max={0.15}
-              step={0.005}
-              value={element.cornerInset ?? 0.03}
-              onChange={(v) => change({ cornerInset: v })}
-              format={() => `${Math.round((element.cornerInset ?? 0.03) * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Arm length"
+            min={0.01}
+            max={0.2}
+            step={0.005}
+            value={element.sizeFrac}
+            onChange={(v) => change({ sizeFrac: v })}
+            format={() => `${Math.round(element.sizeFrac * 100)}%`}
+          />
+          <SliderRow
+            label="Inset"
+            min={0}
+            max={0.15}
+            step={0.005}
+            value={element.cornerInset ?? 0.03}
+            onChange={(v) => change({ cornerInset: v })}
+            format={() => `${Math.round((element.cornerInset ?? 0.03) * 100)}%`}
+          />
         </div>
       ) : element.kind === 'heading-arrow' ? (
         <div className="flex flex-col gap-2.5">
@@ -270,7 +258,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             </FieldRow>
           )}
           <div className="flex flex-col gap-2.5">
-            <FieldRow
+            <SliderRow
               label="Smoothing"
               hint={
                 <>
@@ -279,19 +267,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                   read.
                 </>
               }
-            >
-              <RangeField
-                label="Smoothing"
-                min={0}
-                max={3}
-                step={0.1}
-                value={element.headingSmoothing ?? 0.6}
-                onChange={(v) => change({ headingSmoothing: v })}
-                format={() =>
-                  `${(element.headingSmoothing ?? 0.6) === 0 ? 'off' : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}`
-                }
-              />
-            </FieldRow>
+              min={0}
+              max={3}
+              step={0.1}
+              value={element.headingSmoothing ?? 0.6}
+              onChange={(v) => change({ headingSmoothing: v })}
+              format={() =>
+                `${(element.headingSmoothing ?? 0.6) === 0 ? 'off' : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}`
+              }
+            />
             <FieldRow
               label="Heading lost"
               hint={
@@ -312,17 +296,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               </NativeSelect>
             </FieldRow>
             {(element.headingGap ?? 'dim') !== 'hide' && (
-              <FieldRow label="Hold for">
-                <RangeField
-                  label="Hold for"
-                  min={0.5}
-                  max={10}
-                  step={0.5}
-                  value={element.headingHoldSeconds ?? 2}
-                  onChange={(v) => change({ headingHoldSeconds: v })}
-                  format={() => `${(element.headingHoldSeconds ?? 2).toFixed(1)} s`}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Hold for"
+                min={0.5}
+                max={10}
+                step={0.5}
+                value={element.headingHoldSeconds ?? 2}
+                onChange={(v) => change({ headingHoldSeconds: v })}
+                format={() => `${(element.headingHoldSeconds ?? 2).toFixed(1)} s`}
+              />
             )}
             <EarlyValues element={element} change={change} />
           </div>
@@ -334,29 +316,25 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             disappears when there is no heading (hovering, or a clip without telemetry).
           </p>
           <>
-            <FieldRow label="Width">
-              <RangeField
-                label="Width"
-                min={0.15}
-                max={0.98}
-                step={0.01}
-                value={element.tapeWidthFrac ?? 0.5}
-                onChange={(v) => change({ tapeWidthFrac: v })}
-                format={() => `${Math.round((element.tapeWidthFrac ?? 0.5) * 100)}%`}
-              />
-            </FieldRow>
-          </>
-          <FieldRow label="Span">
-            <RangeField
-              label="Span"
-              min={20}
-              max={180}
-              step={5}
-              value={element.tapeSpanDeg ?? 90}
-              onChange={(v) => change({ tapeSpanDeg: v })}
-              format={() => `${Math.round(element.tapeSpanDeg ?? 90)}°`}
+            <SliderRow
+              label="Width"
+              min={0.15}
+              max={0.98}
+              step={0.01}
+              value={element.tapeWidthFrac ?? 0.5}
+              onChange={(v) => change({ tapeWidthFrac: v })}
+              format={() => `${Math.round((element.tapeWidthFrac ?? 0.5) * 100)}%`}
             />
-          </FieldRow>
+          </>
+          <SliderRow
+            label="Span"
+            min={20}
+            max={180}
+            step={5}
+            value={element.tapeSpanDeg ?? 90}
+            onChange={(v) => change({ tapeSpanDeg: v })}
+            format={() => `${Math.round(element.tapeSpanDeg ?? 90)}°`}
+          />
           <>
             <FieldRow label="Labels every">
               <NativeSelect
@@ -385,39 +363,33 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               </NativeSelect>
             </FieldRow>
           </>
-          <FieldRow label="Tick height">
-            <RangeField
-              label="Tick height"
-              min={0.4}
-              max={2.5}
-              step={0.1}
-              value={element.tapeTickScale ?? 1}
-              onChange={(v) => change({ tapeTickScale: v })}
-              format={() => `${Math.round((element.tapeTickScale ?? 1) * 100)}%`}
-            />
-          </FieldRow>
-          <FieldRow label="Edge fade">
-            <RangeField
-              label="Edge fade"
-              min={0}
-              max={0.6}
-              step={0.02}
-              value={element.tapeFadeFrac ?? 0.22}
-              onChange={(v) => change({ tapeFadeFrac: v })}
-              format={() => `${Math.round((element.tapeFadeFrac ?? 0.22) * 100)}%`}
-            />
-          </FieldRow>
-          <FieldRow label="Opacity">
-            <RangeField
-              label="Opacity"
-              min={0.1}
-              max={1}
-              step={0.05}
-              value={element.tapeOpacity ?? 1}
-              onChange={(v) => change({ tapeOpacity: v })}
-              format={() => `${Math.round((element.tapeOpacity ?? 1) * 100)}%`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Tick height"
+            min={0.4}
+            max={2.5}
+            step={0.1}
+            value={element.tapeTickScale ?? 1}
+            onChange={(v) => change({ tapeTickScale: v })}
+            format={() => `${Math.round((element.tapeTickScale ?? 1) * 100)}%`}
+          />
+          <SliderRow
+            label="Edge fade"
+            min={0}
+            max={0.6}
+            step={0.02}
+            value={element.tapeFadeFrac ?? 0.22}
+            onChange={(v) => change({ tapeFadeFrac: v })}
+            format={() => `${Math.round((element.tapeFadeFrac ?? 0.22) * 100)}%`}
+          />
+          <SliderRow
+            label="Opacity"
+            min={0.1}
+            max={1}
+            step={0.05}
+            value={element.tapeOpacity ?? 1}
+            onChange={(v) => change({ tapeOpacity: v })}
+            format={() => `${Math.round((element.tapeOpacity ?? 1) * 100)}%`}
+          />
 
           <>
             <FieldRow label="Sight">
@@ -472,7 +444,7 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             onChange={(on) => change({ tapeRule: on })}
           />
           <div className="flex flex-col gap-2.5">
-            <FieldRow
+            <SliderRow
               label="Smoothing"
               hint={
                 <>
@@ -481,19 +453,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                   read.
                 </>
               }
-            >
-              <RangeField
-                label="Smoothing"
-                min={0}
-                max={3}
-                step={0.1}
-                value={element.headingSmoothing ?? 0.6}
-                onChange={(v) => change({ headingSmoothing: v })}
-                format={() =>
-                  `${(element.headingSmoothing ?? 0.6) === 0 ? 'off' : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}`
-                }
-              />
-            </FieldRow>
+              min={0}
+              max={3}
+              step={0.1}
+              value={element.headingSmoothing ?? 0.6}
+              onChange={(v) => change({ headingSmoothing: v })}
+              format={() =>
+                `${(element.headingSmoothing ?? 0.6) === 0 ? 'off' : `${(element.headingSmoothing ?? 0.6).toFixed(1)} s`}`
+              }
+            />
             <FieldRow
               label="Heading lost"
               hint={
@@ -514,17 +482,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               </NativeSelect>
             </FieldRow>
             {(element.headingGap ?? 'dim') !== 'hide' && (
-              <FieldRow label="Hold for">
-                <RangeField
-                  label="Hold for"
-                  min={0.5}
-                  max={10}
-                  step={0.5}
-                  value={element.headingHoldSeconds ?? 2}
-                  onChange={(v) => change({ headingHoldSeconds: v })}
-                  format={() => `${(element.headingHoldSeconds ?? 2).toFixed(1)} s`}
-                />
-              </FieldRow>
+              <SliderRow
+                label="Hold for"
+                min={0.5}
+                max={10}
+                step={0.5}
+                value={element.headingHoldSeconds ?? 2}
+                onChange={(v) => change({ headingHoldSeconds: v })}
+                format={() => `${(element.headingHoldSeconds ?? 2).toFixed(1)} s`}
+              />
             )}
             <EarlyValues element={element} change={change} />
           </div>
@@ -547,17 +513,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             </NativeSelect>
           </FieldRow>
           {(element.batterySource ?? 'manual') === 'manual' ? (
-            <FieldRow label="Level">
-              <RangeField
-                label="Level"
-                min={0}
-                max={100}
-                step={1}
-                value={element.batteryPercent ?? 100}
-                onChange={(v) => change({ batteryPercent: v })}
-                format={() => `${Math.round(element.batteryPercent ?? 100)}%`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Level"
+              min={0}
+              max={100}
+              step={1}
+              value={element.batteryPercent ?? 100}
+              onChange={(v) => change({ batteryPercent: v })}
+              format={() => `${Math.round(element.batteryPercent ?? 100)}%`}
+            />
           ) : (
             <FieldRow
               label="Key"
@@ -576,17 +540,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               />
             </FieldRow>
           )}
-          <FieldRow label="Cell width">
-            <RangeField
-              label="Cell width"
-              min={1.2}
-              max={4}
-              step={0.1}
-              value={element.batteryAspect ?? 2.1}
-              onChange={(v) => change({ batteryAspect: v })}
-              format={() => `${(element.batteryAspect ?? 2.1).toFixed(1)}×`}
-            />
-          </FieldRow>
+          <SliderRow
+            label="Cell width"
+            min={1.2}
+            max={4}
+            step={0.1}
+            value={element.batteryAspect ?? 2.1}
+            onChange={(v) => change({ batteryAspect: v })}
+            format={() => `${(element.batteryAspect ?? 2.1).toFixed(1)}×`}
+          />
           <>
             <FieldRow label="Low">
               <input
@@ -601,17 +563,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 onChange={(e) => change({ batteryLowColor: e.target.value })}
               />
             </FieldRow>
-            <FieldRow label="Alarm under">
-              <RangeField
-                label="Alarm under"
-                min={0}
-                max={60}
-                step={1}
-                value={element.batteryLowPercent ?? 20}
-                onChange={(v) => change({ batteryLowPercent: v })}
-                format={() => `${Math.round(element.batteryLowPercent ?? 20)}%`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Alarm under"
+              min={0}
+              max={60}
+              step={1}
+              value={element.batteryLowPercent ?? 20}
+              onChange={(v) => change({ batteryLowPercent: v })}
+              format={() => `${Math.round(element.batteryLowPercent ?? 20)}%`}
+            />
           </>
           <FieldRow label="Reading">
             <NativeSelect
@@ -662,40 +622,34 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             </NativeSelect>
           </FieldRow>
           <>
-            <FieldRow label="Phone size">
-              <RangeField
-                label="Phone size"
-                min={0.3}
-                max={0.85}
-                step={0.02}
-                value={element.rotatePhoneScale ?? 0.66}
-                onChange={(v) => change({ rotatePhoneScale: v })}
-                format={() => `${Math.round((element.rotatePhoneScale ?? 0.66) * 100)}%`}
-              />
-            </FieldRow>
-            <FieldRow label="Arrow size">
-              <RangeField
-                label="Arrow size"
-                min={0.2}
-                max={0.48}
-                step={0.02}
-                value={element.rotateArcScale ?? 0.44}
-                onChange={(v) => change({ rotateArcScale: v })}
-                format={() => `${Math.round((element.rotateArcScale ?? 0.44) * 100)}%`}
-              />
-            </FieldRow>
-          </>
-          <FieldRow label="Cycle">
-            <RangeField
-              label="Cycle"
-              min={0.6}
-              max={4}
-              step={0.1}
-              value={element.rotateCycleSeconds ?? 1.8}
-              onChange={(v) => change({ rotateCycleSeconds: v })}
-              format={() => `${(element.rotateCycleSeconds ?? 1.8).toFixed(1)} s`}
+            <SliderRow
+              label="Phone size"
+              min={0.3}
+              max={0.85}
+              step={0.02}
+              value={element.rotatePhoneScale ?? 0.66}
+              onChange={(v) => change({ rotatePhoneScale: v })}
+              format={() => `${Math.round((element.rotatePhoneScale ?? 0.66) * 100)}%`}
             />
-          </FieldRow>
+            <SliderRow
+              label="Arrow size"
+              min={0.2}
+              max={0.48}
+              step={0.02}
+              value={element.rotateArcScale ?? 0.44}
+              onChange={(v) => change({ rotateArcScale: v })}
+              format={() => `${Math.round((element.rotateArcScale ?? 0.44) * 100)}%`}
+            />
+          </>
+          <SliderRow
+            label="Cycle"
+            min={0.6}
+            max={4}
+            step={0.1}
+            value={element.rotateCycleSeconds ?? 1.8}
+            onChange={(v) => change({ rotateCycleSeconds: v })}
+            format={() => `${(element.rotateCycleSeconds ?? 1.8).toFixed(1)} s`}
+          />
           <SwitchRow
             label="Tip back upright each cycle"
             checked={element.rotateReturn ?? true}
@@ -850,17 +804,15 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
       {/* Size — geometry: always the element's own (themes only multiply it).
           Frame corners carry their own arm-length slider above. */}
       {element.kind !== 'frame-corners' && (
-        <FieldRow label="Size">
-          <RangeField
-            label="Size"
-            min={0.015}
-            max={0.14}
-            step={0.005}
-            value={element.sizeFrac}
-            onChange={(v) => change({ sizeFrac: v })}
-            format={() => `${Math.round(element.sizeFrac * 100)}%`}
-          />
-        </FieldRow>
+        <SliderRow
+          label="Size"
+          min={0.015}
+          max={0.14}
+          step={0.005}
+          value={element.sizeFrac}
+          onChange={(v) => change({ sizeFrac: v })}
+          format={() => `${Math.round(element.sizeFrac * 100)}%`}
+        />
       )}
 
       {/* Colour + weight + italic (weight/italic not applicable to arrows) */}
@@ -1009,24 +961,22 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
                 }
               />
             </FieldRow>
-            <FieldRow label="Opacity">
-              <RangeField
-                label="Opacity"
-                min={0}
-                max={1}
-                step={0.05}
-                value={legColor.alpha}
-                onChange={(v) =>
-                  change({
-                    legibility: {
-                      ...leg,
-                      color: toRgba(legColor.hex, v),
-                    },
-                  })
-                }
-                format={() => `${Math.round(legColor.alpha * 100)}%`}
-              />
-            </FieldRow>
+            <SliderRow
+              label="Opacity"
+              min={0}
+              max={1}
+              step={0.05}
+              value={legColor.alpha}
+              onChange={(v) =>
+                change({
+                  legibility: {
+                    ...leg,
+                    color: toRgba(legColor.hex, v),
+                  },
+                })
+              }
+              format={() => `${Math.round(legColor.alpha * 100)}%`}
+            />
           </>
         )}
       </div>

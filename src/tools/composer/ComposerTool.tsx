@@ -31,6 +31,7 @@ import {
   type ExportProgress,
 } from '../../shared/media/webcodecs-export';
 import { Icons } from '../../shared/ui/icons';
+import SliderBar from '../../shared/ui/SliderBar';
 
 const COMPOSER_KINDS = ['video+telemetry'] as const;
 const PREVIEW_MAX = 1440;
@@ -452,16 +453,14 @@ export default function ComposerTool() {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               {!isPip ? (
-                <label className="flex items-center gap-2">
-                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Split</span>
-                  <input type="range" min={0.2} max={0.8} step={0.01} value={split} onChange={(e) => setSplit(Number(e.target.value))} className="accent-accent w-32" />
-                </label>
+                <div className="flex-[1_1_12rem] min-w-0">
+                  <SliderBar label="Split" min={0.2} max={0.8} step={0.01} reset={0.5} value={split} onChange={setSplit} format={(v) => `${Math.round(v * 100)}%`} />
+                </div>
               ) : (
                 <>
-                  <label className="flex items-center gap-2">
-                    <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Inset</span>
-                    <input type="range" min={0.15} max={0.5} step={0.01} value={inset} onChange={(e) => setInset(Number(e.target.value))} className="accent-accent w-28" />
-                  </label>
+                  <div className="flex-[1_1_12rem] min-w-0">
+                    <SliderBar label="Inset" min={0.15} max={0.5} step={0.01} value={inset} onChange={setInset} format={(v) => `${Math.round(v * 100)}%`} />
+                  </div>
                   <div className="flex items-center gap-1">
                     {CORNERS.map((c) => (
                       <button key={c.id} type="button" className={`${chip} w-8 justify-center px-0`} aria-pressed={corner === c.id} onClick={() => setCorner(c.id)}>
@@ -479,10 +478,9 @@ export default function ComposerTool() {
                   </button>
                 ))}
               </div>
-              <label className="flex items-center gap-2">
-                <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Map zoom</span>
-                <input type="range" min={-4} max={4} step={0.5} value={zoomOffset} onChange={(e) => setZoomOffset(Number(e.target.value))} className="accent-accent w-28" />
-              </label>
+              <div className="flex-[1_1_12rem] min-w-0">
+                <SliderBar label="Map zoom" min={-4} max={4} step={0.5} reset={0} value={zoomOffset} onChange={setZoomOffset} format={(v) => (v > 0 ? `+${v}` : String(v))} />
+              </div>
               <button type="button" className={chip} aria-pressed={tilesOn} onClick={() => setTilesOn((t) => !t)} title={TILES_TOGGLE.title}>
                 {tilesOn ? TILES_TOGGLE.on : TILES_TOGGLE.off}
               </button>
@@ -535,16 +533,16 @@ export default function ComposerTool() {
                 <label className="flex items-center gap-1.5">
                   <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Bg</span>
                   <input type="color" value={overlay.bgColor} onChange={(e) => setOverlay((o) => ({ ...o, bgColor: e.target.value }))} className="w-7 h-7 rounded border border-line-strong bg-paper cursor-pointer" aria-label="Background colour" />
-                  <input type="range" min={0} max={1} step={0.05} value={overlay.bgOpacity} onChange={(e) => setOverlay((o) => ({ ...o, bgOpacity: Number(e.target.value) }))} className="accent-accent w-20" aria-label="Background opacity" />
                 </label>
-                <label className="flex items-center gap-1.5">
-                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Radius</span>
-                  <input type="range" min={0} max={32} step={1} value={overlay.radius} onChange={(e) => setOverlay((o) => ({ ...o, radius: Number(e.target.value) }))} className="accent-accent w-20" />
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Size</span>
-                  <input type="range" min={0.6} max={2.2} step={0.1} value={overlay.fontScale} onChange={(e) => setOverlay((o) => ({ ...o, fontScale: Number(e.target.value) }))} className="accent-accent w-20" />
-                </label>
+                <div className="flex-[1_1_12rem] min-w-0">
+                  <SliderBar label="Bg opacity" name="Background opacity" min={0} max={1} step={0.05} value={overlay.bgOpacity} onChange={(bgOpacity) => setOverlay((o) => ({ ...o, bgOpacity }))} format={(v) => `${Math.round(v * 100)}%`} />
+                </div>
+                <div className="flex-[1_1_12rem] min-w-0">
+                  <SliderBar label="Radius" min={0} max={32} step={1} value={overlay.radius} onChange={(radius) => setOverlay((o) => ({ ...o, radius }))} format={(v) => `${v} px`} />
+                </div>
+                <div className="flex-[1_1_12rem] min-w-0">
+                  <SliderBar label="Size" min={0.6} max={2.2} step={0.1} reset={1} value={overlay.fontScale} onChange={(fontScale) => setOverlay((o) => ({ ...o, fontScale }))} format={(v) => `${v.toFixed(1)}×`} />
+                </div>
                 <div className="flex items-center gap-1">
                   <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Font</span>
                   {(['mono', 'sans', 'serif'] as OverlayFont[]).map((fnt) => (
@@ -592,6 +590,7 @@ export default function ComposerTool() {
             </button>
             <input
               type="range"
+              data-playhead
               className="flex-1 accent-accent cursor-pointer"
               min={0}
               max={duration || 0}
