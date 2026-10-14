@@ -110,6 +110,34 @@ def test_finetune_from_a_run_with_frozen_luts_and_per_group_eval(workspace):
     assert all(0 <= m["data_seconds"] <= m["seconds"] for m in metrics if "data_seconds" in m)
 
 
+def test_a_pair_that_does_not_line_up_is_left_out_of_training_and_kept_in_validation(synthetic, capsys):
+    config = load_config(overrides=TINY)
+    ingest(config, sources=["synthetic"], workers=1)
+    pairs = read_index(config.paths.cache, ["synthetic"])
+    train, val = split(pairs, 0.34, seed=1)
+    # One training pair's edit becomes another picture (a neighbouring frame of a burst), and one validation pair too.
+    for victim in (train[0], val[0]):
+        target = np.load(victim.folder / "target.npy")
+        np.save(victim.folder / "target.npy", np.ascontiguousarray(np.rot90(target, 2)))
+        meta = json.loads((victim.folder / "meta.json").read_text())
+        meta.pop("structure", None)  # prepared before ingest wrote it: measured from the cache
+        (victim.folder / "meta.json").write_text(json.dumps(meta))
+    assert main(["train", "--source", "synthetic", "--name", "skip", "--epochs", "1", *SET]) == 0
+    assert "left out 1 training pair(s)" in capsys.readouterr().out
+    def split_of(name: str) -> dict:
+        run = next(r for r in config.paths.runs.iterdir() if r.name.endswith(f"-{name}"))
+        return json.loads((run / "split.json").read_text())
+
+    written = split_of("skip")
+    assert written["left_out"] == [train[0].id] and train[0].id not in written["train"]
+    assert val[0].id in written["validation"]
+
+    assert main(["train", "--source", "synthetic", "--name", "all", "--epochs", "1",
+                 "--set", "train.skip_misaligned=false", *SET]) == 0
+    kept = split_of("all")
+    assert kept["left_out"] == [] and train[0].id in kept["train"]
+
+
 def test_bench_and_missing_run_messages(synthetic, capsys):
     config = load_config(overrides=TINY)
     assert main(["bench", "--steps", "1", *SET]) == 0

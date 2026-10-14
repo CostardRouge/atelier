@@ -103,10 +103,21 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   2026-10-14): each input colour on a 17³ grid sent to the mean target
   colour of its pixels, fitted on the picture itself — no LUT can beat it,
   and what it misses depends on WHERE a pixel is. His run measured 11.95
-  ΔE00 full and 10.36 at 1/8 against 20.6 doing nothing, so detail and
-  shifts were ~1.6 of it; the ceiling says whether the ~10 left is the
-  model's (more basis LUTs, FiveK, a bigger CNN) or his local work (masks,
-  skies, vignettes — out of a `.cube`'s reach whatever the training).
+  ΔE00 full and 10.36 at 1/8 against 20.6 doing nothing. MEASURED on his
+  1 880 pairs: ceiling 7.07 (4.71 at 1/8), and the TRAIN split scores 12.33
+  against 11.95 validation — so the default model (3 basis LUTs, width 16)
+  UNDER-fits: ~4.9 ΔE00 is still a `.cube`'s to win, ~4.7 is his local work
+  (masks, skies, vignettes — out of any `.cube`'s reach), ~2.4 detail. 200
+  epochs bought 11.88 → 11.62 over epoch 40. How to apply: grow capacity
+  (`--set model.basis=8 --set model.width=32`, stored in the run, so eval
+  and export follow) before FiveK or more epochs; compare at epoch 40.
+- **Training leaves out a pair whose edit does not line up** (`train.
+  skip_misaligned`, default on, 2026-10-14): 60 of his 1 630 training pairs
+  passed alignment (luminance NCC ≥ 0.8) with `structure` ≈ 0 and ΔE00 40+ —
+  consecutive file numbers, so most likely a final matched to a neighbouring
+  frame of a burst. A squared loss weighs them hard. Validation KEEPS them
+  so runs stay comparable; `split.json` lists them under `left_out`. A cache
+  without `structure` in `meta.json` is measured from its `.npy`.
 - **The prepared pairs are held in RAM during training** (`train.
   keep_in_memory`, default on; uint16, cropped before the float
   conversion): on his M1 Max an epoch took 41 s against the 12 s the GPU
