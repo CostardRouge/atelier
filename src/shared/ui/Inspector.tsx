@@ -418,6 +418,9 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
   );
 }
 
+// Under a finger a field and a select are 44 px tall, iOS's own form height
+// (`docs/touch-targets.md` T1): a replaced element draws no `::after`, so its
+// zone can only be its box.
 // `max-[820px]:text-base` on every typed field and select: below 16px iOS
 // zooms the page the moment the control is focused, and on a tool screen the
 // document is locked so it never zooms back (`frontend.md`, «Touch sizing»).
@@ -426,9 +429,9 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
 // breakpoint still belongs — and because these are recipe strings, not
 // components.
 export const fieldClass =
-  'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
+  'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] pointer-coarse:h-11 px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
 const selectClass =
-  'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+  'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pointer-coarse:h-11 pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 
 interface NumberFieldProps {
   /** `null` draws an empty field — with `onClear`, for a value that may be absent. */

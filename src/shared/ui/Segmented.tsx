@@ -48,9 +48,12 @@ interface SegmentedProps<T extends string> {
   className?: string;
 }
 
+// Under a finger `sm` and `md` are drawn at 34 px, and a one-row well's
+// options are grabbed on 44 (`touch-row`); a well of several ROWS keeps its
+// zones to the drawing, or one row's would reach over the next's.
 const SEG_SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 text-xs px-2 gap-1',
-  md: 'h-[1.9rem] text-sm px-3 gap-1.5',
+  sm: 'h-7 pointer-coarse:h-[2.125rem] text-xs px-2 gap-1',
+  md: 'h-[1.9rem] pointer-coarse:h-[2.125rem] text-sm px-3 gap-1.5',
   lg: 'h-9 text-sm px-3.5 gap-2',
 };
 
@@ -90,7 +93,7 @@ export default function Segmented<T extends string>({
             className={`${
               tiles
                 ? 'flex flex-col items-center justify-center gap-0.5 py-1 px-0.5 text-2xs leading-tight text-center'
-                : `inline-flex items-center justify-center whitespace-nowrap ${SEG_SIZES[size]}`
+                : `inline-flex items-center justify-center whitespace-nowrap ${SEG_SIZES[size]} ${grid ? '' : 'touch-row'}`
             } rounded-[8px] border font-sans cursor-pointer select-none transition-[background-color,color,box-shadow,border-color,translate] duration-150 ease-paper ${PRESS_LOOK} focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-45 disabled:cursor-default ${stretch ? 'flex-1 min-w-0' : ''} ${
               on
                 ? 'bg-surface text-ink font-semibold border-line-strong shadow-[0_1px_3px_rgba(27,24,19,0.12)]'

@@ -493,3 +493,38 @@ html[data-surface='darkroom'] {
     font-size: max(1rem, 1em);
   }
 }
+
+/*
+  A target under a FINGER is grabbed on 44 px both ways (2026-10-14, face C
+  of `docs/touch-targets.md`). The zone is an `::after`, so the drawing never
+  moves; it exists only under a coarse pointer, so a mouse sees nothing new.
+  - `.touch-row`: a control that lives in a ROW (a button, a segment, a ⋯) —
+    its zone grows to 44 in HEIGHT only, so it never reaches over the
+    neighbour beside it.
+  - `.touch-halo`: an isolated MARK (an ⓘ, a ↺, a swatch, a switch) — 44 both
+    ways around its drawing.
+  In `components`, under the utilities, so a caller's `absolute` still wins
+  over the `relative` the zone needs.
+*/
+@layer components {
+  @media (pointer: coarse) {
+    .touch-row,
+    .touch-halo {
+      position: relative;
+    }
+    .touch-row::after,
+    .touch-halo::after {
+      content: '';
+      position: absolute;
+    }
+    .touch-row::after {
+      left: 0;
+      right: 0;
+      top: min(0px, calc((100% - 44px) / 2));
+      bottom: min(0px, calc((100% - 44px) / 2));
+    }
+    .touch-halo::after {
+      inset: min(0px, calc((100% - 44px) / 2));
+    }
+  }
+}
