@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 from .config import Config, merge
 from .data import Pair, PairDataset, read_index, split
 from .device import pick_device
-from .metrics import STRUCTURE_FLOOR, score, structure
+from .metrics import STRUCTURE_FLOOR, coarse, delta_e2000, score, srgb_to_lab, structure
 from .model.lut3d import AdaptiveLUT
 
 
@@ -137,10 +137,15 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
         a, b = a.unsqueeze(0).to(device), b.unsqueeze(0).to(device)
         out, _ = model(a)
         src, tgt = a[0].permute(1, 2, 0).cpu().numpy(), b[0].permute(1, 2, 0).cpu().numpy()
-        s = score(out[0].permute(1, 2, 0).cpu().numpy(), tgt)
+        out_np = out[0].permute(1, 2, 0).cpu().numpy()
+        s = score(out_np, tgt)
         nothing = score(src, tgt)
         lined = structure(src, tgt)
+        # The same colour difference at 1/8 size: detail and a few pixels of shift averaged out.
+        lab_t = srgb_to_lab(coarse(tgt))
         s.update(identity_psnr=nothing["psnr"], identity_de2000_mean=nothing["de2000_mean"],
+                 coarse_de2000_mean=float(delta_e2000(srgb_to_lab(coarse(out_np)), lab_t).mean()),
+                 identity_coarse_de2000_mean=float(delta_e2000(srgb_to_lab(coarse(src)), lab_t).mean()),
                  structure=None if lined != lined else lined, id=pid)  # None: too flat to judge
         rows.append(s)
         if keep:
@@ -151,6 +156,8 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
                                              or [0])) if rows else float("nan")
     summary["identity_de2000_mean"] = float(np.mean([r["identity_de2000_mean"] for r in rows])) if rows \
         else float("nan")
+    for key in ("coarse_de2000_mean", "identity_coarse_de2000_mean"):
+        summary[key] = float(np.mean([r[key] for r in rows])) if rows else float("nan")
     summary["misaligned"] = sorted((r for r in rows if r["structure"] is not None and r["structure"] < MISALIGNED),
                                    key=lambda r: r["structure"])
     summary["misaligned"] = [{"id": r["id"], "structure": round(r["structure"], 3)} for r in summary["misaligned"]]
@@ -235,7 +242,10 @@ def train(
         t0 = time.perf_counter()
         sums = {"loss": 0.0, "fit": 0.0, "smooth": 0.0, "mono": 0.0}
         count = 0
+        waited = 0.0  # time spent getting the next batch, apart from the GPU's work
+        mark = time.perf_counter()
         for a, b, _ in loader:
+            waited += time.perf_counter() - mark
             a, b = a.to(device, non_blocking=True), b.to(device, non_blocking=True)
             out, _ = model(a)
             fit = torch.mean((out - b) ** 2)
@@ -248,7 +258,8 @@ def train(
             count += n
             for k, v in (("loss", loss), ("fit", fit), ("smooth", smooth), ("mono", mono)):
                 sums[k] += float(v.detach()) * n
-        record = {"epoch": epoch, "seconds": round(time.perf_counter() - t0, 2),
+            mark = time.perf_counter()
+        record = {"epoch": epoch, "seconds": round(time.perf_counter() - t0, 2), "data_seconds": round(waited, 2),
                   **{k: v / max(count, 1) for k, v in sums.items()}}
         if val_pairs and (epoch % eval_every == 0 or epoch == total_epochs):
             summary = evaluate_pairs(model, val_pairs, device)
@@ -263,7 +274,7 @@ def train(
         line = f"  epoch {epoch}/{total_epochs}  loss {record['loss']:.5f}  fit {record['fit']:.5f}"
         if "val_psnr" in record:
             line += f"  val PSNR {record['val_psnr']:.2f} dB  ΔE00 {record['val_de2000_mean']:.2f}"
-        log(line + f"  ({record['seconds']} s)")
+        log(line + f"  ({record['seconds']} s, data {record['data_seconds']} s)")
     return run
 
 

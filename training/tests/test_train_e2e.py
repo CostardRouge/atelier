@@ -104,6 +104,9 @@ def test_finetune_from_a_run_with_frozen_luts_and_per_group_eval(workspace):
     assert all((r["structure"] is None or r["structure"] > 0.9) and np.isfinite(r["identity_de2000_mean"])
                for r in summary["pairs"])
     assert summary["misaligned"] == [] and "identity_psnr" in summary
+    assert np.isfinite(summary["coarse_de2000_mean"]) and np.isfinite(summary["identity_coarse_de2000_mean"])
+    metrics = [json.loads(line) for line in (tuned / "metrics.jsonl").read_text().splitlines() if line.strip()]
+    assert all(0 <= m["data_seconds"] <= m["seconds"] for m in metrics if "data_seconds" in m)
 
 
 def test_bench_and_missing_run_messages(synthetic, capsys):

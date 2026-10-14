@@ -90,6 +90,15 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   listed and its grid drawn. 0.5 is a guess, not measured on his photos.
   How to apply: before tuning a run, read its gap to `identity_*` and its
   misaligned list.
+- **`eval` also scores at 1/8 size** (`metrics.coarse`, 2026-10-14): after
+  the same-aspect alignment fix his run moved only 12.49 → 11.95 ΔE00 with
+  5 pairs still off, so misregistration was not the main limit. ΔE on 8 × 8
+  block means separates the two remaining suspects — a few pixels of lens
+  correction and local detail (forgiven at 1/8) versus colour and light a
+  global LUT cannot reach (masks, vignetting, per-picture exposure). The
+  epoch line splits `data` (waiting for the batch) from the rest: `bench`
+  said 51 ms a step, his epochs ran ~186 ms a step with the pairs in RAM,
+  and the dataset alone costs ~3 ms an item here.
 - **The prepared pairs are held in RAM during training** (`train.
   keep_in_memory`, default on; uint16, cropped before the float
   conversion): on his M1 Max an epoch took 41 s against the 12 s the GPU

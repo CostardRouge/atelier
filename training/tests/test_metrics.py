@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from atelier_training.metrics import delta_e76, delta_e2000, psnr, score, srgb_to_lab, structure
+from atelier_training.metrics import coarse, delta_e76, delta_e2000, psnr, score, srgb_to_lab, structure
 
 
 def test_known_lab_values():
@@ -52,3 +52,14 @@ def test_structure_tells_an_edit_from_a_pair_that_does_not_line_up():
     assert structure(base, base[::-1, ::-1]) < 0.5      # turned half a turn
     assert structure(base, np.roll(base, 25, axis=1)) < 0.5  # cropped elsewhere
     assert np.isnan(structure(base, np.full_like(base, 0.5)))  # too flat to judge
+
+
+def test_coarse_averages_blocks_and_forgives_a_small_shift():
+    img = np.zeros((16, 24, 3), np.float32)
+    img[:8, :8] = 1.0
+    small = coarse(img, 8)
+    assert small.shape == (2, 3, 3) and small[0, 0, 0] == 1.0 and small[1, 1, 0] == 0.0
+    rng = np.random.default_rng(1)
+    noise = rng.random((64, 64, 3)).astype(np.float32)
+    shifted = np.roll(noise, 1, axis=1)
+    assert np.abs(coarse(noise) - coarse(shifted)).mean() < 0.2 * np.abs(noise - shifted).mean()
