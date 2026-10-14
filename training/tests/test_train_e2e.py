@@ -138,6 +138,20 @@ def test_a_pair_that_does_not_line_up_is_left_out_of_training_and_kept_in_valida
     assert kept["left_out"] == [] and train[0].id in kept["train"]
 
 
+def test_a_subset_run_scores_the_pictures_it_saw_and_eval_reads_its_split(synthetic, capsys):
+    config = load_config(overrides=TINY)
+    ingest(config, sources=["synthetic"], workers=1)
+    assert main(["train", "--source", "synthetic", "--name", "few", "--epochs", "2",
+                 *SET, "--set", "train.subset=2", "--set", "train.eval_every=1"]) == 0
+    assert "seen ΔE00" in capsys.readouterr().out
+    run = sorted(config.paths.runs.iterdir())[0]
+    trained = json.loads((run / "split.json").read_text())["train"]
+    metrics = [json.loads(line) for line in (run / "metrics.jsonl").read_text().splitlines() if line.strip()]
+    assert len(trained) == 2 and all(np.isfinite(m["train_de2000_mean"]) for m in metrics)
+    assert main(["eval", "--run", str(run), "--split", "train", "--grids", "0", *SET]) == 0
+    assert [r["id"] for r in json.loads((run / "eval" / "train.json").read_text())["pairs"]] == trained
+
+
 def test_bench_and_missing_run_messages(synthetic, capsys):
     config = load_config(overrides=TINY)
     assert main(["bench", "--steps", "1", *SET]) == 0
