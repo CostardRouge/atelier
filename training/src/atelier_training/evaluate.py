@@ -70,6 +70,8 @@ def evaluate(
         f"ΔE76 mean {summary['de76_mean']:.2f}")
     log(f"doing nothing (the input as it is): PSNR {summary['identity_psnr']:.2f} dB, "
         f"ΔE2000 mean {summary['identity_de2000_mean']:.2f} — the model has to beat this")
+    log(f"at 1/8 size (detail and small shifts averaged out): model ΔE2000 {summary['coarse_de2000_mean']:.2f}, "
+        f"doing nothing {summary['identity_coarse_de2000_mean']:.2f} — what is left is colour and light")
     bad = summary["misaligned"]
     if bad:
         log(f"{len(bad)} pair(s) whose edit does not line up with its input (structure < 0.5), worst first: "

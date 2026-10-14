@@ -114,6 +114,16 @@ def structure(a: np.ndarray, b: np.ndarray, size: int = 128) -> float:
     return float((ea * eb).sum() / den) if den > 0 else float("nan")
 
 
+def coarse(img: np.ndarray, block: int = 8) -> np.ndarray:
+    """The picture as ``block`` × ``block`` means: what is left of it once detail and a few pixels of
+    misregistration are averaged out — its colour and its light."""
+    h, w = (img.shape[0] // block) * block, (img.shape[1] // block) * block
+    if h == 0 or w == 0:
+        return np.asarray(img, dtype=np.float32)
+    x = np.asarray(img[:h, :w, :3], dtype=np.float32)
+    return x.reshape(h // block, block, w // block, block, 3).mean(axis=(1, 3))
+
+
 def score(output: np.ndarray, target: np.ndarray) -> dict[str, float]:
     """Everything the dashboard shows for one pair: PSNR, mean and 95th-percentile ΔE76 and ΔE2000."""
     lab_o, lab_t = srgb_to_lab(output), srgb_to_lab(target)
