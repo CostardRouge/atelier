@@ -20,7 +20,7 @@ import type { Framing } from '../media/framing';
 import type { QrDraw } from '../overlay/draw-qr';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
-import { badgeBlockExtent, badgeElements, badgeSettleSeconds, type BadgeLayout } from './badge-layout';
+import { badgeBlockExtent, badgeElements, badgeExitAt, badgeSettleSeconds, type BadgeLayout } from './badge-layout';
 import { collageSettleSeconds } from './collage';
 import { elementSettleSeconds } from '../overlay/still-frame';
 import { ctaLayout } from './cta-slide';
@@ -105,7 +105,7 @@ export function slideRender(
   // A slide's position used to decide whether it could hold an opener, a badge
   // or shades at all; now it decides only where they are stored.
   const isFirst = slide.kind === 'hook';
-  const spec = isFirst ? pieceBadge(post, slide) : slideBadge(slide);
+  const spec = isFirst ? pieceBadge(post, slide) : slideBadge(post, slide);
   const content = slideBadgeContent(trip, post, slide, exif);
 
   // The opener's pictures reach it here or not at all. A sweep does not need
@@ -176,7 +176,7 @@ export function slideBadgeContent(
 ): BadgeContent | null {
   if (slide.kind === 'cta') return null;
   const isFirst = slide.kind === 'hook';
-  const spec = isFirst ? pieceBadge(post, slide) : slideBadge(slide);
+  const spec = isFirst ? pieceBadge(post, slide) : slideBadge(post, slide);
   if (!spec) return null;
   return badgeContent(trip, post, {
     mode: spec.mode,
@@ -200,12 +200,12 @@ interface BadgeSpec {
   timeAgo: TimeAgoMode;
   layout: BadgeLayout;
   /**
-   * What the badge's exit lands on: the SLIDE's end (2026-10-07,
-   * `slide-timing.ts`) — shortening a slide never cuts an exit and an Auto
-   * slide aligns by itself. `PostBadge.durationSeconds` survives as the length
-   * Auto gives a slide with no opener.
+   * What the badge's exit lands on: the SLIDE's end (2026-10-07) —
+   * shortening a slide never cuts an exit and a slide its opener decides
+   * aligns by itself — or null on a slide too short to let the badge rest,
+   * where it stays to the cut (`badgeExitAt`, 2026-10-14).
    */
-  durationSeconds: number;
+  durationSeconds: number | null;
   textOverrides: Partial<Record<BadgePiece, string>>;
 }
 
@@ -215,14 +215,15 @@ function pieceBadge(post: TripPost, slide: DeckSlide): BadgeSpec {
     mode: post.badge.mode,
     timeAgo: post.badge.timeAgo,
     layout: post.badge.layout,
-    durationSeconds: slide.seconds,
+    durationSeconds: badgeExitAt(slide.seconds, post.badge.pieceStyles, post.badge.cascade),
     textOverrides: post.badge.textOverrides,
   };
 }
 
 /** Another slide's own badge, or null where it draws none. */
-function slideBadge(slide: DeckSlide): BadgeSpec | null {
-  return slide.badge ? { ...slide.badge, durationSeconds: slide.seconds } : null;
+function slideBadge(post: TripPost, slide: DeckSlide): BadgeSpec | null {
+  // The badge's look — and so its entrance — is the piece's on every slide.
+  return slide.badge ? { ...slide.badge, durationSeconds: badgeExitAt(slide.seconds, post.badge.pieceStyles, post.badge.cascade) } : null;
 }
 
 /**

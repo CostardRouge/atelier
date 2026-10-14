@@ -251,7 +251,7 @@ function casedText(text: string, style: BadgePieceStyle | undefined): string {
 function applyPieceStyle(
   el: OverlayElement,
   style: BadgePieceStyle | undefined,
-  durationSeconds: number,
+  durationSeconds: number | null,
 ): void {
   // Kept: a camera plate's runs arrive with their face already pinned.
   const pinned: string[] = [...(el.styleOverrides ?? [])];
@@ -292,8 +292,9 @@ function applyPieceStyle(
     // An animation needs a life to play inside, and an EXIT needs that life to
     // END — the engine lays an out step against the window's close, so a null
     // end means the exit never plays at all. A piece with only an entrance
-    // keeps an open window so it does not vanish for no reason.
-    el.window = style.animation.out
+    // keeps an open window so it does not vanish for no reason, and so does
+    // a badge on a slide too short to let it rest (`badgeExitAt`).
+    el.window = style.animation.out && durationSeconds !== null
       ? { start: 0, end: durationSeconds }
       : { start: 0, end: null };
   }
@@ -392,7 +393,8 @@ export function badgeElements(
   layout: BadgeLayout,
   aspect: number,
   styles: BadgePieceStyles = {},
-  durationSeconds: number = DEFAULT_BADGE_DURATION,
+  /** Where the exits land — `badgeExitAt`; null for a badge that stays to the cut. */
+  durationSeconds: number | null = DEFAULT_BADGE_DURATION,
   cascade: BadgeCascade | null = null,
 ): OverlayElement[] {
   const { pieces, heights, gaps, top, plate } = blockMetrics(content, layout, aspect);
@@ -482,6 +484,22 @@ export function moveBlock(
   const x = clamp(start.x + dxFrac);
   const y = clamp(start.y + dyFrac);
   return snapping ? { x: snap(x), y: snap(y) } : { x, y };
+}
+
+/** How long a badge rests, settled, before its exit may start on a slide's end. */
+export const BADGE_REST_SECONDS = 1;
+
+/**
+ * Where a badge's EXIT lands on a slide of `slideSeconds`: on the slide's end
+ * (2026-10-07 — shortening a slide never cuts an exit) only while the slide
+ * outlasts the badge's entrance plus `BADGE_REST_SECONDS`; under that, null —
+ * the badge stays to the cut. A 1 s slide used to enter and leave its badge
+ * inside the second, a flash (H10 of `docs/slide-length.md`); and its hold,
+ * where the brief first put the exit, is ~0 on a slide that short, so the
+ * only way not to flash is not to leave.
+ */
+export function badgeExitAt(slideSeconds: number, styles: BadgePieceStyles, cascade: BadgeCascade | null = null): number | null {
+  return slideSeconds >= badgeSettleSeconds(styles, cascade) + BADGE_REST_SECONDS ? slideSeconds : null;
 }
 
 /**

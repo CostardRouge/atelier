@@ -95,7 +95,7 @@ import {
   retimedScreenSeconds,
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
-import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
+import { badgeExitAt, badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
 import {
   centreMovable,
   resolvedDirection,
@@ -689,9 +689,11 @@ export default function PostEditor({
       ),
     [slides, clipDurations],
   );
-  // What the badge's exit lands on: the first slide's END (`slide-length.ts`),
-  // never an absolute life — so shortening the slide never cuts the exit.
+  // How long the first slide lasts; the badge's exit lands on its END
+  // (`badgeExitAt`) — never an absolute life, so shortening the slide never
+  // cuts the exit — unless the slide is too short to let the badge rest.
   const hookLife = lengths[0] ?? post.badge.hookSeconds;
+  const hookExit = badgeExitAt(hookLife, post.badge.pieceStyles, post.badge.cascade);
 
   // The first slide's words: its own free text, then its badge over it (a
   // masked line must not mask the signature — `slide-render.ts`) — the
@@ -704,7 +706,7 @@ export default function PostEditor({
           post.badge.layout,
           aspect,
           post.badge.pieceStyles,
-          hookLife,
+          hookExit,
           post.badge.cascade,
         )
       : [];
@@ -713,7 +715,7 @@ export default function PostEditor({
     content,
     post.badge.layout,
     post.badge.pieceStyles,
-    hookLife,
+    hookExit,
     post.badge.cascade,
     aspect,
     hookTexts,
@@ -789,7 +791,7 @@ export default function PostEditor({
       post.badge.layout,
       aspect,
       post.badge.pieceStyles,
-      hookLife,
+      hookExit,
       post.badge.cascade,
     );
     // The free text rides along, or a counting numeral would hide it.
@@ -800,7 +802,7 @@ export default function PostEditor({
     post.badge.layout,
     aspect,
     post.badge.pieceStyles,
-    hookLife,
+    hookExit,
     post.badge.cascade,
     hookTexts,
   ]);

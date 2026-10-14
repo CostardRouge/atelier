@@ -3,6 +3,7 @@ import {
   DEFAULT_BADGE_LAYOUT,
   badgeBlockExtent,
   badgeElements,
+  badgeExitAt,
   badgeSettleSeconds,
   heightFractionOf,
   moveBlock,
@@ -342,6 +343,20 @@ describe('badgeElements — the hook has a duration, so exits can play', () => {
   it('leaves the window open when a piece only enters', () => {
     const el = badgeElements(full, layout(), REEL, anim(false), 6)[0];
     expect(el.window).toEqual({ start: 0, end: null });
+  });
+
+  it('leaves the window open on a slide too short to let the badge rest', () => {
+    const el = badgeElements(full, layout(), REEL, anim(true), null)[0];
+    expect(el.window).toEqual({ start: 0, end: null });
+  });
+
+  it('lands the exit on the slide’s end only past the entrance plus a second', () => {
+    // The entrance settles at 0.4 s: from 1.4 s on the exit lands on the end.
+    expect(badgeExitAt(6, anim(true))).toBe(6);
+    expect(badgeExitAt(1.4, anim(true))).toBe(1.4);
+    expect(badgeExitAt(1.3, anim(true))).toBeNull();
+    // Nothing enters: a second of rest is enough.
+    expect(badgeExitAt(1, {})).toBe(1);
   });
 
   it('gives an unanimated piece no window at all', () => {

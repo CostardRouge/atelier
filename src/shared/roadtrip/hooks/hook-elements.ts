@@ -49,7 +49,8 @@ export function hookElementsAt(
   layout: BadgeLayout,
   aspect: number,
   styles: BadgePieceStyles,
-  durationSeconds: number,
+  /** Where the exits land — `badgeExitAt`; null for a badge that stays to the cut. */
+  durationSeconds: number | null,
   cascade: BadgeCascade | null = null,
 ): ElementsAt | null {
   if (!hook?.rewrites || !content) return null;
