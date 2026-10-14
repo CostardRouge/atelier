@@ -113,6 +113,16 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   The suspect is what the picture alone cannot say (his choice varies by
   series and day). How to apply: run the memorising test (`train.subset`,
   below) before any bigger model, FiveK or more epochs.
+- **The weighing CNN sees the WHOLE picture during training** (`train.
+  whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
+  training CROP (a quarter of a 512 px picture, at full detail) while eval
+  shows it the whole picture shrunk — so it learned corners it is never
+  judged on, and could not tell a dark corner from a dark scene. Found by
+  the memorising test: 50 pairs, even with 50 basis LUTs, stalled at
+  10.5 ΔE00 against a 6.88 ceiling. The ceiling itself is honest: on a
+  real photograph a 33³ LUT fitted by gradient descent matches the 17³
+  binned map (vignette 4.50 vs 4.74, a darker sky 7.97 vs 7.78, a global
+  look 0.25 vs 1.93). Runs before this compare only with each other.
 - **`train.subset = N` is the memorising test** (2026-10-14): N seeded
   training pairs, scored at every validation (`seen ΔE00 … (ceiling …)` in
   the epoch line). Seen pairs falling to their ceiling = the model can draw

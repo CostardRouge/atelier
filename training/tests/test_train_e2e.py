@@ -176,3 +176,31 @@ def test_the_dataset_held_in_memory_reads_each_pair_once_and_gives_the_same_tens
         for f in folder.glob("*.npy"):
             f.unlink()
     assert held[0][0].dtype == torch.float32
+
+
+def test_a_training_crop_comes_with_the_thumbnail_of_its_whole_picture(synthetic):
+    from atelier_training.data import PairDataset, load_pair, read_index
+    from atelier_training.model.lut3d import AdaptiveLUT
+
+    config = load_config(overrides=TINY)
+    ingest(config, sources=["synthetic"], workers=1)
+    pair = read_index(config.paths.cache, ["synthetic"])[0]
+    model = AdaptiveLUT(lut_size=9, basis=2, thumb=16, width=4)
+    crop, target, thumb, _ = PairDataset([pair], crop=16, thumb=16, seed=4)[0]
+    assert crop.shape == target.shape == (3, 16, 16) and thumb.shape == (3, 16, 16)
+    whole = torch.from_numpy(load_pair(pair)[0].transpose(2, 0, 1).copy()).unsqueeze(0)
+    seen = model.thumbnail(whole)[0]
+    flipped = PairDataset([pair], crop=16, thumb=16, augment=True, seed=0)
+    for _ in range(8):  # the flip turns the thumbnail with the crop
+        _, _, t, _ = flipped[0]
+        assert torch.allclose(t, seen, atol=1e-6) or torch.allclose(t, seen.flip(-1), atol=1e-6)
+    assert torch.allclose(thumb, seen, atol=1e-6)
+    # The weighing CNN answers from the thumbnail it is handed, not from the crop (a fresh head answers the
+    # identity whatever it sees: give it weights first).
+    torch.manual_seed(0)
+    torch.nn.init.normal_(model.weights.head.weight)
+    model.eval()
+    out_whole, w_whole = model(crop.unsqueeze(0), thumb.unsqueeze(0))
+    _, w_crop = model(crop.unsqueeze(0))
+    assert out_whole.shape == (1, 3, 16, 16) and not torch.allclose(w_whole, w_crop)
+    assert PairDataset([pair])[0][2].numel() == 0
