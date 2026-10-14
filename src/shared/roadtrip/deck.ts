@@ -179,6 +179,23 @@ export function resolveSlideMedium(
   return { medium: 'image', reason: 'plain' };
 }
 
+/**
+ * The ONE verb beside the medium's sentence: deliver the other medium than the
+ * one this slide goes out as. It writes `'auto'` when that other medium is
+ * what the slide would go out as by itself, so a slide asked back to its own
+ * medium follows what it holds again — no third word on screen to learn.
+ */
+export function mediumVerb(
+  chosen: SlideMedium,
+  animated: boolean,
+  mediaName: string | null,
+): { label: string; write: SlideMedium } {
+  const now = resolveSlideMedium(chosen, animated, mediaName).medium;
+  const other = now === 'video' ? 'image' : 'video';
+  const own = resolveSlideMedium('auto', animated, mediaName).medium;
+  return { label: other === 'image' ? 'Deliver a still' : 'Deliver as video', write: other === own ? 'auto' : other };
+}
+
 /** True when any badge piece carries an animation, or the pieces cascade — what makes a hook move. */
 export function hookAnimates(styles: BadgePieceStyles, cascade?: BadgeCascade | null): boolean {
   return Boolean(cascade) || Object.values(styles).some((style) => Boolean(style?.animation));

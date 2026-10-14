@@ -1,15 +1,13 @@
+import { mediumVerb, type DeckSlide, type SlideReason } from '../../../shared/roadtrip/deck';
+import { CLIP_SPEEDS, MIN_HOOK_SECONDS, screenSecondsCeiling } from '../../../shared/roadtrip/hook-video';
 import {
-  resolveSlideMedium,
-  type DeckSlide,
-  type SlideReason,
-} from '../../../shared/roadtrip/deck';
-import {
-  CLIP_SPEEDS,
-  MAX_HOOK_SECONDS,
-  MIN_HOOK_SECONDS,
-  screenSecondsCeiling,
-} from '../../../shared/roadtrip/hook-video';
-import { DEFAULT_HOLD_SECONDS } from '../../../shared/roadtrip/slide-length';
+  DEFAULT_HOLD_SECONDS,
+  paceSteps,
+  switchOwner,
+  type LengthEdit,
+  type LengthOver,
+} from '../../../shared/roadtrip/slide-length';
+import { FIT_FLOOR_SECONDS } from '../../../shared/roadtrip/slide-timing';
 import type { TrimRange } from '../../../shared/media/trim';
 import { formatTimecode } from '../../../shared/lib/format';
 import { FieldRow, Readout, SliderRow } from '../../../shared/ui/Inspector';
@@ -17,40 +15,20 @@ import type { SlideMedium } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import Segmented from '../../../shared/ui/Segmented';
 
-/** The opener on the slide, as far as the length row needs to name it. */
-export interface SlideOpener {
-  /** Its name on screen — «Virée», «Itinerary», «Défilé». */
-  name: string;
-  /** What it needs at its own pace — never the sped-up length. */
-  seconds: number;
-  /** A fixed length speeds it up rather than cutting it. */
-  fit: boolean;
-}
-
 interface SlideDeliveryProps {
   slide: DeckSlide;
-  /** True when something on this slide is animated — a badge piece, today. */
+  /** True when something on this slide moves — what makes it a video by itself. */
   animated: boolean;
   /** The clip's length when this slide holds one and it has loaded; else 0. */
   clipSeconds: number;
   /** The open clip's stretch and speed, when the slide is a clip — the same numbers the bar under the picture edits. */
   clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
   onMedium: (medium: SlideMedium) => void;
-  /** A length moved by hand — written without changing who owns it (`lengthByHand`). */
-  onSeconds: (seconds: number) => void;
-  /** Hand the length back to the opener, at its own pace with a new slide's hold. */
-  onFollow: () => void;
-  /** The slide's opener, or null for none. */
-  opener: SlideOpener | null;
-  /** Fix the length and speed a longer opener up to it; null when there is no opener. */
-  onFit: (() => void) | null;
+  /** Who decides the length, and the slide's own seconds where they ARE the length. */
+  onLength: (edit: LengthEdit) => void;
+  /** The opener on the slide by its name on screen — «Virée» — or null when nothing on it plays. */
+  openerName: string | null;
 }
-
-const CHOICES: { id: SlideMedium; label: string }[] = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'image', label: 'Image' },
-  { id: 'video', label: 'Video' },
-];
 
 /** The sentence a resolved slide deserves — the real one, never a generic. */
 export function reasonSentence(reason: SlideReason, seconds: number, speed = 1): string {
@@ -73,88 +51,74 @@ export function reasonSentence(reason: SlideReason, seconds: number, speed = 1):
   }
 }
 
-/**
- * The line under a choice's label, or null when the label already says it.
- *
- * `Auto` answers with the medium, which is the only thing it does not say
- * itself. The two explicit choices answer with what they would COST — settled,
- * one frame, a held card — because "Image · image" is a chip repeating its own
- * name, and a control that says nothing reads as decoration.
- */
-function choiceHint(choice: SlideMedium, reason: SlideReason, medium: string): string | null {
-  if (choice === 'auto') return medium;
-  switch (reason) {
-    case 'settled':
-      return 'settled';
-    case 'frozen':
-      return 'one frame';
-    case 'forced-video':
-      return 'a held card';
-    default:
-      return null;
-  }
-}
-
-const pill = 'inline-flex items-center h-5 px-1.5 rounded-full border font-mono text-2xs tracking-[0.04em] whitespace-nowrap';
+const PACE_LABEL: Record<string, string> = { '0.5': '½×', '0.75': '¾×', '1': '1×' };
+const percent = (scale: number) => `${Math.round(scale * 100)} %`;
+const s1 = (seconds: number) => `${seconds.toFixed(1)} s`;
 
 /**
  * What this slide is delivered as, and for how long — decided HERE, where the
- * piece is composed, and never at the door.
+ * piece is composed, and never at the door (his call, 2026-09-09).
  *
- * The maintainer's own call (2026-09-09): a deck that mixes a video hook and
- * three stills is a decision about the post, so the export reads it rather
- * than making it. Each of the three choices shows what it would really
- * deliver for THIS slide, which is the tool's standing rule — an option that
- * cannot say what it does reads as broken.
- *
- * The length wears its OWNER (2026-10-07, `slide-timing.ts`): `Auto · Virée`
- * while the slide follows its opener, `Set by you` once a grip or the slider
- * was dragged — and, when a set length cuts the opener, the cut is said right
- * here with its two verbs (back to Auto, or fit the opener), not in a red
- * sentence on another tab.
+ * The length is face B of `docs/slide-length.md` (2026-10-13): a slide with
+ * an opener is made of PARTS — the opener at a pace, then a hold — and its
+ * OWNER is a word the author picks (`Virée decides` · `Fixed`), the one
+ * gesture that changes it; the numbers under it are the suite's one slider
+ * (`SliderRow`) and write inside that owner. Every control is always drawn,
+ * so nothing moves under the pointer; a cut is said in the length's own line,
+ * never in a sentence that inserts verbs. The medium is a sentence with ONE
+ * verb, not a third «Auto» beside the length's.
  */
-export default function SlideDelivery({
-  slide,
-  animated,
-  clipSeconds,
-  clip,
-  onMedium,
-  onSeconds,
-  onFollow,
-  opener,
-  onFit,
-}: SlideDeliveryProps) {
+export default function SlideDelivery({ slide, animated, clipSeconds, clip, onMedium, onLength, openerName }: SlideDeliveryProps) {
   const name = slide.media?.name ?? null;
   // A clip cannot be held longer than what is left of it after its in point,
   // at its speed — and a read-out that claims 5s over a 3s clip is lying
   // about the file it will write.
   const ceiling = screenSecondsCeiling(slide.videoTimeSeconds, slide.speed, clipSeconds);
   const seconds = Math.min(slide.seconds, ceiling);
-  // Who owns the length is a word (`slide-length.ts`); a slide with nothing
-  // that plays lasts its own seconds whoever owns it.
-  const follows = slide.length.owner === 'opener' && opener !== null;
   const timing = slide.timing;
+  const length = slide.length;
+  const opener = openerName !== null && timing.natural > 0 ? openerName : null;
+  const follows = opener !== null && length.owner === 'opener';
   const cut = timing.cut > 0.05;
-  // What handing the length back to the opener gives — the verb's own number.
-  const followWould = Math.min(opener ? opener.seconds + DEFAULT_HOLD_SECONDS : slide.seconds, ceiling);
-  const pace = timing.scale < 0.999 ? ` at ${Math.round(timing.scale * 100)} %` : '';
+  const sped = timing.scale < 0.999;
+  const verb = mediumVerb(slide.chosen, animated, name);
+
+  // The sum, read: what the slide is made of, its cut said in the same line.
+  const parts = (() => {
+    if (!opener) {
+      if (slide.medium === 'video' && clipSeconds > 0 && ceiling < seconds + 0.05) {
+        return `All that is left of the clip after its in point${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}.`;
+      }
+      return 'How long this picture holds the screen when the piece plays.';
+    }
+    const run = `${opener} ${s1(timing.span)}${sped ? ` at ${percent(timing.scale)}` : ''}`;
+    if (cut) {
+      const why = follows
+        ? slide.medium === 'video' && clipSeconds > 0
+          ? 'the clip ends first'
+          : 'the slide’s ceiling'
+        : length.owner === 'fixed' && length.over === 'cut'
+          ? 'you asked to cut it'
+          : `faster would show a picture for less than ${FIT_FLOOR_SECONDS} s`;
+      return `${run}, its last ${s1(timing.cut)} cut — ${why}.`;
+    }
+    return `${run} + ${s1(timing.hold)} on the picture.`;
+  })();
+
+  const paceId = (() => {
+    if (length.owner !== 'opener') return '';
+    const step = Object.keys(PACE_LABEL).find((k) => Math.abs(Number(k) - length.pace) < 1e-6);
+    return step ?? '';
+  })();
 
   return (
     <>
-      <FieldRow label="Goes out as" hint={reasonSentence(slide.reason, seconds, slide.speed)}>
-        <Segmented
-          fill
-          size="sm"
-          label="What this slide is delivered as"
-          value={slide.chosen}
-          onChange={onMedium}
-          options={CHOICES.map((choice) => {
-            const would = resolveSlideMedium(choice.id, animated, name);
-            const hint = choiceHint(choice.id, would.reason, would.medium);
-            return { id: choice.id, label: choice.label, title: hint ?? undefined };
-          })}
-          className="flex-1 min-w-0"
-        />
+      <FieldRow label="Goes out as" hint={reasonSentence(slide.reason, seconds, slide.speed)} hintShown>
+        <Readout>{slide.medium === 'video' ? 'Video' : 'Image'}</Readout>
+        <span className="flex-1" />
+        <Button size="sm" onClick={() => onMedium(verb.write)}>
+          {verb.label}
+        </Button>
       </FieldRow>
 
       {/* The clip's own numbers, as the audit's inspector drew them: the cut
@@ -181,59 +145,99 @@ export default function SlideDelivery({
         </>
       )}
 
-      <SliderRow
-        label="On screen"
-        name="How long this slide stays on screen"
-        hint={
-          follows && opener
-            ? cut
-              ? `${opener.name} decides, but the clip ends first: ${opener.name} is cut at ${seconds.toFixed(1)}s.`
-              : `${opener.name} decides: its ${timing.span.toFixed(1)}s${pace}, then ${timing.hold.toFixed(1)}s on the picture. Moving the length here or on the band changes its pace or the hold, never who decides.`
-            : slide.medium === 'video'
-              ? clipSeconds > 0 && ceiling < MAX_HOOK_SECONDS
-                ? `At most ${ceiling.toFixed(1)}s of the clip is left after its in point${slide.speed !== 1 ? ` at ${slide.speed}×` : ''}.`
-                : undefined
-              : 'How long this picture holds the screen when the piece plays.'
-        }
-        min={MIN_HOOK_SECONDS}
-        max={ceiling}
-        step={0.5}
-        value={seconds}
-        onChange={onSeconds}
-        format={(v) => `${v.toFixed(1)} s`}
-        trailing={
-          <>
-            <span
-              className={`${pill} ${follows ? 'border-accent text-accent-ink bg-accent-wash' : 'border-line-strong text-muted bg-paper'}`}
-              title={follows ? 'The opener sets the length: its pace, then a hold' : 'The slide lasts the seconds set here'}
+      <FieldRow label="On screen" hint={<p className={cut ? 'text-accent-ink' : undefined}>{parts}</p>} hintShown>
+        <Readout>{s1(seconds)}</Readout>
+      </FieldRow>
+
+      {opener && (
+        <FieldRow label="Length">
+          <Segmented
+            fill
+            size="sm"
+            label="Who decides how long this slide lasts"
+            value={length.owner}
+            onChange={(owner) => onLength(switchOwner(owner, length, timing))}
+            options={[
+              { id: 'opener', label: `${opener} decides`, title: `${opener} at a pace, then a hold: the slide grows when ${opener} does` },
+              { id: 'fixed', label: 'Fixed', title: 'The slide lasts exactly the seconds set here' },
+            ]}
+            className="flex-1 min-w-0"
+          />
+        </FieldRow>
+      )}
+
+      {follows && length.owner === 'opener' ? (
+        <>
+          <FieldRow
+            label="Pace"
+            hint={
+              timing.floored
+                ? `${opener} runs at ${percent(timing.scale)}, its fastest: no picture is shown for less than ${FIT_FLOOR_SECONDS} s.`
+                : paceId === ''
+                  ? `${percent(length.pace)}, set on the band.`
+                  : undefined
+            }
+            hintShown
+          >
+            <Segmented
+              fill
+              size="sm"
+              label={`${opener}’s pace`}
+              value={paceId}
+              onChange={(id) => onLength({ length: { ...length, pace: Number(id) } })}
+              options={paceSteps(timing.floor).map((step) => ({
+                id: String(step.pace),
+                label: PACE_LABEL[String(step.pace)] ?? `${step.pace}×`,
+                disabled: step.refused ?? undefined,
+              }))}
+              className="flex-1 min-w-0"
+            />
+          </FieldRow>
+          <SliderRow
+            label="Hold after"
+            name={`The picture’s time after ${opener}`}
+            min={0}
+            max={10}
+            step={0.1}
+            value={length.hold}
+            reset={DEFAULT_HOLD_SECONDS}
+            onChange={(hold) => onLength({ length: { ...length, hold } })}
+            format={s1}
+          />
+        </>
+      ) : (
+        <>
+          <SliderRow
+            label="Seconds"
+            name="How long this slide stays on screen"
+            min={MIN_HOOK_SECONDS}
+            max={ceiling}
+            step={0.1}
+            value={seconds}
+            onChange={(next) => onLength({ length, seconds: next })}
+            format={s1}
+          />
+          {opener && length.owner === 'fixed' && (
+            <FieldRow
+              label={`If ${opener} is longer`}
+              hint={timing.natural <= seconds + 0.05 ? `${opener} fits: it plays whole at its own pace.` : undefined}
+              hintShown
             >
-              {follows && opener ? `${opener.name} decides` : 'Fixed'}
-            </span>
-            {!follows && opener && !cut && (
-              <Button size="sm" onClick={onFollow} title={`Let ${opener.name} decide: ${followWould.toFixed(1)} s`}>
-                Follow
-              </Button>
-            )}
-          </>
-        }
-      />
-      {!follows && cut && opener && (
-        <div className="flex flex-col gap-1.5">
-          <p className="m-0 text-xs text-accent-ink">
-            {opener.name} takes {opener.seconds.toFixed(1)} s{pace ? `, run${pace}` : ''} — its last {timing.cut.toFixed(1)} s are cut.
-            {timing.floored ? ' Faster would show a picture for less than the time it takes to see one.' : ''}
-          </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" onClick={onFollow}>
-              Use {followWould.toFixed(1)} s
-            </Button>
-            {onFit && !opener.fit && (
-              <Button size="sm" onClick={onFit}>
-                Speed {opener.name} up to {seconds.toFixed(1)} s
-              </Button>
-            )}
-          </div>
-        </div>
+              <Segmented
+                fill
+                size="sm"
+                label={`What a fixed length does with a longer ${opener}`}
+                value={length.over}
+                onChange={(over: LengthOver) => onLength({ length: { owner: 'fixed', over } })}
+                options={[
+                  { id: 'fit', label: 'Speed it up', title: `${opener} runs faster to end with the slide` },
+                  { id: 'cut', label: 'Cut it', title: `${opener} keeps its pace and the slide’s end cuts it` },
+                ]}
+                className="flex-1 min-w-0"
+              />
+            </FieldRow>
+          )}
+        </>
       )}
     </>
   );

@@ -9,8 +9,10 @@ import {
   lengthFromLegacy,
   negotiate,
   paceFloor,
+  paceSteps,
   readSlideLength,
   resolveLength,
+  switchOwner,
 } from './slide-length';
 import { AUTO_TAIL_SECONDS, FIT_FLOOR_SECONDS } from './slide-timing';
 
@@ -146,6 +148,40 @@ describe('lengthByHand / fixedFrom — a gesture never changes the owner', () =>
   it('fixes a clip at its cut, keeping a fixed length’s answer', () => {
     expect(fixedFrom(defaultSlideLength())).toEqual({ owner: 'fixed', over: 'fit' });
     expect(fixedFrom({ owner: 'fixed', over: 'cut' })).toEqual({ owner: 'fixed', over: 'cut' });
+  });
+});
+
+describe('switchOwner — the one gesture that changes the owner, never the length', () => {
+  it('fixes the length at what the slide lasts now, speeding a longer opener up', () => {
+    const timing = resolveLength({ owner: 'opener', pace: 0.75, hold: 1 }, 3, VIREE, BEAT);
+    const edit = switchOwner('fixed', { owner: 'opener', pace: 0.75, hold: 1 }, timing);
+    expect(edit).toEqual({ length: { owner: 'fixed', over: 'fit' }, seconds: timing.seconds });
+    expect(resolveLength(edit.length, edit.seconds!, VIREE, BEAT).seconds).toBeCloseTo(timing.seconds, 9);
+  });
+
+  it('hands a fixed length back to the opener as the pace and hold that last as long', () => {
+    for (const fixed of [4, VIREE, 12]) {
+      const timing = resolveLength({ owner: 'fixed', over: 'cut' }, fixed, VIREE, BEAT);
+      const edit = switchOwner('opener', { owner: 'fixed', over: 'cut' }, timing);
+      expect(edit.seconds).toBeUndefined();
+      expect(resolveLength(edit.length, fixed, VIREE, BEAT).seconds).toBeCloseTo(fixed, 1);
+    }
+  });
+
+  it('is a no-op on the owner already chosen, and the default with nothing to follow', () => {
+    const length = { owner: 'fixed', over: 'cut' } as const;
+    expect(switchOwner('fixed', length, resolveLength(length, 5, VIREE, BEAT))).toEqual({ length });
+    expect(switchOwner('opener', length, resolveLength(length, 5, 0, 0))).toEqual({ length: defaultSlideLength() });
+  });
+});
+
+describe('paceSteps', () => {
+  it('always offers the three steps, refusing those faster than the floor', () => {
+    expect(paceSteps(0.1).map((s) => s.refused)).toEqual([null, null, null]);
+    const steps = paceSteps(0.6);
+    expect(steps.map((s) => s.pace)).toEqual([0.5, 0.75, 1]);
+    expect(steps[0].refused).toMatch(/Faster/);
+    expect(steps[1].refused).toBeNull();
   });
 });
 

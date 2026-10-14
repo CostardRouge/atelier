@@ -30,7 +30,7 @@ import type {
 import type { ExifData } from '../../../shared/exif/exif-parser';
 import CameraPanel from './CameraPanel';
 import SlideDelivery from './SlideDelivery';
-import { DEFAULT_HOLD_SECONDS, defaultSlideLength, lengthByHand } from '../../../shared/roadtrip/slide-length';
+import { DEFAULT_HOLD_SECONDS, defaultSlideLength } from '../../../shared/roadtrip/slide-length';
 import { MAX_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
 import { hookVariantById } from '../../../shared/roadtrip/hooks/registry';
 import { inputClass, linkButton } from './ui';
@@ -124,11 +124,8 @@ export default function ContentTab({
   /** The open slide's opener — the piece's on the first slide, the slide's own elsewhere — as the band and the deck read it. */
   const openerLayers = isHook ? post.badge.hook : (post.slides.find((s) => s.id === slide.slideId)?.hook ?? null);
   const openerVariant = openerLayers?.[0] ? hookVariantById(openerLayers[0].id) : undefined;
-  // What the opener NEEDS at its own pace — never the sped-up length — and
-  // whether a fixed length speeds it up rather than cutting it.
-  const opener = openerVariant && slide.natural > 0
-    ? { name: openerVariant.name, seconds: slide.natural, fit: slide.length.owner === 'fixed' && slide.length.over === 'fit' }
-    : null;
+  // What the opener NEEDS at its own pace — never the sped-up length.
+  const opener = openerVariant && slide.natural > 0 ? { name: openerVariant.name, seconds: slide.natural } : null;
   /** Back to the opener deciding, at its own pace with a new slide's hold. */
   const followOpener = () => (isHook ? patchBadge({ length: defaultSlideLength() }) : patchSlide({ length: defaultSlideLength() }));
   /**
@@ -301,20 +298,14 @@ export default function ContentTab({
             clipSeconds={clipSeconds}
             clip={clip}
             onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
-            // The slider never changes who owns the length: under the opener's
-            // rule it writes a pace and a hold, a fixed one its seconds.
-            onSeconds={(seconds) => {
-              const edit = lengthByHand(slide.length, slide.timing, seconds);
-              if (isHook) patchBadge({ length: edit.length, ...(edit.seconds !== undefined ? { hookSeconds: edit.seconds } : {}) });
-              else patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) });
-            }}
-            onFollow={followOpener}
-            opener={opener}
-            onFit={
-              opener
-                ? () => (isHook ? patchBadge({ length: { owner: 'fixed', over: 'fit' } }) : patchSlide({ length: { owner: 'fixed', over: 'fit' } }))
-                : null
+            // Every control writes inside the owner the author picked; the
+            // seconds are written only where they ARE the length.
+            onLength={(edit) =>
+              isHook
+                ? patchBadge({ length: edit.length, ...(edit.seconds !== undefined ? { hookSeconds: edit.seconds } : {}) })
+                : patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) })
             }
+            openerName={opener?.name ?? null}
           />
         )}
       </InspectorSection>

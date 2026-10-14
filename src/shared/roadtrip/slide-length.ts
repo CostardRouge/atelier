@@ -207,6 +207,33 @@ export function fixedFrom(length: SlideLength): SlideLength {
   return length.owner === 'fixed' ? length : { owner: 'fixed', over: 'fit' };
 }
 
+/**
+ * The owner picked by the author — the one gesture that may change it — WITHOUT
+ * moving the slide's length: a fixed length takes the seconds the slide lasts
+ * now (and speeds a longer opener up, the default answer), the opener takes
+ * that total back as a pace and a hold. So the switch never makes the band
+ * jump; the length then moves only when a number under the new owner does.
+ */
+export function switchOwner(owner: SlideLength['owner'], length: SlideLength, timing: Pick<ResolvedLength, 'seconds' | 'natural' | 'floor'>): LengthEdit {
+  if (owner === length.owner) return { length };
+  if (owner === 'fixed') return { length: { owner: 'fixed', over: 'fit' }, seconds: timing.seconds };
+  if (timing.natural <= 0) return { length: defaultSlideLength() };
+  const { pace, hold } = negotiate(timing.seconds, timing.natural, timing.floor);
+  return { length: { owner: 'opener', pace, hold } };
+}
+
+/**
+ * The inspector's pace steps for an opener whose floor is `floor`: each with
+ * the reason it cannot be taken, when it is faster than the floor allows —
+ * always all three, never fewer, so a step never moves under the pointer.
+ */
+export function paceSteps(floor: number): { pace: number; refused: string | null }[] {
+  return PACE_STEPS.map((pace) => ({
+    pace,
+    refused: pace < floor - 1e-9 ? 'Faster would show a picture for less than the time it takes to see one' : null,
+  }));
+}
+
 function round(value: number, per: number): number {
   return Math.round(value * per) / per;
 }
