@@ -347,6 +347,15 @@ whole render — the gate holds it so — and the one texture it costs is kept
 only for an interactive stage, never for an export or a thumbnail, and never
 past a phone's stage size.
 
+**Under the hand, the stage is drawn at half size.** While a pointer is held
+(a slider's drag, a pinch, a brush) or a wheel turns, each step grades the
+picture at half the stage's size through a second grader and draws it up — a
+quarter of the pixels a step — and the moment the hand lets go the stage is
+graded whole again. A single change — a click on Auto, a preset, a tap — is
+drawn whole at once. The histogram reads at most every 400 ms during a drag
+and once the steps stop. The export, the histogram, the thumbnails and the
+crop's stage never see a half picture, and a stage under 1200 px stays whole.
+
 **The develop is not in the cube.** A correction's white balance, exposure,
 tone curve, luma and channel curves, saturation and vibrance — everything up to
 the colour mixer — runs **per pixel**, before the lattice, in the shader and in
@@ -3302,7 +3311,7 @@ files* / *A folder* in the panel feed the Library directly, and with a Winnow
 connected, **From <instance>** opens the Winnow picker set for flights: a span
 of days, only the clips that carry a log, the Logbook with every flight's track
 drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
-alone, never its video. The panel has seven tabs:
+alone, never its video. The panel has eight tabs:
 
 - **Flights.** Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
@@ -3352,8 +3361,17 @@ alone, never its video. The panel has seven tabs:
 - **Export.** The preview is drawn by the export's own painter: an MP4 (H.264,
   no sound), the frame on screen as a PNG, or a *poster* with every route
   drawn whole.
+- **Presets.** Every dial under a name of your own: a chip applies its preset
+  and stays lit while the dials match it, *Save* keeps the dials on screen (or
+  *Replace*s a preset of the same name), × removes one. A preset keeps how the
+  atlas draws — look, trails, motion, camera, overlay, format — and never what
+  names one set of flights: the title and subtitle, the place or zone framed,
+  the drones picked for the spotlight and the names given to the drones stay
+  as they are on screen.
 
-The dials are remembered in this browser; nothing here is a document.
+The dials and the presets are remembered in this browser; nothing here is a
+document. While the camera holds still the coastline is drawn once and kept,
+not traced again every frame — it was half of what a frame cost.
 
 ## Composer tool
 

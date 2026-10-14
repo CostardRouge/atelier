@@ -215,15 +215,54 @@ one array, numbers as typed arrays, transferred) would bring the main
 thread to ~0 ms and needs `nearestCity` and the maps to read columns —
 the step to take if 130 ms still shows on his phone.
 
+### 2.6 The stage under the hand (P3)
+
+His «vas-y pour la P3, demi-résolution pendant le glissé» (2026-10-14).
+`stage-hand.ts` (pure, specced) decides; `useDevelopPicture` owns a second
+grader slot (`handSlot`, borrowing the stage cache's cubes like the
+histogram's) built at HALF the stage's size, its kernels scaled with it, and
+drawn up into the stage canvas through the same `drawDelivered` /
+`drawImage` — the crop, the border and the framing land on the same pixels
+(measured: held vs rested stage differ by 0.5–0.6 of a code at offset 0, and
+4–9 codes one pixel off, with and without a turned, zoomed 4:5 crop).
+
+**What is the hand.** A re-grade made while a POINTER is held anywhere in
+the page, within 250 ms of a WHEEL, or within 250 ms of the last re-grade's
+paint (the keyboard's held arrows). Time alone failed: on a slow device
+React's two renders and the histogram between two steps outlast any window,
+and a drag never counted (measured). A click lands after its pointer is up,
+so Auto, a preset or a tap paint whole at once. **When it settles.** 180 ms
+after the last step AND once no pointer is held and no wheel turns — a
+settle on the delay alone fired mid-drag on a slow device and drew a whole
+stage while the hand was still on (a 1.3 s stall headless). The second
+grader is built 700 ms after a new picture's first paint, one half render
+drawn nowhere, so the first drag does not pay its context and upload.
+
+**Counted** (production build, SwiftShader, a 2400 × 1600 JPEG, a 4 s
+mouse drag of Contrast at 60 Hz, alternating runs):
+
+| | Before | After |
+| --- | --- | --- |
+| Frames drawn during the drag | 24–28 | **55–57** |
+| The bar's own moves | 8–9 | **18–19** |
+| Stage renders at full size | 7–8 viewport passes | **2–3** (the first and the settle) |
+| Stage renders at half size | 0 | 12–15 |
+
+A real GPU is not SwiftShader: the ratio, not the milliseconds, is what
+this says. Still unmeasured on his Mac and his phone. **What it costs**: a
+second WebGL2 context holding its own upload of the stage's source (like the
+histogram's slot — 15–30 MB of GPU memory on a phone's 2560 px stage, a
+RAW's half-floats included) and its half-size targets, kept while the
+workbench lives. Left: a picture
+under 1200 px stays whole (the half grader would cost more than it saves),
+the loupe and the crop stage keep their own renders, a playing clip paints
+whole.
+
 ## 3. The plan, in commits
 
 - **P1 — the kept upstream.** Built (§2.1).
 - **P2 — the band's cells on demand** (audit PERF-03). Built (§2.2).
-- **P3 — the stage under the hand.** While a pointer is down on a slider, a
-  pinch or a wheel, render at half the stage's size and draw it up; the full
-  render on rest. Lightroom's way. To be MEASURED first on his phone with P1
-  in place: a tone step is now six cheap passes, and a half-size render may
-  buy nothing visible. Never for the export, the histogram or a snapshot.
+- **P3 — the stage under the hand.** Built (§2.6).
 - **P4 — the picture switch.** Built (§2.3).
 - **P5 — the shell's start on a phone** (audit PERF-04, PERF-05, PERF-06).
   Built (§2.4, §2.5); PERF-05's index and the columnar gazetteer are the
@@ -249,5 +288,4 @@ green, the README saying what the code does.
   (`roll-thumb.ts`); a second, smaller size for the contact sheet and the
   gallery covers is cheap to add and worth it only if P2's counts say the
   decode is what hurts.
-- **P3 before or after P4**: which of a drag and a switch he feels first on
-  his phone.
+- ~~P3 before or after P4~~: both are built (P4 2026-10-06, P3 2026-10-14).
