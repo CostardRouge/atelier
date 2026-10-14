@@ -195,8 +195,8 @@ def test_a_training_crop_comes_with_the_thumbnail_of_its_whole_picture(synthetic
         _, _, t, _ = flipped[0]
         assert torch.allclose(t, seen, atol=1e-6) or torch.allclose(t, seen.flip(-1), atol=1e-6)
     assert torch.allclose(thumb, seen, atol=1e-6)
-    # The weighing CNN answers from the thumbnail it is handed, not from the crop (a fresh head answers the
-    # identity whatever it sees: give it weights first).
+    # The weighing CNN answers from the thumbnail it is handed, not from the crop (a fresh head barely moves
+    # off the identity whatever it sees: give it real weights first).
     torch.manual_seed(0)
     torch.nn.init.normal_(model.weights.head.weight)
     model.eval()

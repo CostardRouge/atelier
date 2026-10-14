@@ -25,6 +25,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+INIT_NOISE = 0.01  # scale of the bases' and the head's starting noise: a picture leaves within ~1e-4 of itself
+
 
 def identity_lut(size: int) -> Tensor:
     """``(3, N, N, N)`` identity: the node's own colour, channels first."""
@@ -102,8 +104,9 @@ class WeightNet(nn.Module):
         layers += [nn.Dropout(dropout), nn.AdaptiveAvgPool2d(1)]
         self.features = nn.Sequential(*layers)
         self.head = nn.Conv2d(previous, basis, 1)
-        nn.init.zeros_(self.head.weight)
-        with torch.no_grad():  # starts on the identity LUT alone: the picture leaves as it came
+        with torch.no_grad():  # starts on the identity LUT (row 0 exactly), the others a whisper away from 0:
+            self.head.weight.zero_()  # see AdaptiveLUT — zero weights over zero bases never learn
+            self.head.weight[1:].normal_(0.0, INIT_NOISE)
             self.head.bias.zero_()
             self.head.bias[0] = 1.0
 
@@ -115,7 +118,10 @@ class AdaptiveLUT(nn.Module):
     def __init__(self, lut_size: int = 33, basis: int = 3, thumb: int = 256, width: int = 16):
         super().__init__()
         self.lut_size, self.basis, self.thumb = lut_size, basis, thumb
-        luts = torch.zeros(basis, 3, lut_size, lut_size, lut_size)
+        # The other bases start as a whisper of noise, never exactly zero: a basis at zero whose weight is
+        # also zero is a dead saddle — neither ever receives a gradient (each is the other's factor), so
+        # every run before 2026-10-15 trained basis 0 alone, ONE LUT for every picture.
+        luts = INIT_NOISE * torch.randn(basis, 3, lut_size, lut_size, lut_size)
         luts[0] = identity_lut(lut_size)
         self.luts = nn.Parameter(luts)
         self.weights = WeightNet(basis, width, thumb=thumb)

@@ -39,11 +39,25 @@ def test_regularisers_are_zero_on_the_identity_and_positive_on_noise():
 
 
 def test_a_fresh_model_leaves_the_picture_as_it_came():
+    torch.manual_seed(0)
     model = AdaptiveLUT(lut_size=9, basis=3, thumb=16, width=4).eval()
     img = torch.rand(2, 3, 20, 30)
     out, w = model(img)
-    assert torch.allclose(out, img, atol=1e-5)
-    assert torch.allclose(w, torch.tensor([[1.0, 0.0, 0.0]] * 2))
+    assert torch.allclose(out, img, atol=2e-3)
+    assert torch.allclose(w[:, 0], torch.ones(2)) and float(w[:, 1:].abs().max()) < 0.1
+
+
+def test_every_basis_learns_from_the_first_step():
+    """Zero bases under zero weights are a saddle no gradient leaves: every run before 2026-10-15 trained
+    basis 0 alone. Both factors must start off zero, so the first step reaches every basis and its weight."""
+    torch.manual_seed(0)
+    model = AdaptiveLUT(lut_size=9, basis=4, thumb=16, width=4)
+    img, target = torch.rand(2, 3, 16, 16), torch.rand(2, 3, 16, 16)
+    out, _ = model(img)
+    ((out - target) ** 2).mean().backward()
+    for k in range(1, 4):
+        assert float(model.luts.grad[k].abs().sum()) > 0, k
+        assert float(model.weights.head.weight.grad[k].abs().sum()) > 0, k
 
 
 def test_the_model_is_small():

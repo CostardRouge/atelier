@@ -107,19 +107,28 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   1 880 pairs: ceiling 7.07 (4.71 at 1/8), and the TRAIN split scores 12.33
   against 11.95 validation: no memorising, ~4.9 ΔE00 still a `.cube`'s to
   win, ~4.7 his local work (masks, skies, vignettes — out of any `.cube`'s
-  reach), ~2.4 detail. CAPACITY IS NOT THE LIMIT: 8 basis LUTs at width 32
-  (`--set model.basis=8 --set model.width=32`, stored in the run) reached
-  11.65 at epoch 60, the default 11.62 at 135 — faster to the same plateau.
-  The suspect is what the picture alone cannot say (his choice varies by
-  series and day). How to apply: run the memorising test (`train.subset`,
-  below) before any bigger model, FiveK or more epochs.
+  reach), ~2.4 detail. Every run before 2026-10-15 was ONE LUT (next entry),
+  so its plateau (11.62–11.65 whatever `basis`/`width`) says nothing about
+  capacity. How to apply: run the memorising test (`train.subset`, below)
+  before any bigger model, FiveK or more epochs.
+- **No basis may start at zero under a zero weight** (2026-10-15, `INIT_NOISE`
+  in `model/lut3d.py`): bases 1… started at 0 and the head's weights at 0, a
+  saddle where each factor's gradient is the other — after training they were
+  still EXACTLY zero, so every run was basis 0 alone, one LUT for every
+  picture. Both now start a 0.01 whisper off zero (head row 0 stays exact, so
+  a fresh model is the identity within 1e-4); `test_every_basis_learns_from_
+  the_first_step` pins it. On a toy of 12 crops of one real photo with 12
+  random global looks: 10.5 ΔE00 before, 9.82 after at lr 2e-4 and 6.40 at
+  1e-3 (2 000 steps) — so the default lr is likely too low; measure on his
+  pairs before moving it. Runs before this compare only with each other.
 - **The weighing CNN sees the WHOLE picture during training** (`train.
   whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
   training CROP (a quarter of a 512 px picture, at full detail) while eval
   shows it the whole picture shrunk — so it learned corners it is never
   judged on, and could not tell a dark corner from a dark scene. Found by
-  the memorising test: 50 pairs, even with 50 basis LUTs, stalled at
-  10.5 ΔE00 against a 6.88 ceiling. The ceiling itself is honest: on a
+  the memorising test: 50 pairs stalled at 10.5 ΔE00 against a 6.88
+  ceiling (11.17 → 10.38 with this fix; the stall itself was the dead saddle,
+  next-but-one entry up). The ceiling itself is honest: on a
   real photograph a 33³ LUT fitted by gradient descent matches the 17³
   binned map (vignette 4.50 vs 4.74, a darker sky 7.97 vs 7.78, a global
   look 0.25 vs 1.93). Runs before this compare only with each other.
