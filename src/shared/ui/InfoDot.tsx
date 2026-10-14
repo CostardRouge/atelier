@@ -66,9 +66,9 @@ export function InfoDotButton({
       aria-label={`About ${about}`}
       title={open ? 'Hide the note' : 'What is this?'}
       /* The ring is 16px so it sits on the cap height of a legend; the
-         invisible ::after gives it a 32px touch target, which is what a
-         thumb actually needs. */
-      className={`relative flex-none w-4 h-4 inline-grid place-items-center align-[-0.15em] rounded-full border font-serif text-2xs leading-none cursor-pointer transition-colors after:absolute after:-inset-2 after:content-[''] ${
+         invisible ::after gives it a 32px target under a mouse and 44px under
+         a finger (`touch-halo`, `docs/touch-targets.md` T2). */
+      className={`relative flex-none w-4 h-4 inline-grid place-items-center align-[-0.15em] rounded-full border font-serif text-2xs leading-none cursor-pointer transition-colors pointer-fine:after:absolute pointer-fine:after:-inset-2 pointer-fine:after:content-[''] touch-halo ${
         open
           ? 'border-accent bg-accent-wash text-accent-ink'
           : 'border-line-strong bg-transparent text-muted hover:text-accent-ink hover:border-accent'

@@ -130,6 +130,8 @@ export function InspectorSection({
   // note it unfolds, a menu portalled out of an action — is not the band's.
   // The title stays the real button, so the keyboard and a screen reader keep
   // one control with `aria-expanded`; its click bubbles here like any other.
+  // Under a finger the band is 44 px tall and the title takes its height; the
+  // gap opens to 14 px so the ⓘ's 44 px zone stops short of the title.
   const onBandClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!foldable) return;
     const band = e.currentTarget;
@@ -145,7 +147,7 @@ export function InspectorSection({
     <section className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
       <div
         onClick={onBandClick}
-        className={`group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 ${foldable ? 'cursor-pointer' : ''}`}
+        className={`group/band flex flex-wrap items-center gap-x-2 pointer-coarse:gap-x-3.5 gap-y-0 min-h-7 pointer-coarse:min-h-11 ${foldable ? 'cursor-pointer' : ''}`}
       >
         {foldable ? (
           <button
@@ -153,7 +155,7 @@ export function InspectorSection({
             data-fold
             aria-expanded={open}
             aria-controls={bodyId}
-            className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
+            className="min-w-0 pointer-coarse:self-stretch p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
           >
             {title}
           </button>
@@ -514,9 +516,9 @@ export function TextField({ value, onChange, label, placeholder, disabled }: Tex
   );
 }
 
-/** The colour swatch every row uses. */
+/** The colour swatch every row uses — 44 px under a finger: an `<input type="color">` draws no `::after` to grow a zone with. */
 export const swatchClass =
-  'flex-none w-8 h-8 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer disabled:opacity-40 disabled:cursor-default';
+  'flex-none w-8 h-8 pointer-coarse:w-11 pointer-coarse:h-11 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer disabled:opacity-40 disabled:cursor-default';
 
 interface NativeSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
