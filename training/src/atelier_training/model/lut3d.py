@@ -126,14 +126,15 @@ class AdaptiveLUT(nn.Module):
         return F.interpolate(img, size=(self.thumb, self.thumb), mode="bilinear", align_corners=False,
                              antialias=True)
 
-    def predict_lut(self, img: Tensor) -> tuple[Tensor, Tensor]:
-        """The picture's own LUT ``(B, 3, N, N, N)`` and the weights that made it ``(B, basis)``."""
-        w = self.weights(self.thumbnail(img))
+    def predict_lut(self, img: Tensor, thumb: Tensor | None = None) -> tuple[Tensor, Tensor]:
+        """The picture's own LUT ``(B, 3, N, N, N)`` and the weights that made it ``(B, basis)``. ``thumb``:
+        the WHOLE picture's thumbnail when ``img`` is only a crop of it (training)."""
+        w = self.weights(thumb if thumb is not None else self.thumbnail(img))
         lut = torch.einsum("bk,kcxyz->bcxyz", w, self.luts)
         return lut, w
 
-    def forward(self, img: Tensor) -> tuple[Tensor, Tensor]:
-        lut, w = self.predict_lut(img)
+    def forward(self, img: Tensor, thumb: Tensor | None = None) -> tuple[Tensor, Tensor]:
+        lut, w = self.predict_lut(img, thumb)
         return apply_lut(lut, img), w
 
     def lut_from_weights(self, w: Tensor) -> Tensor:

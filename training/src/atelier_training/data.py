@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 from torch.utils.data import Dataset
 
@@ -98,11 +99,14 @@ def to_tensor(img: np.ndarray) -> Tensor:
 
 class PairDataset(Dataset):
     def __init__(self, pairs: list[Pair], crop: int | None = None, augment: bool = False, seed: int = 0,
-                 keep_in_memory: bool = False):
+                 keep_in_memory: bool = False, thumb: int = 0):
         """``keep_in_memory``: hold every pair's uint16 arrays after its first read (~2 MB a pair at 512 px)
-        instead of reading two files per pair per epoch — measured on his Mac, the disk cost 3× the GPU."""
+        instead of reading two files per pair per epoch — measured on his Mac, the disk cost 3× the GPU.
+        ``thumb``: also hand the thumbnail of the WHOLE input at this size, what the model's weighing CNN
+        sees at evaluation — a crop shows it a corner of the scene it is never judged on (0 = none)."""
         self.pairs = pairs
         self.crop = crop
+        self.thumb = thumb
         self.augment = augment
         self.rng = np.random.default_rng(seed)
         self.memory: dict[int, tuple[np.ndarray, np.ndarray]] | None = {} if keep_in_memory else None
@@ -117,8 +121,10 @@ class PairDataset(Dataset):
     def __len__(self) -> int:
         return len(self.pairs)
 
-    def __getitem__(self, i: int) -> tuple[Tensor, Tensor, str]:
+    def __getitem__(self, i: int) -> tuple[Tensor, Tensor, Tensor, str]:
+        """``(input, target, thumbnail of the whole input or an empty tensor, id)``."""
         a, b = self._read(i)  # uint16: cut first, convert only the crop
+        whole = thumbnail(a, self.thumb) if self.thumb else torch.empty(0)
         if self.crop:
             h, w = a.shape[:2]
             ch, cw = min(self.crop, h), min(self.crop, w)
@@ -131,5 +137,12 @@ class PairDataset(Dataset):
                 b = np.pad(b, ((0, pad_h), (0, pad_w), (0, 0)), mode="reflect" if min(h, w) > 1 else "edge")
         if self.augment and self.rng.random() < 0.5:
             a, b = a[:, ::-1], b[:, ::-1]
+            whole = whole.flip(-1) if self.thumb else whole
         a, b = a.astype(np.float32) / 65535.0, b.astype(np.float32) / 65535.0
-        return to_tensor(a), to_tensor(b), self.pairs[i].id
+        return to_tensor(a), to_tensor(b), whole, self.pairs[i].id
+
+
+def thumbnail(img_u16: np.ndarray, size: int) -> Tensor:
+    """``(3, size, size)`` float in [0, 1]: the whole picture as ``AdaptiveLUT.thumbnail`` would shrink it."""
+    t = to_tensor(img_u16.astype(np.float32) / 65535.0).unsqueeze(0)
+    return F.interpolate(t, size=(size, size), mode="bilinear", align_corners=False, antialias=True)[0]

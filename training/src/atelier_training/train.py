@@ -133,7 +133,7 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
     ds = PairDataset(pairs)
     rows: list[dict] = []
     for i in range(len(ds)):
-        a, b, pid = ds[i]
+        a, b, _, pid = ds[i]
         a, b = a.unsqueeze(0).to(device), b.unsqueeze(0).to(device)
         out, _ = model(a)
         src, tgt = a[0].permute(1, 2, 0).cpu().numpy(), b[0].permute(1, 2, 0).cpu().numpy()
@@ -254,8 +254,10 @@ def train(
     smooth_w = float(tcfg.get("smooth_weight", 1e-4))
     mono_w = float(tcfg.get("monotonic_weight", 10.0))
     eval_every = max(1, int(tcfg.get("eval_every", 5)))
+    # The weighing CNN sees the WHOLE picture, as at evaluation; off, it sees the crop (runs before 2026-10-14).
+    whole = model.thumb if bool(tcfg.get("whole_thumbnail", True)) else 0
     loader = DataLoader(PairDataset(train_pairs, crop=crop, augment=True, seed=int(tcfg.get("seed", 1)),
-                                    keep_in_memory=bool(tcfg.get("keep_in_memory", True))),
+                                    keep_in_memory=bool(tcfg.get("keep_in_memory", True)), thumb=whole),
                         batch_size=batch, shuffle=True, drop_last=False, num_workers=0)
 
     log(f"run {run.folder.name}: {len(train_pairs)} training pairs, {len(val_pairs)} validation, "
@@ -267,10 +269,10 @@ def train(
         count = 0
         waited = 0.0  # time spent getting the next batch, apart from the GPU's work
         mark = time.perf_counter()
-        for a, b, _ in loader:
+        for a, b, t, _ in loader:
             waited += time.perf_counter() - mark
             a, b = a.to(device, non_blocking=True), b.to(device, non_blocking=True)
-            out, _ = model(a)
+            out, _ = model(a, t.to(device, non_blocking=True) if whole else None)
             fit = torch.mean((out - b) ** 2)
             smooth, mono = model.regularisers()
             loss = fit + smooth_w * smooth + mono_w * mono

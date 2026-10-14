@@ -279,6 +279,12 @@ Chaque validation affiche aussi `seen ΔE00 … (ceiling …)` sur ces 50 paires
 S'il descend vers le plafond, le modèle sait dessiner tes retouches et c'est
 la prédiction qui coince ; s'il reste vers 11, c'est le modèle qui limite.
 
+C'est ce test qui a montré que le petit réseau qui choisit le look ne voyait,
+à l'entraînement, qu'un morceau de 256 px de la photo, alors qu'on le juge sur
+la photo entière. Depuis, il voit toujours la photo entière
+(`train.whole_thumbnail`, activé par défaut) ; les runs d'avant ne se
+comparent qu'entre eux.
+
 Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.
 
