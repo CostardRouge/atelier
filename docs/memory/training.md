@@ -170,6 +170,14 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   128 px), `MAX_CROP 3` (a finer crop scores by chance on smooth content —
   0.74 on two UNRELATED synthetic pictures at 1/5). Re-measure both on his
   pairs before trusting a skip count.
+- **`auto` also searches a pair of the SAME aspect when its halves do not
+  line up** (`metrics.structure` < `STRUCTURE_FLOOR`, 2026-10-14): `auto`
+  used to trust a matching aspect, and his first run proved it wrong — he
+  crops and straightens back to 3:2, and 79 of 192 validation pairs were off
+  (he looked at their grids). A cache made before carries no `structure` in
+  its `meta.json`: the next `ingest` measures it from the `.npy` and redoes
+  only the pairs under the floor. A flat picture has no structure (NaN →
+  `null`): never judged, never searched.
 - **The split for a fine-tune is a fifth of the GROUPS**, never of the
   pairs: his groups are one original + one final today, but a group of
   several edits would otherwise leak across the sides.

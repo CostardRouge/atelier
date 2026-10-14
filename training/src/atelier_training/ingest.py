@@ -8,7 +8,10 @@ says how a run merges into it). A pair already cached and newer than its two
 files is not redone, so an ingest can be stopped and rerun. A pair whose aspect
 differs (a crop, a turn, a straightening) is ALIGNED through ``align.py`` — the
 original cut to the edit's frame — and skipped, said, only when the edit is not
-a cut of the original (``ingest.align``). A SLIM group (``winnow-import --slim``)
+a cut of the original (``ingest.align``). Under ``auto`` a pair of the SAME aspect
+is searched too when its two halves do not line up (``metrics.structure``): a crop
+that keeps the 3:2, or a straightening cut back to it, used to be trusted as is
+and taught the model pixels that do not correspond. A SLIM group (``winnow-import --slim``)
 was prepared one group at a time by ``prepare_group`` and its files deleted: its
 cached pairs are reused as they are, never redone.
 """
@@ -38,6 +41,7 @@ from .imaging import (
     save_image,
     to_uint16,
 )
+from .metrics import STRUCTURE_FLOOR, structure
 
 SOURCES = ("fivek", "pairs", "synthetic")
 
@@ -123,7 +127,9 @@ def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw:
     (h, w), (th, tw) = src.shape[:2], dst.shape[:2]
     alignment = None
     mismatch = abs(tw / th - w / h) > tolerance * (w / h)
-    if align == "always" or (align == "auto" and mismatch):
+    # Same aspect: look before trusting it — a 3:2 crop of a 3:2 original does not line up as it is.
+    unaligned = align == "auto" and not mismatch and structure(resize_to(src, tw, th), dst) < STRUCTURE_FLOOR
+    if align == "always" or (align == "auto" and mismatch) or unaligned:
         src, found = align_pair(src, dst)  # ValueError when the edit is not a cut of the original: skipped, said
         alignment = found.as_dict()
         (h, w) = src.shape[:2]
@@ -136,9 +142,15 @@ def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw:
     np.save(out / "input.npy", to_uint16(a))
     np.save(out / "target.npy", to_uint16(b))
     save_image(np.concatenate([a, b], axis=1), out / "preview.jpg", quality=85)
-    meta = {"width": width, "height": height, "input_size": [w, h], "target_size": [tw, th], "alignment": alignment}
+    meta = {"width": width, "height": height, "input_size": [w, h], "target_size": [tw, th], "alignment": alignment,
+            "structure": _rounded(structure(a, b))}
     (out / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return meta
+
+
+def _rounded(s: float) -> float | None:
+    """A structure for a JSON file: three decimals, or None for a pair too flat to judge."""
+    return None if s != s else round(s, 3)
 
 
 def default_workers() -> int:
@@ -184,16 +196,30 @@ def ingest(
 
     metas: dict[int, dict] = {}
     todo: list[int] = []
+    rechecked = 0
     for i, ref in enumerate(refs):
         folder = cache / ref.id
         if (not force or ref.slim) and _fresh(folder, ref):
-            metas[i] = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+            meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+            if align == "auto" and not ref.slim and meta.get("alignment") is None and "structure" not in meta:
+                # Prepared before same-aspect pairs were checked: measure it from the cache, redo it if off.
+                s = structure(*(np.load(folder / n).astype(np.float32) for n in ("input.npy", "target.npy")))
+                if s < STRUCTURE_FLOOR:
+                    todo.append(i)
+                    rechecked += 1
+                    continue
+                meta["structure"] = _rounded(s)
+                (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+            metas[i] = meta
             report.reused += 1
         elif ref.slim:
             report.skipped.append((ref.id, "its files were deleted once prepared (winnow-import --slim) and its "
                                            "cache is gone: run `atelier-train winnow-import --slim` again"))
         else:
             todo.append(i)
+    if rechecked:
+        report.notes.append(f"{rechecked} pair(s) prepared earlier did not line up (a crop or a straightening "
+                            "that kept the aspect): prepared again, aligned")
     if force and any(r.slim for r in refs):
         report.notes.append("--force does not redo a slim group (its files are gone): delete its folder and run "
                             "`atelier-train winnow-import --slim` again to prepare it anew")

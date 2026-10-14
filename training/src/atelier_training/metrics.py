@@ -89,22 +89,29 @@ def psnr(a: np.ndarray, b: np.ndarray) -> float:
     return float("inf") if mse == 0 else float(10 * np.log10(1.0 / mse))
 
 
+STRUCTURE_FLOOR = 0.5  # under this, two halves do not line up (set on synthetic shifts and his first run)
+
+
 def structure(a: np.ndarray, b: np.ndarray, size: int = 128) -> float:
     """How well two pictures LINE UP, blind to their colours: the normalised correlation of their
-    luminance gradients at ``size`` px on the long edge. ~1 for an edit of the same frame, near 0 for
-    a turned, mirrored or mis-cropped pair — the pairs a colour model can only learn noise from."""
+    luminance gradients at ``size`` px on the long edge, each blurred over 3 × 3 so a pixel or two of
+    lens correction does not count. ~1 for an edit of the same frame, near 0 for a turned, mirrored or
+    mis-cropped pair — the pairs a colour model can only learn noise from. NaN when either half has no
+    edges at all (a flat picture): nothing to line up, so nothing to judge."""
     h, w = a.shape[:2]
     step = max(1, int(np.ceil(max(h, w) / size)))
 
     def edges(img: np.ndarray) -> np.ndarray:
         y = np.asarray(img, dtype=np.float64)[::step, ::step, :3] @ np.array([0.2126, 0.7152, 0.0722])
         gx, gy = np.diff(y, axis=1)[:-1, :], np.diff(y, axis=0)[:, :-1]
-        g = np.hypot(gx, gy).ravel()
+        g = np.hypot(gx, gy)
+        p = np.pad(g, 1, mode="edge")
+        g = sum(p[dy:dy + g.shape[0], dx:dx + g.shape[1]] for dy in range(3) for dx in range(3)).ravel()
         return g - g.mean()
 
     ea, eb = edges(a), edges(b)
     den = float(np.sqrt((ea * ea).sum() * (eb * eb).sum()))
-    return float((ea * eb).sum() / den) if den > 0 else 0.0
+    return float((ea * eb).sum() / den) if den > 0 else float("nan")
 
 
 def score(output: np.ndarray, target: np.ndarray) -> dict[str, float]:

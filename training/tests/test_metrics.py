@@ -51,4 +51,4 @@ def test_structure_tells_an_edit_from_a_pair_that_does_not_line_up():
     assert structure(base, edit) > 0.9
     assert structure(base, base[::-1, ::-1]) < 0.5      # turned half a turn
     assert structure(base, np.roll(base, 25, axis=1)) < 0.5  # cropped elsewhere
-    assert structure(base, np.full_like(base, 0.5)) == 0.0   # nothing to line up with
+    assert np.isnan(structure(base, np.full_like(base, 0.5)))  # too flat to judge
