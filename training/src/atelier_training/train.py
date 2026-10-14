@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 from .config import Config, merge
 from .data import Pair, PairDataset, read_index, split
 from .device import pick_device
-from .metrics import STRUCTURE_FLOOR, coarse, delta_e2000, score, srgb_to_lab, structure
+from .metrics import STRUCTURE_FLOOR, best_global_map, coarse, delta_e2000, score, srgb_to_lab, structure
 from .model.lut3d import AdaptiveLUT
 
 
@@ -143,9 +143,12 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
         lined = structure(src, tgt)
         # The same colour difference at 1/8 size: detail and a few pixels of shift averaged out.
         lab_t = srgb_to_lab(coarse(tgt))
+        ceiling = best_global_map(src, tgt)  # the best any colour map could do on this very picture
         s.update(identity_psnr=nothing["psnr"], identity_de2000_mean=nothing["de2000_mean"],
                  coarse_de2000_mean=float(delta_e2000(srgb_to_lab(coarse(out_np)), lab_t).mean()),
                  identity_coarse_de2000_mean=float(delta_e2000(srgb_to_lab(coarse(src)), lab_t).mean()),
+                 ceiling_de2000_mean=float(delta_e2000(srgb_to_lab(ceiling), srgb_to_lab(tgt)).mean()),
+                 ceiling_coarse_de2000_mean=float(delta_e2000(srgb_to_lab(coarse(ceiling)), lab_t).mean()),
                  structure=None if lined != lined else lined, id=pid)  # None: too flat to judge
         rows.append(s)
         if keep:
@@ -156,7 +159,8 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
                                              or [0])) if rows else float("nan")
     summary["identity_de2000_mean"] = float(np.mean([r["identity_de2000_mean"] for r in rows])) if rows \
         else float("nan")
-    for key in ("coarse_de2000_mean", "identity_coarse_de2000_mean"):
+    for key in ("coarse_de2000_mean", "identity_coarse_de2000_mean", "ceiling_de2000_mean",
+                "ceiling_coarse_de2000_mean"):
         summary[key] = float(np.mean([r[key] for r in rows])) if rows else float("nan")
     summary["misaligned"] = sorted((r for r in rows if r["structure"] is not None and r["structure"] < MISALIGNED),
                                    key=lambda r: r["structure"])

@@ -1,7 +1,16 @@
 import numpy as np
 import pytest
 
-from atelier_training.metrics import coarse, delta_e76, delta_e2000, psnr, score, srgb_to_lab, structure
+from atelier_training.metrics import (
+    best_global_map,
+    coarse,
+    delta_e76,
+    delta_e2000,
+    psnr,
+    score,
+    srgb_to_lab,
+    structure,
+)
 
 
 def test_known_lab_values():
@@ -63,3 +72,13 @@ def test_coarse_averages_blocks_and_forgives_a_small_shift():
     noise = rng.random((64, 64, 3)).astype(np.float32)
     shifted = np.roll(noise, 1, axis=1)
     assert np.abs(coarse(noise) - coarse(shifted)).mean() < 0.2 * np.abs(noise - shifted).mean()
+
+
+def test_best_global_map_recovers_a_colour_edit_and_misses_a_local_one():
+    rng = np.random.default_rng(2)
+    src = rng.random((64, 96, 3)).astype(np.float32)
+    graded = np.clip(src ** 0.7 * np.array([1.05, 1.0, 0.9], np.float32), 0, 1)  # the same rule everywhere
+    assert np.abs(best_global_map(src, graded) - graded).mean() < 0.03
+    local = graded.copy()
+    local[:32] *= 0.5  # the top half darkened: the same colour, two answers
+    assert np.abs(best_global_map(src, local) - local).mean() > 0.05

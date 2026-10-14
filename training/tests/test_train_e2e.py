@@ -105,6 +105,7 @@ def test_finetune_from_a_run_with_frozen_luts_and_per_group_eval(workspace):
                for r in summary["pairs"])
     assert summary["misaligned"] == [] and "identity_psnr" in summary
     assert np.isfinite(summary["coarse_de2000_mean"]) and np.isfinite(summary["identity_coarse_de2000_mean"])
+    assert summary["ceiling_de2000_mean"] <= summary["identity_de2000_mean"]
     metrics = [json.loads(line) for line in (tuned / "metrics.jsonl").read_text().splitlines() if line.strip()]
     assert all(0 <= m["data_seconds"] <= m["seconds"] for m in metrics if "data_seconds" in m)
 

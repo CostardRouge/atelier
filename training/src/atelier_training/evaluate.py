@@ -72,6 +72,9 @@ def evaluate(
         f"ΔE2000 mean {summary['identity_de2000_mean']:.2f} — the model has to beat this")
     log(f"at 1/8 size (detail and small shifts averaged out): model ΔE2000 {summary['coarse_de2000_mean']:.2f}, "
         f"doing nothing {summary['identity_coarse_de2000_mean']:.2f} — what is left is colour and light")
+    log(f"best colour map per picture, fitted on the picture itself (no LUT can do better): ΔE2000 "
+        f"{summary['ceiling_de2000_mean']:.2f}, at 1/8 {summary['ceiling_coarse_de2000_mean']:.2f} — what it "
+        "misses depends on WHERE a pixel is (masks, a sky, a vignette)")
     bad = summary["misaligned"]
     if bad:
         log(f"{len(bad)} pair(s) whose edit does not line up with its input (structure < 0.5), worst first: "
