@@ -3311,7 +3311,7 @@ files* / *A folder* in the panel feed the Library directly, and with a Winnow
 connected, **From <instance>** opens the Winnow picker set for flights: a span
 of days, only the clips that carry a log, the Logbook with every flight's track
 drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
-alone, never its video. The panel has seven tabs:
+alone, never its video. The panel has eight tabs:
 
 - **Flights.** Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
@@ -3361,8 +3361,17 @@ alone, never its video. The panel has seven tabs:
 - **Export.** The preview is drawn by the export's own painter: an MP4 (H.264,
   no sound), the frame on screen as a PNG, or a *poster* with every route
   drawn whole.
+- **Presets.** Every dial under a name of your own: a chip applies its preset
+  and stays lit while the dials match it, *Save* keeps the dials on screen (or
+  *Replace*s a preset of the same name), × removes one. A preset keeps how the
+  atlas draws — look, trails, motion, camera, overlay, format — and never what
+  names one set of flights: the title and subtitle, the place or zone framed,
+  the drones picked for the spotlight and the names given to the drones stay
+  as they are on screen.
 
-The dials are remembered in this browser; nothing here is a document.
+The dials and the presets are remembered in this browser; nothing here is a
+document. While the camera holds still the coastline is drawn once and kept,
+not traced again every frame — it was half of what a frame cost.
 
 ## Composer tool
 

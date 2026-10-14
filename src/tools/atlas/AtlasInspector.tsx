@@ -11,6 +11,7 @@ import { dayKey, type AtlasFlight } from './atlas-flight';
 import { flightTone, PALETTES, paletteById, samplePalette, toHex } from './atlas-colour';
 import type { AtlasPlace } from './atlas-places';
 import AtlasWinnow from './AtlasWinnow';
+import AtlasPresetsSection from './AtlasPresetsSection';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -38,7 +39,7 @@ import { formatElapsed } from './atlas-hud';
 
 type Update = (fn: (s: AtlasSettings) => AtlasSettings) => void;
 
-type Tab = 'flights' | 'style' | 'motion' | 'camera' | 'overlay' | 'format' | 'export';
+type Tab = 'flights' | 'style' | 'motion' | 'camera' | 'overlay' | 'format' | 'export' | 'presets';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'flights', label: 'Flights' },
   { id: 'style', label: 'Style' },
@@ -47,6 +48,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'overlay', label: 'Overlay' },
   { id: 'format', label: 'Format' },
   { id: 'export', label: 'Export' },
+  { id: 'presets', label: 'Presets' },
 ];
 const TAB_KEY = 'atelier.atlas.tab';
 
@@ -132,9 +134,9 @@ function placeLabel(names: readonly (string | null)[], k: number): string {
 
 /**
  * Every dial of the atlas, in the suite's one panel grammar (`Inspector.tsx`),
- * in seven tabs: what is drawn (flights, places, drones), how it looks, how
- * it moves, what the frame shows, the words over it, the frame itself, and
- * the export.
+ * in eight tabs: what is drawn (flights, places, drones), how it looks, how
+ * it moves, what the frame shows, the words over it, the frame itself, the
+ * export, and the named presets of all of it.
  */
 export default function AtlasInspector(p: AtlasInspectorProps) {
   const { settings: s, update } = p;
@@ -958,6 +960,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       </InspectorSection>
         </>
       )}
+      {tab === 'presets' && <AtlasPresetsSection settings={s} update={update} />}
     </div>
   );
 }
