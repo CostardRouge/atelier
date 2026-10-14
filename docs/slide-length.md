@@ -4,7 +4,7 @@
 
 Lab (today's controls reproduced with their faults, and three faces on one live Virée with its ferry): <https://claude.ai/artifact/VfSELaC9L6YLJK35e1u27Y>
 
-§1–§2 are fact, traced to lines and measured headless in the real editor (Chromium, a seeded trip, a Melbourne → Devonport → Hobart Virée, the Spirit of Tasmania as the trip's crossing boat). §3 onwards is a proposal awaiting his pick.
+**Status (2026-10-14): face B is BUILT, commits 1–7 of §6** (the sailing stripe excepted, §6.5); seen headless only. §1–§2 are fact, traced to lines and measured headless in the real editor (Chromium, a seeded trip, a Melbourne → Devonport → Hobart Virée, the Spirit of Tasmania as the trip's crossing boat). §3 onwards is a proposal awaiting his pick.
 
 ## 1. What exists
 
@@ -108,7 +108,7 @@ Each is one commit, verified by typecheck, lint, the tests and a headless drive 
 4. ~~**The *Slide* section**~~ — built (2026-10-14) on the slider session's `SliderRow` as it landed: no stepper, the typed value is the bar's own (Enter or a hold); the owner switch keeps the length (`switchOwner`); the medium's one verb is `mediumVerb`. As planned: the sum line, the owner `Segmented`, Pace and Hold (or Seconds + *If Virée is longer*), steppers with a typed field, the medium as a sentence and one verb; `SlideDelivery`'s slider, pill and inserted buttons go, `FitRow` leaves the openers' panels, the Counter's own cut warning reads the new resolution.
 5. ~~**The band**~~ — built (2026-10-14): `gripDraft` reads the grip through the slide's owner (hold past the natural end, pace inside it, a 6 px magnet on the natural end, stopped at the FLOOR or at the band's SHORTEST length, said in the cell's label); the open cell draws a white rail — bright under the opener, faint under the hold —, the natural end dashed where sped up, a floor tick while pacing; grips 14 / 20 px; a press on a grip pauses a playing piece. Not built: the *sailing stripe* — the deck knows the opener's length and shortest beat, not when its ferry sails; it needs `HookRender` to report its phases. As planned: the open cell draws its parts (opener span, sailing stripe, hold, the natural end), one grip with two zones, the stop and its bubble at the floor; grips 14 px beside a mouse and 20 on a phone; pressing a grip while playing PAUSES rather than the grip being hidden.
 6. ~~**The badge's exit**~~ — built (2026-10-14) as `badgeExitAt`, with one change: under the threshold the exit is DROPPED (the badge stays to the cut) rather than landed on the hold's start, because a slide that short has a hold of ~0 and the exit would still flash. As planned: lands on the slide's end only while the slide outlasts its entrance plus one second; under that it lands on the hold's start, so a short slide never flashes its badge (H10).
-7. **Memory, README** — the rules in `roadtrip.md` (rule D rewritten, not appended), the README's Trips section.
+7. ~~**Memory, README**~~ — built (2026-10-14): memory was written with each commit; the README's *How long a slide lasts* rewritten for the section and the band. As planned: — the rules in `roadtrip.md` (rule D rewritten, not appended), the README's Trips section.
 
 ## 7. What is his
 
