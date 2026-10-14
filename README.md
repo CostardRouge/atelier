@@ -1635,7 +1635,7 @@ The numbers are the suite's sliders: drag, tap, or hold (Enter) to type one.
 
 On the band under the picture the open slide's cell draws its parts — a bright
 rail under the opener, a faint one under the hold, the opener's own end dashed
-when it is sped up — and its end grip negotiates: past the opener's end it
+when it is sped up, the stretch where Virée is at sea striped blue with a tick where the car drives aboard and off — and its end grip negotiates: past the opener's end it
 drags the hold, inside it the pace, resting on the opener's end and stopping at
 the fastest pace allowed, the cell saying which (*hold 2.5s*, *68%*, *fastest
 35%*). Pressing a grip pauses a playing piece. A clip's cut is its length, so

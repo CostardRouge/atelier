@@ -30,7 +30,7 @@ import { clipSpeed } from './hook-video';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
-import type { HookLayer, ResolvedHook } from './hooks/hook-variant';
+import type { HookLayer, HookSpan, ResolvedHook } from './hooks/hook-variant';
 import { resolveHook } from './hooks/registry';
 import { resolveLength, type ResolvedLength, type SlideLength } from './slide-length';
 import type { Shade } from '../shades/shades';
@@ -124,6 +124,8 @@ export interface DeckSlide {
   openerSeconds: number;
   /** What the opener needs at its own pace — the length a panel says it takes; 0 for none. */
   natural: number;
+  /** Where the opener is at sea and docks, on the SLIDE's clock (sped up with it) — the band's stripe; empty for none. */
+  spans: readonly HookSpan[];
   /**
    * What the author CHOSE, before resolution — so a panel can show which of
    * the three is pressed without knowing whether this slide's value lives on
@@ -217,11 +219,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
   // Each opener prepared ONCE here, at the slide's pace (`resolveHook`): its
   // length both makes the slide leave as a video and, when the opener
   // decides, is what the slide lasts.
-  const hookTiming = timingOf(
-    resolveHook(post.badge.hook, hookContextFor(trip, post, 1, null, undefined, pieceHookTiming(post))),
-    post.badge.length,
-    post.badge.hookSeconds,
-  );
+  const firstHook = resolveHook(post.badge.hook, hookContextFor(trip, post, 1, null, undefined, pieceHookTiming(post)));
+  const hookTiming = timingOf(firstHook, post.badge.length, post.badge.hookSeconds);
   const hookSeconds = hookTiming.span;
   const slides: DeckSlide[] = [
     {
@@ -259,14 +258,16 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       timing: hookTiming,
       openerSeconds: hookSeconds,
       natural: hookTiming.natural,
+      spans: firstHook.spans,
       speed: isClip(post.media?.name) ? clipSpeed(post.badge.videoSpeed) : 1,
     },
   ];
 
   for (const slide of post.slides) {
-    const timing = slide.hook?.length
-      ? timingOf(resolveHook(slide.hook, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(slide))), slide.length, slide.seconds)
-      : resolveLength(slide.length, slide.seconds, 0, 0);
+    const opener = slide.hook?.length
+      ? resolveHook(slide.hook, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(slide)))
+      : null;
+    const timing = opener ? timingOf(opener, slide.length, slide.seconds) : resolveLength(slide.length, slide.seconds, 0, 0);
     const openerSeconds = timing.span;
     slides.push({
       kind: 'content',
@@ -304,6 +305,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       timing,
       openerSeconds,
       natural: timing.natural,
+      spans: opener?.spans ?? [],
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
     });
   }
@@ -341,6 +343,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       timing: resolveLength(CARD_LENGTH, OUTRO_SECONDS_DEFAULT, 0, 0),
       openerSeconds: 0,
       natural: 0,
+      spans: [],
       speed: 1,
     });
   }

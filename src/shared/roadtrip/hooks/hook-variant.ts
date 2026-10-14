@@ -386,6 +386,13 @@ export interface HookContext {
 export type { SoundEvent } from '../../audio/sound-event';
 import type { SoundEvent } from '../../audio/sound-event';
 
+/** A stretch of an opener's clock worth marking on the band: at sea, or driving aboard or off a ferry. */
+export interface HookSpan {
+  kind: 'sail' | 'board' | 'alight';
+  start: number;
+  end: number;
+}
+
 /** A prepared hook: the closure every downstream reader shares. */
 export interface HookRender {
   /**
@@ -420,6 +427,12 @@ export interface HookRender {
    * streamed map ground). Absent: the paint needs nothing it waits for.
    */
   ready?(t0: number, t1?: number, signal?: AbortSignal): Promise<void>;
+  /**
+   * Stretches of this layer's clock the deck band MARKS on the slide's cell
+   * (`DeckStrip`): where the vehicle is at sea, and the beats it drives
+   * aboard and off a ferry — Virée's crossings. Absent: nothing to mark.
+   */
+  readonly spans?: readonly HookSpan[];
   /** The bed, as times and voices. Rendered offline at export; see §7. */
   score?(): readonly SoundEvent[];
   /**
@@ -729,6 +742,8 @@ export interface ResolvedHook {
   readonly ownsFrame: boolean;
   /** When the badge is on screen — the last layer that says; null where none does. */
   readonly badgeWindow: TimeWindow | null;
+  /** Every layer's marked stretches, in time order, on the slide's clock. */
+  readonly spans: readonly HookSpan[];
   /** The badge's content after every layer has had its say at `t`. */
   contentAt(base: BadgeContent | null, t: number): BadgeContent | null;
   /** Paint every layer, in order. */
@@ -768,6 +783,7 @@ export function foldHook(
     mixWithSource: layers.some((layer) => layer.mixWithSource === true && !!layer.score),
     ownsFrame,
     badgeWindow: layers.reduce<TimeWindow | null>((win, layer) => layer.badgeWindow ?? win, null),
+    spans: layers.flatMap((layer) => layer.spans ?? []).sort((a, b) => a.start - b.start),
     contentAt(base, t) {
       if (!base) return null;
       let content = base;

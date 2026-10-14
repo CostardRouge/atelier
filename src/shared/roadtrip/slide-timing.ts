@@ -37,6 +37,7 @@ export function scaleRender(render: HookRender, scale: number): HookRender {
     ...(ready ? { ready: (t0: number, t1?: number, signal?: AbortSignal) => ready(t0 / scale, t1 === undefined ? undefined : t1 / scale, signal) } : {}),
     ...(score ? { score: () => score().map((event) => ({ ...event, at: event.at * scale })) } : {}),
     ...(render.mixWithSource !== undefined ? { mixWithSource: render.mixWithSource } : {}),
+    ...(render.spans ? { spans: render.spans.map((span) => ({ ...span, start: span.start * scale, end: span.end * scale })) } : {}),
     ...(render.badgeWindow
       ? { badgeWindow: { start: render.badgeWindow.start * scale, end: render.badgeWindow.end === null ? null : render.badgeWindow.end * scale } }
       : {}),

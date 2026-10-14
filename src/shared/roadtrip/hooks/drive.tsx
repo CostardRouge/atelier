@@ -50,6 +50,7 @@ import {
   type DriveRoute,
 } from './drive-plan';
 import { driveRibbon } from './drive-ribbon';
+import { sailSpans } from './sail-spans';
 import { loadLook } from './look-text';
 import { NEW_CARD, badgeMoment, badgeWindowFor, cardScene } from './summary-card';
 import { SummaryCardRows } from './summary-card-panel';
@@ -1100,7 +1101,12 @@ export const driveVariant: HookVariant = {
     // The road's vehicles: the piece's own for the whole road when it borrows
     // one, else the trip's — per stage, per place, a boat on the water, each
     // in its look of the day (`vehicle-plan.ts`).
-    scratch.road = driveRoad(plan, roadInput(ctx, own !== tripVehicle ? own : null)).road;
+    const input = roadInput(ctx, own !== tripVehicle ? own : null);
+    const { road, vehicles } = driveRoad(plan, input);
+    scratch.road = road;
+    // Where it is at sea, and its docks — what the deck band stripes (`sail-spans.ts`).
+    const boats = vehicles.segments.filter((seg) => vehicleLine(refModel(seg.ref, input.fleet)).kind === 'boat');
+    const spans = boats.length ? sailSpans(plan, (s) => boats.some((seg) => s >= seg.s0 && s <= seg.s1)) : sailSpans(plan, () => false);
     // The recap's summary card, measured once with the plan (`summary-card.ts`).
     const card =
       plan.schedule.summaryAt !== null
@@ -1158,6 +1164,7 @@ export const driveVariant: HookVariant = {
         Promise.all([fonts, basemap?.pyramid ? readyGround(basemap, t0, t1, signal) : undefined]).then(() => undefined),
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
+      ...(spans.length ? { spans } : {}),
     };
     // Its shortest beat at its own pace: the floor a slide may speed it to (`slide-length.ts`).
     return { ...render, shortestBeat: driveShortestBeat(plan, o) };

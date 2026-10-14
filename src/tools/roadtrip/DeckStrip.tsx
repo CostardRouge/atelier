@@ -28,7 +28,9 @@
  * hold after — and the one grip has two zones: past the natural end it drags
  * the hold, inside it the pace, resting on the natural end and STOPPING at
  * the floor, the label saying which (`gripDraft`). Pressing a grip while the
- * piece plays pauses it rather than the grip being hidden.
+ * piece plays pauses it rather than the grip being hidden. Where the opener
+ * is at sea its rail is STRIPED, with a tick where it docks (the sailing
+ * stripe, face A, `sail-spans.ts`), so a cut that falls mid-crossing is seen.
  *
  * The strip is laid out by `shared/roadtrip/deck-strip.ts`: a fixed number of
  * pixels a second with a floor, so a clip keeps its size wherever it sits and
@@ -162,6 +164,8 @@ const GAP_PX = 2;
 const CELL_PX = 38;
 const TAP_SLOP_PX = 5;
 const SNAP_PX = 10;
+/** The sea on the band's rail — a fixed blue, the cell being a dark frame in every theme. */
+const SEA = '#5aa0d0';
 /** How close to the opener's natural end the grip rests on it. */
 const MAGNET_PX = 6;
 
@@ -775,6 +779,9 @@ export default function DeckStrip({
                     const pace = g ? g.pace : s.timing.scale;
                     const span = Math.min(total, s.timing.natural * pace);
                     const natural = s.timing.natural * k;
+                    // The crossings are on the slide's clock at its pace; a held grip re-paces them.
+                    const f = s.timing.scale > 0 ? pace / s.timing.scale : 1;
+                    const at = (t: number) => Math.min(cell.width, Math.max(0, t * f * k));
                     return (
                       <>
                         {/* A rail along the foot: bright under the opener, faint under the hold. */}
@@ -783,6 +790,29 @@ export default function DeckStrip({
                           className="absolute left-0 bottom-1 h-1 rounded-r-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.45)] pointer-events-none"
                           style={{ width: span * k }}
                         />
+                        {/* Where the opener is at sea, striped on its rail; a tick where it docks (face A). */}
+                        {s.spans.map((sp) =>
+                          sp.kind === 'sail' ? (
+                            <span
+                              key={`sail-${sp.start}`}
+                              className="absolute bottom-1 h-1 pointer-events-none"
+                              style={{
+                                left: at(sp.start),
+                                width: Math.max(0, at(sp.end) - at(sp.start)),
+                                background: `repeating-linear-gradient(135deg, ${SEA} 0 3px, #fff 3px 6px)`,
+                                boxShadow: '0 0 0 1px rgba(0,0,0,0.45)',
+                              }}
+                              title="At sea"
+                            />
+                          ) : (
+                            <span
+                              key={`${sp.kind}-${sp.start}`}
+                              className="absolute bottom-0.5 h-2 w-0.5 pointer-events-none"
+                              style={{ left: Math.max(0, at(sp.kind === 'board' ? sp.start : sp.end) - 1), background: SEA }}
+                              title={sp.kind === 'board' ? 'Drives aboard' : 'Drives off'}
+                            />
+                          ),
+                        )}
                         {pace < 0.999 && natural < cell.width - 1 && (
                           <span
                             className="absolute top-3 bottom-0 border-l-2 border-dashed border-white/90 pointer-events-none"
