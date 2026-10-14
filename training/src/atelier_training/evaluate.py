@@ -57,18 +57,27 @@ def evaluate(
 
     summary = evaluate_pairs(model, chosen, run.device, keep=keep)
     worst_first = sorted(summary["pairs"], key=lambda r: -r["de2000_mean"])
-    for row in worst_first[:grids]:
-        save_image(drawn[row["id"]], grids_dir / (row["id"].replace("/", "__") + ".jpg"), quality=88)
+    # The worst ΔE first, then the pairs that do not line up, so a broken pair can be SEEN.
+    shown = [row["id"] for row in worst_first[:grids]]
+    shown += [m["id"] for m in summary["misaligned"][:8] if m["id"] not in shown]
+    for pid in shown:
+        save_image(drawn[pid], grids_dir / (pid.replace("/", "__") + ".jpg"), quality=88)
     summary["split"] = which_split
-    summary["grids"] = [row["id"] for row in worst_first[:grids]]
+    summary["grids"] = shown
     (out_dir / f"{which_split}.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     log(f"{which_split}: {len(chosen)} pairs — PSNR {summary['psnr']:.2f} dB, "
         f"ΔE2000 mean {summary['de2000_mean']:.2f} (95th pct {summary['de2000_p95']:.2f}), "
         f"ΔE76 mean {summary['de76_mean']:.2f}")
+    log(f"doing nothing (the input as it is): PSNR {summary['identity_psnr']:.2f} dB, "
+        f"ΔE2000 mean {summary['identity_de2000_mean']:.2f} — the model has to beat this")
+    bad = summary["misaligned"]
+    if bad:
+        log(f"{len(bad)} pair(s) whose edit does not line up with its input (structure < 0.5), worst first: "
+            + ", ".join(f"{m['id']} ({m['structure']:.2f})" for m in bad[:8]))
     worst = summary.get("groups", [])[:5]
     if len(summary.get("groups", [])) > 1:
         log("worst groups: " + ", ".join(f"{g['group']} ΔE {g['de2000_mean']:.2f}" for g in worst))
-    log(f"grids: {min(grids, len(chosen))} written to {grids_dir}")
+    log(f"grids: {len(shown)} written to {grids_dir}")
     return summary
 
 

@@ -80,6 +80,22 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   ≈ 33.6 dB, the exported mean cube ≈ 40 dB; `fit` falls by > 10× in 60
   tiny epochs. Not a quality bar for real data.
 
+- **A run is judged against DOING NOTHING, and a pair against its
+  alignment** (2026-10-14, his first real run: 1 880 pairs, ΔE00 12.5 and
+  16–17 dB on BOTH the training MSE and the validation — a fit that poor is
+  the data's, not the model's). `eval` scores the input itself against the
+  edit (`identity_*`) and `metrics.structure` correlates the two halves'
+  luminance GRADIENTS at 128 px (~1 the same frame whatever the colours, low
+  for a turned, mirrored or mis-cut pair); under `MISALIGNED = 0.5` a pair is
+  listed and its grid drawn. 0.5 is a guess, not measured on his photos.
+  How to apply: before tuning a run, read its gap to `identity_*` and its
+  misaligned list.
+- **The prepared pairs are held in RAM during training** (`train.
+  keep_in_memory`, default on; uint16, cropped before the float
+  conversion): on his M1 Max an epoch took 41 s against the 12 s the GPU
+  needs (`bench` times the step only) — reading two `.npy` per pair per
+  epoch was the rest. ~2 MB a pair at 512 px.
+
 ## M3 — the dashboard (2026-10-13)
 
 - **FastAPI + ONE static page, localhost only**, over the files the CLI

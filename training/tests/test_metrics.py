@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from atelier_training.metrics import delta_e76, delta_e2000, psnr, score, srgb_to_lab
+from atelier_training.metrics import delta_e76, delta_e2000, psnr, score, srgb_to_lab, structure
 
 
 def test_known_lab_values():
@@ -36,3 +36,19 @@ def test_score_is_zero_on_identical_pictures():
     img = np.random.default_rng(0).random((8, 8, 3))
     s = score(img, img)
     assert s["de76_mean"] == 0.0 and s["de2000_mean"] == 0.0 and s["psnr"] == float("inf")
+
+
+def test_structure_tells_an_edit_from_a_pair_that_does_not_line_up():
+    rng = np.random.default_rng(0)
+    # A picture with shapes at every scale: blurred noise plus a few hard edges.
+    base = rng.random((96, 144, 3)).astype(np.float32)
+    for _ in range(3):
+        base = (base + np.roll(base, 1, 0) + np.roll(base, 1, 1)) / 3
+    base[20:50, 30:90] += 0.4
+    base = np.clip(base, 0, 1)
+    edit = np.clip(base ** 0.6 * np.array([1.1, 1.0, 0.85], np.float32), 0, 1)  # brighter, warmer: same frame
+    assert structure(base, base) == pytest.approx(1.0)
+    assert structure(base, edit) > 0.9
+    assert structure(base, base[::-1, ::-1]) < 0.5      # turned half a turn
+    assert structure(base, np.roll(base, 25, axis=1)) < 0.5  # cropped elsewhere
+    assert structure(base, np.full_like(base, 0.5)) == 0.0   # nothing to line up with

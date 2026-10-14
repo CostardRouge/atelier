@@ -68,11 +68,15 @@ def split(pairs: list[Pair], fraction: float, seed: int = 0) -> tuple[list[Pair]
     return train, val
 
 
+def load_pair_u16(pair: Pair) -> tuple[np.ndarray, np.ndarray]:
+    """Both halves as stored: ``(H, W, 3)`` uint16."""
+    return np.load(pair.folder / "input.npy"), np.load(pair.folder / "target.npy")
+
+
 def load_pair(pair: Pair) -> tuple[np.ndarray, np.ndarray]:
     """Both halves as ``(H, W, 3)`` float32 in [0, 1]."""
-    a = np.load(pair.folder / "input.npy").astype(np.float32) / 65535.0
-    b = np.load(pair.folder / "target.npy").astype(np.float32) / 65535.0
-    return a, b
+    a, b = load_pair_u16(pair)
+    return a.astype(np.float32) / 65535.0, b.astype(np.float32) / 65535.0
 
 
 def to_tensor(img: np.ndarray) -> Tensor:
@@ -80,17 +84,28 @@ def to_tensor(img: np.ndarray) -> Tensor:
 
 
 class PairDataset(Dataset):
-    def __init__(self, pairs: list[Pair], crop: int | None = None, augment: bool = False, seed: int = 0):
+    def __init__(self, pairs: list[Pair], crop: int | None = None, augment: bool = False, seed: int = 0,
+                 keep_in_memory: bool = False):
+        """``keep_in_memory``: hold every pair's uint16 arrays after its first read (~2 MB a pair at 512 px)
+        instead of reading two files per pair per epoch — measured on his Mac, the disk cost 3× the GPU."""
         self.pairs = pairs
         self.crop = crop
         self.augment = augment
         self.rng = np.random.default_rng(seed)
+        self.memory: dict[int, tuple[np.ndarray, np.ndarray]] | None = {} if keep_in_memory else None
+
+    def _read(self, i: int) -> tuple[np.ndarray, np.ndarray]:
+        if self.memory is None:
+            return load_pair_u16(self.pairs[i])
+        if i not in self.memory:
+            self.memory[i] = load_pair_u16(self.pairs[i])
+        return self.memory[i]
 
     def __len__(self) -> int:
         return len(self.pairs)
 
     def __getitem__(self, i: int) -> tuple[Tensor, Tensor, str]:
-        a, b = load_pair(self.pairs[i])
+        a, b = self._read(i)  # uint16: cut first, convert only the crop
         if self.crop:
             h, w = a.shape[:2]
             ch, cw = min(self.crop, h), min(self.crop, w)
@@ -103,4 +118,5 @@ class PairDataset(Dataset):
                 b = np.pad(b, ((0, pad_h), (0, pad_w), (0, 0)), mode="reflect" if min(h, w) > 1 else "edge")
         if self.augment and self.rng.random() < 0.5:
             a, b = a[:, ::-1], b[:, ::-1]
+        a, b = a.astype(np.float32) / 65535.0, b.astype(np.float32) / 65535.0
         return to_tensor(a), to_tensor(b), self.pairs[i].id
