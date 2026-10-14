@@ -105,12 +105,20 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   and what it misses depends on WHERE a pixel is. His run measured 11.95
   ΔE00 full and 10.36 at 1/8 against 20.6 doing nothing. MEASURED on his
   1 880 pairs: ceiling 7.07 (4.71 at 1/8), and the TRAIN split scores 12.33
-  against 11.95 validation — so the default model (3 basis LUTs, width 16)
-  UNDER-fits: ~4.9 ΔE00 is still a `.cube`'s to win, ~4.7 is his local work
-  (masks, skies, vignettes — out of any `.cube`'s reach), ~2.4 detail. 200
-  epochs bought 11.88 → 11.62 over epoch 40. How to apply: grow capacity
-  (`--set model.basis=8 --set model.width=32`, stored in the run, so eval
-  and export follow) before FiveK or more epochs; compare at epoch 40.
+  against 11.95 validation: no memorising, ~4.9 ΔE00 still a `.cube`'s to
+  win, ~4.7 his local work (masks, skies, vignettes — out of any `.cube`'s
+  reach), ~2.4 detail. CAPACITY IS NOT THE LIMIT: 8 basis LUTs at width 32
+  (`--set model.basis=8 --set model.width=32`, stored in the run) reached
+  11.65 at epoch 60, the default 11.62 at 135 — faster to the same plateau.
+  The suspect is what the picture alone cannot say (his choice varies by
+  series and day). How to apply: run the memorising test (`train.subset`,
+  below) before any bigger model, FiveK or more epochs.
+- **`train.subset = N` is the memorising test** (2026-10-14): N seeded
+  training pairs, scored at every validation (`seen ΔE00 … (ceiling …)` in
+  the epoch line). Seen pairs falling to their ceiling = the model can draw
+  his looks and only prediction is short; staying near 11 = the model
+  limits. `eval` reads the run's `split.json`, so `--split train` scores
+  what the run REALLY trained on (subset, `left_out` excluded).
 - **Training leaves out a pair whose edit does not line up** (`train.
   skip_misaligned`, default on, 2026-10-14): 60 of his 1 630 training pairs
   passed alignment (luminance NCC ≥ 0.8) with `structure` ≈ 0 and ΔE00 40+ —

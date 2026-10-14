@@ -262,9 +262,22 @@ garde, pour que deux runs restent comparables. Le seuil (0,5) est une
 estimation, pas une mesure sur tes photos.
 
 Pour savoir si le modèle est trop petit ou s'il apprend par cœur, compare
-`eval --split train` à la validation : à peu près pareil, il manque de
-capacité (`--set model.basis=8 --set model.width=32`) ; nettement meilleur en
-train, il apprend par cœur (plus de paires, FiveK).
+`eval --split train` à la validation (`eval` relit le `split.json` du run :
+`--split train` = les paires vraiment apprises). Nettement meilleur en train :
+il apprend par cœur (plus de paires, FiveK). À peu près pareil : soit il manque
+de place, soit ta retouche ne se lit pas dans la photo seule. Sur tes paires,
+un modèle 2,7 × plus gros (`--set model.basis=8 --set model.width=32`) n'a pas
+fait mieux. Pour trancher, **le test du par cœur** : quelques paires
+seulement, revues des centaines de fois.
+
+```bash
+uv run atelier-train train --source pairs --name parcoeur --epochs 300 \
+  --set train.subset=50 --set train.eval_every=25
+```
+
+Chaque validation affiche aussi `seen ΔE00 … (ceiling …)` sur ces 50 paires.
+S'il descend vers le plafond, le modèle sait dessiner tes retouches et c'est
+la prédiction qui coince ; s'il reste vers 11, c'est le modèle qui limite.
 
 Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.

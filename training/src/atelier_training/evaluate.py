@@ -43,6 +43,12 @@ def evaluate(
     tcfg = run.config.get("train", {})
     pairs = read_index(config.paths.cache, sources or run.sources)
     train_pairs, val_pairs = split(pairs, float(tcfg.get("val_fraction", 0.1)), int(tcfg.get("seed", 1)))
+    written = run.folder / "split.json"
+    if written.is_file():  # the pairs the run REALLY trained on: without those it left out, within a subset
+        ids = json.loads(written.read_text(encoding="utf-8"))
+        by_id = {p.id: p for p in pairs}
+        train_pairs = [by_id[i] for i in ids.get("train", []) if i in by_id]
+        val_pairs = [by_id[i] for i in ids.get("validation", []) if i in by_id]
     chosen = {"validation": val_pairs, "train": train_pairs, "all": pairs}[which_split]
     if not chosen:
         raise RuntimeError(f"no pair in the {which_split} split.")

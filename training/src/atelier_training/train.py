@@ -214,6 +214,12 @@ def train(
         # wrong colour map, and a squared loss weighs its ΔE 40 heavily. Validation keeps them, so runs compare.
         left_out = [p for p in train_pairs if pair_structure(p) < MISALIGNED]
         train_pairs = [p for p in train_pairs if p not in left_out]
+    subset = int(tcfg.get("subset", 0))
+    if subset > 0:
+        # The memorising test: can the model reproduce a few pictures it sees again and again? Seeded, so a
+        # resumed run trains on the same ones.
+        order = np.random.default_rng(int(tcfg.get("seed", 1))).permutation(len(train_pairs))
+        train_pairs = [train_pairs[i] for i in sorted(order[:subset])]
     (run.folder / "split.json").write_text(
         json.dumps({"train": [p.id for p in train_pairs], "validation": [p.id for p in val_pairs],
                     "left_out": [p.id for p in left_out]}, indent=1),
@@ -222,6 +228,9 @@ def train(
     if left_out:
         log(f"left out {len(left_out)} training pair(s) whose edit does not line up with its input "
             f"(structure < {MISALIGNED}), listed in split.json")
+    if subset > 0:
+        log(f"training on a subset of {len(train_pairs)} pair(s) (train.subset): every validation also scores "
+            "them, so the log says how close the model gets to pictures it has seen")
 
     model = build_model(cfg, device)
     if init is not None:
@@ -278,6 +287,10 @@ def train(
         if val_pairs and (epoch % eval_every == 0 or epoch == total_epochs):
             summary = evaluate_pairs(model, val_pairs, device)
             record.update({f"val_{k}": v for k, v in summary.items() if k != "pairs"})
+            if subset > 0:
+                seen = evaluate_pairs(model, train_pairs, device)
+                record.update({"train_psnr": seen["psnr"], "train_de2000_mean": seen["de2000_mean"],
+                               "train_ceiling_de2000_mean": seen["ceiling_de2000_mean"]})
             if summary["psnr"] > best:
                 best = summary["psnr"]
                 save_checkpoint(run.folder / "best.pt", model, optimizer, epoch, best, cfg)
@@ -288,6 +301,9 @@ def train(
         line = f"  epoch {epoch}/{total_epochs}  loss {record['loss']:.5f}  fit {record['fit']:.5f}"
         if "val_psnr" in record:
             line += f"  val PSNR {record['val_psnr']:.2f} dB  ΔE00 {record['val_de2000_mean']:.2f}"
+        if "train_de2000_mean" in record:
+            line += (f"  seen ΔE00 {record['train_de2000_mean']:.2f}"
+                     f" (ceiling {record['train_ceiling_de2000_mean']:.2f})")
         log(line + f"  ({record['seconds']} s, data {record['data_seconds']} s)")
     return run
 
