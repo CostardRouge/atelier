@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 from .config import Config, merge
 from .data import Pair, PairDataset, read_index, split
 from .device import pick_device
-from .metrics import score
+from .metrics import score, structure
 from .model.lut3d import AdaptiveLUT
 
 
@@ -120,10 +120,15 @@ def load_model(run: Path | Run, which: str = "best", device: str | None = None) 
     return model, run
 
 
+MISALIGNED = 0.5  # `structure` under this: the edit does not line up with its input (a guess, said as such)
+
+
 @torch.no_grad()
 def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
                    keep: Callable[[str, Tensor, Tensor, Tensor], None] | None = None) -> dict:
-    """Whole pictures one by one: the mean of every ``metrics.score`` key, plus per-pair rows."""
+    """Whole pictures one by one: the mean of every ``metrics.score`` key, plus per-pair rows. Each row also
+    carries the score of DOING NOTHING (the input itself against the edit) and how well the two line up
+    (``structure``), so a run can be told from no model at all and a broken pair from a hard one."""
     model.eval()
     ds = PairDataset(pairs)
     rows: list[dict] = []
@@ -131,13 +136,22 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
         a, b, pid = ds[i]
         a, b = a.unsqueeze(0).to(device), b.unsqueeze(0).to(device)
         out, _ = model(a)
-        s = score(out[0].permute(1, 2, 0).cpu().numpy(), b[0].permute(1, 2, 0).cpu().numpy())
-        s["id"] = pid
+        src, tgt = a[0].permute(1, 2, 0).cpu().numpy(), b[0].permute(1, 2, 0).cpu().numpy()
+        s = score(out[0].permute(1, 2, 0).cpu().numpy(), tgt)
+        nothing = score(src, tgt)
+        s.update(identity_psnr=nothing["psnr"], identity_de2000_mean=nothing["de2000_mean"],
+                 structure=structure(src, tgt), id=pid)
         rows.append(s)
         if keep:
             keep(pid, a[0], b[0], out[0])
     keys = ("psnr", "de76_mean", "de76_p95", "de2000_mean", "de2000_p95")
     summary = {k: float(np.mean([r[k] for r in rows if np.isfinite(r[k])])) if rows else float("nan") for k in keys}
+    summary["identity_psnr"] = float(np.mean([r["identity_psnr"] for r in rows if np.isfinite(r["identity_psnr"])]
+                                             or [0])) if rows else float("nan")
+    summary["identity_de2000_mean"] = float(np.mean([r["identity_de2000_mean"] for r in rows])) if rows \
+        else float("nan")
+    summary["misaligned"] = sorted((r for r in rows if r["structure"] < MISALIGNED), key=lambda r: r["structure"])
+    summary["misaligned"] = [{"id": r["id"], "structure": round(r["structure"], 3)} for r in summary["misaligned"]]
     summary["pairs"] = rows
     # Per GROUP (one original and its edits): where the model is far from his taste, worst first.
     by_group: dict[str, list[dict]] = {}
@@ -208,7 +222,8 @@ def train(
     smooth_w = float(tcfg.get("smooth_weight", 1e-4))
     mono_w = float(tcfg.get("monotonic_weight", 10.0))
     eval_every = max(1, int(tcfg.get("eval_every", 5)))
-    loader = DataLoader(PairDataset(train_pairs, crop=crop, augment=True, seed=int(tcfg.get("seed", 1))),
+    loader = DataLoader(PairDataset(train_pairs, crop=crop, augment=True, seed=int(tcfg.get("seed", 1)),
+                                    keep_in_memory=bool(tcfg.get("keep_in_memory", True))),
                         batch_size=batch, shuffle=True, drop_last=False, num_workers=0)
 
     log(f"run {run.folder.name}: {len(train_pairs)} training pairs, {len(val_pairs)} validation, "

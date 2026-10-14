@@ -89,6 +89,24 @@ def psnr(a: np.ndarray, b: np.ndarray) -> float:
     return float("inf") if mse == 0 else float(10 * np.log10(1.0 / mse))
 
 
+def structure(a: np.ndarray, b: np.ndarray, size: int = 128) -> float:
+    """How well two pictures LINE UP, blind to their colours: the normalised correlation of their
+    luminance gradients at ``size`` px on the long edge. ~1 for an edit of the same frame, near 0 for
+    a turned, mirrored or mis-cropped pair — the pairs a colour model can only learn noise from."""
+    h, w = a.shape[:2]
+    step = max(1, int(np.ceil(max(h, w) / size)))
+
+    def edges(img: np.ndarray) -> np.ndarray:
+        y = np.asarray(img, dtype=np.float64)[::step, ::step, :3] @ np.array([0.2126, 0.7152, 0.0722])
+        gx, gy = np.diff(y, axis=1)[:-1, :], np.diff(y, axis=0)[:, :-1]
+        g = np.hypot(gx, gy).ravel()
+        return g - g.mean()
+
+    ea, eb = edges(a), edges(b)
+    den = float(np.sqrt((ea * ea).sum() * (eb * eb).sum()))
+    return float((ea * eb).sum() / den) if den > 0 else 0.0
+
+
 def score(output: np.ndarray, target: np.ndarray) -> dict[str, float]:
     """Everything the dashboard shows for one pair: PSNR, mean and 95th-percentile ΔE76 and ΔE2000."""
     lab_o, lab_t = srgb_to_lab(output), srgb_to_lab(target)

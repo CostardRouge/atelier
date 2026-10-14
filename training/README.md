@@ -251,6 +251,14 @@ et le ΔE2000, l'écart de couleur tel que l'œil le voit (≈ 1 : à peine
 perceptible ; 2 à 3 : visible). Un ΔE moyen qui descend, c'est le modèle qui
 se rapproche de tes retouches.
 
+`eval` donne aussi le score de **« ne rien faire »** (l'original tel quel
+contre ta retouche) : c'est la barre à battre, un modèle qui en reste proche
+n'a rien appris. Et il liste les paires **qui ne se superposent pas** (une
+retouche tournée, retournée ou recadrée ailleurs que ce qu'a trouvé
+l'alignement), avec leur grille : une paire pareille n'apprend que du bruit,
+mets son dossier de côté (renomme-le avec un `_` devant) et relance `ingest`.
+Le seuil (0,5) est une estimation, pas une mesure sur tes photos.
+
 Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.
 

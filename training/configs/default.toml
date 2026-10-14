@@ -58,6 +58,7 @@ monotonic_weight = 10.0  # keeps every LUT increasing along its own channel, so 
 val_fraction = 0.1       # groups held out for validation (split by GROUP, never by pair)
 seed = 1
 eval_every = 5           # epochs between two validations
+keep_in_memory = true    # hold the prepared pairs in RAM after the first epoch (~2 MB a pair): the disk was 3× the GPU
 
 # ---- The develop predictor (M6): the picture as shot → DevelopSettings' eleven sliders. ----
 [develop]

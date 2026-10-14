@@ -100,6 +100,9 @@ def test_finetune_from_a_run_with_frozen_luts_and_per_group_eval(workspace):
     groups = summary["groups"]
     assert len(groups) == 7 and groups == sorted(groups, key=lambda g: -g["de2000_mean"])
     assert sum(g["pairs"] for g in groups) == len(summary["pairs"])
+    # Every row says what doing nothing scores and how well its two halves line up (a synthetic edit: perfectly).
+    assert all(r["structure"] > 0.9 and np.isfinite(r["identity_de2000_mean"]) for r in summary["pairs"])
+    assert summary["misaligned"] == [] and "identity_psnr" in summary
 
 
 def test_bench_and_missing_run_messages(synthetic, capsys):
@@ -110,3 +113,19 @@ def test_bench_and_missing_run_messages(synthetic, capsys):
     assert "no run found" in capsys.readouterr().out
     assert main(["train", "--source", "pairs"]) == 1  # nothing ingested under pairs
     assert config.paths.runs.exists() is False or not list(config.paths.runs.iterdir())
+
+
+def test_the_dataset_held_in_memory_reads_each_pair_once_and_gives_the_same_tensors(synthetic):
+    from atelier_training.data import PairDataset, read_index
+
+    config = load_config(overrides=TINY)
+    ingest(config, sources=["synthetic"], workers=1)
+    pairs = read_index(config.paths.cache, ["synthetic"])[:3]
+    held, plain = PairDataset(pairs, keep_in_memory=True), PairDataset(pairs)
+    for i in range(len(pairs)):
+        assert all(torch.equal(x, y) for x, y in zip(held[i][:2], plain[i][:2], strict=True))
+    assert set(held.memory) == {0, 1, 2} and plain.memory is None
+    for folder in {p.folder for p in pairs}:  # gone from disk: the held copy still serves
+        for f in folder.glob("*.npy"):
+            f.unlink()
+    assert held[0][0].dtype == torch.float32
