@@ -1,6 +1,8 @@
 # Small targets under a finger, measured, and three faces for one rule
 
-**Status: a proposal awaiting his pick (2026-10-14).** Nothing is built. It
+**Status: he chose C (2026-10-14, *«option C, go avec tes
+recommandations»*), so §5 is answered by the recommendations. Built the same
+day; §6 says what is in.** It
 is the pass he asked for after the sliders (`slider-touch.md`, *«autres petits
 controls après»*, then *«vas-y … design or artifact first»*). The lab is an
 inspector excerpt holding every small control, drawn today and in three faces,
@@ -86,3 +88,46 @@ never the width.
    overlaps in tight rows?
 3. On the curve, a tap beside a point: does nothing under a finger
    (recommended), or adds a point as the mouse does?
+
+## 6. Built (face C)
+
+1. **Rows.** Under a finger, `Button`, `IconButton` and one-row `Segmented`
+   at `sm` are drawn at 34 px, a field or select at 44, and a ⋯ menu's item
+   at 44. `.touch-row` (in `index.css`, `@layer components`) grows their
+   zone to 44 in height only.
+2. **Marks.** The ⓘ keeps 32 px under a mouse and takes `.touch-halo`'s 44
+   under a finger. A swatch, being an `<input type="color">`, is drawn at
+   44. A section's band is 44 tall, its title takes that height, and its gap
+   opens to 14 px so the ⓘ's zone stops short of the title. The ↺ inside a
+   slider bar keeps 32 px, since 44 would steal a column of the bar's tap.
+3. **On/off.** A `ToggleField`'s line is 44 px with the switch's 44 × 44 zone
+   inside it. A `SwitchRow`'s phrase toggles too. A checkbox is drawn at
+   22 px and its label is a 44 px line. The six boxes with no words get a
+   `touch-halo` label. `CheckRow` was not needed: a CSS rule and six labels
+   did it.
+4. **Trim.** `TrimBar` is 64 px under a finger. The handles' 44 × 44 zones
+   reach outward and up; the head's reaches down.
+5. **Curve.** `grabRadiusFor` (pure, tested): 22 px under a finger, read from
+   the press's `pointerType`.
+6. **The guard.** `scripts/check-targets.mjs` (dev server + Playwright,
+   390 px, touch) reads every visible target's zone. It fails on two zones
+   that overlap inside one scrolling box.
+
+**Measured on Flight Atlas's seven tabs (276 targets).**
+
+| | Under 44 px | Overlaps |
+| --- | --- | --- |
+| Before | 257 | 7 |
+| After | 169 | 0 |
+
+The 169 are, in order:
+- the same 15 on every screen: the shell's masthead (the Atelier link, the
+  tool's title, the 34 px-wide theme and GitHub glyphs), Atlas's transport
+  (34 px-wide glyphs, a 36 px time bar) and its two-row tab grid;
+- multi-row `Segmented` grids (anchors, camera), at 34 by design;
+- Atlas's own hand-rolled 28 px chips, outside the kit;
+- narrow section titles, whose 44 px band is the real target.
+
+Not driven on his phone or tablet. Grids of several rows, Atlas's chips and
+the masthead's glyphs are the next candidates if he finds them small.
+
