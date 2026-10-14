@@ -5,6 +5,7 @@ import {
   MIN_PACE,
   defaultSlideLength,
   fixedFrom,
+  gripDraft,
   lengthByHand,
   lengthFromLegacy,
   negotiate,
@@ -148,6 +149,39 @@ describe('lengthByHand / fixedFrom — a gesture never changes the owner', () =>
   it('fixes a clip at its cut, keeping a fixed length’s answer', () => {
     expect(fixedFrom(defaultSlideLength())).toEqual({ owner: 'fixed', over: 'fit' });
     expect(fixedFrom({ owner: 'fixed', over: 'cut' })).toEqual({ owner: 'fixed', over: 'cut' });
+  });
+});
+
+describe('gripDraft — the band’s one grip', () => {
+  const timing = resolveLength(defaultSlideLength(), 3, VIREE, BEAT);
+
+  it('past the opener’s end drags the hold, inside it the pace', () => {
+    expect(gripDraft(defaultSlideLength(), timing, VIREE + 2)).toMatchObject({ zone: 'hold', pace: 1, stopped: null });
+    expect(gripDraft(defaultSlideLength(), timing, VIREE + 2).seconds).toBeCloseTo(VIREE + 2, 9);
+    const inside = gripDraft(defaultSlideLength(), timing, VIREE * 0.6);
+    expect(inside).toMatchObject({ zone: 'pace', pace: 0.6, hold: 0, stopped: null });
+    expect(inside.seconds).toBeCloseTo(VIREE * 0.6, 9);
+  });
+
+  it('stops at the floor, and draws the end where the slide would really end', () => {
+    const stopped = gripDraft(defaultSlideLength(), timing, 1);
+    expect(stopped.stopped).toBe('floor');
+    expect(stopped.seconds).toBeCloseTo(VIREE * FLOOR, 9);
+    // An opener with no beat runs down to a tenth: the band's shortest length stops it first.
+    const free = resolveLength(defaultSlideLength(), 3, VIREE, 0);
+    const shortest = gripDraft(defaultSlideLength(), free, MIN_HOOK_SECONDS);
+    expect(shortest.stopped).toBe('shortest');
+    expect(shortest.seconds).toBeCloseTo(MIN_HOOK_SECONDS, 1); // the pace is kept in hundredths
+  });
+
+  it('rests on the natural end inside the magnet', () => {
+    expect(gripDraft(defaultSlideLength(), timing, VIREE + 0.1, 0.2)).toMatchObject({ seconds: VIREE, zone: 'hold', hold: 0 });
+  });
+
+  it('is plain seconds within the bounds on a fixed length', () => {
+    const fixed = { owner: 'fixed', over: 'fit' } as const;
+    expect(gripDraft(fixed, timing, 4)).toMatchObject({ seconds: 4, zone: 'seconds', stopped: null });
+    expect(gripDraft(fixed, timing, 99, 0, { min: 1, max: 60 }).seconds).toBe(60);
   });
 });
 

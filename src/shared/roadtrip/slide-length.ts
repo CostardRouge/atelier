@@ -199,6 +199,42 @@ export function lengthByHand(length: SlideLength, timing: Pick<ResolvedLength, '
   return { length, seconds: total };
 }
 
+/** What the band's grip would make of the length while it is held. */
+export interface GripDraft {
+  /** What the slide would last — where the cell's end is drawn. */
+  seconds: number;
+  /** What the drag is moving: the hold past the opener's end, its pace inside it, or plain seconds. */
+  zone: 'hold' | 'pace' | 'seconds';
+  pace: number;
+  hold: number;
+  /** Pulled past what the slide may be: the opener's FLOOR, or the band's SHORTEST length. */
+  stopped: 'floor' | 'shortest' | null;
+}
+
+/**
+ * The band's ONE grip, read (face B): under the opener's rule a drag past the
+ * opener's natural end is the HOLD and inside it the PACE, resting on the
+ * natural end within `magnet` seconds and STOPPING at the floor — so the cell
+ * is drawn where the slide would really end. A fixed length, or a slide with
+ * nothing that plays, is plain seconds within the band's bounds.
+ */
+export function gripDraft(
+  length: SlideLength,
+  timing: Pick<ResolvedLength, 'natural' | 'floor'>,
+  total: number,
+  magnet = 0,
+  bounds: { min: number; max: number } = { min: MIN_HOOK_SECONDS, max: MAX_HOOK_SECONDS },
+): GripDraft {
+  if (length.owner === 'opener' && timing.natural > 0) {
+    const n = negotiate(total, timing.natural, timing.floor, magnet);
+    const seconds = clamp(timing.natural * n.pace + n.hold, bounds.min, bounds.max);
+    const stopped = n.stopped ? 'floor' : n.pace < 1 && total <= bounds.min + 1e-9 ? 'shortest' : null;
+    return { seconds, zone: n.pace < 1 ? 'pace' : 'hold', pace: n.pace, hold: n.hold, stopped };
+  }
+  const seconds = clamp(total, bounds.min, bounds.max);
+  return { seconds, zone: 'seconds', pace: 1, hold: seconds, stopped: null };
+}
+
 /**
  * A clip's cut IS its length: trimming a clip slide fixes it at the cut,
  * keeping a fixed length's answer to a longer opener (speed it up, by default).
