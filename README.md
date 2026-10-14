@@ -347,6 +347,15 @@ whole render — the gate holds it so — and the one texture it costs is kept
 only for an interactive stage, never for an export or a thumbnail, and never
 past a phone's stage size.
 
+**Under the hand, the stage is drawn at half size.** While a pointer is held
+(a slider's drag, a pinch, a brush) or a wheel turns, each step grades the
+picture at half the stage's size through a second grader and draws it up — a
+quarter of the pixels a step — and the moment the hand lets go the stage is
+graded whole again. A single change — a click on Auto, a preset, a tap — is
+drawn whole at once. The histogram reads at most every 400 ms during a drag
+and once the steps stop. The export, the histogram, the thumbnails and the
+crop's stage never see a half picture, and a stage under 1200 px stays whole.
+
 **The develop is not in the cube.** A correction's white balance, exposure,
 tone curve, luma and channel curves, saturation and vibrance — everything up to
 the colour mixer — runs **per pixel**, before the lattice, in the shader and in

@@ -20,6 +20,7 @@ import { decodeStill, stageBudget } from '../media/still-decode';
 import { openStageStill } from './stage-sources';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
+import { HAND_SETTLE_MS, HAND_WARM_MS, handSize, inputsMoved, isHandStep } from './stage-hand';
 
 /** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
 const COLOUR_SAMPLE_EDGE = 512;
@@ -29,6 +30,27 @@ const COLOUR_SAMPLE_EDGE = 512;
  * small render is drawn down with smoothing rather than sampled sparsely.
  */
 const BELOW_RENDER_EDGE = 512;
+/**
+ * Whether the hand is on the page — the pointers held down and the last wheel
+ * — read by the stage under the hand (`stage-hand.ts`). Watched once, for the
+ * whole module, in the capture phase so a control that stops a press cannot
+ * hide it; a window that loses the focus forgets its pointers, so a release
+ * outside it cannot leave one held for ever.
+ */
+const handPointers = new Set<number>();
+let handWheelAt = -Infinity;
+if (typeof window !== 'undefined') {
+  const release = (e: PointerEvent) => handPointers.delete(e.pointerId);
+  window.addEventListener('pointerdown', (e) => handPointers.add(e.pointerId), true);
+  window.addEventListener('pointerup', release, true);
+  window.addEventListener('pointercancel', release, true);
+  window.addEventListener('blur', () => handPointers.clear());
+  window.addEventListener('wheel', () => (handWheelAt = performance.now()), { capture: true, passive: true });
+}
+/** The hand has let go: no pointer held, no wheel inside the settle delay. */
+function handResting(now: number): boolean {
+  return handPointers.size === 0 && now - handWheelAt >= HAND_SETTLE_MS;
+}
 /** Inside a burst of steps, the histogram is read at most this often… */
 const HISTOGRAM_BURST_MS = 400;
 /** …or this long after the steps stop. */
@@ -1053,6 +1075,10 @@ export function useDevelopPicture({
   // an opacity nudge on one layer costs one small pass and nothing else
   // (`layer-render.ts`). One per hook, like the grader it feeds.
   const stageSlot = useRef<GraderSlot>({ cache: makeLayerPassCache(), current: null });
+  // The stage UNDER THE HAND, graded at half its size (`stage-hand.ts`) —
+  // a grader of its own, built on the first drag and borrowing the stage
+  // cache's cubes like the histogram's slot.
+  const handSlot = useRef<GraderSlot | null>(null);
   // The deferred bake of the layers' cubes (see `stack` above).
   useMemo(() => stageSlot.current.cache.prime(stack), [stack]);
   // The post-crop vignette the picture HAS, for every grader call below —
@@ -1137,7 +1163,41 @@ export function useDevelopPicture({
   // playing clip repaints once per frame it presents, without a React render
   // per frame of the whole workbench. The effect below calls it when an input
   // moves; the loop further down calls it when only the frame did.
-  const paintStage = () => {
+  /** The grader of the stage under the hand, at `half` — built on first use. */
+  const handGrader = (half: { width: number; height: number }): HeldGrader | null => {
+    if (!source) return null;
+    if (!handSlot.current) handSlot.current = { cache: makeLayerPassCache(stageSlot.current.cache), current: null };
+    return graderFrom(
+      handSlot.current,
+      cube,
+      { ...source, ...half },
+      geometry,
+      stack,
+      overlay,
+      subjectMasks,
+      detail,
+      pixelScale * (half.width / source.width),
+      repair,
+      film,
+      gainField,
+      flashMask,
+      clipping,
+      sharpenMask,
+      postVignetteRef.current,
+    );
+  };
+  // Built ahead, while the page is idle after a new picture's first paint:
+  // the second grader's context, its shaders and the source's upload were a
+  // hitch of their own at the start of every first drag (1.3 s headless,
+  // SwiftShader). One half render, drawn nowhere.
+  const warmHand = () => {
+    if (!source || holding) return;
+    const half = handSize(source.width, source.height);
+    if (half) handGrader(half)?.render(source.gpu ?? source.image, video ? video.currentTime : undefined);
+  };
+  const warmRef = useRef(warmHand);
+  warmRef.current = warmHand;
+  const paintStage = (underHand = false) => {
     const canvas = canvasRef.current;
     if (!canvas || !source || !canvasSize) return;
     const { w, h } = canvasSize;
@@ -1147,19 +1207,28 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding
-      ? null
-      : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping, sharpenMask);
+    // Under the hand the picture is graded at HALF the stage's size through
+    // a grader of its own and drawn up (`stage-hand.ts`); the stage's own
+    // grader, and the picture it holds, wait for the hand to rest.
+    const half = underHand && !holding ? handSize(source.width, source.height) : null;
+    let grader: HeldGrader | null = null;
+    if (half) {
+      grader = handGrader(half);
+    } else if (!holding) {
+      grader = graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping, sharpenMask);
+    }
     // A clip is graded AT its instant: the held grade is keyed on it, or a
     // playing clip would be served the first frame's grade for ever — and
     // the film's grain re-rolls on it (`held-grader.ts`).
     const graded = grader ? grader.render(source.gpu ?? source.image, video ? video.currentTime : undefined) : source.image;
+    const gw = grader && half ? half.width : source.width;
+    const gh = grader && half ? half.height : source.height;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
       ctx.clearRect(0, 0, w, h);
-      drawDelivered(ctx, graded, source.width, source.height, framing, layout, border);
+      drawDelivered(ctx, graded, gw, gh, framing, layout, border);
     } else {
-      ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+      ctx.drawImage(graded, 0, 0, gw, gh, 0, 0, w, h);
     }
     // The wipe: the untouched picture to the LEFT of the divider, the way the
     // shader's own split works — before on the left, after on the right. The
@@ -1190,9 +1259,73 @@ export function useDevelopPicture({
   // (2026-10-02). A clip's own frame loop reads nothing: a pointer at rest
   // over a playing clip would pay that sync per presented frame.
   const readAfterPaint = useRef<() => void>(() => {});
+  // The hand (`stage-hand.ts`): when the last re-grade was, the inputs it was
+  // graded with, and the timer that grades the stage whole once the hand rests.
+  const hand = useRef<{ at: number; inputs: unknown[] | null; source: BadgeSource | null; timer: number; warm: number }>({
+    at: -Infinity,
+    inputs: null,
+    source: null,
+    timer: 0,
+    warm: 0,
+  });
+  useEffect(
+    () => () => {
+      window.clearTimeout(hand.current.timer);
+      window.clearTimeout(hand.current.warm);
+      handSlot.current?.current?.grader.dispose();
+      handSlot.current = null;
+    },
+    [],
+  );
   useEffect(() => {
+    const h = hand.current;
+    const inputs: unknown[] = [cube, geometry, stack, overlay, flashMask, clipping, sharpenMask, postVignette, subjectMasks, detail, pixelScale, repair, film, gainField];
+    const samePicture = h.source === source;
+    const regraded = samePicture && inputsMoved(h.inputs, inputs);
+    const step =
+      regraded && isHandStep({ held: handPointers.size > 0, wheelAt: handWheelAt, paintedAt: h.at }, performance.now());
+    h.inputs = inputs;
+    h.source = source;
+    // A step, or anything else drawn while the hand is still on (the wipe
+    // moved mid-drag): half, and whole again once it rests. A new picture,
+    // a lone change, a playing clip: whole at once.
+    if ((step || (h.timer !== 0 && samePicture)) && !(video && !video.paused)) {
+      if (step) window.clearTimeout(h.timer);
+      paintRef.current(true);
+      // Timed from the END of the paint: a step waits behind the render, so
+      // on a slow device two steps start further apart than the window
+      // even mid-drag — measured, a 550 ms render never counted as the hand.
+      if (regraded) h.at = performance.now();
+      if (step || h.timer === 0) {
+        // Whole again once the hand RESTS: never while a pointer is still
+        // held or a wheel still turns — on a slow device React's work between
+        // two steps outlasts the delay, and a whole render fired mid-drag was
+        // the second the drag stood still (1.3 s headless).
+        const settle = () => {
+          if (handResting(performance.now())) {
+            h.timer = 0;
+            paintRef.current();
+            readAfterPaint.current();
+          } else {
+            h.timer = window.setTimeout(settle, HAND_SETTLE_MS);
+          }
+        };
+        h.timer = window.setTimeout(settle, HAND_SETTLE_MS);
+      }
+      return;
+    }
+    window.clearTimeout(h.timer);
+    h.timer = 0;
     paintRef.current();
+    if (regraded) h.at = performance.now();
     readAfterPaint.current();
+    if (!samePicture) {
+      window.clearTimeout(h.warm);
+      h.warm = window.setTimeout(() => {
+        h.warm = 0;
+        if (hand.current.source === source) warmRef.current();
+      }, HAND_WARM_MS);
+    }
   }, [
     source,
     canvasSize,

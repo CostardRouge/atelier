@@ -122,6 +122,20 @@ readout over them shows numbers. The view is never remembered past the session
 a PNG with white, black, a red-only clip and a mid grey: every mark where the
 rule says, the readout decoding each, J and the end words toggling.
 
+**Under the hand the stage is graded at HALF size** (2026-10-14, P3, his
+«vas-y pour la P3»; `docs/develop-performance.md` §2.6): `stage-hand.ts`
+(pure) + a second slot in `useDevelopPicture` (`handSlot`), drawn up through
+the stage's own `drawDelivered`, whole again once the hand lets go. **The
+hand is a held POINTER, a recent wheel or a step close behind the last
+paint — never time alone**, and the settle waits for the pointers to lift:
+on a slow device React and the histogram between two steps outlast any
+window, so a time-only test never engaged, and a settle on the delay alone
+drew a whole stage mid-drag. The second grader is warmed 700 ms after a new
+picture's first paint. **How to apply**: a new interactive surface that
+re-grades per step reads `handSize` / `isHandStep` rather than its own
+timer; the export, the histogram, thumbnails, `delivered()` and the crop
+stage never take the half grader.
+
 **Inside a burst of steps the histogram waits** (2026-10-14, his «pas du
 tout fluide» about the sliders): a read is a second render AND a readback,
 and the readback waits for the GPU to finish the stage's own render — in a
