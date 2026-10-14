@@ -122,6 +122,18 @@ readout over them shows numbers. The view is never remembered past the session
 a PNG with white, black, a red-only clip and a mid grey: every mark where the
 rule says, the readout decoding each, J and the end words toggling.
 
+**Inside a burst of steps the histogram waits** (2026-10-14, his «pas du
+tout fluide» about the sliders): a read is a second render AND a readback,
+and the readback waits for the GPU to finish the stage's own render — in a
+production build 11 reads in a 1.6 s Contrast drag cost 0.93 s of the main
+thread (headless, SwiftShader). The read now runs the next frame only at
+rest; within `HISTOGRAM_BURST_MS` (400) of the last read it waits for the
+steps to stop (`HISTOGRAM_QUIET_MS`, 150) or for the burst's read to fall
+due — 5 reads for the same drag. **How to apply**: anything that reads a
+graded picture back per change (a readout, a thumbnail, a measure) follows
+the same rule; a dev build hides this cost, its renders being slow enough
+that rAF already folded the steps — measure a drag on `vite build`.
+
 **The histogram renders through a slot of its OWN** (2026-10-02, the audit's
 PERF-02): `histSlot`, a 160 px grader (`fitRenderSize` to
 `HISTOGRAM_SAMPLE_EDGE`) borrowing the stage cache's cubes like the

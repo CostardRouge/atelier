@@ -29,6 +29,10 @@ const COLOUR_SAMPLE_EDGE = 512;
  * small render is drawn down with smoothing rather than sampled sparsely.
  */
 const BELOW_RENDER_EDGE = 512;
+/** Inside a burst of steps, the histogram is read at most this often… */
+const HISTOGRAM_BURST_MS = 400;
+/** …or this long after the steps stop. */
+const HISTOGRAM_QUIET_MS = 150;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection, LensProfileTerms } from '../render/lens';
@@ -1289,11 +1293,17 @@ export function useDevelopPicture({
   }, [compare]);
 
   // The histogram, read off a small copy of the graded picture one frame
-  // after it changes — so a slider step paints first and measures second, and
-  // a burst of steps measures once. Keyed on the picture and the cube only:
-  // the wipe and "hold for before" do not change what is delivered. A clip
-  // that comes to rest on another frame (`restedFrame`) is measured again.
+  // after it changes — so a slider step paints first and measures second.
+  // INSIDE a burst of steps (a slider under the hand) it waits for the steps
+  // to stop, or reads every `HISTOGRAM_BURST_MS` at most: a read is a second
+  // render and a READBACK, which waits for the GPU to finish the stage's own
+  // render — 11 reads in a 1.6 s drag took 0.93 s of the main thread in a
+  // production build, measured headless (2026-10-14, his «pas du tout
+  // fluide»). Keyed on the picture and the cube only: the wipe and "hold for
+  // before" do not change what is delivered. A clip that comes to rest on
+  // another frame (`restedFrame`) is measured again.
   const [histogram, setHistogram] = useState<Histogram | null>(null);
+  const histogramReadAt = useRef(-Infinity);
   const sampleRef = useRef<HTMLCanvasElement | null>(null);
   // Measured through a grader of ITS OWN at the sample's size, never the
   // stage's: the stage draws with the looking passes (a mask's wash, a blink,
@@ -1320,6 +1330,7 @@ export function useDevelopPicture({
     const measure = () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
+      histogramReadAt.current = performance.now();
       const fitted = fitRenderSize(source.width, source.height, HISTOGRAM_SAMPLE_EDGE);
       const w = Math.max(1, fitted.width);
       const h = Math.max(1, fitted.height);
@@ -1366,10 +1377,13 @@ export function useDevelopPicture({
         // back: the strip keeps its last reading rather than breaking the sheet.
       }
     };
-    // The next frame, or a moment later where frames are not being drawn (a
-    // hidden pane still shows the sheet's numbers), whichever comes first.
-    const raf = requestAnimationFrame(measure);
-    const fallback = window.setTimeout(measure, 120);
+    // At rest: the next frame, or a moment later where frames are not being
+    // drawn (a hidden pane still shows the sheet's numbers), whichever comes
+    // first. In a burst: when the steps stop, or when the burst's read is due.
+    const since = performance.now() - histogramReadAt.current;
+    const burst = since < HISTOGRAM_BURST_MS;
+    const raf = burst ? 0 : requestAnimationFrame(measure);
+    const fallback = window.setTimeout(measure, burst ? Math.min(HISTOGRAM_QUIET_MS, HISTOGRAM_BURST_MS - since) : 120);
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
