@@ -95,7 +95,7 @@ import {
   retimedScreenSeconds,
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
-import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
+import { badgeExitAt, badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
 import {
   centreMovable,
   resolvedDirection,
@@ -112,6 +112,13 @@ import {
   type LoopScope,
 } from '../../shared/roadtrip/deck-strip';
 import { MAX_HOOK_SECONDS, MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
+import {
+  DEFAULT_HOLD_SECONDS,
+  fixedFrom,
+  lengthByHand,
+  type LengthOver,
+  type SlideLength,
+} from '../../shared/roadtrip/slide-length';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
@@ -335,8 +342,58 @@ export default function PostEditor({
   );
   usePublishMediaScope(mediaScope);
 
+  // An opener that names a GROUP of places by its town needs the shipped
+  // index (`stop-clusters.ts`): asked for here, once, and the context rebuilt
+  // when it lands — `hookContextFor` reads it, so the stage, the rail and
+  // the exports then name the same groups.
+  const [townsTick, setTownsTick] = useState(0);
+  const deckLayersForTowns = useMemo(
+    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
+    [post.badge.hook, post.slides],
+  );
+  useEffect(() => {
+    if (!wantsTowns(deckLayersForTowns) || townsIfLoaded()) return;
+    let alive = true;
+    loadTowns()
+      .then(() => {
+        if (alive) setTownsTick((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [deckLayersForTowns]);
+
+  // A Virée under the trip's water rule reads the shipped coastline to tell a
+  // crossing from a road (`terrain.ts`): asked for here, once, and the context
+  // rebuilt when it lands — until then the road is driven whole.
+  const [landTick, setLandTick] = useState(0);
+  const drivesUnderWaterRule = trip.crossings?.auto === true && deckLayersForTowns.some((layer) => layer.id === 'drive');
+  useEffect(() => {
+    if (!drivesUnderWaterRule || landIfLoaded()) return;
+    let alive = true;
+    loadLandIndex()
+      .then(() => {
+        if (alive) setLandTick((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [drivesUnderWaterRule]);
+
   // --- the deck: the hook, any content pictures, and the closing card ------
-  const slides = useMemo(() => deckSlides(trip, post), [trip, post]);
+  // Rebuilt when the town index or the coastline lands, like the stage's own
+  // context: the deck prepares every opener to learn its length, and an Auto
+  // slide lasts that length — a Virée whose ferry crossings are only found
+  // once the coastline is read was timed WITHOUT them, so the slide ended
+  // before the car was off the boat while the stage drew it whole.
+  const slides = useMemo(
+    () => deckSlides(trip, post),
+    // `townsTick` and `landTick` are not read: they rebuild the deck once
+    // `hookContextFor`'s synchronous readers have something to return.
+    [trip, post, townsTick, landTick],
+  );
   const slideIndex = Math.min(selected, slides.length - 1);
   const slide = slides[slideIndex];
   const isHook = slide.kind === 'hook';
@@ -620,8 +677,8 @@ export default function PostEditor({
   );
 
   // Each slide holds the screen for what it really delivers — a clip its cut,
-  // a still the seconds its inspector gives it or, in Auto, its opener plus a
-  // hold (`slide-timing.ts`) — and the durations of clips the stage has
+  // a still the seconds its inspector gives it or, where its opener decides,
+  // the opener at its pace plus a hold (`slide-length.ts`) — and the durations of clips the stage has
   // already decoded are remembered, so a stored 5s over a 3s clip reads 3 on
   // the band before that slide is opened again.
   const [clipDurations, setClipDurations] = useState<Record<string, number>>({});
@@ -632,9 +689,11 @@ export default function PostEditor({
       ),
     [slides, clipDurations],
   );
-  // What the badge's exit lands on: the first slide's END (`slide-timing.ts`),
-  // never an absolute life — so shortening the slide never cuts the exit.
+  // How long the first slide lasts; the badge's exit lands on its END
+  // (`badgeExitAt`) — never an absolute life, so shortening the slide never
+  // cuts the exit — unless the slide is too short to let the badge rest.
   const hookLife = lengths[0] ?? post.badge.hookSeconds;
+  const hookExit = badgeExitAt(hookLife, post.badge.pieceStyles, post.badge.cascade);
 
   // The first slide's words: its own free text, then its badge over it (a
   // masked line must not mask the signature — `slide-render.ts`) — the
@@ -647,7 +706,7 @@ export default function PostEditor({
           post.badge.layout,
           aspect,
           post.badge.pieceStyles,
-          hookLife,
+          hookExit,
           post.badge.cascade,
         )
       : [];
@@ -656,7 +715,7 @@ export default function PostEditor({
     content,
     post.badge.layout,
     post.badge.pieceStyles,
-    hookLife,
+    hookExit,
     post.badge.cascade,
     aspect,
     hookTexts,
@@ -666,46 +725,6 @@ export default function PostEditor({
     () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
     [content, post.badge.layout, aspect],
   );
-
-  // An opener that names a GROUP of places by its town needs the shipped
-  // index (`stop-clusters.ts`): asked for here, once, and the context rebuilt
-  // when it lands — `hookContextFor` reads it, so the stage, the rail and
-  // the exports then name the same groups.
-  const [townsTick, setTownsTick] = useState(0);
-  const deckLayersForTowns = useMemo(
-    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
-    [post.badge.hook, post.slides],
-  );
-  useEffect(() => {
-    if (!wantsTowns(deckLayersForTowns) || townsIfLoaded()) return;
-    let alive = true;
-    loadTowns()
-      .then(() => {
-        if (alive) setTownsTick((n) => n + 1);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [deckLayersForTowns]);
-
-  // A Virée under the trip's water rule reads the shipped coastline to tell a
-  // crossing from a road (`terrain.ts`): asked for here, once, and the context
-  // rebuilt when it lands — until then the road is driven whole.
-  const [landTick, setLandTick] = useState(0);
-  const drivesUnderWaterRule = trip.crossings?.auto === true && deckLayersForTowns.some((layer) => layer.id === 'drive');
-  useEffect(() => {
-    if (!drivesUnderWaterRule || landIfLoaded()) return;
-    let alive = true;
-    loadLandIndex()
-      .then(() => {
-        if (alive) setLandTick((n) => n + 1);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [drivesUnderWaterRule]);
 
   // What every hook variant is prepared against — built by the one function
   // the deck, the rail and the exports use too — and what the picker hands to a
@@ -772,7 +791,7 @@ export default function PostEditor({
       post.badge.layout,
       aspect,
       post.badge.pieceStyles,
-      hookLife,
+      hookExit,
       post.badge.cascade,
     );
     // The free text rides along, or a counting numeral would hide it.
@@ -783,7 +802,7 @@ export default function PostEditor({
     post.badge.layout,
     aspect,
     post.badge.pieceStyles,
-    hookLife,
+    hookExit,
     post.badge.cascade,
     hookTexts,
   ]);
@@ -1002,15 +1021,16 @@ export default function PostEditor({
   const setClipRange = useCallback(
     (range: TrimRange) => {
       const seconds = screenSecondsOf(range, slide.speed);
-      // A cut made by hand is a length set by hand: the slide leaves Auto.
+      // A clip's cut IS its length: the slide is fixed at it (`fixedFrom`).
+      const length = fixedFrom(slide.length);
       if (slide.kind === 'hook') {
-        patchBadge({ videoTimeSeconds: range.start, hookSeconds: seconds, hookAuto: false });
+        patchBadge({ videoTimeSeconds: range.start, hookSeconds: seconds, length });
       } else if (slide.slideId) {
         onChangePost({
           ...post,
           slides: post.slides.map((s) =>
             s.id === slide.slideId
-              ? { ...s, videoTimeSeconds: range.start, seconds, auto: false }
+              ? { ...s, videoTimeSeconds: range.start, seconds, length }
               : s,
           ),
         });
@@ -1032,13 +1052,14 @@ export default function PostEditor({
         slide.speed,
         speed,
       );
+      const length = fixedFrom(slide.length);
       if (slide.kind === 'hook') {
-        patchBadge({ videoSpeed: speed, hookSeconds: seconds, hookAuto: false });
+        patchBadge({ videoSpeed: speed, hookSeconds: seconds, length });
       } else if (slide.slideId) {
         onChangePost({
           ...post,
           slides: post.slides.map((s) =>
-            s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds, auto: false } : s,
+            s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds, length } : s,
           ),
         });
       }
@@ -1856,6 +1877,42 @@ export default function PostEditor({
       },
     },
     {
+      id: 'trips.slideLength',
+      title: 'Set how long a slide lasts',
+      description:
+        'Who decides a slide’s length (the open slide unless named; 1 is the hook): owner "opener" — the opener at a pace (1 its own, 0.5 twice as fast, never under its floor) then a hold in seconds — or owner "fixed" — the slide lasts `seconds`, and a longer opener is sped up to fit ("fit") or cut ("cut"). Anything not named is kept. trips.piece reports each slide’s length, what its opener needs and its pace. One undo step.',
+      params: {
+        position: { type: 'number', description: 'The slide’s position, from 1; the open slide when absent.', integer: true, min: 1, optional: true },
+        owner: { type: 'string', description: 'Who decides.', enum: ['opener', 'fixed'], optional: true },
+        pace: { type: 'number', description: 'The opener’s pace under owner "opener", 0.1..1.', min: 0.1, max: 1, optional: true },
+        hold: { type: 'number', description: 'Seconds on the picture after the opener, under owner "opener".', min: 0, max: MAX_HOOK_SECONDS, optional: true },
+        seconds: { type: 'number', description: 'The slide’s length under owner "fixed".', min: MIN_HOOK_SECONDS, max: MAX_HOOK_SECONDS, optional: true },
+        over: { type: 'string', description: 'Under owner "fixed", what a longer opener does.', enum: ['fit', 'cut'], optional: true },
+      },
+      run: (p) => {
+        const target = slideAt(p.position);
+        if (target.kind === 'cta') throw new CommandError('invalid', 'the closing card lasts the outro’s length');
+        const now = postNow.current;
+        const was = target.length;
+        const owner = (p.owner as SlideLength['owner'] | undefined) ?? was.owner;
+        const length: SlideLength =
+          owner === 'opener'
+            ? {
+                owner: 'opener',
+                pace: typeof p.pace === 'number' ? p.pace : was.owner === 'opener' ? was.pace : 1,
+                hold: typeof p.hold === 'number' ? p.hold : was.owner === 'opener' ? was.hold : DEFAULT_HOLD_SECONDS,
+              }
+            : { owner: 'fixed', over: (p.over as LengthOver | undefined) ?? (was.owner === 'fixed' ? was.over : 'fit') };
+        const seconds = typeof p.seconds === 'number' ? p.seconds : undefined;
+        writePost(
+          target.kind === 'hook'
+            ? { ...now, badge: { ...now.badge, length, ...(seconds !== undefined ? { hookSeconds: seconds } : {}) } }
+            : { ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, length, ...(seconds !== undefined ? { seconds } : {}) } : x)) },
+        );
+        return { position: target.position, length };
+      },
+    },
+    {
       id: 'trips.develop',
       title: 'Correct a slide’s picture',
       description:
@@ -2252,16 +2309,18 @@ export default function PostEditor({
               min: MIN_HOOK_SECONDS,
               max: MAX_HOOK_SECONDS,
               onChange: (seconds, local) => {
-                // A grip dragged sets the length by hand: the slide leaves Auto.
-                if (isHook) patchBadge({ hookSeconds: seconds, hookAuto: false });
-                else patchSlide({ seconds, auto: false });
+                // A grip never changes who owns the length: under the opener's
+                // rule it writes a pace and a hold, a fixed one its seconds.
+                const edit = lengthByHand(slide.length, slide.timing, seconds);
+                if (isHook) patchBadge({ length: edit.length, ...(edit.seconds !== undefined ? { hookSeconds: edit.seconds } : {}) });
+                else patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) });
                 deck.goTo(slideIndex, local);
               },
             }
           : null
       }
-      // What a SET slide cuts off its opener, hatched at the cell's end.
-      overflowFor={(i) => (slides[i] && !slides[i].auto ? Math.max(0, (openerSecondsBySlide[i] ?? 0) - (lengths[i] ?? 0)) : 0)}
+      // What the slide's end cuts off its opener, hatched at the cell's end.
+      overflowFor={(i) => slides[i]?.timing.cut ?? 0}
     />
   );
 

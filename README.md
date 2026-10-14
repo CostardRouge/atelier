@@ -1135,12 +1135,12 @@ lower), its ink, a panel behind it (fill, corner radius, outline) and an
 entrance and exit drawn from the engine's own animation model — fade, slide,
 scale, typewriter, wipe, with duration, easing and a stagger delay. An exit
 lands on the **end of the slide** — shorten the slide and the exit comes
-sooner, never cut; playing the piece from the band under the preview shows the
+sooner, never cut, and on a slide too short to let the badge rest it stays; playing the piece from the band under the preview shows the
 entrance land and the exit leave. A new piece's first slide is on screen for
 **5 s** (the badge settles in 4, the picture holds one more) unless the trip
-remembers another length for that kind of piece — and it is born **Auto**:
-give it an opener and the slide lasts what the opener needs plus half a second,
-with no number to set (see *How long a slide lasts*, below).
+remembers another length for that kind of piece — and its opener **decides**:
+give it one and the slide lasts what the opener needs plus half a second, with
+no number to set (see *How long a slide lasts*, below).
 
 **A look you like becomes the starting point.** Trip settings (the ⚙ beside the
 way back) → **New pieces** saves
@@ -1619,21 +1619,31 @@ let go (the Content tab's *On screen* slider is the same number). `⋯` moves th
 closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
 
-**How long a slide lasts.** A slide's length has an owner, and the *On screen*
-row says which. A new slide is **Auto**: it lasts what it carries — an opener
-(Itinerary, Virée, Défilé) plus a half-second hold, else its own seconds — and
-follows the opener when its settings change, so nothing is ever cut; the band
-writes `· auto` on its cell. Drag a grip, the slider or a clip's cut and the
-length is **Set by you**, with an *Auto* button to hand it back. A set slide
-shorter than its opener shows the cut **hatched** at the end of its cell and,
-under the slider, two verbs: *Use 10.4 s* (back to Auto) or *Fit Virée to
-5.0 s*. **Fit to the slide** is a setting of the opener, kept with it in its own
-panel under its length: the opener's clock is scaled so it rests when the slide
-ends — content, drawing and ticks on one scaled clock — and it follows the
-slide's length when that changes later, under a floor: a picture never shows
-for less than 0.35 s, below which the fit is refused and the panel says why. A
-slide may last up to a minute. Pieces made before this rule keep their stored
-length, set by hand, and are offered the same two verbs.
+**How long a slide lasts.** The Content tab's *Slide* section says it as a sum
+— *On screen 6.4 s: Virée 5.9 s + 0.5 s on the picture* — and names who decides
+it with one switch, the only thing that changes the owner (switching keeps the
+length where it was). On a new slide **the opener decides** (Itinerary, Virée,
+Défilé): the slide is the opener at its **Pace** (½×, ¾× or its own 1×), then a
+**Hold after** on the picture — so when the opener grows (a ferry crossing, a
+stop, the recap's beats) the slide grows with it. A slide can instead be
+**Fixed** at a number of **Seconds** — for a reel cut to a beat — and then asks
+one question of a longer opener: **speed it up** to end with the slide (the
+default), or **cut it**, hatched at the end of its cell. The opener is never run
+faster than the time it takes to see a picture (0.35 s on its shortest beat);
+a fixed length under that runs it at that pace and cuts the rest, and says so.
+The numbers are the suite's sliders: drag, tap, or hold (Enter) to type one.
+
+On the band under the picture the open slide's cell draws its parts — a bright
+rail under the opener, a faint one under the hold, the opener's own end dashed
+when it is sped up, the stretch where Virée is at sea striped blue with a tick where the car drives aboard and off — and its end grip negotiates: past the opener's end it
+drags the hold, inside it the pace, resting on the opener's end and stopping at
+the fastest pace allowed, the cell saying which (*hold 2.5s*, *68%*, *fastest
+35%*). Pressing a grip pauses a playing piece. A clip's cut is its length, so
+trimming a clip fixes it. The badge's exit lands on the slide's end, except on
+a slide too short to let it rest after its entrance, where it simply stays.
+*Goes out as* says whether the slide leaves as a video or an image and why,
+with one verb to deliver the other. A slide may last up to a minute; pieces
+made before this rule keep their length to the frame.
 
 **Any slide can hold what the hook holds.** Being first is what makes a slide
 the hook; what it *carries* is each slide's own. Open a content slide and the

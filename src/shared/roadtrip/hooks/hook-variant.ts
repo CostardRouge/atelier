@@ -39,6 +39,7 @@ import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
 import type { StyleTheme } from '../../overlay/title-styles';
 import type { TimeWindow } from '../../overlay/animation';
+import type { ResolvedLength, SlideLength } from '../slide-length';
 
 /** What the engine draws into — the 2D context both renderers already use. */
 export type HookCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -310,11 +311,13 @@ export interface HookContext {
    */
   counterMode?: CounterMode;
   /**
-   * How long the hook slide is ON SCREEN (`PostBadge.hookSeconds`) — not the
-   * badge's life. What a variant compares its own length against, to say so
-   * when it would be cut off.
+   * Who decides how long the slide is and its stored seconds
+   * (`slide-length.ts`) — read by `resolveHook` ALONE, which runs the opener
+   * at the pace this resolves to. A variant never reads it: it prepares at its
+   * own pace and reports its shortest beat (`HookRender.shortestBeat`), so no
+   * opener speeds itself up. Absent (a picker preview, a test): its own pace.
    */
-  screenSeconds?: number;
+  slideLength?: { length: SlideLength; seconds: number };
   /** Every day of the trip, in order — filled when `needs.coverage` asks. */
   calendar?: readonly HookDay[];
   /** The trip's legs, in the order they were lived — filled for `needs.stages`. */
@@ -383,6 +386,13 @@ export interface HookContext {
 export type { SoundEvent } from '../../audio/sound-event';
 import type { SoundEvent } from '../../audio/sound-event';
 
+/** A stretch of an opener's clock worth marking on the band: at sea, or driving aboard or off a ferry. */
+export interface HookSpan {
+  kind: 'sail' | 'board' | 'alight';
+  start: number;
+  end: number;
+}
+
 /** A prepared hook: the closure every downstream reader shares. */
 export interface HookRender {
   /**
@@ -390,6 +400,12 @@ export interface HookRender {
    * case, and the reason a hook with no variant costs no time.
    */
   readonly seconds: number;
+  /**
+   * Its SHORTEST beat at its own pace — a picture's time, a stop's dwell, a
+   * day's flash — which the slide may never speed under `FIT_FLOOR_SECONDS`
+   * (`paceFloor`). Absent: nothing in it needs a floor of its own.
+   */
+  readonly shortestBeat?: number;
   /**
    * The pieces this layer rewrites at `t`, merged OVER the computed content.
    * `null` on a piece hides it. Absent = the badge says what it always said.
@@ -411,6 +427,12 @@ export interface HookRender {
    * streamed map ground). Absent: the paint needs nothing it waits for.
    */
   ready?(t0: number, t1?: number, signal?: AbortSignal): Promise<void>;
+  /**
+   * Stretches of this layer's clock the deck band MARKS on the slide's cell
+   * (`DeckStrip`): where the vehicle is at sea, and the beats it drives
+   * aboard and off a ferry — Virée's crossings. Absent: nothing to mark.
+   */
+  readonly spans?: readonly HookSpan[];
   /** The bed, as times and voices. Rendered offline at export; see §7. */
   score?(): readonly SoundEvent[];
   /**
@@ -705,8 +727,12 @@ export function setHookOptions(
 
 /** Several layers, read as one. What the renderers and the export consume. */
 export interface ResolvedHook {
-  /** Seconds the longest layer occupies; 0 when nothing plays. */
+  /** Seconds the longest layer occupies ON THE SLIDE — sped up when the slide asks; 0 when nothing plays. */
   readonly seconds: number;
+  /** Seconds the longest layer needs at its own pace — what a panel says it takes. */
+  readonly natural: number;
+  /** The slide's length resolved against it — null where no length was handed (`HookContext.slideLength`). */
+  readonly length: ResolvedLength | null;
   /**
    * True when a layer rewrites badge text. A caller only builds elements per
    * frame when this is set — the badge alone must keep its static elements.
@@ -716,6 +742,8 @@ export interface ResolvedHook {
   readonly ownsFrame: boolean;
   /** When the badge is on screen — the last layer that says; null where none does. */
   readonly badgeWindow: TimeWindow | null;
+  /** Every layer's marked stretches, in time order, on the slide's clock. */
+  readonly spans: readonly HookSpan[];
   /** The badge's content after every layer has had its say at `t`. */
   contentAt(base: BadgeContent | null, t: number): BadgeContent | null;
   /** Paint every layer, in order. */
@@ -740,14 +768,22 @@ export interface ResolvedHook {
  * `stageAt` already uses for overlapping legs, and the only one that stays
  * predictable when a stack is reordered.
  */
-export function foldHook(layers: readonly HookRender[], ownsFrame: boolean): ResolvedHook {
+export function foldHook(
+  layers: readonly HookRender[],
+  ownsFrame: boolean,
+  natural?: number,
+  length: ResolvedLength | null = null,
+): ResolvedHook {
   const seconds = layers.reduce((max, layer) => Math.max(max, layer.seconds), 0);
   return {
     seconds,
+    natural: natural ?? seconds,
+    length,
     rewrites: layers.some((layer) => typeof layer.content === 'function'),
     mixWithSource: layers.some((layer) => layer.mixWithSource === true && !!layer.score),
     ownsFrame,
     badgeWindow: layers.reduce<TimeWindow | null>((win, layer) => layer.badgeWindow ?? win, null),
+    spans: layers.flatMap((layer) => layer.spans ?? []).sort((a, b) => a.start - b.start),
     contentAt(base, t) {
       if (!base) return null;
       let content = base;

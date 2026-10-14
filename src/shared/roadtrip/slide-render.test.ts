@@ -92,6 +92,25 @@ describe('slideRender', () => {
     expect(render.qr).toBeNull();
   });
 
+  it('lands the badge’s exit on the slide’s end, and keeps it on a slide too short to rest', () => {
+    const t = trip();
+    const fade = { preset: 'fade' as const, duration: 0.5, easing: 'out' as const };
+    const badge = (hookSeconds: number) => ({
+      ...defaultPostBadge('carousel'),
+      length: { owner: 'fixed' as const, over: 'cut' as const },
+      hookSeconds,
+      pieceStyles: { kicker: { animation: { in: fade, out: fade } } },
+    });
+    const windowOf = (hookSeconds: number) => {
+      const p = post({ badge: badge(hookSeconds) });
+      const render = slideRender(t, p, deckSlides(t, p)[0], ASPECT);
+      return render.elements.find((el) => el.animation)?.window;
+    };
+    expect(windowOf(6)).toEqual({ start: 0, end: 6 });
+    // 1.2 s < 0.5 s of entrance + 1 s of rest: no flash, the badge stays.
+    expect(windowOf(1.2)).toEqual({ start: 0, end: null });
+  });
+
   it('gives a content slide its caption and nothing of the badge', () => {
     const t = trip();
     const p = post({ slides: [{ ...createPostSlide(null), caption: 'Over the gorge' }] });

@@ -123,8 +123,6 @@ export interface ScrubOptions {
   pitchDrift: ScrubDrift;
   /** Over a clip with its own sound: mix the ticks in rather than leave them out. */
   mixWithClip: boolean;
-  /** FIT the sweep into a shorter slide — `MapOptions.fit`, the same rule. */
-  fit: boolean;
 }
 
 export const SCRUB_DEFAULTS: ScrubOptions = {
@@ -159,7 +157,6 @@ export const SCRUB_DEFAULTS: ScrubOptions = {
   tickPitch: 1,
   pitchDrift: 'flat',
   mixWithClip: false,
-  fit: false,
 };
 
 /** The bounds each option is clamped to — a stored value is never trusted. */
@@ -447,7 +444,6 @@ export function scrubOptions(raw: Readonly<Record<string, unknown>>): ScrubOptio
     ),
     pitchDrift: o.pitchDrift === 'rising' || o.pitchDrift === 'falling' ? o.pitchDrift : 'flat',
     mixWithClip: o.mixWithClip === true,
-    fit: o.fit === true,
   };
 }
 

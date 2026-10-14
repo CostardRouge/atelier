@@ -17,6 +17,7 @@
 
 import type { BadgeContent, CounterMode } from '../day-badge';
 import type { TripDoc, TripPost } from '../trip-types';
+import type { SlideLength } from '../slide-length';
 import { hookCalendar, hookStages } from './hook-calendar';
 import { townsIfLoaded } from '../load-gazetteer';
 import type { HookContext, HookLayer, HookPicture } from './hook-variant';
@@ -29,14 +30,14 @@ import { tripRoadLine } from '../road-track';
 export interface HookTiming {
   /** The badge's life on that slide — what an exit animation lands on. */
   durationSeconds: number;
-  /** How long the slide is on screen, as last set. */
+  /** The slide's own stored seconds — a fixed length, or what a slide with no opener lasts. */
   screenSeconds: number;
   /**
-   * The slide FOLLOWS its opener (`slide-timing.ts`): its length is the
-   * opener's plus a hold, so the opener is told no screen time — nothing
-   * fits into it, nothing is cut by it. Absent or false: a set length.
+   * Who decides the slide's length (`slide-length.ts`) — handed to
+   * `resolveHook`, which runs the opener at the pace it resolves to. Absent:
+   * the opener plays at its own pace and the slide follows it.
    */
-  auto?: boolean;
+  length?: SlideLength;
   /** What the slide's badge counts; absent where the slide draws none. */
   counterMode?: CounterMode;
 }
@@ -46,7 +47,7 @@ export function pieceHookTiming(post: TripPost): HookTiming {
   return {
     durationSeconds: post.badge.durationSeconds,
     screenSeconds: post.badge.hookSeconds,
-    auto: post.badge.hookAuto === true,
+    length: post.badge.length,
     counterMode: post.badge.mode,
   };
 }
@@ -58,13 +59,13 @@ export function pieceHookTiming(post: TripPost): HookTiming {
  */
 export function slideHookTiming(slide: {
   seconds: number;
-  auto?: boolean;
+  length: SlideLength;
   badge: { durationSeconds: number; mode: CounterMode } | null;
 }): HookTiming {
   return {
     durationSeconds: slide.badge?.durationSeconds ?? slide.seconds,
     screenSeconds: slide.seconds,
-    auto: slide.auto === true,
+    length: slide.length,
     counterMode: slide.badge?.mode,
   };
 }
@@ -81,9 +82,8 @@ export function hookContextFor(
   return {
     aspect,
     durationSeconds: timing.durationSeconds,
-    // An Auto slide follows its opener: the opener is told no screen time, so
-    // it never fits into one nor warns of being cut by one.
-    screenSeconds: timing.auto ? undefined : timing.screenSeconds,
+    // Read by `resolveHook` alone, which runs the opener at the slide's pace.
+    ...(timing.length ? { slideLength: { length: timing.length, seconds: timing.screenSeconds } } : {}),
     date: post.date,
     content,
     counterMode: timing.counterMode,

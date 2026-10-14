@@ -22,8 +22,15 @@
  *
  * The open slide's cell carries a GRIP at each end: dragging one sets how long
  * the slide holds the screen — a still's seconds, a clip's cut — with the
- * other end held still on screen, and writes once, on release (the Content
- * tab's *On screen* slider is the same number, and its keyboard twin).
+ * other end held still on screen, and writes once, on release. Under an
+ * opener that decides (face B of `docs/slide-length.md`) the cell DRAWS its
+ * parts — the opener's span, its natural end dashed where it is sped up, the
+ * hold after — and the one grip has two zones: past the natural end it drags
+ * the hold, inside it the pace, resting on the natural end and STOPPING at
+ * the floor, the label saying which (`gripDraft`). Pressing a grip while the
+ * piece plays pauses it rather than the grip being hidden. Where the opener
+ * is at sea its rail is STRIPED, with a tick where it docks (the sailing
+ * stripe, face A, `sail-spans.ts`), so a cut that falls mid-crossing is seen.
  *
  * The strip is laid out by `shared/roadtrip/deck-strip.ts`: a fixed number of
  * pixels a second with a floor, so a clip keeps its size wherever it sits and
@@ -51,6 +58,7 @@ import {
   type StripEdge,
 } from '../../shared/roadtrip/deck-strip';
 import { CLIP_SPEEDS, MAX_HOOK_SECONDS, MIN_HOOK_SECONDS, screenSecondsOf } from '../../shared/roadtrip/hook-video';
+import { gripDraft, type GripDraft } from '../../shared/roadtrip/slide-length';
 import TrimBar from '../../shared/media/TrimBar';
 import type { TrimRange } from '../../shared/media/trim';
 import { formatTimecode } from '../../shared/lib/format';
@@ -142,6 +150,8 @@ interface Sizing {
   seconds: number;
   /** A clip's draft cut. */
   range: TrimRange | null;
+  /** A still's draft under its owner — which zone the grip is in, the pace, the hold. */
+  grip: GripDraft | null;
 }
 
 /** Shortest cut the handles may leave — the floor `clipSlice` keeps. */
@@ -154,6 +164,10 @@ const GAP_PX = 2;
 const CELL_PX = 38;
 const TAP_SLOP_PX = 5;
 const SNAP_PX = 10;
+/** The sea on the band's rail — a fixed blue, the cell being a dark frame in every theme. */
+const SEA = '#5aa0d0';
+/** How close to the opener's natural end the grip rests on it. */
+const MAGNET_PX = 6;
 
 const pillBase =
   'flex-none rounded-full border font-mono tracking-[0.04em] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
@@ -175,6 +189,15 @@ const pillOn = 'border-accent bg-accent-wash text-accent-ink';
 
 function seconds(v: number): string {
   return `${v.toFixed(1).replace(/\.0$/, '')}s`;
+}
+
+/** What a held grip is moving, said in the open cell's label. */
+function gripWord(grip: GripDraft | null): string {
+  if (!grip || grip.zone === 'seconds') return '';
+  if (grip.stopped === 'floor') return ` · fastest ${Math.round(grip.pace * 100)}%`;
+  if (grip.stopped === 'shortest') return ` · shortest, ${Math.round(grip.pace * 100)}%`;
+  if (grip.zone === 'pace') return ` · ${Math.round(grip.pace * 100)}%`;
+  return grip.hold > 0 ? ` · hold ${seconds(grip.hold)}` : ' · its own end';
 }
 
 function slideName(slide: DeckSlide): string {
@@ -383,6 +406,9 @@ export default function DeckStrip({
     // The grip is the band's too: without this the band would scrub as well.
     e.stopPropagation();
     cancelAnimationFrame(glide.current);
+    // The strip moves under a playing piece: a press on a grip stops it, so
+    // the end held is the end that was pressed.
+    if (playing) onTogglePlay();
     e.currentTarget.setPointerCapture(e.pointerId);
     sizeDrag.current = {
       edge,
@@ -405,9 +431,13 @@ export default function DeckStrip({
     let draft: Sizing | null = null;
     if (d.range && clip) {
       const range = resizedClip(d.range, d.edge, dx, pxPerSecond, clip.speed, clip.duration, MIN_LENGTH, MAX_HOOK_SECONDS, FRAME_STEP);
-      draft = { edge: d.edge, anchor: d.anchor, seconds: screenSecondsOf(range, clip.speed), range };
+      draft = { edge: d.edge, anchor: d.anchor, seconds: screenSecondsOf(range, clip.speed), range, grip: null };
     } else if (resize) {
-      draft = { edge: d.edge, anchor: d.anchor, seconds: resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max), range: null };
+      const raw = resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max);
+      const open = slides[index];
+      // Read through the slide's owner: the cell ends where the slide would.
+      const grip = open ? gripDraft(open.length, open.timing, raw, MAGNET_PX / pxPerSecond, resize) : null;
+      draft = { edge: d.edge, anchor: d.anchor, seconds: grip?.seconds ?? raw, range: null, grip };
     }
     d.draft = draft;
     setSizing(draft);
@@ -463,16 +493,15 @@ export default function DeckStrip({
   const contentCount = slides.filter((s) => s.kind === 'content').length;
   const hasCard = slides.some((s) => s.kind === 'cta');
 
-  // Whether the open cell wears its grips: never while the piece plays (the
-  // strip moves under the finger), never on the closing card (its length is
-  // the outro's), and on a clip only once its length is known.
+  // Whether the open cell wears its grips: never on the closing card (its
+  // length is the outro's), and on a clip only once its length is known.
+  // While the piece plays they stay, and a press pauses it.
   const grips =
-    !playing &&
     !trimming &&
     slide?.kind !== 'cta' &&
     (clip ? clip.duration > 0 : Boolean(resize));
   // A finger's width on a phone, a pointer's beside a mouse.
-  const gripPx = compact || coarse ? 16 : 10;
+  const gripPx = compact || coarse ? 20 : 14;
 
   // The row's geometry on this shell. On a phone every control is a finger's
   // target: the play button a size up from the 34px pills beside it (the same
@@ -681,7 +710,13 @@ export default function DeckStrip({
                 (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
                 (holds ? ` ${holds}` : '') +
                 ` ${seconds(drawn[i] ?? 0)}` +
-                (s.auto && !sizing ? ' · auto' : '') +
+                // The pace the opener runs at, when the slide speeds it up —
+                // and, while a grip is held, what the grip is moving.
+                (sizing && i === index
+                  ? gripWord(sizing.grip)
+                  : s.timing.scale < 0.999
+                    ? ` · ${Math.round(s.timing.scale * 100)}%`
+                    : '') +
                 (s.speed !== 1 ? ` · ${s.speed}×` : '');
               const gripped = grips && i === index;
               // Two grips never cover more than two thirds of a short cell.
@@ -733,6 +768,68 @@ export default function DeckStrip({
                       {Icons.loopOne}
                     </span>
                   )}
+                  {i === index && s.timing.natural > 0 && (() => {
+                    // The open cell's PARTS: the opener's span (a bar along its
+                    // foot), its natural end dashed where it is sped up, and —
+                    // while a grip paces it — the floor it stops at.
+                    const total = drawn[i] ?? 0;
+                    if (!(total > 0)) return null;
+                    const k = cell.width / total;
+                    const g = sizing && i === index ? sizing.grip : null;
+                    const pace = g ? g.pace : s.timing.scale;
+                    const span = Math.min(total, s.timing.natural * pace);
+                    const natural = s.timing.natural * k;
+                    // The crossings are on the slide's clock at its pace; a held grip re-paces them.
+                    const f = s.timing.scale > 0 ? pace / s.timing.scale : 1;
+                    const at = (t: number) => Math.min(cell.width, Math.max(0, t * f * k));
+                    return (
+                      <>
+                        {/* A rail along the foot: bright under the opener, faint under the hold. */}
+                        <span className="absolute inset-x-0 bottom-1 h-1 bg-white/30 pointer-events-none" />
+                        <span
+                          className="absolute left-0 bottom-1 h-1 rounded-r-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.45)] pointer-events-none"
+                          style={{ width: span * k }}
+                        />
+                        {/* Where the opener is at sea, striped on its rail; a tick where it docks (face A). */}
+                        {s.spans.map((sp) =>
+                          sp.kind === 'sail' ? (
+                            <span
+                              key={`sail-${sp.start}`}
+                              className="absolute bottom-1 h-1 pointer-events-none"
+                              style={{
+                                left: at(sp.start),
+                                width: Math.max(0, at(sp.end) - at(sp.start)),
+                                background: `repeating-linear-gradient(135deg, ${SEA} 0 3px, #fff 3px 6px)`,
+                                boxShadow: '0 0 0 1px rgba(0,0,0,0.45)',
+                              }}
+                              title="At sea"
+                            />
+                          ) : (
+                            <span
+                              key={`${sp.kind}-${sp.start}`}
+                              className="absolute bottom-0.5 h-2 w-0.5 pointer-events-none"
+                              style={{ left: Math.max(0, at(sp.kind === 'board' ? sp.start : sp.end) - 1), background: SEA }}
+                              title={sp.kind === 'board' ? 'Drives aboard' : 'Drives off'}
+                            />
+                          ),
+                        )}
+                        {pace < 0.999 && natural < cell.width - 1 && (
+                          <span
+                            className="absolute top-3 bottom-0 border-l-2 border-dashed border-white/90 pointer-events-none"
+                            style={{ left: natural }}
+                            title="Where the opener would end at its own pace"
+                          />
+                        )}
+                        {g && g.zone === 'pace' && (
+                          <span
+                            className="absolute bottom-0 h-4 w-1 bg-ink ring-1 ring-white/80 pointer-events-none"
+                            style={{ left: Math.max(0, s.timing.natural * s.timing.floor * k - 1) }}
+                            title="The fastest this opener may run"
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
                   {cutPx > 0 && (
                     <span
                       className="absolute inset-y-0 right-0 pointer-events-none"
@@ -762,7 +859,9 @@ export default function DeckStrip({
                             ? edge === 'start'
                               ? 'Drag to move where this clip starts'
                               : 'Drag to move where this clip ends'
-                            : 'Drag to make this slide longer or shorter'
+                            : s.length.owner === 'opener' && s.timing.natural > 0
+                              ? 'Drag: past the opener’s end to hold the picture longer, inside it to run the opener faster'
+                              : 'Drag to make this slide longer or shorter'
                         }
                         className={`absolute inset-y-0 grid place-items-center bg-accent cursor-ew-resize touch-pan-y ${
                           edge === 'start' ? 'left-0' : 'right-0'

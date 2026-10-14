@@ -7,6 +7,7 @@ import {
   contentSlideElements,
   deckSlides,
   hookAnimates,
+  mediumVerb,
   moveItem,
   resolveSlideMedium,
   slideFileName,
@@ -244,6 +245,20 @@ describe('moveItem', () => {
 });
 
 // --- what a slide is delivered as ------------------------------------------
+
+describe('mediumVerb — one verb beside the medium', () => {
+  it('offers the other medium, and writes auto when that is the slide’s own', () => {
+    // Something moves: by itself a video; the verb offers a still, written as a choice.
+    expect(mediumVerb('auto', true, null)).toEqual({ label: 'Deliver a still', write: 'image' });
+    // Asked for a still: the verb goes back to video, which is the slide's own — auto again.
+    expect(mediumVerb('image', true, null)).toEqual({ label: 'Deliver as video', write: 'auto' });
+    // A plain picture: by itself a still; the verb holds it as video.
+    expect(mediumVerb('auto', false, 'a.jpg')).toEqual({ label: 'Deliver as video', write: 'video' });
+    expect(mediumVerb('video', false, 'a.jpg')).toEqual({ label: 'Deliver a still', write: 'auto' });
+    // A clip frozen on one frame comes back to moving.
+    expect(mediumVerb('image', false, 'a.mp4')).toEqual({ label: 'Deliver as video', write: 'auto' });
+  });
+});
 
 describe('resolveSlideMedium', () => {
   it('leaves a plain photograph an image', () => {

@@ -78,6 +78,15 @@ export function pieceDetail(trip: TripDoc, post: TripPost) {
       medium: s.medium,
       seconds: Math.round(s.seconds * 100) / 100,
       opener: s.hook?.[0]?.id ?? null,
+      // Who decides the length, and how the opener plays in it (`slide-length.ts`).
+      length: s.length,
+      ...(s.natural > 0
+        ? {
+            openerNeeds: Math.round(s.natural * 100) / 100,
+            openerPace: Math.round(s.timing.scale * 100) / 100,
+            ...(s.timing.cut > 0.005 ? { openerCut: Math.round(s.timing.cut * 100) / 100 } : {}),
+          }
+        : {}),
       ...(s.caption ? { caption: s.caption } : {}),
     })),
   };

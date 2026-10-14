@@ -29,8 +29,6 @@ import type {
   HookVariant,
 } from './hook-variant';
 import { Group, MovedRow } from './panel-ui';
-import { FitRow } from './fit-row';
-import { fitRender } from '../slide-timing';
 import type { HookRender } from './hook-variant';
 import { paintScrub } from './scrub-paint';
 import {
@@ -352,15 +350,6 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
           onChange={(sweepSeconds) => set({ sweepSeconds })}
           format={(v) => `${v.toFixed(1)}s`}
         />
-        {plan && plan.endSeconds > 0 && (
-          <FitRow
-            seconds={plan.endSeconds}
-            screenSeconds={ctx.screenSeconds}
-            shortestBeat={perStop}
-            fit={o.fit}
-            onChange={(fit) => set({ fit })}
-          />
-        )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
           <Segmented
             size="sm"
@@ -671,7 +660,8 @@ export const scrubVariant: HookVariant = {
     // A set slide shorter than the sweep: fitted into it when asked, under
     // the flash floor (`slide-timing.ts`); an Auto slide follows the sweep.
     const perStop = plan.stops.length > 1 ? plan.sweepSeconds / (plan.stops.length - 1) : end;
-    return o.fit ? fitRender(render, ctx.screenSeconds, perStop).render : render;
+    // Its shortest beat at its own pace: the floor a slide may speed it to (`slide-length.ts`).
+    return { ...render, shortestBeat: perStop };
   },
   // The TAPE is what a click grabs and a drag moves: the flashes fill the frame
   // and the numeral is a badge piece, so neither has a place to be dragged to.

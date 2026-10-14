@@ -94,8 +94,8 @@ export const DRIVE_CHAPTERS: readonly OpenerChapter[] = [
   {
     id: 'motion',
     title: 'Motion',
-    keys: ['driveSeconds', 'fit', 'easing', 'delaySeconds', 'arriveSeconds', 'end', 'captionFollows'],
-    words: ['Motion', 'Driving', 'Speed', 'Duration', 'Fit to the slide', 'Easing', 'Settle', 'Brake', 'Even', 'Wind up', 'Glide', 'Hold first', 'At the end', 'Then', 'Reveal the picture', 'Stay on the map', 'Badge follows'],
+    keys: ['driveSeconds', 'easing', 'delaySeconds', 'arriveSeconds', 'end', 'captionFollows'],
+    words: ['Motion', 'Driving', 'Speed', 'Duration', 'Easing', 'Settle', 'Brake', 'Even', 'Wind up', 'Glide', 'Hold first', 'At the end', 'Then', 'Reveal the picture', 'Stay on the map', 'Badge follows'],
     facts: [
       { key: 'driveSeconds', say: seconds },
       { key: 'easing', say: easing },
@@ -181,8 +181,8 @@ export const MAP_CHAPTERS: readonly OpenerChapter[] = [
   {
     id: 'motion',
     title: 'Motion',
-    keys: ['draw', 'drawSeconds', 'fit', 'dwellSeconds', 'easing', 'delaySeconds', 'pen'],
-    words: ['Motion', 'Travel', 'Speed', 'Duration', 'Fit to the slide', 'Wait', 'Easing', 'Hold first', 'Pen', 'Dot', 'Plane', 'Bare line'],
+    keys: ['draw', 'drawSeconds', 'dwellSeconds', 'easing', 'delaySeconds', 'pen'],
+    words: ['Motion', 'Travel', 'Speed', 'Duration', 'Wait', 'Easing', 'Hold first', 'Pen', 'Dot', 'Plane', 'Bare line'],
     facts: [
       { key: 'draw', say: (v) => (v === false ? 'Still map' : null) },
       { key: 'drawSeconds', say: seconds },
@@ -236,8 +236,8 @@ export const SCRUB_CHAPTERS: readonly OpenerChapter[] = [
   {
     id: 'sweep',
     title: 'Sweep',
-    keys: ['sweepSeconds', 'fit', 'easing', 'delaySeconds'],
-    words: ['Sweep', 'Length', 'Duration', 'Speed', 'Fit to the slide', 'Motion', 'Easing', 'Hold first'],
+    keys: ['sweepSeconds', 'easing', 'delaySeconds'],
+    words: ['Sweep', 'Length', 'Duration', 'Speed', 'Motion', 'Easing', 'Hold first'],
     facts: [{ key: 'sweepSeconds', say: seconds }, { key: 'easing', say: easing }],
   },
   {

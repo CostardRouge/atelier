@@ -60,9 +60,7 @@ import { readyGround } from './basemap-strip';
 import { CameraRows } from './camera-rows';
 import { stripBudget } from '../../map/osm-tiles';
 import { Group, MovedRow, resetLink } from './panel-ui';
-import { FitRow } from './fit-row';
 import { GroupRows } from './group-rows';
-import { fitRender } from '../slide-timing';
 import { StopStyleRow } from './stops-editor';
 import { StopSourceRows } from './stop-source-rows';
 import { sourceStops } from './stop-source';
@@ -608,15 +606,6 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         {o.draw && (
-          <FitRow
-            seconds={timing.total}
-            screenSeconds={ctx.screenSeconds}
-            shortestBeat={mapShortestBeat(timing)}
-            fit={o.fit}
-            onChange={(fit) => set({ fit })}
-          />
-        )}
-        {o.draw && (
           <SliderRow
             label="Wait"
             hint={
@@ -923,8 +912,8 @@ export const mapVariant: HookVariant = {
         : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
-    // A set slide shorter than the journey: fitted into it when asked (`slide-timing.ts`).
-    return o.fit ? fitRender(render, ctx.screenSeconds, mapShortestBeat(timing)).render : render;
+    // Its shortest beat at its own pace: the floor a slide may speed it to (`slide-length.ts`).
+    return { ...render, shortestBeat: mapShortestBeat(timing) };
   },
   Sketch: MapSketch,
   chapters: MAP_CHAPTERS,

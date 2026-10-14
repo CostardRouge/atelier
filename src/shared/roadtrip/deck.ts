@@ -30,9 +30,9 @@ import { clipSpeed } from './hook-video';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
-import type { HookLayer } from './hooks/hook-variant';
+import type { HookLayer, HookSpan, ResolvedHook } from './hooks/hook-variant';
 import { resolveHook } from './hooks/registry';
-import { slideTiming } from './slide-timing';
+import { resolveLength, type ResolvedLength, type SlideLength } from './slide-length';
 import type { Shade } from '../shades/shades';
 import type { SlideBadge } from './slide-capacities';
 
@@ -113,13 +113,19 @@ export interface DeckSlide {
   /** What this slide is delivered as, `auto` already resolved. */
   medium: 'image' | 'video';
   /**
-   * The slide's length FOLLOWS its opener (`slide-timing.ts`): `seconds`
-   * below is then the opener's plus a hold, not what is stored; false means
-   * set by hand. The closing card's is structural.
+   * Who decides the slide's length (`slide-length.ts`) as stored — the
+   * opener (at a pace, then a hold) or a fixed `seconds`. The closing card's
+   * is structural: fixed.
    */
-  auto: boolean;
-  /** What this slide's opener occupies; 0 for none or one that plays nothing. */
+  length: SlideLength;
+  /** That length resolved against the opener: the pace, the hold, what is cut. */
+  timing: ResolvedLength;
+  /** What this slide's opener occupies ON THE SLIDE, sped up when it is; 0 for none or one that plays nothing. */
   openerSeconds: number;
+  /** What the opener needs at its own pace — the length a panel says it takes; 0 for none. */
+  natural: number;
+  /** Where the opener is at sea and docks, on the SLIDE's clock (sped up with it) — the band's stripe; empty for none. */
+  spans: readonly HookSpan[];
   /**
    * What the author CHOSE, before resolution — so a panel can show which of
    * the three is pressed without knowing whether this slide's value lives on
@@ -175,9 +181,34 @@ export function resolveSlideMedium(
   return { medium: 'image', reason: 'plain' };
 }
 
+/**
+ * The ONE verb beside the medium's sentence: deliver the other medium than the
+ * one this slide goes out as. It writes `'auto'` when that other medium is
+ * what the slide would go out as by itself, so a slide asked back to its own
+ * medium follows what it holds again — no third word on screen to learn.
+ */
+export function mediumVerb(
+  chosen: SlideMedium,
+  animated: boolean,
+  mediaName: string | null,
+): { label: string; write: SlideMedium } {
+  const now = resolveSlideMedium(chosen, animated, mediaName).medium;
+  const other = now === 'video' ? 'image' : 'video';
+  const own = resolveSlideMedium('auto', animated, mediaName).medium;
+  return { label: other === 'image' ? 'Deliver a still' : 'Deliver as video', write: other === own ? 'auto' : other };
+}
+
 /** True when any badge piece carries an animation, or the pieces cascade — what makes a hook move. */
 export function hookAnimates(styles: BadgePieceStyles, cascade?: BadgeCascade | null): boolean {
   return Boolean(cascade) || Object.values(styles).some((style) => Boolean(style?.animation));
+}
+
+/** The closing card's length: the outro's, fixed. */
+const CARD_LENGTH: SlideLength = { owner: 'fixed', over: 'cut' };
+
+/** A resolved opener's length on its slide — `resolveHook` resolved it, given the slide's timing. */
+function timingOf(hook: ResolvedHook, length: SlideLength, seconds: number): ResolvedLength {
+  return hook.length ?? resolveLength(length, seconds, hook.natural, 0);
 }
 
 /**
@@ -185,10 +216,12 @@ export function hookAnimates(styles: BadgePieceStyles, cascade?: BadgeCascade | 
  * post asks for it AND the trip's template says something.
  */
 export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
-  // Each opener prepared ONCE here: its length is both what makes the slide
-  // leave as a video and, under Auto, what the slide lasts.
-  const hookSeconds = resolveHook(post.badge.hook, hookContextFor(trip, post, 1, null, undefined, pieceHookTiming(post))).seconds;
-  const hookTiming = slideTiming(post.badge.hookAuto === true, post.badge.hookSeconds, hookSeconds);
+  // Each opener prepared ONCE here, at the slide's pace (`resolveHook`): its
+  // length both makes the slide leave as a video and, when the opener
+  // decides, is what the slide lasts.
+  const firstHook = resolveHook(post.badge.hook, hookContextFor(trip, post, 1, null, undefined, pieceHookTiming(post)));
+  const hookTiming = timingOf(firstHook, post.badge.length, post.badge.hookSeconds);
+  const hookSeconds = hookTiming.span;
   const slides: DeckSlide[] = [
     {
       kind: 'hook',
@@ -221,17 +254,21 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       ),
       chosen: post.badge.medium,
       seconds: hookTiming.seconds,
-      auto: hookTiming.owner === 'auto',
+      length: post.badge.length,
+      timing: hookTiming,
       openerSeconds: hookSeconds,
+      natural: hookTiming.natural,
+      spans: firstHook.spans,
       speed: isClip(post.media?.name) ? clipSpeed(post.badge.videoSpeed) : 1,
     },
   ];
 
   for (const slide of post.slides) {
-    const openerSeconds = slide.hook?.length
-      ? resolveHook(slide.hook, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(slide))).seconds
-      : 0;
-    const timing = slideTiming(slide.auto === true, slide.seconds, openerSeconds);
+    const opener = slide.hook?.length
+      ? resolveHook(slide.hook, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(slide)))
+      : null;
+    const timing = opener ? timingOf(opener, slide.length, slide.seconds) : resolveLength(slide.length, slide.seconds, 0, 0);
+    const openerSeconds = timing.span;
     slides.push({
       kind: 'content',
       position: slides.length + 1,
@@ -264,8 +301,11 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       ),
       chosen: slide.medium,
       seconds: timing.seconds,
-      auto: timing.owner === 'auto',
+      length: slide.length,
+      timing,
       openerSeconds,
+      natural: timing.natural,
+      spans: opener?.spans ?? [],
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
     });
   }
@@ -299,8 +339,11 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       reason: 'plain',
       chosen: 'image',
       seconds: OUTRO_SECONDS_DEFAULT,
-      auto: false,
+      length: CARD_LENGTH,
+      timing: resolveLength(CARD_LENGTH, OUTRO_SECONDS_DEFAULT, 0, 0),
       openerSeconds: 0,
+      natural: 0,
+      spans: [],
       speed: 1,
     });
   }

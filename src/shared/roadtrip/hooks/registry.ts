@@ -22,6 +22,8 @@ import {
   type HookVariant,
   type ResolvedHook,
 } from './hook-variant';
+import { resolveLength } from '../slide-length';
+import { scaleRender } from '../slide-timing';
 
 export const HOOK_VARIANTS: readonly HookVariant[] = [
   badgeVariant,
@@ -64,11 +66,24 @@ export function resolveHook(
     }
   }
 
-  const renders: HookRender[] = resolved.map(({ variant, layer }) =>
+  const prepared: HookRender[] = resolved.map(({ variant, layer }) =>
     variant.prepare(layer.options ?? {}, ctx),
   );
   const ownsFrame = resolved.some(({ variant }) => variant.owns === 'frame');
-  return foldHook(renders, ownsFrame);
+  const natural = prepared.reduce((max, render) => Math.max(max, render.seconds), 0);
+  if (!ctx.slideLength) return foldHook(prepared, ownsFrame, natural, null);
+  // The slide decides the pace (`slide-length.ts`), ONCE, here: every layer
+  // runs on the same clock, so the stage, the deck, every export and the
+  // Studio bridge play the same opener in the same seconds.
+  const beats = prepared.map((render) => render.shortestBeat ?? 0).filter((beat) => beat > 0);
+  const length = resolveLength(
+    ctx.slideLength.length,
+    ctx.slideLength.seconds,
+    natural,
+    beats.length ? Math.min(...beats) : 0,
+  );
+  const renders = length.scale < 1 ? prepared.map((render) => scaleRender(render, length.scale)) : prepared;
+  return foldHook(renders, ownsFrame, natural, length);
 }
 
 /** Why a variant cannot run on this piece, or null. Drives the picker's cards. */
