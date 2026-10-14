@@ -101,7 +101,8 @@ def test_finetune_from_a_run_with_frozen_luts_and_per_group_eval(workspace):
     assert len(groups) == 7 and groups == sorted(groups, key=lambda g: -g["de2000_mean"])
     assert sum(g["pairs"] for g in groups) == len(summary["pairs"])
     # Every row says what doing nothing scores and how well its two halves line up (a synthetic edit: perfectly).
-    assert all(r["structure"] > 0.9 and np.isfinite(r["identity_de2000_mean"]) for r in summary["pairs"])
+    assert all((r["structure"] is None or r["structure"] > 0.9) and np.isfinite(r["identity_de2000_mean"])
+               for r in summary["pairs"])
     assert summary["misaligned"] == [] and "identity_psnr" in summary
 
 

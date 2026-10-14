@@ -275,8 +275,12 @@ aussi dans le tableau de bord).
 original par `ingest` (`align.py`, par corrélation de luminance ; un
 redressement jusqu'à ±6°) et la paire est préparée sur les mêmes pixels. Une
 retouche qui n'est pas une découpe de l'original (perspective corrigée,
-contenu déplacé) est ignorée et dite. `ingest.align = "always"` cherche aussi
-dans les paires de même format (un recadrage qui garde le 3:2).
+contenu déplacé) est ignorée et dite. Une retouche **du même format** (un
+recadrage qui garde le 3:2, un redressement recadré au 3:2) est cherchée elle
+aussi dès que ses deux moitiés ne se superposent pas. Une préparation faite
+avant cette vérification est mesurée au prochain `ingest`, et seules les
+paires décalées sont refaites. `ingest.align = "always"` cherche dans toutes
+les paires.
 
 ## 6 bis. Le second modèle : tes réglages Develop
 

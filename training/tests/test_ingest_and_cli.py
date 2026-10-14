@@ -70,18 +70,26 @@ def test_a_cropped_edit_is_aligned_into_its_original(workspace):
     a = np.load(config.paths.cache / by_id["pairs/g/square"]["folder"] / "input.npy") / 65535.0
     b = np.load(config.paths.cache / by_id["pairs/g/square"]["folder"] / "target.npy") / 65535.0
     assert np.abs(apply_transform("faded", a.astype(np.float32)) - b).mean() < 0.03  # the same pixels, graded
-    same_aspect = json.loads((config.paths.cache / by_id["pairs/g/crop"]["folder"] / "meta.json").read_text())
-    assert same_aspect["alignment"] is None  # auto: a matching aspect is trusted as is
-
-    forced = ingest(load_config(overrides=["ingest.long_edge=96", "ingest.align=always"]), sources=["pairs"],
-                    workers=1, force=True)
-    assert forced.skipped == []
-    crop_meta = json.loads((config.paths.cache / "pairs/g/crop" / "meta.json").read_text())
+    # auto: a 3:2 cut of a 3:2 original does not line up as it is, so it is searched too (it was trusted once).
+    crop_meta = json.loads((config.paths.cache / by_id["pairs/g/crop"]["folder"] / "meta.json").read_text())
     assert crop_meta["alignment"]["score"] > 0.9 and abs(crop_meta["alignment"]["x0"] - 50) <= 3
+    assert crop_meta["structure"] > 0.9 and sq["structure"] > 0.9
 
     never = ingest(load_config(overrides=["ingest.long_edge=96", "ingest.align=never"]), sources=["pairs"],
                    workers=1, force=True)
     assert [pid for pid, _ in never.skipped] == ["pairs/g/square"]
+    off = json.loads((config.paths.cache / "pairs/g/crop" / "meta.json").read_text())
+    assert off["alignment"] is None and off["structure"] < 0.5  # what a run trusting the aspect learned from
+
+    # A cache prepared before that check (no `structure` in its meta) is measured and the pair done again.
+    del off["structure"]
+    (config.paths.cache / "pairs/g/crop" / "meta.json").write_text(json.dumps(off))
+    again = ingest(config, sources=["pairs"], workers=1)
+    assert again.written == 1 and any("did not line up" in n for n in again.notes)  # the crop alone, done again
+    fixed = json.loads((config.paths.cache / "pairs/g/crop" / "meta.json").read_text())
+    assert fixed["alignment"]["score"] > 0.9 and fixed["structure"] > 0.9
+    # A pair that lines up keeps its cache: the next run measures it once and reuses it.
+    assert ingest(config, sources=["pairs"], workers=1).written == 0
 
 
 def test_parallel_ingest_gives_the_same_result_as_sequential(synthetic):

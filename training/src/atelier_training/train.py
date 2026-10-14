@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 from .config import Config, merge
 from .data import Pair, PairDataset, read_index, split
 from .device import pick_device
-from .metrics import score, structure
+from .metrics import STRUCTURE_FLOOR, score, structure
 from .model.lut3d import AdaptiveLUT
 
 
@@ -120,7 +120,7 @@ def load_model(run: Path | Run, which: str = "best", device: str | None = None) 
     return model, run
 
 
-MISALIGNED = 0.5  # `structure` under this: the edit does not line up with its input (a guess, said as such)
+MISALIGNED = STRUCTURE_FLOOR  # `structure` under this: the edit does not line up with its input
 
 
 @torch.no_grad()
@@ -139,8 +139,9 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
         src, tgt = a[0].permute(1, 2, 0).cpu().numpy(), b[0].permute(1, 2, 0).cpu().numpy()
         s = score(out[0].permute(1, 2, 0).cpu().numpy(), tgt)
         nothing = score(src, tgt)
+        lined = structure(src, tgt)
         s.update(identity_psnr=nothing["psnr"], identity_de2000_mean=nothing["de2000_mean"],
-                 structure=structure(src, tgt), id=pid)
+                 structure=None if lined != lined else lined, id=pid)  # None: too flat to judge
         rows.append(s)
         if keep:
             keep(pid, a[0], b[0], out[0])
@@ -150,7 +151,8 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
                                              or [0])) if rows else float("nan")
     summary["identity_de2000_mean"] = float(np.mean([r["identity_de2000_mean"] for r in rows])) if rows \
         else float("nan")
-    summary["misaligned"] = sorted((r for r in rows if r["structure"] < MISALIGNED), key=lambda r: r["structure"])
+    summary["misaligned"] = sorted((r for r in rows if r["structure"] is not None and r["structure"] < MISALIGNED),
+                                   key=lambda r: r["structure"])
     summary["misaligned"] = [{"id": r["id"], "structure": round(r["structure"], 3)} for r in summary["misaligned"]]
     summary["pairs"] = rows
     # Per GROUP (one original and its edits): where the model is far from his taste, worst first.
