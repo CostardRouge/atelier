@@ -276,10 +276,68 @@ function meets(a: WorldBox, b: WorldBox): boolean {
   return a.x1 >= b.x0 && a.x0 <= b.x1 && a.y1 >= b.y0 && a.y0 <= b.y1;
 }
 
-function paintLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPerWorld: number, unit: number, tilesDrawn: boolean): void {
+/**
+ * The land as last drawn on a target canvas, kept as a raster of the map's
+ * rectangle: the world's coast is thousands of vertices filled through a
+ * transform, and it was HALF of a frame's cost (measured headless, 300
+ * flights: 8 frames in 2 s with it, 17 without) — while a camera that does
+ * not move draws the very same land every frame. Keyed on everything that
+ * shapes it; one per target, so the stage and an export never trade theirs.
+ * Kept only once the SAME land is asked twice running: a moving camera (a
+ * follow, a drift, a dive) draws it directly, as before, and pays no copy.
+ */
+interface LandRaster {
+  key: string;
+  land: LandCollection;
+  /** The raster, once the key has been asked twice running; null while it has not. */
+  surface: OffscreenCanvas | HTMLCanvasElement | null;
+}
+const landRasters = new WeakMap<object, LandRaster>();
+
+function newSurface(w: number, h: number): OffscreenCanvas | HTMLCanvasElement | null {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
+function paintLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPerWorld: number, unit: number, tilesDrawn: boolean, rect: Rect): void {
   const { map } = scene.settings;
   // Under real tiles the 1:50m coast is only a wrong second coastline.
   if (!scene.land || map.land === 'off' || tilesDrawn) return;
+  const x = Math.floor(rect.x);
+  const y = Math.floor(rect.y);
+  const w = Math.ceil(rect.x + rect.w) - x;
+  const h = Math.ceil(rect.y + rect.h) - y;
+  const key = [m.a, m.b, m.c, m.d, m.e - x, m.f - y, w, h, map.land, map.landColour, unit, pxPerWorld].join(',');
+  const held = landRasters.get(ctx.canvas);
+  const same = held !== undefined && held.key === key && held.land === scene.land;
+  if (same && held.surface) {
+    ctx.drawImage(held.surface, x, y);
+    return;
+  }
+  if (!same) {
+    // A land not seen last frame: drawn directly, and remembered by its key.
+    landRasters.set(ctx.canvas, { key, land: scene.land, surface: null });
+    drawLand(ctx, scene, m, box, pxPerWorld, unit);
+    return;
+  }
+  const surface = newSurface(w, h);
+  const into = surface?.getContext('2d') as Ctx2D | null | undefined;
+  if (!surface || !into) {
+    drawLand(ctx, scene, m, box, pxPerWorld, unit);
+    return;
+  }
+  drawLand(into, scene, { ...m, e: m.e - x, f: m.f - y }, box, pxPerWorld, unit);
+  held.surface = surface;
+  ctx.drawImage(surface, x, y);
+}
+
+function drawLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPerWorld: number, unit: number): void {
+  const { map } = scene.settings;
+  if (!scene.land) return;
   const fill = map.land === 'fill';
   ctx.save();
   ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
@@ -450,7 +508,7 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
     ? scene.tiles.draw(ctx, m, box, pxPerWorld, { colour: s.map.background, alpha: s.map.tileDim })
     : false;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  paintLand(ctx, scene, m, box, pxPerWorld, unit, tilesDrawn);
+  paintLand(ctx, scene, m, box, pxPerWorld, unit, tilesDrawn, rect);
   paintGrid(ctx, scene, m, box, pxPerWorld, unit);
   paintLabels(ctx, scene, m, unit, rect);
 
