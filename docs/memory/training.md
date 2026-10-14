@@ -99,6 +99,14 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   epoch line splits `data` (waiting for the batch) from the rest: `bench`
   said 51 ms a step, his epochs ran ~186 ms a step with the pairs in RAM,
   and the dataset alone costs ~3 ms an item here.
+- **`eval` gives a CEILING per picture** (`metrics.best_global_map`,
+  2026-10-14): each input colour on a 17³ grid sent to the mean target
+  colour of its pixels, fitted on the picture itself — no LUT can beat it,
+  and what it misses depends on WHERE a pixel is. His run measured 11.95
+  ΔE00 full and 10.36 at 1/8 against 20.6 doing nothing, so detail and
+  shifts were ~1.6 of it; the ceiling says whether the ~10 left is the
+  model's (more basis LUTs, FiveK, a bigger CNN) or his local work (masks,
+  skies, vignettes — out of a `.cube`'s reach whatever the training).
 - **The prepared pairs are held in RAM during training** (`train.
   keep_in_memory`, default on; uint16, cropped before the float
   conversion): on his M1 Max an epoch took 41 s against the 12 s the GPU

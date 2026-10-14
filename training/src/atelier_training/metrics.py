@@ -124,6 +124,23 @@ def coarse(img: np.ndarray, block: int = 8) -> np.ndarray:
     return x.reshape(h // block, block, w // block, block, 3).mean(axis=(1, 3))
 
 
+def best_global_map(src: np.ndarray, target: np.ndarray, bins: int = 17) -> np.ndarray:
+    """The best a colour-to-colour map can do on THIS picture: every input colour (on a ``bins``³ grid)
+    sent to the mean target colour of the pixels that had it, fitted on the picture itself. No LUT,
+    adaptive or not, can beat it on that picture — what it still misses is work that depends on WHERE
+    a pixel is (a mask, a darkened sky, a vignette), not on its colour."""
+    x = np.clip(np.asarray(src, dtype=np.float32)[..., :3], 0, 1)
+    t = np.asarray(target, dtype=np.float32)[..., :3].reshape(-1, 3)
+    q = np.rint(x * (bins - 1)).astype(np.int64).reshape(-1, 3)
+    cell = (q[:, 0] * bins + q[:, 1]) * bins + q[:, 2]
+    count = np.bincount(cell, minlength=bins**3).astype(np.float64)
+    out = np.empty_like(t)
+    for c in range(3):
+        mean = np.bincount(cell, weights=t[:, c], minlength=bins**3) / np.maximum(count, 1)
+        out[:, c] = mean[cell]
+    return out.reshape(x.shape)
+
+
 def score(output: np.ndarray, target: np.ndarray) -> dict[str, float]:
     """Everything the dashboard shows for one pair: PSNR, mean and 95th-percentile ΔE76 and ΔE2000."""
     lab_o, lab_t = srgb_to_lab(output), srgb_to_lab(target)
