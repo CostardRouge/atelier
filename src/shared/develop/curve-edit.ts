@@ -18,6 +18,23 @@ import { isIdentityCurve, makeCurve, type Curve, type CurvePoint } from './curve
 export const GRAB_RADIUS = 0.045;
 
 /**
+ * How near a FINGER must come, in CSS pixels (`docs/touch-targets.md` T5): a
+ * 44 px target's radius. In curve units 0.045 is 9 px on a 200 px box, and a
+ * finger that landed 15 px from a point ADDED a second one beside it.
+ */
+export const FINGER_GRAB_PX = 22;
+
+/**
+ * The grab radius for a box `boxPx` wide in the hand that pressed: a mouse
+ * keeps `GRAB_RADIUS`; a finger never less than `FINGER_GRAB_PX` — so a tap
+ * beside a point takes the point, and only a tap clear of every point adds one.
+ */
+export function grabRadiusFor(boxPx: number, finger: boolean): number {
+  if (!finger || !(boxPx > 0)) return GRAB_RADIUS;
+  return Math.max(GRAB_RADIUS, FINGER_GRAB_PX / boxPx);
+}
+
+/**
  * The least gap in x between neighbours. Two points at one x is a vertical
  * jump `makeCurve` divides by zero on, and `normaliseCurve` would silently
  * drop one — so the gesture never produces it in the first place.

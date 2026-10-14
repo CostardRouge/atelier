@@ -9,6 +9,7 @@ import {
   describeCurvePoint,
   moveCurvePoint,
   pointAt,
+  grabRadiusFor,
   removeCurvePoint,
 } from './curve-edit';
 import {
@@ -112,7 +113,11 @@ export default function DevelopCurve({
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const p = at(e);
     liveRef.current = curve;
-    const found = pointAt(curve, p.x, p.y);
+    // A finger takes a point within 22 px, so a tap beside one never adds
+    // another (`grabRadiusFor`); the event says which hand, not the screen.
+    const box = boxRef.current?.getBoundingClientRect();
+    const radius = grabRadiusFor(box ? Math.min(box.width, box.height) : 0, e.pointerType !== 'mouse');
+    const found = pointAt(curve, p.x, p.y, radius);
     if (found >= 0) {
       grabRef.current = found;
       setDragging(found);
