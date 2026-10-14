@@ -18,6 +18,10 @@
  * A native `<input type="range">` stays INSIDE, transparent and
  * pointer-less, so the keyboard, a screen reader, the undo keys' "textless
  * input" rule and Space's focus rule all keep answering exactly as they did.
+ *
+ * Its focus ring is drawn INSIDE the bar, and only for the keyboard
+ * (2026-10-14, his screenshot): an outer ring was cut off by the section's
+ * edge, and the press's own focus lit it on every drag.
  */
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
@@ -110,6 +114,11 @@ export default function SliderBar({
   // Escape's "keep what was there" included.
   const typedOpen = useRef(false);
   const [dragging, setDragging] = useState(false);
+  // The keyboard's focus, drawn as a ring INSIDE the bar. Never the press's:
+  // a press focuses the hidden input from script, after a `pointerdown` whose
+  // mouse events were cancelled, and Chrome counts that as `:focus-visible`.
+  const [ring, setRing] = useState(false);
+  const pressed = useRef(false);
   const scale = typedScale(words, range);
 
   useEffect(
@@ -153,6 +162,8 @@ export default function SliderBar({
     e.preventDefault();
     // Focus the hidden input the way a native range is focused by a press,
     // so the arrows answer next — without scrolling a frame (`frontend.md`).
+    pressed.current = true;
+    setRing(false);
     inputRef.current?.focus({ preventScroll: true });
     if (e.pointerType === 'mouse') {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -233,10 +244,11 @@ export default function SliderBar({
       onContextMenu={(e) => e.preventDefault()}
       data-dragging={dragging || undefined}
       aria-disabled={disabled || undefined}
+      data-ring={ring || undefined}
       className={`group/slider relative w-full min-w-0 h-9 pointer-coarse:h-11 overflow-hidden rounded-control border bg-surface select-none touch-pan-y [-webkit-touch-callout:none] transition-colors ${
         disabled
           ? 'opacity-45 pointer-events-none border-line-strong'
-          : 'cursor-ew-resize border-line-strong hover:border-ink-soft/40 has-[:focus-visible]:border-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/20 data-[dragging]:border-accent'
+          : 'cursor-ew-resize border-line-strong hover:border-ink-soft/40 data-[ring]:border-accent data-[dragging]:border-accent'
       }`}
     >
       <span
@@ -244,9 +256,12 @@ export default function SliderBar({
         className="absolute inset-y-0 bg-accent-wash"
         style={{ left: `${fill.left * 100}%`, width: `${fill.width * 100}%` }}
       />
+      {/* The value's edge, open across the band the words are written in:
+          drawn whole, it ran through the value at one end of the range and
+          through the name and its ↺ near the middle. */}
       <span
         aria-hidden="true"
-        className="absolute inset-y-0 w-0.5 bg-accent"
+        className="absolute inset-y-0 w-0.5 bg-[linear-gradient(to_bottom,var(--color-accent)_0_27%,transparent_27%_73%,var(--color-accent)_73%)]"
         style={{ left: `clamp(0px, calc(${edge * 100}% - 1px), calc(100% - 2px))` }}
       />
       {/* The one raw range the lint allows: it is the bar's keyboard and its
@@ -265,6 +280,11 @@ export default function SliderBar({
         aria-valuetext={words}
         onChange={(e) => write(Number(e.target.value))}
         onKeyDown={onKeyDown}
+        onFocus={() => setRing(!pressed.current)}
+        onBlur={() => {
+          pressed.current = false;
+          setRing(false);
+        }}
         className="absolute inset-0 w-full h-full m-0 opacity-0 pointer-events-none"
       />
       <span className="relative flex items-center h-full gap-1.5 pl-3 pr-2.5 pointer-events-none">
@@ -324,6 +344,7 @@ export default function SliderBar({
           </span>
         )}
       </span>
+      {ring && <span aria-hidden="true" className="absolute inset-0 rounded-[inherit] ring-2 ring-inset ring-accent/35 pointer-events-none" />}
     </div>
   );
 }
