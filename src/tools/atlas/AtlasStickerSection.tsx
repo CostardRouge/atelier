@@ -4,6 +4,7 @@ import Segmented from '../../shared/ui/Segmented';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
+import AtlasMore from './AtlasMore';
 import { addLogo, forgetLogo, useAtlasLogos } from './atlas-logos';
 import { STICKER_FONT } from './atlas-overlay';
 import type { AtlasSettings, DroneLine, Spot } from './atlas-settings';
@@ -16,7 +17,7 @@ interface AtlasStickerSectionProps {
   names: readonly string[];
   /** Where a piece goes — the inspector's own six-spot row. */
   spotRow: (value: Spot, onChange: (v: Spot) => void) => ReactNode;
-  /** Opens the Flights tab, where drones are named. */
+  /** Opens the flight list, where drones are named. */
   onNameDrones: () => void;
 }
 
@@ -44,7 +45,7 @@ export default function AtlasStickerSection({ settings: s, update, names, spotRo
       id="atlas.sticker"
       title="Drone sticker"
       marked={on}
-      info="The drone that flew, written the way its maker does: «DJI MINI 5 PRO» with the model's body heavy and its qualifier light, or the maker's logo followed by the model in light. The name comes from the clip (Flights › Drones), renamed or not."
+      info="The drone that flew, written the way its maker does: «DJI MINI 5 PRO» with the model's body heavy and its qualifier light, or the maker's logo followed by the model in light. The name comes from the clip (the flights at the foot of the panel › Drone names), renamed or not."
     >
       <FieldRow label="Shows">
         <Segmented<DroneLine>
@@ -62,7 +63,6 @@ export default function AtlasStickerSection({ settings: s, update, names, spotRo
       </FieldRow>
       {on && (
         <>
-          {spotRow(s.hud.droneAt, (v) => update((cur) => ({ ...cur, hud: { ...cur.hud, droneAt: v } })))}
           {names.length === 0 && (
             <div className="flex items-center justify-between gap-2 py-1">
               <p className="m-0 text-xs text-muted">No flight shown names its drone, so there is no sticker to draw.</p>
@@ -84,49 +84,51 @@ export default function AtlasStickerSection({ settings: s, update, names, spotRo
               ]}
             />
           </FieldRow>
-          <FieldRow label="Ink">
-            <Segmented<StickerInk>
-              size="sm"
-              fill
-              label="Sticker ink"
-              value={sticker.ink}
-              onChange={(v) => set({ ink: v })}
-              options={[
-                { id: 'auto', label: 'Auto', title: 'White or black, whichever reads better on the ground under it' },
-                { id: 'text', label: 'Text', title: 'The overlay text colour' },
-                { id: 'accent', label: 'Accent' },
-                { id: 'white', label: 'White' },
-                { id: 'black', label: 'Black' },
-              ]}
-            />
-          </FieldRow>
-          <FieldRow label="Backing">
-            <Segmented<StickerBacking>
-              size="sm"
-              fill
-              label="Sticker backing"
-              value={sticker.backing}
-              onChange={(v) => set({ backing: v })}
-              options={[
-                { id: 'none', label: 'None' },
-                { id: 'shadow', label: 'Shadow' },
-                { id: 'plate', label: 'Plate' },
-              ]}
-            />
-          </FieldRow>
           <SliderRow label="Size" value={sticker.size} min={12} max={80} step={1} format={(v) => `${Math.round(v)} px`} onChange={(v) => set({ size: v })} />
-          <FieldRow label="Maker" hint="Written first when a name has no maker." hintShown={false}>
-            <TextField label="Maker" value={sticker.maker} placeholder="DJI" onChange={(v) => set({ maker: v })} />
-          </FieldRow>
-          {sticker.style === 'type' &&
-            names.map((name) => (
-              <WeightRow key={name} name={name} maker={sticker.maker} weight={s.aircraft.weights[name]} onChange={(k) => setWeight(name, k)} />
+          {sticker.style === 'logo' &&
+            makers.map((maker) => (
+              <LogoRow key={makerKey(maker)} maker={maker} />
             ))}
-          {sticker.style === 'logo' && (
-            <>
-              {makers.map((maker) => (
-                <LogoRow key={makerKey(maker)} maker={maker} />
+          <AtlasMore id="atlas.sticker">
+            {spotRow(s.hud.droneAt, (v) => update((cur) => ({ ...cur, hud: { ...cur.hud, droneAt: v } })))}
+            <FieldRow label="Ink">
+              <Segmented<StickerInk>
+                size="sm"
+                fill
+                label="Sticker ink"
+                value={sticker.ink}
+                onChange={(v) => set({ ink: v })}
+                options={[
+                  { id: 'auto', label: 'Auto', title: 'White or black, whichever reads better on the ground under it' },
+                  { id: 'text', label: 'Text', title: 'The overlay text colour' },
+                  { id: 'accent', label: 'Accent' },
+                  { id: 'white', label: 'White' },
+                  { id: 'black', label: 'Black' },
+                ]}
+              />
+            </FieldRow>
+            <FieldRow label="Backing">
+              <Segmented<StickerBacking>
+                size="sm"
+                fill
+                label="Sticker backing"
+                value={sticker.backing}
+                onChange={(v) => set({ backing: v })}
+                options={[
+                  { id: 'none', label: 'None' },
+                  { id: 'shadow', label: 'Shadow' },
+                  { id: 'plate', label: 'Plate' },
+                ]}
+              />
+            </FieldRow>
+            <FieldRow label="Maker" hint="Written first when a name has no maker." hintShown={false}>
+              <TextField label="Maker" value={sticker.maker} placeholder="DJI" onChange={(v) => set({ maker: v })} />
+            </FieldRow>
+            {sticker.style === 'type' &&
+              names.map((name) => (
+                <WeightRow key={name} name={name} maker={sticker.maker} weight={s.aircraft.weights[name]} onChange={(k) => setWeight(name, k)} />
               ))}
+            {sticker.style === 'logo' && (
               <FieldRow label="Logo colour">
                 <Segmented<'tint' | 'file'>
                   size="sm"
@@ -140,8 +142,8 @@ export default function AtlasStickerSection({ settings: s, update, names, spotRo
                   ]}
                 />
               </FieldRow>
-            </>
-          )}
+            )}
+          </AtlasMore>
         </>
       )}
     </InspectorSection>

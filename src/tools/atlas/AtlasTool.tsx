@@ -17,6 +17,17 @@ import { useAtlasFlights, type FlightSource } from './use-atlas-flights';
 import { useAtlasLogos } from './atlas-logos';
 import { useAtlasScene } from './use-atlas-scene';
 import { useAtlasSettings } from './use-atlas-settings';
+import { parseLayer, type AtlasLayer } from './atlas-layers';
+
+const LAYER_KEY = 'atelier.atlas.layer';
+
+function readLayer(): AtlasLayer {
+  try {
+    return parseLayer(localStorage.getItem(LAYER_KEY));
+  } catch {
+    return 'map';
+  }
+}
 
 /** What the atlas reads: anything carrying a DJI telemetry log. */
 const ATLAS_KINDS = ['video+telemetry', 'telemetry'] as const;
@@ -42,6 +53,16 @@ export default function AtlasTool() {
   // The tiles switch is OFF every time the atlas opens (`local-first.md`).
   const [tilesOn, setTilesOnState] = useState(false);
   const [paintSeq, setPaintSeq] = useState(0);
+  // The inspector's layer: one of its chips, or whatever was clicked on the stage.
+  const [layer, setLayerState] = useState<AtlasLayer>(readLayer);
+  const setLayer = useCallback((next: AtlasLayer) => {
+    setLayerState(next);
+    try {
+      localStorage.setItem(LAYER_KEY, next);
+    } catch {
+      /* the layer holds for the session */
+    }
+  }, []);
 
   const sources = useMemo<FlightSource[]>(
     () =>
@@ -157,6 +178,8 @@ export default function AtlasTool() {
               drawingZone={drawingZone}
               onZone={onZone}
               paintSeq={paintSeq}
+              selected={layer}
+              onPick={setLayer}
             />
             {empties && (
               <div className="absolute inset-0 grid place-items-center p-6 pointer-events-none">
@@ -169,8 +192,10 @@ export default function AtlasTool() {
           </div>
           <AtlasTransport clock={clock} activity={scene.core.activity} streets={streetsSwitch} />
         </div>
-        <aside className="flex-1 min-h-0 overflow-y-auto overscroll-contain border border-line rounded-paper-lg bg-surface shadow-paper-soft px-3 @min-[860px]:flex-none" aria-label="Flight Atlas settings">
+        <aside className="flex-1 min-h-0 flex flex-col overflow-hidden border border-line rounded-paper-lg bg-surface shadow-paper-soft @min-[860px]:flex-none" aria-label="Flight Atlas settings">
           <AtlasInspector
+            layer={layer}
+            onLayer={setLayer}
             settings={settings}
             update={update}
             onReset={() => {

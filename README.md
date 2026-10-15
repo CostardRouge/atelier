@@ -3311,29 +3311,40 @@ files* / *A folder* in the panel feed the Library directly, and with a Winnow
 connected, **From <instance>** opens the Winnow picker set for flights: a span
 of days, only the clips that carry a log, the Logbook with every flight's track
 drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
-alone, never its video. The panel has eight tabs:
+alone, never its video.
 
-- **Flights.** Take-offs within 4 km of each other form a *place*, named
+The panel shows **one layer at a time** — the things the picture shows, as
+chips at its top: *Map*, *Flights*, *Timing*, *Camera*, *Title*,
+*Statistics*, *Clock*, *Sticker*. **Click a thing on the picture** — a word
+of the overlay, a flight's line, the map itself — and the panel opens its
+layer, the thing outlined while it is selected; a drag still moves the map.
+What the picture does not show sits at the panel's foot: the flight list
+(*N flights*), *Export* and *Presets*. Each section opens on its essentials;
+the rest folds behind **N more**, remembered in this browser.
+
+- **The flight list** (the foot's *N flights*). Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
   flights (double-click: that place alone); hovering a flight singles it out.
   **Drones**: the aircraft each clip's MP4 metadata names (QuickTime `©mdl`,
   an `ilst`, Apple's `keys`; a DJI camera code such as `FC8482` becomes
   *DJI Mini 4 Pro*) — renamable, and a name for the flights whose file says
   nothing. Nothing is guessed from the flight itself.
-- **Style.** It opens on **Ground** — what the flights are drawn over, as
+- **Map.** It opens on **Ground** — what the flights are drawn over, as
   three pictures in the look's own colours: *Plain* (the ground's colour),
   *Coastline* (the shipped coastline, offline) or *Streets* (OpenStreetMap
   tiles toned *night*, *grey*, *sepia* or *natural*, with a dim, credited in
   every frame they appear in; see "The network exceptions"; off every time the
   atlas opens). The **map glyph beside Play** is the same Streets switch, one
   click from the picture. Then looks (Transit, Aurora, Ember, Neon, Papier,
-  Blueprint, Golden hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
-  fade, ghost network, smoothing), drones (size, pulse, halo, take-off and
-  landing ripples, altitude drawn as height with a ground shadow and a thread),
-  colour (one, per flight, place, altitude, speed, date or hour, nine palettes,
-  glow, additive light) and the map's details (ground colour, how the land is
-  drawn and its colour, grid, vignette, place names).
-- **Motion.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
+  Blueprint, Golden hour, Ink, plus *Surprise me*) and the map's details
+  (how the land is drawn and its colour, grid, vignette, ground colour, place
+  names).
+- **Flights.** Trails (tail, width, afterglow; taper, fade, ghost network,
+  smoothing), drones (size, pulse, take-off and landing ripples; pulse rate,
+  halo, altitude drawn as height with a ground shadow and a thread) and colour
+  (one, per flight, place, altitude, speed, date or hour, nine palettes; glow,
+  additive light).
+- **Timing.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
   day at the hour it was flown, slowed against the clock) or *Calendar* (in
   the order flown, the idle between flights cut to a cap while the clock
   races through it); total length, stagger, overlap, *equalize*, seeded
@@ -3347,9 +3358,10 @@ alone, never its video. The panel has eight tabs:
   the one that goes farthest — follows it at a chosen closeness while the
   others fade, and comes back; on a place or a zone, only the flights it shows
   are followed.
-- **Overlay.** Every word wears the **Studio's and Trips' title styles** (the
-  same presets and panel: font, case, colour, legibility, glow) plus an
-  accent. Pieces, each in one of six spots (corners, top, bottom): a title and
+- **Title, Statistics, Clock, Sticker** — the words over the map. Every word
+  wears the **Studio's and Trips' title styles** (the same presets and panel:
+  font, case, colour, legibility, glow — under *Title*) plus an accent.
+  Pieces, each in one of six spots (corners, top, bottom): a title and
   subtitle; **statistics** — flights, distance, airtime, highest, average
   height (time-weighted), average and top speed, places — as a column or a
   row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
@@ -3367,11 +3379,10 @@ alone, never its video. The panel has eight tabs:
   maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits.
-- **Format.** Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
+- **Export** (the foot). Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
   rate (30/60), and a **mount**: a border, a deeper band under the map for the
   text, rounded corners, its colour, and whether the text sits on the map or
-  across the whole frame. The preview is letterboxed to it.
-- **Export.** The preview is drawn by the export's own painter: an MP4 (H.264,
+  across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter: an MP4 (H.264,
   no sound), the frame on screen as a PNG, or a *poster* with every route
   drawn whole.
 - **Presets.** Every dial under a name of your own: a chip applies its preset

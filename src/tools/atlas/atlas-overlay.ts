@@ -21,6 +21,7 @@ import type { Ctx2D } from './atlas-paint';
 import { parseHex, rgba } from './atlas-colour';
 import type { Rect, Spot } from './atlas-settings';
 import { luminance, type StickerBacking } from './atlas-sticker';
+import type { AtlasLayer, OverlayHit } from './atlas-layers';
 
 /** One line of text in a stack. */
 export interface TextLine {
@@ -89,7 +90,12 @@ export interface StickerBlock {
   gapAfter?: number;
 }
 
-export type Block = TextLine | StatRow | StatColumn | CurveBlock | StickerBlock;
+/** Whose a block is: the inspector layer a click on it opens. */
+interface Owned {
+  owner?: AtlasLayer;
+}
+
+export type Block = (TextLine | StatRow | StatColumn | CurveBlock | StickerBlock) & Owned;
 
 export interface OverlayLayout {
   spots: Partial<Record<Spot, Block[]>>;
@@ -132,9 +138,10 @@ function textElement(id: string, text: string, anchor: Anchor, x: number, y: num
 
 /**
  * Draw the overlay inside `area` (pixels of the frame). `unit` is the area's
- * short side over 1080.
+ * short side over 1080. Returns the box of every owned block as drawn, so a
+ * click on the stage can open what it landed on.
  */
-export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): void {
+export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): OverlayHit[] {
   const short = Math.min(area.w, area.h);
   const unit = (short / 1080) * layout.scale;
   const margin = 0.045 * short;
@@ -143,6 +150,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
   const elements: OverlayElement[] = [];
   const curves: { block: CurveBlock; x: number; y: number; w: number; h: number }[] = [];
   const stickers: { block: StickerBlock; item: StickerItem; x: number; y: number }[] = [];
+  const hits: OverlayHit[] = [];
   let seq = 0;
 
   /** The element a line becomes, with its measured height. */
@@ -208,15 +216,24 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
     let y = bottom ? area.y + area.h - margin - total : area.y + margin;
     const colW = Math.min(area.w - 2 * margin, Math.max(300 * unit, area.w * 0.28));
 
+    /** Record a block's box, `w` wide at the spot's alignment. */
+    const hit = (b: Block, w: number, h: number) => {
+      if (!b.owner || w <= 0 || h <= 0) return;
+      const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
+      hits.push({ layer: b.owner, x, y, w, h });
+    };
+
     for (const b of blocks) {
       const h = blockHeight(b);
       if (b.kind === 'text') {
         elements.push(lineElement(b, anchor, ax, y));
+        if (b.text.trim()) hit(b, widthOf(b.text, b.size, !!b.label, b.weight), heightOf(b));
       } else if (b.kind === 'row') {
         const valueH = heightOf(b);
         const gap = b.size * unit * 0.9;
         const widths = b.items.map((it) => Math.max(widthOf(it.value, b.size, false), widthOf(it.label, b.size * 0.42, true)));
         const rowW = widths.reduce((s, w) => s + w, 0) + gap * Math.max(0, b.items.length - 1);
+        hit(b, rowW, h);
         let x = align === 'left' ? ax : align === 'center' ? ax - rowW / 2 : ax - rowW;
         b.items.forEach((it, i) => {
           const cx = x + widths[i] / 2;
@@ -230,6 +247,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
         const labelSize = b.size * 0.46;
         const gap = b.size * unit * 0.45;
         const labelDrop = (heightOf(b) - heightOf({ size: labelSize })) * 0.62;
+        hit(b, valueW + gap + Math.max(...b.items.map((it) => widthOf(it.label, labelSize, true))), b.items.length * rowH);
         b.items.forEach((it, i) => {
           const yy = y + i * rowH;
           if (align === 'right') {
@@ -245,14 +263,17 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
       } else if (b.kind === 'sticker') {
         const px = b.size * unit;
         const m = stickerMetrics(px, b.backing);
+        const widths = b.items.map((item) => measureSticker(ctx, item, px).w + 2 * m.padX);
+        hit(b, Math.max(...widths), b.items.length * m.boxH + (b.items.length - 1) * m.between);
         b.items.forEach((item, i) => {
-          const w = measureSticker(ctx, item, px).w + 2 * m.padX;
+          const w = widths[i];
           const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
           stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between) });
         });
       } else {
         const w = colW;
         const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
+        hit(b, w, h);
         curves.push({ block: b, x, y: y + 6 * unit, w, h: b.size * unit });
       }
       y += h;
@@ -270,6 +291,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
     drawOverlays(ctx, local, null, area.w, area.h, { theme });
     ctx.restore();
   }
+  return hits;
 }
 
 function drawCurve(ctx: Ctx2D, b: CurveBlock, x: number, y: number, w: number, h: number, unit: number, accentHex: string, theme: StyleTheme): void {
