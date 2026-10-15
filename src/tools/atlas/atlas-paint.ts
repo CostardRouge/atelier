@@ -29,6 +29,7 @@ import { simplify, type AtlasPlace } from './atlas-places';
 import { activeAt, flightState, type Schedule, type Slot } from './atlas-schedule';
 import { mapRect, resolvedClock, type AtlasSettings, type Rect, type Spot } from './atlas-settings';
 import { viewAffine, visibleBox, type Affine, type AtlasView } from './atlas-view';
+import type { OverlayHit } from './atlas-layers';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -447,12 +448,18 @@ function roundRect(ctx: Ctx2D, r: Rect, radius: number): void {
   ctx.closePath();
 }
 
+/** Where things landed on a painted frame, frame pixels: the map, and each piece of the overlay. */
+export interface PaintedFrame {
+  map: Rect;
+  hits: OverlayHit[];
+}
+
 /**
  * Draw one frame of the atlas: the mount (a border, a band for the text,
  * rounded corners), the map inside it, then the overlay — over the map or
  * across the whole frame.
  */
-export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): void {
+export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): PaintedFrame {
   const { width, height, t } = frame;
   const s = scene.settings;
   const rect = mapRect(s.format, width, height);
@@ -482,7 +489,8 @@ export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): vo
   ctx.restore();
 
   const area: Rect = s.format.textOn === 'frame' ? { x: 0, y: 0, w: width, h: height } : rect;
-  paintOverlay(ctx, overlayLayout(scene, frame, states, spot, tilesDrawn), area);
+  const hits = paintOverlay(ctx, overlayLayout(scene, frame, states, spot, tilesDrawn), area);
+  return { map: rect, hits };
 }
 
 /** The map, inside `rect` of the frame. True when tiles were drawn under it. */
@@ -831,9 +839,9 @@ export function overlayLayout(
   const put = (at: Spot, ...blocks: Block[]) => (spots[at] = [...(spots[at] ?? []), ...blocks]);
   const z = hud.titleSize;
 
-  if (hud.title) put(hud.titleAt, { kind: 'text', text: hud.title, size: 58 * z, gapAfter: hud.subtitle ? 0 : 0.25 });
-  if (hud.subtitle) put(hud.titleAt, { kind: 'text', text: hud.subtitle, size: 26 * z, weight: 500, gapAfter: 0.5 });
-  if (hud.dates && scene.dateRange) put(hud.datesAt, { kind: 'text', text: scene.dateRange, size: 22, label: true, gapAfter: 0.25 });
+  if (hud.title) put(hud.titleAt, { kind: 'text', text: hud.title, size: 58 * z, gapAfter: hud.subtitle ? 0 : 0.25, owner: 'title' });
+  if (hud.subtitle) put(hud.titleAt, { kind: 'text', text: hud.subtitle, size: 26 * z, weight: 500, gapAfter: 0.5, owner: 'title' });
+  if (hud.dates && scene.dateRange) put(hud.datesAt, { kind: 'text', text: scene.dateRange, size: 22, label: true, gapAfter: 0.25, owner: 'clock' });
   if (hud.drone !== 'off') {
     const names = new Set<string>();
     scene.flights.forEach((_, i) => {
@@ -841,7 +849,7 @@ export function overlayLayout(
       if (!name) return;
       if (hud.drone === 'all' || (!frame.poster && states[i].phase === 'flying')) names.add(name);
     });
-    if (names.size) put(hud.droneAt, stickerBlock(scene, [...names], tilesDrawn));
+    if (names.size) put(hud.droneAt, { ...stickerBlock(scene, [...names], tilesDrawn), owner: 'sticker' });
   }
 
   // The followed flight's card, while the spotlight holds.
@@ -864,18 +872,18 @@ export function overlayLayout(
       { value: speed, label: 'Speed' },
       { value: dist, label: 'Flown' },
     ] });
-    put(hud.spotCardAt, ...blocks, { kind: 'text', text: ' ', size: 10 });
+    put(hud.spotCardAt, ...blocks.map((b) => ({ ...b, owner: 'clock' as const })), { kind: 'text', text: ' ', size: 10 });
   }
 
   const kind = resolvedClock(hud.clock, choreo.mode);
   const lines = frame.poster ? null : clockLines(kind, scene.schedule, t);
-  if (lines?.small) put(hud.clockAt, { kind: 'text', text: lines.small, size: 28, weight: 500 });
-  if (lines) put(hud.clockAt, { kind: 'text', text: lines.big, size: 100 });
+  if (lines?.small) put(hud.clockAt, { kind: 'text', text: lines.small, size: 28, weight: 500, owner: 'clock' });
+  if (lines) put(hud.clockAt, { kind: 'text', text: lines.big, size: 100, owner: 'clock' });
   if (hud.counter && !frame.poster) {
-    put(hud.clockAt, { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28, accent: true, weight: 600, gapAfter: 0.3 });
+    put(hud.clockAt, { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
   }
   if (hud.graph && !frame.poster && scene.activity.length > 1) {
-    put(hud.clockAt, { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50 });
+    put(hud.clockAt, { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50, owner: 'clock' });
   }
 
   if (hud.stats.length) {
@@ -886,14 +894,14 @@ export function overlayLayout(
       // Only a counting numeral rolls: a total held still would freeze mid-roll.
       return { value: r.text, label: r.label, odometer: live ? r.odometer : undefined };
     });
-    put(hud.statsAt, hud.statsLayout === 'row' ? { kind: 'row', items, size: 44 } : { kind: 'column', items, size: 32 });
+    put(hud.statsAt, hud.statsLayout === 'row' ? { kind: 'row', items, size: 44, owner: 'stats' } : { kind: 'column', items, size: 32, owner: 'stats' });
   }
 
   const credits: string[] = [];
   if (hud.credit) credits.push(`Data: DJI flight telemetry · ${scene.flights.length} flight${scene.flights.length === 1 ? '' : 's'}`);
   // The tiles' licence asks for its credit wherever they are shown — never a switch.
   if (tilesDrawn) credits.push('Map © OpenStreetMap contributors');
-  for (const line of credits) put(hud.clockAt, { kind: 'text', text: line, size: 14, weight: 500 });
+  for (const line of credits) put(hud.clockAt, { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
 
   return { spots, theme: hud.theme, accent: hud.accent, scale: hud.scale };
 }
