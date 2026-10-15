@@ -85,10 +85,12 @@ Ce qu'il suppose :
   premier type de `fivek_input_prefer` gagne (TIFF, puis PNG, JPEG, et le DNG
   en dernier).
 
-**Attention :** dans le téléchargement officiel, les retouches des experts ne
-sont pas des images mais des réglages dans le catalogue Lightroom
-(`fivek.lrcat`). **Sans Lightroom**, le MIT sert aussi chaque retouche en
-fichier (un TIFF 16 bits ProPhoto de ~32 Mo, ~160 Go pour un expert) :
+**Pas besoin de l'archive de 50 Go, ni de Lightroom.** Dans l'archive, les
+retouches des experts ne sont pas des images mais des réglages dans le
+catalogue Lightroom (`fivek.lrcat`). Le MIT sert aussi chaque fichier
+séparément : la liste des 5 000 photos, chaque DNG (~10 Mo) et chaque
+retouche d'expert (un TIFF 16 bits ProPhoto de ~32 Mo). `fivek-fetch` les
+télécharge **une photo à la fois** :
 
 ```bash
 uv run atelier-train fivek-fetch --limit 100   # un essai sur 100 photos
@@ -96,17 +98,23 @@ uv run atelier-train fivek-fetch               # les 5 000 (relançable : repren
 uv run atelier-train ingest --source fivek
 ```
 
-Chaque retouche est téléchargée, convertie en sRGB (l'espace de tes finals),
-réduite à 1 024 px et écrite dans `training/data/fivek/expertC/` à côté des
-DNG, puis le téléchargement est supprimé : le disque ne garde que ~2,5 Mo par
-photo. Le réseau, lui, transporte les ~160 Go. `make doctor` signale le
-catalogue sans export.
+Pour chaque photo :
 
-Si l'archive est décompressée ailleurs (un disque externe, `~/Downloads`…),
-pas besoin de la déplacer : ajoute `--set paths.fivek=/chemin/vers/le/dossier`
-à chaque commande (`fivek-fetch`, `ingest`, `doctor`), ou écris-le une fois
-dans un fichier passé par `--config`. Le dossier est lu à toute profondeur.
-`fivek-fetch` s'arrête en erreur s'il n'y trouve aucun DNG.
+1. le DNG est développé tel que pris (les réglages `[raw]` que `ingest`
+   utilise), réduit à 768 px et écrit dans `training/data/fivek/input/` ;
+2. la retouche de l'expert est convertie en sRGB (l'espace de tes finals),
+   réduite pareil et écrite dans `training/data/fivek/expertC/` ;
+3. les téléchargements sont supprimés aussitôt.
+
+Le disque garde ~4 Mo par photo (~20 Go pour les 5 000). Le réseau, lui,
+transporte ~42 Mo par photo (~210 Go en tout). Développer un DNG demande
+`rawpy` (`make setup`).
+
+Si une archive décompressée est déjà là (des DNG `a0001…` sous le dossier),
+seules les retouches sont téléchargées. Si elle est ailleurs (un disque
+externe…), ajoute `--set paths.fivek=/chemin/vers/le/dossier` à chaque
+commande (`fivek-fetch`, `ingest`, `doctor`) : le dossier est lu à toute
+profondeur.
 
 C'est l'expert **C** qui est utilisé par défaut (c'est l'usage dans les
 publications) ; pour en changer : `--set ingest.fivek_expert=A`.

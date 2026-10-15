@@ -64,10 +64,29 @@ def test_fetch_writes_srgb_edits_beside_the_dngs_and_resumes(tmp_path):
     assert report.photos == 3
 
 
-def test_no_dng_under_the_root_is_said_and_fails(workspace, capsys):
-    from atelier_training.cli import main
+def test_with_no_archive_the_photos_come_from_mit_too(tmp_path, monkeypatch):
+    from atelier_training.datasets import fivek_fetch
 
-    assert main(["fivek-fetch", "--limit", "5"]) == 1
-    out = capsys.readouterr().out
-    assert "no FiveK DNG" in out and "--set paths.fivek=" in out
-    assert not (workspace / "data" / "fivek" / "expertC").exists()  # nothing created where nothing was found
+    root = tmp_path / "fivek"  # nothing on disk: the archive was deleted
+    lists = {fivek_fetch.LIST_URLS[0]: "a0002-two\na0001-one\n", fivek_fetch.LIST_URLS[1]: "a0003-three\n\n"}
+    asked = []
+
+    def fake_fetch(url, dest):
+        asked.append(url.rsplit("/", 2)[-2])
+        if url.endswith(".tif"):
+            tifffile.imwrite(dest, np.full((40, 60, 3), 32768, np.uint16), photometric="rgb")
+        else:
+            dest.write_bytes(b"a DNG")
+
+    rendered = np.full((80, 120, 3), 0.25, np.float32)  # what rawpy would render, as shot
+    monkeypatch.setattr(fivek_fetch, "load_image", lambda path, raw: rendered)
+    report = fetch_expert(root, "C", long_edge=30, limit=2, log=lambda s: None, fetch=fake_fetch,
+                          fetch_text=lists.__getitem__)
+    assert (report.photos, report.fetched, report.inputs) == (3, 2, 2) and asked == ["dng", "tiff16_c"] * 2
+    assert load_image(root / "input" / "a0001-one.tif", {}).shape == (20, 30, 3)
+    assert not list(root.rglob(".*"))  # no download left behind
+    assert [i.input.parent.name for i in scan_fivek(root, "C").items] == ["input", "input"]
+
+    asked.clear()  # the next run fetches the third photo only
+    report = fetch_expert(root, "C", long_edge=30, log=lambda s: None, fetch=fake_fetch, fetch_text=lists.__getitem__)
+    assert (report.kept, report.fetched) == (2, 1) and asked == ["dng", "tiff16_c"]

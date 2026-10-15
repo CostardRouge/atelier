@@ -266,17 +266,19 @@ def cmd_fivek_fetch(args: argparse.Namespace) -> int:
 
     config = _config(args)
     expert = (args.expert or str(config.section("ingest").get("fivek_expert", "C"))).upper()
-    print(f"Fetching expert {expert}'s edits into {config.paths.fivek / ('expert' + expert)} "
-          f"(one at a time, {args.long_edge} px, sRGB)…")
-    report = fetch_expert(config.paths.fivek, expert, long_edge=args.long_edge, limit=args.limit)
-    if not report.photos:
-        print(f"✗ no FiveK DNG (a0001…a5000) under {config.paths.fivek}. Unpack the archive there, or point at "
-              "the folder you unpacked it into: `--set paths.fivek=/path/to/fivek` (any depth below it is read).")
+    root = config.paths.fivek
+    print(f"Fetching FiveK (expert {expert}) into {root}, one photo at a time, {args.long_edge} px, sRGB…")
+    try:
+        report = fetch_expert(root, expert, long_edge=args.long_edge, limit=args.limit,
+                              raw=dict(config.section("raw")))
+    except (OSError, RuntimeError) as e:
+        print(f"✗ {e}")
         return 1
     for stem, why in report.failed[:10]:
         print(f"  · {stem}: {why}")
-    print(f"{report.fetched} written, {report.kept} already there, {len(report.failed)} failed. "
-          "A failed one is fetched again by the same command.")
+    print(f"{report.fetched} photo(s) fetched ({report.inputs} input(s) rendered from their DNG), "
+          f"{report.kept} already there, {len(report.failed)} failed, of {report.photos}. "
+          "Run the same command again to fetch what is missing.")
     if report.fetched or report.kept:
         print("Next: `atelier-train ingest --source fivek`.")
     return 1 if report.failed and not report.fetched and not report.kept else 0
@@ -460,9 +462,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_winnow_import)
 
     p = sub.add_parser("fivek-fetch", parents=[common],
-                       help="download an expert's FiveK edits as sRGB images, no Lightroom needed (one at a time)")
+                       help="download FiveK from MIT (photos and an expert's edits) as small sRGB images, "
+                       "one at a time")
     p.add_argument("--expert", help="A to E (default: ingest.fivek_expert, C)")
-    p.add_argument("--long-edge", type=int, default=1024, help="pixels kept on the long edge (default 1024)")
+    p.add_argument("--long-edge", type=int, default=768, help="pixels kept on the long edge (default 768)")
     p.add_argument("--limit", type=int, default=0, help="stop after this many photos (0 = all)")
     p.set_defaults(func=cmd_fivek_fetch)
 

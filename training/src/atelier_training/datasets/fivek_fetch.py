@@ -1,13 +1,20 @@
-"""Fetch an expert's FiveK edits as images, one photo at a time, without Lightroom.
+"""Fetch FiveK from MIT one photo at a time, without the archive and without Lightroom.
 
 The 50 GB archive holds the DNGs and a Lightroom catalogue: the experts' edits are
-SETTINGS, not pictures. MIT also serves every edit as its own file —
-``img/tiff16_<expert>/<name>.tif``, a 16-bit TIFF in ProPhoto RGB (ROMM, D50,
-gamma 1.8), ~32 MB each, ~160 GB for one expert — too much to keep. So each one
-is downloaded, converted to sRGB (the space his finals are in), shrunk to a long
-edge (1024 by default) and written as a 16-bit TIFF beside the DNGs, under
-``expert<X>/`` where the FiveK reader looks; the download is deleted at once.
-A photo whose edit is already there is skipped, so a cut run resumes.
+SETTINGS, not pictures. MIT serves every file on its own instead: the photo list
+(``legal/filesAdobe.txt`` + ``legal/filesAdobeMIT.txt``, 5,000 names), each DNG
+(``img/dng/<name>.dng``, ~10 MB) and each expert's edit (``img/tiff16_<x>/<name>.tif``,
+a 16-bit TIFF in ProPhoto RGB — ROMM, D50, gamma 1.8 — ~32 MB). Nothing is kept
+at full size:
+
+- the EDIT is converted to sRGB (the space his finals are in), shrunk to a long
+  edge (768 by default: ingest keeps 512, the rest is room to align a cropped edit) and written under ``expert<X>/``;
+- the INPUT, when no DNG of that photo is already on disk, is the DNG rendered
+  as shot by the same rawpy settings ``ingest`` uses, shrunk alike and written
+  under ``input/`` (the reader takes a TIFF before a DNG);
+
+each download is deleted at once, so the disk keeps ~5 MB a photo. A photo whose
+files are already there is skipped, so a cut run resumes.
 """
 
 from __future__ import annotations
@@ -20,10 +27,12 @@ from pathlib import Path
 
 import numpy as np
 
-from ..imaging import fit_long_edge, is_raw, resize_to, save_image
-from .fivek import scan_fivek
+from ..imaging import fit_long_edge, is_raw, load_image, resize_to, to_uint16
+from .fivek import PHOTO_ID, scan_fivek
 
 BASE_URL = "https://data.csail.mit.edu/graphics/fivek/img"
+LIST_URLS = ("https://data.csail.mit.edu/graphics/fivek/legal/filesAdobe.txt",
+             "https://data.csail.mit.edu/graphics/fivek/legal/filesAdobeMIT.txt")
 
 # ProPhoto (ROMM) primaries, D50 → XYZ; Bradford D50 → D65; XYZ → linear sRGB (D65).
 PROPHOTO_TO_XYZ_D50 = np.array([[0.7976749, 0.1351917, 0.0313534],
@@ -68,12 +77,24 @@ def download(url: str, dest: Path) -> None:
     part.replace(dest)
 
 
+def read_text(url: str) -> str:
+    with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310 — a fixed https host
+        return response.read().decode("utf-8")
+
+
+def mit_photo_list(fetch_text: Callable[[str], str] = read_text) -> list[str]:
+    """The 5,000 photo names MIT serves (``a0001-jmac_DSC1459`` …), from its two licence lists."""
+    names = {line.strip() for url in LIST_URLS for line in fetch_text(url).splitlines()}
+    return sorted(n for n in names if PHOTO_ID.match(n))
+
+
 @dataclass
 class FetchReport:
     fetched: int = 0
     kept: int = 0
     failed: list[tuple[str, str]] = field(default_factory=list)
-    photos: int = 0  # FiveK DNGs found under the root: 0 means the archive is not where it was looked for
+    photos: int = 0  # photos this run works over: the DNGs on disk, else MIT's list
+    inputs: int = 0  # inputs rendered from a downloaded DNG
 
 
 def read_prophoto_tiff(path: Path) -> np.ndarray:
@@ -89,49 +110,76 @@ def read_prophoto_tiff(path: Path) -> np.ndarray:
     return prophoto_to_srgb(data[..., :3].astype(np.float32) / scale, gamma)
 
 
+def _save_shrunk(img: np.ndarray, dest: Path, long_edge: int) -> None:
+    """A 16-bit TIFF, deflated losslessly (~12 % smaller: the low bits are noise and barely compress)."""
+    import tifffile
+
+    h, w = img.shape[:2]
+    if long_edge and max(w, h) > long_edge:
+        img = resize_to(img, *fit_long_edge(w, h, long_edge))
+    tifffile.imwrite(dest, to_uint16(img), photometric="rgb", compression="zlib", predictor=True)
+
+
 def fetch_expert(
     root: Path,
     expert: str = "C",
-    long_edge: int = 1024,
+    long_edge: int = 768,
     limit: int = 0,
     log: Callable[[str], None] = print,
     fetch: Callable[[str, Path], None] = download,
+    raw: dict | None = None,
+    fetch_text: Callable[[str], str] = read_text,
 ) -> FetchReport:
-    """Write ``root/expert<X>/<name>.tif`` for every FiveK DNG under ``root`` that has none yet."""
+    """Write ``root/expert<X>/<name>.tif`` for every photo that has none yet, and ``root/input/<name>.tif``
+    for every photo that has no input at all. The photos are the DNGs under ``root`` when there are any
+    (an archive already unpacked: only the edits are fetched), else MIT's whole list."""
     expert = expert.upper()
     scan = scan_fivek(root, expert)
     have = scan.targets.get(expert, {})
-    out_dir = root / f"expert{expert}"
-    report = FetchReport()
+    local = {pid: [p for p in files if is_raw(p)] for pid, files in scan.inputs.items()}
+    stems = sorted(raws[0].stem for raws in local.values() if raws)
+    if not stems:
+        stems = mit_photo_list(fetch_text)
+    out_dir, in_dir = root / f"expert{expert}", root / "input"
+    report = FetchReport(photos=len(stems))
     todo = []
-    for pid in sorted(scan.inputs):
-        raws = [p for p in scan.inputs[pid] if is_raw(p)]
-        if not raws:
-            continue
-        if pid in have:
+    for stem in stems:
+        pid = PHOTO_ID.match(stem).group(1).lower()
+        need_input, need_edit = pid not in scan.inputs, pid not in have
+        if need_input or need_edit:
+            todo.append((stem, need_input, need_edit))
+        else:
             report.kept += 1
-            continue
-        todo.append(raws[0].stem)
-    report.photos = report.kept + len(todo)
     if limit:
         todo = todo[:limit]
-    if todo:
-        out_dir.mkdir(parents=True, exist_ok=True)
-    for i, stem in enumerate(todo, 1):
-        tmp = out_dir / f".{stem}.download.tif"
+    if any(need_input for _, need_input, _ in todo):
         try:
-            fetch(f"{BASE_URL}/tiff16_{expert.lower()}/{stem}.tif", tmp)
-            img = read_prophoto_tiff(tmp)
-            h, w = img.shape[:2]
-            if long_edge and max(w, h) > long_edge:
-                img = resize_to(img, *fit_long_edge(w, h, long_edge))
-            save_image(img, out_dir / f"{stem}.tif")
+            import rawpy  # noqa: F401 — checked before the first download, not after it
+        except ImportError as err:
+            raise RuntimeError("rendering a DNG needs rawpy: run `make setup` (it installs the raw extra)") from err
+    for i, (stem, need_input, need_edit) in enumerate(todo, 1):
+        tmps = []
+        try:
+            if need_input:
+                in_dir.mkdir(parents=True, exist_ok=True)
+                tmp = in_dir / f".{stem}.download.dng"
+                tmps.append(tmp)
+                fetch(f"{BASE_URL}/dng/{stem}.dng", tmp)
+                _save_shrunk(load_image(tmp, raw or {}), in_dir / f"{stem}.tif", long_edge)
+                report.inputs += 1
+            if need_edit:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                tmp = out_dir / f".{stem}.download.tif"
+                tmps.append(tmp)
+                fetch(f"{BASE_URL}/tiff16_{expert.lower()}/{stem}.tif", tmp)
+                _save_shrunk(read_prophoto_tiff(tmp), out_dir / f"{stem}.tif", long_edge)
             report.fetched += 1
-        except Exception as e:  # noqa: BLE001 — one missing or broken edit never stops the run
+        except Exception as e:  # noqa: BLE001 — one missing or broken photo never stops the run
             report.failed.append((stem, str(e)))
         finally:
-            tmp.unlink(missing_ok=True)
-            tmp.with_name(tmp.name + ".part").unlink(missing_ok=True)
+            for tmp in tmps:
+                tmp.unlink(missing_ok=True)
+                tmp.with_name(tmp.name + ".part").unlink(missing_ok=True)
         if i % 50 == 0 or i == len(todo):
-            log(f"  {i}/{len(todo)} — {report.fetched} written, {len(report.failed)} failed")
+            log(f"  {i}/{len(todo)} — {report.fetched} done, {len(report.failed)} failed")
     return report
