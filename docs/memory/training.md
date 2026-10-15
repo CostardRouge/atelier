@@ -121,6 +121,17 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   random global looks: 10.5 ΔE00 before, 9.82 after at lr 2e-4 and 6.40 at
   1e-3 (2 000 steps) — so the default lr is likely too low; measure on his
   pairs before moving it. Runs before this compare only with each other.
+- **After that fix the adaptive LUT PLATEAUS at ~11.5 ΔE00 on his pairs, and
+  the number of bases is not why** (2026-10-15, 1 571 pairs, lr 1e-3, width
+  32, 60 epochs): 8 bases 11.54 best validation, train 11.02 (eval
+  `--split train`); 32 bases 11.46, final train loss 0.0150 vs 0.0153. The
+  train/validation gap is only 0.5, yet train sits 4 above the 7.05
+  per-picture ceiling, and 50 memorised pairs reach 9.19 after 300 epochs
+  (still falling). So neither capacity nor over-fitting explains it. What is
+  left, untested: the training schedule (loss still falling at epoch 60, no
+  lr decay), information the picture does not carry (camera, ISO, hour,
+  series — what DevelopNet already reads), FiveK pretraining. How to apply:
+  try those before any bigger model, and judge a run on its grids too.
 - **The weighing CNN sees the WHOLE picture during training** (`train.
   whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
   training CROP (a quarter of a 512 px picture, at full detail) while eval
