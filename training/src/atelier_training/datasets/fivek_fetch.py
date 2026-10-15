@@ -110,6 +110,13 @@ def read_prophoto_tiff(path: Path) -> np.ndarray:
     return prophoto_to_srgb(data[..., :3].astype(np.float32) / scale, gamma)
 
 
+def require_rawpy() -> None:
+    try:
+        import rawpy  # noqa: F401
+    except ImportError as err:
+        raise RuntimeError("rendering a DNG needs rawpy: run `make setup` (it installs the raw extra)") from err
+
+
 def _save_shrunk(img: np.ndarray, dest: Path, long_edge: int) -> None:
     """A 16-bit TIFF, deflated losslessly (~12 % smaller: the low bits are noise and barely compress)."""
     import tifffile
@@ -153,10 +160,7 @@ def fetch_expert(
     if limit:
         todo = todo[:limit]
     if any(need_input for _, need_input, _ in todo):
-        try:
-            import rawpy  # noqa: F401 — checked before the first download, not after it
-        except ImportError as err:
-            raise RuntimeError("rendering a DNG needs rawpy: run `make setup` (it installs the raw extra)") from err
+        require_rawpy()  # before the first download, not after it
     for i, (stem, need_input, need_edit) in enumerate(todo, 1):
         tmps = []
         try:
