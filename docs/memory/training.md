@@ -330,6 +330,13 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   How to apply: anything new that reads a pair's FILES must handle a slim
   group (`Group.slim`, `PairRef.slim`), and anything that changes how a pair
   is prepared reaches slim groups only by re-fetching them.
+- 2026-10-15 — **`slim-pairs` slims groups ALREADY prepared, offline**
+  (`ingest.slim_prepared_groups`): he needed the space back for FiveK, and
+  deleting `data/pairs/` by hand would have dropped every pair from the index
+  on the next whole ingest of `pairs` (a whole run of a source is
+  authoritative, `write_index`). It decodes nothing and asks no instance: a
+  group whose every edit is cached loses its pictures and gains the same
+  `slim` block; one with an edit missing from the cache keeps its files.
 - In a cloud container, run uv with `UV_PYTHON=3.13` (the system Python):
   GitHub release downloads, where uv fetches 3.12 from, answered 403 through
   the proxy. On the Mac `make setup` lets uv fetch 3.12.

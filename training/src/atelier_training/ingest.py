@@ -31,7 +31,7 @@ import numpy as np
 from .align import align_pair
 from .config import Config
 from .datasets.fivek import scan_fivek
-from .datasets.pairs import edit_stem, read_group, scan_pairs
+from .datasets.pairs import SLIM_META, edit_stem, read_group, scan_pairs, slim_block
 from .imaging import (
     HeifSupportMissing,
     RawSupportMissing,
@@ -313,6 +313,51 @@ def prepare_group(config: Config, folder: Path, source: str = "pairs") -> dict:
             continue
         out["prepared"].append(stem)
     return out
+
+
+def slim_prepared_groups(config: Config, dry_run: bool = False, log: Callable[[str], None] = print) -> dict:
+    """Slim the Winnow groups ALREADY prepared, offline: a group every edit of which is in the cache loses
+    its pictures and gains the ``slim`` block ``winnow-import --slim`` writes, so ingest keeps serving it
+    from the cache. Nothing is decoded again; a group with an edit missing from the cache keeps its files
+    (deleting them would lose that pair). Deleting the pairs folder by hand instead drops every pair from
+    the index on the next whole ingest of ``pairs`` — a whole run of a source is authoritative for it."""
+    counts = {"slimmed": 0, "kept": 0, "already": 0, "freed": 0}
+    root = config.paths.pairs
+    if not root.is_dir():
+        return counts
+    for folder in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))):
+        meta_file = folder / SLIM_META
+        if not meta_file.is_file():
+            continue  # not a Winnow group: no manifest of where its files came from
+        if slim_block(folder) is not None:
+            counts["already"] += 1
+            continue
+        group = read_group(folder, [])
+        if group.original is None or not group.edits:
+            counts["kept"] += 1
+            continue
+        stems = [edit_stem(e.file, folder) for e in group.edits]
+        missing = [s for s in stems if not _cached(config.paths.cache / "pairs" / group.name / s)]
+        if missing:
+            counts["kept"] += 1
+            log(f"  {folder.name}: kept, {len(missing)} edit(s) not in the cache ({', '.join(missing[:3])})")
+            continue
+        files = [group.original, *(e.file for e in group.edits), *folder.rglob("*.part")]
+        freed = sum(f.stat().st_size for f in files if f.is_file())
+        counts["slimmed"] += 1
+        counts["freed"] += freed
+        if dry_run:
+            continue
+        for f in files:
+            f.unlink(missing_ok=True)
+        finals_dir = folder / "finals"
+        if finals_dir.is_dir() and not any(finals_dir.iterdir()):
+            finals_dir.rmdir()
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        meta["slim"] = {"finals": [int(f["id"]) for f in meta.get("finals", [])], "prepared": stems,
+                        "skipped": {}, "freed_bytes": freed}
+        meta_file.write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    return counts
 
 
 def group_prepared(config: Config, folder: Path, block: dict, source: str = "pairs") -> bool:

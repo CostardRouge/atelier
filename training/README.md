@@ -166,6 +166,15 @@ allégés au passage, sans rien retélécharger : c'est aussi la façon de
 récupérer la place si un import sans `--slim` a déjà rempli le disque.
 Ensuite `uv run atelier-train ingest --source pairs` les reprend tels quels.
 
+Sans Winnow et sans rien redécoder, `uv run atelier-train slim-pairs` allège
+les dossiers dont **toutes** les retouches sont déjà dans le cache
+(`--dry-run` dit d'abord combien de Go il libère). Un dossier dont une retouche
+manque au cache garde ses fichiers. **Ne supprime pas `data/pairs/` à la
+main** : le prochain `ingest` complet des paires les retirerait toutes de
+l'index, et l'affinage sur tes paires deviendrait impossible sans tout
+retélécharger. Et garde `data/cache/` : après l'allègement, c'est lui seul qui
+porte tes paires.
+
 Le prix : une paire allégée ne peut pas être refaite à une autre taille
 (`ingest.long_edge`) ni avec `--force` ; pour cela, supprime son dossier et
 son cache, et relance `winnow-import --slim`, qui la retélécharge. Si son
@@ -193,6 +202,7 @@ pour qu'une relance ne refasse rien.
 | `make validate` | vérifie tes groupes de paires |
 | `make ingest` | prépare les paires pour l'entraînement (redimensionnées, en cache) |
 | `uv run atelier-train init-group <dossier>` | écrit un `manifest.toml` deviné |
+| `uv run atelier-train slim-pairs` | allège hors ligne les paires déjà préparées (fichiers supprimés, cache gardé) |
 | `uv run atelier-train winnow-import --slim` | rapatrie tes paires original → final depuis ton Winnow (lecture seule), préparées puis supprimées une à une |
 | `make serve` | ouvre le tableau de bord dans le navigateur (boutons, courbes, grilles) |
 | `make bench` | chronomètre un pas d'entraînement sur ce Mac et estime la durée d'un run |
