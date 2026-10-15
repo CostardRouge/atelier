@@ -232,6 +232,13 @@ export const Icons = {
     </>,
   ),
   crop: icon(<path d="M7 3v14h14M3 7h14v14" />),
+  // A square of ground crossed by two roads and a lane: the streets under a map.
+  streets: icon(
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9c6 1.2 12-1.6 18 0M9.5 3c1 6-.8 12 .8 18M15.5 3 14 21" />
+    </>,
+  ),
 
   // --- the view panels (band, contact sheet, day picker): a frame and where
   //     the pictures stand in it, or the grid they make. ---------------------

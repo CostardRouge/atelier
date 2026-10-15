@@ -3320,16 +3320,19 @@ alone, never its video. The panel has eight tabs:
   an `ilst`, Apple's `keys`; a DJI camera code such as `FC8482` becomes
   *DJI Mini 4 Pro*) — renamable, and a name for the flights whose file says
   nothing. Nothing is guessed from the flight itself.
-- **Style.** Looks (Transit, Aurora, Ember, Neon, Papier, Blueprint, Golden
-  hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
+- **Style.** It opens on **Ground** — what the flights are drawn over, as
+  three pictures in the look's own colours: *Plain* (the ground's colour),
+  *Coastline* (the shipped coastline, offline) or *Streets* (OpenStreetMap
+  tiles toned *night*, *grey*, *sepia* or *natural*, with a dim, credited in
+  every frame they appear in; see "The network exceptions"; off every time the
+  atlas opens). The **map glyph beside Play** is the same Streets switch, one
+  click from the picture. Then looks (Transit, Aurora, Ember, Neon, Papier,
+  Blueprint, Golden hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
   fade, ghost network, smoothing), drones (size, pulse, halo, take-off and
   landing ripples, altitude drawn as height with a ground shadow and a thread),
   colour (one, per flight, place, altitude, speed, date or hour, nine palettes,
-  glow, additive light) and the map (ground, shipped coastline, grid, vignette,
-  place names, and — only if switched on here — OpenStreetMap tiles toned
-  *night*, *grey*, *sepia* or *natural*, credited in every frame they appear
-  in; see "The network exceptions"; the switch is off every time the atlas
-  opens).
+  glow, additive light) and the map's details (ground colour, how the land is
+  drawn and its colour, grid, vignette, place names).
 - **Motion.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
   day at the hour it was flown, slowed against the clock) or *Calendar* (in
   the order flown, the idle between flights cut to a cap while the clock
@@ -3350,8 +3353,18 @@ alone, never its video. The panel has eight tabs:
   subtitle; **statistics** — flights, distance, airtime, highest, average
   height (time-weighted), average and top speed, places — as a column or a
   row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
-  or mi/ft; the **date range**; the **drones** (all shown, or those in the
-  air); a **card** for the drone in the spotlight (its name, day, aircraft,
+  or mi/ft; the **date range**; the **drone sticker** — the drone that flew,
+  written the way its maker does: «**DJI MINI 5** PRO» in Montserrat, the
+  model's body heavy and its trailing qualifier (Pro, Plus, Cine…) light, or
+  the maker's **logo** followed by the model in light. Every drone shown, or
+  those in the air; an ink that picks white or black against the ground by
+  itself (or the text colour, the accent, white, black); no backing, a shadow
+  or a plate; its size; the maker written in front of a bare model (DJI by
+  default); and, name by name, which words are light (a tap on a word). The
+  logo is **yours to import** — an SVG or a transparent PNG from your own
+  files, kept on this device only and never in a preset — drawn in the ink
+  or as the file is; Atelier ships no maker's logo, and without one the
+  maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits.
 - **Format.** Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame

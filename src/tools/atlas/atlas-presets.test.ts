@@ -21,7 +21,7 @@ function perth(): AtlasSettings {
     trail: { ...DEFAULT_SETTINGS.trail, width: 4.2 },
     camera: { ...DEFAULT_SETTINGS.camera, frame: 'zone', zone: { x0: 0.8, y0: 0.6, x1: 0.81, y1: 0.61 }, place: 'p3', picked: ['DJI_0001'] },
     hud: { ...DEFAULT_SETTINGS.hud, title: 'Perth', subtitle: 'May' },
-    aircraft: { names: { FC8482: 'Mini 4 Pro' }, fallback: 'Mini' },
+    aircraft: { names: { FC8482: 'Mini 4 Pro' }, fallback: 'Mini', weights: { 'DJI Mini 4 Pro': 1 } },
   });
 }
 
@@ -38,7 +38,7 @@ describe('presetSettings', () => {
     expect(kept.camera.picked).toEqual([]);
     expect(kept.hud.title).toBe('');
     expect(kept.hud.subtitle).toBe('');
-    expect(kept.aircraft).toEqual({ names: {}, fallback: '' });
+    expect(kept.aircraft).toEqual({ names: {}, fallback: '', weights: {} });
   });
 });
 

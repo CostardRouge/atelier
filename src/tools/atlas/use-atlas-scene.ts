@@ -6,6 +6,7 @@ import { nearestCity } from '../../shared/roadtrip/gazetteer';
 import { latOf, positionAt, unionBox, type AtlasFlight, type WorldBox } from './atlas-flight';
 import { formatDateRange } from './atlas-hud';
 import { LodCache, sceneStats, type PaintScene } from './atlas-paint';
+import type { StickerLogoSource } from './atlas-overlay';
 import { clusterPlaces, placeOfFlight, type AtlasPlace } from './atlas-places';
 import { activityCurve, buildSchedule, flightState, type Schedule } from './atlas-schedule';
 import { mapUnitFrame, type AtlasSettings } from './atlas-settings';
@@ -46,6 +47,7 @@ export function useAtlasScene(
   settings: AtlasSettings,
   freeView: AtlasView | null,
   aircraftRaw: ReadonlyMap<string, string>,
+  logos: ReadonlyMap<string, StickerLogoSource>,
 ): AtlasScene {
   const lod = useRef(new LodCache()).current;
   const [land, setLand] = useState<LandCollection | null>(null);
@@ -234,8 +236,9 @@ export function useAtlasScene(
       aircraft,
       totals,
       dateRange,
+      logos,
     }),
-    [flights, schedule, settings, visiblePlaces, placeNames, placeOf, land, activity, stats, lod, episodes, aircraft, totals, dateRange],
+    [flights, schedule, settings, visiblePlaces, placeNames, placeOf, land, activity, stats, lod, episodes, aircraft, totals, dateRange, logos],
   );
 
   return { core, schedule, places, placeNames, viewAt, fitAll, mapFrame, aircraftFound, unnamed };

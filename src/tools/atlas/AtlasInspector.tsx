@@ -6,12 +6,13 @@ import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import StylePanel from '../../shared/overlay/StylePanel';
 import { mulberry32 } from '../../shared/lib/prng';
-import { TILES_IN_OPENER_NOTICE } from '../../shared/map/osm-tiles';
 import { dayKey, type AtlasFlight } from './atlas-flight';
 import { flightTone, PALETTES, paletteById, samplePalette, toHex } from './atlas-colour';
 import type { AtlasPlace } from './atlas-places';
 import AtlasWinnow from './AtlasWinnow';
 import AtlasPresetsSection from './AtlasPresetsSection';
+import AtlasGround from './AtlasGround';
+import AtlasStickerSection from './AtlasStickerSection';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -23,12 +24,10 @@ import {
   type CameraFrame,
   type ClockMode,
   type ColourBy,
-  type DroneLine,
   type FrameAspect,
   type GridMode,
   type LandMode,
   type Spot,
-  type TileTone,
 } from './atlas-settings';
 import type { ChoreoMode, ChoreoOrder, Tempo } from './atlas-schedule';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
@@ -82,6 +81,8 @@ interface AtlasInspectorProps {
   onZoneFromView: () => void;
   aircraftFound: readonly { name: string; count: number }[];
   unnamed: number;
+  /** Every drone name the shown flights carry, as the stickers write them. */
+  stickerNames: readonly string[];
   dateRange: string | null;
   /** The animation's length, hold included. */
   total: number;
@@ -390,6 +391,8 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       )}
       {tab === 'style' && (
         <>
+      <AtlasGround settings={s} update={update} tilesOn={p.tilesOn} setTilesOn={p.setTilesOn} />
+
       {/* Looks -------------------------------------------------------------- */}
       <InspectorSection id="atlas.looks" title="Look" info="A look sets the colours, the trails, the heads and the ground at once. Every dial below stays yours afterwards.">
         <div className="grid grid-cols-4 gap-1.5">
@@ -499,7 +502,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       </InspectorSection>
 
       {/* Map ---------------------------------------------------------------- */}
-      <InspectorSection id="atlas.map" title="Map" info="The ground under the flights: a colour, the coastline shipped with the app (offline), a grid, and — only if you turn it on here — OpenStreetMap tiles.">
+      <InspectorSection id="atlas.map" title="Map details" info="The ground's colour, how the land is drawn and in what colour, a grid, the vignette and the place names. What the flights are drawn over is chosen in Ground, at the top of this tab.">
         <Colour label="Ground" value={s.map.background} onChange={(v) => map({ background: v })} />
         <FieldRow label="Land">
           <Segmented<LandMode>
@@ -533,27 +536,6 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         {s.map.grid !== 'off' && <Colour label="Grid colour" value={s.map.gridColour} onChange={(v) => map({ gridColour: v })} />}
         <Slider label="Vignette" value={s.map.vignette} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ vignette: v })} />
         <SwitchRow label="Place names on the map" checked={s.map.labels} onChange={(v) => map({ labels: v })} />
-        <SwitchRow label="OpenStreetMap tiles" checked={p.tilesOn} onChange={p.setTilesOn} hint={TILES_IN_OPENER_NOTICE} />
-        {p.tilesOn && (
-          <>
-            <FieldRow label="Tone">
-              <Segmented<TileTone>
-                size="sm"
-                fill
-                label="Tile tone"
-                value={s.map.tileTone}
-                onChange={(v) => map({ tileTone: v })}
-                options={[
-                  { id: 'night', label: 'Night' },
-                  { id: 'grey', label: 'Grey' },
-                  { id: 'sepia', label: 'Sepia' },
-                  { id: 'natural', label: 'Natural' },
-                ]}
-              />
-            </FieldRow>
-            <Slider label="Dim" value={s.map.tileDim} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ tileDim: v })} />
-          </>
-        )}
       </InspectorSection>
 
         </>
@@ -872,13 +854,9 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         <SpotRow label="Where" value={s.hud.clockAt} onChange={(v) => hud({ clockAt: v })} />
       </InspectorSection>
 
-      <InspectorSection id="atlas.info" title="Dates and drones" marked={s.hud.dates || s.hud.drone !== 'off'} info="The span of the flights shown, and the aircraft that flew them (named in the Flights tab).">
+      <InspectorSection id="atlas.info" title="Dates and the spotlight card" marked={s.hud.dates || s.hud.spotCard} info="The span of the flights shown, and a card for the flight the spotlight follows.">
         <SwitchRow label="Date range" checked={s.hud.dates} onChange={(v) => hud({ dates: v })} hint={p.dateRange ?? 'No flight carries a date.'} hintShown />
         {s.hud.dates && <SpotRow label="Where" value={s.hud.datesAt} onChange={(v) => hud({ datesAt: v })} />}
-        <FieldRow label="Drone">
-          <Segmented<DroneLine> size="sm" fill label="Drone" value={s.hud.drone} onChange={(v) => hud({ drone: v })} options={[{ id: 'off', label: 'Off' }, { id: 'all', label: 'All shown' }, { id: 'flying', label: 'In the air' }]} />
-        </FieldRow>
-        {s.hud.drone !== 'off' && <SpotRow label="Where" value={s.hud.droneAt} onChange={(v) => hud({ droneAt: v })} />}
         <SwitchRow
           label="A card for the drone in the spotlight"
           checked={s.hud.spotCard}
@@ -888,6 +866,14 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         />
         {s.hud.spotCard && <SpotRow label="Where" value={s.hud.spotCardAt} onChange={(v) => hud({ spotCardAt: v })} />}
       </InspectorSection>
+
+      <AtlasStickerSection
+        settings={s}
+        update={update}
+        names={p.stickerNames}
+        spotRow={(value, onChange) => <SpotRow label="Where" value={value} onChange={onChange} />}
+        onNameDrones={() => pickTab('flights')}
+      />
         </>
       )}
       {tab === 'format' && (

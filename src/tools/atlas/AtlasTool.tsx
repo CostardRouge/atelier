@@ -14,6 +14,7 @@ import type { WorldBox } from './atlas-flight';
 import { PlayClock } from './play-clock';
 import { useAtlasExport, type ExportKind } from './use-atlas-export';
 import { useAtlasFlights, type FlightSource } from './use-atlas-flights';
+import { useAtlasLogos } from './atlas-logos';
 import { useAtlasScene } from './use-atlas-scene';
 import { useAtlasSettings } from './use-atlas-settings';
 
@@ -50,7 +51,8 @@ export default function AtlasTool() {
     [lib.assets, lib.selection],
   );
   const { flights, reading, empty, aircraft } = useAtlasFlights(sources);
-  const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft);
+  const logos = useAtlasLogos();
+  const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft, logos);
 
   const clock = useRef(new PlayClock()).current;
   useEffect(() => clock.setTotal(scene.schedule.total), [clock, scene.schedule.total]);
@@ -72,6 +74,9 @@ export default function AtlasTool() {
     if (on && !tilesAllowed()) allowTiles(true);
     setTilesOnState(on);
   }, []);
+
+  const stickerNames = useMemo(() => [...new Set(scene.core.aircraft.filter((n): n is string => !!n))], [scene.core.aircraft]);
+  const streetsSwitch = useMemo(() => ({ on: tilesOn, set: setTilesOn }), [tilesOn, setTilesOn]);
 
   const onFreeView = useCallback(
     (view: AtlasView) => {
@@ -162,7 +167,7 @@ export default function AtlasTool() {
               </div>
             )}
           </div>
-          <AtlasTransport clock={clock} activity={scene.core.activity} />
+          <AtlasTransport clock={clock} activity={scene.core.activity} streets={streetsSwitch} />
         </div>
         <aside className="flex-1 min-h-0 overflow-y-auto overscroll-contain border border-line rounded-paper-lg bg-surface shadow-paper-soft px-3 @min-[860px]:flex-none" aria-label="Flight Atlas settings">
           <AtlasInspector
@@ -189,6 +194,7 @@ export default function AtlasTool() {
             onZoneFromView={onZoneFromView}
             aircraftFound={scene.aircraftFound}
             unnamed={scene.unnamed}
+            stickerNames={stickerNames}
             dateRange={scene.core.dateRange}
             total={scene.schedule.total}
             exporter={exporter}
