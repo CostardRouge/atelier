@@ -10,6 +10,8 @@ interface AtlasTransportProps {
   clock: PlayClock;
   /** Flights in the air per sample, over the whole animation. */
   activity: readonly number[];
+  /** The streets under the flights — the Ground section's Streets, one click from Play. */
+  streets?: { on: boolean; set: (on: boolean) => void };
 }
 
 const SPEEDS = [
@@ -24,7 +26,7 @@ const SPEEDS = [
  * before dragging to it. Space plays and pauses, under the suite's one rule
  * for who owns the key (`transport-keys.ts`).
  */
-export default function AtlasTransport({ clock, activity }: AtlasTransportProps) {
+export default function AtlasTransport({ clock, activity, streets }: AtlasTransportProps) {
   useSyncExternalStore(clock.subscribe, clock.getVersion);
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -108,6 +110,16 @@ export default function AtlasTransport({ clock, activity }: AtlasTransportProps)
         </svg>
         <span className="absolute top-0 bottom-0 w-0.5 bg-accent pointer-events-none" style={{ left: `${fraction * 100}%` }} />
       </div>
+      {streets && (
+        <IconButton
+          label={streets.on ? 'Streets on — click to take them away' : 'Draw the streets under the flights (OpenStreetMap)'}
+          onClick={() => streets.set(!streets.on)}
+          aria-pressed={streets.on}
+          variant={streets.on ? 'default' : 'ghost'}
+        >
+          {Icons.streets}
+        </IconButton>
+      )}
       <IconButton
         label={clock.loop ? 'Looping — click to play once' : 'Playing once — click to loop'}
         onClick={() => clock.setLoop(!clock.loop)}

@@ -6,12 +6,12 @@ import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import StylePanel from '../../shared/overlay/StylePanel';
 import { mulberry32 } from '../../shared/lib/prng';
-import { TILES_IN_OPENER_NOTICE } from '../../shared/map/osm-tiles';
 import { dayKey, type AtlasFlight } from './atlas-flight';
 import { flightTone, PALETTES, paletteById, samplePalette, toHex } from './atlas-colour';
 import type { AtlasPlace } from './atlas-places';
 import AtlasWinnow from './AtlasWinnow';
 import AtlasPresetsSection from './AtlasPresetsSection';
+import AtlasGround from './AtlasGround';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -28,7 +28,6 @@ import {
   type GridMode,
   type LandMode,
   type Spot,
-  type TileTone,
 } from './atlas-settings';
 import type { ChoreoMode, ChoreoOrder, Tempo } from './atlas-schedule';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
@@ -390,6 +389,8 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       )}
       {tab === 'style' && (
         <>
+      <AtlasGround settings={s} update={update} tilesOn={p.tilesOn} setTilesOn={p.setTilesOn} />
+
       {/* Looks -------------------------------------------------------------- */}
       <InspectorSection id="atlas.looks" title="Look" info="A look sets the colours, the trails, the heads and the ground at once. Every dial below stays yours afterwards.">
         <div className="grid grid-cols-4 gap-1.5">
@@ -499,7 +500,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       </InspectorSection>
 
       {/* Map ---------------------------------------------------------------- */}
-      <InspectorSection id="atlas.map" title="Map" info="The ground under the flights: a colour, the coastline shipped with the app (offline), a grid, and — only if you turn it on here — OpenStreetMap tiles.">
+      <InspectorSection id="atlas.map" title="Map details" info="The ground's colour, how the land is drawn and in what colour, a grid, the vignette and the place names. What the flights are drawn over is chosen in Ground, at the top of this tab.">
         <Colour label="Ground" value={s.map.background} onChange={(v) => map({ background: v })} />
         <FieldRow label="Land">
           <Segmented<LandMode>
@@ -533,27 +534,6 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         {s.map.grid !== 'off' && <Colour label="Grid colour" value={s.map.gridColour} onChange={(v) => map({ gridColour: v })} />}
         <Slider label="Vignette" value={s.map.vignette} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ vignette: v })} />
         <SwitchRow label="Place names on the map" checked={s.map.labels} onChange={(v) => map({ labels: v })} />
-        <SwitchRow label="OpenStreetMap tiles" checked={p.tilesOn} onChange={p.setTilesOn} hint={TILES_IN_OPENER_NOTICE} />
-        {p.tilesOn && (
-          <>
-            <FieldRow label="Tone">
-              <Segmented<TileTone>
-                size="sm"
-                fill
-                label="Tile tone"
-                value={s.map.tileTone}
-                onChange={(v) => map({ tileTone: v })}
-                options={[
-                  { id: 'night', label: 'Night' },
-                  { id: 'grey', label: 'Grey' },
-                  { id: 'sepia', label: 'Sepia' },
-                  { id: 'natural', label: 'Natural' },
-                ]}
-              />
-            </FieldRow>
-            <Slider label="Dim" value={s.map.tileDim} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ tileDim: v })} />
-          </>
-        )}
       </InspectorSection>
 
         </>

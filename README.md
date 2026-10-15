@@ -3320,16 +3320,19 @@ alone, never its video. The panel has eight tabs:
   an `ilst`, Apple's `keys`; a DJI camera code such as `FC8482` becomes
   *DJI Mini 4 Pro*) — renamable, and a name for the flights whose file says
   nothing. Nothing is guessed from the flight itself.
-- **Style.** Looks (Transit, Aurora, Ember, Neon, Papier, Blueprint, Golden
-  hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
+- **Style.** It opens on **Ground** — what the flights are drawn over, as
+  three pictures in the look's own colours: *Plain* (the ground's colour),
+  *Coastline* (the shipped coastline, offline) or *Streets* (OpenStreetMap
+  tiles toned *night*, *grey*, *sepia* or *natural*, with a dim, credited in
+  every frame they appear in; see "The network exceptions"; off every time the
+  atlas opens). The **map glyph beside Play** is the same Streets switch, one
+  click from the picture. Then looks (Transit, Aurora, Ember, Neon, Papier,
+  Blueprint, Golden hour, Ink, plus *Surprise me*), trails (tail, taper, width, afterglow and its
   fade, ghost network, smoothing), drones (size, pulse, halo, take-off and
   landing ripples, altitude drawn as height with a ground shadow and a thread),
   colour (one, per flight, place, altitude, speed, date or hour, nine palettes,
-  glow, additive light) and the map (ground, shipped coastline, grid, vignette,
-  place names, and — only if switched on here — OpenStreetMap tiles toned
-  *night*, *grey*, *sepia* or *natural*, credited in every frame they appear
-  in; see "The network exceptions"; the switch is off every time the atlas
-  opens).
+  glow, additive light) and the map's details (ground colour, how the land is
+  drawn and its colour, grid, vignette, place names).
 - **Motion.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
   day at the hour it was flown, slowed against the clock) or *Calendar* (in
   the order flown, the idle between flights cut to a cap while the clock

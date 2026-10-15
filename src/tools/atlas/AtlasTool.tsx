@@ -73,6 +73,8 @@ export default function AtlasTool() {
     setTilesOnState(on);
   }, []);
 
+  const streetsSwitch = useMemo(() => ({ on: tilesOn, set: setTilesOn }), [tilesOn, setTilesOn]);
+
   const onFreeView = useCallback(
     (view: AtlasView) => {
       setFreeView(view);
@@ -162,7 +164,7 @@ export default function AtlasTool() {
               </div>
             )}
           </div>
-          <AtlasTransport clock={clock} activity={scene.core.activity} />
+          <AtlasTransport clock={clock} activity={scene.core.activity} streets={streetsSwitch} />
         </div>
         <aside className="flex-1 min-h-0 overflow-y-auto overscroll-contain border border-line rounded-paper-lg bg-surface shadow-paper-soft px-3 @min-[860px]:flex-none" aria-label="Flight Atlas settings">
           <AtlasInspector
