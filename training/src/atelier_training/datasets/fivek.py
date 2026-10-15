@@ -109,7 +109,7 @@ def scan_fivek(
                 break
 
     if not scan.inputs:
-        scan.notes.append("no FiveK photo found (files named a0001…a5000).")
+        scan.notes.append("no FiveK photo found (files named a0001…a5000): `atelier-train fivek-fetch` downloads them.")
     if not chosen:
         found = ", ".join(scan.experts_found) or "none"
         if catalogues:

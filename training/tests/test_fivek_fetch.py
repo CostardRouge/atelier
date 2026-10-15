@@ -61,3 +61,49 @@ def test_fetch_writes_srgb_edits_beside_the_dngs_and_resumes(tmp_path):
     asked.clear()  # a second run fetches only what is missing
     report = fetch_expert(root, "C", long_edge=30, log=lambda s: None, fetch=fake_fetch)
     assert report.kept == 2 and asked == [asked[0]] and asked[0].endswith("a0003-three.tif")
+    assert report.photos == 3
+
+
+def test_with_no_archive_the_photos_come_from_mit_too(tmp_path, monkeypatch):
+    from atelier_training.datasets import fivek_fetch
+
+    root = tmp_path / "fivek"  # nothing on disk: the archive was deleted
+    lists = {fivek_fetch.LIST_URLS[0]: "a0002-two\na0001-one\n", fivek_fetch.LIST_URLS[1]: "a0003-three\n\n"}
+    asked = []
+
+    def fake_fetch(url, dest):
+        asked.append(url.rsplit("/", 2)[-2])
+        if url.endswith(".tif"):
+            tifffile.imwrite(dest, np.full((40, 60, 3), 32768, np.uint16), photometric="rgb")
+        else:
+            dest.write_bytes(b"a DNG")
+
+    rendered = np.full((80, 120, 3), 0.25, np.float32)  # what rawpy would render, as shot
+    monkeypatch.setattr(fivek_fetch, "load_image", lambda path, raw: rendered)
+    monkeypatch.setattr(fivek_fetch, "require_rawpy", lambda: None)  # the CI installs no rawpy
+    report = fetch_expert(root, "C", long_edge=30, limit=2, log=lambda s: None, fetch=fake_fetch,
+                          fetch_text=lists.__getitem__)
+    assert (report.photos, report.fetched, report.inputs) == (3, 2, 2) and asked == ["dng", "tiff16_c"] * 2
+    assert load_image(root / "input" / "a0001-one.tif", {}).shape == (20, 30, 3)
+    assert not list(root.rglob(".*"))  # no download left behind
+    assert [i.input.parent.name for i in scan_fivek(root, "C").items] == ["input", "input"]
+
+    asked.clear()  # the next run fetches the third photo only
+    report = fetch_expert(root, "C", long_edge=30, log=lambda s: None, fetch=fake_fetch, fetch_text=lists.__getitem__)
+    assert (report.kept, report.fetched) == (2, 1) and asked == ["dng", "tiff16_c"]
+
+
+def test_without_rawpy_nothing_is_downloaded(tmp_path, monkeypatch):
+    import builtins
+
+    from atelier_training.datasets import fivek_fetch
+
+    real_import = builtins.__import__
+    monkeypatch.setattr(builtins, "__import__",
+                        lambda name, *a, **k: (_ for _ in ()).throw(ImportError(name)) if name == "rawpy"
+                        else real_import(name, *a, **k))
+    asked = []
+    with pytest.raises(RuntimeError, match="rawpy"):
+        fetch_expert(tmp_path, "C", log=lambda s: None, fetch=lambda url, dest: asked.append(url),
+                     fetch_text={u: "a0001-one\n" for u in fivek_fetch.LIST_URLS}.__getitem__)
+    assert asked == []

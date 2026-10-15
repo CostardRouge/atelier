@@ -330,16 +330,23 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   How to apply: anything new that reads a pair's FILES must handle a slim
   group (`Group.slim`, `PairRef.slim`), and anything that changes how a pair
   is prepared reaches slim groups only by re-fetching them.
-- 2026-10-15 — **FiveK's edits are FETCHED as images, never exported**
-  (`atelier-train fivek-fetch`, `datasets/fivek_fetch.py`): his archive is
-  the DNGs + the Lightroom catalogue, and he will not install Lightroom. MIT
-  serves each edit as `img/tiff16_<x>/<name>.tif` — 16-bit ProPhoto (ROMM
-  ICC, gamma 1.8), ~32 MB, ~160 GB an expert — so each is fetched, converted
-  ProPhoto → sRGB (Bradford D50→D65, out-of-gamut clipped), shrunk to 1024 px
-  and written to `expert<X>/` beside the DNGs, the download deleted at once.
-  Checked on a0001: 1.39 ΔE00 against MIT's own sRGB thumbnail, 10.87 if read
-  as sRGB unconverted. How to apply: any target outside sRGB is converted
-  where it is written, never at ingest.
+- 2026-10-15 — **FiveK is FETCHED from MIT photo by photo, never from the
+  archive or Lightroom** (`atelier-train fivek-fetch`,
+  `datasets/fivek_fetch.py`): the archive is DNGs + a Lightroom catalogue, he
+  will not install Lightroom, and he deleted the archive for space. MIT serves
+  the list (`legal/filesAdobe.txt` + `filesAdobeMIT.txt`, 5 000 names), each
+  DNG (`img/dng/`, ~10 MB) and each edit (`img/tiff16_<x>/`, 16-bit ProPhoto,
+  ROMM ICC gamma 1.8, ~32 MB). Each photo: the DNG rendered as shot with
+  ingest's own `[raw]` settings → `input/<name>.tif`, the edit converted
+  ProPhoto → sRGB (Bradford D50→D65, out-of-gamut clipped) →
+  `expert<X>/<name>.tif`, both 768 px deflated 16-bit (~4 MB a photo,
+  ~20 GB for 5 000; ~42 MB of network a photo), downloads deleted at once.
+  DNGs already on disk are used instead of MIT's list (only edits fetched).
+  Checked: a0001's edit at 1.39 ΔE00 against MIT's own sRGB thumbnail (10.87
+  read unconverted); four real pairs ingested at structure 0.87–0.95, no
+  alignment needed. How to apply: any target outside sRGB is converted where
+  it is written, never at ingest; a dataset command says where it looked and
+  never prints a silent zero.
 - 2026-10-15 — **`slim-pairs` slims groups ALREADY prepared, offline**
   (`ingest.slim_prepared_groups`): he needed the space back for FiveK, and
   deleting `data/pairs/` by hand would have dropped every pair from the index
