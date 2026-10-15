@@ -261,6 +261,23 @@ def cmd_export_develop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fivek_fetch(args: argparse.Namespace) -> int:
+    from .datasets.fivek_fetch import fetch_expert
+
+    config = _config(args)
+    expert = (args.expert or str(config.section("ingest").get("fivek_expert", "C"))).upper()
+    print(f"Fetching expert {expert}'s edits into {config.paths.fivek / ('expert' + expert)} "
+          f"(one at a time, {args.long_edge} px, sRGB)…")
+    report = fetch_expert(config.paths.fivek, expert, long_edge=args.long_edge, limit=args.limit)
+    for stem, why in report.failed[:10]:
+        print(f"  · {stem}: {why}")
+    print(f"{report.fetched} written, {report.kept} already there, {len(report.failed)} failed. "
+          "A failed one is fetched again by the same command.")
+    if report.fetched or report.kept:
+        print("Next: `atelier-train ingest --source fivek`.")
+    return 1 if report.failed and not report.fetched and not report.kept else 0
+
+
 def cmd_slim_pairs(args: argparse.Namespace) -> int:
     from .ingest import slim_prepared_groups
 
@@ -437,6 +454,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="prepare each group into the cache, then delete its files: one group on disk at a time "
                         "(also slims the groups already fetched)")
     p.set_defaults(func=cmd_winnow_import)
+
+    p = sub.add_parser("fivek-fetch", parents=[common],
+                       help="download an expert's FiveK edits as sRGB images, no Lightroom needed (one at a time)")
+    p.add_argument("--expert", help="A to E (default: ingest.fivek_expert, C)")
+    p.add_argument("--long-edge", type=int, default=1024, help="pixels kept on the long edge (default 1024)")
+    p.add_argument("--limit", type=int, default=0, help="stop after this many photos (0 = all)")
+    p.set_defaults(func=cmd_fivek_fetch)
 
     p = sub.add_parser("slim-pairs", parents=[common],
                        help="delete the pictures of Winnow groups already in the cache, offline; ingest keeps them")

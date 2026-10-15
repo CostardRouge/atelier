@@ -330,6 +330,16 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   How to apply: anything new that reads a pair's FILES must handle a slim
   group (`Group.slim`, `PairRef.slim`), and anything that changes how a pair
   is prepared reaches slim groups only by re-fetching them.
+- 2026-10-15 — **FiveK's edits are FETCHED as images, never exported**
+  (`atelier-train fivek-fetch`, `datasets/fivek_fetch.py`): his archive is
+  the DNGs + the Lightroom catalogue, and he will not install Lightroom. MIT
+  serves each edit as `img/tiff16_<x>/<name>.tif` — 16-bit ProPhoto (ROMM
+  ICC, gamma 1.8), ~32 MB, ~160 GB an expert — so each is fetched, converted
+  ProPhoto → sRGB (Bradford D50→D65, out-of-gamut clipped), shrunk to 1024 px
+  and written to `expert<X>/` beside the DNGs, the download deleted at once.
+  Checked on a0001: 1.39 ΔE00 against MIT's own sRGB thumbnail, 10.87 if read
+  as sRGB unconverted. How to apply: any target outside sRGB is converted
+  where it is written, never at ingest.
 - 2026-10-15 — **`slim-pairs` slims groups ALREADY prepared, offline**
   (`ingest.slim_prepared_groups`): he needed the space back for FiveK, and
   deleting `data/pairs/` by hand would have dropped every pair from the index

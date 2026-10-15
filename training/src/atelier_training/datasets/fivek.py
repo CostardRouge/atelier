@@ -115,7 +115,8 @@ def scan_fivek(
         if catalogues:
             scan.notes.append(
                 f"no exported edit of expert {expert} (experts found: {found}); the edits are inside "
-                f"{catalogues[0].name} and must be exported to a folder named expert{expert}/ first."
+                f"{catalogues[0].name}: fetch them as images with `atelier-train fivek-fetch` (no Lightroom), "
+                f"or export them to a folder named expert{expert}/."
             )
         else:
             scan.notes.append(f"no folder of expert {expert}'s edits (expected expert{expert}/; found: {found}).")
