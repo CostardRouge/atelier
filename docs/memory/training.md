@@ -339,7 +339,11 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   and written to `expert<X>/` beside the DNGs, the download deleted at once.
   Checked on a0001: 1.39 ΔE00 against MIT's own sRGB thumbnail, 10.87 if read
   as sRGB unconverted. How to apply: any target outside sRGB is converted
-  where it is written, never at ingest.
+  where it is written, never at ingest. A root with NO DNG fails loudly
+  (his first run printed «0 written, 0 already there, 0 failed» over an
+  archive unpacked elsewhere): a command reading a dataset says where it
+  looked and how to point it elsewhere (`--set paths.fivek=…`), never a
+  silent zero.
 - 2026-10-15 — **`slim-pairs` slims groups ALREADY prepared, offline**
   (`ingest.slim_prepared_groups`): he needed the space back for FiveK, and
   deleting `data/pairs/` by hand would have dropped every pair from the index

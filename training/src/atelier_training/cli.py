@@ -269,6 +269,10 @@ def cmd_fivek_fetch(args: argparse.Namespace) -> int:
     print(f"Fetching expert {expert}'s edits into {config.paths.fivek / ('expert' + expert)} "
           f"(one at a time, {args.long_edge} px, sRGB)…")
     report = fetch_expert(config.paths.fivek, expert, long_edge=args.long_edge, limit=args.limit)
+    if not report.photos:
+        print(f"✗ no FiveK DNG (a0001…a5000) under {config.paths.fivek}. Unpack the archive there, or point at "
+              "the folder you unpacked it into: `--set paths.fivek=/path/to/fivek` (any depth below it is read).")
+        return 1
     for stem, why in report.failed[:10]:
         print(f"  · {stem}: {why}")
     print(f"{report.fetched} written, {report.kept} already there, {len(report.failed)} failed. "

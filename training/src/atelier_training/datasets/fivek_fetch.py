@@ -73,6 +73,7 @@ class FetchReport:
     fetched: int = 0
     kept: int = 0
     failed: list[tuple[str, str]] = field(default_factory=list)
+    photos: int = 0  # FiveK DNGs found under the root: 0 means the archive is not where it was looked for
 
 
 def read_prophoto_tiff(path: Path) -> np.ndarray:
@@ -111,9 +112,11 @@ def fetch_expert(
             report.kept += 1
             continue
         todo.append(raws[0].stem)
+    report.photos = report.kept + len(todo)
     if limit:
         todo = todo[:limit]
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if todo:
+        out_dir.mkdir(parents=True, exist_ok=True)
     for i, stem in enumerate(todo, 1):
         tmp = out_dir / f".{stem}.download.tif"
         try:

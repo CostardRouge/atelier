@@ -102,6 +102,12 @@ DNG, puis le téléchargement est supprimé : le disque ne garde que ~2,5 Mo par
 photo. Le réseau, lui, transporte les ~160 Go. `make doctor` signale le
 catalogue sans export.
 
+Si l'archive est décompressée ailleurs (un disque externe, `~/Downloads`…),
+pas besoin de la déplacer : ajoute `--set paths.fivek=/chemin/vers/le/dossier`
+à chaque commande (`fivek-fetch`, `ingest`, `doctor`), ou écris-le une fois
+dans un fichier passé par `--config`. Le dossier est lu à toute profondeur.
+`fivek-fetch` s'arrête en erreur s'il n'y trouve aucun DNG.
+
 C'est l'expert **C** qui est utilisé par défaut (c'est l'usage dans les
 publications) ; pour en changer : `--set ingest.fivek_expert=A`.
 

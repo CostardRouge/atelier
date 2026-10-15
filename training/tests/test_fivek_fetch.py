@@ -61,3 +61,13 @@ def test_fetch_writes_srgb_edits_beside_the_dngs_and_resumes(tmp_path):
     asked.clear()  # a second run fetches only what is missing
     report = fetch_expert(root, "C", long_edge=30, log=lambda s: None, fetch=fake_fetch)
     assert report.kept == 2 and asked == [asked[0]] and asked[0].endswith("a0003-three.tif")
+    assert report.photos == 3
+
+
+def test_no_dng_under_the_root_is_said_and_fails(workspace, capsys):
+    from atelier_training.cli import main
+
+    assert main(["fivek-fetch", "--limit", "5"]) == 1
+    out = capsys.readouterr().out
+    assert "no FiveK DNG" in out and "--set paths.fivek=" in out
+    assert not (workspace / "data" / "fivek" / "expertC").exists()  # nothing created where nothing was found
