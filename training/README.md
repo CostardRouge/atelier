@@ -87,9 +87,20 @@ Ce qu'il suppose :
 
 **Attention :** dans le téléchargement officiel, les retouches des experts ne
 sont pas des images mais des réglages dans le catalogue Lightroom
-(`fivek.lrcat`). Il faut les **exporter** (en TIFF de préférence) dans
-`training/data/fivek/expertC/`, ou utiliser une version déjà exportée du jeu.
-`make doctor` le signale s'il trouve le catalogue sans export.
+(`fivek.lrcat`). **Sans Lightroom**, le MIT sert aussi chaque retouche en
+fichier (un TIFF 16 bits ProPhoto de ~32 Mo, ~160 Go pour un expert) :
+
+```bash
+uv run atelier-train fivek-fetch --limit 100   # un essai sur 100 photos
+uv run atelier-train fivek-fetch               # les 5 000 (relançable : reprend où il s'est arrêté)
+uv run atelier-train ingest --source fivek
+```
+
+Chaque retouche est téléchargée, convertie en sRGB (l'espace de tes finals),
+réduite à 1 024 px et écrite dans `training/data/fivek/expertC/` à côté des
+DNG, puis le téléchargement est supprimé : le disque ne garde que ~2,5 Mo par
+photo. Le réseau, lui, transporte les ~160 Go. `make doctor` signale le
+catalogue sans export.
 
 C'est l'expert **C** qui est utilisé par défaut (c'est l'usage dans les
 publications) ; pour en changer : `--set ingest.fivek_expert=A`.
