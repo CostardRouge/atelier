@@ -12,6 +12,7 @@ import type { AtlasPlace } from './atlas-places';
 import AtlasWinnow from './AtlasWinnow';
 import AtlasPresetsSection from './AtlasPresetsSection';
 import AtlasGround from './AtlasGround';
+import AtlasStickerSection from './AtlasStickerSection';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -23,7 +24,6 @@ import {
   type CameraFrame,
   type ClockMode,
   type ColourBy,
-  type DroneLine,
   type FrameAspect,
   type GridMode,
   type LandMode,
@@ -81,6 +81,8 @@ interface AtlasInspectorProps {
   onZoneFromView: () => void;
   aircraftFound: readonly { name: string; count: number }[];
   unnamed: number;
+  /** Every drone name the shown flights carry, as the stickers write them. */
+  stickerNames: readonly string[];
   dateRange: string | null;
   /** The animation's length, hold included. */
   total: number;
@@ -852,13 +854,9 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         <SpotRow label="Where" value={s.hud.clockAt} onChange={(v) => hud({ clockAt: v })} />
       </InspectorSection>
 
-      <InspectorSection id="atlas.info" title="Dates and drones" marked={s.hud.dates || s.hud.drone !== 'off'} info="The span of the flights shown, and the aircraft that flew them (named in the Flights tab).">
+      <InspectorSection id="atlas.info" title="Dates and the spotlight card" marked={s.hud.dates || s.hud.spotCard} info="The span of the flights shown, and a card for the flight the spotlight follows.">
         <SwitchRow label="Date range" checked={s.hud.dates} onChange={(v) => hud({ dates: v })} hint={p.dateRange ?? 'No flight carries a date.'} hintShown />
         {s.hud.dates && <SpotRow label="Where" value={s.hud.datesAt} onChange={(v) => hud({ datesAt: v })} />}
-        <FieldRow label="Drone">
-          <Segmented<DroneLine> size="sm" fill label="Drone" value={s.hud.drone} onChange={(v) => hud({ drone: v })} options={[{ id: 'off', label: 'Off' }, { id: 'all', label: 'All shown' }, { id: 'flying', label: 'In the air' }]} />
-        </FieldRow>
-        {s.hud.drone !== 'off' && <SpotRow label="Where" value={s.hud.droneAt} onChange={(v) => hud({ droneAt: v })} />}
         <SwitchRow
           label="A card for the drone in the spotlight"
           checked={s.hud.spotCard}
@@ -868,6 +866,14 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         />
         {s.hud.spotCard && <SpotRow label="Where" value={s.hud.spotCardAt} onChange={(v) => hud({ spotCardAt: v })} />}
       </InspectorSection>
+
+      <AtlasStickerSection
+        settings={s}
+        update={update}
+        names={p.stickerNames}
+        spotRow={(value, onChange) => <SpotRow label="Where" value={value} onChange={onChange} />}
+        onNameDrones={() => pickTab('flights')}
+      />
         </>
       )}
       {tab === 'format' && (

@@ -21,7 +21,8 @@ import type { LandCollection } from '../../shared/map/land';
 import { indexAt, positionAt, secondsOfDay, type AtlasFlight, type WorldBox } from './atlas-flight';
 import { DAY_STOPS, flightTone, mix, paletteById, parseHex, rgba, sampleCyclic, samplePalette, type Rgb } from './atlas-colour';
 import { clockLines, counterLine, formatDate, formatTimeOfDay, graphEnds } from './atlas-hud';
-import { paintOverlay, type Block, type OverlayLayout } from './atlas-overlay';
+import { paintOverlay, type Block, type OverlayLayout, type StickerBlock, type StickerLogoSource } from './atlas-overlay';
+import { inkForGround, luminance, makerKey, stickerParts, stickerText, STICKER_DARK, STICKER_LIGHT } from './atlas-sticker';
 import { spotlightStrength, type Episode } from './atlas-spotlight';
 import { flightTotalsAt, readStat, statsAt, type AtlasStats } from './atlas-stats';
 import { simplify, type AtlasPlace } from './atlas-places';
@@ -71,6 +72,8 @@ export interface PaintScene {
   totals: AtlasStats;
   /** «12 Jan – 30 May 2026», or null when no flight is dated. */
   dateRange: string | null;
+  /** The makers' logos kept on this device, by maker key — what a logo sticker draws. */
+  logos: ReadonlyMap<string, StickerLogoSource>;
 }
 
 export interface PaintFrame {
@@ -768,7 +771,51 @@ export const HUD_FONT_FACES = [
   "400 32px 'Instrument Serif'",
   "500 32px 'JetBrains Mono'",
   "600 32px 'JetBrains Mono'",
+  "300 32px 'Montserrat'",
+  "600 32px 'Montserrat'",
 ];
+
+/** The tiles' tones, roughly as bright as they land — what an automatic sticker ink reads under Streets. */
+const TONE_LUMINANCE: Record<string, number> = { night: 0.02, grey: 0.05, sepia: 0.04, natural: 0.72 };
+
+/**
+ * The sticker's ink: the author's, or — `auto` — white or near-black, the
+ * better contrast against what lies under the overlay: the mount where the
+ * text is laid across the frame, else the map's ground, the tiles dimmed by
+ * it under Streets.
+ */
+export function stickerInk(settings: AtlasSettings, tilesDrawn: boolean): string {
+  const { hud, map, format } = settings;
+  switch (hud.sticker.ink) {
+    case 'text':
+      return hud.theme.style.color;
+    case 'accent':
+      return hud.accent;
+    case 'white':
+      return STICKER_LIGHT;
+    case 'black':
+      return STICKER_DARK;
+    case 'auto': {
+      if (format.textOn === 'frame' && (format.border > 0 || format.band > 0)) return inkForGround(luminance(format.borderColour));
+      const ground = luminance(map.background);
+      const under = tilesDrawn ? (TONE_LUMINANCE[map.tileTone] ?? 0.05) * (1 - map.tileDim) + ground * map.tileDim : ground;
+      return inkForGround(under);
+    }
+  }
+}
+
+/** The drones' stickers: one per name, in its two weights or behind its maker's logo. */
+function stickerBlock(scene: PaintScene, names: readonly string[], tilesDrawn: boolean): StickerBlock {
+  const { hud, aircraft } = scene.settings;
+  const sticker = hud.sticker;
+  const items = names.map((name) => {
+    const parts = stickerParts(name, sticker.maker, aircraft.weights[name]);
+    const logo = sticker.style === 'logo' ? scene.logos.get(makerKey(parts.maker)) ?? null : null;
+    const text = stickerText(parts, sticker.style, logo !== null);
+    return { bold: text.bold, light: text.light, logo: text.logo ? logo : null, tint: sticker.logoTint };
+  });
+  return { kind: 'sticker', items, size: sticker.size, ink: stickerInk(scene.settings, tilesDrawn), backing: sticker.backing, gapAfter: 0.4 };
+}
 
 /** What the overlay says at this frame, piece by piece, in its spots. */
 export function overlayLayout(
@@ -794,7 +841,7 @@ export function overlayLayout(
       if (!name) return;
       if (hud.drone === 'all' || (!frame.poster && states[i].phase === 'flying')) names.add(name);
     });
-    if (names.size) put(hud.droneAt, { kind: 'text', text: [...names].join(' · '), size: 22, label: true, accent: true, gapAfter: 0.4 });
+    if (names.size) put(hud.droneAt, stickerBlock(scene, [...names], tilesDrawn));
   }
 
   // The followed flight's card, while the spotlight holds.

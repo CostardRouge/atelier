@@ -3353,8 +3353,18 @@ alone, never its video. The panel has eight tabs:
   subtitle; **statistics** — flights, distance, airtime, highest, average
   height (time-weighted), average and top speed, places — as a column or a
   row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
-  or mi/ft; the **date range**; the **drones** (all shown, or those in the
-  air); a **card** for the drone in the spotlight (its name, day, aircraft,
+  or mi/ft; the **date range**; the **drone sticker** — the drone that flew,
+  written the way its maker does: «**DJI MINI 5** PRO» in Montserrat, the
+  model's body heavy and its trailing qualifier (Pro, Plus, Cine…) light, or
+  the maker's **logo** followed by the model in light. Every drone shown, or
+  those in the air; an ink that picks white or black against the ground by
+  itself (or the text colour, the accent, white, black); no backing, a shadow
+  or a plate; its size; the maker written in front of a bare model (DJI by
+  default); and, name by name, which words are light (a tap on a word). The
+  logo is **yours to import** — an SVG or a transparent PNG from your own
+  files, kept on this device only and never in a preset — drawn in the ink
+  or as the file is; Atelier ships no maker's logo, and without one the
+  maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits.
 - **Format.** Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame

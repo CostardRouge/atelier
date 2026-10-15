@@ -20,6 +20,7 @@ import { resolveElementStyle, type StyleTheme, type ThemableKey } from '../../sh
 import type { Ctx2D } from './atlas-paint';
 import { parseHex, rgba } from './atlas-colour';
 import type { Rect, Spot } from './atlas-settings';
+import { luminance, type StickerBacking } from './atlas-sticker';
 
 /** One line of text in a stack. */
 export interface TextLine {
@@ -62,7 +63,33 @@ export interface CurveBlock {
   size: number;
 }
 
-export type Block = TextLine | StatRow | StatColumn | CurveBlock;
+/** A logo a sticker can draw: any picture a canvas takes, and its width over its height. */
+export interface StickerLogoSource {
+  image: CanvasImageSource;
+  ratio: number;
+}
+
+/** One sticker: an optional logo, a heavy run and a light run of text. */
+export interface StickerItem {
+  bold: string;
+  light: string;
+  logo: StickerLogoSource | null;
+  /** The logo drawn in the ink (its shape kept), or as the file is. */
+  tint: boolean;
+}
+
+/** Drone stickers, one under the other. */
+export interface StickerBlock {
+  kind: 'sticker';
+  items: StickerItem[];
+  /** Font size, px on a 1080 short side. */
+  size: number;
+  ink: string;
+  backing: StickerBacking;
+  gapAfter?: number;
+}
+
+export type Block = TextLine | StatRow | StatColumn | CurveBlock | StickerBlock;
 
 export interface OverlayLayout {
   spots: Partial<Record<Spot, Block[]>>;
@@ -115,6 +142,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
   const accent = layout.accent;
   const elements: OverlayElement[] = [];
   const curves: { block: CurveBlock; x: number; y: number; w: number; h: number }[] = [];
+  const stickers: { block: StickerBlock; item: StickerItem; x: number; y: number }[] = [];
   let seq = 0;
 
   /** The element a line becomes, with its measured height. */
@@ -162,6 +190,10 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
         return b.items.length * heightOf(b) * 1.04;
       case 'curve':
         return b.size * unit + 44 * unit;
+      case 'sticker': {
+        const m = stickerMetrics(b.size * unit, b.backing);
+        return b.items.length * m.boxH + (b.items.length - 1) * m.between + (b.gapAfter ?? 0) * m.boxH;
+      }
     }
   };
 
@@ -210,6 +242,14 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
             elements.push(lineElement({ kind: 'text', text: it.label, size: labelSize, label: true, accent: true }, 'top-left', left + valueW + gap, yy + labelDrop));
           }
         });
+      } else if (b.kind === 'sticker') {
+        const px = b.size * unit;
+        const m = stickerMetrics(px, b.backing);
+        b.items.forEach((item, i) => {
+          const w = measureSticker(ctx, item, px).w + 2 * m.padX;
+          const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
+          stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between) });
+        });
       } else {
         const w = colW;
         const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
@@ -220,6 +260,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): voi
   }
 
   for (const c of curves) drawCurve(ctx, c.block, c.x, c.y, c.w, c.h, unit, accent, theme);
+  for (const st of stickers) drawSticker(ctx, st.item, st.x, st.y, st.block.size * unit, st.block.ink, st.block.backing, unit);
 
   if (elements.length) {
     ctx.save();
@@ -280,5 +321,101 @@ function drawCurve(ctx: Ctx2D, b: CurveBlock, x: number, y: number, w: number, h
   ctx.fillText(b.ends[0], x, base + label * 1.45);
   ctx.textAlign = 'right';
   ctx.fillText(b.ends[1], x + w, base + label * 1.45);
+  ctx.restore();
+}
+
+// --- the gear sticker --------------------------------------------------------
+
+/** The sticker's face: the weights a maker's own «shot on» card uses. */
+export const STICKER_FONT = "'Montserrat', 'Space Grotesk', sans-serif";
+
+function stickerMetrics(px: number, backing: StickerBacking) {
+  const plate = backing === 'plate';
+  const padY = plate ? 0.42 * px : 0;
+  return { padX: plate ? 0.62 * px : 0, padY, boxH: 0.9 * px + 2 * padY, between: 0.32 * px };
+}
+
+function stickerFont(ctx: Ctx2D, weight: number, px: number): void {
+  ctx.font = `${weight} ${px}px ${STICKER_FONT}`;
+  // Ignored where a canvas has no letter spacing: the sticker is merely a touch tighter.
+  if ('letterSpacing' in ctx) (ctx as { letterSpacing: string }).letterSpacing = `${(0.02 * px).toFixed(2)}px`;
+}
+
+function measureSticker(ctx: Ctx2D, item: StickerItem, px: number) {
+  const logoH = 0.86 * px;
+  const logoW = item.logo ? logoH * item.logo.ratio : 0;
+  // The font and its spacing are the sticker's: the text engine draws after it on this context.
+  ctx.save();
+  stickerFont(ctx, 600, px);
+  const boldW = item.bold ? ctx.measureText(item.bold).width : 0;
+  stickerFont(ctx, 300, px);
+  const lightW = item.light ? ctx.measureText(item.light).width : 0;
+  ctx.restore();
+  const gap = 0.3 * px;
+  const parts = [logoW, boldW, lightW].filter((w) => w > 0);
+  return { w: parts.reduce((s, w) => s + w, 0) + gap * Math.max(0, parts.length - 1), logoW, logoH, boldW, lightW, gap };
+}
+
+/** A logo in one ink, kept per size: its shape, none of its colours. */
+const tintCache = new WeakMap<object, Map<string, CanvasImageSource>>();
+function tintedLogo(logo: StickerLogoSource, w: number, h: number, ink: string): CanvasImageSource {
+  const cw = Math.max(1, Math.round(w));
+  const ch = Math.max(1, Math.round(h));
+  const key = `${ink}|${cw}|${ch}`;
+  let byKey = tintCache.get(logo.image as object);
+  if (!byKey) tintCache.set(logo.image as object, (byKey = new Map()));
+  const hit = byKey.get(key);
+  if (hit) return hit;
+  const canvas: OffscreenCanvas | HTMLCanvasElement =
+    typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(cw, ch) : Object.assign(document.createElement('canvas'), { width: cw, height: ch });
+  const c = canvas.getContext('2d') as Ctx2D | null;
+  if (!c) return logo.image;
+  c.drawImage(logo.image, 0, 0, cw, ch);
+  c.globalCompositeOperation = 'source-in';
+  c.fillStyle = ink;
+  c.fillRect(0, 0, cw, ch);
+  if (byKey.size > 12) byKey.clear();
+  byKey.set(key, canvas);
+  return canvas;
+}
+
+function drawSticker(ctx: Ctx2D, item: StickerItem, x: number, y: number, px: number, ink: string, backing: StickerBacking, unit: number): void {
+  const m = stickerMetrics(px, backing);
+  const k = measureSticker(ctx, item, px);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (backing === 'plate') {
+    const dark = luminance(ink) > 0.5;
+    ctx.fillStyle = dark ? 'rgba(12,14,18,0.48)' : 'rgba(250,248,242,0.86)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, k.w + 2 * m.padX, m.boxH, 0.32 * px);
+    ctx.fill();
+  }
+  if (backing === 'shadow') {
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 6 * unit;
+    ctx.shadowOffsetY = unit;
+  }
+  let cx = x + m.padX;
+  // The caps sit in the middle of a box 0.9 em tall.
+  const baseline = y + m.padY + 0.81 * px;
+  if (item.logo) {
+    const top = baseline - 0.36 * px - k.logoH / 2;
+    const source = item.tint ? tintedLogo(item.logo, k.logoW, k.logoH, ink) : item.logo.image;
+    ctx.drawImage(source, cx, top, k.logoW, k.logoH);
+    cx += k.logoW + k.gap;
+  }
+  ctx.fillStyle = ink;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  if (item.bold) {
+    stickerFont(ctx, 600, px);
+    ctx.fillText(item.bold, cx, baseline);
+    cx += k.boldW + k.gap;
+  }
+  if (item.light) {
+    stickerFont(ctx, 300, px);
+    ctx.fillText(item.light, cx, baseline);
+  }
   ctx.restore();
 }

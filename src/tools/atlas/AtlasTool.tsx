@@ -14,6 +14,7 @@ import type { WorldBox } from './atlas-flight';
 import { PlayClock } from './play-clock';
 import { useAtlasExport, type ExportKind } from './use-atlas-export';
 import { useAtlasFlights, type FlightSource } from './use-atlas-flights';
+import { useAtlasLogos } from './atlas-logos';
 import { useAtlasScene } from './use-atlas-scene';
 import { useAtlasSettings } from './use-atlas-settings';
 
@@ -50,7 +51,8 @@ export default function AtlasTool() {
     [lib.assets, lib.selection],
   );
   const { flights, reading, empty, aircraft } = useAtlasFlights(sources);
-  const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft);
+  const logos = useAtlasLogos();
+  const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft, logos);
 
   const clock = useRef(new PlayClock()).current;
   useEffect(() => clock.setTotal(scene.schedule.total), [clock, scene.schedule.total]);
@@ -73,6 +75,7 @@ export default function AtlasTool() {
     setTilesOnState(on);
   }, []);
 
+  const stickerNames = useMemo(() => [...new Set(scene.core.aircraft.filter((n): n is string => !!n))], [scene.core.aircraft]);
   const streetsSwitch = useMemo(() => ({ on: tilesOn, set: setTilesOn }), [tilesOn, setTilesOn]);
 
   const onFreeView = useCallback(
@@ -191,6 +194,7 @@ export default function AtlasTool() {
             onZoneFromView={onZoneFromView}
             aircraftFound={scene.aircraftFound}
             unnamed={scene.unnamed}
+            stickerNames={stickerNames}
             dateRange={scene.core.dateRange}
             total={scene.schedule.total}
             exporter={exporter}

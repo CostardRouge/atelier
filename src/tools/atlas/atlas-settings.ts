@@ -19,6 +19,7 @@ import { PALETTES } from './atlas-colour';
 import type { WorldBox } from './atlas-flight';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
 import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
+import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
@@ -148,9 +149,11 @@ export interface HudSettings {
   /** The first and last day of the flights shown. */
   dates: boolean;
   datesAt: Spot;
-  /** Which drones are named: every one shown, those in the air, or none. */
+  /** Which drones get their sticker: every one shown, those in the air, or none. */
   drone: DroneLine;
   droneAt: Spot;
+  /** How a drone's sticker is written — «DJI MINI 5 PRO» in two weights, or its maker's logo. */
+  sticker: StickerSettings;
   /** While the spotlight follows a flight: its name, day, drone and live readings. */
   spotCard: boolean;
   spotCardAt: Spot;
@@ -180,6 +183,8 @@ export interface AircraftSettings {
   names: Record<string, string>;
   /** The name of a flight whose file says nothing (a loose `.srt`). Empty: unnamed. */
   fallback: string;
+  /** Where each name's light words start on its sticker, keyed by the name shown; absent: the qualifiers at the end. */
+  weights: Record<string, number>;
 }
 
 export interface AtlasSettings {
@@ -264,12 +269,13 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     datesAt: 'tl',
     drone: 'all',
     droneAt: 'tl',
+    sticker: STICKER_DEFAULTS,
     spotCard: true,
     spotCardAt: 'tr',
     credit: true,
   },
   format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map' },
-  aircraft: { names: {}, fallback: '' },
+  aircraft: { names: {}, fallback: '', weights: {} },
 };
 
 // --- presets -----------------------------------------------------------------
@@ -485,6 +491,7 @@ const CLOCKS: readonly ClockMode[] = ['auto', 'off', 'time', 'date', 'datetime',
 export const SPOTS: readonly Spot[] = ['tl', 'tc', 'tr', 'bl', 'bc', 'br'];
 const PICKS: readonly SpotlightPick[] = ['random', 'picked', 'longest', 'farthest'];
 const DRONE_LINES: readonly DroneLine[] = ['off', 'all', 'flying'];
+const STICKER_INKS: readonly StickerInk[] = ['auto', 'text', 'accent', 'white', 'black'];
 export const ASPECTS: readonly FrameAspect[] = ['16:9', '9:16', '1:1', '4:5', '3:2'];
 const SHORTS = [720, 1080, 1440, 2160];
 const WEIGHTS: readonly FontWeight[] = [400, 500, 600, 700];
@@ -565,6 +572,11 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
   for (const [key, val] of Object.entries(obj(a.names))) {
     if (typeof val === 'string' && key.length <= 80) names[key] = val.slice(0, 60);
   }
+  const weights: Record<string, number> = {};
+  for (const [key, val] of Object.entries(obj(a.weights))) {
+    if (typeof val === 'number' && Number.isFinite(val) && key.length <= 80) weights[key] = Math.max(0, Math.min(12, Math.round(val)));
+  }
+  const st = obj(u.sticker);
   return {
     choreo: {
       mode: oneOf(c.mode, MODES, d.choreo.mode),
@@ -663,6 +675,14 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       datesAt: oneOf(u.datesAt, SPOTS, d.hud.datesAt),
       drone: oneOf(u.drone, DRONE_LINES, d.hud.drone),
       droneAt: oneOf(u.droneAt, SPOTS, d.hud.droneAt),
+      sticker: {
+        style: oneOf(st.style, ['type', 'logo'] as const, d.hud.sticker.style),
+        maker: str(st.maker, d.hud.sticker.maker, 24),
+        ink: oneOf(st.ink, STICKER_INKS, d.hud.sticker.ink),
+        backing: oneOf(st.backing, ['none', 'shadow', 'plate'] as const, d.hud.sticker.backing),
+        size: num(st.size, d.hud.sticker.size, 12, 80),
+        logoTint: bool(st.logoTint, d.hud.sticker.logoTint),
+      },
       spotCard: bool(u.spotCard, d.hud.spotCard),
       spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
@@ -678,7 +698,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       radius: num(f.radius, d.format.radius, 0, 0.15),
       textOn: oneOf(f.textOn, ['map', 'frame'] as const, d.format.textOn),
     },
-    aircraft: { names, fallback: str(a.fallback, d.aircraft.fallback, 60) },
+    aircraft: { names, fallback: str(a.fallback, d.aircraft.fallback, 60), weights },
   };
 }
 

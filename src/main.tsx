@@ -24,6 +24,8 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
 import '@fontsource/vt323/400.css';
+import '@fontsource/montserrat/300.css';
+import '@fontsource/montserrat/600.css';
 import './index.css';
 
 // Every tool is a chunk fetched on first use (`app/tools.tsx`), and the site

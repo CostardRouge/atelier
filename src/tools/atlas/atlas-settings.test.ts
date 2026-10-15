@@ -24,6 +24,15 @@ describe('sanitizeSettings', () => {
     expect('junk' in s).toBe(false);
   });
 
+  it('keeps a sticker and its weights, and refuses what they cannot be', () => {
+    const s = sanitizeSettings({
+      hud: { sticker: { style: 'logo', ink: 'neon', backing: 'plate', size: 500, maker: 'Autel', logoTint: 'yes' } },
+      aircraft: { weights: { 'DJI Mini 4 Pro': 1.6, 'DJI Air 3S': 'two', 'DJI Flip': 40 } },
+    });
+    expect(s.hud.sticker).toEqual({ style: 'logo', ink: 'auto', backing: 'plate', size: 80, maker: 'Autel', logoTint: true });
+    expect(s.aircraft.weights).toEqual({ 'DJI Mini 4 Pro': 2, 'DJI Flip': 12 });
+  });
+
   it('every preset gives settings that survive sanitising', () => {
     for (const p of [...LOOK_PRESETS, ...MOTION_PRESETS]) {
       const s = p.apply(DEFAULT_SETTINGS);
