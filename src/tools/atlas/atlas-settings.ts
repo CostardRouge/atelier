@@ -20,6 +20,7 @@ import type { WorldBox } from './atlas-flight';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
 import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
+import { INTRO_DEFAULTS, INTRO_LENGTH, OUTRO_DEFAULTS, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
@@ -197,6 +198,9 @@ export interface AtlasSettings {
   hud: HudSettings;
   format: FormatSettings;
   aircraft: AircraftSettings;
+  /** Before the flights and after them (`atlas-story.ts`). */
+  intro: IntroSettings;
+  outro: OutroSettings;
 }
 
 /** A title style from a preset, with a few of its values changed. */
@@ -276,6 +280,8 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
   },
   format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map' },
   aircraft: { names: {}, fallback: '', weights: {} },
+  intro: INTRO_DEFAULTS,
+  outro: OUTRO_DEFAULTS,
 };
 
 // --- presets -----------------------------------------------------------------
@@ -577,6 +583,10 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
     if (typeof val === 'number' && Number.isFinite(val) && key.length <= 80) weights[key] = Math.max(0, Math.min(12, Math.round(val)));
   }
   const st = obj(u.sticker);
+  const ii = obj(root.intro);
+  const oo = obj(root.outro);
+  const di = d.intro;
+  const dO = d.outro;
   return {
     choreo: {
       mode: oneOf(c.mode, MODES, d.choreo.mode),
@@ -699,6 +709,22 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       textOn: oneOf(f.textOn, ['map', 'frame'] as const, d.format.textOn),
     },
     aircraft: { names, fallback: str(a.fallback, d.aircraft.fallback, 60), weights },
+    intro: {
+      style: oneOf(ii.style, ['title', 'reveal', 'dive', 'none'] as const, di.style),
+      length: num(ii.length, di.length, INTRO_LENGTH.min, INTRO_LENGTH.max),
+      behind: oneOf(ii.behind, ['black', 'ground', 'map'] as const, di.behind),
+      into: oneOf(ii.into, ['fade', 'black', 'cut'] as const, di.into),
+      title: str(ii.title, di.title, 80),
+      line: str(ii.line, di.line, 120),
+      sticker: bool(ii.sticker, di.sticker),
+    },
+    outro: {
+      style: oneOf(oo.style, ['summary', 'pull', 'fade', 'none'] as const, dO.style),
+      length: num(oo.length, dO.length, INTRO_LENGTH.min, INTRO_LENGTH.max),
+      totals: bool(oo.totals, dO.totals),
+      sticker: bool(oo.sticker, dO.sticker),
+      line: str(oo.line, dO.line, 120),
+    },
   };
 }
 

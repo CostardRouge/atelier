@@ -48,6 +48,11 @@ type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Optional render context: the project theme and the media time (grain). */
 export interface DrawOptions {
   theme?: StyleTheme | null;
+  /**
+   * A fade over every element at once, times each element's own (a host that
+   * fades its whole overlay in or out). Absent is 1: nothing changes.
+   */
+  alpha?: number;
   /** Current media time in seconds — phases the animated grain so preview and
    * export stay frame-identical. */
   timeSeconds?: number;
@@ -1806,8 +1811,8 @@ export function drawOverlays(
     }
 
     ctx.save();
-    elementAlpha = tf.alpha;
-    ctx.globalAlpha = tf.alpha;
+    elementAlpha = tf.alpha * (opts?.alpha ?? 1);
+    ctx.globalAlpha = elementAlpha;
     // A text that masks the picture (`knockout.ts`). Only words can: the
     // drawn instruments below have no glyphs to cut with.
     const knock = canMask(el) ? readKnockout(el.knockout) : null;

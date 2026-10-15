@@ -42,6 +42,8 @@ function withContentOf(target: AtlasSettings, content: AtlasSettings): AtlasSett
     },
     hud: { ...target.hud, title: content.hud.title, subtitle: content.hud.subtitle },
     aircraft: content.aircraft,
+    intro: { ...target.intro, title: content.intro.title, line: content.intro.line },
+    outro: { ...target.outro, line: content.outro.line },
   };
 }
 

@@ -96,7 +96,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
           blob = await encodeFrames({
             width: w,
             height: h,
-            seconds: core.schedule.total,
+            seconds: core.story.total,
             fps: settings.format.fps,
             draw: (t) => paint(t),
             signal: ctl.signal,
@@ -109,7 +109,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
           });
           name = `flight-atlas-${stamp()}.mp4`;
         } else {
-          const drawn = await paint(req.kind === 'poster' ? core.schedule.total : req.at, req.kind === 'poster');
+          const drawn = await paint(req.kind === 'poster' ? core.story.intro + core.story.flights : req.at, req.kind === 'poster');
           blob =
             'convertToBlob' in drawn
               ? await drawn.convertToBlob({ type: 'image/png' })
