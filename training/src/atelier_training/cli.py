@@ -261,6 +261,19 @@ def cmd_export_develop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_slim_pairs(args: argparse.Namespace) -> int:
+    from .ingest import slim_prepared_groups
+
+    config = _config(args)
+    counts = slim_prepared_groups(config, dry_run=args.dry_run)
+    verb = "would free" if args.dry_run else "freed"
+    print(f"{counts['slimmed']} group(s) slimmed, {verb} {counts['freed'] / 1e9:.1f} GB; "
+          f"{counts['kept']} kept whole (an edit not in the cache), {counts['already']} already slim.")
+    if counts["slimmed"] and not args.dry_run:
+        print("Their pairs stay in the cache and the index: keep training/data/cache, it is all that holds them now.")
+    return 0
+
+
 def cmd_winnow_import(args: argparse.Namespace) -> int:
     import getpass
 
@@ -424,6 +437,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="prepare each group into the cache, then delete its files: one group on disk at a time "
                         "(also slims the groups already fetched)")
     p.set_defaults(func=cmd_winnow_import)
+
+    p = sub.add_parser("slim-pairs", parents=[common],
+                       help="delete the pictures of Winnow groups already in the cache, offline; ingest keeps them")
+    p.add_argument("--dry-run", action="store_true", help="say what would be freed, delete nothing")
+    p.set_defaults(func=cmd_slim_pairs)
 
     p = sub.add_parser("serve", parents=[common], help="open the local dashboard (actions, curves, image grids)")
     p.add_argument("--port", type=int, default=8765)

@@ -237,6 +237,48 @@ def test_slim_prepares_each_group_then_deletes_its_files_and_ingest_reuses_it(st
     assert ingest(config, sources=["pairs"]).reused == 2
 
 
+def test_slim_pairs_slims_the_groups_already_prepared_offline(stub, workspace, monkeypatch, capsys):
+    monkeypatch.setenv("WINNOW_TOKEN", "wnw_secret")
+    Stub.assets[1] = {**Stub.assets[1], "filename": "DSC01.png", "ext": "png"}
+    config = load_config()
+    assert main(["winnow-import", "--host", stub, "--limit", "2"]) == 0
+    g1 = config.paths.pairs / "winnow-1"
+    ingest(config, sources=["pairs"], workers=1)
+    prepared = [p for p in (config.paths.cache / "pairs" / "winnow-1").rglob("input.npy")]
+    assert len(prepared) == 2
+    capsys.readouterr()
+
+    assert main(["slim-pairs", "--dry-run"]) == 0  # says, deletes nothing
+    assert "would free" in capsys.readouterr().out and (g1 / "DSC01.png").is_file()
+
+    Stub.seen = []
+    assert main(["slim-pairs"]) == 0
+    assert _downloads() == []  # offline: nothing asked of the instance
+    assert sorted(p.name for p in g1.iterdir()) == ["manifest.toml", "winnow.json"]
+    block = json.loads((g1 / "winnow.json").read_text())["slim"]
+    assert block["finals"] == [10, 11] and block["prepared"] == ["finals/DSC01", "finals/DSC01-bw"]
+    assert block["freed_bytes"] > 0
+    # A whole ingest of the pairs still serves both pairs, from the cache alone.
+    report = ingest(config, sources=["pairs"], workers=1)
+    assert (report.reused, report.written, report.skipped) == (2, 0, [])
+    assert main(["slim-pairs"]) == 0
+    assert "1 already slim" in capsys.readouterr().out.splitlines()[-1]
+
+
+def test_slim_pairs_keeps_a_group_whose_edit_is_not_in_the_cache(stub, workspace, monkeypatch, capsys):
+    monkeypatch.setenv("WINNOW_TOKEN", "wnw_secret")
+    Stub.assets[1] = {**Stub.assets[1], "filename": "DSC01.png", "ext": "png"}
+    config = load_config()
+    assert main(["winnow-import", "--host", stub, "--limit", "2"]) == 0
+    ingest(config, sources=["pairs"], workers=1)
+    import shutil
+    shutil.rmtree(config.paths.cache / "pairs" / "winnow-1" / "finals" / "DSC01-bw")
+    assert main(["slim-pairs"]) == 0
+    assert "kept, 1 edit(s) not in the cache" in capsys.readouterr().out
+    assert (config.paths.pairs / "winnow-1" / "DSC01.png").is_file()
+    assert "slim" not in json.loads((config.paths.pairs / "winnow-1" / "winnow.json").read_text())
+
+
 def test_slim_keeps_the_files_when_no_decoder_could_read_them(stub, tmp_path):
     client = WinnowClient(stub, token="wnw_secret")
     out = tmp_path / "pairs"
