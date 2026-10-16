@@ -183,6 +183,16 @@ describe('capacityMarks', () => {
     expect(capacityMarks(bare)).toBe('');
   });
 
+  it('marks the piece’s badge with a star where it is not on the first slide', () => {
+    const doc = createTripDoc('Australia', '2025-03-01', '2025-03-10');
+    const base = createTripPost('carousel', '2025-03-05', '');
+    const other = { ...createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 }), pieceBadge: true, hook: [{ id: 'map', options: {} }] };
+    const post = { ...base, slides: [{ ...base.slides[0], pieceBadge: false, hook: null }, other] };
+    const [first, held] = deckSlides(doc, post);
+    expect(capacityMarks(first)).toBe('');
+    expect(capacityMarks(held)).toBe('★◆');
+  });
+
   it('marks an opener, a badge and words, in that order', () => {
     const [, held] = slides((slide) => {
       slide.hook = [{ id: 'map', options: {} }];

@@ -292,13 +292,16 @@ export function slideMotionMarks(
 /**
  * What a slide holds beyond its picture, as the band says it — an opener ◆, a
  * badge #, words T — so a deck with a map at slide 4 reads as one before any
- * cell is opened. The slide carrying the piece's badge says so in its own
- * mark; the closing card holds none of them.
+ * cell is opened, and ★ the piece's own badge where it is not on the first
+ * slide; the closing card holds none of them.
  */
 export function capacityMarks(slide: DeckSlide): string {
-  if (slide.kind === 'cta' || slide.pieceBadge) return '';
+  if (slide.kind === 'cta') return '';
+  // On the first slide the piece's badge is what "Hook" already says; moved
+  // elsewhere it is marked ★, the slide's opener and words beside it.
+  if (slide.pieceBadge && slide.position === 1) return '';
   const holds = capacitiesOf(slide);
-  return `${holds.opener ? '◆' : ''}${holds.badge ? '#' : ''}${holds.text ? 'T' : ''}`;
+  return `${slide.pieceBadge ? '★' : ''}${holds.opener ? '◆' : ''}${holds.badge ? '#' : ''}${holds.text ? 'T' : ''}`;
 }
 
 /** The cell under a strip x, or null in a gap or past either end. */

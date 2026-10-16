@@ -38,11 +38,17 @@ import { DateField } from '../../../shared/ui/DateField';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, Readout, SelectField, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
 import type { TrimRange } from '../../../shared/media/trim';
+import { badgeMoveCarriesOpener, badgeSlideOf } from '../../../shared/roadtrip/piece-slides';
 
 interface ContentTabProps {
   trip: TripDoc;
   post: TripPost;
   slide: DeckSlide;
+  /**
+   * Put the piece's badge on the open slide (`withBadgeOn`) — offered where
+   * the piece opens without it, or where no slide carries it any more.
+   */
+  onBadgeHere?: () => void;
   /**
    * What the OPEN slide's badge says — the piece's on the first slide, the
    * slide's own elsewhere — or null when it draws none or cannot be counted.
@@ -119,10 +125,15 @@ export default function ContentTab({
   textFieldRef,
   captionFieldRef,
   onEditClosingCard,
+  onBadgeHere,
 }: ContentTabProps) {
   /** The open slide carries the PIECE's badge (wherever it sits). */
   const isHook = slide.pieceBadge;
   const slideShades = post.slides.find((s) => s.id === slide.slideId)?.shades ?? [];
+  // Where the piece's badge is, by its place in the deck, or null where no slide carries it.
+  const badgeSlide = badgeSlideOf(post);
+  const badgeAt = badgeSlide ? post.slides.indexOf(badgeSlide) + 1 : null;
+  const badgeBringsOpener = badgeMoveCarriesOpener(post, slide.slideId);
   /** The open slide's opener, as the band and the deck read it. */
   const openerLayers = post.slides.find((s) => s.id === slide.slideId)?.hook ?? null;
   const openerVariant = openerLayers?.[0] ? hookVariantById(openerLayers[0].id) : undefined;
@@ -240,6 +251,24 @@ export default function ContentTab({
           </>
         }
       >
+        {/* The piece's badge travels with its slide (v34): said where the piece
+            opens without it, or where no slide carries it any more, with the
+            one verb that brings it here. Never a refusal — opening on a bare
+            picture may be the point. */}
+        {slide.kind !== 'cta' && !slide.pieceBadge && onBadgeHere && (badgeAt === null || slide.position === 1) && (
+          <div className="flex flex-col gap-2 mx-4 my-2 px-3 py-2.5 rounded-paper border border-warn-line bg-warn-wash text-xs text-ink leading-snug">
+            <span>
+              {badgeAt === null
+                ? 'No slide carries the piece’s badge.'
+                : `This piece opens without its badge — it is on slide ${badgeAt}.`}
+            </span>
+            <span>
+              <Button size="sm" onClick={onBadgeHere}>
+                {badgeBringsOpener ? 'Bring the badge and its opener here' : badgeAt === null ? 'Put the badge here' : 'Bring the badge here'}
+              </Button>
+            </span>
+          </div>
+        )}
         {badge && (
           <FieldRow
             label={isHook ? 'Text' : 'Badge text'}

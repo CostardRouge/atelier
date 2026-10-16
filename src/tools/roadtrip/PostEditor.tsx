@@ -131,7 +131,7 @@ import {
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
-import { closesWithCard, hasCardSlide, leadSlideOf } from '../../shared/roadtrip/piece-slides';
+import { closesWithCard, hasCardSlide, leadSlideOf, withBadgeOn } from '../../shared/roadtrip/piece-slides';
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
@@ -2629,6 +2629,7 @@ export default function PostEditor({
               patchBadge={patchBadge}
               patchSlide={patchSlide}
               patchSlideBadge={patchSlideBadge}
+              onBadgeHere={() => onChangePost(withBadgeOn(post, slide.slideId))}
               texts={openTexts}
               onTexts={setOpenTexts}
               textFieldRef={textFieldRef}
@@ -2649,6 +2650,7 @@ export default function PostEditor({
               shades={openShades}
               onShades={setOpenShades}
               onSlideBadge={(badge) => patchSlide({ badge })}
+              onBadgeHere={() => onChangePost(withBadgeOn(post, slide.slideId))}
               hookPictureStatus={hookPictureStatus}
               piece={piece}
               onChangeTrip={onChangeTrip}

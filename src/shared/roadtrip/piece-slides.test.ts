@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  badgeMoveCarriesOpener,
   badgeSlideOf,
   closesWithCard,
   coverSlideOf,
@@ -7,6 +8,7 @@ import {
   leadSlideOf,
   pictureSlides,
   pieceMediaOf,
+  withBadgeOn,
 } from './piece-slides';
 import { createCardSlide, createPostSlide, createTripPost, withCardSlide } from './trip-types';
 
@@ -65,5 +67,44 @@ describe('withCardSlide', () => {
     expect(withCardSlide(middle, false).slides).toHaveLength(2);
     // Already so: the same piece back.
     expect(withCardSlide(post, true)).toBe(post);
+  });
+});
+
+describe('withBadgeOn', () => {
+  it('moves the badge and brings its opener to a slide that has none', () => {
+    const { post, first, b } = piece();
+    const driving = { ...post, slides: [{ ...first, hook: [{ id: 'drive', options: {} }], hookShelf: { map: {} } }, ...post.slides.slice(1)] };
+    expect(badgeMoveCarriesOpener(driving, b.id)).toBe(true);
+    const out = withBadgeOn(driving, b.id);
+    expect(badgeSlideOf(out)?.id).toBe(b.id);
+    expect(out.slides[1].hook).toEqual([{ id: 'drive', options: {} }]);
+    expect(out.slides[1].hookShelf).toEqual({ map: {} });
+    expect(out.slides[0]).toMatchObject({ pieceBadge: false, hook: null });
+    expect('hookShelf' in out.slides[0]).toBe(false);
+  });
+
+  it('leaves a slide’s own opener where it is, and the badge variant behind as none', () => {
+    const { post, b } = piece();
+    const own = { ...post, slides: [post.slides[0], { ...b, hook: [{ id: 'map', options: {} }] }, ...post.slides.slice(2)] };
+    expect(badgeMoveCarriesOpener(own, b.id)).toBe(false);
+    const out = withBadgeOn(own, b.id);
+    expect(out.slides[1].hook).toEqual([{ id: 'map', options: {} }]);
+    // The first slide held the badge variant only: it is left holding nothing.
+    expect(out.slides[0]).toMatchObject({ pieceBadge: false, hook: null });
+  });
+
+  it('gives a chapter mark’s place to the badge, and puts a lost badge back', () => {
+    const { post, c } = piece();
+    const marked = { ...post, slides: [...post.slides.slice(0, 2), { ...c, badge: { mode: 'day', timeAgo: 'off', layout: { anchor: 'top-left', x: 0.1, y: 0.1, sizeFrac: 0.05 }, durationSeconds: 2, textOverrides: {} } as never }, post.slides[3]] };
+    expect(withBadgeOn(marked, c.id).slides[2]).toMatchObject({ pieceBadge: true, badge: null, hook: [{ id: 'badge', options: {} }] });
+    const lost = { ...post, slides: post.slides.slice(1) };
+    expect(badgeSlideOf(lost)).toBeNull();
+    expect(badgeSlideOf(withBadgeOn(lost, c.id))?.id).toBe(c.id);
+  });
+
+  it('never puts the badge on the card, and changes nothing where it already is', () => {
+    const { post, first } = piece();
+    expect(withBadgeOn(post, post.slides[3].id)).toBe(post);
+    expect(withBadgeOn(post, first.id)).toBe(post);
   });
 });

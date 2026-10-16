@@ -11,11 +11,14 @@
  *   credit are measured from;
  * - a CARD slide is the trip's closing card, placed by this piece.
  *
- * Pure, DOM-free, and type-only in its imports so `trip-types.ts` can use it.
+ * Pure and DOM-free; its imports are types, or values from modules that
+ * import only types, so `trip-types.ts` can use it.
  */
 
 import type { SavedMediaRef } from '../projects/project-types';
 import type { PostSlide, TripPost } from './trip-types';
+// A value from a module with type-only imports: no cycle through `trip-types.ts`.
+import { DEFAULT_HOOK_ID } from './hooks/hook-variant';
 
 /** The slide that carries the piece's badge, or null when none does. */
 export function badgeSlideOf(post: Pick<TripPost, 'slides'>): PostSlide | null {
@@ -64,4 +67,54 @@ export function leadSlideOf(post: Pick<TripPost, 'slides'>): PostSlide | null {
 export function closesWithCard(post: Pick<TripPost, 'slides'>): boolean {
   const last = post.slides[post.slides.length - 1];
   return last ? isCardSlide(last) : false;
+}
+
+/** Whether a slide's opener list draws anything beyond the plain badge variant. */
+function drawsOpener(slide: Pick<PostSlide, 'hook'>): boolean {
+  return (slide.hook ?? []).some((layer) => layer.id !== DEFAULT_HOOK_ID);
+}
+
+/** What `withBadgeOn` would carry: the badge alone, or its opener with it. */
+export function badgeMoveCarriesOpener(post: Pick<TripPost, 'slides'>, slideId: string): boolean {
+  const from = badgeSlideOf(post);
+  const to = post.slides.find((slide) => slide.id === slideId);
+  return Boolean(from && to && from !== to && drawsOpener(from) && !drawsOpener(to));
+}
+
+/**
+ * The piece with its badge on `slideId` — the one verb that moves it, since a
+ * slide that moves keeps what it holds. Its opener comes along when the
+ * slide it lands on has none of its own (a Virée set up for the badge's
+ * picture would otherwise be left on a slide with no badge); a chapter mark
+ * on the target gives way, a slide drawing one badge at a time. The slide
+ * left behind keeps an opener of its own, never the plain badge variant.
+ * Unchanged when the slide is a card, is missing, or already carries it.
+ */
+export function withBadgeOn<P extends Pick<TripPost, 'slides'>>(post: P, slideId: string): P {
+  const to = post.slides.find((slide) => slide.id === slideId);
+  const from = badgeSlideOf(post);
+  if (!to || isCardSlide(to) || to === from) return post;
+  const carry = badgeMoveCarriesOpener(post, slideId);
+  return {
+    ...post,
+    slides: post.slides.map((slide): PostSlide => {
+      if (slide === to) {
+        return {
+          ...slide,
+          pieceBadge: true,
+          badge: null,
+          hook: carry && from ? from.hook : drawsOpener(slide) ? slide.hook : [{ id: DEFAULT_HOOK_ID, options: {} }],
+          ...(carry && from?.hookShelf ? { hookShelf: from.hookShelf } : {}),
+        };
+      }
+      if (slide === from) {
+        if (!carry) return { ...slide, pieceBadge: false, hook: drawsOpener(slide) ? slide.hook : null };
+        // Its opener went with the badge, and the shelf of that opener with it.
+        const rest: PostSlide = { ...slide, pieceBadge: false, hook: null };
+        delete rest.hookShelf;
+        return rest;
+      }
+      return slide;
+    }),
+  };
 }
