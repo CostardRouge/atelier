@@ -11,6 +11,7 @@ import type { AtlasTiles } from './atlas-tiles';
 import { aspectRatio, mapRect, type FormatSettings } from './atlas-settings';
 import { invertAffine, panView, viewAffine, zoomViewAbout, type AtlasView } from './atlas-view';
 import { cameraHeldBy } from './atlas-story';
+import { safeRect } from './atlas-safe';
 import type { SceneCore } from './use-atlas-scene';
 import type { PlayClock } from './play-clock';
 
@@ -71,6 +72,8 @@ export default function AtlasStage(props: AtlasStageProps) {
   /** The piece being dragged and where it would land now — painted, not yet written. */
   const dragging = useRef<{ piece: PieceId; place: Placement } | null>(null);
   const [snapWord, setSnapWord] = useState<string | null>(null);
+  // The social apps' zones show while they are kept clear and the frame's own settings are open — never in the file.
+  const safeShown = format.safe === 'clear' && selected === 'output';
   /** Why the hand cannot move the camera now, said for a moment after it tried. */
   const [heldWord, setHeldWord] = useState<string | null>(null);
   const heldTimer = useRef(0);
@@ -233,14 +236,14 @@ export default function AtlasStage(props: AtlasStageProps) {
     const piece = pieceAt(p.frame.hits, (clientX - r.left) * p.dpr, (clientY - r.top) * p.dpr, REACH * p.dpr);
     const box = piece ? pieceBox(p.frame.hits, piece) : null;
     if (!piece || !box) return null;
-    const { area } = p.frame;
+    const { area, safe } = p.frame;
     const k = p.dpr;
     onPick(PIECE_LAYER[piece]);
     let moved = false;
     return {
       move: (m) => {
         moved = true;
-        const place = dropPlacement({ ...box, x: box.x + m.totalX * k, y: box.y + m.totalY * k }, area);
+        const place = dropPlacement({ ...box, x: box.x + m.totalX * k, y: box.y + m.totalY * k }, area, safe);
         dragging.current = { piece, place };
         dirty.current = true;
         const word = 'spot' in place ? `Back to the ${SPOT_WORDS[place.spot]}` : null;
@@ -336,6 +339,7 @@ export default function AtlasStage(props: AtlasStageProps) {
         aria-label="Flight Atlas animation"
       />
       <span ref={outlineRef} aria-hidden="true" className="absolute hidden border-2 border-accent rounded-paper pointer-events-none" />
+      {safeShown && size.w > 0 && <SafeZones aspect={format.aspect} width={size.w} height={size.h} />}
       {band && (
         <span
           className="absolute border-2 border-accent bg-accent/15 pointer-events-none rounded-sm"
@@ -387,4 +391,26 @@ function placeOutline(canvas: HTMLCanvasElement, outline: HTMLSpanElement | null
   if (st.top !== top) st.top = top;
   if (st.width !== width) st.width = width;
   if (st.height !== height) st.height = height;
+}
+
+/** The social apps' zones over the stage, hatched outside the part they leave alone. */
+function SafeZones({ aspect, width, height }: { aspect: FormatSettings['aspect']; width: number; height: number }) {
+  const r = safeRect(aspect, width, height);
+  return (
+    <svg
+      aria-hidden="true"
+      width={width}
+      height={height}
+      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-accent"
+    >
+      <defs>
+        <pattern id="atlas-safe-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="8" height="8" fill="currentColor" fillOpacity="0.12" />
+          <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeOpacity="0.45" strokeWidth="2" />
+        </pattern>
+      </defs>
+      <path fillRule="evenodd" fill="url(#atlas-safe-hatch)" d={`M0 0H${width}V${height}H0Z M${r.x} ${r.y}V${r.y + r.h}H${r.x + r.w}V${r.y}Z`} />
+      <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="6 5" />
+    </svg>
+  );
 }

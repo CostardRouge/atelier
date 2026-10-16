@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react';
-import { FieldRow, InspectorSection, SliderRow, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, SliderRow, SwitchRow, TextAreaField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import AtlasMore from './AtlasMore';
+import AtlasStatChips from './AtlasStatChips';
 import type { AtlasSettings } from './atlas-settings';
-import { INTRO_LENGTH, type IntroBehind, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
+import { INTRO_LENGTH, LINE_SIZE, STATS_SIZE, TEXT_SIZE, type DiveFrom, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
 
 type Update = (fn: (s: AtlasSettings) => AtlasSettings) => void;
 
 const secs = (v: number) => `${v.toFixed(1)} s`;
+const pct = (v: number) => `${Math.round(v * 100)} %`;
 
 /** A style as a small picture of what it does, pressed while chosen. */
 function StyleTiles<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: { id: T; label: string; picture: ReactNode }[] }) {
@@ -115,9 +117,44 @@ export function IntroSection({ settings: s, update, autoTitle, autoLine, hasStic
       {on && (
         <SliderRow label="Length" value={intro.length} min={INTRO_LENGTH.min} max={INTRO_LENGTH.max} step={0.5} format={secs} onChange={(v) => set({ length: v })} />
       )}
+      {intro.style === 'dive' && (
+        <FieldRow label="Starts from" hint="The world fills the picture (its sides cut in a tall frame), so no band shows. A closer start is a shorter dive." hintShown={false}>
+          <Segmented<DiveFrom>
+            size="sm"
+            fill
+            label="Where the dive starts"
+            value={intro.diveFrom}
+            onChange={(v) => set({ diveFrom: v })}
+            options={[
+              { id: 'world', label: 'World' },
+              { id: 'continent', label: 'Continent' },
+              { id: 'country', label: 'Country' },
+              { id: 'region', label: 'Region' },
+            ]}
+          />
+        </FieldRow>
+      )}
       {on && (
-        <FieldRow label="Title">
-          <TextField label="Intro title" value={intro.title} placeholder={autoTitle || 'The place the flights share'} onChange={(v) => set({ title: v })} />
+        <FieldRow label="Title" align="start">
+          <TextAreaField label="Intro title" value={intro.title} placeholder={autoTitle || 'The place the flights share'} onChange={(v) => set({ title: v })} />
+        </FieldRow>
+      )}
+      {on && (
+        <SliderRow label="Size" value={intro.titleSize} min={TEXT_SIZE.min} max={TEXT_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ titleSize: v })} />
+      )}
+      {on && (
+        <FieldRow label="Too long" hint="Enter starts a new line. A line wider than the frame goes on to the next one, or the title gets smaller until it fits on one. The outro's title follows." hintShown={false}>
+          <Segmented<IntroFit>
+            size="sm"
+            fill
+            label="When the title is too long"
+            value={intro.fit}
+            onChange={(v) => set({ fit: v })}
+            options={[
+              { id: 'wrap', label: 'New lines' },
+              { id: 'shrink', label: 'Smaller' },
+            ]}
+          />
         </FieldRow>
       )}
       {on && (
@@ -154,9 +191,10 @@ export function IntroSection({ settings: s, update, autoTitle, autoLine, hasStic
               />
             </FieldRow>
           )}
-          <FieldRow label="Line 2">
-            <TextField label="Intro second line" value={intro.line} placeholder={autoLine} onChange={(v) => set({ line: v })} />
+          <FieldRow label="Line 2" align="start">
+            <TextAreaField label="Intro second line" value={intro.line} placeholder={autoLine} onChange={(v) => set({ line: v })} />
           </FieldRow>
+          <SliderRow label="Line 2 size" value={intro.lineSize} min={LINE_SIZE.min} max={LINE_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ lineSize: v })} />
           <SwitchRow
             label="The drone sticker under the title"
             checked={intro.sticker}
@@ -233,16 +271,52 @@ export function OutroSection({ settings: s, update, hasSticker }: Omit<StoryProp
       {on && (
         <SliderRow label="Length" value={outro.length} min={INTRO_LENGTH.min} max={INTRO_LENGTH.max} step={0.5} format={secs} onChange={(v) => set({ length: v })} />
       )}
+      {outro.style === 'summary' && (
+        <FieldRow label="Totals" align="start" hint={outro.stats.length === 0 ? 'None ticked: no totals, the title alone.' : undefined} hintShown>
+          <AtlasStatChips label="Totals counted up" value={outro.stats} onChange={(v) => set({ stats: v })} />
+        </FieldRow>
+      )}
+      {outro.style === 'summary' && outro.stats.length > 0 && (
+        <SliderRow label="Size" value={outro.statsSize} min={STATS_SIZE.min} max={STATS_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ statsSize: v })} />
+      )}
+      {outro.style === 'summary' && outro.stats.length > 1 && (
+        <FieldRow label="Layout" hint="A row too wide for the frame goes on to a second line by itself." hintShown={false}>
+          <Segmented<'row' | 'grid'>
+            size="sm"
+            fill
+            label="Layout of the totals"
+            value={outro.statsLayout}
+            onChange={(v) => set({ statsLayout: v })}
+            options={[
+              { id: 'row', label: 'Row' },
+              { id: 'grid', label: 'Grid' },
+            ]}
+          />
+        </FieldRow>
+      )}
+      {outro.style === 'summary' && outro.stats.length > 1 && outro.statsLayout === 'grid' && (
+        <FieldRow label="Columns">
+          <Segmented<'2' | '3' | '4'>
+            size="sm"
+            fill
+            label="Columns"
+            value={String(outro.columns) as '2' | '3' | '4'}
+            onChange={(v) => set({ columns: Number(v) as 2 | 3 | 4 })}
+            options={[
+              { id: '2', label: '2' },
+              { id: '3', label: '3' },
+              { id: '4', label: '4' },
+            ]}
+          />
+        </FieldRow>
+      )}
       {on && (
-        <FieldRow label="Last line">
-          <TextField label="The outro's last line" value={outro.line} placeholder="Nothing" onChange={(v) => set({ line: v })} />
+        <FieldRow label="Last line" align="start">
+          <TextAreaField label="The outro's last line" value={outro.line} placeholder="Nothing" onChange={(v) => set({ line: v })} />
         </FieldRow>
       )}
       {on && (
         <AtlasMore id="atlas.outro">
-          {outro.style === 'summary' && (
-            <SwitchRow label="Count the totals up" checked={outro.totals} onChange={(v) => set({ totals: v })} hint="Flights, distance, airtime, highest." />
-          )}
           {outro.style !== 'fade' && (
             <SwitchRow
               label="The drone sticker"

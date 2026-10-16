@@ -9,8 +9,10 @@
  * cannot disagree.
  */
 
-import type { AtlasStats } from './atlas-stats';
-import { clampScale, type AtlasView } from './atlas-view';
+import type { AtlasStats, StatKey } from './atlas-stats';
+import { latOf, type WorldBox } from './atlas-flight';
+import { spanForKm } from './atlas-spotlight';
+import { clampScale, type AtlasView, type ViewLook } from './atlas-view';
 
 export type IntroStyle = 'title' | 'reveal' | 'dive' | 'none';
 /** What a title card stands on. */
@@ -31,21 +33,50 @@ export interface IntroSettings {
   line: string;
   /** The drone sticker under the title. */
   sticker: boolean;
+  /** The title's size, times its default (the outro's title too). */
+  titleSize: number;
+  /** The second line's size, times its default. */
+  lineSize: number;
+  /** A title too wide for the frame goes on to more lines, or gets smaller until it fits on one. */
+  fit: IntroFit;
+  /** Where a world dive starts: the whole world filling the frame, or that close above the flights. */
+  diveFrom: DiveFrom;
 }
+
+export type DiveFrom = 'world' | 'continent' | 'country' | 'region';
+export const DIVE_FROMS: readonly DiveFrom[] = ['world', 'continent', 'country', 'region'];
+/** How many km the frame's short side spans where a dive starts, under each level. */
+const DIVE_KM: Record<Exclude<DiveFrom, 'world'>, number> = { continent: 5000, country: 1500, region: 400 };
+
+export type IntroFit = 'wrap' | 'shrink';
+
+/** The title's and the line's size, times their default. */
+export const TEXT_SIZE = { min: 0.4, max: 1.6 } as const;
+export const LINE_SIZE = { min: 0.4, max: 2 } as const;
+/** How wide the intro's and the outro's words may run, a fraction of the area. */
+export const STORY_TEXT_WIDTH = 0.84;
 
 export interface OutroSettings {
   style: OutroStyle;
   /** Seconds. */
   length: number;
-  /** The summary counts the totals up. */
-  totals: boolean;
+  /** The totals the summary counts up, in this order; none draws no totals. */
+  stats: StatKey[];
+  /** Their size, times the default. */
+  statsSize: number;
+  /** Side by side (a row too wide goes on to the next line), or a grid of `columns`. */
+  statsLayout: 'row' | 'grid';
+  columns: 2 | 3 | 4;
   sticker: boolean;
   /** A last line; empty draws none. */
   line: string;
 }
 
-export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true };
-export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, totals: true, sticker: true, line: '' };
+export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true, titleSize: 1, lineSize: 1, fit: 'wrap', diveFrom: 'world' };
+export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, stats: ['flights', 'distance', 'time', 'maxAlt'], statsSize: 1, statsLayout: 'row', columns: 2, sticker: true, line: '' };
+
+/** The outro's totals' size, times the default. */
+export const STATS_SIZE = { min: 0.5, max: 1.6 } as const;
 
 export const INTRO_LENGTH = { min: 1.5, max: 8 } as const;
 
@@ -216,7 +247,7 @@ export function outroLook(s: OutroSettings, story: Story, t: number): OutroLook 
     look.scrim = 0.8 * veil;
     look.overlay = 1 - veil;
     look.title = E(O0 + 0.2 * k, O0 + 0.8 * k);
-    look.totals = s.totals ? E(O0 + 0.3 * k, O0 + 0.9 * k) : 0;
+    look.totals = s.stats.length ? E(O0 + 0.3 * k, O0 + 0.9 * k) : 0;
     look.count = E(O0 + 0.4 * k, O0 + 1.9 * k);
     look.sticker = sticker * E(O0 + 0.9 * k, O0 + 1.5 * k);
     look.line = E(O0 + 1.6 * k, O0 + 2.3 * k);
@@ -250,6 +281,35 @@ export function diveView(world: AtlasView, target: AtlasView, z: number): AtlasV
   const ox = (target.cx - world.cx) * world.scale * (1 - p);
   const oy = (target.cy - world.cy) * world.scale * (1 - p);
   return { cx: target.cx - ox / scale, cy: target.cy - oy / scale, scale: clampScale(scale) };
+}
+
+/**
+ * The view a world dive starts from, in a `width × height` frame under the
+ * look: never smaller than what COVERS the frame with the world (the map
+ * filling the picture, its sides cut in a tall frame, so no band of nothing
+ * can show), centred on the target and held inside the world's edges. From
+ * a level closer than the world, the frame spans that many km above the
+ * target — never closer than the target itself.
+ */
+export function diveStart(from: DiveFrom, world: WorldBox, target: AtlasView, look: ViewLook, width: number, height: number): AtlasView {
+  const short = Math.min(width, height);
+  const r = (look.bearing * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(r));
+  const sin = Math.abs(Math.sin(r));
+  const tilt = Math.min(1, Math.max(0.2, look.tilt));
+  // The frame's half extents on the ground, in pixels, before the scale.
+  const fx = (width / 2) * cos + (height / (2 * tilt)) * sin;
+  const fy = (width / 2) * sin + (height / (2 * tilt)) * cos;
+  const hw = (world.x1 - world.x0) / 2;
+  const hh = (world.y1 - world.y0) / 2;
+  const cover = clampScale(Math.max(fx / hw, fy / hh) / short);
+  let scale = cover;
+  if (from !== 'world') scale = Math.max(cover, Math.min(target.scale, 1 / spanForKm(DIVE_KM[from], latOf(target.cy))));
+  // Centred on the target, but never past the world's edge.
+  const ex = fx / (scale * short);
+  const ey = fy / (scale * short);
+  const clampTo = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
+  return { cx: clampTo(target.cx, world.x0 + ex, world.x1 - ex), cy: clampTo(target.cy, world.y0 + ey, world.y1 - ey), scale };
 }
 
 /** The pull-back's view: the camera stepping back from where the flights ended. */

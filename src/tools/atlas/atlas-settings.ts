@@ -20,8 +20,9 @@ import type { WorldBox } from './atlas-flight';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
 import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
+import type { SafeMode } from './atlas-safe';
 import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
-import { INTRO_DEFAULTS, INTRO_LENGTH, OUTRO_DEFAULTS, type IntroSettings, type OutroSettings } from './atlas-story';
+import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
@@ -93,6 +94,8 @@ export interface MapSettings {
   landColour: string;
   grid: GridMode;
   gridColour: string;
+  /** How strongly the grid shows, 0.1..1. */
+  gridStrength: number;
   vignette: number;
   tileTone: TileTone;
   /** How much of the background colour is laid over the tiles, 0..1. */
@@ -160,6 +163,8 @@ export interface HudSettings {
   spotCard: boolean;
   spotCardAt: Spot;
   credit: boolean;
+  /** Where the credits sit: under the clock (wherever it is), or a spot of their own. */
+  creditsAt: Spot | 'clock';
   /** Pieces dragged off their spot on the stage, where they were let go (`atlas-place.ts`). */
   free: Partial<Record<PieceId, FreePlace>>;
 }
@@ -179,6 +184,8 @@ export interface FormatSettings {
   radius: number;
   /** Where the overlay is laid out: inside the map, or across the whole frame (on the border). */
   textOn: 'map' | 'frame';
+  /** Keep the overlay out of where the social apps draw their own interface (`atlas-safe.ts`). */
+  safe: SafeMode;
 }
 
 /** What the atlas calls each aircraft. */
@@ -237,6 +244,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     landColour: '#060609',
     grid: 'off',
     gridColour: '#2a2840',
+    gridStrength: 1,
     vignette: 0.35,
     tileTone: 'night',
     tileDim: 0.45,
@@ -280,9 +288,10 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     spotCard: true,
     spotCardAt: 'tr',
     credit: true,
+    creditsAt: 'clock',
     free: {},
   },
-  format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map' },
+  format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map', safe: 'ignore' },
   aircraft: { names: {}, fallback: '', weights: {} },
   intro: INTRO_DEFAULTS,
   outro: OUTRO_DEFAULTS,
@@ -642,6 +651,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       landColour: hex(m.landColour, d.map.landColour),
       grid: oneOf(m.grid, GRIDS, d.map.grid),
       gridColour: hex(m.gridColour, d.map.gridColour),
+      gridStrength: num(m.gridStrength, d.map.gridStrength, 0.1, 1),
       vignette: num(m.vignette, d.map.vignette, 0, 1),
       tileTone: oneOf(m.tileTone, TONES, d.map.tileTone),
       tileDim: num(m.tileDim, d.map.tileDim, 0, 1),
@@ -700,6 +710,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       spotCard: bool(u.spotCard, d.hud.spotCard),
       spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
+      creditsAt: oneOf(u.creditsAt, [...SPOTS, 'clock'] as const, d.hud.creditsAt),
       free: Object.fromEntries(
         PIECES.flatMap((piece) => {
           const place = sanitizePlace(obj(u.free)[piece]);
@@ -717,6 +728,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       borderColour: hex(f.borderColour, d.format.borderColour),
       radius: num(f.radius, d.format.radius, 0, 0.15),
       textOn: oneOf(f.textOn, ['map', 'frame'] as const, d.format.textOn),
+      safe: oneOf(f.safe, ['ignore', 'clear'] as const, d.format.safe),
     },
     aircraft: { names, fallback: str(a.fallback, d.aircraft.fallback, 60), weights },
     intro: {
@@ -724,16 +736,24 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       length: num(ii.length, di.length, INTRO_LENGTH.min, INTRO_LENGTH.max),
       behind: oneOf(ii.behind, ['black', 'ground', 'map'] as const, di.behind),
       into: oneOf(ii.into, ['fade', 'black', 'cut'] as const, di.into),
-      title: str(ii.title, di.title, 80),
-      line: str(ii.line, di.line, 120),
+      title: str(ii.title, di.title, 160),
+      line: str(ii.line, di.line, 200),
       sticker: bool(ii.sticker, di.sticker),
+      titleSize: num(ii.titleSize, di.titleSize, TEXT_SIZE.min, TEXT_SIZE.max),
+      lineSize: num(ii.lineSize, di.lineSize, LINE_SIZE.min, LINE_SIZE.max),
+      fit: oneOf(ii.fit, ['wrap', 'shrink'] as const, di.fit),
+      diveFrom: oneOf(ii.diveFrom, DIVE_FROMS, di.diveFrom),
     },
     outro: {
       style: oneOf(oo.style, ['summary', 'pull', 'fade', 'none'] as const, dO.style),
       length: num(oo.length, dO.length, INTRO_LENGTH.min, INTRO_LENGTH.max),
-      totals: bool(oo.totals, dO.totals),
+      // Before the totals were chosen, a switch: off is none of them.
+      stats: Array.isArray(oo.stats) ? STAT_KEYS.filter((key) => (oo.stats as unknown[]).includes(key)) : oo.totals === false ? [] : dO.stats,
+      statsSize: num(oo.statsSize, dO.statsSize, STATS_SIZE.min, STATS_SIZE.max),
+      statsLayout: oneOf(oo.statsLayout, ['row', 'grid'] as const, dO.statsLayout),
+      columns: oneOf(oo.columns, [2, 3, 4] as const, dO.columns),
       sticker: bool(oo.sticker, dO.sticker),
-      line: str(oo.line, dO.line, 120),
+      line: str(oo.line, dO.line, 200),
     },
   };
 }

@@ -3319,7 +3319,7 @@ chips at its top: *Intro*, *Map*, *Flights*, *Timing*, *Camera*, *Title*,
 of the overlay, a flight's line, the map itself — and the panel opens its
 layer, the thing outlined while it is selected. **Drag a piece of the
 overlay** — the title, the dates, the statistics, the clock, the spotlight
-card, the sticker — to move it: let go near one of its six spots and it goes
+card, the sticker, the credits — to move it: let go near one of its six spots and it goes
 back to that spot, anywhere else and it stays where you put it (its *Where*
 row then says so, and a spot picked there puts it back). A drag anywhere else
 still moves the map.
@@ -3333,13 +3333,20 @@ the rest folds behind **N more**, remembered in this browser.
   a **title card** (the place, *N flights · the dates*, the drone sticker, on
   black, the map's colour or the dimmed map, handed over by a fade, through
   black or a cut), a **map reveal** (the title over the veiled map, lifting as
-  the flights start), a **world dive** (the whole world, a pin, the camera
-  diving onto the place) or nothing. The outro is a **summary** (the map
-  darkened, the totals — flights, distance, airtime, highest — counting up,
-  the sticker, a last line), a **pull back** (the camera stepping back over
+  the flights start), a **world dive** (the whole world filling the picture —
+  or a continent, a country or a region above the flights, as you choose —, a
+  pin, the camera diving onto the place) or nothing. The outro is a **summary** (the map
+  darkened, the totals you tick — flights, distance, airtime, highest by
+  default, any of the eight statistics — counting up at a size you set, in a
+  row that goes on to a second line when too wide or a grid of 2, 3 or 4
+  columns, the sticker, a last line), a **pull back** (the camera stepping back over
   every route, the title at the top), a **fade out**, or nothing. The title
   and the second line write themselves from the flights until you type your
-  own; a preset keeps how they play, never their words.
+  own; a preset keeps how they play, never their words. The title takes
+  several lines (Enter starts one) and a **size**, and one too wide for the
+  frame either goes on to more lines or gets smaller until it fits on one —
+  it never leaves the frame; the outro's title follows, and the second line
+  has its own size.
 - **The flight list** (the foot's *N flights*). Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
   flights (double-click: that place alone); hovering a flight singles it out.
@@ -3355,8 +3362,8 @@ the rest folds behind **N more**, remembered in this browser.
   atlas opens). The **map glyph beside Play** is the same Streets switch, one
   click from the picture. Then looks (Transit, Aurora, Ember, Neon, Papier,
   Blueprint, Golden hour, Ink, plus *Surprise me*) and the map's details
-  (how the land is drawn and its colour, grid, vignette, ground colour, place
-  names).
+  (how the land is drawn and its colour, a grid — its colour on the same row,
+  and how strongly it shows —, vignette, ground colour, place names).
 - **Flights.** Trails (tail, width, afterglow; taper, fade, ghost network,
   smoothing), drones (size, pulse, take-off and landing ripples; pulse rate,
   halo, altitude drawn as height with a ground shadow and a thread) and colour
@@ -3384,7 +3391,8 @@ the rest folds behind **N more**, remembered in this browser.
   height (time-weighted), average and top speed, places — as a column or a
   row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
   or mi/ft; the **date range**; the **drone sticker** — the drone that flew,
-  written the way its maker does: «**DJI MINI 5** PRO» in Montserrat, the
+  written the way its maker does (each drone renamed right there under
+  *Names*, the same rows as the flight list's): «**DJI MINI 5** PRO» in Montserrat, the
   model's body heavy and its trailing qualifier (Pro, Plus, Cine…) light, or
   the maker's **logo** followed by the model in light. Every drone shown, or
   those in the air; an ink that picks white or black against the ground by
@@ -3396,9 +3404,15 @@ the rest folds behind **N more**, remembered in this browser.
   or as the file is; Atelier ships no maker's logo, and without one the
   maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
-  activity curve and the credits.
+  activity curve and the credits — under the clock by default, or in a spot
+  of their own (*Credits at*), and dragged on their own like every piece.
 - **Export** (the foot). Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
-  rate (30/60), and a **mount**: a border, a deeper band under the map for the
+  rate (30/60), the **social apps' zones** — *Ignore*, or *Keep clear*: every
+  word moves out of where Reels, TikTok and Shorts draw their own interface
+  over a 9:16 video (a feed's crop or a player's bar for the other ratios;
+  rounded from their guides), a piece dragged by hand stops at their edge, and
+  the zones show hatched on the stage while *Export* is open, never in the
+  file —, and a **mount**: a border, a deeper band under the map for the
   text, rounded corners, its colour, and whether the text sits on the map or
   across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter: an MP4 (H.264,
   no sound), the frame on screen as a PNG, or a *poster* with every route

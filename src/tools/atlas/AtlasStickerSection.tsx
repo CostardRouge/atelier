@@ -17,8 +17,8 @@ interface AtlasStickerSectionProps {
   names: readonly string[];
   /** Where the sticker goes — the inspector's own row, which knows a hand placement. */
   where: ReactNode;
-  /** Opens the flight list, where drones are named. */
-  onNameDrones: () => void;
+  /** The drones' names — the flight list's own rows, one setting in two places. */
+  droneNames: ReactNode;
 }
 
 /**
@@ -27,7 +27,7 @@ interface AtlasStickerSectionProps {
  * written in front of a bare model, where each name turns light, and the
  * makers' logos kept on this device.
  */
-export default function AtlasStickerSection({ settings: s, update, names, where, onNameDrones }: AtlasStickerSectionProps) {
+export default function AtlasStickerSection({ settings: s, update, names, where, droneNames }: AtlasStickerSectionProps) {
   const sticker = s.hud.sticker;
   const set = (patch: Partial<StickerSettings>) => update((cur) => ({ ...cur, hud: { ...cur.hud, sticker: { ...cur.hud.sticker, ...patch } } }));
   const setWeight = (name: string, k: number | null) =>
@@ -45,7 +45,7 @@ export default function AtlasStickerSection({ settings: s, update, names, where,
       id="atlas.sticker"
       title="Drone sticker"
       marked={on}
-      info="The drone that flew, written the way its maker does: «DJI MINI 5 PRO» with the model's body heavy and its qualifier light, or the maker's logo followed by the model in light. The name comes from the clip (the flights at the foot of the panel › Drone names), renamed or not."
+      info="The drone that flew, written the way its maker does: «DJI MINI 5 PRO» with the model's body heavy and its qualifier light, or the maker's logo followed by the model in light. The name comes from the clip, renamed under Names — the same rows as the flight list's Drone names."
     >
       <FieldRow label="Shows">
         <Segmented<DroneLine>
@@ -63,14 +63,7 @@ export default function AtlasStickerSection({ settings: s, update, names, where,
       </FieldRow>
       {on && (
         <>
-          {names.length === 0 && (
-            <div className="flex items-center justify-between gap-2 py-1">
-              <p className="m-0 text-xs text-muted">No flight shown names its drone, so there is no sticker to draw.</p>
-              <Button size="sm" variant="ghost" onClick={onNameDrones}>
-                Name them
-              </Button>
-            </div>
-          )}
+          {names.length === 0 && <p className="m-0 text-xs text-muted">No flight shown names its drone, so there is no sticker to draw: name them here.</p>}
           <FieldRow label="Style">
             <Segmented<StickerStyle>
               size="sm"
@@ -89,6 +82,8 @@ export default function AtlasStickerSection({ settings: s, update, names, where,
             makers.map((maker) => (
               <LogoRow key={makerKey(maker)} maker={maker} />
             ))}
+          <span className="text-2xs font-mono uppercase tracking-[0.12em] text-muted pt-1">Names</span>
+          {droneNames}
           <AtlasMore id="atlas.sticker">
             {where}
             <FieldRow label="Ink">
