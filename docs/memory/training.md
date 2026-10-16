@@ -346,7 +346,10 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   read unconverted); four real pairs ingested at structure 0.87–0.95, no
   alignment needed. How to apply: any target outside sRGB is converted where
   it is written, never at ingest; a dataset command says where it looked and
-  never prints a silent zero.
+  never prints a silent zero. Traps met on his run: 29 of MIT's names hold a
+  space or parentheses (`a0532-jmacdscf0021 (1)`), so a URL is built with
+  `urllib.parse.quote`, never the bare name; and a body can end short of its
+  Content-Length with no error, so `download` checks the length and retries.
 - 2026-10-15 — **`slim-pairs` slims groups ALREADY prepared, offline**
   (`ingest.slim_prepared_groups`): he needed the space back for FiveK, and
   deleting `data/pairs/` by hand would have dropped every pair from the index
