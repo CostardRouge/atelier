@@ -22,6 +22,8 @@ import { parseHex, rgba } from './atlas-colour';
 import type { Rect, Spot } from './atlas-settings';
 import { luminance, type StickerBacking } from './atlas-sticker';
 import type { AtlasLayer, OverlayHit } from './atlas-layers';
+import { breakLines, fitSize } from './atlas-text';
+import { placeBounds, spotLines, type Align, type FreePlace, type PieceId } from './atlas-place';
 
 /** One line of text in a stack. */
 export interface TextLine {
@@ -38,6 +40,12 @@ export interface TextLine {
   odometer?: number;
   /** Room under the line, in line heights. */
   gapAfter?: number;
+  /**
+   * Kept within `maxW` of the area's width: broken into lines (the author's
+   * own breaks kept) or made smaller until it fits on one. Without it a
+   * line is drawn as it is.
+   */
+  fit?: { maxW: number; mode: 'wrap' | 'shrink' };
 }
 
 /** Statistics side by side, each its value over its label. */
@@ -45,6 +53,18 @@ export interface StatRow {
   kind: 'row';
   items: { value: string; label: string; odometer?: number }[];
   size: number;
+  /**
+   * Kept within `maxW` of the area's width: in a grid of `columns` (every
+   * cell as wide as the widest), or as rows broken where the next item
+   * would pass the width. Either way made smaller if one line still would.
+   */
+  fit?: { maxW: number; columns?: number };
+  /** Every item laid in a cell this wide, px — a grid's columns. */
+  cell?: number;
+  /** The row laid as if it held this many cells — a grid's short last row keeps its columns. */
+  slots?: number;
+  /** Room under the row, in row heights. */
+  gapAfter?: number;
 }
 
 /** Statistics one under the other, each its value then its label. */
@@ -93,26 +113,35 @@ export interface StickerBlock {
 /** Whose a block is: the inspector layer a click on it opens. */
 interface Owned {
   owner?: AtlasLayer;
+  /** The draggable piece it belongs to (`atlas-place.ts`). */
+  piece?: PieceId;
+  /** This block's own fade, times the layout's (an intro's lines arrive one by one). */
+  alpha?: number;
 }
 
 export type Block = (TextLine | StatRow | StatColumn | CurveBlock | StickerBlock) & Owned;
 
+/** A spot of the frame, or its middle (`mc`) — where an intro or an outro stacks its lines. */
+export type LayoutSpot = Spot | 'mc';
+
 export interface OverlayLayout {
-  spots: Partial<Record<Spot, Block[]>>;
+  spots: Partial<Record<LayoutSpot, Block[]>>;
   theme: StyleTheme;
   accent: string;
   /** Every size times this. */
   scale: number;
+  /** Where the middle stack's centre sits, a fraction of the area's height (0.5 when absent). */
+  middleAt?: number;
+  /** Every block moved down by this, a fraction of the area's short side (a stack rising into place). */
+  shiftY?: number;
+  /** Pieces placed by hand, each a stack of its own at its place. */
+  free?: { place: FreePlace; blocks: Block[] }[];
+  /** The part of the frame the social apps leave alone (frame pixels), when it is kept clear. */
+  safe?: Rect | null;
 }
 
-const ANCHOR: Record<Spot, Anchor> = {
-  tl: 'top-left',
-  tc: 'top-center',
-  tr: 'top-right',
-  bl: 'top-left',
-  bc: 'top-center',
-  br: 'top-right',
-};
+/** Every stack is laid from its top, at the edge it grows from. */
+const ANCHOR_OF: Record<Align, Anchor> = { left: 'top-left', center: 'top-center', right: 'top-right' };
 
 const LINE = 1.22;
 
@@ -141,16 +170,22 @@ function textElement(id: string, text: string, anchor: Anchor, x: number, y: num
  * short side over 1080. Returns the box of every owned block as drawn, so a
  * click on the stage can open what it landed on.
  */
-export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): OverlayHit[] {
+export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alpha = 1): OverlayHit[] {
   const short = Math.min(area.w, area.h);
   const unit = (short / 1080) * layout.scale;
-  const margin = 0.045 * short;
+  // The lines the spots pin to: the margin, and the social apps' zones when kept clear.
+  const lines = spotLines(area, layout.safe);
+  const middleX = (lines.left + lines.right) / 2;
+  const room = layout.safe ? lines.right - lines.left : Infinity;
   const theme = layout.theme;
   const accent = layout.accent;
   const elements: OverlayElement[] = [];
-  const curves: { block: CurveBlock; x: number; y: number; w: number; h: number }[] = [];
-  const stickers: { block: StickerBlock; item: StickerItem; x: number; y: number }[] = [];
+  const curves: { block: CurveBlock; x: number; y: number; w: number; h: number; alpha: number }[] = [];
+  const stickers: { block: StickerBlock; item: StickerItem; x: number; y: number; alpha: number }[] = [];
   const hits: OverlayHit[] = [];
+  /** Each text element's fade, by id — the engine is handed one group per fade. */
+  const fades = new Map<string, number>();
+  let blockAlpha = alpha;
   let seq = 0;
 
   /** The element a line becomes, with its measured height. */
@@ -172,7 +207,9 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
       over.color = accent;
     }
     if (line.odometer !== undefined) over.odometer = line.odometer;
-    return textElement(`o${seq++}`, line.text, anchor, (x - area.x) / area.w, (y - area.y) / area.h, (line.size * unit) / short, over, pinned);
+    const el = textElement(`o${seq++}`, line.text, anchor, (x - area.x) / area.w, (y - area.y) / area.h, (line.size * unit) / short, over, pinned);
+    fades.set(el.id, blockAlpha);
+    return el;
   };
 
   /** A line's height on the frame, the theme's own scale included. */
@@ -188,12 +225,74 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
     return ctx.measureText(shown).width + rs.letterSpacingEm * px * shown.length;
   };
 
+  /**
+   * A text with a width to keep or lines of its own, as the lines it draws:
+   * one block per line, the room under it kept on the last — so the stack
+   * lays them out like any other lines and nothing passes the width.
+   */
+  /** How wide one statistic of a row is drawn: its value or its label, the wider. */
+  const cellW = (it: { value: string; label: string }, size: number) => Math.max(widthOf(it.value, size, false), widthOf(it.label, size * 0.42, true));
+  const rowGap = (size: number) => size * unit * 0.9;
+
+  const expand = (b: Block): Block[] => {
+    if (b.kind === 'row' && b.fit && b.items.length) return expandRow(b, b.fit);
+    if (b.kind !== 'text' || (!b.fit && !b.text.includes('\n'))) return [b];
+    const measure = (t: string, size = b.size) => widthOf(t, size, !!b.label, b.weight);
+    const maxW = b.fit ? Math.min(b.fit.maxW * area.w, room) : Infinity;
+    if (b.fit?.mode === 'shrink') {
+      const one = b.text.replace(/\s*\n\s*/g, ' ').trim();
+      return [{ ...b, text: one, size: fitSize([one], b.size, maxW, measure) }];
+    }
+    const lines = breakLines(b.text, maxW, (t) => measure(t));
+    // A single word wider than the width is made smaller rather than cut.
+    const size = Number.isFinite(maxW) ? fitSize(lines, b.size, maxW, measure) : b.size;
+    return lines.map((text, i) => ({ ...b, text, size, gapAfter: i === lines.length - 1 ? b.gapAfter : 0 }));
+  };
+
+  /** A row with a width to keep, as the rows it draws (see `StatRow.fit`). */
+  const expandRow = (b: StatRow & Owned, fit: NonNullable<StatRow['fit']>): Block[] => {
+    const maxW = Math.min(fit.maxW * area.w, room);
+    const rows: (typeof b.items)[] = [];
+    let size = b.size;
+    let cell: number | undefined;
+    let slots: number | undefined;
+    if (fit.columns) {
+      const cols = Math.min(fit.columns, b.items.length);
+      cell = Math.max(...b.items.map((it) => cellW(it, size)));
+      const w = cell * cols + rowGap(size) * (cols - 1);
+      if (w > maxW) {
+        size *= maxW / w;
+        cell *= maxW / w;
+      }
+      slots = cols;
+      for (let i = 0; i < b.items.length; i += cols) rows.push(b.items.slice(i, i + cols));
+    } else {
+      // Smaller first if a single statistic is wider than the width.
+      const widest = Math.max(...b.items.map((it) => cellW(it, size)));
+      if (widest > maxW) size *= maxW / widest;
+      let cur: typeof b.items = [];
+      let w = 0;
+      for (const it of b.items) {
+        const cw = cellW(it, size);
+        if (cur.length && w + rowGap(size) + cw > maxW) {
+          rows.push(cur);
+          cur = [];
+          w = 0;
+        }
+        w += (cur.length ? rowGap(size) : 0) + cw;
+        cur.push(it);
+      }
+      rows.push(cur);
+    }
+    return rows.map((items, i) => ({ ...b, items, size, cell, slots, fit: undefined, gapAfter: i === rows.length - 1 ? b.gapAfter : 0.18 }));
+  };
+
   const blockHeight = (b: Block): number => {
     switch (b.kind) {
       case 'text':
         return heightOf(b) * (1 + (b.gapAfter ?? 0));
       case 'row':
-        return (heightOf(b) + heightOf({ size: b.size * 0.42 })) * 1.08;
+        return (heightOf(b) + heightOf({ size: b.size * 0.42 })) * 1.08 * (1 + (b.gapAfter ?? 0));
       case 'column':
         return b.items.length * heightOf(b) * 1.04;
       case 'curve':
@@ -205,34 +304,55 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
     }
   };
 
-  for (const spot of Object.keys(layout.spots) as Spot[]) {
-    const blocks = layout.spots[spot] ?? [];
+  // Every stack: a spot's, pinned to its corner or edge, or a piece placed by hand, at its place.
+  const stacks: { blocks: Block[]; align: Align; ax: number; top: (total: number) => number }[] = [];
+  for (const spot of Object.keys(layout.spots) as LayoutSpot[]) {
+    const align: Align = spot[1] === 'l' ? 'left' : spot[1] === 'c' ? 'center' : 'right';
+    const bottom = spot[0] === 'b';
+    const middle = spot === 'mc';
+    stacks.push({
+      blocks: layout.spots[spot] ?? [],
+      align,
+      ax: align === 'left' ? lines.left : align === 'center' ? middleX : lines.right,
+      top: (total) => (middle ? area.y + area.h * (layout.middleAt ?? 0.5) - total / 2 : bottom ? lines.bottom - total : lines.top),
+    });
+  }
+  const bounds = placeBounds(area, layout.safe);
+  for (const f of layout.free ?? []) {
+    // Held where it was let go, but never pushed out past the bottom (nor into the apps' zones).
+    const ax = Math.min(bounds.x + bounds.w, Math.max(bounds.x, area.x + f.place.x * area.w));
+    stacks.push({ blocks: f.blocks, align: f.place.align, ax, top: (total) => Math.max(bounds.y, Math.min(area.y + f.place.y * area.h, bounds.y + bounds.h - total)) });
+  }
+  for (const stack of stacks) {
+    const blocks = stack.blocks.filter((b) => (b.alpha ?? 1) > 0.001).flatMap(expand);
     if (!blocks.length) continue;
     const total = blocks.reduce((h, b) => h + blockHeight(b), 0);
-    const bottom = spot[0] === 'b';
-    const align = spot[1] === 'l' ? 'left' : spot[1] === 'c' ? 'center' : 'right';
-    const anchor = ANCHOR[spot];
-    const ax = align === 'left' ? area.x + margin : align === 'center' ? area.x + area.w / 2 : area.x + area.w - margin;
-    let y = bottom ? area.y + area.h - margin - total : area.y + margin;
-    const colW = Math.min(area.w - 2 * margin, Math.max(300 * unit, area.w * 0.28));
+    const { align, ax } = stack;
+    const anchor = ANCHOR_OF[align];
+    let y = stack.top(total) + (layout.shiftY ?? 0) * short;
+    const colW = Math.min(lines.right - lines.left, Math.max(300 * unit, area.w * 0.28));
 
     /** Record a block's box, `w` wide at the spot's alignment. */
     const hit = (b: Block, w: number, h: number) => {
-      if (!b.owner || w <= 0 || h <= 0) return;
+      // A piece too faint to see is not a piece a click lands on.
+      if (!b.owner || w <= 0 || h <= 0 || blockAlpha < 0.3) return;
       const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
-      hits.push({ layer: b.owner, x, y, w, h });
+      hits.push({ layer: b.owner, piece: b.piece, x, y, w, h });
     };
 
     for (const b of blocks) {
       const h = blockHeight(b);
+      blockAlpha = alpha * (b.alpha ?? 1);
       if (b.kind === 'text') {
         elements.push(lineElement(b, anchor, ax, y));
         if (b.text.trim()) hit(b, widthOf(b.text, b.size, !!b.label, b.weight), heightOf(b));
       } else if (b.kind === 'row') {
         const valueH = heightOf(b);
-        const gap = b.size * unit * 0.9;
-        const widths = b.items.map((it) => Math.max(widthOf(it.value, b.size, false), widthOf(it.label, b.size * 0.42, true)));
-        const rowW = widths.reduce((s, w) => s + w, 0) + gap * Math.max(0, b.items.length - 1);
+        const gap = rowGap(b.size);
+        const widths = b.items.map((it) => b.cell ?? cellW(it, b.size));
+        // A grid's short last row keeps the columns of the rows above it.
+        const laid = b.cell && b.slots ? Array<number>(b.slots).fill(b.cell) : widths;
+        const rowW = laid.reduce((s, w) => s + w, 0) + gap * Math.max(0, laid.length - 1);
         hit(b, rowW, h);
         let x = align === 'left' ? ax : align === 'center' ? ax - rowW / 2 : ax - rowW;
         b.items.forEach((it, i) => {
@@ -268,27 +388,41 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
         b.items.forEach((item, i) => {
           const w = widths[i];
           const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
-          stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between) });
+          stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between), alpha: blockAlpha });
         });
       } else {
         const w = colW;
         const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
         hit(b, w, h);
-        curves.push({ block: b, x, y: y + 6 * unit, w, h: b.size * unit });
+        curves.push({ block: b, x, y: y + 6 * unit, w, h: b.size * unit, alpha: blockAlpha });
       }
       y += h;
     }
   }
 
-  for (const c of curves) drawCurve(ctx, c.block, c.x, c.y, c.w, c.h, unit, accent, theme);
-  for (const st of stickers) drawSticker(ctx, st.item, st.x, st.y, st.block.size * unit, st.block.ink, st.block.backing, unit);
+  const base = ctx.globalAlpha;
+  for (const c of curves) {
+    ctx.globalAlpha = base * c.alpha;
+    drawCurve(ctx, c.block, c.x, c.y, c.w, c.h, unit, accent, theme);
+  }
+  for (const st of stickers) {
+    ctx.globalAlpha = base * st.alpha;
+    drawSticker(ctx, st.item, st.x, st.y, st.block.size * unit, st.block.ink, st.block.backing, unit);
+  }
+  ctx.globalAlpha = base;
 
   if (elements.length) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, area.x, area.y);
     // The engine lays elements out in its own frame: the area, at the origin.
-    const local = elements.map((el) => el);
-    drawOverlays(ctx, local, null, area.w, area.h, { theme });
+    // It sets each element's alpha itself, so a fade is handed to it, one
+    // group of elements per fade (one group when nothing fades).
+    const groups = new Map<number, OverlayElement[]>();
+    for (const el of elements) {
+      const a = fades.get(el.id) ?? alpha;
+      groups.set(a, [...(groups.get(a) ?? []), el]);
+    }
+    for (const [a, group] of groups) drawOverlays(ctx, group, null, area.w, area.h, a === 1 ? { theme } : { theme, alpha: a });
     ctx.restore();
   }
   return hits;

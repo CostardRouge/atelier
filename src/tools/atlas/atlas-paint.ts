@@ -21,6 +21,7 @@ import type { LandCollection } from '../../shared/map/land';
 import { indexAt, positionAt, secondsOfDay, type AtlasFlight, type WorldBox } from './atlas-flight';
 import { DAY_STOPS, flightTone, mix, paletteById, parseHex, rgba, sampleCyclic, samplePalette, type Rgb } from './atlas-colour';
 import { clockLines, counterLine, formatDate, formatTimeOfDay, graphEnds } from './atlas-hud';
+import { safeRect } from './atlas-safe';
 import { paintOverlay, type Block, type OverlayLayout, type StickerBlock, type StickerLogoSource } from './atlas-overlay';
 import { inkForGround, luminance, makerKey, stickerParts, stickerText, STICKER_DARK, STICKER_LIGHT } from './atlas-sticker';
 import { spotlightStrength, type Episode } from './atlas-spotlight';
@@ -30,6 +31,9 @@ import { activeAt, flightState, type Schedule, type Slot } from './atlas-schedul
 import { mapRect, resolvedClock, type AtlasSettings, type Rect, type Spot } from './atlas-settings';
 import { viewAffine, visibleBox, type Affine, type AtlasView } from './atlas-view';
 import type { OverlayHit } from './atlas-layers';
+import { PIECE_SPOT, type PieceId } from './atlas-place';
+import { flightTime, introLook, outroLook, phaseAt, type Story } from './atlas-story';
+import { paintStory, paintVeils } from './atlas-story-paint';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -75,9 +79,14 @@ export interface PaintScene {
   dateRange: string | null;
   /** The makers' logos kept on this device, by maker key — what a logo sticker draws. */
   logos: ReadonlyMap<string, StickerLogoSource>;
+  /** The film around the flights: what the frame's `t` is measured on. */
+  story: Story;
+  /** Where a world-dive intro lands — the pin's world point — or null. */
+  diveTo: { x: number; y: number } | null;
 }
 
 export interface PaintFrame {
+  /** STORY time: the intro, then the flights, then the outro. */
   t: number;
   view: AtlasView;
   width: number;
@@ -370,6 +379,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   if (cols * rows > 20_000) return;
   const px = (x: number, y: number) => [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f] as const;
   ctx.save();
+  ctx.globalAlpha *= map.gridStrength;
   if (map.grid === 'lines') {
     ctx.strokeStyle = map.gridColour;
     ctx.lineWidth = Math.max(0.5, 0.8 * unit);
@@ -451,7 +461,13 @@ function roundRect(ctx: Ctx2D, r: Rect, radius: number): void {
 /** Where things landed on a painted frame, frame pixels: the map, and each piece of the overlay. */
 export interface PaintedFrame {
   map: Rect;
+  /** Where the overlay is laid out — the map, or the whole frame — what a dragged piece is placed in. */
+  area: Rect;
   hits: OverlayHit[];
+  /** The span of the film the frame is in: a click on its map opens the intro or the outro. */
+  phase: 'intro' | 'flights' | 'outro';
+  /** The part of the frame the social apps leave alone, when it is kept clear (`atlas-safe.ts`). */
+  safe: Rect | null;
 }
 
 /**
@@ -459,9 +475,14 @@ export interface PaintedFrame {
  * rounded corners), the map inside it, then the overlay — over the map or
  * across the whole frame.
  */
-export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): PaintedFrame {
-  const { width, height, t } = frame;
+export function paintAtlas(ctx: Ctx2D, scene: PaintScene, storyFrame: PaintFrame): PaintedFrame {
   const s = scene.settings;
+  const story = scene.story;
+  // Everything about the flights runs on THEIR time; the intro and the outro on the film's.
+  const frame: PaintFrame = { ...storyFrame, t: flightTime(story, storyFrame.t) };
+  const { width, height, t } = frame;
+  const intro = frame.poster ? null : introLook(s.intro, story, storyFrame.t);
+  const outro = frame.poster ? null : outroLook(s.outro, story, storyFrame.t);
   const rect = mapRect(s.format, width, height);
   const full = rect.x <= 0 && rect.y <= 0 && rect.w >= width && rect.h >= height && s.format.radius === 0;
 
@@ -486,11 +507,21 @@ export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): Pa
     ctx.clip();
   }
   const tilesDrawn = paintMap(ctx, scene, frame, rect, states, spot);
+  if (intro && outro) paintVeils(ctx, scene, rect, intro, outro);
   ctx.restore();
 
   const area: Rect = s.format.textOn === 'frame' ? { x: 0, y: 0, w: width, h: height } : rect;
-  const hits = paintOverlay(ctx, overlayLayout(scene, frame, states, spot, tilesDrawn), area);
-  return { map: rect, hits };
+  // The flights' overlay steps aside for the intro and the outro.
+  const shown = (intro?.overlay ?? 1) * (outro?.overlay ?? 1);
+  const safe = s.format.safe === 'clear' ? safeRect(s.format.aspect, width, height) : null;
+  const hits = shown > 0.001 ? paintOverlay(ctx, { ...overlayLayout(scene, frame, states, spot, tilesDrawn), safe }, area, shown) : [];
+  if (intro && outro) hits.push(...paintStory(ctx, scene, { width, height, view: frame.view }, rect, intro, outro, stickerBlock(scene, droneNames(scene), tilesDrawn), safe));
+  return { map: rect, area, hits, phase: phaseAt(story, storyFrame.t), safe };
+}
+
+/** Every drone the shown flights name, once each, as the stickers write them. */
+function droneNames(scene: PaintScene): string[] {
+  return [...new Set(scene.aircraft.filter((n): n is string => !!n))];
 }
 
 /** The map, inside `rect` of the frame. True when tiles were drawn under it. */
@@ -813,7 +844,7 @@ export function stickerInk(settings: AtlasSettings, tilesDrawn: boolean): string
 }
 
 /** The drones' stickers: one per name, in its two weights or behind its maker's logo. */
-function stickerBlock(scene: PaintScene, names: readonly string[], tilesDrawn: boolean): StickerBlock {
+export function stickerBlock(scene: PaintScene, names: readonly string[], tilesDrawn: boolean): StickerBlock {
   const { hud, aircraft } = scene.settings;
   const sticker = hud.sticker;
   const items = names.map((name) => {
@@ -836,12 +867,24 @@ export function overlayLayout(
   const { hud, choreo } = scene.settings;
   const t = frame.t;
   const spots: Partial<Record<Spot, Block[]>> = {};
-  const put = (at: Spot, ...blocks: Block[]) => (spots[at] = [...(spots[at] ?? []), ...blocks]);
+  // Each piece goes to its spot, or to the place it was dragged to.
+  const free = new Map<PieceId, Block[]>();
+  const put = (piece: PieceId, ...blocks: Block[]) => {
+    const tagged = blocks.map((b) => ({ ...b, piece }));
+    // The credits under the clock ride the clock's stack — its spot, or where it was placed by hand.
+    const host: PieceId = piece === 'credits' && !hud.free.credits && hud.creditsAt === 'clock' ? 'clock' : piece;
+    if (hud.free[host]) free.set(host, [...(free.get(host) ?? []), ...tagged]);
+    else {
+      const at = hud[PIECE_SPOT[host]];
+      if (at === 'clock') return;
+      spots[at] = [...(spots[at] ?? []), ...tagged];
+    }
+  };
   const z = hud.titleSize;
 
-  if (hud.title) put(hud.titleAt, { kind: 'text', text: hud.title, size: 58 * z, gapAfter: hud.subtitle ? 0 : 0.25, owner: 'title' });
-  if (hud.subtitle) put(hud.titleAt, { kind: 'text', text: hud.subtitle, size: 26 * z, weight: 500, gapAfter: 0.5, owner: 'title' });
-  if (hud.dates && scene.dateRange) put(hud.datesAt, { kind: 'text', text: scene.dateRange, size: 22, label: true, gapAfter: 0.25, owner: 'clock' });
+  if (hud.title) put('title', { kind: 'text', text: hud.title, size: 58 * z, gapAfter: hud.subtitle ? 0 : 0.25, owner: 'title' });
+  if (hud.subtitle) put('title', { kind: 'text', text: hud.subtitle, size: 26 * z, weight: 500, gapAfter: 0.5, owner: 'title' });
+  if (hud.dates && scene.dateRange) put('dates', { kind: 'text', text: scene.dateRange, size: 22, label: true, gapAfter: 0.25, owner: 'clock' });
   if (hud.drone !== 'off') {
     const names = new Set<string>();
     scene.flights.forEach((_, i) => {
@@ -849,7 +892,7 @@ export function overlayLayout(
       if (!name) return;
       if (hud.drone === 'all' || (!frame.poster && states[i].phase === 'flying')) names.add(name);
     });
-    if (names.size) put(hud.droneAt, { ...stickerBlock(scene, [...names], tilesDrawn), owner: 'sticker' });
+    if (names.size) put('sticker', { ...stickerBlock(scene, [...names], tilesDrawn), owner: 'sticker' });
   }
 
   // The followed flight's card, while the spotlight holds.
@@ -872,18 +915,18 @@ export function overlayLayout(
       { value: speed, label: 'Speed' },
       { value: dist, label: 'Flown' },
     ] });
-    put(hud.spotCardAt, ...blocks.map((b) => ({ ...b, owner: 'clock' as const })), { kind: 'text', text: ' ', size: 10 });
+    put('card', ...blocks.map((b) => ({ ...b, owner: 'clock' as const })), { kind: 'text', text: ' ', size: 10 });
   }
 
   const kind = resolvedClock(hud.clock, choreo.mode);
   const lines = frame.poster ? null : clockLines(kind, scene.schedule, t);
-  if (lines?.small) put(hud.clockAt, { kind: 'text', text: lines.small, size: 28, weight: 500, owner: 'clock' });
-  if (lines) put(hud.clockAt, { kind: 'text', text: lines.big, size: 100, owner: 'clock' });
+  if (lines?.small) put('clock', { kind: 'text', text: lines.small, size: 28, weight: 500, owner: 'clock' });
+  if (lines) put('clock', { kind: 'text', text: lines.big, size: 100, owner: 'clock' });
   if (hud.counter && !frame.poster) {
-    put(hud.clockAt, { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
+    put('clock', { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
   }
   if (hud.graph && !frame.poster && scene.activity.length > 1) {
-    put(hud.clockAt, { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50, owner: 'clock' });
+    put('clock', { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50, owner: 'clock' });
   }
 
   if (hud.stats.length) {
@@ -894,14 +937,20 @@ export function overlayLayout(
       // Only a counting numeral rolls: a total held still would freeze mid-roll.
       return { value: r.text, label: r.label, odometer: live ? r.odometer : undefined };
     });
-    put(hud.statsAt, hud.statsLayout === 'row' ? { kind: 'row', items, size: 44, owner: 'stats' } : { kind: 'column', items, size: 32, owner: 'stats' });
+    put('stats', hud.statsLayout === 'row' ? { kind: 'row', items, size: 44, owner: 'stats' } : { kind: 'column', items, size: 32, owner: 'stats' });
   }
 
   const credits: string[] = [];
   if (hud.credit) credits.push(`Data: DJI flight telemetry · ${scene.flights.length} flight${scene.flights.length === 1 ? '' : 's'}`);
   // The tiles' licence asks for its credit wherever they are shown — never a switch.
   if (tilesDrawn) credits.push('Map © OpenStreetMap contributors');
-  for (const line of credits) put(hud.clockAt, { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
+  for (const line of credits) put('credits', { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
 
-  return { spots, theme: hud.theme, accent: hud.accent, scale: hud.scale };
+  return {
+    spots,
+    free: [...free].map(([piece, blocks]) => ({ place: hud.free[piece]!, blocks })),
+    theme: hud.theme,
+    accent: hud.accent,
+    scale: hud.scale,
+  };
 }

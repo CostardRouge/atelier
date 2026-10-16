@@ -14,7 +14,13 @@ import AtlasPresetsSection from './AtlasPresetsSection';
 import AtlasGround from './AtlasGround';
 import AtlasStickerSection from './AtlasStickerSection';
 import AtlasMore from './AtlasMore';
+import AtlasStatChips from './AtlasStatChips';
+import AtlasDroneNames from './AtlasDroneNames';
+import type { SafeMode } from './atlas-safe';
+import { IntroSection, OutroSection } from './AtlasStorySections';
+import { introLine, introTitle } from './atlas-story';
 import { FOOT_LAYERS, LAYERS, layerInfo, type AtlasLayer } from './atlas-layers';
+import { PIECE_SPOT, withPlacement, type PieceId } from './atlas-place';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -33,7 +39,7 @@ import {
 } from './atlas-settings';
 import type { ChoreoMode, ChoreoOrder, Tempo } from './atlas-schedule';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
-import { STAT_KEYS, STAT_LABELS, type Units } from './atlas-stats';
+import type { Units } from './atlas-stats';
 import type { AtlasExport, ExportKind } from './use-atlas-export';
 import { exportSize } from './use-atlas-export';
 import { formatElapsed } from './atlas-hud';
@@ -96,15 +102,19 @@ function Colour({ label, value, onChange }: { label: string; value: string; onCh
 const SPOT_GLYPH: Record<Spot, string> = { tl: '↖', tc: '↑', tr: '↗', bl: '↙', bc: '↓', br: '↘' };
 const SPOT_NAME: Record<Spot, string> = { tl: 'Top left', tc: 'Top', tr: 'Top right', bl: 'Bottom left', bc: 'Bottom', br: 'Bottom right' };
 
-/** Where a piece sits: the frame's six spots, laid out as they are on the frame. */
-function SpotRow({ label, value, onChange }: { label: string; value: Spot; onChange: (v: Spot) => void }) {
+/**
+ * Where a piece sits: the frame's six spots, laid out as they are on the
+ * frame. A piece dragged off its spot on the stage lights none of them, and
+ * a spot picked puts it back.
+ */
+function SpotRow({ label, value, onChange, free = false }: { label: string; value: Spot; onChange: (v: Spot) => void; free?: boolean }) {
   return (
-    <FieldRow label={label} align="start">
+    <FieldRow label={label} align="start" hint={free ? 'Placed by hand on the picture — pick a spot to put it back.' : 'Or drag it on the picture.'} hintShown={free}>
       <Segmented<Spot>
         size="sm"
         columns={3}
         label={label}
-        value={value}
+        value={(free ? '' : value) as Spot}
         onChange={onChange}
         options={SPOTS.map((id) => ({ id, label: SPOT_GLYPH[id], title: SPOT_NAME[id] }))}
       />
@@ -159,6 +169,11 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   useEffect(() => {
     if (layer !== 'camera') setDrawingZone(false);
   }, [layer, setDrawingZone]);
+
+  /** A piece's Where row: its spot, or the word that it was placed by hand. */
+  const where = (piece: Exclude<PieceId, 'credits'>) => (
+    <SpotRow label="Where" value={s.hud[PIECE_SPOT[piece]] as Spot} free={!!s.hud.free[piece]} onChange={(v) => update((cur) => withPlacement(cur, piece, { spot: v }))} />
+  );
 
   const set = <K extends keyof AtlasSettings>(key: K, patch: Partial<AtlasSettings[K]>) =>
     update((cur) => ({ ...cur, [key]: { ...(cur[key] as object), ...patch } }));
@@ -357,24 +372,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       title="Drone names"
       info="The aircraft is read from each clip's own metadata (never from the log, which names none). Rename what a file says, or name the flights whose file says nothing — a loose .srt."
     >
-      {p.aircraftFound.length === 0 && (
-        <p className="m-0 text-xs text-muted">No clip named its aircraft{p.flights.length ? ' — the logs came without their videos, or the videos do not say.' : '.'}</p>
-      )}
-      {p.aircraftFound.map((a) => (
-        <FieldRow key={a.name} label={<span className="font-mono text-2xs">{a.name}</span>} hint={`${a.count} flight${a.count === 1 ? '' : 's'}`} hintShown>
-          <TextField
-            label={`Call ${a.name}`}
-            value={s.aircraft.names[a.name] ?? ''}
-            placeholder={a.name}
-            onChange={(v) => update((cur) => ({ ...cur, aircraft: { ...cur.aircraft, names: { ...cur.aircraft.names, [a.name]: v } } }))}
-          />
-        </FieldRow>
-      ))}
-      {p.unnamed > 0 && (
-        <FieldRow label="Unnamed" hint={`${p.unnamed} flight${p.unnamed === 1 ? '' : 's'} whose file names no aircraft`} hintShown>
-          <TextField label="Name the unnamed flights" value={s.aircraft.fallback} placeholder="DJI Mini 4 Pro" onChange={(v) => update((cur) => ({ ...cur, aircraft: { ...cur.aircraft, fallback: v } }))} />
-        </FieldRow>
-      )}
+      <AtlasDroneNames settings={s} update={update} found={p.aircraftFound} unnamed={p.unnamed} hasFlights={p.flights.length > 0} />
     </InspectorSection>
   );
 
@@ -521,12 +519,13 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             { id: 'dots', label: 'Dots' },
           ]}
         />
+        {s.map.grid !== 'off' && <input type="color" aria-label="Grid colour" value={s.map.gridColour} onChange={(e) => map({ gridColour: e.target.value })} className={swatchClass} />}
       </FieldRow>
+      {s.map.grid !== 'off' && <Slider label="Grid shows" value={s.map.gridStrength} min={0.1} max={1} step={0.05} format={pct} onChange={(v) => map({ gridStrength: v })} />}
       <Slider label="Vignette" value={s.map.vignette} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ vignette: v })} />
       <AtlasMore id="atlas.map">
         <Colour label="Ground" value={s.map.background} onChange={(v) => map({ background: v })} />
         {s.map.land !== 'off' && <Colour label="Land colour" value={s.map.landColour} onChange={(v) => map({ landColour: v })} />}
-        {s.map.grid !== 'off' && <Colour label="Grid colour" value={s.map.gridColour} onChange={(v) => map({ gridColour: v })} />}
         <SwitchRow label="Place names on the map" checked={s.map.labels} onChange={(v) => map({ labels: v })} />
       </AtlasMore>
     </InspectorSection>
@@ -786,7 +785,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         <TextField label="Subtitle" value={s.hud.subtitle} onChange={(v) => hud({ subtitle: v })} placeholder="Six months, 37 flights" />
       </FieldRow>
       <AtlasMore id="atlas.title">
-        <SpotRow label="Where" value={s.hud.titleAt} onChange={(v) => hud({ titleAt: v })} />
+        {where('title')}
         <Slider label="Size" value={s.hud.titleSize} min={0.4} max={3} step={0.05} format={pct} onChange={(v) => hud({ titleSize: v })} />
       </AtlasMore>
     </InspectorSection>
@@ -794,23 +793,8 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
 
   const statsSec = (
     <InspectorSection id="atlas.stats" title="Statistics" marked={s.hud.stats.length > 0} info="What the flights add up to, measured from the tracks: live (the numbers grow as the animation flies) or the totals throughout.">
-      <div className="flex flex-wrap gap-1">
-        {STAT_KEYS.map((key) => {
-          const on = s.hud.stats.includes(key);
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={on}
-              onClick={() => hud({ stats: on ? s.hud.stats.filter((k) => k !== key) : STAT_KEYS.filter((k) => k === key || s.hud.stats.includes(k)) })}
-              className="h-7 px-2.5 rounded-full border text-xs transition-colors border-line-strong bg-paper text-muted aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash"
-            >
-              {STAT_LABELS[key]}
-            </button>
-          );
-        })}
-      </div>
-      {s.hud.stats.length > 0 && <SpotRow label="Where" value={s.hud.statsAt} onChange={(v) => hud({ statsAt: v })} />}
+      <AtlasStatChips label="Statistics shown" value={s.hud.stats} onChange={(v) => hud({ stats: v })} />
+      {s.hud.stats.length > 0 && where('stats')}
       {s.hud.stats.length > 0 && (
         <AtlasMore id="atlas.stats">
           <FieldRow label="Count">
@@ -853,7 +837,30 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         )}
         <SwitchRow label="Activity curve" checked={s.hud.graph} onChange={(v) => hud({ graph: v })} />
         <SwitchRow label="Data credit" checked={s.hud.credit} onChange={(v) => hud({ credit: v })} hint="The map's own credit is always written when its tiles are drawn." />
-        <SpotRow label="Where" value={s.hud.clockAt} onChange={(v) => hud({ clockAt: v })} />
+        <FieldRow
+          label="Credits at"
+          hint={s.hud.free.credits ? 'Placed by hand on the picture — pick a place to put them back.' : 'Or drag them on the picture.'}
+          hintShown={!!s.hud.free.credits}
+        >
+          <SelectField<Spot | 'clock' | ''>
+            label="Where the credits sit"
+            value={s.hud.free.credits ? '' : s.hud.creditsAt}
+            onChange={(v) => {
+              if (!v) return;
+              update((cur) => {
+                const free = { ...cur.hud.free };
+                delete free.credits;
+                return { ...cur, hud: { ...cur.hud, creditsAt: v, free } };
+              });
+            }}
+            options={[
+              ...(s.hud.free.credits ? [{ id: '' as const, label: 'Placed by hand' }] : []),
+              { id: 'clock', label: 'With the clock' },
+              ...SPOTS.map((id) => ({ id, label: SPOT_NAME[id] })),
+            ]}
+          />
+        </FieldRow>
+        {where('clock')}
       </AtlasMore>
     </InspectorSection>
   );
@@ -861,7 +868,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   const datesSec = (
     <InspectorSection id="atlas.info" title="Dates and the spotlight card" marked={s.hud.dates || s.hud.spotCard} info="The span of the flights shown, and a card for the flight the spotlight follows.">
       <SwitchRow label="Date range" checked={s.hud.dates} onChange={(v) => hud({ dates: v })} hint={p.dateRange ?? 'No flight carries a date.'} hintShown />
-      {s.hud.dates && <SpotRow label="Where" value={s.hud.datesAt} onChange={(v) => hud({ datesAt: v })} />}
+      {s.hud.dates && where('dates')}
       <SwitchRow
         label="A card for the drone in the spotlight"
         checked={s.hud.spotCard}
@@ -869,7 +876,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         hint={s.camera.spotlight.on ? 'Its name, day, aircraft, height, speed and distance, while it is followed.' : 'Turn the spotlight on in Camera.'}
         hintShown={!s.camera.spotlight.on}
       />
-      {s.hud.spotCard && <SpotRow label="Where" value={s.hud.spotCardAt} onChange={(v) => hud({ spotCardAt: v })} />}
+      {s.hud.spotCard && where('card')}
     </InspectorSection>
   );
 
@@ -895,6 +902,27 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       </FieldRow>
       <FieldRow label="Frame rate">
         <Segmented<string> size="sm" fill label="Frame rate" value={String(s.format.fps)} onChange={(v) => format({ fps: Number(v) })} options={[{ id: '30', label: '30 fps' }, { id: '60', label: '60 fps' }]} />
+      </FieldRow>
+      <FieldRow
+        label="Social apps"
+        hint={
+          s.format.safe === 'clear'
+            ? 'Every word stays out of the hatched zones, where Reels, TikTok and Shorts draw their own interface (a feed\'s crop, a player\'s bar for the other ratios). Rounded from their guides; shown here only.'
+            : 'Kept clear, the words move out of where the apps draw their own interface.'
+        }
+        hintShown={false}
+      >
+        <Segmented<SafeMode>
+          size="sm"
+          fill
+          label="Social apps' zones"
+          value={s.format.safe}
+          onChange={(v) => format({ safe: v })}
+          options={[
+            { id: 'ignore', label: 'Ignore' },
+            { id: 'clear', label: 'Keep clear' },
+          ]}
+        />
       </FieldRow>
     </InspectorSection>
   );
@@ -951,12 +979,21 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       settings={s}
       update={update}
       names={p.stickerNames}
-      spotRow={(value, onChange) => <SpotRow label="Where" value={value} onChange={onChange} />}
-      onNameDrones={() => onLayer('data')}
+      where={where('sticker')}
+      droneNames={<AtlasDroneNames settings={s} update={update} found={p.aircraftFound} unnamed={p.unnamed} hasFlights={p.flights.length > 0} />}
     />
   );
 
+  const story = { settings: s, update, hasSticker: p.stickerNames.length > 0 };
   const sections: Record<AtlasLayer, ReactNode> = {
+    intro: (
+      <IntroSection
+        {...story}
+        autoTitle={introTitle({ ...s.intro, title: '' }, s.hud.title, p.placeNames[0] ?? null)}
+        autoLine={introLine({ ...s.intro, line: '' }, shown, p.dateRange)}
+      />
+    ),
+    outro: <OutroSection {...story} />,
     map: (
       <>
         {groundSec}

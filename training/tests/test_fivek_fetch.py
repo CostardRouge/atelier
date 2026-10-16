@@ -68,10 +68,12 @@ def test_with_no_archive_the_photos_come_from_mit_too(tmp_path, monkeypatch):
     from atelier_training.datasets import fivek_fetch
 
     root = tmp_path / "fivek"  # nothing on disk: the archive was deleted
-    lists = {fivek_fetch.LIST_URLS[0]: "a0002-two\na0001-one\n", fivek_fetch.LIST_URLS[1]: "a0003-three\n\n"}
-    asked = []
+    # 29 of MIT's names hold a space or parentheses ("a0532-jmacdscf0021 (1)"): the URL quotes them.
+    lists = {fivek_fetch.LIST_URLS[0]: "a0002-two (1)\na0001-one\n", fivek_fetch.LIST_URLS[1]: "a0003-three\n\n"}
+    asked, urls = [], []
 
     def fake_fetch(url, dest):
+        urls.append(url)
         asked.append(url.rsplit("/", 2)[-2])
         if url.endswith(".tif"):
             tifffile.imwrite(dest, np.full((40, 60, 3), 32768, np.uint16), photometric="rgb")
@@ -85,6 +87,7 @@ def test_with_no_archive_the_photos_come_from_mit_too(tmp_path, monkeypatch):
                           fetch_text=lists.__getitem__)
     assert (report.photos, report.fetched, report.inputs) == (3, 2, 2) and asked == ["dng", "tiff16_c"] * 2
     assert load_image(root / "input" / "a0001-one.tif", {}).shape == (20, 30, 3)
+    assert urls[-1].endswith("/tiff16_c/a0002-two%20%281%29.tif") and (root / "expertC" / "a0002-two (1).tif").is_file()
     assert not list(root.rglob(".*"))  # no download left behind
     assert [i.input.parent.name for i in scan_fivek(root, "C").items] == ["input", "input"]
 
@@ -107,3 +110,26 @@ def test_without_rawpy_nothing_is_downloaded(tmp_path, monkeypatch):
         fetch_expert(tmp_path, "C", log=lambda s: None, fetch=lambda url, dest: asked.append(url),
                      fetch_text={u: "a0001-one\n" for u in fivek_fetch.LIST_URLS}.__getitem__)
     assert asked == []
+
+
+def test_a_download_shorter_than_its_length_is_tried_again(tmp_path, monkeypatch):
+    import io
+
+    from atelier_training.datasets import fivek_fetch
+
+    bodies = [b"half", b"whole body"]  # a connection that closes early raises nothing: only the length tells
+
+    class Response(io.BytesIO):
+        headers = {"Content-Length": "10"}
+
+        def __exit__(self, *exc):
+            self.close()
+
+    monkeypatch.setattr(fivek_fetch.urllib.request, "urlopen", lambda url, timeout: Response(bodies.pop(0)))
+    fivek_fetch.download("https://x/y.tif", tmp_path / "y.tif")
+    assert (tmp_path / "y.tif").read_bytes() == b"whole body" and not bodies
+
+    monkeypatch.setattr(fivek_fetch.urllib.request, "urlopen", lambda url, timeout: Response(b"short"))
+    with pytest.raises(OSError, match="truncated"):
+        fivek_fetch.download("https://x/z.tif", tmp_path / "z.tif")
+    assert not list(tmp_path.glob("z.tif*"))

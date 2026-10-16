@@ -12,6 +12,7 @@ import { activityCurve, buildSchedule, flightState, type Schedule } from './atla
 import { mapUnitFrame, type AtlasSettings } from './atlas-settings';
 import { episodeAt, spanForKm, spotlightEpisodes } from './atlas-spotlight';
 import { totalStats } from './atlas-stats';
+import { diveStart, diveView, ease, flightTime, pullView, storyOf, outroLook } from './atlas-story';
 import { boxOf, buildCameraTrack, cameraAt, clampScale, driftView, fitView, WORLD_BOX, type AtlasView } from './atlas-view';
 
 /** The scene without what the stage adds per frame (tiles, focus). */
@@ -23,7 +24,7 @@ export interface AtlasScene {
   /** Every place of every loaded flight (not only the visible ones), biggest first. */
   places: AtlasPlace[];
   placeNames: (string | null)[];
-  /** The view at animation time `t`, normalised to the MAP's short side. */
+  /** The view at STORY time `t` (intro, flights, outro), normalised to the MAP's short side. */
   viewAt: (t: number) => AtlasView;
   /** The view that frames every visible flight (what «Fit» returns to). */
   fitAll: AtlasView;
@@ -157,7 +158,7 @@ export function useAtlasScene(
     [flights, schedule, camera.spotlight, camera.picked, spotArea],
   );
 
-  const viewAt = useMemo(() => {
+  const flightsViewAt = useMemo(() => {
     const length = schedule.length;
     const drift = camera.drift;
     const boxes = flights.map((f) => f.box);
@@ -219,6 +220,33 @@ export function useAtlasScene(
     return (t: number) => cameraAt(track, t);
   }, [schedule, camera.drift, camera.frame, camera.place, camera.zone, camera.padding, camera.tightness, camera.spotlight.closeness, choreo.tempo, freeView, fitAll, places, look, fw, fh, flights, episodes]);
 
+  // The film around the flights: an intro before, an outro after.
+  const { intro, outro } = settings;
+  const story = useMemo(() => storyOf(intro, outro, schedule.total), [intro, outro, schedule.total]);
+
+  // The camera over the whole film: the flights' own, held still around
+  // them — but diving from the world into a world-dive intro, and stepping
+  // back over the network in a pull-back outro.
+  const viewAt = useMemo(() => {
+    const target = flightsViewAt(0);
+    const start = intro.style === 'dive' ? diveStart(intro.diveFrom, WORLD_BOX, target, look, fw, fh) : null;
+    return (t: number): AtlasView => {
+      if (start && t < story.intro) {
+        return diveView(start, target, ease(0.22 * story.intro, 0.8 * story.intro, t));
+      }
+      if (story.outro > 0 && outro.style === 'pull' && t > story.intro + story.flights) {
+        return pullView(flightsViewAt(story.flights), outroLook(outro, story, t).pull);
+      }
+      return flightsViewAt(flightTime(story, t));
+    };
+  }, [flightsViewAt, story, intro, outro, look, fw, fh]);
+
+  const diveTo = useMemo(() => {
+    if (intro.style !== 'dive' || !flights.length) return null;
+    const v = flightsViewAt(0);
+    return { x: v.cx, y: v.cy };
+  }, [intro.style, flights.length, flightsViewAt]);
+
   const core = useMemo<SceneCore>(
     () => ({
       flights,
@@ -237,8 +265,10 @@ export function useAtlasScene(
       totals,
       dateRange,
       logos,
+      story,
+      diveTo,
     }),
-    [flights, schedule, settings, visiblePlaces, placeNames, placeOf, land, activity, stats, lod, episodes, aircraft, totals, dateRange, logos],
+    [flights, schedule, settings, visiblePlaces, placeNames, placeOf, land, activity, stats, lod, episodes, aircraft, totals, dateRange, logos, story, diveTo],
   );
 
   return { core, schedule, places, placeNames, viewAt, fitAll, mapFrame, aircraftFound, unnamed };

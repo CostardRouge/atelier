@@ -9,8 +9,9 @@
 import type { AtlasFlight } from './atlas-flight';
 import type { Rect } from './atlas-settings';
 import type { Affine } from './atlas-view';
+import type { PieceId } from './atlas-place';
 
-export type AtlasLayer = 'map' | 'flights' | 'timing' | 'camera' | 'title' | 'stats' | 'clock' | 'sticker' | 'data' | 'output' | 'presets';
+export type AtlasLayer = 'intro' | 'outro' | 'map' | 'flights' | 'timing' | 'camera' | 'title' | 'stats' | 'clock' | 'sticker' | 'data' | 'output' | 'presets';
 
 /** A layer's chip: its name and the one line under it in the panel. */
 export interface LayerInfo {
@@ -21,6 +22,7 @@ export interface LayerInfo {
 
 /** What is drawn, in the order the eye meets it: the chips at the top of the panel. */
 export const LAYERS: readonly LayerInfo[] = [
+  { id: 'intro', label: 'Intro', hint: 'before the first flight' },
   { id: 'map', label: 'Map', hint: 'the ground under it all' },
   { id: 'flights', label: 'Flights', hint: 'how each flight draws' },
   { id: 'timing', label: 'Timing', hint: 'when each flight plays' },
@@ -29,6 +31,7 @@ export const LAYERS: readonly LayerInfo[] = [
   { id: 'stats', label: 'Statistics', hint: 'what the flights add up to' },
   { id: 'clock', label: 'Clock', hint: 'count, curve, dates, card' },
   { id: 'sticker', label: 'Sticker', hint: 'the drone that flew' },
+  { id: 'outro', label: 'Outro', hint: 'after the last landing' },
 ];
 
 /** What is not drawn — the logs, the file, the presets: the panel's foot. */
@@ -52,6 +55,8 @@ export function parseLayer(v: unknown): AtlasLayer {
 /** A piece of the overlay as drawn on a frame: whose it is and its box, frame pixels. */
 export interface OverlayHit extends Rect {
   layer: AtlasLayer;
+  /** The piece of the overlay it belongs to, when that piece can be dragged. */
+  piece?: PieceId;
 }
 
 /** The layer whose box holds the point, `pad` pixels around each; the last drawn wins. */

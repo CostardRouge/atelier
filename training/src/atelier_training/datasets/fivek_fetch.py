@@ -20,6 +20,7 @@ files are already there is skipped, so a cut run resumes.
 from __future__ import annotations
 
 import struct
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -68,13 +69,23 @@ def prophoto_to_srgb(img: np.ndarray, gamma: float = 1.8) -> np.ndarray:
     return np.where(srgb <= 0.0031308, 12.92 * srgb, 1.055 * srgb ** (1 / 2.4) - 0.055).astype(np.float32)
 
 
-def download(url: str, dest: Path) -> None:
-    """Stream ``url`` into ``dest`` through a ``.part`` file, so a cut transfer never looks finished."""
+def download(url: str, dest: Path, attempts: int = 3) -> None:
+    """Stream ``url`` into ``dest`` through a ``.part`` file, so a cut transfer never looks finished. A body
+    shorter than its Content-Length (a connection that closes early raises nothing) is tried again."""
     part = dest.with_name(dest.name + ".part")
-    with urllib.request.urlopen(url, timeout=120) as response, part.open("wb") as out:  # noqa: S310 — a fixed https host
-        while chunk := response.read(1 << 20):
-            out.write(chunk)
-    part.replace(dest)
+    for attempt in range(1, attempts + 1):
+        with urllib.request.urlopen(url, timeout=120) as response, part.open("wb") as out:  # noqa: S310 — a fixed https host
+            expected = int(response.headers.get("Content-Length") or -1)
+            got = 0
+            while chunk := response.read(1 << 20):
+                out.write(chunk)
+                got += len(chunk)
+        if expected < 0 or got == expected:
+            part.replace(dest)
+            return
+        if attempt == attempts:
+            part.unlink(missing_ok=True)
+            raise OSError(f"truncated download: {got} of {expected} bytes, {attempts} times")
 
 
 def read_text(url: str) -> str:
@@ -168,14 +179,14 @@ def fetch_expert(
                 in_dir.mkdir(parents=True, exist_ok=True)
                 tmp = in_dir / f".{stem}.download.dng"
                 tmps.append(tmp)
-                fetch(f"{BASE_URL}/dng/{stem}.dng", tmp)
+                fetch(f"{BASE_URL}/dng/{urllib.parse.quote(stem)}.dng", tmp)
                 _save_shrunk(load_image(tmp, raw or {}), in_dir / f"{stem}.tif", long_edge)
                 report.inputs += 1
             if need_edit:
                 out_dir.mkdir(parents=True, exist_ok=True)
                 tmp = out_dir / f".{stem}.download.tif"
                 tmps.append(tmp)
-                fetch(f"{BASE_URL}/tiff16_{expert.lower()}/{stem}.tif", tmp)
+                fetch(f"{BASE_URL}/tiff16_{expert.lower()}/{urllib.parse.quote(stem)}.tif", tmp)
                 _save_shrunk(read_prophoto_tiff(tmp), out_dir / f"{stem}.tif", long_edge)
             report.fetched += 1
         except Exception as e:  # noqa: BLE001 — one missing or broken photo never stops the run

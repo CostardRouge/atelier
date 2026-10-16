@@ -6,9 +6,12 @@ import type { StyleTheme } from '../../shared/overlay/title-styles';
 import type { WorldBox } from './atlas-flight';
 import { HUD_FONT_FACES, paintAtlas, type PaintedFrame, type PaintScene } from './atlas-paint';
 import { hitAt, nearFlight, unionOf, type AtlasLayer } from './atlas-layers';
+import { dropPlacement, PIECE_LAYER, pieceAt, pieceBox, withPlacement, type PieceId, type Placement } from './atlas-place';
 import type { AtlasTiles } from './atlas-tiles';
 import { aspectRatio, mapRect, type FormatSettings } from './atlas-settings';
 import { invertAffine, panView, viewAffine, zoomViewAbout, type AtlasView } from './atlas-view';
+import { cameraHeldBy } from './atlas-story';
+import { safeRect } from './atlas-safe';
 import type { SceneCore } from './use-atlas-scene';
 import type { PlayClock } from './play-clock';
 
@@ -32,7 +35,17 @@ interface AtlasStageProps {
   selected: AtlasLayer;
   /** A click (not a drag) landed on something: open its layer. */
   onPick: (layer: AtlasLayer) => void;
+  /** A piece of the overlay was dragged and let go: back in a spot, or held where it is. */
+  onPlace: (piece: PieceId, place: Placement) => void;
 }
+
+const SPOT_WORDS = { tl: 'top left', tc: 'top', tr: 'top right', bl: 'bottom left', bc: 'bottom', br: 'bottom right' } as const;
+
+/** What the chip says when the story holds the camera and the hand tried to move it. */
+const HELD_WORDS = {
+  dive: 'The world dive moves the camera here — zoom once the flights start',
+  pull: 'The pull-back moves the camera here — zoom during the flights',
+} as const;
 
 /** CSS pixels around a piece or a line within which a click still lands on it. */
 const REACH = 8;
@@ -47,7 +60,7 @@ const REACH = 8;
  * a zone is being drawn, a drag draws it.
  */
 export default function AtlasStage(props: AtlasStageProps) {
-  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick } = props;
+  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick, onPlace } = props;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const outlineRef = useRef<HTMLSpanElement>(null);
@@ -56,6 +69,15 @@ export default function AtlasStage(props: AtlasStageProps) {
   const [room, setRoom] = useState({ w: 0, h: 0 });
   const [fontsReady, setFontsReady] = useState(0);
   const [band, setBand] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /** The piece being dragged and where it would land now — painted, not yet written. */
+  const dragging = useRef<{ piece: PieceId; place: Placement } | null>(null);
+  const [snapWord, setSnapWord] = useState<string | null>(null);
+  // The social apps' zones show while they are kept clear and the frame's own settings are open — never in the file.
+  const safeShown = format.safe === 'clear' && selected === 'output';
+  /** Why the hand cannot move the camera now, said for a moment after it tried. */
+  const [heldWord, setHeldWord] = useState<string | null>(null);
+  const heldTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(heldTimer.current), []);
 
   const face = `${theme.style.italic ? 'italic ' : ''}${theme.style.weight} 32px '${theme.style.fontFamily}'`;
   useEffect(() => {
@@ -114,7 +136,8 @@ export default function AtlasStage(props: AtlasStageProps) {
         }
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          const scene: PaintScene = { ...c, tiles: tl, focus: fo };
+          const held = dragging.current;
+          const scene: PaintScene = { ...c, settings: held ? withPlacement(c.settings, held.piece, held.place) : c.settings, tiles: tl, focus: fo };
           painted.current = { frame: paintAtlas(ctx, scene, { t: clock.t, view: v(clock.t), width: W, height: H }), dpr };
           placeOutline(canvas, outlineRef.current, painted.current, sel);
         }
@@ -134,22 +157,38 @@ export default function AtlasStage(props: AtlasStageProps) {
     return { left: r.left + m.x, top: r.top + m.y, w: m.w, h: m.h };
   };
 
+  /**
+   * True when the story moves the camera now (a world dive, a pull-back): the
+   * gesture is refused and the reason said, rather than written as a free
+   * view the next frame paints over — the bounce a zoom in the dive showed.
+   */
+  const cameraHeld = () => {
+    const held = cameraHeldBy(core.settings.intro, core.settings.outro, core.story, clock.t);
+    if (!held) return false;
+    setHeldWord(HELD_WORDS[held]);
+    window.clearTimeout(heldTimer.current);
+    heldTimer.current = window.setTimeout(() => setHeldWord(null), 1800);
+    return true;
+  };
+
   // The hand: zoom about the pointer, drag to pan — on the view shown now.
   const target: ZoomTarget = {
     scaleAt: () => viewAt(clock.t).scale,
     zoomTo: (scale, anchor) => {
+      if (cameraHeld()) return;
       const r = mapOnScreen();
       if (!r) return;
       const cur = viewAt(clock.t);
       onFreeView(zoomViewAbout(cur, look, r.w, r.h, scale / cur.scale, anchor.x - r.left, anchor.y - r.top));
     },
     panBy: (dx, dy) => {
+      if (cameraHeld()) return;
       const r = mapOnScreen();
       if (!r) return;
       onFreeView(panView(viewAt(clock.t), look, r.w, r.h, dx, dy));
     },
     drag: (start) => {
-      if (!drawingZone) return 'pan';
+      if (!drawingZone) return pieceDrag(start.x, start.y) ?? 'pan';
       const box = boxRef.current?.getBoundingClientRect();
       if (!box) return null;
       const x0 = start.x;
@@ -184,6 +223,42 @@ export default function AtlasStage(props: AtlasStageProps) {
   };
   useZoomGestures({ ref: boxRef, target, wheel: 'any' });
 
+  /**
+   * A press on a piece of the overlay picks it up: its layer opens, and the
+   * piece follows the hand — back into a spot when it comes near one — until
+   * it is let go, when it is written once. Anywhere else, null: the map pans.
+   */
+  function pieceDrag(clientX: number, clientY: number): DragHandler | null {
+    const canvas = canvasRef.current;
+    const p = painted.current;
+    if (!canvas || !p) return null;
+    const r = canvas.getBoundingClientRect();
+    const piece = pieceAt(p.frame.hits, (clientX - r.left) * p.dpr, (clientY - r.top) * p.dpr, REACH * p.dpr);
+    const box = piece ? pieceBox(p.frame.hits, piece) : null;
+    if (!piece || !box) return null;
+    const { area, safe } = p.frame;
+    const k = p.dpr;
+    onPick(PIECE_LAYER[piece]);
+    let moved = false;
+    return {
+      move: (m) => {
+        moved = true;
+        const place = dropPlacement({ ...box, x: box.x + m.totalX * k, y: box.y + m.totalY * k }, area, safe);
+        dragging.current = { piece, place };
+        dirty.current = true;
+        const word = 'spot' in place ? `Back to the ${SPOT_WORDS[place.spot]}` : null;
+        setSnapWord((w) => (w === word ? w : word));
+      },
+      end: (e) => {
+        const held = dragging.current;
+        dragging.current = null;
+        dirty.current = true;
+        setSnapWord(null);
+        if (held && moved && !e.cancelled) onPlace(held.piece, held.place);
+      },
+    };
+  }
+
   /** The layer under a client point: a piece of the overlay, a flight's line, else the map. */
   const layerAt = (clientX: number, clientY: number): AtlasLayer | null => {
     const canvas = canvasRef.current;
@@ -196,6 +271,8 @@ export default function AtlasStage(props: AtlasStageProps) {
     if (piece) return piece;
     const m = p.frame.map;
     if (x < m.x || y < m.y || x > m.x + m.w || y > m.y + m.h) return null;
+    // During the intro or the outro, the map is theirs.
+    if (p.frame.phase !== 'flights') return p.frame.phase;
     const a = viewAffine(viewAt(clock.t), look, m.w, m.h);
     return nearFlight(core.flights, { ...a, e: a.e + m.x, f: a.f + m.y }, x, y, REACH * p.dpr) ? 'flights' : 'map';
   };
@@ -226,8 +303,10 @@ export default function AtlasStage(props: AtlasStageProps) {
     };
     const move = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse' || e.buttons) return;
-      const over = !hand.current.drawing && painted.current && hitAt(painted.current.frame.hits, ...canvasPoint(e));
-      el.style.cursor = over ? 'pointer' : '';
+      const hits = !hand.current.drawing && painted.current ? painted.current.frame.hits : [];
+      const at = canvasPoint(e);
+      // A piece can be picked up; a word of the intro or the outro only clicked.
+      el.style.cursor = pieceAt(hits, ...at) ? 'move' : hitAt(hits, ...at) ? 'pointer' : '';
     };
     const canvasPoint = (e: PointerEvent): [number, number, number] => {
       const r = canvasRef.current?.getBoundingClientRect();
@@ -260,6 +339,7 @@ export default function AtlasStage(props: AtlasStageProps) {
         aria-label="Flight Atlas animation"
       />
       <span ref={outlineRef} aria-hidden="true" className="absolute hidden border-2 border-accent rounded-paper pointer-events-none" />
+      {safeShown && size.w > 0 && <SafeZones aspect={format.aspect} width={size.w} height={size.h} />}
       {band && (
         <span
           className="absolute border-2 border-accent bg-accent/15 pointer-events-none rounded-sm"
@@ -270,6 +350,12 @@ export default function AtlasStage(props: AtlasStageProps) {
             height: Math.abs(band.y1 - band.y0),
           }}
         />
+      )}
+      {snapWord && (
+        <span className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">{snapWord}</span>
+      )}
+      {heldWord && !snapWord && (
+        <span role="status" className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">{heldWord}</span>
       )}
       {drawingZone && !band && (
         <span className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">
@@ -305,4 +391,26 @@ function placeOutline(canvas: HTMLCanvasElement, outline: HTMLSpanElement | null
   if (st.top !== top) st.top = top;
   if (st.width !== width) st.width = width;
   if (st.height !== height) st.height = height;
+}
+
+/** The social apps' zones over the stage, hatched outside the part they leave alone. */
+function SafeZones({ aspect, width, height }: { aspect: FormatSettings['aspect']; width: number; height: number }) {
+  const r = safeRect(aspect, width, height);
+  return (
+    <svg
+      aria-hidden="true"
+      width={width}
+      height={height}
+      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-accent"
+    >
+      <defs>
+        <pattern id="atlas-safe-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="8" height="8" fill="currentColor" fillOpacity="0.12" />
+          <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeOpacity="0.45" strokeWidth="2" />
+        </pattern>
+      </defs>
+      <path fillRule="evenodd" fill="url(#atlas-safe-hatch)" d={`M0 0H${width}V${height}H0Z M${r.x} ${r.y}V${r.y + r.h}H${r.x + r.w}V${r.y}Z`} />
+      <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="6 5" />
+    </svg>
+  );
 }
