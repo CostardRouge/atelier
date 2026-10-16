@@ -3317,7 +3317,12 @@ The panel shows **one layer at a time** — the things the picture shows, as
 chips at its top: *Intro*, *Map*, *Flights*, *Timing*, *Camera*, *Title*,
 *Statistics*, *Clock*, *Sticker*, *Outro*. **Click a thing on the picture** — a word
 of the overlay, a flight's line, the map itself — and the panel opens its
-layer, the thing outlined while it is selected; a drag still moves the map.
+layer, the thing outlined while it is selected. **Drag a piece of the
+overlay** — the title, the dates, the statistics, the clock, the spotlight
+card, the sticker — to move it: let go near one of its six spots and it goes
+back to that spot, anywhere else and it stays where you put it (its *Where*
+row then says so, and a spot picked there puts it back). A drag anywhere else
+still moves the map.
 What the picture does not show sits at the panel's foot: the flight list
 (*N flights*), *Export* and *Presets*. Each section opens on its essentials;
 the rest folds behind **N more**, remembered in this browser.

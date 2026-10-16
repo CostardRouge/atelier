@@ -22,6 +22,7 @@ import { parseHex, rgba } from './atlas-colour';
 import type { Rect, Spot } from './atlas-settings';
 import { luminance, type StickerBacking } from './atlas-sticker';
 import type { AtlasLayer, OverlayHit } from './atlas-layers';
+import { SPOT_MARGIN, type Align, type FreePlace, type PieceId } from './atlas-place';
 
 /** One line of text in a stack. */
 export interface TextLine {
@@ -93,6 +94,8 @@ export interface StickerBlock {
 /** Whose a block is: the inspector layer a click on it opens. */
 interface Owned {
   owner?: AtlasLayer;
+  /** The draggable piece it belongs to (`atlas-place.ts`). */
+  piece?: PieceId;
   /** This block's own fade, times the layout's (an intro's lines arrive one by one). */
   alpha?: number;
 }
@@ -112,17 +115,12 @@ export interface OverlayLayout {
   middleAt?: number;
   /** Every block moved down by this, a fraction of the area's short side (a stack rising into place). */
   shiftY?: number;
+  /** Pieces placed by hand, each a stack of its own at its place. */
+  free?: { place: FreePlace; blocks: Block[] }[];
 }
 
-const ANCHOR: Record<LayoutSpot, Anchor> = {
-  mc: 'top-center',
-  tl: 'top-left',
-  tc: 'top-center',
-  tr: 'top-right',
-  bl: 'top-left',
-  bc: 'top-center',
-  br: 'top-right',
-};
+/** Every stack is laid from its top, at the edge it grows from. */
+const ANCHOR_OF: Record<Align, Anchor> = { left: 'top-left', center: 'top-center', right: 'top-right' };
 
 const LINE = 1.22;
 
@@ -154,7 +152,7 @@ function textElement(id: string, text: string, anchor: Anchor, x: number, y: num
 export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alpha = 1): OverlayHit[] {
   const short = Math.min(area.w, area.h);
   const unit = (short / 1080) * layout.scale;
-  const margin = 0.045 * short;
+  const margin = SPOT_MARGIN * short;
   const theme = layout.theme;
   const accent = layout.accent;
   const elements: OverlayElement[] = [];
@@ -220,17 +218,30 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     }
   };
 
+  // Every stack: a spot's, pinned to its corner or edge, or a piece placed by hand, at its place.
+  const stacks: { blocks: Block[]; align: Align; ax: number; top: (total: number) => number }[] = [];
   for (const spot of Object.keys(layout.spots) as LayoutSpot[]) {
-    const blocks = (layout.spots[spot] ?? []).filter((b) => (b.alpha ?? 1) > 0.001);
-    if (!blocks.length) continue;
-    const total = blocks.reduce((h, b) => h + blockHeight(b), 0);
+    const align: Align = spot[1] === 'l' ? 'left' : spot[1] === 'c' ? 'center' : 'right';
     const bottom = spot[0] === 'b';
     const middle = spot === 'mc';
-    const align = spot[1] === 'l' ? 'left' : spot[1] === 'c' ? 'center' : 'right';
-    const anchor = ANCHOR[spot];
-    const ax = align === 'left' ? area.x + margin : align === 'center' ? area.x + area.w / 2 : area.x + area.w - margin;
-    let y = middle ? area.y + area.h * (layout.middleAt ?? 0.5) - total / 2 : bottom ? area.y + area.h - margin - total : area.y + margin;
-    y += (layout.shiftY ?? 0) * short;
+    stacks.push({
+      blocks: layout.spots[spot] ?? [],
+      align,
+      ax: align === 'left' ? area.x + margin : align === 'center' ? area.x + area.w / 2 : area.x + area.w - margin,
+      top: (total) => (middle ? area.y + area.h * (layout.middleAt ?? 0.5) - total / 2 : bottom ? area.y + area.h - margin - total : area.y + margin),
+    });
+  }
+  for (const f of layout.free ?? []) {
+    // Held where it was let go, but never pushed out past the area's bottom.
+    stacks.push({ blocks: f.blocks, align: f.place.align, ax: area.x + f.place.x * area.w, top: (total) => Math.min(area.y + f.place.y * area.h, area.y + area.h - total) });
+  }
+  for (const stack of stacks) {
+    const blocks = stack.blocks.filter((b) => (b.alpha ?? 1) > 0.001);
+    if (!blocks.length) continue;
+    const total = blocks.reduce((h, b) => h + blockHeight(b), 0);
+    const { align, ax } = stack;
+    const anchor = ANCHOR_OF[align];
+    let y = stack.top(total) + (layout.shiftY ?? 0) * short;
     const colW = Math.min(area.w - 2 * margin, Math.max(300 * unit, area.w * 0.28));
 
     /** Record a block's box, `w` wide at the spot's alignment. */
@@ -238,7 +249,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
       // A piece too faint to see is not a piece a click lands on.
       if (!b.owner || w <= 0 || h <= 0 || blockAlpha < 0.3) return;
       const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
-      hits.push({ layer: b.owner, x, y, w, h });
+      hits.push({ layer: b.owner, piece: b.piece, x, y, w, h });
     };
 
     for (const b of blocks) {
