@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cameraHeldBy,
   countedStats,
   diveView,
   flightTime,
@@ -38,6 +39,19 @@ describe('flightTime and phaseAt', () => {
     expect(phaseAt(s, 1)).toBe('intro');
     expect(phaseAt(s, 20)).toBe('flights');
     expect(phaseAt(s, 35)).toBe('outro');
+  });
+});
+
+describe('cameraHeldBy', () => {
+  const s = storyOf(INTRO_DEFAULTS, OUTRO_DEFAULTS, 30);
+  const dive = { ...INTRO_DEFAULTS, style: 'dive' as const };
+  const pull = { ...OUTRO_DEFAULTS, style: 'pull' as const };
+  it('holds the camera through a world dive and a pull-back, and only there', () => {
+    expect(cameraHeldBy(dive, OUTRO_DEFAULTS, s, 2)).toBe('dive');
+    expect(cameraHeldBy(dive, OUTRO_DEFAULTS, s, 10)).toBeNull();
+    expect(cameraHeldBy(INTRO_DEFAULTS, pull, s, 36)).toBe('pull');
+    expect(cameraHeldBy(INTRO_DEFAULTS, OUTRO_DEFAULTS, s, 2)).toBeNull();
+    expect(cameraHeldBy(INTRO_DEFAULTS, OUTRO_DEFAULTS, s, 36)).toBeNull();
   });
 });
 
