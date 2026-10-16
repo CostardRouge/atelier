@@ -171,8 +171,8 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   }, [layer, setDrawingZone]);
 
   /** A piece's Where row: its spot, or the word that it was placed by hand. */
-  const where = (piece: PieceId) => (
-    <SpotRow label="Where" value={s.hud[PIECE_SPOT[piece]]} free={!!s.hud.free[piece]} onChange={(v) => update((cur) => withPlacement(cur, piece, { spot: v }))} />
+  const where = (piece: Exclude<PieceId, 'credits'>) => (
+    <SpotRow label="Where" value={s.hud[PIECE_SPOT[piece]] as Spot} free={!!s.hud.free[piece]} onChange={(v) => update((cur) => withPlacement(cur, piece, { spot: v }))} />
   );
 
   const set = <K extends keyof AtlasSettings>(key: K, patch: Partial<AtlasSettings[K]>) =>
@@ -837,6 +837,29 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         )}
         <SwitchRow label="Activity curve" checked={s.hud.graph} onChange={(v) => hud({ graph: v })} />
         <SwitchRow label="Data credit" checked={s.hud.credit} onChange={(v) => hud({ credit: v })} hint="The map's own credit is always written when its tiles are drawn." />
+        <FieldRow
+          label="Credits at"
+          hint={s.hud.free.credits ? 'Placed by hand on the picture — pick a place to put them back.' : 'Or drag them on the picture.'}
+          hintShown={!!s.hud.free.credits}
+        >
+          <SelectField<Spot | 'clock' | ''>
+            label="Where the credits sit"
+            value={s.hud.free.credits ? '' : s.hud.creditsAt}
+            onChange={(v) => {
+              if (!v) return;
+              update((cur) => {
+                const free = { ...cur.hud.free };
+                delete free.credits;
+                return { ...cur, hud: { ...cur.hud, creditsAt: v, free } };
+              });
+            }}
+            options={[
+              ...(s.hud.free.credits ? [{ id: '' as const, label: 'Placed by hand' }] : []),
+              { id: 'clock', label: 'With the clock' },
+              ...SPOTS.map((id) => ({ id, label: SPOT_NAME[id] })),
+            ]}
+          />
+        </FieldRow>
         {where('clock')}
       </AtlasMore>
     </InspectorSection>

@@ -871,9 +871,12 @@ export function overlayLayout(
   const free = new Map<PieceId, Block[]>();
   const put = (piece: PieceId, ...blocks: Block[]) => {
     const tagged = blocks.map((b) => ({ ...b, piece }));
-    if (hud.free[piece]) free.set(piece, [...(free.get(piece) ?? []), ...tagged]);
+    // The credits under the clock ride the clock's stack — its spot, or where it was placed by hand.
+    const host: PieceId = piece === 'credits' && !hud.free.credits && hud.creditsAt === 'clock' ? 'clock' : piece;
+    if (hud.free[host]) free.set(host, [...(free.get(host) ?? []), ...tagged]);
     else {
-      const at = hud[PIECE_SPOT[piece]];
+      const at = hud[PIECE_SPOT[host]];
+      if (at === 'clock') return;
       spots[at] = [...(spots[at] ?? []), ...tagged];
     }
   };
@@ -941,7 +944,7 @@ export function overlayLayout(
   if (hud.credit) credits.push(`Data: DJI flight telemetry · ${scene.flights.length} flight${scene.flights.length === 1 ? '' : 's'}`);
   // The tiles' licence asks for its credit wherever they are shown — never a switch.
   if (tilesDrawn) credits.push('Map © OpenStreetMap contributors');
-  for (const line of credits) put('clock', { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
+  for (const line of credits) put('credits', { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
 
   return {
     spots,

@@ -1,7 +1,7 @@
 /**
  * Where a piece of the overlay sits, once it can be DRAGGED on the stage —
  * the title, the date range, the statistics, the clock stack, the spotlight
- * card, the sticker. A piece stays in one of its six spots by default and
+ * card, the sticker, the credits. A piece stays in one of its six spots by default and
  * goes back to one when it is dropped near it (the spots are kept, as the
  * maintainer asked); dropped anywhere else it is held there, by the edge it
  * grows from, as fractions of the overlay's area — so it holds at any size
@@ -11,12 +11,12 @@
 import type { AtlasLayer, OverlayHit } from './atlas-layers';
 import type { AtlasSettings, HudSettings, Rect, Spot } from './atlas-settings';
 
-export type PieceId = 'title' | 'dates' | 'stats' | 'clock' | 'card' | 'sticker';
+export type PieceId = 'title' | 'dates' | 'stats' | 'clock' | 'card' | 'sticker' | 'credits';
 
-export const PIECES: readonly PieceId[] = ['title', 'dates', 'stats', 'clock', 'card', 'sticker'];
+export const PIECES: readonly PieceId[] = ['title', 'dates', 'stats', 'clock', 'card', 'sticker', 'credits'];
 
 /** The inspector layer a piece belongs to — what a click or a drag on it opens. */
-export const PIECE_LAYER: Record<PieceId, AtlasLayer> = { title: 'title', dates: 'clock', stats: 'stats', clock: 'clock', card: 'clock', sticker: 'sticker' };
+export const PIECE_LAYER: Record<PieceId, AtlasLayer> = { title: 'title', dates: 'clock', stats: 'stats', clock: 'clock', card: 'clock', sticker: 'sticker', credits: 'clock' };
 
 /** The setting that holds a piece's spot. */
 export const PIECE_SPOT: Record<PieceId, keyof HudSettings & `${string}At`> = {
@@ -26,6 +26,8 @@ export const PIECE_SPOT: Record<PieceId, keyof HudSettings & `${string}At`> = {
   clock: 'clockAt',
   card: 'spotCardAt',
   sticker: 'droneAt',
+  // `'clock'` there: under the clock, in whatever spot or place the clock is.
+  credits: 'creditsAt',
 };
 
 export type Align = 'left' | 'center' | 'right';

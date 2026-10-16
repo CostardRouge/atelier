@@ -3319,7 +3319,7 @@ chips at its top: *Intro*, *Map*, *Flights*, *Timing*, *Camera*, *Title*,
 of the overlay, a flight's line, the map itself — and the panel opens its
 layer, the thing outlined while it is selected. **Drag a piece of the
 overlay** — the title, the dates, the statistics, the clock, the spotlight
-card, the sticker — to move it: let go near one of its six spots and it goes
+card, the sticker, the credits — to move it: let go near one of its six spots and it goes
 back to that spot, anywhere else and it stays where you put it (its *Where*
 row then says so, and a spot picked there puts it back). A drag anywhere else
 still moves the map.
@@ -3404,7 +3404,8 @@ the rest folds behind **N more**, remembered in this browser.
   or as the file is; Atelier ships no maker's logo, and without one the
   maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
-  activity curve and the credits.
+  activity curve and the credits — under the clock by default, or in a spot
+  of their own (*Credits at*), and dragged on their own like every piece.
 - **Export** (the foot). Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
   rate (30/60), the **social apps' zones** — *Ignore*, or *Keep clear*: every
   word moves out of where Reels, TikTok and Shorts draw their own interface

@@ -103,3 +103,7 @@ His ask: keep the words out of where Reels / TikTok / Shorts draw their interfac
 ## Drone names are edited where they show (2026-10-16)
 
 His ask: rename each drone from the Sticker layer instead of going to the flight list. **Decision**: `AtlasDroneNames` is the one component for the rows (`aircraft.names`, `aircraft.fallback`), drawn in the flight list's *Drone names* AND in the Sticker layer under *Names* — one setting, two places, never a second copy of the names. **How to apply**: a setting read in one layer but stored with another is drawn in both through one component, not reached by a «go there» button.
+
+## The credits are a piece of their own (2026-10-16)
+
+His ask: place the mandatory credits (data line, © OpenStreetMap) apart from the clock stack. **Decision**: a seventh piece, `credits`, owned by the Clock layer; `hud.creditsAt` is `'clock'` (the default, where every saved atlas keeps them: they ride the clock's stack — its spot or its hand placement) or a spot; dragged, they are held as `hud.free.credits`. The blocks always carry `piece: 'credits'`, so a press on them drags them alone even while they sit under the clock. **How to apply**: a piece that may live inside another's stack routes through `put`'s host (`creditsAt === 'clock'` → the clock's place) and keeps its own `piece` tag; its *Where* row needs the extra «With the clock» choice (`SelectField`, not `SpotRow`).

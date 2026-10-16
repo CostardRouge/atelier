@@ -62,6 +62,14 @@ describe('withPlacement', () => {
     expect(back.hud.free.title).toBeUndefined();
   });
 
+  it('gives the credits a spot of their own, off the clock', () => {
+    expect(DEFAULT_SETTINGS.hud.creditsAt).toBe('clock');
+    const s = withPlacement(DEFAULT_SETTINGS, 'credits', { spot: 'bc' });
+    expect(s.hud.creditsAt).toBe('bc');
+    expect(s.hud.clockAt).toBe(DEFAULT_SETTINGS.hud.clockAt);
+    expect(sanitizeSettings({ hud: { creditsAt: 'middle' } }).hud.creditsAt).toBe('clock');
+  });
+
   it('moves the spot of the piece named, and no other', () => {
     const s = withPlacement(DEFAULT_SETTINGS, 'card', { spot: 'bl' });
     expect(s.hud.spotCardAt).toBe('bl');

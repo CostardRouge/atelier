@@ -163,6 +163,8 @@ export interface HudSettings {
   spotCard: boolean;
   spotCardAt: Spot;
   credit: boolean;
+  /** Where the credits sit: under the clock (wherever it is), or a spot of their own. */
+  creditsAt: Spot | 'clock';
   /** Pieces dragged off their spot on the stage, where they were let go (`atlas-place.ts`). */
   free: Partial<Record<PieceId, FreePlace>>;
 }
@@ -286,6 +288,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     spotCard: true,
     spotCardAt: 'tr',
     credit: true,
+    creditsAt: 'clock',
     free: {},
   },
   format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map', safe: 'ignore' },
@@ -707,6 +710,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       spotCard: bool(u.spotCard, d.hud.spotCard),
       spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
+      creditsAt: oneOf(u.creditsAt, [...SPOTS, 'clock'] as const, d.hud.creditsAt),
       free: Object.fromEntries(
         PIECES.flatMap((piece) => {
           const place = sanitizePlace(obj(u.free)[piece]);
