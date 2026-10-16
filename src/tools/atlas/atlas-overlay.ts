@@ -22,6 +22,7 @@ import { parseHex, rgba } from './atlas-colour';
 import type { Rect, Spot } from './atlas-settings';
 import { luminance, type StickerBacking } from './atlas-sticker';
 import type { AtlasLayer, OverlayHit } from './atlas-layers';
+import { breakLines, fitSize } from './atlas-text';
 import { SPOT_MARGIN, type Align, type FreePlace, type PieceId } from './atlas-place';
 
 /** One line of text in a stack. */
@@ -39,6 +40,12 @@ export interface TextLine {
   odometer?: number;
   /** Room under the line, in line heights. */
   gapAfter?: number;
+  /**
+   * Kept within `maxW` of the area's width: broken into lines (the author's
+   * own breaks kept) or made smaller until it fits on one. Without it a
+   * line is drawn as it is.
+   */
+  fit?: { maxW: number; mode: 'wrap' | 'shrink' };
 }
 
 /** Statistics side by side, each its value over its label. */
@@ -201,6 +208,25 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     return ctx.measureText(shown).width + rs.letterSpacingEm * px * shown.length;
   };
 
+  /**
+   * A text with a width to keep or lines of its own, as the lines it draws:
+   * one block per line, the room under it kept on the last — so the stack
+   * lays them out like any other lines and nothing passes the width.
+   */
+  const expand = (b: Block): Block[] => {
+    if (b.kind !== 'text' || (!b.fit && !b.text.includes('\n'))) return [b];
+    const measure = (t: string, size = b.size) => widthOf(t, size, !!b.label, b.weight);
+    const maxW = b.fit ? b.fit.maxW * area.w : Infinity;
+    if (b.fit?.mode === 'shrink') {
+      const one = b.text.replace(/\s*\n\s*/g, ' ').trim();
+      return [{ ...b, text: one, size: fitSize([one], b.size, maxW, measure) }];
+    }
+    const lines = breakLines(b.text, maxW, (t) => measure(t));
+    // A single word wider than the width is made smaller rather than cut.
+    const size = Number.isFinite(maxW) ? fitSize(lines, b.size, maxW, measure) : b.size;
+    return lines.map((text, i) => ({ ...b, text, size, gapAfter: i === lines.length - 1 ? b.gapAfter : 0 }));
+  };
+
   const blockHeight = (b: Block): number => {
     switch (b.kind) {
       case 'text':
@@ -236,7 +262,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     stacks.push({ blocks: f.blocks, align: f.place.align, ax: area.x + f.place.x * area.w, top: (total) => Math.min(area.y + f.place.y * area.h, area.y + area.h - total) });
   }
   for (const stack of stacks) {
-    const blocks = stack.blocks.filter((b) => (b.alpha ?? 1) > 0.001);
+    const blocks = stack.blocks.filter((b) => (b.alpha ?? 1) > 0.001).flatMap(expand);
     if (!blocks.length) continue;
     const total = blocks.reduce((h, b) => h + blockHeight(b), 0);
     const { align, ax } = stack;

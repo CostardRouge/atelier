@@ -520,6 +520,23 @@ export function TextField({ value, onChange, label, placeholder, disabled }: Tex
   );
 }
 
+/** Text that may run over several lines: Enter starts a new one. */
+export function TextAreaField({ value, onChange, label, placeholder, rows = 2 }: Omit<TextFieldProps, 'disabled'> & { rows?: number }) {
+  return (
+    <textarea
+      value={value}
+      placeholder={placeholder}
+      rows={rows}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.value)}
+      className={textAreaClass}
+    />
+  );
+}
+
+const textAreaClass =
+  'block w-full min-w-0 font-sans text-sm max-[820px]:text-base leading-snug px-3 py-1.5 border border-line-strong rounded-control bg-surface text-ink resize-y focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+
 /** The colour swatch every row uses — 44 px under a finger: an `<input type="color">` draws no `::after` to grow a zone with. */
 export const swatchClass =
   'flex-none w-8 h-8 pointer-coarse:w-11 pointer-coarse:h-11 p-0 border border-line-strong rounded-[7px] bg-surface cursor-pointer disabled:opacity-40 disabled:cursor-default';

@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
-import { FieldRow, InspectorSection, SliderRow, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, SliderRow, SwitchRow, TextAreaField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import AtlasMore from './AtlasMore';
 import type { AtlasSettings } from './atlas-settings';
-import { INTRO_LENGTH, type IntroBehind, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
+import { INTRO_LENGTH, LINE_SIZE, TEXT_SIZE, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
 
 type Update = (fn: (s: AtlasSettings) => AtlasSettings) => void;
 
 const secs = (v: number) => `${v.toFixed(1)} s`;
+const pct = (v: number) => `${Math.round(v * 100)} %`;
 
 /** A style as a small picture of what it does, pressed while chosen. */
 function StyleTiles<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: { id: T; label: string; picture: ReactNode }[] }) {
@@ -116,8 +117,26 @@ export function IntroSection({ settings: s, update, autoTitle, autoLine, hasStic
         <SliderRow label="Length" value={intro.length} min={INTRO_LENGTH.min} max={INTRO_LENGTH.max} step={0.5} format={secs} onChange={(v) => set({ length: v })} />
       )}
       {on && (
-        <FieldRow label="Title">
-          <TextField label="Intro title" value={intro.title} placeholder={autoTitle || 'The place the flights share'} onChange={(v) => set({ title: v })} />
+        <FieldRow label="Title" align="start">
+          <TextAreaField label="Intro title" value={intro.title} placeholder={autoTitle || 'The place the flights share'} onChange={(v) => set({ title: v })} />
+        </FieldRow>
+      )}
+      {on && (
+        <SliderRow label="Size" value={intro.titleSize} min={TEXT_SIZE.min} max={TEXT_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ titleSize: v })} />
+      )}
+      {on && (
+        <FieldRow label="Too long" hint="Enter starts a new line. A line wider than the frame goes on to the next one, or the title gets smaller until it fits on one. The outro's title follows." hintShown={false}>
+          <Segmented<IntroFit>
+            size="sm"
+            fill
+            label="When the title is too long"
+            value={intro.fit}
+            onChange={(v) => set({ fit: v })}
+            options={[
+              { id: 'wrap', label: 'New lines' },
+              { id: 'shrink', label: 'Smaller' },
+            ]}
+          />
         </FieldRow>
       )}
       {on && (
@@ -154,9 +173,10 @@ export function IntroSection({ settings: s, update, autoTitle, autoLine, hasStic
               />
             </FieldRow>
           )}
-          <FieldRow label="Line 2">
-            <TextField label="Intro second line" value={intro.line} placeholder={autoLine} onChange={(v) => set({ line: v })} />
+          <FieldRow label="Line 2" align="start">
+            <TextAreaField label="Intro second line" value={intro.line} placeholder={autoLine} onChange={(v) => set({ line: v })} />
           </FieldRow>
+          <SliderRow label="Line 2 size" value={intro.lineSize} min={LINE_SIZE.min} max={LINE_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ lineSize: v })} />
           <SwitchRow
             label="The drone sticker under the title"
             checked={intro.sticker}
@@ -234,8 +254,8 @@ export function OutroSection({ settings: s, update, hasSticker }: Omit<StoryProp
         <SliderRow label="Length" value={outro.length} min={INTRO_LENGTH.min} max={INTRO_LENGTH.max} step={0.5} format={secs} onChange={(v) => set({ length: v })} />
       )}
       {on && (
-        <FieldRow label="Last line">
-          <TextField label="The outro's last line" value={outro.line} placeholder="Nothing" onChange={(v) => set({ line: v })} />
+        <FieldRow label="Last line" align="start">
+          <TextAreaField label="The outro's last line" value={outro.line} placeholder="Nothing" onChange={(v) => set({ line: v })} />
         </FieldRow>
       )}
       {on && (

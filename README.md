@@ -3339,7 +3339,11 @@ the rest folds behind **N more**, remembered in this browser.
   the sticker, a last line), a **pull back** (the camera stepping back over
   every route, the title at the top), a **fade out**, or nothing. The title
   and the second line write themselves from the flights until you type your
-  own; a preset keeps how they play, never their words.
+  own; a preset keeps how they play, never their words. The title takes
+  several lines (Enter starts one) and a **size**, and one too wide for the
+  frame either goes on to more lines or gets smaller until it fits on one —
+  it never leaves the frame; the outro's title follows, and the second line
+  has its own size.
 - **The flight list** (the foot's *N flights*). Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
   flights (double-click: that place alone); hovering a flight singles it out.

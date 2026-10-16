@@ -31,7 +31,21 @@ export interface IntroSettings {
   line: string;
   /** The drone sticker under the title. */
   sticker: boolean;
+  /** The title's size, times its default (the outro's title too). */
+  titleSize: number;
+  /** The second line's size, times its default. */
+  lineSize: number;
+  /** A title too wide for the frame goes on to more lines, or gets smaller until it fits on one. */
+  fit: IntroFit;
 }
+
+export type IntroFit = 'wrap' | 'shrink';
+
+/** The title's and the line's size, times their default. */
+export const TEXT_SIZE = { min: 0.4, max: 1.6 } as const;
+export const LINE_SIZE = { min: 0.4, max: 2 } as const;
+/** How wide the intro's and the outro's words may run, a fraction of the area. */
+export const STORY_TEXT_WIDTH = 0.84;
 
 export interface OutroSettings {
   style: OutroStyle;
@@ -44,7 +58,7 @@ export interface OutroSettings {
   line: string;
 }
 
-export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true };
+export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true, titleSize: 1, lineSize: 1, fit: 'wrap' };
 export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, totals: true, sticker: true, line: '' };
 
 export const INTRO_LENGTH = { min: 1.5, max: 8 } as const;
