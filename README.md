@@ -3405,7 +3405,12 @@ the rest folds behind **N more**, remembered in this browser.
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits.
 - **Export** (the foot). Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
-  rate (30/60), and a **mount**: a border, a deeper band under the map for the
+  rate (30/60), the **social apps' zones** — *Ignore*, or *Keep clear*: every
+  word moves out of where Reels, TikTok and Shorts draw their own interface
+  over a 9:16 video (a feed's crop or a player's bar for the other ratios;
+  rounded from their guides), a piece dragged by hand stops at their edge, and
+  the zones show hatched on the stage while *Export* is open, never in the
+  file —, and a **mount**: a border, a deeper band under the map for the
   text, rounded corners, its colour, and whether the text sits on the map or
   across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter: an MP4 (H.264,
   no sound), the frame on screen as a PNG, or a *poster* with every route

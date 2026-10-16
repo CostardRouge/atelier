@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OverlayHit } from './atlas-layers';
-import { dropPlacement, pieceAt, pieceBox, sanitizePlace, withPlacement } from './atlas-place';
+import { dropPlacement, pieceAt, pieceBox, placeBounds, sanitizePlace, spotLines, withPlacement } from './atlas-place';
 import { DEFAULT_SETTINGS, sanitizeSettings } from './atlas-settings';
 
 // A 1000 × 500 area at the origin: short side 500, a spot's margin 22.5 px, the snap 30 px.
@@ -28,6 +28,27 @@ describe('dropPlacement', () => {
   it('measures a spot in the area it is given, not the frame', () => {
     const inner = { x: 100, y: 50, w: 800, h: 400 };
     expect(dropPlacement({ x: 120, y: 70, w: 100, h: 30 }, inner)).toEqual({ spot: 'tl' });
+  });
+});
+
+describe('the social apps’ zones', () => {
+  // A 9:16 frame of 360 × 640 whose apps leave 20..320 × 80..480.
+  const tall = { x: 0, y: 0, w: 360, h: 640 };
+  const safe = { x: 20, y: 80, w: 300, h: 400 };
+
+  it('moves the spots inside the zones, and leaves them alone without', () => {
+    expect(spotLines(tall, safe)).toEqual({ left: 20, right: 320, top: 80, bottom: 480 });
+    expect(spotLines(tall)).toEqual({ left: 16.2, right: 343.8, top: 16.2, bottom: 623.8 });
+  });
+
+  it('snaps to a spot where it now stands, and stops a held piece at the zones’ edge', () => {
+    expect(dropPlacement({ x: 22, y: 84, w: 100, h: 30 }, tall, safe)).toEqual({ spot: 'tl' });
+    const held = dropPlacement({ x: 100, y: 560, w: 100, h: 40 }, tall, safe);
+    expect(held).toEqual({ free: { x: 150 / 360, y: 440 / 640, align: 'center' } });
+  });
+
+  it('places by hand inside the area when the zones and the area do not meet', () => {
+    expect(placeBounds({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 200, w: 10, h: 10 })).toEqual({ x: 0, y: 0, w: 100, h: 100 });
   });
 });
 

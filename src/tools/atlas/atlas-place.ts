@@ -61,14 +61,41 @@ function edgeX(box: Rect, align: Align): number {
   return align === 'left' ? box.x : align === 'center' ? box.x + box.w / 2 : box.x + box.w;
 }
 
+/**
+ * The four lines the spots pin their stacks to: the area's edges less the
+ * margin, and — when a social app's zones are kept clear — no nearer the
+ * frame's edge than `safe` (frame pixels).
+ */
+export function spotLines(area: Rect, safe?: Rect | null): { left: number; right: number; top: number; bottom: number } {
+  const m = SPOT_MARGIN * Math.min(area.w, area.h);
+  const lines = { left: area.x + m, right: area.x + area.w - m, top: area.y + m, bottom: area.y + area.h - m };
+  if (!safe) return lines;
+  return {
+    left: Math.max(lines.left, safe.x),
+    right: Math.min(lines.right, safe.x + safe.w),
+    top: Math.max(lines.top, safe.y),
+    bottom: Math.min(lines.bottom, safe.y + safe.h),
+  };
+}
+
+/** Where a piece placed by hand may go: the area, inside the safe zones when they are kept clear. */
+export function placeBounds(area: Rect, safe?: Rect | null): Rect {
+  if (!safe) return area;
+  const x0 = Math.max(area.x, safe.x);
+  const y0 = Math.max(area.y, safe.y);
+  const x1 = Math.min(area.x + area.w, safe.x + safe.w);
+  const y1 = Math.min(area.y + area.h, safe.y + safe.h);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : area;
+}
+
 /** The point a spot pins its stack to, and the same point of `box` for that spot. */
-function spotDistance(spot: Spot, box: Rect, area: Rect): number {
+function spotDistance(spot: Spot, box: Rect, area: Rect, safe?: Rect | null): number {
   const short = Math.min(area.w, area.h);
-  const m = SPOT_MARGIN * short;
+  const lines = spotLines(area, safe);
   const align = alignOf(spot);
-  const sx = align === 'left' ? area.x + m : align === 'center' ? area.x + area.w / 2 : area.x + area.w - m;
+  const sx = align === 'left' ? lines.left : align === 'center' ? area.x + area.w / 2 : lines.right;
   const bottom = spot[0] === 'b';
-  const sy = bottom ? area.y + area.h - m : area.y + m;
+  const sy = bottom ? lines.bottom : lines.top;
   const by = bottom ? box.y + box.h : box.y;
   return Math.hypot(edgeX(box, align) - sx, by - sy) / short;
 }
@@ -77,13 +104,14 @@ function spotDistance(spot: Spot, box: Rect, area: Rect): number {
  * Where a piece dragged to `box` (frame pixels) lands inside `area`: the
  * nearest spot when its anchor comes within `SNAP` of that spot's, else held
  * where it is — growing from the edge nearest the side of the area it is on,
- * so a longer title never runs off the frame's nearest edge — kept inside.
+ * so a longer title never runs off the frame's nearest edge — kept inside,
+ * and out of the social apps' zones (`safe`, frame pixels) when given.
  */
-export function dropPlacement(box: Rect, area: Rect): Placement {
+export function dropPlacement(box: Rect, area: Rect, safe?: Rect | null): Placement {
   let best: Spot | null = null;
   let bestD = SNAP;
   for (const spot of SPOTS) {
-    const d = spotDistance(spot, box, area);
+    const d = spotDistance(spot, box, area, safe);
     if (d <= bestD) {
       best = spot;
       bestD = d;
@@ -92,8 +120,10 @@ export function dropPlacement(box: Rect, area: Rect): Placement {
   if (best) return { spot: best };
   const cx = (box.x + box.w / 2 - area.x) / area.w;
   const align: Align = cx < 1 / 3 ? 'left' : cx > 2 / 3 ? 'right' : 'center';
-  const left = Math.min(Math.max(box.x, area.x), area.x + area.w - Math.min(box.w, area.w));
-  const top = Math.min(Math.max(box.y, area.y), area.y + area.h - Math.min(box.h, area.h));
+  // Kept inside the area, and out of the apps' zones when they are kept clear.
+  const b = placeBounds(area, safe);
+  const left = Math.min(Math.max(box.x, b.x), b.x + b.w - Math.min(box.w, b.w));
+  const top = Math.min(Math.max(box.y, b.y), b.y + b.h - Math.min(box.h, b.h));
   const kept = { ...box, x: left, y: top };
   return { free: { x: (edgeX(kept, align) - area.x) / area.w, y: (top - area.y) / area.h, align } };
 }

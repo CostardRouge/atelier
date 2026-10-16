@@ -43,10 +43,11 @@ export function paintStory(
   intro: IntroLook,
   outro: OutroLook,
   sticker: StickerBlock,
+  safe: Rect | null = null,
 ): OverlayHit[] {
   const s = scene.settings;
   const hits: OverlayHit[] = [];
-  const base: Omit<OverlayLayout, 'spots'> = { theme: s.hud.theme, accent: s.hud.accent, scale: s.hud.scale };
+  const base: Omit<OverlayLayout, 'spots'> = { theme: s.hud.theme, accent: s.hud.accent, scale: s.hud.scale, safe };
   const hasSticker = sticker.items.length > 0;
   const title = introTitle(s.intro, s.hud.title, scene.placeNames[0] ?? null);
   const fit = { maxW: STORY_TEXT_WIDTH, mode: s.intro.fit };

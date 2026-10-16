@@ -20,6 +20,7 @@ import type { WorldBox } from './atlas-flight';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
 import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
+import type { SafeMode } from './atlas-safe';
 import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
 import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
@@ -181,6 +182,8 @@ export interface FormatSettings {
   radius: number;
   /** Where the overlay is laid out: inside the map, or across the whole frame (on the border). */
   textOn: 'map' | 'frame';
+  /** Keep the overlay out of where the social apps draw their own interface (`atlas-safe.ts`). */
+  safe: SafeMode;
 }
 
 /** What the atlas calls each aircraft. */
@@ -285,7 +288,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     credit: true,
     free: {},
   },
-  format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map' },
+  format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map', safe: 'ignore' },
   aircraft: { names: {}, fallback: '', weights: {} },
   intro: INTRO_DEFAULTS,
   outro: OUTRO_DEFAULTS,
@@ -721,6 +724,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       borderColour: hex(f.borderColour, d.format.borderColour),
       radius: num(f.radius, d.format.radius, 0, 0.15),
       textOn: oneOf(f.textOn, ['map', 'frame'] as const, d.format.textOn),
+      safe: oneOf(f.safe, ['ignore', 'clear'] as const, d.format.safe),
     },
     aircraft: { names, fallback: str(a.fallback, d.aircraft.fallback, 60), weights },
     intro: {

@@ -21,6 +21,7 @@ import type { LandCollection } from '../../shared/map/land';
 import { indexAt, positionAt, secondsOfDay, type AtlasFlight, type WorldBox } from './atlas-flight';
 import { DAY_STOPS, flightTone, mix, paletteById, parseHex, rgba, sampleCyclic, samplePalette, type Rgb } from './atlas-colour';
 import { clockLines, counterLine, formatDate, formatTimeOfDay, graphEnds } from './atlas-hud';
+import { safeRect } from './atlas-safe';
 import { paintOverlay, type Block, type OverlayLayout, type StickerBlock, type StickerLogoSource } from './atlas-overlay';
 import { inkForGround, luminance, makerKey, stickerParts, stickerText, STICKER_DARK, STICKER_LIGHT } from './atlas-sticker';
 import { spotlightStrength, type Episode } from './atlas-spotlight';
@@ -465,6 +466,8 @@ export interface PaintedFrame {
   hits: OverlayHit[];
   /** The span of the film the frame is in: a click on its map opens the intro or the outro. */
   phase: 'intro' | 'flights' | 'outro';
+  /** The part of the frame the social apps leave alone, when it is kept clear (`atlas-safe.ts`). */
+  safe: Rect | null;
 }
 
 /**
@@ -510,9 +513,10 @@ export function paintAtlas(ctx: Ctx2D, scene: PaintScene, storyFrame: PaintFrame
   const area: Rect = s.format.textOn === 'frame' ? { x: 0, y: 0, w: width, h: height } : rect;
   // The flights' overlay steps aside for the intro and the outro.
   const shown = (intro?.overlay ?? 1) * (outro?.overlay ?? 1);
-  const hits = shown > 0.001 ? paintOverlay(ctx, overlayLayout(scene, frame, states, spot, tilesDrawn), area, shown) : [];
-  if (intro && outro) hits.push(...paintStory(ctx, scene, { width, height, view: frame.view }, rect, intro, outro, stickerBlock(scene, droneNames(scene), tilesDrawn)));
-  return { map: rect, area, hits, phase: phaseAt(story, storyFrame.t) };
+  const safe = s.format.safe === 'clear' ? safeRect(s.format.aspect, width, height) : null;
+  const hits = shown > 0.001 ? paintOverlay(ctx, { ...overlayLayout(scene, frame, states, spot, tilesDrawn), safe }, area, shown) : [];
+  if (intro && outro) hits.push(...paintStory(ctx, scene, { width, height, view: frame.view }, rect, intro, outro, stickerBlock(scene, droneNames(scene), tilesDrawn), safe));
+  return { map: rect, area, hits, phase: phaseAt(story, storyFrame.t), safe };
 }
 
 /** Every drone the shown flights name, once each, as the stickers write them. */

@@ -15,6 +15,7 @@ import AtlasGround from './AtlasGround';
 import AtlasStickerSection from './AtlasStickerSection';
 import AtlasMore from './AtlasMore';
 import AtlasStatChips from './AtlasStatChips';
+import type { SafeMode } from './atlas-safe';
 import { IntroSection, OutroSection } from './AtlasStorySections';
 import { introLine, introTitle } from './atlas-story';
 import { FOOT_LAYERS, LAYERS, layerInfo, type AtlasLayer } from './atlas-layers';
@@ -894,6 +895,27 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       </FieldRow>
       <FieldRow label="Frame rate">
         <Segmented<string> size="sm" fill label="Frame rate" value={String(s.format.fps)} onChange={(v) => format({ fps: Number(v) })} options={[{ id: '30', label: '30 fps' }, { id: '60', label: '60 fps' }]} />
+      </FieldRow>
+      <FieldRow
+        label="Social apps"
+        hint={
+          s.format.safe === 'clear'
+            ? 'Every word stays out of the hatched zones, where Reels, TikTok and Shorts draw their own interface (a feed\'s crop, a player\'s bar for the other ratios). Rounded from their guides; shown here only.'
+            : 'Kept clear, the words move out of where the apps draw their own interface.'
+        }
+        hintShown={false}
+      >
+        <Segmented<SafeMode>
+          size="sm"
+          fill
+          label="Social apps' zones"
+          value={s.format.safe}
+          onChange={(v) => format({ safe: v })}
+          options={[
+            { id: 'ignore', label: 'Ignore' },
+            { id: 'clear', label: 'Keep clear' },
+          ]}
+        />
       </FieldRow>
     </InspectorSection>
   );

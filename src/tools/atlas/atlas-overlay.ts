@@ -23,7 +23,7 @@ import type { Rect, Spot } from './atlas-settings';
 import { luminance, type StickerBacking } from './atlas-sticker';
 import type { AtlasLayer, OverlayHit } from './atlas-layers';
 import { breakLines, fitSize } from './atlas-text';
-import { SPOT_MARGIN, type Align, type FreePlace, type PieceId } from './atlas-place';
+import { placeBounds, spotLines, type Align, type FreePlace, type PieceId } from './atlas-place';
 
 /** One line of text in a stack. */
 export interface TextLine {
@@ -136,6 +136,8 @@ export interface OverlayLayout {
   shiftY?: number;
   /** Pieces placed by hand, each a stack of its own at its place. */
   free?: { place: FreePlace; blocks: Block[] }[];
+  /** The part of the frame the social apps leave alone (frame pixels), when it is kept clear. */
+  safe?: Rect | null;
 }
 
 /** Every stack is laid from its top, at the edge it grows from. */
@@ -171,7 +173,10 @@ function textElement(id: string, text: string, anchor: Anchor, x: number, y: num
 export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alpha = 1): OverlayHit[] {
   const short = Math.min(area.w, area.h);
   const unit = (short / 1080) * layout.scale;
-  const margin = SPOT_MARGIN * short;
+  // The lines the spots pin to: the margin, and the social apps' zones when kept clear.
+  const lines = spotLines(area, layout.safe);
+  const middleX = (lines.left + lines.right) / 2;
+  const room = layout.safe ? lines.right - lines.left : Infinity;
   const theme = layout.theme;
   const accent = layout.accent;
   const elements: OverlayElement[] = [];
@@ -233,7 +238,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     if (b.kind === 'row' && b.fit && b.items.length) return expandRow(b, b.fit);
     if (b.kind !== 'text' || (!b.fit && !b.text.includes('\n'))) return [b];
     const measure = (t: string, size = b.size) => widthOf(t, size, !!b.label, b.weight);
-    const maxW = b.fit ? b.fit.maxW * area.w : Infinity;
+    const maxW = b.fit ? Math.min(b.fit.maxW * area.w, room) : Infinity;
     if (b.fit?.mode === 'shrink') {
       const one = b.text.replace(/\s*\n\s*/g, ' ').trim();
       return [{ ...b, text: one, size: fitSize([one], b.size, maxW, measure) }];
@@ -246,7 +251,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
 
   /** A row with a width to keep, as the rows it draws (see `StatRow.fit`). */
   const expandRow = (b: StatRow & Owned, fit: NonNullable<StatRow['fit']>): Block[] => {
-    const maxW = fit.maxW * area.w;
+    const maxW = Math.min(fit.maxW * area.w, room);
     const rows: (typeof b.items)[] = [];
     let size = b.size;
     let cell: number | undefined;
@@ -308,13 +313,15 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     stacks.push({
       blocks: layout.spots[spot] ?? [],
       align,
-      ax: align === 'left' ? area.x + margin : align === 'center' ? area.x + area.w / 2 : area.x + area.w - margin,
-      top: (total) => (middle ? area.y + area.h * (layout.middleAt ?? 0.5) - total / 2 : bottom ? area.y + area.h - margin - total : area.y + margin),
+      ax: align === 'left' ? lines.left : align === 'center' ? middleX : lines.right,
+      top: (total) => (middle ? area.y + area.h * (layout.middleAt ?? 0.5) - total / 2 : bottom ? lines.bottom - total : lines.top),
     });
   }
+  const bounds = placeBounds(area, layout.safe);
   for (const f of layout.free ?? []) {
-    // Held where it was let go, but never pushed out past the area's bottom.
-    stacks.push({ blocks: f.blocks, align: f.place.align, ax: area.x + f.place.x * area.w, top: (total) => Math.min(area.y + f.place.y * area.h, area.y + area.h - total) });
+    // Held where it was let go, but never pushed out past the bottom (nor into the apps' zones).
+    const ax = Math.min(bounds.x + bounds.w, Math.max(bounds.x, area.x + f.place.x * area.w));
+    stacks.push({ blocks: f.blocks, align: f.place.align, ax, top: (total) => Math.max(bounds.y, Math.min(area.y + f.place.y * area.h, bounds.y + bounds.h - total)) });
   }
   for (const stack of stacks) {
     const blocks = stack.blocks.filter((b) => (b.alpha ?? 1) > 0.001).flatMap(expand);
@@ -323,7 +330,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     const { align, ax } = stack;
     const anchor = ANCHOR_OF[align];
     let y = stack.top(total) + (layout.shiftY ?? 0) * short;
-    const colW = Math.min(area.w - 2 * margin, Math.max(300 * unit, area.w * 0.28));
+    const colW = Math.min(lines.right - lines.left, Math.max(300 * unit, area.w * 0.28));
 
     /** Record a block's box, `w` wide at the spot's alignment. */
     const hit = (b: Block, w: number, h: number) => {
