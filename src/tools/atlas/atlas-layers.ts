@@ -9,6 +9,7 @@
 import type { AtlasFlight } from './atlas-flight';
 import type { Rect } from './atlas-settings';
 import type { Affine } from './atlas-view';
+import type { PieceId } from './atlas-place';
 
 export type AtlasLayer = 'intro' | 'outro' | 'map' | 'flights' | 'timing' | 'camera' | 'title' | 'stats' | 'clock' | 'sticker' | 'data' | 'output' | 'presets';
 
@@ -54,6 +55,8 @@ export function parseLayer(v: unknown): AtlasLayer {
 /** A piece of the overlay as drawn on a frame: whose it is and its box, frame pixels. */
 export interface OverlayHit extends Rect {
   layer: AtlasLayer;
+  /** The piece of the overlay it belongs to, when that piece can be dragged. */
+  piece?: PieceId;
 }
 
 /** The layer whose box holds the point, `pad` pixels around each; the last drawn wins. */

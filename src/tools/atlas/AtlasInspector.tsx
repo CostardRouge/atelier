@@ -17,6 +17,7 @@ import AtlasMore from './AtlasMore';
 import { IntroSection, OutroSection } from './AtlasStorySections';
 import { introLine, introTitle } from './atlas-story';
 import { FOOT_LAYERS, LAYERS, layerInfo, type AtlasLayer } from './atlas-layers';
+import { PIECE_SPOT, withPlacement, type PieceId } from './atlas-place';
 import {
   ASPECTS,
   LOOK_PRESETS,
@@ -98,15 +99,19 @@ function Colour({ label, value, onChange }: { label: string; value: string; onCh
 const SPOT_GLYPH: Record<Spot, string> = { tl: '↖', tc: '↑', tr: '↗', bl: '↙', bc: '↓', br: '↘' };
 const SPOT_NAME: Record<Spot, string> = { tl: 'Top left', tc: 'Top', tr: 'Top right', bl: 'Bottom left', bc: 'Bottom', br: 'Bottom right' };
 
-/** Where a piece sits: the frame's six spots, laid out as they are on the frame. */
-function SpotRow({ label, value, onChange }: { label: string; value: Spot; onChange: (v: Spot) => void }) {
+/**
+ * Where a piece sits: the frame's six spots, laid out as they are on the
+ * frame. A piece dragged off its spot on the stage lights none of them, and
+ * a spot picked puts it back.
+ */
+function SpotRow({ label, value, onChange, free = false }: { label: string; value: Spot; onChange: (v: Spot) => void; free?: boolean }) {
   return (
-    <FieldRow label={label} align="start">
+    <FieldRow label={label} align="start" hint={free ? 'Placed by hand on the picture — pick a spot to put it back.' : 'Or drag it on the picture.'} hintShown={free}>
       <Segmented<Spot>
         size="sm"
         columns={3}
         label={label}
-        value={value}
+        value={(free ? '' : value) as Spot}
         onChange={onChange}
         options={SPOTS.map((id) => ({ id, label: SPOT_GLYPH[id], title: SPOT_NAME[id] }))}
       />
@@ -161,6 +166,11 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   useEffect(() => {
     if (layer !== 'camera') setDrawingZone(false);
   }, [layer, setDrawingZone]);
+
+  /** A piece's Where row: its spot, or the word that it was placed by hand. */
+  const where = (piece: PieceId) => (
+    <SpotRow label="Where" value={s.hud[PIECE_SPOT[piece]]} free={!!s.hud.free[piece]} onChange={(v) => update((cur) => withPlacement(cur, piece, { spot: v }))} />
+  );
 
   const set = <K extends keyof AtlasSettings>(key: K, patch: Partial<AtlasSettings[K]>) =>
     update((cur) => ({ ...cur, [key]: { ...(cur[key] as object), ...patch } }));
@@ -788,7 +798,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         <TextField label="Subtitle" value={s.hud.subtitle} onChange={(v) => hud({ subtitle: v })} placeholder="Six months, 37 flights" />
       </FieldRow>
       <AtlasMore id="atlas.title">
-        <SpotRow label="Where" value={s.hud.titleAt} onChange={(v) => hud({ titleAt: v })} />
+        {where('title')}
         <Slider label="Size" value={s.hud.titleSize} min={0.4} max={3} step={0.05} format={pct} onChange={(v) => hud({ titleSize: v })} />
       </AtlasMore>
     </InspectorSection>
@@ -812,7 +822,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           );
         })}
       </div>
-      {s.hud.stats.length > 0 && <SpotRow label="Where" value={s.hud.statsAt} onChange={(v) => hud({ statsAt: v })} />}
+      {s.hud.stats.length > 0 && where('stats')}
       {s.hud.stats.length > 0 && (
         <AtlasMore id="atlas.stats">
           <FieldRow label="Count">
@@ -855,7 +865,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         )}
         <SwitchRow label="Activity curve" checked={s.hud.graph} onChange={(v) => hud({ graph: v })} />
         <SwitchRow label="Data credit" checked={s.hud.credit} onChange={(v) => hud({ credit: v })} hint="The map's own credit is always written when its tiles are drawn." />
-        <SpotRow label="Where" value={s.hud.clockAt} onChange={(v) => hud({ clockAt: v })} />
+        {where('clock')}
       </AtlasMore>
     </InspectorSection>
   );
@@ -863,7 +873,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   const datesSec = (
     <InspectorSection id="atlas.info" title="Dates and the spotlight card" marked={s.hud.dates || s.hud.spotCard} info="The span of the flights shown, and a card for the flight the spotlight follows.">
       <SwitchRow label="Date range" checked={s.hud.dates} onChange={(v) => hud({ dates: v })} hint={p.dateRange ?? 'No flight carries a date.'} hintShown />
-      {s.hud.dates && <SpotRow label="Where" value={s.hud.datesAt} onChange={(v) => hud({ datesAt: v })} />}
+      {s.hud.dates && where('dates')}
       <SwitchRow
         label="A card for the drone in the spotlight"
         checked={s.hud.spotCard}
@@ -871,7 +881,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         hint={s.camera.spotlight.on ? 'Its name, day, aircraft, height, speed and distance, while it is followed.' : 'Turn the spotlight on in Camera.'}
         hintShown={!s.camera.spotlight.on}
       />
-      {s.hud.spotCard && <SpotRow label="Where" value={s.hud.spotCardAt} onChange={(v) => hud({ spotCardAt: v })} />}
+      {s.hud.spotCard && where('card')}
     </InspectorSection>
   );
 
@@ -953,7 +963,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       settings={s}
       update={update}
       names={p.stickerNames}
-      spotRow={(value, onChange) => <SpotRow label="Where" value={value} onChange={onChange} />}
+      where={where('sticker')}
       onNameDrones={() => onLayer('data')}
     />
   );

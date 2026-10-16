@@ -20,6 +20,7 @@ import type { WorldBox } from './atlas-flight';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
 import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
+import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
 import { INTRO_DEFAULTS, INTRO_LENGTH, OUTRO_DEFAULTS, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
@@ -159,6 +160,8 @@ export interface HudSettings {
   spotCard: boolean;
   spotCardAt: Spot;
   credit: boolean;
+  /** Pieces dragged off their spot on the stage, where they were let go (`atlas-place.ts`). */
+  free: Partial<Record<PieceId, FreePlace>>;
 }
 
 /** The frame around the map — what a print would call its mount. */
@@ -277,6 +280,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     spotCard: true,
     spotCardAt: 'tr',
     credit: true,
+    free: {},
   },
   format: { aspect: '16:9', short: 1080, fps: 30, border: 0, band: 0, borderColour: '#0b0b0e', radius: 0, textOn: 'map' },
   aircraft: { names: {}, fallback: '', weights: {} },
@@ -696,6 +700,12 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       spotCard: bool(u.spotCard, d.hud.spotCard),
       spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
+      free: Object.fromEntries(
+        PIECES.flatMap((piece) => {
+          const place = sanitizePlace(obj(u.free)[piece]);
+          return place ? [[piece, place]] : [];
+        }),
+      ),
     },
     format: {
       // The frame's shape lived at the root before the Format tab.

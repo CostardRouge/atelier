@@ -6,6 +6,7 @@ import type { StyleTheme } from '../../shared/overlay/title-styles';
 import type { WorldBox } from './atlas-flight';
 import { HUD_FONT_FACES, paintAtlas, type PaintedFrame, type PaintScene } from './atlas-paint';
 import { hitAt, nearFlight, unionOf, type AtlasLayer } from './atlas-layers';
+import { dropPlacement, PIECE_LAYER, pieceAt, pieceBox, withPlacement, type PieceId, type Placement } from './atlas-place';
 import type { AtlasTiles } from './atlas-tiles';
 import { aspectRatio, mapRect, type FormatSettings } from './atlas-settings';
 import { invertAffine, panView, viewAffine, zoomViewAbout, type AtlasView } from './atlas-view';
@@ -32,7 +33,11 @@ interface AtlasStageProps {
   selected: AtlasLayer;
   /** A click (not a drag) landed on something: open its layer. */
   onPick: (layer: AtlasLayer) => void;
+  /** A piece of the overlay was dragged and let go: back in a spot, or held where it is. */
+  onPlace: (piece: PieceId, place: Placement) => void;
 }
+
+const SPOT_WORDS = { tl: 'top left', tc: 'top', tr: 'top right', bl: 'bottom left', bc: 'bottom', br: 'bottom right' } as const;
 
 /** CSS pixels around a piece or a line within which a click still lands on it. */
 const REACH = 8;
@@ -47,7 +52,7 @@ const REACH = 8;
  * a zone is being drawn, a drag draws it.
  */
 export default function AtlasStage(props: AtlasStageProps) {
-  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick } = props;
+  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick, onPlace } = props;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const outlineRef = useRef<HTMLSpanElement>(null);
@@ -56,6 +61,9 @@ export default function AtlasStage(props: AtlasStageProps) {
   const [room, setRoom] = useState({ w: 0, h: 0 });
   const [fontsReady, setFontsReady] = useState(0);
   const [band, setBand] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /** The piece being dragged and where it would land now — painted, not yet written. */
+  const dragging = useRef<{ piece: PieceId; place: Placement } | null>(null);
+  const [snapWord, setSnapWord] = useState<string | null>(null);
 
   const face = `${theme.style.italic ? 'italic ' : ''}${theme.style.weight} 32px '${theme.style.fontFamily}'`;
   useEffect(() => {
@@ -114,7 +122,8 @@ export default function AtlasStage(props: AtlasStageProps) {
         }
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          const scene: PaintScene = { ...c, tiles: tl, focus: fo };
+          const held = dragging.current;
+          const scene: PaintScene = { ...c, settings: held ? withPlacement(c.settings, held.piece, held.place) : c.settings, tiles: tl, focus: fo };
           painted.current = { frame: paintAtlas(ctx, scene, { t: clock.t, view: v(clock.t), width: W, height: H }), dpr };
           placeOutline(canvas, outlineRef.current, painted.current, sel);
         }
@@ -149,7 +158,7 @@ export default function AtlasStage(props: AtlasStageProps) {
       onFreeView(panView(viewAt(clock.t), look, r.w, r.h, dx, dy));
     },
     drag: (start) => {
-      if (!drawingZone) return 'pan';
+      if (!drawingZone) return pieceDrag(start.x, start.y) ?? 'pan';
       const box = boxRef.current?.getBoundingClientRect();
       if (!box) return null;
       const x0 = start.x;
@@ -183,6 +192,42 @@ export default function AtlasStage(props: AtlasStageProps) {
     },
   };
   useZoomGestures({ ref: boxRef, target, wheel: 'any' });
+
+  /**
+   * A press on a piece of the overlay picks it up: its layer opens, and the
+   * piece follows the hand — back into a spot when it comes near one — until
+   * it is let go, when it is written once. Anywhere else, null: the map pans.
+   */
+  function pieceDrag(clientX: number, clientY: number): DragHandler | null {
+    const canvas = canvasRef.current;
+    const p = painted.current;
+    if (!canvas || !p) return null;
+    const r = canvas.getBoundingClientRect();
+    const piece = pieceAt(p.frame.hits, (clientX - r.left) * p.dpr, (clientY - r.top) * p.dpr, REACH * p.dpr);
+    const box = piece ? pieceBox(p.frame.hits, piece) : null;
+    if (!piece || !box) return null;
+    const { area } = p.frame;
+    const k = p.dpr;
+    onPick(PIECE_LAYER[piece]);
+    let moved = false;
+    return {
+      move: (m) => {
+        moved = true;
+        const place = dropPlacement({ ...box, x: box.x + m.totalX * k, y: box.y + m.totalY * k }, area);
+        dragging.current = { piece, place };
+        dirty.current = true;
+        const word = 'spot' in place ? `Back to the ${SPOT_WORDS[place.spot]}` : null;
+        setSnapWord((w) => (w === word ? w : word));
+      },
+      end: (e) => {
+        const held = dragging.current;
+        dragging.current = null;
+        dirty.current = true;
+        setSnapWord(null);
+        if (held && moved && !e.cancelled) onPlace(held.piece, held.place);
+      },
+    };
+  }
 
   /** The layer under a client point: a piece of the overlay, a flight's line, else the map. */
   const layerAt = (clientX: number, clientY: number): AtlasLayer | null => {
@@ -228,8 +273,10 @@ export default function AtlasStage(props: AtlasStageProps) {
     };
     const move = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse' || e.buttons) return;
-      const over = !hand.current.drawing && painted.current && hitAt(painted.current.frame.hits, ...canvasPoint(e));
-      el.style.cursor = over ? 'pointer' : '';
+      const hits = !hand.current.drawing && painted.current ? painted.current.frame.hits : [];
+      const at = canvasPoint(e);
+      // A piece can be picked up; a word of the intro or the outro only clicked.
+      el.style.cursor = pieceAt(hits, ...at) ? 'move' : hitAt(hits, ...at) ? 'pointer' : '';
     };
     const canvasPoint = (e: PointerEvent): [number, number, number] => {
       const r = canvasRef.current?.getBoundingClientRect();
@@ -272,6 +319,9 @@ export default function AtlasStage(props: AtlasStageProps) {
             height: Math.abs(band.y1 - band.y0),
           }}
         />
+      )}
+      {snapWord && (
+        <span className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">{snapWord}</span>
       )}
       {drawingZone && !band && (
         <span className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">

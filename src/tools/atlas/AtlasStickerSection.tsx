@@ -7,7 +7,7 @@ import { Icons } from '../../shared/ui/icons';
 import AtlasMore from './AtlasMore';
 import { addLogo, forgetLogo, useAtlasLogos } from './atlas-logos';
 import { STICKER_FONT } from './atlas-overlay';
-import type { AtlasSettings, DroneLine, Spot } from './atlas-settings';
+import type { AtlasSettings, DroneLine } from './atlas-settings';
 import { makerKey, stickerParts, type StickerBacking, type StickerInk, type StickerSettings, type StickerStyle } from './atlas-sticker';
 
 interface AtlasStickerSectionProps {
@@ -15,8 +15,8 @@ interface AtlasStickerSectionProps {
   update: (fn: (s: AtlasSettings) => AtlasSettings) => void;
   /** Every drone name the shown flights carry, as the atlas writes it. */
   names: readonly string[];
-  /** Where a piece goes — the inspector's own six-spot row. */
-  spotRow: (value: Spot, onChange: (v: Spot) => void) => ReactNode;
+  /** Where the sticker goes — the inspector's own row, which knows a hand placement. */
+  where: ReactNode;
   /** Opens the flight list, where drones are named. */
   onNameDrones: () => void;
 }
@@ -27,7 +27,7 @@ interface AtlasStickerSectionProps {
  * written in front of a bare model, where each name turns light, and the
  * makers' logos kept on this device.
  */
-export default function AtlasStickerSection({ settings: s, update, names, spotRow, onNameDrones }: AtlasStickerSectionProps) {
+export default function AtlasStickerSection({ settings: s, update, names, where, onNameDrones }: AtlasStickerSectionProps) {
   const sticker = s.hud.sticker;
   const set = (patch: Partial<StickerSettings>) => update((cur) => ({ ...cur, hud: { ...cur.hud, sticker: { ...cur.hud.sticker, ...patch } } }));
   const setWeight = (name: string, k: number | null) =>
@@ -90,7 +90,7 @@ export default function AtlasStickerSection({ settings: s, update, names, spotRo
               <LogoRow key={makerKey(maker)} maker={maker} />
             ))}
           <AtlasMore id="atlas.sticker">
-            {spotRow(s.hud.droneAt, (v) => update((cur) => ({ ...cur, hud: { ...cur.hud, droneAt: v } })))}
+            {where}
             <FieldRow label="Ink">
               <Segmented<StickerInk>
                 size="sm"

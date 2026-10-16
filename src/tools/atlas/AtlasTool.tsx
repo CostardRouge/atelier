@@ -18,6 +18,7 @@ import { useAtlasLogos } from './atlas-logos';
 import { useAtlasScene } from './use-atlas-scene';
 import { useAtlasSettings } from './use-atlas-settings';
 import { parseLayer, type AtlasLayer } from './atlas-layers';
+import { withPlacement, type PieceId, type Placement } from './atlas-place';
 
 const LAYER_KEY = 'atelier.atlas.layer';
 
@@ -151,6 +152,8 @@ export default function AtlasTool() {
     onZone(visibleBox(scene.viewAt(clock.t), look, scene.mapFrame.w, scene.mapFrame.h));
   }, [onZone, scene, clock, settings.camera.bearing, settings.camera.tilt]);
 
+  const onPlace = useCallback((piece: PieceId, place: Placement) => update((s) => withPlacement(s, piece, place)), [update]);
+
   const look = useMemo(() => ({ bearing: settings.camera.bearing, tilt: settings.camera.tilt }), [settings.camera.bearing, settings.camera.tilt]);
 
   const empties = flights.length === 0 && !reading;
@@ -191,6 +194,7 @@ export default function AtlasTool() {
               paintSeq={paintSeq}
               selected={layer}
               onPick={setLayer}
+              onPlace={onPlace}
             />
             {empties && (
               <div className="absolute inset-0 grid place-items-center p-6 pointer-events-none">
