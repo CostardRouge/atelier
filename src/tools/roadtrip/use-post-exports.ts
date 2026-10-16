@@ -175,7 +175,7 @@ const CLIP_PHASES: readonly RunPhase[] = [
 
 /** A slide as one unit of a run: named as the deck strip names it, with its file. */
 function slideUnit(slide: DeckSlide, name: string, moving: boolean): RunUnit {
-  const which = slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Slide ${slide.position}`;
+  const which = slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Trip’s card' : `Slide ${slide.position}`;
   return { id: String(slide.position), name: `${which} · ${name}`, phases: moving ? CLIP_PHASES : STILL_PHASES };
 }
 

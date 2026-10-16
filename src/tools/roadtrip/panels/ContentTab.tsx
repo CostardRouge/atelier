@@ -215,7 +215,7 @@ export default function ContentTab({
   const timeLine = timeOptions.find((p) => p.id === badge?.timeAgo)?.text ?? null;
 
   const slideName =
-    slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
+    slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Trip’s card' : `Picture ${slide.position}`;
 
   return (
     <div className="flex flex-col">

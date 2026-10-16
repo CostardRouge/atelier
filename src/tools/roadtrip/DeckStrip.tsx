@@ -222,7 +222,7 @@ function gripWord(grip: GripDraft | null): string {
 }
 
 function slideName(slide: DeckSlide): string {
-  return slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
+  return slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Trip’s card' : `Picture ${slide.position}`;
 }
 
 export default function DeckStrip({
@@ -715,11 +715,13 @@ export default function DeckStrip({
       onSelect: sound.onToggle,
     });
   }
+  // The trip's card is a slide like the others: added at the end, moved like
+  // any slide, taken out from here. Its words are the trip's, shared.
   if (!includeCta) {
-    menu.push({ id: 'cta-on', label: 'Close with the call to action', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(true) });
+    menu.push({ id: 'cta-on', label: 'Add the trip’s card', disabled: orderLocked, title: lockedWhy ?? 'At the end — move it like any slide', onSelect: () => onIncludeCta(true) });
   } else {
-    menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the closing card…' : 'Write the closing card…', onSelect: onEditClosingCard });
-    menu.push({ id: 'cta-off', label: 'End on the last picture', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
+    menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the trip’s card…' : 'Write the trip’s card…', onSelect: onEditClosingCard });
+    menu.push({ id: 'cta-off', label: 'Remove the trip’s card', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
   }
   if (slide && slide.kind !== 'cta' && pictures > 1) {
     menu.push({ id: 'remove', label: 'Remove this picture', danger: true, disabled: orderLocked, title: lockedWhy, onSelect: onRemove });
@@ -897,7 +899,7 @@ export default function DeckStrip({
               const rule = video ? 'rgba(0,0,0,0.55)' : 'var(--color-paper)';
               const holds = capacityMarks(s);
               const label =
-                (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
+                (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'Card' : String(s.position)) +
                 (holds ? ` ${holds}` : '') +
                 ` ${seconds(drawn[i] ?? 0)}` +
                 // The pace the opener runs at, when the slide speeds it up —
@@ -1127,7 +1129,7 @@ export default function DeckStrip({
                 aria-hidden="true"
               >
                 <span className="absolute left-1 top-0.5 font-mono text-3xs text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
-                  {slides[lift.from].kind === 'cta' ? 'End' : String(lift.from + 1)}
+                  {slides[lift.from].kind === 'cta' ? 'Card' : String(lift.from + 1)}
                 </span>
               </div>
             );

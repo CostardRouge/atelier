@@ -18,7 +18,7 @@ import { isDefaultDevelop } from '../../shared/develop/develop';
 import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
 import type { HookBlock, Shade } from '../../shared/shades/shades';
 import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
-import { badgeSlideOf, closesWithCard } from '../../shared/roadtrip/piece-slides';
+import { badgeSlideOf, closesWithCard, hasCardSlide } from '../../shared/roadtrip/piece-slides';
 import type { GradeScope } from './use-trip-grade';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { useVerb } from '../../shared/ui/use-verb';
@@ -323,6 +323,12 @@ export default function StudioLink({
             {badgeSlide?.develop && !isDefaultDevelop(badgeSlide.develop) ? ' and the picture’s correction' : ''}; the
             picture&rsquo;s crop and the trip&rsquo;s title style stay here.
           </p>
+          {hasCardSlide(post) && !closesWithCard(post) && (
+            <p className="m-0 text-2xs text-faint leading-snug">
+              The trip&rsquo;s card is not this piece&rsquo;s last slide, so it stays here: the
+              Studio adds a card only after the footage.
+            </p>
+          )}
           {/* Two grades, one file: say which one the Studio export will use. */}
           <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-xs text-ink-soft leading-snug">
             {projectGraded

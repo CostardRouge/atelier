@@ -29,7 +29,7 @@ export interface PieceEdits {
 const NONE: PieceEdits = { slides: [], everything: false };
 
 function slideName(slide: DeckSlide): string {
-  return slide.kind === 'hook' ? 'the hook' : slide.kind === 'cta' ? 'the closing card' : `slide ${slide.position}`;
+  return slide.kind === 'hook' ? 'the hook' : slide.kind === 'cta' ? 'the trip’s card' : `slide ${slide.position}`;
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
