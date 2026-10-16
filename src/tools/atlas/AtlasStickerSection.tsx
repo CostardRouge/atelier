@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { FieldRow, InspectorSection, SliderRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, SliderRow, SwitchRow, TextField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import AtlasMore from './AtlasMore';
-import { addLogo, forgetLogo, useAtlasLogos } from './atlas-logos';
+import { addLogo, forgetLogo, setLogoGround, useAtlasLogos } from './atlas-logos';
 import { STICKER_FONT } from './atlas-overlay';
 import type { AtlasSettings, DroneLine } from './atlas-settings';
 import { makerKey, stickerParts, type StickerBacking, type StickerInk, type StickerSettings, type StickerStyle } from './atlas-sticker';
@@ -184,36 +184,52 @@ function LogoRow({ maker }: { maker: string }) {
   const logo = logos.get(makerKey(maker));
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const hint = error ?? (logo?.opaque ? 'This file has no transparency: in the ink it draws as a block — keep it «As it is», or use an SVG or a PNG.' : 'An SVG or a transparent PNG from your own files, kept on this device only. Without one, the maker is written in the heavy weight.');
+  const hint =
+    error ??
+    (logo?.opaque
+      ? logo.ground
+        ? 'Its background is kept: in the ink it draws as a block.'
+        : 'This file has no transparency and no plain background to take out: in the ink it draws as a block — keep it «As it is», or use an SVG or a transparent PNG.'
+      : 'An SVG, or a PNG or JPEG whose plain background is taken out, from your own files and kept on this device only. Without one, the maker is written in the heavy weight.');
   return (
-    <FieldRow label={`${maker} logo`} hint={hint} hintShown={!!error || !!logo?.opaque}>
-      <div className="flex items-center gap-1.5 min-w-0">
-        {logo ? (
-          <>
-            <span className="h-8 px-2 inline-flex items-center rounded-control bg-frame border border-line min-w-0">
-              <img src={logo.image.src} alt={`${maker} logo`} className="h-4 w-auto max-w-[7rem] object-contain" />
-            </span>
-            <IconButton size="sm" variant="ghost" label={`Forget the ${maker} logo`} onClick={() => void forgetLogo(maker)}>
-              {Icons.trash}
-            </IconButton>
-          </>
-        ) : null}
-        <Button size="sm" variant={logo ? 'ghost' : 'default'} onClick={() => input.current?.click()}>
-          {Icons.upload} {logo ? 'Replace' : 'Import'}
-        </Button>
-        <input
-          ref={input}
-          type="file"
-          accept=".svg,.png,.webp,.jpg,.jpeg,image/svg+xml,image/png,image/webp,image/jpeg"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (!file) return;
-            void addLogo(maker, file).then((r) => setError(r.ok ? null : r.reason));
-          }}
+    <>
+      <FieldRow label={`${maker} logo`} hint={hint} hintShown={!!error || !!logo?.opaque}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {logo ? (
+            <>
+              <span className="h-8 px-2 inline-flex items-center rounded-control bg-frame border border-line min-w-0">
+                <img src={logo.image.src} alt={`${maker} logo`} className="h-4 w-auto max-w-[7rem] object-contain" />
+              </span>
+              <IconButton size="sm" variant="ghost" label={`Forget the ${maker} logo`} onClick={() => void forgetLogo(maker)}>
+                {Icons.trash}
+              </IconButton>
+            </>
+          ) : null}
+          <Button size="sm" variant={logo ? 'ghost' : 'default'} onClick={() => input.current?.click()}>
+            {Icons.upload} {logo ? 'Replace' : 'Import'}
+          </Button>
+          <input
+            ref={input}
+            type="file"
+            accept=".svg,.png,.webp,.jpg,.jpeg,image/svg+xml,image/png,image/webp,image/jpeg"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              void addLogo(maker, file).then((r) => setError(r.ok ? null : r.reason));
+            }}
+          />
+        </div>
+      </FieldRow>
+      {logo?.ground && (
+        <SwitchRow
+          label="Take out its background"
+          checked={!logo.keepGround}
+          onChange={(v) => void setLogoGround(maker, !v)}
+          hint="The plain colour (or the grey checkerboard) the file was saved on, read from its edge."
         />
-      </div>
-    </FieldRow>
+      )}
+    </>
   );
 }

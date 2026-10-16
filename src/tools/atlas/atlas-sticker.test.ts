@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoLightFrom, drawableSvg, inkForGround, luminance, makerKey, stickerCase, stickerParts, stickerText, STICKER_DARK, STICKER_LIGHT } from './atlas-sticker';
+import { autoLightFrom, drawableSvg, svgWithViewBox, withSvgNamespace, inkForGround, luminance, makerKey, stickerCase, stickerParts, stickerText, STICKER_DARK, STICKER_LIGHT } from './atlas-sticker';
 
 describe('stickerParts', () => {
   it('keeps a known maker and sets the trailing qualifier light', () => {
@@ -67,7 +67,7 @@ describe('drawableSvg', () => {
   });
 
   it('keeps a file that states its size', () => {
-    const svg = '<svg width="300" height="100" viewBox="0 0 30 10"></svg>';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" viewBox="0 0 30 10"></svg>';
     expect(drawableSvg(svg)).toEqual({ text: svg, ratio: 3 });
   });
 
@@ -75,6 +75,18 @@ describe('drawableSvg', () => {
     const out = drawableSvg('<svg width="100%" viewBox="0 0 50 25"></svg>');
     expect(out?.text).toContain('<svg width="50" height="25"');
     expect(out?.ratio).toBe(2);
+  });
+
+  it('gives an SVG copied out of a page the namespaces a picture needs', () => {
+    const out = drawableSvg('<svg viewBox="0 0 10 5"><use xlink:href="#a"/></svg>');
+    expect(out?.text).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(out?.text).toContain('xmlns:xlink="http://www.w3.org/1999/xlink"');
+    expect(withSvgNamespace('<svg xmlns="http://www.w3.org/2000/svg"></svg>')).toBe('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+  });
+
+  it('sizes an SVG that states nothing from the box measured on the page', () => {
+    const measured = svgWithViewBox('<svg xmlns="http://www.w3.org/2000/svg"><rect width="40" height="10"/></svg>', { x: 0, y: 0, width: 40, height: 10 });
+    expect(drawableSvg(measured)?.ratio).toBe(4);
   });
 
   it('refuses what is not a sized SVG', () => {

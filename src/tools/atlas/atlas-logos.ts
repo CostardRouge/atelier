@@ -10,7 +10,8 @@
  */
 
 import { useEffect, useSyncExternalStore } from 'react';
-import { drawableSvg, makerKey } from './atlas-sticker';
+import { findGround, hasTransparency, keyOut } from './atlas-logo-key';
+import { drawableSvg, makerKey, svgWithViewBox, withSvgNamespace } from './atlas-sticker';
 
 const DB_NAME = 'atelier-atlas-logos';
 const STORE = 'logos';
@@ -22,6 +23,8 @@ interface LogoRecord {
   type: string;
   bytes: ArrayBuffer;
   addedAt: number;
+  /** The author kept the plain ground the file was saved on (absent: it is taken out). */
+  keepGround?: boolean;
 }
 
 /** A logo ready to draw. */
@@ -31,11 +34,17 @@ export interface AtlasLogo {
   image: HTMLImageElement;
   /** Width over height. */
   ratio: number;
-  /** A file with no transparency (a JPEG): in the ink it is a block. */
+  /** A file with no transparency and no ground to take out: in the ink it is a block. */
   opaque: boolean;
+  /** The file stood on a plain ground (or a baked checkerboard) that can be taken out. */
+  ground: boolean;
+  /** That ground is kept, as the author asked. */
+  keepGround: boolean;
 }
 
 let logos: ReadonlyMap<string, AtlasLogo> = new Map();
+/** The files behind them, by maker key — so a choice made on one works even where IndexedDB does not. */
+const records = new Map<string, LogoRecord>();
 let loading: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 function publish(next: ReadonlyMap<string, AtlasLogo>): void {
@@ -82,34 +91,94 @@ async function write(fn: (store: IDBObjectStore) => void): Promise<void> {
 }
 
 const isSvg = (r: Pick<LogoRecord, 'type' | 'fileName'>) => /svg/i.test(r.type) || /\.svg$/i.test(r.fileName);
-const isJpeg = (r: Pick<LogoRecord, 'type' | 'fileName'>) => /jpe?g/i.test(r.type) || /\.jpe?g$/i.test(r.fileName);
 
-/** Decode a record into something a canvas draws at any size; null when it is no picture. */
-async function decode(r: LogoRecord): Promise<AtlasLogo | null> {
-  let blob: Blob;
-  let ratio: number | null = null;
-  if (isSvg(r)) {
-    const sized = drawableSvg(new TextDecoder().decode(r.bytes));
-    if (!sized) return null;
-    blob = new Blob([sized.text], { type: 'image/svg+xml' });
-    ratio = sized.ratio;
-  } else {
-    blob = new Blob([r.bytes], { type: r.type || 'image/png' });
-  }
+/** The largest side a raster logo is worked at — far more than a sticker ever draws. */
+const WORK_SIDE = 2048;
+
+async function imageOf(blob: Blob): Promise<HTMLImageElement | null> {
   const image = new Image();
   const url = URL.createObjectURL(blob);
   image.src = url;
   try {
     await image.decode();
+    // The URL stays alive with the image: a canvas draws an SVG from it at every size asked.
+    return image;
   } catch {
     URL.revokeObjectURL(url);
     return null;
   }
-  // The URL stays alive with the image: a canvas draws an SVG from it at every size asked.
-  ratio ??= image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : null;
-  if (!ratio) return null;
-  return { maker: r.maker, fileName: r.fileName, image, ratio: Math.max(0.2, Math.min(12, ratio)), opaque: isJpeg(r) };
 }
+
+/**
+ * An SVG whose file states no size and no viewBox, measured on the page:
+ * drawn hidden in the document, its content's box becomes its viewBox.
+ */
+function measuredSvg(text: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:0;height:0;overflow:hidden;visibility:hidden';
+  try {
+    const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+    const svg = doc.documentElement;
+    if (svg.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) return null;
+    holder.appendChild(document.importNode(svg, true));
+    document.body.appendChild(holder);
+    const box = (holder.firstChild as SVGGraphicsElement).getBBox();
+    return box.width > 0 && box.height > 0 ? svgWithViewBox(text, box) : null;
+  } catch {
+    return null;
+  } finally {
+    holder.remove();
+  }
+}
+
+/**
+ * A raster logo with its plain ground taken out (`atlas-logo-key.ts`),
+ * unless the author keeps it: a new PNG image, or the decoded one as it is.
+ */
+async function keyed(image: HTMLImageElement, keep: boolean): Promise<{ image: HTMLImageElement; ground: boolean; clear: boolean }> {
+  const k = Math.min(1, WORK_SIDE / Math.max(image.naturalWidth, image.naturalHeight));
+  const w = Math.max(1, Math.round(image.naturalWidth * k));
+  const h = Math.max(1, Math.round(image.naturalHeight * k));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return { image, ground: false, clear: false };
+  ctx.drawImage(image, 0, 0, w, h);
+  const pixels = ctx.getImageData(0, 0, w, h);
+  const clear = hasTransparency(pixels.data);
+  const ground = clear ? null : findGround(pixels.data, w, h);
+  if (!ground || keep) return { image, ground: !!ground, clear };
+  pixels.data.set(keyOut(pixels.data, ground));
+  ctx.putImageData(pixels, 0, 0);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const out = blob ? await imageOf(blob) : null;
+  if (!out) return { image, ground: true, clear };
+  URL.revokeObjectURL(image.src);
+  return { image: out, ground: true, clear: true };
+}
+
+/** Decode a record into something a canvas draws at any size; null when it is no picture. */
+async function decode(r: LogoRecord): Promise<AtlasLogo | null> {
+  const keep = !!r.keepGround;
+  if (isSvg(r)) {
+    const raw = withSvgNamespace(new TextDecoder().decode(r.bytes));
+    const sized = drawableSvg(raw) ?? drawableSvg(measuredSvg(raw) ?? '');
+    if (!sized) return null;
+    const image = await imageOf(new Blob([sized.text], { type: 'image/svg+xml' }));
+    if (!image) return null;
+    // An SVG keeps its own transparency: nothing to take out.
+    return { maker: r.maker, fileName: r.fileName, image, ratio: clampRatio(sized.ratio), opaque: false, ground: false, keepGround: false };
+  }
+  const decoded = await imageOf(new Blob([r.bytes], { type: r.type || 'image/png' }));
+  if (!decoded || !decoded.naturalWidth || !decoded.naturalHeight) return null;
+  const ratio = decoded.naturalWidth / decoded.naturalHeight;
+  const out = await keyed(decoded, keep);
+  return { maker: r.maker, fileName: r.fileName, image: out.image, ratio: clampRatio(ratio), opaque: !out.clear, ground: out.ground, keepGround: keep && out.ground };
+}
+
+const clampRatio = (ratio: number) => Math.max(0.2, Math.min(12, ratio));
 
 function release(logo: AtlasLogo | undefined): void {
   if (logo?.image.src.startsWith('blob:')) URL.revokeObjectURL(logo.image.src);
@@ -118,10 +187,10 @@ function release(logo: AtlasLogo | undefined): void {
 /** Read every kept logo once per visit. */
 function load(): Promise<void> {
   loading ??= (async () => {
-    const records = await allRecords();
     const next = new Map<string, AtlasLogo>(logos);
-    for (const r of records) {
+    for (const r of await allRecords()) {
       if (next.has(r.maker)) continue;
+      records.set(r.maker, r);
       const logo = await decode(r);
       if (logo) next.set(r.maker, logo);
     }
@@ -143,8 +212,9 @@ export async function addLogo(maker: string, file: File): Promise<AddLogoResult>
   }
   const record: LogoRecord = { maker: makerKey(maker), fileName: file.name, type: file.type, bytes, addedAt: Date.now() };
   const logo = await decode(record);
-  if (!logo) return { ok: false, reason: `${file.name} is not a picture this browser can draw (an SVG with a size, a PNG, a WebP or a JPEG).` };
+  if (!logo) return { ok: false, reason: `${file.name} is not a picture this browser can draw (an SVG, a PNG, a WebP or a JPEG).` };
   await load();
+  records.set(record.maker, record);
   const next = new Map(logos);
   release(next.get(record.maker));
   next.set(record.maker, logo);
@@ -153,9 +223,26 @@ export async function addLogo(maker: string, file: File): Promise<AddLogoResult>
   return { ok: true };
 }
 
+/** Keep or take out the plain ground `maker`'s logo was saved on. */
+export async function setLogoGround(maker: string, keep: boolean): Promise<void> {
+  const key = makerKey(maker);
+  const record = records.get(key);
+  if (!record) return;
+  const next: LogoRecord = { ...record, keepGround: keep };
+  records.set(key, next);
+  const logo = await decode(next);
+  if (!logo) return;
+  const map = new Map(logos);
+  release(map.get(key));
+  map.set(key, logo);
+  publish(map);
+  await write((store) => store.put(next));
+}
+
 /** Take `maker`'s logo away: the sticker writes its name again. */
 export async function forgetLogo(maker: string): Promise<void> {
   const key = makerKey(maker);
+  records.delete(key);
   const next = new Map(logos);
   release(next.get(key));
   next.delete(key);

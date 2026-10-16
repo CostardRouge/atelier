@@ -140,7 +140,31 @@ export function inkForGround(groundLuminance: number): string {
  * written from the viewBox when missing. Returns the text and its aspect
  * (width / height), or null when the file is not an SVG with a size.
  */
+/**
+ * The SVG with the namespaces a browser needs to draw it as a picture: an
+ * `<img>` refuses an `<svg>` without `xmlns` (one copied out of a web page
+ * often has none), and an `xlink:href` without its own declaration.
+ */
+export function withSvgNamespace(text: string): string {
+  const open = /<svg\b[^>]*>/i.exec(text);
+  if (!open) return text;
+  let tag = open[0];
+  if (!/\sxmlns\s*=/i.test(tag)) tag = tag.replace(/^<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  if (/xlink:/i.test(text) && !/\sxmlns:xlink\s*=/i.test(tag)) tag = tag.replace(/^<svg\b/i, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+  return text.replace(open[0], tag);
+}
+
+/** The SVG given a viewBox measured on the page (`box`, user units), when its file states no size at all. */
+export function svgWithViewBox(text: string, box: { x: number; y: number; width: number; height: number }): string {
+  const open = /<svg\b[^>]*>/i.exec(text);
+  if (!open || box.width <= 0 || box.height <= 0) return text;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  const tag = open[0].replace(/\sviewBox\s*=\s*["'][^"']*["']/i, '').replace(/^<svg\b/i, `<svg viewBox="${round(box.x)} ${round(box.y)} ${round(box.width)} ${round(box.height)}"`);
+  return text.replace(open[0], tag);
+}
+
 export function drawableSvg(text: string): { text: string; ratio: number } | null {
+  text = withSvgNamespace(text);
   const open = /<svg\b[^>]*>/i.exec(text);
   if (!open) return null;
   const tag = open[0];
