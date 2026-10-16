@@ -21,7 +21,7 @@ import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
 import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
 import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
-import { INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
+import { INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
@@ -738,7 +738,11 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
     outro: {
       style: oneOf(oo.style, ['summary', 'pull', 'fade', 'none'] as const, dO.style),
       length: num(oo.length, dO.length, INTRO_LENGTH.min, INTRO_LENGTH.max),
-      totals: bool(oo.totals, dO.totals),
+      // Before the totals were chosen, a switch: off is none of them.
+      stats: Array.isArray(oo.stats) ? STAT_KEYS.filter((key) => (oo.stats as unknown[]).includes(key)) : oo.totals === false ? [] : dO.stats,
+      statsSize: num(oo.statsSize, dO.statsSize, STATS_SIZE.min, STATS_SIZE.max),
+      statsLayout: oneOf(oo.statsLayout, ['row', 'grid'] as const, dO.statsLayout),
+      columns: oneOf(oo.columns, [2, 3, 4] as const, dO.columns),
       sticker: bool(oo.sticker, dO.sticker),
       line: str(oo.line, dO.line, 200),
     },

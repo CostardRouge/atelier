@@ -87,3 +87,7 @@ His report: a long intro title ran off both edges. **Decision**: a `TextLine` ma
 ## A control's own colour sits on its row (2026-10-16)
 
 He asked for the grid's colour, which existed — fourth line behind «4 more» in Map details, never found. **Decision**: the swatch now sits on the Grid row itself beside Lines / Dots (with *Grid shows*, `map.gridStrength`, under it). **How to apply**: what only qualifies one control (its colour, its strength) goes on that control's row or right under it, never in the section's fold, where it reads as missing.
+
+## The outro's totals are chosen, sized and laid out (2026-10-16)
+
+His ask: pick which totals the summary counts, their size, and a grid rather than one row. **Decision**: `OutroSettings.stats` (the eight `STAT_KEYS`, its own choice apart from the Statistics layer's — `AtlasStatChips` draws both), `statsSize`, `statsLayout` `row | grid` and `columns` 2–4. A `StatRow` with a `fit` is expanded by `paintOverlay` like a text: a grid gives every cell the widest one's width and keeps a short last row on the columns above (`cell`, `slots`); a row breaks where the next item would pass 84 %; both shrink when one line still would. The old `totals: false` reads as none ticked. **How to apply**: a statistics block that must stay in the frame gets a `fit`, never its own layout code.

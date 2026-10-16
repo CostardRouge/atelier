@@ -9,7 +9,7 @@
  * cannot disagree.
  */
 
-import type { AtlasStats } from './atlas-stats';
+import type { AtlasStats, StatKey } from './atlas-stats';
 import { clampScale, type AtlasView } from './atlas-view';
 
 export type IntroStyle = 'title' | 'reveal' | 'dive' | 'none';
@@ -51,15 +51,23 @@ export interface OutroSettings {
   style: OutroStyle;
   /** Seconds. */
   length: number;
-  /** The summary counts the totals up. */
-  totals: boolean;
+  /** The totals the summary counts up, in this order; none draws no totals. */
+  stats: StatKey[];
+  /** Their size, times the default. */
+  statsSize: number;
+  /** Side by side (a row too wide goes on to the next line), or a grid of `columns`. */
+  statsLayout: 'row' | 'grid';
+  columns: 2 | 3 | 4;
   sticker: boolean;
   /** A last line; empty draws none. */
   line: string;
 }
 
 export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true, titleSize: 1, lineSize: 1, fit: 'wrap' };
-export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, totals: true, sticker: true, line: '' };
+export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, stats: ['flights', 'distance', 'time', 'maxAlt'], statsSize: 1, statsLayout: 'row', columns: 2, sticker: true, line: '' };
+
+/** The outro's totals' size, times the default. */
+export const STATS_SIZE = { min: 0.5, max: 1.6 } as const;
 
 export const INTRO_LENGTH = { min: 1.5, max: 8 } as const;
 
@@ -230,7 +238,7 @@ export function outroLook(s: OutroSettings, story: Story, t: number): OutroLook 
     look.scrim = 0.8 * veil;
     look.overlay = 1 - veil;
     look.title = E(O0 + 0.2 * k, O0 + 0.8 * k);
-    look.totals = s.totals ? E(O0 + 0.3 * k, O0 + 0.9 * k) : 0;
+    look.totals = s.stats.length ? E(O0 + 0.3 * k, O0 + 0.9 * k) : 0;
     look.count = E(O0 + 0.4 * k, O0 + 1.9 * k);
     look.sticker = sticker * E(O0 + 0.9 * k, O0 + 1.5 * k);
     look.line = E(O0 + 1.6 * k, O0 + 2.3 * k);

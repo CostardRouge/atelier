@@ -53,6 +53,18 @@ export interface StatRow {
   kind: 'row';
   items: { value: string; label: string; odometer?: number }[];
   size: number;
+  /**
+   * Kept within `maxW` of the area's width: in a grid of `columns` (every
+   * cell as wide as the widest), or as rows broken where the next item
+   * would pass the width. Either way made smaller if one line still would.
+   */
+  fit?: { maxW: number; columns?: number };
+  /** Every item laid in a cell this wide, px — a grid's columns. */
+  cell?: number;
+  /** The row laid as if it held this many cells — a grid's short last row keeps its columns. */
+  slots?: number;
+  /** Room under the row, in row heights. */
+  gapAfter?: number;
 }
 
 /** Statistics one under the other, each its value then its label. */
@@ -213,7 +225,12 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
    * one block per line, the room under it kept on the last — so the stack
    * lays them out like any other lines and nothing passes the width.
    */
+  /** How wide one statistic of a row is drawn: its value or its label, the wider. */
+  const cellW = (it: { value: string; label: string }, size: number) => Math.max(widthOf(it.value, size, false), widthOf(it.label, size * 0.42, true));
+  const rowGap = (size: number) => size * unit * 0.9;
+
   const expand = (b: Block): Block[] => {
+    if (b.kind === 'row' && b.fit && b.items.length) return expandRow(b, b.fit);
     if (b.kind !== 'text' || (!b.fit && !b.text.includes('\n'))) return [b];
     const measure = (t: string, size = b.size) => widthOf(t, size, !!b.label, b.weight);
     const maxW = b.fit ? b.fit.maxW * area.w : Infinity;
@@ -227,12 +244,50 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     return lines.map((text, i) => ({ ...b, text, size, gapAfter: i === lines.length - 1 ? b.gapAfter : 0 }));
   };
 
+  /** A row with a width to keep, as the rows it draws (see `StatRow.fit`). */
+  const expandRow = (b: StatRow & Owned, fit: NonNullable<StatRow['fit']>): Block[] => {
+    const maxW = fit.maxW * area.w;
+    const rows: (typeof b.items)[] = [];
+    let size = b.size;
+    let cell: number | undefined;
+    let slots: number | undefined;
+    if (fit.columns) {
+      const cols = Math.min(fit.columns, b.items.length);
+      cell = Math.max(...b.items.map((it) => cellW(it, size)));
+      const w = cell * cols + rowGap(size) * (cols - 1);
+      if (w > maxW) {
+        size *= maxW / w;
+        cell *= maxW / w;
+      }
+      slots = cols;
+      for (let i = 0; i < b.items.length; i += cols) rows.push(b.items.slice(i, i + cols));
+    } else {
+      // Smaller first if a single statistic is wider than the width.
+      const widest = Math.max(...b.items.map((it) => cellW(it, size)));
+      if (widest > maxW) size *= maxW / widest;
+      let cur: typeof b.items = [];
+      let w = 0;
+      for (const it of b.items) {
+        const cw = cellW(it, size);
+        if (cur.length && w + rowGap(size) + cw > maxW) {
+          rows.push(cur);
+          cur = [];
+          w = 0;
+        }
+        w += (cur.length ? rowGap(size) : 0) + cw;
+        cur.push(it);
+      }
+      rows.push(cur);
+    }
+    return rows.map((items, i) => ({ ...b, items, size, cell, slots, fit: undefined, gapAfter: i === rows.length - 1 ? b.gapAfter : 0.18 }));
+  };
+
   const blockHeight = (b: Block): number => {
     switch (b.kind) {
       case 'text':
         return heightOf(b) * (1 + (b.gapAfter ?? 0));
       case 'row':
-        return (heightOf(b) + heightOf({ size: b.size * 0.42 })) * 1.08;
+        return (heightOf(b) + heightOf({ size: b.size * 0.42 })) * 1.08 * (1 + (b.gapAfter ?? 0));
       case 'column':
         return b.items.length * heightOf(b) * 1.04;
       case 'curve':
@@ -286,9 +341,11 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
         if (b.text.trim()) hit(b, widthOf(b.text, b.size, !!b.label, b.weight), heightOf(b));
       } else if (b.kind === 'row') {
         const valueH = heightOf(b);
-        const gap = b.size * unit * 0.9;
-        const widths = b.items.map((it) => Math.max(widthOf(it.value, b.size, false), widthOf(it.label, b.size * 0.42, true)));
-        const rowW = widths.reduce((s, w) => s + w, 0) + gap * Math.max(0, b.items.length - 1);
+        const gap = rowGap(b.size);
+        const widths = b.items.map((it) => b.cell ?? cellW(it, b.size));
+        // A grid's short last row keeps the columns of the rows above it.
+        const laid = b.cell && b.slots ? Array<number>(b.slots).fill(b.cell) : widths;
+        const rowW = laid.reduce((s, w) => s + w, 0) + gap * Math.max(0, laid.length - 1);
         hit(b, rowW, h);
         let x = align === 'left' ? ax : align === 'center' ? ax - rowW / 2 : ax - rowW;
         b.items.forEach((it, i) => {

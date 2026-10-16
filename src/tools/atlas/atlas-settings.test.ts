@@ -10,6 +10,12 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
   });
 
+  it('reads the outro’s old totals switch as its chosen totals', () => {
+    expect(sanitizeSettings({ outro: { totals: false } }).outro.stats).toEqual([]);
+    expect(sanitizeSettings({ outro: { totals: true } }).outro.stats).toEqual(DEFAULT_SETTINGS.outro.stats);
+    expect(sanitizeSettings({ outro: { stats: ['places', 'flights', 'warp'], columns: 5 } }).outro).toMatchObject({ stats: ['flights', 'places'], columns: 2 });
+  });
+
   it('clamps, refuses the wrong type and drops what it does not know', () => {
     const s = sanitizeSettings({
       choreo: { mode: 'warp', length: 9999, equalize: -3 },

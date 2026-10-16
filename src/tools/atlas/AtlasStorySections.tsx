@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 import { FieldRow, InspectorSection, SliderRow, SwitchRow, TextAreaField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import AtlasMore from './AtlasMore';
+import AtlasStatChips from './AtlasStatChips';
 import type { AtlasSettings } from './atlas-settings';
-import { INTRO_LENGTH, LINE_SIZE, TEXT_SIZE, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
+import { INTRO_LENGTH, LINE_SIZE, STATS_SIZE, TEXT_SIZE, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
 
 type Update = (fn: (s: AtlasSettings) => AtlasSettings) => void;
 
@@ -253,6 +254,45 @@ export function OutroSection({ settings: s, update, hasSticker }: Omit<StoryProp
       {on && (
         <SliderRow label="Length" value={outro.length} min={INTRO_LENGTH.min} max={INTRO_LENGTH.max} step={0.5} format={secs} onChange={(v) => set({ length: v })} />
       )}
+      {outro.style === 'summary' && (
+        <FieldRow label="Totals" align="start" hint={outro.stats.length === 0 ? 'None ticked: no totals, the title alone.' : undefined} hintShown>
+          <AtlasStatChips label="Totals counted up" value={outro.stats} onChange={(v) => set({ stats: v })} />
+        </FieldRow>
+      )}
+      {outro.style === 'summary' && outro.stats.length > 0 && (
+        <SliderRow label="Size" value={outro.statsSize} min={STATS_SIZE.min} max={STATS_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ statsSize: v })} />
+      )}
+      {outro.style === 'summary' && outro.stats.length > 1 && (
+        <FieldRow label="Layout" hint="A row too wide for the frame goes on to a second line by itself." hintShown={false}>
+          <Segmented<'row' | 'grid'>
+            size="sm"
+            fill
+            label="Layout of the totals"
+            value={outro.statsLayout}
+            onChange={(v) => set({ statsLayout: v })}
+            options={[
+              { id: 'row', label: 'Row' },
+              { id: 'grid', label: 'Grid' },
+            ]}
+          />
+        </FieldRow>
+      )}
+      {outro.style === 'summary' && outro.stats.length > 1 && outro.statsLayout === 'grid' && (
+        <FieldRow label="Columns">
+          <Segmented<'2' | '3' | '4'>
+            size="sm"
+            fill
+            label="Columns"
+            value={String(outro.columns) as '2' | '3' | '4'}
+            onChange={(v) => set({ columns: Number(v) as 2 | 3 | 4 })}
+            options={[
+              { id: '2', label: '2' },
+              { id: '3', label: '3' },
+              { id: '4', label: '4' },
+            ]}
+          />
+        </FieldRow>
+      )}
       {on && (
         <FieldRow label="Last line" align="start">
           <TextAreaField label="The outro's last line" value={outro.line} placeholder="Nothing" onChange={(v) => set({ line: v })} />
@@ -260,9 +300,6 @@ export function OutroSection({ settings: s, update, hasSticker }: Omit<StoryProp
       )}
       {on && (
         <AtlasMore id="atlas.outro">
-          {outro.style === 'summary' && (
-            <SwitchRow label="Count the totals up" checked={outro.totals} onChange={(v) => set({ totals: v })} hint="Flights, distance, airtime, highest." />
-          )}
           {outro.style !== 'fade' && (
             <SwitchRow
               label="The drone sticker"

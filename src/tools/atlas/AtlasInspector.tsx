@@ -14,6 +14,7 @@ import AtlasPresetsSection from './AtlasPresetsSection';
 import AtlasGround from './AtlasGround';
 import AtlasStickerSection from './AtlasStickerSection';
 import AtlasMore from './AtlasMore';
+import AtlasStatChips from './AtlasStatChips';
 import { IntroSection, OutroSection } from './AtlasStorySections';
 import { introLine, introTitle } from './atlas-story';
 import { FOOT_LAYERS, LAYERS, layerInfo, type AtlasLayer } from './atlas-layers';
@@ -36,7 +37,7 @@ import {
 } from './atlas-settings';
 import type { ChoreoMode, ChoreoOrder, Tempo } from './atlas-schedule';
 import type { SpotlightPick, SpotlightSettings } from './atlas-spotlight';
-import { STAT_KEYS, STAT_LABELS, type Units } from './atlas-stats';
+import type { Units } from './atlas-stats';
 import type { AtlasExport, ExportKind } from './use-atlas-export';
 import { exportSize } from './use-atlas-export';
 import { formatElapsed } from './atlas-hud';
@@ -807,22 +808,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
 
   const statsSec = (
     <InspectorSection id="atlas.stats" title="Statistics" marked={s.hud.stats.length > 0} info="What the flights add up to, measured from the tracks: live (the numbers grow as the animation flies) or the totals throughout.">
-      <div className="flex flex-wrap gap-1">
-        {STAT_KEYS.map((key) => {
-          const on = s.hud.stats.includes(key);
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={on}
-              onClick={() => hud({ stats: on ? s.hud.stats.filter((k) => k !== key) : STAT_KEYS.filter((k) => k === key || s.hud.stats.includes(k)) })}
-              className="h-7 px-2.5 rounded-full border text-xs transition-colors border-line-strong bg-paper text-muted aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash"
-            >
-              {STAT_LABELS[key]}
-            </button>
-          );
-        })}
-      </div>
+      <AtlasStatChips label="Statistics shown" value={s.hud.stats} onChange={(v) => hud({ stats: v })} />
       {s.hud.stats.length > 0 && where('stats')}
       {s.hud.stats.length > 0 && (
         <AtlasMore id="atlas.stats">

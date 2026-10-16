@@ -3335,8 +3335,10 @@ the rest folds behind **N more**, remembered in this browser.
   black or a cut), a **map reveal** (the title over the veiled map, lifting as
   the flights start), a **world dive** (the whole world, a pin, the camera
   diving onto the place) or nothing. The outro is a **summary** (the map
-  darkened, the totals — flights, distance, airtime, highest — counting up,
-  the sticker, a last line), a **pull back** (the camera stepping back over
+  darkened, the totals you tick — flights, distance, airtime, highest by
+  default, any of the eight statistics — counting up at a size you set, in a
+  row that goes on to a second line when too wide or a grid of 2, 3 or 4
+  columns, the sticker, a last line), a **pull back** (the camera stepping back over
   every route, the title at the top), a **fade out**, or nothing. The title
   and the second line write themselves from the flights until you type your
   own; a preset keeps how they play, never their words. The title takes

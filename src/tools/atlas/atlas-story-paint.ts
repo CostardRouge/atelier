@@ -11,12 +11,9 @@ import type { OverlayHit } from './atlas-layers';
 import { paintOverlay, type Block, type OverlayLayout, type StickerBlock } from './atlas-overlay';
 import type { Ctx2D, PaintScene } from './atlas-paint';
 import type { Rect } from './atlas-settings';
-import { readStat, type StatKey } from './atlas-stats';
+import { readStat } from './atlas-stats';
 import { countedStats, introLine, introTitle, STORY_TEXT_WIDTH, type IntroLook, type OutroLook } from './atlas-story';
 import { viewAffine, type AtlasView } from './atlas-view';
-
-/** The four totals a summary counts up. */
-const SUMMARY: readonly StatKey[] = ['flights', 'distance', 'time', 'maxAlt'];
 
 /** The card and the scrims over the map — inside the map's clip, under every word. */
 export function paintVeils(ctx: Ctx2D, scene: PaintScene, rect: Rect, intro: IntroLook, outro: OutroLook): void {
@@ -93,14 +90,15 @@ export function paintStory(
   if (outro.title + outro.totals + outro.sticker > 0.001 || (outro.line > 0.001 && outro.black < 0.001)) {
     const head: Block[] = [];
     if (title) head.push({ kind: 'text', text: title, size: (outro.titleAt === 'top' ? 58 : 64) * s.intro.titleSize, gapAfter: 0.4, alpha: outro.title, owner: 'outro', fit });
-    if (outro.totals > 0.001) {
+    if (outro.totals > 0.001 && s.outro.stats.length) {
       const counted = countedStats(scene.totals, outro.count);
-      const items = SUMMARY.map((key) => {
+      const items = s.outro.stats.map((key) => {
         const r = readStat(key, counted, s.hud.units);
         // Only a counting numeral rolls: a total held still would freeze mid-roll.
         return { value: r.text, label: r.label, odometer: outro.count < 1 ? r.odometer : undefined };
       });
-      head.push({ kind: 'row', items, size: 56, alpha: outro.totals, owner: 'outro' });
+      const columns = s.outro.statsLayout === 'grid' ? s.outro.columns : undefined;
+      head.push({ kind: 'row', items, size: 56 * s.outro.statsSize, alpha: outro.totals, owner: 'outro', fit: { maxW: STORY_TEXT_WIDTH, columns } });
       head.push({ kind: 'text', text: ' ', size: 20 });
     }
     if (hasSticker && outro.sticker > 0.001) head.push({ ...sticker, gapAfter: 0.5, alpha: outro.sticker, owner: 'outro' });
