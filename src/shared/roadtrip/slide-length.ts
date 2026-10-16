@@ -266,7 +266,7 @@ export function switchOwner(owner: SlideLength['owner'], length: SlideLength, ti
 export function paceSteps(floor: number): { pace: number; refused: string | null }[] {
   return PACE_STEPS.map((pace) => ({
     pace,
-    refused: pace < floor - 1e-9 ? 'Faster would show a picture for less than the time it takes to see one' : null,
+    refused: pace < floor - 1e-9 ? 'Faster would rush a picture or a leg past the time it takes to see it' : null,
   }));
 }
 

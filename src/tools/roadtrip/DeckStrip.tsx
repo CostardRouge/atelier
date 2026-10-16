@@ -168,6 +168,14 @@ const SNAP_PX = 10;
 const SEA = '#5aa0d0';
 /** How close to the opener's natural end the grip rests on it. */
 const MAGNET_PX = 6;
+/** A grip held this close to the band's edge, pulled toward it, slides the band so the end keeps growing. */
+const EDGE_PX = 28;
+/** The fastest the band slides under a grip held at its very edge, px per frame. */
+const EDGE_STEP_PX = 3;
+/** How far past the open cell an end is still grabbed under a finger. */
+const GRIP_HALO_PX = 24;
+/** How far inside the band's edge a let-go end is put back: clear of the edge's fade (w-8) and a grip wide. */
+const KEEP_PX = 56;
 
 const pillBase =
   'flex-none rounded-full border font-mono tracking-[0.04em] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
@@ -399,7 +407,14 @@ export default function DeckStrip({
     range: TrimRange | null;
     moved: boolean;
     draft: Sizing | null;
+    /** The finger's last x, and how far the band has slid under it at the edge (px, + to the right). */
+    x: number;
+    slid: number;
+    /** What the band slid without the length changing — the magnet, or a bound reached. */
+    stuck: number;
   } | null>(null);
+  const edgeRaf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(edgeRaf.current), []);
 
   const onGripDown = (e: PointerEvent<HTMLSpanElement>, edge: StripEdge) => {
     if (e.button !== 0) return;
@@ -418,7 +433,57 @@ export default function DeckStrip({
       range: clip ? clip.range : null,
       moved: false,
       draft: null,
+      x: e.clientX,
+      slid: 0,
+      stuck: 0,
     };
+  };
+
+  /** The draft for the finger's distance plus what the band slid: the fixed end slides with the band, so the moving end stays under the finger. */
+  const redraft = (d: NonNullable<typeof sizeDrag.current>): Sizing | null => {
+    const dx = d.x - d.x0 + d.slid;
+    const anchor = d.anchor - d.slid;
+    if (d.range && clip) {
+      const range = resizedClip(d.range, d.edge, dx, pxPerSecond, clip.speed, clip.duration, MIN_LENGTH, MAX_HOOK_SECONDS, FRAME_STEP);
+      return { edge: d.edge, anchor, seconds: screenSecondsOf(range, clip.speed), range, grip: null };
+    }
+    if (!resize) return null;
+    const raw = resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max);
+    const open = slides[index];
+    // Read through the slide's owner: the cell ends where the slide would.
+    const grip = open ? gripDraft(open.length, open.timing, raw, MAGNET_PX / pxPerSecond, resize) : null;
+    return { edge: d.edge, anchor, seconds: grip?.seconds ?? raw, range: null, grip };
+  };
+
+  // A phone's band is narrower than a slide: an end pulled against the
+  // band's edge slides the band, faster the deeper the finger, and stops
+  // where the length does (a ceiling, the floor) rather than leave the finger.
+  const edgeTick = () => {
+    edgeRaf.current = 0;
+    const d = sizeDrag.current;
+    const box = viewport.current?.getBoundingClientRect();
+    if (!d || !d.moved || !box) return;
+    const into = d.x > d.x0 ? d.x - (box.right - EDGE_PX) : d.x < d.x0 ? box.left + EDGE_PX - d.x : 0;
+    if (!(into > 0)) return;
+    const step = Math.sign(d.x - d.x0) * Math.max(1, Math.round((EDGE_STEP_PX * Math.min(into, EDGE_PX)) / EDGE_PX));
+    const before = d.draft?.seconds;
+    d.slid += step;
+    const draft = redraft(d);
+    if (!draft) return;
+    if (Math.abs(draft.seconds - (before ?? draft.seconds)) < 1e-9) {
+      // Past the magnet's reach it is a bound: the band gives back what it slid for nothing.
+      d.stuck += step;
+      if (Math.abs(d.stuck) > 2 * MAGNET_PX + EDGE_STEP_PX) {
+        d.slid -= d.stuck;
+        d.stuck = 0;
+        d.draft = redraft(d);
+        setSizing(d.draft);
+        return;
+      }
+    } else d.stuck = 0;
+    d.draft = draft;
+    setSizing(draft);
+    edgeRaf.current = requestAnimationFrame(edgeTick);
   };
 
   const onGripMove = (e: PointerEvent<HTMLSpanElement>) => {
@@ -428,24 +493,18 @@ export default function DeckStrip({
     const dx = e.clientX - d.x0;
     if (!d.moved && Math.abs(dx) < TAP_SLOP_PX) return;
     d.moved = true;
-    let draft: Sizing | null = null;
-    if (d.range && clip) {
-      const range = resizedClip(d.range, d.edge, dx, pxPerSecond, clip.speed, clip.duration, MIN_LENGTH, MAX_HOOK_SECONDS, FRAME_STEP);
-      draft = { edge: d.edge, anchor: d.anchor, seconds: screenSecondsOf(range, clip.speed), range, grip: null };
-    } else if (resize) {
-      const raw = resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max);
-      const open = slides[index];
-      // Read through the slide's owner: the cell ends where the slide would.
-      const grip = open ? gripDraft(open.length, open.timing, raw, MAGNET_PX / pxPerSecond, resize) : null;
-      draft = { edge: d.edge, anchor: d.anchor, seconds: grip?.seconds ?? raw, range: null, grip };
-    }
+    d.x = e.clientX;
+    const draft = redraft(d);
     d.draft = draft;
     setSizing(draft);
+    if (!edgeRaf.current) edgeRaf.current = requestAnimationFrame(edgeTick);
   };
 
   const onGripUp = (e: PointerEvent<HTMLSpanElement>) => {
     const d = sizeDrag.current;
     sizeDrag.current = null;
+    cancelAnimationFrame(edgeRaf.current);
+    edgeRaf.current = 0;
     e.stopPropagation();
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     setSizing(null);
@@ -466,7 +525,18 @@ export default function DeckStrip({
       MIN_CELL_PX,
       GAP_PX,
     );
-    resize.onChange(draft.seconds, localAtOffset(next, index, anchoredOffset(next, index, draft.edge, draft.anchor)));
+    let at = anchoredOffset(next, index, draft.edge, draft.anchor);
+    // An end let go against the band's edge is left under its fade, half
+    // clipped: the band slides it back in so the next press finds it.
+    const box = viewport.current?.getBoundingClientRect();
+    const cellAt = next.cells[index];
+    if (box && cellAt) {
+      const needle = box.left + box.width / 2;
+      const end = needle + (draft.edge === 'end' ? cellAt.left + cellAt.width : cellAt.left) - at;
+      if (end > box.right - KEEP_PX) at += end - (box.right - KEEP_PX);
+      else if (end < box.left + KEEP_PX) at -= box.left + KEEP_PX - end;
+    }
+    resize.onChange(draft.seconds, localAtOffset(next, index, at));
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -782,6 +852,9 @@ export default function DeckStrip({
                     // The crossings are on the slide's clock at its pace; a held grip re-paces them.
                     const f = s.timing.scale > 0 ? pace / s.timing.scale : 1;
                     const at = (t: number) => Math.min(cell.width, Math.max(0, t * f * k));
+                    // A mark the slide's end cuts off is not drawn: a dock pinned to the edge reads as one that happens.
+                    const shown = (sp: (typeof s.spans)[number]) =>
+                      (sp.kind === 'alight' ? sp.end : sp.start) * f * k < cell.width - 0.5;
                     return (
                       <>
                         {/* A rail along the foot: bright under the opener, faint under the hold. */}
@@ -791,7 +864,7 @@ export default function DeckStrip({
                           style={{ width: span * k }}
                         />
                         {/* Where the opener is at sea, striped on its rail; a tick where it docks (face A). */}
-                        {s.spans.map((sp) =>
+                        {s.spans.filter(shown).map((sp) =>
                           sp.kind === 'sail' ? (
                             <span
                               key={`sail-${sp.start}`}
@@ -874,6 +947,28 @@ export default function DeckStrip({
                 </div>
               );
             })}
+            {/* Under a finger an end is grabbed beyond its drawing too, OUTSIDE
+                the cell, so a short slide's two narrow grips stay two targets
+                that never overlap (T of docs/touch-targets.md). */}
+            {grips &&
+              coarse &&
+              layout.cells[index] &&
+              (['start', 'end'] as const).map((edge) => {
+                const cell = layout.cells[index];
+                return (
+                  <span
+                    key={`halo-${edge}`}
+                    data-grip-halo={edge}
+                    aria-hidden="true"
+                    onPointerDown={(e) => onGripDown(e, edge)}
+                    onPointerMove={onGripMove}
+                    onPointerUp={onGripUp}
+                    onPointerCancel={onGripUp}
+                    className="absolute inset-y-0 cursor-ew-resize touch-pan-y"
+                    style={{ left: edge === 'start' ? cell.left - GRIP_HALO_PX : cell.left + cell.width, width: GRIP_HALO_PX }}
+                  />
+                );
+              })}
           </div>
           <div
             className="absolute inset-y-0 left-0 w-8 pointer-events-none"

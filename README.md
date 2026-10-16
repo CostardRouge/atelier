@@ -1638,18 +1638,24 @@ stop, the recap's beats) the slide grows with it. A slide can instead be
 **Fixed** at a number of **Seconds** — for a reel cut to a beat — and then asks
 one question of a longer opener: **speed it up** to end with the slide (the
 default), or **cut it**, hatched at the end of its cell. The opener is never run
-faster than the time it takes to see a picture (0.35 s on its shortest beat);
-a fixed length under that runs it at that pace and cuts the rest, and says so.
+faster than the time it takes to see a picture or drive a leg (0.35 s on its
+shortest beat — a short drive to a ferry's port is one); a fixed length under
+that runs it at that pace and cuts the rest, and says so.
 The numbers are the suite's sliders: drag, tap, or hold (Enter) to type one.
 
 On the band under the picture the open slide's cell draws its parts — a bright
 rail under the opener, a faint one under the hold, the opener's own end dashed
-when it is sped up, the stretch where Virée is at sea striped blue with a tick where the car drives aboard and off — and its end grip negotiates: past the opener's end it
-drags the hold, inside it the pace, resting on the opener's end and stopping at
-the fastest pace allowed, the cell saying which (*hold 2.5s*, *68%*, *fastest
-35%*). Pressing a grip pauses a playing piece. A clip's cut is its length, so
-trimming a clip fixes it. The badge's exit lands on the slide's end, except on
-a slide too short to let it rest after its entrance, where it simply stays.
+when it is sped up, the stretch where Virée is at sea striped blue with a tick
+where the car drives aboard and off (a cut slide draws only what it keeps) —
+and its end grip negotiates: past the opener's end it drags the hold, inside it
+the pace, resting on the opener's end and stopping at the fastest pace allowed,
+the cell saying which (*hold 2.5s*, *68%*, *fastest 35%*). Under a finger an
+end is also grabbed just outside its cell, a grip held against the band's edge
+slides the band so the slide keeps growing, and an end let go there is brought
+back into view. Pressing a grip pauses a playing piece. A clip's cut is its
+length, so trimming a clip fixes it. The badge's exit lands on the slide's end,
+except on a slide too short to let it rest after its entrance, where it simply
+stays.
 *Goes out as* says whether the slide leaves as a video or an image and why,
 with one verb to deliver the other. A slide may last up to a minute; pieces
 made before this rule keep their length to the frame.
