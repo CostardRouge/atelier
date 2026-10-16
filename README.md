@@ -3333,8 +3333,9 @@ the rest folds behind **N more**, remembered in this browser.
   a **title card** (the place, *N flights · the dates*, the drone sticker, on
   black, the map's colour or the dimmed map, handed over by a fade, through
   black or a cut), a **map reveal** (the title over the veiled map, lifting as
-  the flights start), a **world dive** (the whole world, a pin, the camera
-  diving onto the place) or nothing. The outro is a **summary** (the map
+  the flights start), a **world dive** (the whole world filling the picture —
+  or a continent, a country or a region above the flights, as you choose —, a
+  pin, the camera diving onto the place) or nothing. The outro is a **summary** (the map
   darkened, the totals you tick — flights, distance, airtime, highest by
   default, any of the eight statistics — counting up at a size you set, in a
   row that goes on to a second line when too wide or a grid of 2, 3 or 4

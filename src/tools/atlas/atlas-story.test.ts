@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cameraHeldBy,
   countedStats,
+  diveStart,
   diveView,
   flightTime,
   INTRO_DEFAULTS,
@@ -148,6 +149,27 @@ describe('cameras', () => {
     expect(mid.scale).toBeCloseTo(64);
     expect((target.cx - mid.cx) * mid.scale).toBeCloseTo(0.15);
     expect((target.cy - mid.cy) * mid.scale).toBeCloseTo(0.05);
+  });
+
+  it('starts a dive on a world that covers the frame, held inside the world', () => {
+    const world = { x0: 0, y0: 0.13, x1: 1, y1: 0.87 };
+    const look = { bearing: 0, tilt: 1 };
+    const target = { cx: 0.85, cy: 0.62, scale: 4096 };
+    // 16:9: the world's width fills the frame's width, its top and bottom cut.
+    const wide = diveStart('world', world, target, look, 1920, 1080);
+    expect(wide.scale).toBeCloseTo(1920 / 1080);
+    expect(wide.cx).toBeCloseTo(0.5);
+    // 9:16: its height fills the frame's height; centred on the target as far as the edge allows.
+    const tall = diveStart('world', world, target, look, 1080, 1920);
+    expect(tall.scale).toBeCloseTo(1920 / 0.74 / 1080);
+    const halfW = 540 / (tall.scale * 1080);
+    expect(tall.cx).toBeCloseTo(1 - halfW);
+    // Closer levels start nearer, never closer than the target.
+    const region = diveStart('region', world, target, look, 1920, 1080);
+    expect(region.scale).toBeGreaterThan(diveStart('country', world, target, look, 1920, 1080).scale);
+    expect(region.scale).toBeLessThanOrEqual(target.scale);
+    expect(region.cx).toBeCloseTo(0.85);
+    expect(diveStart('region', world, { ...target, scale: 1.5 }, look, 1920, 1080).scale).toBeCloseTo(1920 / 1080);
   });
 
   it('pulls back to a little more than half the scale', () => {

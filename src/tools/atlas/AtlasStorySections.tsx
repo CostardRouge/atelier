@@ -4,7 +4,7 @@ import Segmented from '../../shared/ui/Segmented';
 import AtlasMore from './AtlasMore';
 import AtlasStatChips from './AtlasStatChips';
 import type { AtlasSettings } from './atlas-settings';
-import { INTRO_LENGTH, LINE_SIZE, STATS_SIZE, TEXT_SIZE, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
+import { INTRO_LENGTH, LINE_SIZE, STATS_SIZE, TEXT_SIZE, type DiveFrom, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
 
 type Update = (fn: (s: AtlasSettings) => AtlasSettings) => void;
 
@@ -116,6 +116,23 @@ export function IntroSection({ settings: s, update, autoTitle, autoLine, hasStic
       />
       {on && (
         <SliderRow label="Length" value={intro.length} min={INTRO_LENGTH.min} max={INTRO_LENGTH.max} step={0.5} format={secs} onChange={(v) => set({ length: v })} />
+      )}
+      {intro.style === 'dive' && (
+        <FieldRow label="Starts from" hint="The world fills the picture (its sides cut in a tall frame), so no band shows. A closer start is a shorter dive." hintShown={false}>
+          <Segmented<DiveFrom>
+            size="sm"
+            fill
+            label="Where the dive starts"
+            value={intro.diveFrom}
+            onChange={(v) => set({ diveFrom: v })}
+            options={[
+              { id: 'world', label: 'World' },
+              { id: 'continent', label: 'Continent' },
+              { id: 'country', label: 'Country' },
+              { id: 'region', label: 'Region' },
+            ]}
+          />
+        </FieldRow>
       )}
       {on && (
         <FieldRow label="Title" align="start">

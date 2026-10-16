@@ -12,7 +12,7 @@ import { activityCurve, buildSchedule, flightState, type Schedule } from './atla
 import { mapUnitFrame, type AtlasSettings } from './atlas-settings';
 import { episodeAt, spanForKm, spotlightEpisodes } from './atlas-spotlight';
 import { totalStats } from './atlas-stats';
-import { diveView, ease, flightTime, pullView, storyOf, outroLook } from './atlas-story';
+import { diveStart, diveView, ease, flightTime, pullView, storyOf, outroLook } from './atlas-story';
 import { boxOf, buildCameraTrack, cameraAt, clampScale, driftView, fitView, WORLD_BOX, type AtlasView } from './atlas-view';
 
 /** The scene without what the stage adds per frame (tiles, focus). */
@@ -228,10 +228,11 @@ export function useAtlasScene(
   // them — but diving from the world into a world-dive intro, and stepping
   // back over the network in a pull-back outro.
   const viewAt = useMemo(() => {
-    const world = fitView(WORLD_BOX, look, fw, fh, 0);
+    const target = flightsViewAt(0);
+    const start = intro.style === 'dive' ? diveStart(intro.diveFrom, WORLD_BOX, target, look, fw, fh) : null;
     return (t: number): AtlasView => {
-      if (t < story.intro && intro.style === 'dive') {
-        return diveView(world, flightsViewAt(0), ease(0.22 * story.intro, 0.8 * story.intro, t));
+      if (start && t < story.intro) {
+        return diveView(start, target, ease(0.22 * story.intro, 0.8 * story.intro, t));
       }
       if (story.outro > 0 && outro.style === 'pull' && t > story.intro + story.flights) {
         return pullView(flightsViewAt(story.flights), outroLook(outro, story, t).pull);
