@@ -942,8 +942,9 @@ reporting through `onTold`; it keeps the four rules Auto tone fixed above
 (measured AS SHOT so a second press is the same answer; solved against this
 suite's own maths; a clamp or a refusal said out loud; nothing written where
 nothing was measured). The three heuristic verbs are §5 of the brief (Auto
-bands, Auto level, crop to the subject); a model's inference and an LLM's
-answer land through the very same seam when they come.
+bands, Auto level, crop to the subject); a model's inference lands through
+the very same seam (*My own*), and an agent's edits through the commands —
+the in-app LLM is closed (2026-10-16, `auto-develop.md` §4.3).
 
 **Auto bands (A1, built 2026-10-02).** `autoBands(stats)` in
 `auto-develop.ts`, the third button of the Auto row in both hosts. It reads
