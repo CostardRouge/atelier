@@ -300,3 +300,32 @@ export function capacityMarks(slide: DeckSlide): string {
   const holds = capacitiesOf(slide);
   return `${holds.opener ? '◆' : ''}${holds.badge ? '#' : ''}${holds.text ? 'T' : ''}`;
 }
+
+/** The cell under a strip x, or null in a gap or past either end. */
+export function cellAtX(layout: StripLayout, x: number): number | null {
+  const i = layout.cells.findIndex((cell) => x >= cell.left && x <= cell.left + cell.width);
+  return i >= 0 ? i : null;
+}
+
+/**
+ * Where a lifted slide would land, as a SLOT between cells (0 before the
+ * first, `cells.length` after the last): the number of cells whose middle
+ * the pointer has passed.
+ */
+export function dropSlot(layout: StripLayout, x: number): number {
+  return layout.cells.filter((cell) => x > cell.left + cell.width / 2).length;
+}
+
+/** The index a slide lifted from `from` takes when it is dropped in `slot` — its own place counted out. */
+export function dropIndex(from: number, slot: number): number {
+  return slot > from ? slot - 1 : slot;
+}
+
+/** The strip x of a slot's gap, where the drop marker is drawn. */
+export function slotX(layout: StripLayout, slot: number, gapPx: number): number {
+  const cells = layout.cells;
+  if (cells.length === 0) return 0;
+  if (slot <= 0) return cells[0].left - gapPx / 2;
+  if (slot >= cells.length) return cells[cells.length - 1].left + cells[cells.length - 1].width + gapPx / 2;
+  return cells[slot].left - gapPx / 2;
+}
