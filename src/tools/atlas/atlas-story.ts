@@ -68,6 +68,18 @@ export function flightTime(story: Story, t: number): number {
   return Math.min(story.flights, Math.max(0, t - story.intro));
 }
 
+/**
+ * Whether the story moves the camera itself at `t` — a world dive's intro, a
+ * pull-back's outro — so the hand cannot: a zoom there would write a free
+ * view the next frame paints over. Null while the flights' camera is shown.
+ */
+export function cameraHeldBy(intro: IntroSettings, outro: OutroSettings, story: Story, t: number): 'dive' | 'pull' | null {
+  const phase = phaseAt(story, t);
+  if (phase === 'intro' && intro.style === 'dive') return 'dive';
+  if (phase === 'outro' && outro.style === 'pull') return 'pull';
+  return null;
+}
+
 /** Which span `t` is in. */
 export function phaseAt(story: Story, t: number): 'intro' | 'flights' | 'outro' {
   if (t < story.intro) return 'intro';

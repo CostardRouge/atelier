@@ -10,6 +10,7 @@ import { dropPlacement, PIECE_LAYER, pieceAt, pieceBox, withPlacement, type Piec
 import type { AtlasTiles } from './atlas-tiles';
 import { aspectRatio, mapRect, type FormatSettings } from './atlas-settings';
 import { invertAffine, panView, viewAffine, zoomViewAbout, type AtlasView } from './atlas-view';
+import { cameraHeldBy } from './atlas-story';
 import type { SceneCore } from './use-atlas-scene';
 import type { PlayClock } from './play-clock';
 
@@ -39,6 +40,12 @@ interface AtlasStageProps {
 
 const SPOT_WORDS = { tl: 'top left', tc: 'top', tr: 'top right', bl: 'bottom left', bc: 'bottom', br: 'bottom right' } as const;
 
+/** What the chip says when the story holds the camera and the hand tried to move it. */
+const HELD_WORDS = {
+  dive: 'The world dive moves the camera here — zoom once the flights start',
+  pull: 'The pull-back moves the camera here — zoom during the flights',
+} as const;
+
 /** CSS pixels around a piece or a line within which a click still lands on it. */
 const REACH = 8;
 
@@ -64,6 +71,10 @@ export default function AtlasStage(props: AtlasStageProps) {
   /** The piece being dragged and where it would land now — painted, not yet written. */
   const dragging = useRef<{ piece: PieceId; place: Placement } | null>(null);
   const [snapWord, setSnapWord] = useState<string | null>(null);
+  /** Why the hand cannot move the camera now, said for a moment after it tried. */
+  const [heldWord, setHeldWord] = useState<string | null>(null);
+  const heldTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(heldTimer.current), []);
 
   const face = `${theme.style.italic ? 'italic ' : ''}${theme.style.weight} 32px '${theme.style.fontFamily}'`;
   useEffect(() => {
@@ -143,16 +154,32 @@ export default function AtlasStage(props: AtlasStageProps) {
     return { left: r.left + m.x, top: r.top + m.y, w: m.w, h: m.h };
   };
 
+  /**
+   * True when the story moves the camera now (a world dive, a pull-back): the
+   * gesture is refused and the reason said, rather than written as a free
+   * view the next frame paints over — the bounce a zoom in the dive showed.
+   */
+  const cameraHeld = () => {
+    const held = cameraHeldBy(core.settings.intro, core.settings.outro, core.story, clock.t);
+    if (!held) return false;
+    setHeldWord(HELD_WORDS[held]);
+    window.clearTimeout(heldTimer.current);
+    heldTimer.current = window.setTimeout(() => setHeldWord(null), 1800);
+    return true;
+  };
+
   // The hand: zoom about the pointer, drag to pan — on the view shown now.
   const target: ZoomTarget = {
     scaleAt: () => viewAt(clock.t).scale,
     zoomTo: (scale, anchor) => {
+      if (cameraHeld()) return;
       const r = mapOnScreen();
       if (!r) return;
       const cur = viewAt(clock.t);
       onFreeView(zoomViewAbout(cur, look, r.w, r.h, scale / cur.scale, anchor.x - r.left, anchor.y - r.top));
     },
     panBy: (dx, dy) => {
+      if (cameraHeld()) return;
       const r = mapOnScreen();
       if (!r) return;
       onFreeView(panView(viewAt(clock.t), look, r.w, r.h, dx, dy));
@@ -322,6 +349,9 @@ export default function AtlasStage(props: AtlasStageProps) {
       )}
       {snapWord && (
         <span className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">{snapWord}</span>
+      )}
+      {heldWord && !snapWord && (
+        <span role="status" className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">{heldWord}</span>
       )}
       {drawingZone && !band && (
         <span className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-on-media bg-black/60 px-3 py-1.5 rounded-full pointer-events-none">
