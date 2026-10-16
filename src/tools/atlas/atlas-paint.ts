@@ -30,6 +30,8 @@ import { activeAt, flightState, type Schedule, type Slot } from './atlas-schedul
 import { mapRect, resolvedClock, type AtlasSettings, type Rect, type Spot } from './atlas-settings';
 import { viewAffine, visibleBox, type Affine, type AtlasView } from './atlas-view';
 import type { OverlayHit } from './atlas-layers';
+import { flightTime, introLook, outroLook, phaseAt, type Story } from './atlas-story';
+import { paintStory, paintVeils } from './atlas-story-paint';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -75,9 +77,14 @@ export interface PaintScene {
   dateRange: string | null;
   /** The makers' logos kept on this device, by maker key — what a logo sticker draws. */
   logos: ReadonlyMap<string, StickerLogoSource>;
+  /** The film around the flights: what the frame's `t` is measured on. */
+  story: Story;
+  /** Where a world-dive intro lands — the pin's world point — or null. */
+  diveTo: { x: number; y: number } | null;
 }
 
 export interface PaintFrame {
+  /** STORY time: the intro, then the flights, then the outro. */
   t: number;
   view: AtlasView;
   width: number;
@@ -452,6 +459,8 @@ function roundRect(ctx: Ctx2D, r: Rect, radius: number): void {
 export interface PaintedFrame {
   map: Rect;
   hits: OverlayHit[];
+  /** The span of the film the frame is in: a click on its map opens the intro or the outro. */
+  phase: 'intro' | 'flights' | 'outro';
 }
 
 /**
@@ -459,9 +468,14 @@ export interface PaintedFrame {
  * rounded corners), the map inside it, then the overlay — over the map or
  * across the whole frame.
  */
-export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): PaintedFrame {
-  const { width, height, t } = frame;
+export function paintAtlas(ctx: Ctx2D, scene: PaintScene, storyFrame: PaintFrame): PaintedFrame {
   const s = scene.settings;
+  const story = scene.story;
+  // Everything about the flights runs on THEIR time; the intro and the outro on the film's.
+  const frame: PaintFrame = { ...storyFrame, t: flightTime(story, storyFrame.t) };
+  const { width, height, t } = frame;
+  const intro = frame.poster ? null : introLook(s.intro, story, storyFrame.t);
+  const outro = frame.poster ? null : outroLook(s.outro, story, storyFrame.t);
   const rect = mapRect(s.format, width, height);
   const full = rect.x <= 0 && rect.y <= 0 && rect.w >= width && rect.h >= height && s.format.radius === 0;
 
@@ -486,11 +500,20 @@ export function paintAtlas(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame): Pa
     ctx.clip();
   }
   const tilesDrawn = paintMap(ctx, scene, frame, rect, states, spot);
+  if (intro && outro) paintVeils(ctx, scene, rect, intro, outro);
   ctx.restore();
 
   const area: Rect = s.format.textOn === 'frame' ? { x: 0, y: 0, w: width, h: height } : rect;
-  const hits = paintOverlay(ctx, overlayLayout(scene, frame, states, spot, tilesDrawn), area);
-  return { map: rect, hits };
+  // The flights' overlay steps aside for the intro and the outro.
+  const shown = (intro?.overlay ?? 1) * (outro?.overlay ?? 1);
+  const hits = shown > 0.001 ? paintOverlay(ctx, overlayLayout(scene, frame, states, spot, tilesDrawn), area, shown) : [];
+  if (intro && outro) hits.push(...paintStory(ctx, scene, { width, height, view: frame.view }, rect, intro, outro, stickerBlock(scene, droneNames(scene), tilesDrawn)));
+  return { map: rect, hits, phase: phaseAt(story, storyFrame.t) };
+}
+
+/** Every drone the shown flights name, once each, as the stickers write them. */
+function droneNames(scene: PaintScene): string[] {
+  return [...new Set(scene.aircraft.filter((n): n is string => !!n))];
 }
 
 /** The map, inside `rect` of the frame. True when tiles were drawn under it. */
@@ -813,7 +836,7 @@ export function stickerInk(settings: AtlasSettings, tilesDrawn: boolean): string
 }
 
 /** The drones' stickers: one per name, in its two weights or behind its maker's logo. */
-function stickerBlock(scene: PaintScene, names: readonly string[], tilesDrawn: boolean): StickerBlock {
+export function stickerBlock(scene: PaintScene, names: readonly string[], tilesDrawn: boolean): StickerBlock {
   const { hud, aircraft } = scene.settings;
   const sticker = hud.sticker;
   const items = names.map((name) => {

@@ -53,16 +53,6 @@ export default function AtlasTool() {
   // The tiles switch is OFF every time the atlas opens (`local-first.md`).
   const [tilesOn, setTilesOnState] = useState(false);
   const [paintSeq, setPaintSeq] = useState(0);
-  // The inspector's layer: one of its chips, or whatever was clicked on the stage.
-  const [layer, setLayerState] = useState<AtlasLayer>(readLayer);
-  const setLayer = useCallback((next: AtlasLayer) => {
-    setLayerState(next);
-    try {
-      localStorage.setItem(LAYER_KEY, next);
-    } catch {
-      /* the layer holds for the session */
-    }
-  }, []);
 
   const sources = useMemo<FlightSource[]>(
     () =>
@@ -76,7 +66,28 @@ export default function AtlasTool() {
   const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft, logos);
 
   const clock = useRef(new PlayClock()).current;
-  useEffect(() => clock.setTotal(scene.schedule.total), [clock, scene.schedule.total]);
+  const storyRef = useRef(scene.core.story);
+  storyRef.current = scene.core.story;
+  // The inspector's layer: one of its chips, or whatever was clicked on the stage.
+  const [layer, setLayerState] = useState<AtlasLayer>(readLayer);
+  const setLayer = useCallback((next: AtlasLayer) => {
+    // Opening the intro or the outro plays it, unless the playhead is already in it.
+    const st = storyRef.current;
+    if (next === 'intro' && st.intro > 0 && clock.t >= st.intro) {
+      clock.seek(0);
+      clock.setPlaying(true);
+    } else if (next === 'outro' && st.outro > 0 && clock.t < st.intro + st.flights) {
+      clock.seek(st.intro + st.flights);
+      clock.setPlaying(true);
+    }
+    setLayerState(next);
+    try {
+      localStorage.setItem(LAYER_KEY, next);
+    } catch {
+      /* the layer holds for the session */
+    }
+  }, [clock]);
+  useEffect(() => clock.setTotal(scene.core.story.total), [clock, scene.core.story.total]);
   // Start playing the first time there is something to play.
   const started = useRef(false);
   useEffect(() => {
@@ -190,7 +201,7 @@ export default function AtlasTool() {
               </div>
             )}
           </div>
-          <AtlasTransport clock={clock} activity={scene.core.activity} streets={streetsSwitch} />
+          <AtlasTransport clock={clock} activity={scene.core.activity} story={scene.core.story} streets={streetsSwitch} />
         </div>
         <aside className="flex-1 min-h-0 flex flex-col overflow-hidden border border-line rounded-paper-lg bg-surface shadow-paper-soft @min-[860px]:flex-none" aria-label="Flight Atlas settings">
           <AtlasInspector
@@ -221,7 +232,7 @@ export default function AtlasTool() {
             unnamed={scene.unnamed}
             stickerNames={stickerNames}
             dateRange={scene.core.dateRange}
-            total={scene.schedule.total}
+            total={scene.core.story.total}
             exporter={exporter}
             onExport={onExport}
           />

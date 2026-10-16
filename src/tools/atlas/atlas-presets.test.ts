@@ -22,6 +22,8 @@ function perth(): AtlasSettings {
     camera: { ...DEFAULT_SETTINGS.camera, frame: 'zone', zone: { x0: 0.8, y0: 0.6, x1: 0.81, y1: 0.61 }, place: 'p3', picked: ['DJI_0001'] },
     hud: { ...DEFAULT_SETTINGS.hud, title: 'Perth', subtitle: 'May' },
     aircraft: { names: { FC8482: 'Mini 4 Pro' }, fallback: 'Mini', weights: { 'DJI Mini 4 Pro': 1 } },
+    intro: { ...DEFAULT_SETTINGS.intro, style: 'dive', length: 6, title: 'Perth', line: 'May 2026' },
+    outro: { ...DEFAULT_SETTINGS.outro, style: 'pull', line: 'See you over the river' },
   });
 }
 
@@ -39,6 +41,16 @@ describe('presetSettings', () => {
     expect(kept.hud.title).toBe('');
     expect(kept.hud.subtitle).toBe('');
     expect(kept.aircraft).toEqual({ names: {}, fallback: '', weights: {} });
+  });
+
+  it('keeps how the intro and the outro play, never their words', () => {
+    const kept = presetSettings(perth());
+    expect(kept.intro.style).toBe('dive');
+    expect(kept.intro.length).toBe(6);
+    expect(kept.intro.title).toBe('');
+    expect(kept.intro.line).toBe('');
+    expect(kept.outro.style).toBe('pull');
+    expect(kept.outro.line).toBe('');
   });
 });
 

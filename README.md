@@ -3314,14 +3314,27 @@ drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
 alone, never its video.
 
 The panel shows **one layer at a time** — the things the picture shows, as
-chips at its top: *Map*, *Flights*, *Timing*, *Camera*, *Title*,
-*Statistics*, *Clock*, *Sticker*. **Click a thing on the picture** — a word
+chips at its top: *Intro*, *Map*, *Flights*, *Timing*, *Camera*, *Title*,
+*Statistics*, *Clock*, *Sticker*, *Outro*. **Click a thing on the picture** — a word
 of the overlay, a flight's line, the map itself — and the panel opens its
 layer, the thing outlined while it is selected; a drag still moves the map.
 What the picture does not show sits at the panel's foot: the flight list
 (*N flights*), *Export* and *Presets*. Each section opens on its essentials;
 the rest folds behind **N more**, remembered in this browser.
 
+- **Intro and Outro.** A few seconds added before the first flight and after
+  the last landing — the flights keep their own length, the video is that much
+  longer, and the scrubber shows both as named bands at its ends. The intro is
+  a **title card** (the place, *N flights · the dates*, the drone sticker, on
+  black, the map's colour or the dimmed map, handed over by a fade, through
+  black or a cut), a **map reveal** (the title over the veiled map, lifting as
+  the flights start), a **world dive** (the whole world, a pin, the camera
+  diving onto the place) or nothing. The outro is a **summary** (the map
+  darkened, the totals — flights, distance, airtime, highest — counting up,
+  the sticker, a last line), a **pull back** (the camera stepping back over
+  every route, the title at the top), a **fade out**, or nothing. The title
+  and the second line write themselves from the flights until you type your
+  own; a preset keeps how they play, never their words.
 - **The flight list** (the foot's *N flights*). Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
   flights (double-click: that place alone); hovering a flight singles it out.

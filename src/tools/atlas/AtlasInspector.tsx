@@ -14,6 +14,8 @@ import AtlasPresetsSection from './AtlasPresetsSection';
 import AtlasGround from './AtlasGround';
 import AtlasStickerSection from './AtlasStickerSection';
 import AtlasMore from './AtlasMore';
+import { IntroSection, OutroSection } from './AtlasStorySections';
+import { introLine, introTitle } from './atlas-story';
 import { FOOT_LAYERS, LAYERS, layerInfo, type AtlasLayer } from './atlas-layers';
 import {
   ASPECTS,
@@ -956,7 +958,16 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
     />
   );
 
+  const story = { settings: s, update, hasSticker: p.stickerNames.length > 0 };
   const sections: Record<AtlasLayer, ReactNode> = {
+    intro: (
+      <IntroSection
+        {...story}
+        autoTitle={introTitle({ ...s.intro, title: '' }, s.hud.title, p.placeNames[0] ?? null)}
+        autoLine={introLine({ ...s.intro, line: '' }, shown, p.dateRange)}
+      />
+    ),
+    outro: <OutroSection {...story} />,
     map: (
       <>
         {groundSec}

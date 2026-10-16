@@ -196,6 +196,8 @@ export default function AtlasStage(props: AtlasStageProps) {
     if (piece) return piece;
     const m = p.frame.map;
     if (x < m.x || y < m.y || x > m.x + m.w || y > m.y + m.h) return null;
+    // During the intro or the outro, the map is theirs.
+    if (p.frame.phase !== 'flights') return p.frame.phase;
     const a = viewAffine(viewAt(clock.t), look, m.w, m.h);
     return nearFlight(core.flights, { ...a, e: a.e + m.x, f: a.f + m.y }, x, y, REACH * p.dpr) ? 'flights' : 'map';
   };

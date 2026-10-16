@@ -93,19 +93,29 @@ export interface StickerBlock {
 /** Whose a block is: the inspector layer a click on it opens. */
 interface Owned {
   owner?: AtlasLayer;
+  /** This block's own fade, times the layout's (an intro's lines arrive one by one). */
+  alpha?: number;
 }
 
 export type Block = (TextLine | StatRow | StatColumn | CurveBlock | StickerBlock) & Owned;
 
+/** A spot of the frame, or its middle (`mc`) — where an intro or an outro stacks its lines. */
+export type LayoutSpot = Spot | 'mc';
+
 export interface OverlayLayout {
-  spots: Partial<Record<Spot, Block[]>>;
+  spots: Partial<Record<LayoutSpot, Block[]>>;
   theme: StyleTheme;
   accent: string;
   /** Every size times this. */
   scale: number;
+  /** Where the middle stack's centre sits, a fraction of the area's height (0.5 when absent). */
+  middleAt?: number;
+  /** Every block moved down by this, a fraction of the area's short side (a stack rising into place). */
+  shiftY?: number;
 }
 
-const ANCHOR: Record<Spot, Anchor> = {
+const ANCHOR: Record<LayoutSpot, Anchor> = {
+  mc: 'top-center',
   tl: 'top-left',
   tc: 'top-center',
   tr: 'top-right',
@@ -141,16 +151,19 @@ function textElement(id: string, text: string, anchor: Anchor, x: number, y: num
  * short side over 1080. Returns the box of every owned block as drawn, so a
  * click on the stage can open what it landed on.
  */
-export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): OverlayHit[] {
+export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alpha = 1): OverlayHit[] {
   const short = Math.min(area.w, area.h);
   const unit = (short / 1080) * layout.scale;
   const margin = 0.045 * short;
   const theme = layout.theme;
   const accent = layout.accent;
   const elements: OverlayElement[] = [];
-  const curves: { block: CurveBlock; x: number; y: number; w: number; h: number }[] = [];
-  const stickers: { block: StickerBlock; item: StickerItem; x: number; y: number }[] = [];
+  const curves: { block: CurveBlock; x: number; y: number; w: number; h: number; alpha: number }[] = [];
+  const stickers: { block: StickerBlock; item: StickerItem; x: number; y: number; alpha: number }[] = [];
   const hits: OverlayHit[] = [];
+  /** Each text element's fade, by id — the engine is handed one group per fade. */
+  const fades = new Map<string, number>();
+  let blockAlpha = alpha;
   let seq = 0;
 
   /** The element a line becomes, with its measured height. */
@@ -172,7 +185,9 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
       over.color = accent;
     }
     if (line.odometer !== undefined) over.odometer = line.odometer;
-    return textElement(`o${seq++}`, line.text, anchor, (x - area.x) / area.w, (y - area.y) / area.h, (line.size * unit) / short, over, pinned);
+    const el = textElement(`o${seq++}`, line.text, anchor, (x - area.x) / area.w, (y - area.y) / area.h, (line.size * unit) / short, over, pinned);
+    fades.set(el.id, blockAlpha);
+    return el;
   };
 
   /** A line's height on the frame, the theme's own scale included. */
@@ -205,26 +220,30 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
     }
   };
 
-  for (const spot of Object.keys(layout.spots) as Spot[]) {
-    const blocks = layout.spots[spot] ?? [];
+  for (const spot of Object.keys(layout.spots) as LayoutSpot[]) {
+    const blocks = (layout.spots[spot] ?? []).filter((b) => (b.alpha ?? 1) > 0.001);
     if (!blocks.length) continue;
     const total = blocks.reduce((h, b) => h + blockHeight(b), 0);
     const bottom = spot[0] === 'b';
+    const middle = spot === 'mc';
     const align = spot[1] === 'l' ? 'left' : spot[1] === 'c' ? 'center' : 'right';
     const anchor = ANCHOR[spot];
     const ax = align === 'left' ? area.x + margin : align === 'center' ? area.x + area.w / 2 : area.x + area.w - margin;
-    let y = bottom ? area.y + area.h - margin - total : area.y + margin;
+    let y = middle ? area.y + area.h * (layout.middleAt ?? 0.5) - total / 2 : bottom ? area.y + area.h - margin - total : area.y + margin;
+    y += (layout.shiftY ?? 0) * short;
     const colW = Math.min(area.w - 2 * margin, Math.max(300 * unit, area.w * 0.28));
 
     /** Record a block's box, `w` wide at the spot's alignment. */
     const hit = (b: Block, w: number, h: number) => {
-      if (!b.owner || w <= 0 || h <= 0) return;
+      // A piece too faint to see is not a piece a click lands on.
+      if (!b.owner || w <= 0 || h <= 0 || blockAlpha < 0.3) return;
       const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
       hits.push({ layer: b.owner, x, y, w, h });
     };
 
     for (const b of blocks) {
       const h = blockHeight(b);
+      blockAlpha = alpha * (b.alpha ?? 1);
       if (b.kind === 'text') {
         elements.push(lineElement(b, anchor, ax, y));
         if (b.text.trim()) hit(b, widthOf(b.text, b.size, !!b.label, b.weight), heightOf(b));
@@ -268,27 +287,41 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect): Ove
         b.items.forEach((item, i) => {
           const w = widths[i];
           const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
-          stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between) });
+          stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between), alpha: blockAlpha });
         });
       } else {
         const w = colW;
         const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
         hit(b, w, h);
-        curves.push({ block: b, x, y: y + 6 * unit, w, h: b.size * unit });
+        curves.push({ block: b, x, y: y + 6 * unit, w, h: b.size * unit, alpha: blockAlpha });
       }
       y += h;
     }
   }
 
-  for (const c of curves) drawCurve(ctx, c.block, c.x, c.y, c.w, c.h, unit, accent, theme);
-  for (const st of stickers) drawSticker(ctx, st.item, st.x, st.y, st.block.size * unit, st.block.ink, st.block.backing, unit);
+  const base = ctx.globalAlpha;
+  for (const c of curves) {
+    ctx.globalAlpha = base * c.alpha;
+    drawCurve(ctx, c.block, c.x, c.y, c.w, c.h, unit, accent, theme);
+  }
+  for (const st of stickers) {
+    ctx.globalAlpha = base * st.alpha;
+    drawSticker(ctx, st.item, st.x, st.y, st.block.size * unit, st.block.ink, st.block.backing, unit);
+  }
+  ctx.globalAlpha = base;
 
   if (elements.length) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, area.x, area.y);
     // The engine lays elements out in its own frame: the area, at the origin.
-    const local = elements.map((el) => el);
-    drawOverlays(ctx, local, null, area.w, area.h, { theme });
+    // It sets each element's alpha itself, so a fade is handed to it, one
+    // group of elements per fade (one group when nothing fades).
+    const groups = new Map<number, OverlayElement[]>();
+    for (const el of elements) {
+      const a = fades.get(el.id) ?? alpha;
+      groups.set(a, [...(groups.get(a) ?? []), el]);
+    }
+    for (const [a, group] of groups) drawOverlays(ctx, group, null, area.w, area.h, a === 1 ? { theme } : { theme, alpha: a });
     ctx.restore();
   }
   return hits;
