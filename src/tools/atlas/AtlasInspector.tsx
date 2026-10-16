@@ -15,6 +15,7 @@ import AtlasGround from './AtlasGround';
 import AtlasStickerSection from './AtlasStickerSection';
 import AtlasMore from './AtlasMore';
 import AtlasStatChips from './AtlasStatChips';
+import AtlasDroneNames from './AtlasDroneNames';
 import type { SafeMode } from './atlas-safe';
 import { IntroSection, OutroSection } from './AtlasStorySections';
 import { introLine, introTitle } from './atlas-story';
@@ -371,24 +372,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       title="Drone names"
       info="The aircraft is read from each clip's own metadata (never from the log, which names none). Rename what a file says, or name the flights whose file says nothing — a loose .srt."
     >
-      {p.aircraftFound.length === 0 && (
-        <p className="m-0 text-xs text-muted">No clip named its aircraft{p.flights.length ? ' — the logs came without their videos, or the videos do not say.' : '.'}</p>
-      )}
-      {p.aircraftFound.map((a) => (
-        <FieldRow key={a.name} label={<span className="font-mono text-2xs">{a.name}</span>} hint={`${a.count} flight${a.count === 1 ? '' : 's'}`} hintShown>
-          <TextField
-            label={`Call ${a.name}`}
-            value={s.aircraft.names[a.name] ?? ''}
-            placeholder={a.name}
-            onChange={(v) => update((cur) => ({ ...cur, aircraft: { ...cur.aircraft, names: { ...cur.aircraft.names, [a.name]: v } } }))}
-          />
-        </FieldRow>
-      ))}
-      {p.unnamed > 0 && (
-        <FieldRow label="Unnamed" hint={`${p.unnamed} flight${p.unnamed === 1 ? '' : 's'} whose file names no aircraft`} hintShown>
-          <TextField label="Name the unnamed flights" value={s.aircraft.fallback} placeholder="DJI Mini 4 Pro" onChange={(v) => update((cur) => ({ ...cur, aircraft: { ...cur.aircraft, fallback: v } }))} />
-        </FieldRow>
-      )}
+      <AtlasDroneNames settings={s} update={update} found={p.aircraftFound} unnamed={p.unnamed} hasFlights={p.flights.length > 0} />
     </InspectorSection>
   );
 
@@ -973,7 +957,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       update={update}
       names={p.stickerNames}
       where={where('sticker')}
-      onNameDrones={() => onLayer('data')}
+      droneNames={<AtlasDroneNames settings={s} update={update} found={p.aircraftFound} unnamed={p.unnamed} hasFlights={p.flights.length > 0} />}
     />
   );
 

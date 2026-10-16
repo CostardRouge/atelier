@@ -3391,7 +3391,8 @@ the rest folds behind **N more**, remembered in this browser.
   height (time-weighted), average and top speed, places — as a column or a
   row, counted *as it flies* (odometer digits that roll) or as totals, in km/m
   or mi/ft; the **date range**; the **drone sticker** — the drone that flew,
-  written the way its maker does: «**DJI MINI 5** PRO» in Montserrat, the
+  written the way its maker does (each drone renamed right there under
+  *Names*, the same rows as the flight list's): «**DJI MINI 5** PRO» in Montserrat, the
   model's body heavy and its trailing qualifier (Pro, Plus, Cine…) light, or
   the maker's **logo** followed by the model in light. Every drone shown, or
   those in the air; an ink that picks white or black against the ground by
