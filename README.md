@@ -2972,6 +2972,23 @@ and the write-back are built against Winnow's forthcoming API and will be
 re-checked when it lands; the trip bucket is the patch under
 `docs/winnow-patches/` until it does.
 
+### Two tabs, one document
+
+A trip, a Studio project or a Develop roll is edited by **one tab at a time**
+in a browser. The first tab to open it edits it; any other tab shows it read
+only under a band — *Open in another tab — read only here* — refreshed each
+time the editing tab saves (at once if it is on screen, otherwise when you come
+back to it). **Edit here** hands the document over: the editing tab writes what
+it still holds, turns read only, and this one takes it. A tab that does not
+answer within a second and a half has the document taken, and its last unsaved
+edits are dropped rather than written over yours. Closing the editing tab, or
+leaving the document, lets a waiting tab take it by itself. The preset book is
+not opened like a document: every tab reads the stored book before writing it
+and shows the others' changes as they land, so two tabs never drop each other's
+presets. Between devices nothing changes: a document kept on a Winnow is still
+guarded by its revision (the sync pill). Browsers without Web Locks keep the old
+behaviour.
+
 ### Online
 
 Deployed via GitHub Pages at [`atelier.steeve.website`](https://atelier.steeve.website/).

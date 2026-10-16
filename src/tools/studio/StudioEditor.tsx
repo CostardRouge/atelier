@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type ReactNode,
 } from 'react';
 import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
@@ -249,6 +250,19 @@ interface StudioEditorProps {
   onForgetMissing: () => void;
   /** What the shell wants in the project bar — the sync pill of a remote project. */
   headerExtra?: ReactNode;
+  /**
+   * Whether the autosave may write now — false while another tab of this
+   * browser edits the project (`use-document-lock.tsx`). Read at each save.
+   */
+  canWrite?: () => boolean;
+  /** Where the editor hands the shell its pending save: written before the project changes tabs, dropped when it was taken. */
+  saveControl?: MutableRefObject<StudioSaveControl | null>;
+}
+
+/** The autosave's two verbs the shell needs when the project changes hands. */
+export interface StudioSaveControl {
+  flush: () => Promise<void>;
+  discard: () => void;
 }
 
 /**
@@ -268,6 +282,8 @@ export default function StudioEditor({
   headerExtra,
   onRepoint,
   onForgetMissing,
+  canWrite,
+  saveControl,
 }: StudioEditorProps) {
   // A grading screen sits in the darkroom: neutral grey, so the eye does not
   // adapt to warm paper and misjudge the frame (`use-surface.ts`).
@@ -1300,6 +1316,8 @@ export default function StudioEditor({
     docRef.current = project;
   }, [project]);
   const durationRef = useRef<number>(project.durationSeconds ?? 0);
+  const canWriteRef = useRef(canWrite);
+  canWriteRef.current = canWrite;
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstRun = useRef(true);
   /** The save the timer is waiting to run, and whether one is owed. */
@@ -1318,6 +1336,21 @@ export default function StudioEditor({
       saveTimer.current = null;
       void pendingSave.current?.();
     };
+    if (saveControl) {
+      saveControl.current = {
+        flush: async () => {
+          if (!saveOwed.current) return;
+          if (saveTimer.current) clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+          await pendingSave.current?.();
+        },
+        discard: () => {
+          if (saveTimer.current) clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+          saveOwed.current = false;
+        },
+      };
+    }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
     };
@@ -1327,6 +1360,7 @@ export default function StudioEditor({
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', flush);
       flush();
+      if (saveControl) saveControl.current = null;
     };
   }, []);
 
@@ -1358,6 +1392,8 @@ export default function StudioEditor({
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const save = async () => {
       saveOwed.current = false;
+      // Read only: another tab edits this project, and its saves are the store's.
+      if (canWriteRef.current && !canWriteRef.current()) return;
       setSaveState('saving');
       // Hashing is memoised per file, so only the first save of a folder
       // pays for it; every later autosave is a cache hit.

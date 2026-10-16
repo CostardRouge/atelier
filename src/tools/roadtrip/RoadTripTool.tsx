@@ -42,6 +42,7 @@ import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import { pullTrip, pushOnce } from '../../shared/roadtrip/trip-remote';
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
+import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
 import { TIMELINE_SYNC_ENABLED } from '../../shared/sources/winnow/features';
 import {
   getWinnowConnection,
@@ -193,6 +194,8 @@ export default function RoadTripTool() {
   const flushRef = useRef<() => Promise<void>>(async () => {});
   /** The undo stack, read by the sync machine the same way. */
   const historyRef = useRef<DocumentHistory<TripDoc | null> | null>(null);
+  /** One editor per trip across this browser's tabs, read by the funnels below. */
+  const lockRef = useRef<DocumentLock | null>(null);
 
   // --- the remote machine --------------------------------------------------
   // Shared with every document kind (`use-document-sync.tsx`); this tool only
@@ -217,6 +220,7 @@ export default function RoadTripTool() {
   const sync = useDocumentSync<TripDoc>({
     doc: open,
     driver: syncDriver,
+    canPush: () => lockRef.current?.canWrite() ?? true,
     beforeFlush: () => flushRef.current(),
     onDiscardPending: () => {
       pending.current = null;
@@ -228,6 +232,27 @@ export default function RoadTripTool() {
     },
   });
   const { edited, resume, clear } = sync;
+
+  // One editor per trip across this browser's tabs (`use-document-lock.tsx`):
+  // another tab shows it read only, refreshed when this one saves.
+  const lock = useDocumentLock<TripDoc>({
+    kind: 'trip',
+    id: open?.id ?? null,
+    flush: () => flushRef.current(),
+    discard: () => {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      pending.current = null;
+    },
+    load: async (id) => (await listTrips()).find((t) => t.id === id) ?? null,
+    onReload: (doc, editing) => {
+      replaceOpen(doc);
+      // Taken from another tab, which kept its sync record moving: read it again.
+      if (editing) void resume(doc).then((r) => r?.replaced && replaceOpen(r.doc));
+    },
+  });
+  lockRef.current = lock;
+  const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
 
   /**
    * The document replaced UNDER the tool — by the pill's verbs, or by a
@@ -245,12 +270,16 @@ export default function RoadTripTool() {
   const flush = useCallback(async () => {
     const doc = pending.current;
     pending.current = null;
-    if (!doc) return;
+    // A tab that lost the trip to another never writes it.
+    if (!doc || !lockRef.current?.canWrite()) return;
     const ok = await putTrip(doc);
     setStorageFailed(!ok);
     // The mirror moved: for a trip kept on an instance the record is dirty
     // from now, and a push is due after the idle delay.
-    if (ok) edited(doc);
+    if (ok) {
+      edited(doc);
+      lockRef.current?.saved(doc);
+    }
   }, [edited]);
   flushRef.current = flush;
 
@@ -264,6 +293,8 @@ export default function RoadTripTool() {
 
   const handleChange = useCallback(
     (doc: TripDoc) => {
+      // Read only: another tab edits this trip (its band says so).
+      if (lockRef.current && !lockRef.current.canWrite()) return;
       setOpen(doc);
       pending.current = doc;
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
@@ -666,6 +697,9 @@ export default function RoadTripTool() {
       clear();
       return;
     }
+    // A read-only tab never asks: the editing tab does, and the record it
+    // would read is the other tab's.
+    if (lock.state !== 'editing' && lock.state !== 'free') return;
     if (resumedFor.current === open.id) return;
     resumedFor.current = open.id;
     void resume(open).then((r) => {
@@ -673,7 +707,7 @@ export default function RoadTripTool() {
       // mirror on the undo stack, and one ⌘Z pushed it over the newer copy.
       if (r?.replaced) replaceOpen(r.doc);
     });
-  }, [open, resume, clear]);
+  }, [open, resume, clear, lock.state]);
 
   // The gallery's «Trip settings…» opens the trip on its settings sheet: the
   // overview reads this as it mounts and says so, and it is dropped then, or
@@ -823,6 +857,7 @@ export default function RoadTripTool() {
         </p>
       )}
 
+      {!showGallery && lock.band}
       {showGallery ? (
         <TripGallery
           openTripId={open?.id ?? null}
@@ -830,45 +865,50 @@ export default function RoadTripTool() {
           timelineSources={seedSources}
           onSeedFrom={(id) => openImport('seed', id)}
         />
-      ) : editingPost ? (
-        <PostEditor
-          key={editingPost.id}
-          trip={open}
-          post={editingPost}
-          onBack={() => go(editingPost.date)}
-          onChangePost={updatePost}
-          onChangeTrip={handleChange}
-          headerExtra={
-            <>
-              {history.control}
-              {sync.pill}
-            </>
-          }
-          deduceSources={deduceSources}
-          onDeduceFrom={openDeduce}
-        />
       ) : (
-        <TripOverview
-          key={open.id}
-          trip={open}
-          initialSettings={settingsOnOpen}
-          onSettingsTaken={settingsTaken}
-          selectedDate={route.date}
-          onSelectDate={(date, options) => go(date, null, options)}
-          onShowTrips={() => navigate(HOME_ROUTE)}
-          onChange={handleChange}
-          onOpenPost={(post) => go(post.date, post.id)}
-          headerExtra={
-            <>
-              {history.control}
-              {sync.pill}
-            </>
-          }
-          timelineSources={completeSources}
-          onCompleteFrom={(id) => openImport('complete', id)}
-          deduceSources={deduceSources}
-          onDeduceFrom={openDeduce}
-        />
+        // Inert while another tab edits the trip: nothing here can write it.
+        <div ref={editorRef} className="contents">
+          {editingPost ? (
+            <PostEditor
+              key={editingPost.id}
+              trip={open}
+              post={editingPost}
+              onBack={() => go(editingPost.date)}
+              onChangePost={updatePost}
+              onChangeTrip={handleChange}
+              headerExtra={
+                <>
+                  {history.control}
+                  {sync.pill}
+                </>
+              }
+              deduceSources={deduceSources}
+              onDeduceFrom={openDeduce}
+            />
+          ) : (
+            <TripOverview
+              key={open.id}
+              trip={open}
+              initialSettings={settingsOnOpen}
+              onSettingsTaken={settingsTaken}
+              selectedDate={route.date}
+              onSelectDate={(date, options) => go(date, null, options)}
+              onShowTrips={() => navigate(HOME_ROUTE)}
+              onChange={handleChange}
+              onOpenPost={(post) => go(post.date, post.id)}
+              headerExtra={
+                <>
+                  {history.control}
+                  {sync.pill}
+                </>
+              }
+              timelineSources={completeSources}
+              onCompleteFrom={(id) => openImport('complete', id)}
+              deduceSources={deduceSources}
+              onDeduceFrom={openDeduce}
+            />
+          )}
+        </div>
       )}
 
       {/* A completion needs its trip loaded; a seed needs nothing open. */}
