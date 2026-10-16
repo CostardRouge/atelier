@@ -530,7 +530,7 @@ export default function RoadTripTool() {
       run: async () => {
         if (!open) throw new CommandError('unavailable', 'no trip is open');
         const gaps = (await commands.execute('trips.gaps')) as { untoldWithMedia?: { date: string; count: number }[]; gaps: { start: string; length: number }[]; toldDays: number; totalDays: number };
-        const line = (post: TripPost) => ({ id: post.id, kind: post.kind, date: post.date, ...(post.endDate ? { endDate: post.endDate } : {}), title: post.title || null, pictures: (post.media ? 1 : 0) + post.slides.filter((s) => s.media).length });
+        const line = (post: TripPost) => ({ id: post.id, kind: post.kind, date: post.date, ...(post.endDate ? { endDate: post.endDate } : {}), title: post.title || null, pictures: post.slides.filter((s) => s.media).length });
         const sorted = [...open.posts].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         const next = gaps.untoldWithMedia?.[0] ?? (gaps.gaps[0] ? { date: gaps.gaps[0].start, count: null } : null);
         return {

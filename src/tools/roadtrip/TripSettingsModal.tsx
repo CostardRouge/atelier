@@ -20,9 +20,8 @@ import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { prunePins } from '../../shared/roadtrip/trip-cover';
 import {
   POST_KINDS,
-  defaultPostBadge,
   hookDefaultsFrom,
-  type PostBadge,
+  withSavedLook,
   type PostKind,
   type TripDoc,
   type TripPost,
@@ -162,8 +161,8 @@ interface TripSettingsModalProps {
   land?: boolean;
   ctaFieldRefs?: CtaFieldRefs;
   onChangeTrip: (trip: TripDoc) => void;
-  /** Writes the piece's badge — with `post`. */
-  patchBadge?: (patch: Partial<PostBadge>) => void;
+  /** Writes the piece — with `post`. */
+  onChangePost?: (post: TripPost) => void;
   onClose: () => void;
   /** The connected instances Deduce can ask — what the Deduce section offers. */
   deduceSources?: readonly string[];
@@ -207,7 +206,7 @@ export default function TripSettingsModal({
   land = false,
   ctaFieldRefs,
   onChangeTrip,
-  patchBadge,
+  onChangePost,
   onClose,
   deduceSources = [],
   onDeduceFrom,
@@ -511,7 +510,7 @@ export default function TripSettingsModal({
 
             {open === 'defaults' && (
               <>
-                {post && patchBadge && (
+                {post && onChangePost && (
                   <div className="flex flex-col gap-2.5 px-4 py-3.5 border border-accent rounded-paper bg-accent-wash">
                     <span className="font-mono text-2xs tracking-[0.14em] uppercase text-accent-ink">This piece · {pieceLabel}</span>
                     <div className="flex flex-wrap gap-1.5">
@@ -520,7 +519,7 @@ export default function TripSettingsModal({
                         onClick={() =>
                           onChangeTrip({
                             ...trip,
-                            hookDefaults: { ...trip.hookDefaults, [post.kind]: hookDefaultsFrom(post.badge) },
+                            hookDefaults: { ...trip.hookDefaults, [post.kind]: hookDefaultsFrom(post) },
                           })
                         }
                         className={smallButton}
@@ -531,14 +530,9 @@ export default function TripSettingsModal({
                         <button
                           type="button"
                           onClick={() =>
-                            patchBadge({
-                              ...defaultPostBadge(post.kind, savedDefault),
-                              // The day, the frame of the clip and the author's own
-                              // words belong to this piece, not to the default.
-                              referenceDate: post.badge.referenceDate,
-                              videoTimeSeconds: post.badge.videoTimeSeconds,
-                              textOverrides: post.badge.textOverrides,
-                            })
+                            // The day, the frame of the clip and the author's own
+                            // words belong to this piece, not to the default.
+                            onChangePost(withSavedLook(post, savedDefault))
                           }
                           className={`${smallButton} font-normal`}
                         >

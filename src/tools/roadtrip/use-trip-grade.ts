@@ -12,12 +12,12 @@ import {
   unboundGrades,
   writeGrade,
   moveGradeScope,
-  HOOK_PICTURE,
   type GradeScope,
   type GradedPicture,
   type PictureKey,
 } from '../../shared/roadtrip/post-grade';
 import type { TripDoc, TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
+import { leadSlideOf } from '../../shared/roadtrip/piece-slides';
 
 export type { GradeScope } from '../../shared/roadtrip/post-grade';
 
@@ -174,7 +174,8 @@ export function useTripGrade(
     saved: savedOf(stack),
     lutFor,
     filmFor,
-    hookGrade: gradeShownBy(trip, post, HOOK_PICTURE),
-    hookScope: gradeScopeOf(post, HOOK_PICTURE),
+    // The picture under the piece's badge — what the Studio bridge compares.
+    hookGrade: gradeShownBy(trip, post, leadSlideOf(post)?.id ?? null),
+    hookScope: gradeScopeOf(post, leadSlideOf(post)?.id ?? null),
   };
 }

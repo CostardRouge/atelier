@@ -22,6 +22,7 @@ import { tripCoverage } from '../trip-coverage';
 import { stageLabel } from '../trip-places';
 import type { TripDoc, TripPlace } from '../trip-types';
 import type { HookDay, HookDayPiece, HookPlace, HookStage } from './hook-variant';
+import { leadSlideOf } from '../piece-slides';
 
 /**
  * The last calendars built, by the piece they leave out. Everything a calendar
@@ -74,13 +75,16 @@ function buildCalendar(trip: TripDoc): HookDay[] {
       dayNumber: cell.dayNumber,
       told: others.length > 0,
       legStart: legStarts.has(cell.date),
-      pieces: others.map((post) => ({
-        id: post.id,
-        title: post.title.trim(),
-        published: post.publishedAt !== null,
-        media: post.media ?? null,
-        videoSeconds: Number.isFinite(post.badge.videoTimeSeconds) ? post.badge.videoTimeSeconds : 0,
-      })),
+      pieces: others.map((post) => {
+        const lead = leadSlideOf(post);
+        return {
+          id: post.id,
+          title: post.title.trim(),
+          published: post.publishedAt !== null,
+          media: lead?.media ?? null,
+          videoSeconds: lead && Number.isFinite(lead.videoTimeSeconds) ? lead.videoTimeSeconds : 0,
+        };
+      }),
     };
   });
 }

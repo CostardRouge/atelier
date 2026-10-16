@@ -170,10 +170,10 @@ export default function useRailThumbs({
         const collageLuts = slide.collage
           ? [slide, ...slide.collage.cells].map((cell) => lutId(lutFor({ ...slide, develop: cell.develop })))
           : null;
-        // Where a slide that is not the first is drawn at rest: past its own
-        // opener, badge, text and cells. The first slide's rest reads the
-        // piece's badge and is taken below, with the rest of the effect's clock.
-        const rest = slide.kind === 'hook' ? null : slideSettleSeconds(post, slide, render, aspect);
+        // Where a slide is drawn at rest: past its own opener, badge, text and
+        // cells. The rest of the slide carrying the piece's badge reads that
+        // badge and is taken below, with the rest of the effect's clock.
+        const rest = slide.pieceBadge ? null : slideSettleSeconds(post, slide, render, aspect);
         return {
           key: slideKey(slide),
           slide,
@@ -273,7 +273,7 @@ export default function useRailThumbs({
           // collage's own entrance, on any slide, and on a slide that is not
           // the first, past its own badge, opener and text.
           timeSeconds:
-            job.slide.kind === 'hook'
+            job.slide.pieceBadge
               ? Math.max(
                   settle,
                   job.render.hook?.seconds ?? 0,

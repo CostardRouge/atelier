@@ -420,7 +420,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           ? await loadClipMeta(hookFile, { thumbnail: false })
           : hookInfo;
       // The slide's own speed, resolved by the deck (1 for a photograph).
-      const speed = hookIsVideo ? clipSpeed(post.badge.videoSpeed) : 1;
+      const speed = hookIsVideo ? clipSpeed(inputs.hookSlide.speed) : 1;
       const variant = hookVariant(post.badge.aspectId, 1080, speed);
       const shared = {
         variant,
@@ -428,14 +428,14 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         hook,
         elementsAt: inputs.hookElementsAt,
         theme: trip.theme,
-        shades: post.badge.shades,
+        shades: inputs.hookSlide.shades,
         block: inputs.block,
-        // The hook's own framing, so the burned-in picture is cropped where
+        // The slide's own framing, so the burned-in picture is cropped where
         // the preview showed it — the PNG deck goes through the same value.
-        framing: post.badge.framing,
-        // And how it moves over the hook, on the clock the stage plays it on.
+        framing: inputs.hookSlide.framing,
+        // And how it moves over the slide, on the clock the stage plays it on.
         motion: {
-          motion: post.badge.motion ?? null,
+          motion: inputs.hookSlide.motion,
           seconds: inputs.hookLength,
           openerSeconds: hook?.seconds ?? 0,
         },
@@ -453,18 +453,18 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             },
             srcWidth: meta.width,
             srcHeight: meta.height,
-            range: hookRange(post.badge.videoTimeSeconds, inputs.hookLength, meta.duration, speed),
+            range: hookRange(inputs.hookSlide.videoTimeSeconds, inputs.hookLength, meta.duration, speed),
           })
-        : post.badge.collage
+        : inputs.hookSlide.collage
           ? await (async () => {
               // The hook's collage, painted: its cells decoded and graded
               // exactly as the piece export does for any collage slide.
-              const cells = await loadCollageSources(inputs.hookSlide, post.badge.collage!, inputs.resolve, { maxEdge: exportEdge() });
+              const cells = await loadCollageSources(inputs.hookSlide, inputs.hookSlide.collage!, inputs.resolve, { maxEdge: exportEdge() });
               try {
                 return await exportHookStillVideo({
                   ...shared,
                   collage: {
-                    render: { collage: post.badge.collage!, items: cells.items, seconds: inputs.hookLength },
+                    render: { collage: inputs.hookSlide.collage!, items: cells.items, seconds: inputs.hookLength },
                     luts: cells.items.map((cell) =>
                       looks.lutFor({ ...inputs.hookSlide, develop: cell.develop }),
                     ),
@@ -529,7 +529,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   ): Promise<Blob> {
     const { post, trip, aspect } = inputs;
     const { slide } = item;
-    const isHook = slide.kind === 'hook';
+    // The slide carrying the piece's badge burns in what the stage drew for it.
+    const isHook = slide.pieceBadge;
     const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
     const own = isHook ? null : slideRender(trip, post, slide, aspect, livePictures(), inputs.exif);
     const opener = own ? own.hook : liveHook();
@@ -540,7 +541,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       hook: opener,
       elementsAt: own ? own.elementsAt : inputs.hookElementsAt,
       theme: trip.theme,
-      shades: own ? own.shades : post.badge.shades,
+      shades: own ? own.shades : slide.shades,
       block: own ? own.block : inputs.block,
       framing: slide.framing,
       // A picture that moves in its frame moves on this slide's own clock,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { deckSlides } from '../deck';
-import { createPostSlide, createTripDoc, createTripPost, type TripDoc, type TripPost } from '../trip-types';
+import { createPostSlide, createTripDoc, createTripPost, type PostSlide, type TripDoc, type TripPost } from '../trip-types';
 import { hookCalendar, standingPiece } from './hook-calendar';
-import { hookContextFor, hookMoves, openerMoves, pieceHookTiming, slideHookTiming } from './hook-context';
+import { hookContextFor, hookMoves, openerMoves, slideHookTiming } from './hook-context';
 import { hookElementsAt } from './hook-elements';
 import { resolveHook } from './registry';
 import { DEFAULT_BADGE_LAYOUT } from '../badge-layout';
@@ -28,9 +28,12 @@ function fixture(): { trip: TripDoc; hero: TripPost } {
   return { trip, hero };
 }
 
-const scrubbing = (post: TripPost): TripPost => ({
+const scrubbing = (post: TripPost): TripPost => withLead(post, { hook: [{ id: 'scrub', options: {} }] });
+
+/** The piece with its first slide — the one carrying the badge — patched. */
+const withLead = (post: TripPost, patch: Partial<PostSlide>): TripPost => ({
   ...post,
-  badge: { ...post.badge, hook: [{ id: 'scrub', options: {} }] },
+  slides: [{ ...post.slides[0], ...patch }, ...post.slides.slice(1)],
 });
 
 describe('hookCalendar', () => {
@@ -76,7 +79,7 @@ describe('hookCalendar', () => {
     // Documents are updated IMMUTABLY, as the app does (the calendar is kept by identity).
     const withMedia = (t: TripDoc, id: string, name: string): TripDoc => ({
       ...t,
-      posts: t.posts.map((p) => (p.id === id ? { ...p, media: { name, size: 1, lastModified: 0 } } : p)),
+      posts: t.posts.map((p) => (p.id === id ? withLead(p, { media: { name, size: 1, lastModified: 0 } }) : p)),
     });
     // Neither has a picture: the published one still stands.
     expect(standingPiece(hookCalendar(trip, hero.id)[4])?.id).toBe(published.id);
@@ -140,7 +143,7 @@ describe('the scrub through the shared context', () => {
   it('steps the numeral while it sweeps, and gives the badge its own value back at rest', () => {
     const { trip, hero } = fixture();
     const post = scrubbing(hero);
-    const hook = resolveHook(post.badge.hook, hookContextFor(trip, post, 9 / 16, content));
+    const hook = resolveHook(post.slides[0].hook!, hookContextFor(trip, post, 9 / 16, content));
     expect(hook.rewrites).toBe(true);
     expect(hook.contentAt(content, 0)?.headline).toBe('1');
     expect(hook.contentAt(content, hook.seconds + 1)?.headline).toBe('8');
@@ -149,7 +152,7 @@ describe('the scrub through the shared context', () => {
   it('leaves the numeral alone under any counter but the day of the trip', () => {
     const { trip, hero } = fixture();
     const post = scrubbing({ ...hero, badge: { ...hero.badge, mode: 'stage-day' } });
-    const hook = resolveHook(post.badge.hook, hookContextFor(trip, post, 9 / 16, content));
+    const hook = resolveHook(post.slides[0].hook!, hookContextFor(trip, post, 9 / 16, content));
     expect(hook.rewrites).toBe(false);
     expect(hook.seconds).toBeGreaterThan(0);
   });
@@ -164,11 +167,11 @@ describe('the scrub through the shared context', () => {
       vehicles: [{ ...trip.vehicles[0], changes: [{ id: 'c', from: '2000-01-01', look: { ...trip.vehicles[0].spec, color: '#123456' } }] }],
     };
     expect(hookContextFor(repainted, hero, 9 / 16, content).vehicle?.color).toBe('#123456');
-    const plain = resolveHook(hero.badge.hook, ctx);
+    const plain = resolveHook(hero.slides[0].hook!, ctx);
     expect(hookElementsAt(plain, content, DEFAULT_BADGE_LAYOUT, 9 / 16, {}, 4)).toBeNull();
 
     const post = scrubbing(hero);
-    const scrub = resolveHook(post.badge.hook, hookContextFor(trip, post, 9 / 16, content));
+    const scrub = resolveHook(post.slides[0].hook!, hookContextFor(trip, post, 9 / 16, content));
     const at = hookElementsAt(scrub, content, DEFAULT_BADGE_LAYOUT, 9 / 16, {}, 4);
     const headline = (t: number) => at?.(t).find((el) => el.id === 'piece:headline')?.text;
     expect(headline(0)).toBe('1');
@@ -181,14 +184,14 @@ describe('an opener on another slide (v29)', () => {
     const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
     slide.hook = [{ id, options: {} }];
     slide.seconds = 6;
-    return { ...post, slides: [slide] };
+    return { ...post, slides: [post.slides[0], slide] };
   };
 
   it('carries the SLIDE’s length to the resolver, and no counter when the slide draws no badge', () => {
     const { trip, hero } = fixture();
     const p = withSlideOpener(hero, 'scrub');
     // A new slide's opener decides its length (`slide-length.ts`).
-    const timing = slideHookTiming(p.slides[0]);
+    const timing = slideHookTiming(p, p.slides[1]);
     expect(timing.length).toEqual(defaultSlideLength());
     expect(timing.screenSeconds).toBe(6);
     expect(timing.durationSeconds).toBe(6);
@@ -202,19 +205,19 @@ describe('an opener on another slide (v29)', () => {
   it('the deck lasts the opener at its pace plus a hold when it decides, and a fixed length as it is', () => {
     const { trip, hero: plain } = fixture();
     const hero = scrubbing(plain);
-    const natural = resolveHook(hero.badge.hook, hookContextFor(trip, hero, 1, null, undefined, { ...pieceHookTiming(hero), length: undefined })).seconds;
+    const natural = resolveHook(hero.slides[0].hook!, hookContextFor(trip, hero, 1, null, undefined, { ...slideHookTiming(hero, hero.slides[0]), length: undefined })).seconds;
     expect(natural).toBeGreaterThan(0);
-    const follows = deckSlides(trip, { ...hero, badge: { ...hero.badge, length: defaultSlideLength(), hookSeconds: 2 } })[0];
+    const follows = deckSlides(trip, withLead(hero, { length: defaultSlideLength(), seconds: 2 }))[0];
     expect(follows.natural).toBeCloseTo(natural, 9);
     expect(follows.openerSeconds).toBeCloseTo(natural, 9);
     expect(follows.seconds).toBeCloseTo(natural + AUTO_TAIL_SECONDS, 9);
     // At ¾ pace the opener occupies three quarters of its time, said apart from what it needs.
-    const brisk = deckSlides(trip, { ...hero, badge: { ...hero.badge, length: { owner: 'opener', pace: 0.75, hold: 1 } } })[0];
+    const brisk = deckSlides(trip, withLead(hero, { length: { owner: 'opener', pace: 0.75, hold: 1 } }))[0];
     expect(brisk.natural).toBeCloseTo(natural, 9);
     expect(brisk.openerSeconds).toBeCloseTo(Math.max(brisk.timing.floor, 0.75) * natural, 9);
     expect(brisk.seconds).toBeCloseTo(brisk.openerSeconds + 1, 9);
     // Fixed and cut: the stored seconds, the opener at its own pace, the rest said as cut.
-    const cut = deckSlides(trip, { ...hero, badge: { ...hero.badge, length: { owner: 'fixed', over: 'cut' }, hookSeconds: 2 } })[0];
+    const cut = deckSlides(trip, withLead(hero, { length: { owner: 'fixed', over: 'cut' }, seconds: 2 }))[0];
     expect(cut.seconds).toBe(2);
     expect(cut.openerSeconds).toBeCloseTo(natural, 9);
     expect(cut.timing.cut).toBeCloseTo(Math.max(0, natural - 2), 9);
@@ -223,14 +226,14 @@ describe('an opener on another slide (v29)', () => {
   it('is told the slide badge’s counter and life when it has one', () => {
     const { hero } = fixture();
     const p = withSlideOpener(hero, 'scrub');
-    p.slides[0].badge = {
+    p.slides[1].badge = {
       mode: 'stage-day',
       timeAgo: 'off',
       layout: { ...DEFAULT_BADGE_LAYOUT },
       durationSeconds: 1.5,
       textOverrides: {},
     };
-    const timing = slideHookTiming(p.slides[0]);
+    const timing = slideHookTiming(p, p.slides[1]);
     expect(timing.counterMode).toBe('stage-day');
     expect(timing.durationSeconds).toBe(1.5);
   });
@@ -238,7 +241,7 @@ describe('an opener on another slide (v29)', () => {
   it('makes a content slide leave as a video when its own opener plays', () => {
     const { trip, hero } = fixture();
     const p = withSlideOpener(hero, 'scrub');
-    expect(openerMoves(trip, p, p.slides[0].hook, slideHookTiming(p.slides[0]))).toBe(true);
+    expect(openerMoves(trip, p, p.slides[1].hook, slideHookTiming(p, p.slides[1]))).toBe(true);
     const [, content] = deckSlides(trip, p);
     expect(content.medium).toBe('video');
     expect(content.reason).toBe('animated');
@@ -246,10 +249,10 @@ describe('an opener on another slide (v29)', () => {
 
   it('keeps a content slide with no opener, or the badge variant alone, a still', () => {
     const { trip, hero } = fixture();
-    const bare = { ...hero, slides: [createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 })] };
+    const bare = { ...hero, slides: [hero.slides[0], createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 })] };
     expect(deckSlides(trip, bare)[1].medium).toBe('image');
     const badgeOnly = withSlideOpener(hero, 'badge');
-    expect(openerMoves(trip, badgeOnly, badgeOnly.slides[0].hook, slideHookTiming(badgeOnly.slides[0]))).toBe(false);
+    expect(openerMoves(trip, badgeOnly, badgeOnly.slides[1].hook, slideHookTiming(badgeOnly, badgeOnly.slides[1]))).toBe(false);
     expect(deckSlides(trip, badgeOnly)[1].medium).toBe('image');
   });
 

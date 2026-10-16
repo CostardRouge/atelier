@@ -100,7 +100,7 @@ interface DeckStripProps {
   onSelect: (index: number) => void;
   onAdd: () => void;
   onRemove: () => void;
-  /** Indices into `post.slides`, content pictures only. */
+  /** Two deck positions, 0-based: the slide at `from` lands at `to`. */
   onMove: (from: number, to: number) => void;
   includeCta: boolean;
   onIncludeCta: (on: boolean) => void;
@@ -588,8 +588,8 @@ export default function DeckStrip({
   const menu: OverflowItem[] = [];
   if (ci >= 0) {
     menu.push(
-      { id: 'earlier', label: 'Move earlier', disabled: ci === 0 || orderLocked, title: lockedWhy, onSelect: () => onMove(ci, ci - 1) },
-      { id: 'later', label: 'Move later', disabled: ci >= contentCount - 1 || orderLocked, title: lockedWhy, onSelect: () => onMove(ci, ci + 1) },
+      { id: 'earlier', label: 'Move earlier', disabled: ci === 0 || orderLocked, title: lockedWhy, onSelect: () => onMove(index, index - 1) },
+      { id: 'later', label: 'Move later', disabled: ci >= contentCount - 1 || orderLocked, title: lockedWhy, onSelect: () => onMove(index, index + 1) },
     );
   }
   // On a phone the ticks toggle lives here rather than on the row: a clip

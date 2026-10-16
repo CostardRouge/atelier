@@ -168,7 +168,8 @@ describe('capacityMarks', () => {
     const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
     edit(slide);
     const doc = createTripDoc('Australia', '2025-03-01', '2025-03-10');
-    const post = { ...createTripPost('carousel', '2025-03-05', ''), slides: [slide] };
+    const base = createTripPost('carousel', '2025-03-05', '');
+    const post = { ...base, slides: [base.slides[0], slide] };
     return deckSlides(doc, post);
   };
 

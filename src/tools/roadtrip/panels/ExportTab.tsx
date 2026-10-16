@@ -12,6 +12,7 @@ import { note } from './ui';
 import type { DeliverySummary } from '../../../shared/develop/roll-export';
 import { FieldRow, InspectorSection, LockSections } from '../../../shared/ui/Inspector';
 import RunLockNotice from '../../../shared/ui/RunLockNotice';
+import { leadSlideOf } from '../../../shared/roadtrip/piece-slides';
 
 interface ExportTabProps {
   trip: TripDoc;
@@ -235,7 +236,7 @@ export default function ExportTab({
           <StudioLink
             post={post}
             elements={hookElements}
-            shades={post.badge.shades}
+            shades={leadSlideOf(post)?.shades ?? []}
             block={hookBlock}
             cta={trip.cta}
             aspect={aspect}

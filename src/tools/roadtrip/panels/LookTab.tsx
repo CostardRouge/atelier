@@ -125,7 +125,8 @@ export default function LookTab({
   placingShade = null,
   onPlaceShade,
 }: LookTabProps) {
-  const isHook = slide.kind === 'hook';
+  /** The open slide carries the PIECE's badge — its look is edited here. */
+  const isHook = slide.pieceBadge;
   const isCta = slide.kind === 'cta';
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
   const setPieceStyle = (style: BadgePieceStyle) =>

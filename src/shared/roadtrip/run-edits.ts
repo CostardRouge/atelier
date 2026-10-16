@@ -66,7 +66,8 @@ export function editedDuringExport(
     const changed =
       !later ||
       !same(slide, later) ||
-      (slide.kind === 'hook' && !same(sent.post.badge, now.post.badge));
+      // A badge wears the piece's look wherever it is drawn.
+      ((slide.pieceBadge || slide.badge !== null) && !same(sent.post.badge, now.post.badge));
     if (changed) slides.push(slideName(slide));
   }
   return { slides, everything };

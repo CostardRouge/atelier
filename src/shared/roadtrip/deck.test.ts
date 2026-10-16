@@ -16,30 +16,42 @@ import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
+  badgeSlideFrom,
+  createCardSlide,
   createPostSlide,
   defaultPostBadge,
   type PostKind,
+  type PostSlide,
   type TripDoc,
   type TripPost,
   defaultTripCover,
 } from './trip-types';
+import type { SavedMediaRef } from '../projects/project-types';
 
-const post = (over: Partial<TripPost> = {}, kind: PostKind = 'carousel'): TripPost => ({
-  id: 'p1',
-  kind,
-  date: '2025-03-27',
-  endDate: null,
-  title: 'Kalbarri cliffs',
-  media: { name: 'DJI_0001.JPG', size: 10, lastModified: 1 },
-  badge: defaultPostBadge(kind),
-  slides: [],
-  includeCta: false,
-  projectId: null,
-  grade: null,
-  publishedAt: null,
-  createdAt: 0,
-  ...over,
-});
+/**
+ * A piece: its first slide carrying the badge over `media`, then `slides`,
+ * then the trip's card when `includeCta` — the shape v34 stores.
+ */
+const post = (
+  over: Partial<Omit<TripPost, 'slides'>> & { media?: SavedMediaRef | null; slides?: PostSlide[]; includeCta?: boolean } = {},
+  kind: PostKind = 'carousel',
+): TripPost => {
+  const { media = { name: 'DJI_0001.JPG', size: 10, lastModified: 1 }, slides = [], includeCta = false, ...rest } = over;
+  return {
+    id: 'p1',
+    kind,
+    date: '2025-03-27',
+    endDate: null,
+    title: 'Kalbarri cliffs',
+    badge: defaultPostBadge(kind),
+    slides: [{ ...badgeSlideFrom(null, media), id: 'hook' }, ...slides, ...(includeCta ? [createCardSlide()] : [])],
+    projectId: null,
+    grade: null,
+    publishedAt: null,
+    createdAt: 0,
+    ...rest,
+  };
+};
 
 const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 5,
@@ -76,7 +88,7 @@ describe('deckSlides', () => {
 
   it('carries the hook’s own picture and frame', () => {
     const p = post();
-    p.badge.videoTimeSeconds = 2.5;
+    p.slides[0].videoTimeSeconds = 2.5;
     const [hook] = deckSlides(trip(), p);
     expect(hook.media?.name).toBe('DJI_0001.JPG');
     expect(hook.videoTimeSeconds).toBe(2.5);
@@ -110,11 +122,23 @@ describe('deckSlides', () => {
     ]);
   });
 
-  it('gives content slides an id and the hook none', () => {
+  it('gives every slide its own id, the first included', () => {
     const slide = createPostSlide();
     const slides = deckSlides(trip(), post({ slides: [slide] }));
-    expect(slides[0].slideId).toBeNull();
+    expect(slides[0].slideId).toBe('hook');
     expect(slides[1].slideId).toBe(slide.id);
+  });
+
+  it('draws the piece’s badge where it sits, and the card where it sits', () => {
+    const a = createPostSlide();
+    const p = post({ slides: [a], includeCta: true });
+    // The badge moved to the second picture, the card to the middle.
+    p.slides = [{ ...p.slides[0], pieceBadge: false, hook: null }, p.slides[2], { ...a, pieceBadge: true, hook: [] }];
+    const slides = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
+    expect(slides.map((s) => s.kind)).toEqual(['hook', 'cta', 'content']);
+    expect(slides.map((s) => s.pieceBadge)).toEqual([false, false, true]);
+    expect(slides[2].hook).toEqual([]);
+    expect(slides[0].hook).toBeNull();
   });
 
   it('carries each content slide’s own caption and frame', () => {
@@ -333,7 +357,7 @@ describe('deckSlides — medium and screen time', () => {
     expect(hook.medium).toBe('video');
     expect(hook.reason).toBe('moving');
     expect(hook.chosen).toBe('auto');
-    expect(hook.seconds).toBe(p.badge.hookSeconds);
+    expect(hook.seconds).toBe(p.slides[0].seconds);
   });
 
   it('follows an animated badge over a photograph — the case that started this', () => {
@@ -357,34 +381,31 @@ describe('deckSlides — medium and screen time', () => {
 
   it('keeps the closing card a still, whatever else the deck does', () => {
     const p = post({ includeCta: true });
-    p.badge.medium = 'video';
+    p.slides[0].medium = 'video';
     const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
     expect(deck.slice(-1)[0]).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
   });
 
   it('carries a clip’s speed, and 1 for anything that is not a clip', () => {
-    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
-    p.badge.videoSpeed = 2;
     const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
     slide.videoSpeed = 0.5; // a photograph has no speed, whatever is stored
     const clip = createPostSlide({ name: 'DJI_0002.MOV', size: 1, lastModified: 1 });
     clip.videoSpeed = 0.5;
-    const deck = deckSlides(
-      trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }),
-      { ...p, slides: [slide, clip], includeCta: true },
-    );
+    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 }, slides: [slide, clip], includeCta: true });
+    p.slides[0].videoSpeed = 2;
+    const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
     expect(deck.map((s) => s.speed)).toEqual([2, 1, 0.5, 1]);
   });
 
   it('delivers a photograph that moves in its frame as a video under auto', () => {
-    const p = post();
-    p.badge.motion = { keys: [{ at: 0, scale: 1.2, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
     const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
     slide.motion = { keys: [{ at: 0, scale: 1.5, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
     const still = createPostSlide({ name: 'IMG_3.JPG', size: 1, lastModified: 1 });
-    const deck = deckSlides(trip(), { ...p, slides: [slide, still] });
+    const p = post({ slides: [slide, still] });
+    p.slides[0].motion = { keys: [{ at: 0, scale: 1.2, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
+    const deck = deckSlides(trip(), p);
     expect(deck[0]).toMatchObject({ medium: 'video', reason: 'animated' });
-    expect(deck[0].motion).toEqual(p.badge.motion);
+    expect(deck[0].motion).toEqual(p.slides[0].motion);
     expect(deck[1]).toMatchObject({ medium: 'video', reason: 'animated' });
     expect(deck[2]).toMatchObject({ medium: 'image', motion: null });
   });
@@ -398,18 +419,17 @@ describe('deckSlides — medium and screen time', () => {
 
   it('reads an odd stored speed as “as shot”', () => {
     const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
-    p.badge.videoSpeed = NaN;
+    p.slides[0].videoSpeed = NaN;
     expect(deckSlides(trip(), p)[0].speed).toBe(1);
   });
 });
 
 describe('deckSlides — the picture’s own develop', () => {
   it('carries the hook’s and each slide’s develop, and none for the closing card', () => {
-    const p = post({ includeCta: true });
-    p.badge.develop = { ...DEFAULT_DEVELOP, exposure: 0.7 };
     const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
     slide.develop = { ...DEFAULT_DEVELOP, highlights: -40 };
-    p.slides = [slide, createPostSlide()];
+    const p = post({ includeCta: true, slides: [slide, createPostSlide()] });
+    p.slides[0].develop = { ...DEFAULT_DEVELOP, exposure: 0.7 };
     const t = trip();
     t.cta = { ...t.cta, headline: 'Follow the trip' };
     const slides = deckSlides(t, p);
@@ -422,10 +442,9 @@ describe('deckSlides — the picture’s own develop', () => {
 
   it('carries the picture’s own GRADE the same way — the deck resolves the chain', () => {
     const own = { layers: [], output: 'rec709-to-srgb' as const };
-    const p = post({ includeCta: true });
-    p.badge.grade = own;
     const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
-    p.slides = [slide];
+    const p = post({ includeCta: true, slides: [slide] });
+    p.slides[0].grade = own;
     const t = trip();
     t.cta = { ...t.cta, headline: 'Follow the trip' };
     const slides = deckSlides(t, p);
@@ -443,12 +462,12 @@ describe('deckSlides — what a content slide holds decides how it leaves (v29)'
     return { slide, p: post({ slides: [slide] }) };
   };
 
-  it('carries each slide’s capacities, the first slide’s from the piece', () => {
+  it('carries each slide’s capacities, the first slide’s its own too', () => {
     const { slide, p } = withSlide();
     slide.hook = [{ id: 'map', options: {} }];
     const [first, content] = deckSlides(trip(), p);
-    expect(first.hook).toBe(p.badge.hook);
-    expect(first.shades).toBe(p.badge.shades);
+    expect(first.hook).toBe(p.slides[0].hook);
+    expect(first.shades).toBe(p.slides[0].shades);
     expect(first.badge).toBeNull();
     expect(content.hook).toEqual([{ id: 'map', options: {} }]);
     expect(content.texts).toEqual([]);

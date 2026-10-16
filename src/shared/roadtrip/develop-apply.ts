@@ -21,10 +21,10 @@ function stored(settings: DevelopSettings | null): DevelopSettings | null {
 }
 
 /**
- * The post with `settings` written onto every picture it holds — the hook
- * and each content slide that names a picture — except the slide `except`
- * (a slide id, or `'hook'`), which is the one the sheet writes itself on
- * Done. A slide with no picture is left alone: there is nothing to correct.
+ * The post with `settings` written onto every picture it holds — each slide
+ * that names a picture — except the slide `except` (a slide id), which is
+ * the one the sheet writes itself on Done. A slide with no picture is left
+ * alone: there is nothing to correct.
  */
 export function applyDevelopToPost(
   post: TripPost,
@@ -34,8 +34,6 @@ export function applyDevelopToPost(
   const value = stored(settings);
   return {
     ...post,
-    badge:
-      except === 'hook' || !post.media ? post.badge : { ...post.badge, develop: value },
     slides: post.slides.map((s) =>
       s.id === except || !s.media ? s : { ...s, develop: value },
     ),
@@ -44,7 +42,7 @@ export function applyDevelopToPost(
 
 /** How many pictures `applyDevelopToPost` would write, with the same `except`. */
 export function countPostPictures(post: TripPost, except: string | null = null): number {
-  let n = except !== 'hook' && post.media ? 1 : 0;
+  let n = 0;
   for (const s of post.slides) if (s.id !== except && s.media) n += 1;
   return n;
 }

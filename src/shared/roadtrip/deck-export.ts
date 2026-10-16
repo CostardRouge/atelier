@@ -127,11 +127,11 @@ export async function renderDeck(
         collageLuts: cells
           ? cells.items.map((item) => opts.lutFor?.({ ...slide, develop: item.develop }) ?? null)
           : undefined,
-        // Settled: past the badge's entrances on the hook — the caller's
-        // clock, where the stage is — and past every other slide's own opener,
-        // badge, text and cells.
+        // Settled: past the badge's entrances on the slide carrying the
+        // piece's badge — the caller's clock, where the stage is — and past
+        // every other slide's own opener, badge, text and cells.
         timeSeconds:
-          slide.kind === 'hook'
+          slide.pieceBadge
             ? Math.max(opts.timeSeconds, collageSettleSeconds(slide.collage, aspect))
             : slideSettleSeconds(post, slide, render, aspect),
         width: w,

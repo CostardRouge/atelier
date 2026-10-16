@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { mapOptions } from './hooks/map-plan';
+import { defaultHookLayers } from './hooks/hook-variant';
 import {
   DEFAULT_PLACE_STYLE,
   DEFAULT_SLIDE_SECONDS,
   TRIP_DOC_VERSION,
+  badgeSlideFrom,
   createTripDoc,
   createTripPlace,
   createPostSlide,
@@ -20,11 +22,18 @@ import {
   spanProblem,
   splitLegacyRegion,
   stageProblem,
+  type PostSlide,
   type TripDoc,
   type TripPlace,
   type TripStage,
 } from './trip-types';
 import { tripRouteLabel } from './trip-places';
+import { createTripPostV33, postToV33 } from './legacy-post.fixture';
+import { deckSlides } from './deck';
+import type { TripPostV33 } from './trip-types';
+
+/** A stored post of a document not yet migrated, read in the shape it was written in. */
+const stored = (doc: TripDoc, i = 0) => doc.posts[i] as unknown as TripPostV33;
 import { createShade } from '../shades/shades';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_FRAMING } from '../media/framing';
@@ -58,9 +67,12 @@ describe('createTripDoc', () => {
 });
 
 describe('createTripPost', () => {
-  it('starts with no media and the day counter', () => {
+  it('starts on one slide carrying the badge, with no media, and the day counter', () => {
     const post = createTripPost('reel', '2025-03-27', 'Cliffs');
-    expect(post.media).toBeNull();
+    expect(post.slides).toHaveLength(1);
+    expect(post.slides[0].pieceBadge).toBe(true);
+    expect(post.slides[0].media).toBeNull();
+    expect(post.slides[0].hook).toEqual(defaultHookLayers());
     expect(post.badge.mode).toBe('day');
     expect(post.badge.timeAgo).toBe('off');
     expect(post.publishedAt).toBeNull();
@@ -77,7 +89,7 @@ describe('createTripPost', () => {
     // A carousel used to arrive with one. It is one click on the rail, and a
     // slide nobody composed does not belong in a deck by default.
     for (const kind of ['reel', 'carousel', 'photo'] as const) {
-      expect(createTripPost(kind, '2025-03-27', 'A').includeCta).toBe(false);
+      expect(createTripPost(kind, '2025-03-27', 'A').slides.some((s) => s.card)).toBe(false);
     }
   });
 });
@@ -114,7 +126,8 @@ describe('migrateTripDoc', () => {
 
   it('gives every existing post a badge and an empty media hint', () => {
     const doc = migrateTripDoc(v1());
-    expect(doc.posts[0].media).toBeNull();
+    expect(doc.posts[0].slides[0].media).toBeNull();
+    expect(doc.posts[0].slides[0].pieceBadge).toBe(true);
     expect(doc.posts[0].badge.mode).toBe('day');
   });
 
@@ -143,9 +156,9 @@ describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
   /** A v22 trip: a piece and a remembered look, neither knowing the credit. */
   const v22 = () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const post = createTripPost('reel', '2025-03-27', 'Cliffs');
+    const post = createTripPostV33('reel', '2025-03-27', 'Cliffs');
     delete (post.badge as Partial<typeof post.badge>).showExif;
-    const defaults = hookDefaultsFrom(post.badge);
+    const defaults = hookDefaultsFrom(createTripPost('reel', '2025-03-27', 'Cliffs'));
     delete (defaults as Partial<typeof defaults>).showExif;
     return {
       ...doc,
@@ -172,7 +185,7 @@ describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
 describe('migrateTripDoc — v24 → v25, the badge may cascade', () => {
   const v24 = () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const post = createTripPost('reel', '2025-03-27', 'Cliffs');
+    const post = createTripPostV33('reel', '2025-03-27', 'Cliffs');
     delete (post.badge as Partial<typeof post.badge>).cascade;
     return { ...doc, version: 24, posts: [post] } as TripDoc;
   };
@@ -199,7 +212,7 @@ describe('migrateTripDoc — v24 → v25, the badge may cascade', () => {
 describe('migrateTripDoc — v23 → v24, a slide may hold several pictures', () => {
   const v23 = () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    const post = createTripPostV33('carousel', '2025-03-27', 'Cliffs');
     post.slides = [createPostSlide(null)];
     delete (post.badge as Partial<typeof post.badge>).collage;
     delete (post.slides[0] as Partial<(typeof post.slides)[0]>).collage;
@@ -209,18 +222,18 @@ describe('migrateTripDoc — v23 → v24, a slide may hold several pictures', ()
   it('starts every slide on the one picture it always held', () => {
     const doc = migrateTripDoc(v23());
     expect(doc.version).toBe(TRIP_DOC_VERSION);
-    expect(doc.posts[0].badge.collage).toBeNull();
     expect(doc.posts[0].slides[0].collage).toBeNull();
+    expect(doc.posts[0].slides[1].collage).toBeNull();
   });
 
   it('keeps a sound collage and turns an unknown template into none', () => {
     const doc = v23();
-    doc.posts[0].badge.collage = { template: 'grid-2x2', cells: [] } as never;
+    stored(doc).badge.collage = { template: 'grid-2x2', cells: [] } as never;
     (doc.posts[0].slides[0] as { collage?: unknown }).collage = { template: 'from-the-future' };
     const migrated = migrateTripDoc(doc);
-    expect(migrated.posts[0].badge.collage?.template).toBe('grid-2x2');
-    expect(migrated.posts[0].badge.collage?.cells).toEqual([]);
-    expect(migrated.posts[0].slides[0].collage).toBeNull();
+    expect(migrated.posts[0].slides[0].collage?.template).toBe('grid-2x2');
+    expect(migrated.posts[0].slides[0].collage?.cells).toEqual([]);
+    expect(migrated.posts[0].slides[1].collage).toBeNull();
   });
 });
 
@@ -228,7 +241,7 @@ describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
   /** A v21 trip: a grade on the trip and on the piece, none on a picture. */
   const v21 = () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    const post = createTripPostV33('carousel', '2025-03-27', 'Cliffs');
     post.slides = [createPostSlide(null)];
     delete (post.badge as Partial<typeof post.badge>).grade;
     delete (post.slides[0] as Partial<(typeof post.slides)[0]>).grade;
@@ -238,18 +251,18 @@ describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
   it('starts every picture on "follow the piece", so nothing changes look', () => {
     const doc = migrateTripDoc(v21());
     expect(doc.version).toBe(TRIP_DOC_VERSION);
-    expect(doc.posts[0].badge.grade).toBeNull();
     expect(doc.posts[0].slides[0].grade).toBeNull();
+    expect(doc.posts[0].slides[1].grade).toBeNull();
   });
 
   it('keeps a grade a picture already carries, and refuses junk', () => {
     const grade = { layers: [], output: 'rec709-to-srgb' };
     const doc = v21();
-    doc.posts[0].badge.grade = grade as never;
+    stored(doc).badge.grade = grade as never;
     (doc.posts[0].slides[0] as { grade?: unknown }).grade = 'a look';
     const migrated = migrateTripDoc(doc);
-    expect(migrated.posts[0].badge.grade).toEqual({ ...grade, film: null });
-    expect(migrated.posts[0].slides[0].grade).toBeNull();
+    expect(migrated.posts[0].slides[0].grade).toEqual({ ...grade, film: null });
+    expect(migrated.posts[0].slides[1].grade).toBeNull();
   });
 });
 
@@ -349,17 +362,17 @@ describe('migrateTripDoc — v19 → v20, the Route becomes an Itinerary', () =>
 
   it('converts the layer rather than dropping the piece back to the badge', () => {
     const doc = migrateTripDoc(v18());
-    expect(doc.posts[0].badge.hook[0].id).toBe('map');
+    expect(doc.posts[0].slides[0].hook?.[0].id).toBe('map');
   });
 
   it('seeds the stops from the trip’s own located places, in order', () => {
-    const o = mapOptions(migrateTripDoc(v18()).posts[0].badge.hook[0].options);
+    const o = mapOptions(migrateTripDoc(v18()).posts[0].slides[0].hook![0].options);
     expect(o.stops.map((stop) => stop.name)).toEqual(['Perth', 'Kalbarri']);
     expect(o.stops[0]).toMatchObject({ lat: -31.95, lon: 115.86 });
   });
 
   it('carries every option that means the same thing in both', () => {
-    const o = mapOptions(migrateTripDoc(v18()).posts[0].badge.hook[0].options);
+    const o = mapOptions(migrateTripDoc(v18()).posts[0].slides[0].hook![0].options);
     expect(o).toMatchObject({
       position: 'bottom',
       size: 1.1,
@@ -374,7 +387,7 @@ describe('migrateTripDoc — v19 → v20, the Route becomes an Itinerary', () =>
   });
 
   it('starts with the pictures off and the line straight — what the Route drew', () => {
-    const o = mapOptions(migrateTripDoc(v18()).posts[0].badge.hook[0].options);
+    const o = mapOptions(migrateTripDoc(v18()).posts[0].slides[0].hook![0].options);
     expect(o.media).toBe('off');
     expect(o.curve).toBe(0);
   });
@@ -386,7 +399,7 @@ describe('migrateTripDoc — v19 → v20, the Route becomes an Itinerary', () =>
 
   it('leaves a piece that never used it alone, and stays idempotent', () => {
     const doc = migrateTripDoc(v18());
-    expect(doc.posts[1].badge.hook[0].id).toBe('badge');
+    expect(doc.posts[1].slides[0].hook?.[0].id).toBe('badge');
     expect(migrateTripDoc(doc)).toEqual(doc);
   });
 });
@@ -534,7 +547,7 @@ describe('migrateTripDoc — v3 → v4', () => {
   });
 
   it('leaves the picture alone — no shade until one is asked for', () => {
-    expect(migrateTripDoc(v3(true)).posts[0].badge.shades).toEqual([]);
+    expect(migrateTripDoc(v3(true)).posts[0].slides[0].shades).toEqual([]);
   });
 
   it('moves the year lines into the temporal vocabulary, keeping the words', () => {
@@ -606,7 +619,7 @@ describe('migrateTripDoc — v5 → v6, the shades', () => {
   /** A v5 document, with the vignette + scrim pair the shades replace. */
   const v5 = (backdrop: Record<string, unknown>): TripDoc => {
     const doc = createTripDoc('Australia', '2025-03-01', '2026-01-04');
-    const post = createTripPost('photo', '2025-03-27', 'A day');
+    const post = createTripPostV33('photo', '2025-03-27', 'A day');
     const badge = { ...post.badge } as unknown as Record<string, unknown>;
     delete badge.shades;
     badge.backdrop = backdrop;
@@ -620,7 +633,7 @@ describe('migrateTripDoc — v5 → v6, the shades', () => {
   it('carries a scrim over as the edge shade it always was', () => {
     const shades = migrateTripDoc(
       v5({ gradient: 'linear', gradientStrength: 0.5, gradientColor: '#101010', gradientFrom: 'top', vignette: 0 }),
-    ).posts[0].badge.shades;
+    ).posts[0].slides[0].shades;
     expect(shades).toHaveLength(1);
     expect(shades[0]).toMatchObject({
       direction: 'top',
@@ -633,14 +646,14 @@ describe('migrateTripDoc — v5 → v6, the shades', () => {
   it('keeps an “under the hook” scrim following the hook', () => {
     const shades = migrateTripDoc(
       v5({ gradient: 'under', gradientStrength: 0.6, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0 }),
-    ).posts[0].badge.shades;
+    ).posts[0].slides[0].shades;
     expect(shades[0]).toMatchObject({ direction: 'bottom', followHook: true });
   });
 
   it('carries a vignette over as an inverted radial', () => {
     const shades = migrateTripDoc(
       v5({ gradient: 'off', gradientStrength: 0.65, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0.4 }),
-    ).posts[0].badge.shades;
+    ).posts[0].slides[0].shades;
     expect(shades).toHaveLength(1);
     expect(shades[0]).toMatchObject({ direction: 'radial', invert: true });
   });
@@ -648,14 +661,14 @@ describe('migrateTripDoc — v5 → v6, the shades', () => {
   it('carries BOTH when both were on — which is what could not be done before', () => {
     const shades = migrateTripDoc(
       v5({ gradient: 'linear', gradientStrength: 0.5, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0.3 }),
-    ).posts[0].badge.shades;
+    ).posts[0].slides[0].shades;
     expect(shades).toHaveLength(2);
   });
 
   it('leaves a post that had neither with nothing at all', () => {
     const shades = migrateTripDoc(
       v5({ gradient: 'off', gradientStrength: 0.65, gradientColor: '#000000', gradientFrom: 'bottom', vignette: 0 }),
-    ).posts[0].badge.shades;
+    ).posts[0].slides[0].shades;
     expect(shades).toEqual([]);
   });
 
@@ -668,22 +681,34 @@ describe('migrateTripDoc — v5 → v6, the shades', () => {
 });
 
 describe('hook defaults — the look a trip gives a new piece', () => {
-  const composed = () => {
+  const composed = (over: { referenceDate?: string; videoTimeSeconds?: number } = {}) => {
     const post = createTripPost('reel', '2025-03-27', 'A reel');
     return {
-      ...post.badge,
-      aspectId: '1:1',
-      mode: 'stage-day' as const,
-      timeAgo: 'days-ago' as const,
-      showPin: true,
-      durationSeconds: 6,
-      layout: { ...post.badge.layout, anchor: 'top-right' as const, sizeFrac: 0.3 },
-      pieceStyles: { headline: { textCase: 'upper' as const } },
-      shades: [{ ...createShade(), direction: 'radial' as const, strength: 0.4 }],
+      ...post,
+      badge: {
+        ...post.badge,
+        aspectId: '1:1',
+        mode: 'stage-day' as const,
+        timeAgo: 'days-ago' as const,
+        showPin: true,
+        durationSeconds: 6,
+        layout: { ...post.badge.layout, anchor: 'top-right' as const, sizeFrac: 0.3 },
+        pieceStyles: { headline: { textCase: 'upper' as const } },
+        ...(over.referenceDate ? { referenceDate: over.referenceDate } : {}),
+      },
+      slides: [
+        {
+          ...post.slides[0],
+          shades: [{ ...createShade(), direction: 'radial' as const, strength: 0.4 }],
+          videoTimeSeconds: over.videoTimeSeconds ?? 0,
+        },
+      ],
     };
   };
+  const fresh = (defaults: ReturnType<typeof hookDefaultsFrom> | null) =>
+    createTripPost('reel', '2025-03-28', '', null, defaults);
 
-  it('lifts the look out of a piece', () => {
+  it('lifts the look out of a piece — its badge and the slide carrying it', () => {
     const d = hookDefaultsFrom(composed());
     expect(d).toMatchObject({
       aspectId: '1:1',
@@ -698,43 +723,40 @@ describe('hook defaults — the look a trip gives a new piece', () => {
   });
 
   it('gives a new piece that look', () => {
-    const badge = defaultPostBadge('reel', hookDefaultsFrom(composed()));
-    expect(badge.aspectId).toBe('1:1');
-    expect(badge.layout.sizeFrac).toBe(0.3);
-    expect(badge.shades[0].strength).toBe(0.4);
+    const post = fresh(hookDefaultsFrom(composed()));
+    expect(post.badge.aspectId).toBe('1:1');
+    expect(post.badge.layout.sizeFrac).toBe(0.3);
+    expect(post.slides[0].shades[0].strength).toBe(0.4);
   });
 
   it('never inherits what belongs to one day', () => {
     // A reference day, a clip's frame and the author's own words are facts
     // about the piece that was composed, not habits of the trip.
-    const from = { ...composed(), referenceDate: '2026-01-01', videoTimeSeconds: 4.5 };
-    const badge = defaultPostBadge('reel', hookDefaultsFrom(from));
-    expect(badge.referenceDate).toBeNull();
-    expect(badge.videoTimeSeconds).toBe(0);
-    expect(badge.textOverrides).toEqual({});
+    const post = fresh(hookDefaultsFrom(composed({ referenceDate: '2026-01-01', videoTimeSeconds: 4.5 })));
+    expect(post.badge.referenceDate).toBeNull();
+    expect(post.slides[0].videoTimeSeconds).toBe(0);
+    expect(post.badge.textOverrides).toEqual({});
   });
 
   it('does not share mutable state with the piece it came from', () => {
     const source = composed();
     const d = hookDefaultsFrom(source);
-    const badge = defaultPostBadge('reel', d);
-    badge.layout.sizeFrac = 0.9;
-    badge.shades[0].strength = 0.1;
+    const post = fresh(d);
+    post.badge.layout.sizeFrac = 0.9;
+    post.slides[0].shades[0].strength = 0.1;
     expect(d.layout.sizeFrac).toBe(0.3);
     expect(d.shades[0].strength).toBe(0.4);
-    expect(source.layout.sizeFrac).toBe(0.3);
+    expect(source.badge.layout.sizeFrac).toBe(0.3);
   });
 
   it('gives each copied shade its own id', () => {
     const d = hookDefaultsFrom(composed());
-    const a = defaultPostBadge('reel', d);
-    const b = defaultPostBadge('reel', d);
-    expect(a.shades[0].id).not.toBe(b.shades[0].id);
+    expect(fresh(d).slides[0].shades[0].id).not.toBe(fresh(d).slides[0].shades[0].id);
   });
 
   it('falls back to the factory look with no default saved', () => {
     expect(defaultPostBadge('reel').aspectId).toBe('9:16');
-    expect(defaultPostBadge('reel', null).shades).toEqual([]);
+    expect(fresh(null).slides[0].shades).toEqual([]);
   });
 
   it('starts a trip with none — a default nobody chose is a factory setting', () => {
@@ -749,12 +771,9 @@ describe('duplicateTripPost', () => {
       ...post,
       projectId: 'proj-1',
       publishedAt: 1_700_000_000_000,
-      badge: {
-        ...post.badge,
-        aspectId: '1:1',
-        shades: [createShade({ strength: 0.4 })],
-      },
+      badge: { ...post.badge, aspectId: '1:1' },
       slides: [
+        { ...post.slides[0], shades: [createShade({ strength: 0.4 })] },
         { ...createPostSlide(), id: 's1', caption: 'One' },
         { ...createPostSlide(), id: 's2', videoTimeSeconds: 2, caption: 'Two' },
       ],
@@ -764,8 +783,9 @@ describe('duplicateTripPost', () => {
   it('carries the look and the slides over — that is the point', () => {
     const copy = duplicateTripPost(source());
     expect(copy.badge.aspectId).toBe('1:1');
-    expect(copy.badge.shades[0].strength).toBe(0.4);
-    expect(copy.slides.map((s) => s.caption)).toEqual(['One', 'Two']);
+    expect(copy.slides[0].shades[0].strength).toBe(0.4);
+    expect(copy.slides[0].pieceBadge).toBe(true);
+    expect(copy.slides.map((s) => s.caption)).toEqual(['', 'One', 'Two']);
     expect(copy.date).toBe('2025-07-09');
     expect(copy.kind).toBe('carousel');
   });
@@ -791,16 +811,16 @@ describe('duplicateTripPost', () => {
     const copy = duplicateTripPost(from);
     expect(copy.id).not.toBe(from.id);
     expect(copy.slides.map((s) => s.id)).not.toEqual(from.slides.map((s) => s.id));
-    expect(copy.badge.shades[0].id).not.toBe(from.badge.shades[0].id);
+    expect(copy.slides[0].shades[0].id).not.toBe(from.slides[0].shades[0].id);
   });
 
   it('shares no mutable state with the piece it came from', () => {
     const from = source();
     const copy = duplicateTripPost(from);
     copy.badge.layout.sizeFrac = 0.9;
-    copy.slides[0].caption = 'changed';
+    copy.slides[1].caption = 'changed';
     expect(from.badge.layout.sizeFrac).not.toBe(0.9);
-    expect(from.slides[0].caption).toBe('One');
+    expect(from.slides[1].caption).toBe('One');
   });
 });
 
@@ -902,7 +922,7 @@ describe('migrateTripDoc — v9 → v10, the grade', () => {
     const doc = createTripDoc('Australie', '2025-11-02', '2026-02-14');
     doc.version = 9;
     delete (doc as Partial<TripDoc>).grade;
-    const post = createTripPost('reel', '2025-11-05', 'Kalbarri');
+    const post = createTripPostV33('reel', '2025-11-05', 'Kalbarri');
     delete (post as Partial<typeof post>).grade;
     doc.posts = [post];
     return doc;
@@ -1043,7 +1063,7 @@ describe('framing (v12)', () => {
       version: 11,
       posts: [
         {
-          ...createTripPost('carousel', '2025-08-24', 'Kalbarri'),
+          ...createTripPostV33('carousel', '2025-08-24', 'Kalbarri'),
           badge: { ...defaultPostBadge('carousel'), framing: undefined },
           slides: [{ id: 's1', media: null, videoTimeSeconds: 0, caption: '' }],
         },
@@ -1052,7 +1072,7 @@ describe('framing (v12)', () => {
 
   it('gives every picture the centred cover-crop it already had', () => {
     const doc = migrateTripDoc(v11());
-    expect(doc.posts[0].badge.framing).toEqual(DEFAULT_FRAMING);
+    expect(doc.posts[0].slides[0].framing).toEqual(DEFAULT_FRAMING);
     expect(doc.posts[0].slides[0].framing).toEqual(DEFAULT_FRAMING);
   });
 
@@ -1068,13 +1088,11 @@ describe('framing (v12)', () => {
   it('is never inherited by the next piece of the same kind', () => {
     // A crop is about ONE photograph's subject; carrying it onto the next
     // picture is how a subject ends up out of frame.
-    const badge = {
-      ...defaultPostBadge('reel'),
-      framing: { ...DEFAULT_FRAMING, scale: 2.5, x: 0.2, y: -0.1, rotation: 12, flipX: true, fit: 'contain' as const },
-    };
-    const defaults = hookDefaultsFrom(badge);
+    const post = createTripPost('reel', '2025-03-27', '');
+    post.slides[0].framing = { ...DEFAULT_FRAMING, scale: 2.5, x: 0.2, y: -0.1, rotation: 12, flipX: true, fit: 'contain' as const };
+    const defaults = hookDefaultsFrom(post);
     expect('framing' in defaults).toBe(false);
-    expect(defaultPostBadge('reel', defaults).framing).toEqual(DEFAULT_FRAMING);
+    expect(createTripPost('reel', '2025-03-28', '', null, defaults).slides[0].framing).toEqual(DEFAULT_FRAMING);
   });
 });
 
@@ -1117,7 +1135,7 @@ describe('migrateTripDoc — v17 → v18 (a mirror and a fit)', () => {
       version: 17,
       posts: [
         {
-          ...createTripPost('carousel', '2025-03-27', 'Cliffs'),
+          ...createTripPostV33('carousel', '2025-03-27', 'Cliffs'),
           badge: {
             ...defaultPostBadge('carousel'),
             framing: { scale: 2, x: 0.1, y: -0.05, rotation: 12 },
@@ -1131,14 +1149,14 @@ describe('migrateTripDoc — v17 → v18 (a mirror and a fit)', () => {
 
   it('keeps every crop and lands it unmirrored on cover', () => {
     const doc = migrateTripDoc(v17());
-    expect(doc.posts[0].badge.framing).toEqual({
+    expect(doc.posts[0].slides[0].framing).toEqual({
       ...DEFAULT_FRAMING,
       scale: 2,
       x: 0.1,
       y: -0.05,
       rotation: 12,
     });
-    expect(doc.posts[0].slides[0].framing).toEqual({ ...DEFAULT_FRAMING, rotation: 90 });
+    expect(doc.posts[0].slides[1].framing).toEqual({ ...DEFAULT_FRAMING, rotation: 90 });
     expect(doc.posts[0].badge.aspectId).toBe('4:5');
     expect(doc.version).toBe(TRIP_DOC_VERSION);
   });
@@ -1158,7 +1176,7 @@ describe('migrateTripDoc — v16 → v17 (a picture’s own develop)', () => {
       version: 16,
       posts: [
         {
-          ...createTripPost('carousel', '2025-03-27', 'Cliffs'),
+          ...createTripPostV33('carousel', '2025-03-27', 'Cliffs'),
           badge,
           slides: [slide],
         },
@@ -1169,30 +1187,31 @@ describe('migrateTripDoc — v16 → v17 (a picture’s own develop)', () => {
 
   it('leaves every picture as shot and the presets empty', () => {
     const doc = migrateTripDoc(v16());
-    expect(doc.posts[0].badge.develop).toBeNull();
     expect(doc.posts[0].slides[0].develop).toBeNull();
+    expect(doc.posts[0].slides[1].develop).toBeNull();
     expect(doc.developPresets).toEqual([]);
     expect(doc.version).toBe(TRIP_DOC_VERSION);
   });
 
   it('reads a stored develop through the clamp, and an all-zero one as nothing', () => {
     const doc = migrateTripDoc(v16({ exposure: 9, vibrance: 'x' }, { exposure: 0 }));
-    expect(doc.posts[0].badge.develop).toEqual({ ...DEFAULT_DEVELOP, exposure: 3 });
-    expect(doc.posts[0].slides[0].develop).toBeNull();
+    expect(doc.posts[0].slides[0].develop).toEqual({ ...DEFAULT_DEVELOP, exposure: 3 });
+    expect(doc.posts[0].slides[1].develop).toBeNull();
   });
 
   it('keeps a document that already says so, presets included', () => {
-    const doc = migrateTripDoc(v16());
+    const doc = v16();
     doc.posts[0].slides[0].develop = { ...DEFAULT_DEVELOP, highlights: -40 };
     doc.developPresets = [{ id: 'p', name: 'Dusk', settings: { ...DEFAULT_DEVELOP, tint: 5 } }];
-    const again = migrateTripDoc({ ...doc, version: 16 });
-    expect(again.posts[0].slides[0].develop).toEqual({ ...DEFAULT_DEVELOP, highlights: -40 });
+    const again = migrateTripDoc(doc);
+    expect(again.posts[0].slides[1].develop).toEqual({ ...DEFAULT_DEVELOP, highlights: -40 });
     expect(again.developPresets).toEqual(doc.developPresets);
   });
 
   it('never hands a develop to a new piece — a correction is not a habit', () => {
-    const badge = defaultPostBadge('reel', hookDefaultsFrom({ ...defaultPostBadge('reel'), develop: { ...DEFAULT_DEVELOP, exposure: 1 } }));
-    expect(badge.develop).toBeNull();
+    const post = createTripPost('reel', '2025-03-27', '');
+    post.slides[0].develop = { ...DEFAULT_DEVELOP, exposure: 1 };
+    expect(createTripPost('reel', '2025-03-28', '', null, hookDefaultsFrom(post)).slides[0].develop).toBeNull();
     expect(createPostSlide().develop).toBeNull();
   });
 });
@@ -1203,13 +1222,13 @@ describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
     // Built by REMOVING what v14 added, rather than by trusting today's
     // factory: a fixture that carries the new fields proves nothing about a
     // document written before they existed.
-    const badge = { ...defaultPostBadge('carousel'), durationSeconds: 6 } as Record<
+    const badge = { ...createTripPostV33('carousel', '2025-03-27', '').badge, durationSeconds: 6 } as Record<
       string,
       unknown
     >;
     delete badge.medium;
     delete badge.hookSeconds;
-    const defaults = { ...hookDefaultsFrom(defaultPostBadge('reel')) } as Record<
+    const defaults = { ...hookDefaultsFrom(createTripPost('reel', '2025-03-27', '')) } as Record<
       string,
       unknown
     >;
@@ -1248,18 +1267,18 @@ describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
 
   it('files every slide as `auto`, which delivers exactly what it did before', () => {
     const doc = migrateTripDoc(v13());
-    expect(doc.posts[0].badge.medium).toBe('auto');
+    expect(doc.posts[0].slides[0].medium).toBe('auto');
     expect(doc.posts[0].slides[0].medium).toBe('auto');
   });
 
   it('gives the hook the screen time the slider used to offer', () => {
     // duration + a beat: the badge's own hold is what it was always derived
     // from, so no stored piece changes length.
-    expect(migrateTripDoc(v13()).posts[0].badge.hookSeconds).toBe(7);
+    expect(migrateTripDoc(v13()).posts[0].slides[0].seconds).toBe(7);
   });
 
   it('gives a content slide the default screen time', () => {
-    expect(migrateTripDoc(v13()).posts[0].slides[0].seconds).toBe(DEFAULT_SLIDE_SECONDS);
+    expect(migrateTripDoc(v13()).posts[0].slides[1].seconds).toBe(DEFAULT_SLIDE_SECONDS);
   });
 
   it('fills the trip’s remembered defaults too', () => {
@@ -1269,12 +1288,12 @@ describe('migrateTripDoc — v13 → v14 (a slide says what it is)', () => {
   });
 
   it('leaves a document that already says so untouched', () => {
-    const doc = migrateTripDoc(v13());
-    doc.posts[0].badge.medium = 'image';
+    const doc = v13();
+    stored(doc).badge.medium = 'image';
     doc.posts[0].slides[0].seconds = 8;
-    const again = migrateTripDoc({ ...doc, version: 13 });
-    expect(again.posts[0].badge.medium).toBe('image');
-    expect(again.posts[0].slides[0].seconds).toBe(8);
+    const again = migrateTripDoc(doc);
+    expect(again.posts[0].slides[0].medium).toBe('image');
+    expect(again.posts[0].slides[1].seconds).toBe(8);
   });
 });
 
@@ -1317,7 +1336,7 @@ describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
           createdAt: 0,
         },
       ],
-      hookDefaults: { reel: hookDefaultsFrom(defaultPostBadge('reel')) },
+      hookDefaults: { reel: hookDefaultsFrom(createTripPost('reel', '2025-03-27', '')) },
       cover: defaultTripCover(),
       grade: emptyGrade(),
       sourceId: 'local',
@@ -1332,11 +1351,11 @@ describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
   it('plays every existing clip as shot, so nothing changes length', () => {
     const doc = migrateTripDoc(v15());
     expect(doc.version).toBe(TRIP_DOC_VERSION);
-    expect(doc.posts[0].badge.videoSpeed).toBe(1);
+    expect(doc.posts[0].slides[0].videoSpeed).toBe(1);
     expect(doc.posts[0].slides[0].videoSpeed).toBe(1);
     // The in point and the screen time are exactly what they were.
-    expect(doc.posts[0].badge.videoTimeSeconds).toBe(2);
-    expect(doc.posts[0].badge.hookSeconds).toBe(5);
+    expect(doc.posts[0].slides[0].videoTimeSeconds).toBe(2);
+    expect(doc.posts[0].slides[0].seconds).toBe(5);
   });
 
   it('gives the hook defaults no speed — it is never inherited', () => {
@@ -1345,10 +1364,10 @@ describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
   });
 
   it('keeps a speed a document already carries', () => {
-    const doc = migrateTripDoc(v15());
-    doc.posts[0].badge.videoSpeed = 2;
-    const again = migrateTripDoc({ ...doc, version: 15 });
-    expect(again.posts[0].badge.videoSpeed).toBe(2);
+    const doc = v15();
+    stored(doc).badge.videoSpeed = 2;
+    const again = migrateTripDoc(doc);
+    expect(again.posts[0].slides[0].videoSpeed).toBe(2);
   });
 
   it('fills a v1 document all the way up without leaving a hole', () => {
@@ -1370,9 +1389,9 @@ describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
       updatedAt: 0,
     } as unknown as TripDoc;
     const doc = migrateTripDoc(v1);
-    expect(doc.posts[0].badge.videoSpeed).toBe(1);
+    expect(doc.posts[0].slides[0].videoSpeed).toBe(1);
     expect(doc.posts[0].badge.mode).toBe('day');
-    expect(doc.posts[0].badge.hookSeconds).toBeGreaterThan(0);
+    expect(doc.posts[0].slides[0].seconds).toBeGreaterThan(0);
   });
 });
 
@@ -1408,7 +1427,7 @@ describe('migrateTripDoc — v26 → v27, the stored destination is dropped', ()
 describe('migrateTripDoc — v27 → v28, a picture may move in its frame', () => {
   const v27 = () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    const post = createTripPostV33('carousel', '2025-03-27', 'Cliffs');
     post.slides = [createPostSlide(null)];
     post.badge.collage = { template: 'grid-2x2', cells: [{}] } as never;
     delete (post.badge as Partial<typeof post.badge>).motion;
@@ -1419,32 +1438,32 @@ describe('migrateTripDoc — v27 → v28, a picture may move in its frame', () =
   it('holds every picture still — hook, slides and cells', () => {
     const doc = migrateTripDoc(v27());
     expect(doc.version).toBe(TRIP_DOC_VERSION);
-    expect(doc.posts[0].badge.motion).toBeNull();
     expect(doc.posts[0].slides[0].motion).toBeNull();
-    expect(doc.posts[0].badge.collage?.cells[0].motion).toBeNull();
+    expect(doc.posts[0].slides[1].motion).toBeNull();
+    expect(doc.posts[0].slides[0].collage?.cells[0].motion).toBeNull();
   });
 
   it('keeps a sound motion and refuses junk', () => {
     const doc = v27();
-    doc.posts[0].badge.motion = { keys: [{ at: 0, scale: 2, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
+    stored(doc).badge.motion = { keys: [{ at: 0, scale: 2, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
     (doc.posts[0].slides[0] as { motion?: unknown }).motion = { keys: 'fast' };
     const migrated = migrateTripDoc(doc);
-    expect(migrated.posts[0].badge.motion?.keys).toEqual([{ at: 0, scale: 2, x: 0, y: 0 }]);
-    expect(migrated.posts[0].slides[0].motion).toBeNull();
+    expect(migrated.posts[0].slides[0].motion?.keys).toEqual([{ at: 0, scale: 2, x: 0, y: 0 }]);
+    expect(migrated.posts[0].slides[1].motion).toBeNull();
   });
 
   it('never gives a new piece a motion to inherit', () => {
     const post = createTripPost('reel', '2025-03-27', 'Cliffs');
-    expect(post.badge.motion).toBeNull();
+    expect(post.slides[0].motion).toBeNull();
     expect(createPostSlide(null).motion).toBeNull();
-    expect('motion' in hookDefaultsFrom(post.badge)).toBe(false);
+    expect('motion' in hookDefaultsFrom(post)).toBe(false);
   });
 });
 
 describe('migrateTripDoc — v28 → v29, any slide may hold an opener, a badge, shades and text', () => {
   const v28 = () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const post = createTripPost('carousel', '2025-03-27', 'Three drives');
+    const post = createTripPostV33('carousel', '2025-03-27', 'Three drives');
     post.slides = [createPostSlide(null), createPostSlide(null)];
     for (const slide of post.slides) {
       const bare = slide as Partial<typeof slide>;
@@ -1458,16 +1477,16 @@ describe('migrateTripDoc — v28 → v29, any slide may hold an opener, a badge,
 
   it('gives every stored slide none of them, and leaves the first slide’s own untouched', () => {
     const before = v28();
-    const hookBefore = structuredClone(before.posts[0].badge.hook);
+    const hookBefore = structuredClone(stored(before).badge.hook);
     const doc = migrateTripDoc(before);
     expect(doc.version).toBe(TRIP_DOC_VERSION);
-    for (const slide of doc.posts[0].slides) {
+    for (const slide of doc.posts[0].slides.slice(1)) {
       expect(slide.hook).toBeNull();
       expect(slide.shades).toEqual([]);
       expect(slide.badge).toBeNull();
       expect(slide.texts).toEqual([]);
     }
-    expect(doc.posts[0].badge.hook).toEqual(hookBefore);
+    expect(doc.posts[0].slides[0].hook).toEqual(hookBefore);
   });
 
   it('keeps sound capacities and turns junk into none', () => {
@@ -1482,7 +1501,7 @@ describe('migrateTripDoc — v28 → v29, any slide may hold an opener, a badge,
     b.texts = [{ kind: 'battery' }];
     b.shades = 'dark';
     const migrated = migrateTripDoc(doc);
-    const [ma, mb] = migrated.posts[0].slides;
+    const [, ma, mb] = migrated.posts[0].slides;
     expect(ma.hook).toEqual([{ id: 'map', options: { stops: [] } }]);
     expect(ma.badge?.mode).toBe('stage-day');
     expect(ma.badge?.layout.anchor).toBe('top-right');
@@ -1503,7 +1522,7 @@ describe('migrateTripDoc — v28 → v29, any slide may hold an opener, a badge,
   });
 
   it('gives a duplicated piece’s slide shades their own identity', () => {
-    const post = createTripPost('carousel', '2025-03-27', 'Drives');
+    const post = createTripPostV33('carousel', '2025-03-27', 'Drives');
     const slide = createPostSlide(null);
     slide.shades = [createShade()];
     post.slides = [slide];
@@ -1549,7 +1568,7 @@ describe('migrateTripDoc — v32 → v33, a slide’s length has an owner', () =
   /** A v32 piece: rule D's marks on the badge and a slide, Fit on the slide's opener only. */
   const v32 = () => {
     const doc = createTripDoc('Tasmanie', '2026-01-01', '2026-01-10');
-    const post = createTripPost('carousel', '2026-01-03', '');
+    const post = createTripPostV33('carousel', '2026-01-03', '');
     const legacyBadge = post.badge as unknown as Record<string, unknown>;
     delete legacyBadge.length;
     legacyBadge.hookAuto = true;
@@ -1563,7 +1582,8 @@ describe('migrateTripDoc — v32 → v33, a slide’s length has an owner', () =
     set.auto = false;
     set.seconds = 6;
     set.hook = [{ id: 'map', options: {} }];
-    const defaults = hookDefaultsFrom(post.badge) as unknown as Record<string, unknown>;
+    const defaults = hookDefaultsFrom(createTripPost('carousel', '2026-01-03', '')) as unknown as Record<string, unknown>;
+    defaults.hook = [{ id: 'drive', options: { stopsOn: 'custom', fit: false } }];
     delete defaults.length;
     return {
       ...doc,
@@ -1576,21 +1596,21 @@ describe('migrateTripDoc — v32 → v33, a slide’s length has an owner', () =
   it('turns Auto into the opener deciding with rule D’s hold, and a set length into a fixed one', () => {
     const doc = migrateTripDoc(v32());
     const [post] = doc.posts;
-    expect(post.badge.length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+    expect(post.slides[0].length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
     // No mark was "set by hand": fixed, its opener sped up where Fit was on, cut where it was not.
-    expect(post.slides[0].length).toEqual({ owner: 'fixed', over: 'fit' });
-    expect(post.slides[0].seconds).toBe(4);
-    expect(post.slides[1].length).toEqual({ owner: 'fixed', over: 'cut' });
-    expect(post.slides[1].seconds).toBe(6);
+    expect(post.slides[1].length).toEqual({ owner: 'fixed', over: 'fit' });
+    expect(post.slides[1].seconds).toBe(4);
+    expect(post.slides[2].length).toEqual({ owner: 'fixed', over: 'cut' });
+    expect(post.slides[2].seconds).toBe(6);
   });
 
   it('deletes rule D’s keys and every opener’s own Fit', () => {
     const doc = migrateTripDoc(v32());
     const [post] = doc.posts;
     expect('hookAuto' in post.badge).toBe(false);
-    expect('auto' in post.slides[1]).toBe(false);
-    expect(post.badge.hook[0].options).toEqual({ stopsOn: 'custom' });
-    expect(post.slides[0].hook?.[0].options).toEqual({});
+    expect('auto' in post.slides[2]).toBe(false);
+    expect(post.slides[0].hook?.[0].options).toEqual({ stopsOn: 'custom' });
+    expect(post.slides[1].hook?.[0].options).toEqual({});
   });
 
   it('reads a saved look with no mark as the opener deciding, as a new piece did', () => {
@@ -1600,7 +1620,92 @@ describe('migrateTripDoc — v32 → v33, a slide’s length has an owner', () =
   });
 
   it('gives a new piece and a new slide to their opener', () => {
-    expect(defaultPostBadge('reel').length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+    expect(badgeSlideFrom(null).length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
     expect(createPostSlide().length).toEqual({ owner: 'opener', pace: 1, hold: 0.5 });
+  });
+});
+
+describe('migrateTripDoc — v33 → v34, every slide in one list', () => {
+  /** A v33 piece with something on every field the hook kept apart. */
+  const v33 = () => {
+    const doc = createTripDoc('Tasmanie', '2026-01-01', '2026-01-10');
+    const current = createTripPost('carousel', '2026-01-03', 'Cradle');
+    const content = { ...createPostSlide({ name: 'b.jpg', size: 1, lastModified: 1 }), caption: 'Dove Lake' };
+    current.slides = [
+      {
+        ...current.slides[0],
+        media: { name: 'a.jpg', size: 1, lastModified: 1 },
+        framing: { ...DEFAULT_FRAMING, scale: 1.4 },
+        develop: { ...DEFAULT_DEVELOP, exposure: 0.5 },
+        seconds: 6.5,
+        hook: [{ id: 'drive', options: {} }],
+        hookShelf: { map: { size: 0.4 } },
+        shades: [createShade({ strength: 0.3 })],
+        texts: [],
+      },
+      content,
+      { ...createPostSlide(), card: 'trip' as const },
+    ];
+    const post = postToV33(current);
+    return { doc: { ...doc, version: 33, posts: [post] } as unknown as TripDoc, post, current };
+  };
+
+  it('moves the hook’s picture and everything about it onto the first slide, which carries the badge', () => {
+    const { doc, post } = v33();
+    const [migrated] = migrateTripDoc(doc).posts;
+    const [first] = migrated.slides;
+    expect(first.id).toBe(`hook-${post.id}`);
+    expect(first.pieceBadge).toBe(true);
+    expect(first.media).toEqual(post.media);
+    expect(first).toMatchObject({
+      framing: post.badge.framing,
+      develop: post.badge.develop,
+      seconds: post.badge.hookSeconds,
+      length: post.badge.length,
+      hook: post.badge.hook,
+      hookShelf: post.badge.hookShelf,
+      shades: post.badge.shades,
+      caption: '',
+      badge: null,
+    });
+  });
+
+  it('keeps the content slides in order and turns the closing card into a slide at the end', () => {
+    const { doc, post } = v33();
+    const [migrated] = migrateTripDoc(doc).posts;
+    expect(migrated.slides.map((s) => s.caption)).toEqual(['', 'Dove Lake', '']);
+    expect(migrated.slides[2]).toMatchObject({ id: `card-${post.id}`, card: 'trip' });
+    expect(migrated.slides[1]).toEqual(post.slides[0]);
+  });
+
+  it('leaves the badge holding only what is the piece’s, and the post no media or flag', () => {
+    const { doc } = v33();
+    const [migrated] = migrateTripDoc(doc).posts;
+    for (const key of ['media', 'includeCta']) expect(key in migrated).toBe(false);
+    for (const key of ['framing', 'hook', 'hookSeconds', 'shades', 'medium', 'develop', 'grade', 'collage', 'texts', 'hookShelf', 'videoSpeed', 'videoTimeSeconds', 'motion', 'length']) {
+      expect(key in migrated.badge).toBe(false);
+    }
+    expect(migrated.badge).toEqual(defaultPostBadge('carousel'));
+  });
+
+  it('is the inverse of the fixture that stores a piece the old way', () => {
+    const { doc, current } = v33();
+    const [migrated] = migrateTripDoc(doc).posts;
+    // Every slide but the derived ids is what the piece held before it was stored.
+    const withoutId = (slide: PostSlide) => ({ ...slide, id: '' });
+    expect(migrated.slides.map(withoutId)).toEqual(current.slides.map(withoutId));
+  });
+
+  it('names its slides the same on every device', () => {
+    const { doc } = v33();
+    expect(migrateTripDoc(doc).posts[0].slides.map((s) => s.id)).toEqual(migrateTripDoc(doc).posts[0].slides.map((s) => s.id));
+  });
+
+  it('draws the same deck: the badge on the first, the card last', () => {
+    const { doc } = v33();
+    const migrated = migrateTripDoc({ ...doc, cta: { ...DEFAULT_CTA } } as TripDoc);
+    const deck = deckSlides(migrated, migrated.posts[0]);
+    expect(deck.map((s) => s.kind)).toEqual(['hook', 'content', 'cta']);
+    expect(deck.map((s) => s.pieceBadge)).toEqual([true, false, false]);
   });
 });

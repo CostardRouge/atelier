@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { gradeKey } from '../lut/saved-grade';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import {
-  HOOK_PICTURE,
   countOwnGrades,
   gradeScopeOf,
   gradeShownBy,
@@ -35,6 +34,9 @@ const grade = (id: string): TripGrade => ({ layers: [layer(id)], output: 'none' 
 
 const ref = (name: string) => ({ name, size: 1, lastModified: 1 });
 
+/** The first slide's id — the picture under the badge, a slide like the others since v34. */
+const HOOK_PICTURE = 'hook';
+
 function trip(): TripDoc {
   const doc = createTripDoc('Australie', '2025-07-01', '2025-07-31');
   doc.grade = grade('trip');
@@ -43,8 +45,7 @@ function trip(): TripDoc {
 
 function piece(): TripPost {
   const post = createTripPost('carousel', '2025-07-03', 'Cliffs');
-  post.media = ref('hook.jpg');
-  post.slides = [createPostSlide(ref('a.jpg')), createPostSlide(ref('b.jpg'))];
+  post.slides = [{ ...post.slides[0], id: HOOK_PICTURE, media: ref('hook.jpg') }, createPostSlide(ref('a.jpg')), createPostSlide(ref('b.jpg'))];
   return post;
 }
 
@@ -57,14 +58,14 @@ describe('the chain', () => {
 
     p.grade = grade('piece');
     expect(gradeShownBy(t, p, HOOK_PICTURE)).toEqual(grade('piece'));
-    expect(gradeShownBy(t, p, p.slides[0].id)).toEqual(grade('piece'));
-    expect(gradeScopeOf(p, p.slides[0].id)).toBe('post');
-
-    p.slides[0].grade = grade('slide');
-    expect(gradeShownBy(t, p, p.slides[0].id)).toEqual(grade('slide'));
-    expect(gradeScopeOf(p, p.slides[0].id)).toBe('slide');
-    // The rest of the deck is untouched by one picture departing.
     expect(gradeShownBy(t, p, p.slides[1].id)).toEqual(grade('piece'));
+    expect(gradeScopeOf(p, p.slides[1].id)).toBe('post');
+
+    p.slides[1].grade = grade('slide');
+    expect(gradeShownBy(t, p, p.slides[1].id)).toEqual(grade('slide'));
+    expect(gradeScopeOf(p, p.slides[1].id)).toBe('slide');
+    // The rest of the deck is untouched by one picture departing.
+    expect(gradeShownBy(t, p, p.slides[2].id)).toEqual(grade('piece'));
     expect(gradeShownBy(t, p, HOOK_PICTURE)).toEqual(grade('piece'));
   });
 
@@ -74,9 +75,9 @@ describe('the chain', () => {
   });
 
   it('names the hook and each slide, and the closing card as no picture', () => {
-    expect(pictureKeyOf({ kind: 'hook', slideId: null })).toBe(HOOK_PICTURE);
+    expect(pictureKeyOf({ kind: 'hook', slideId: HOOK_PICTURE })).toBe(HOOK_PICTURE);
     expect(pictureKeyOf({ kind: 'content', slideId: 's7' })).toBe('s7');
-    expect(pictureKeyOf({ kind: 'cta', slideId: null })).toBeNull();
+    expect(pictureKeyOf({ kind: 'cta', slideId: 'card' })).toBeNull();
     // The closing card can never depart: there is nothing to own a grade.
     const p = piece();
     p.grade = grade('piece');
@@ -91,8 +92,8 @@ describe('countOwnGrades', () => {
     expect(countOwnGrades(p)).toBe(0);
     p.grade = grade('piece');
     expect(countOwnGrades(p)).toBe(0);
-    p.badge.grade = grade('hook');
-    p.slides[1].grade = grade('b');
+    p.slides[0].grade = grade('hook');
+    p.slides[2].grade = grade('b');
     expect(countOwnGrades(p)).toBe(2);
   });
 });
@@ -100,9 +101,9 @@ describe('countOwnGrades', () => {
 describe('sameGradeRung', () => {
   it('is true for two pictures that both follow, and for one with itself', () => {
     const p = piece();
-    expect(sameGradeRung(p, HOOK_PICTURE, p.slides[0].id)).toBe(true);
+    expect(sameGradeRung(p, HOOK_PICTURE, p.slides[1].id)).toBe(true);
     p.grade = grade('piece');
-    expect(sameGradeRung(p, HOOK_PICTURE, p.slides[0].id)).toBe(true);
+    expect(sameGradeRung(p, HOOK_PICTURE, p.slides[1].id)).toBe(true);
     expect(sameGradeRung(p, HOOK_PICTURE, HOOK_PICTURE)).toBe(true);
   });
 
@@ -112,13 +113,13 @@ describe('sameGradeRung', () => {
     // Exactly the state `moveGradeScope('slide')` leaves: a byte-identical
     // copy. Comparing by value would have this slide follow the next slider
     // step it is supposed to be deaf to.
-    p.slides[0].grade = grade('piece');
-    expect(gradeKey(p.slides[0].grade)).toBe(gradeKey(p.grade));
-    expect(sameGradeRung(p, p.slides[0].id, HOOK_PICTURE)).toBe(false);
-    expect(sameGradeRung(p, p.slides[0].id, p.slides[0].id)).toBe(true);
+    p.slides[1].grade = grade('piece');
+    expect(gradeKey(p.slides[1].grade)).toBe(gradeKey(p.grade));
+    expect(sameGradeRung(p, p.slides[1].id, HOOK_PICTURE)).toBe(false);
+    expect(sameGradeRung(p, p.slides[1].id, p.slides[1].id)).toBe(true);
     // The picture that departed is not the one being edited, so the others
     // still share their own rung.
-    expect(sameGradeRung(p, HOOK_PICTURE, p.slides[1].id)).toBe(true);
+    expect(sameGradeRung(p, HOOK_PICTURE, p.slides[2].id)).toBe(true);
   });
 });
 
@@ -131,8 +132,8 @@ describe('moveGradeScope', () => {
     expect(gradeShownBy(t, onPiece, HOOK_PICTURE)).toEqual(grade('trip'));
 
     const onPicture = moveGradeScope(t, onPiece, HOOK_PICTURE, 'slide');
-    expect(onPicture.badge.grade).toEqual(grade('trip'));
-    expect(onPicture.slides[0].grade).toBeNull();
+    expect(onPicture.slides[0].grade).toEqual(grade('trip'));
+    expect(onPicture.slides[1].grade).toBeNull();
     // Departing changes nothing until the author changes something.
     expect(gradeShownBy(t, onPicture, HOOK_PICTURE)).toEqual(grade('trip'));
   });
@@ -141,14 +142,14 @@ describe('moveGradeScope', () => {
     const t = trip();
     const p = piece();
     p.grade = grade('piece');
-    p.badge.grade = grade('hook');
+    p.slides[0].grade = grade('hook');
 
     const toPiece = moveGradeScope(t, p, HOOK_PICTURE, 'post');
-    expect(toPiece.badge.grade).toBeNull();
+    expect(toPiece.slides[0].grade).toBeNull();
     expect(toPiece.grade).toEqual(grade('piece'));
 
     const toTrip = moveGradeScope(t, p, HOOK_PICTURE, 'trip');
-    expect(toTrip.badge.grade).toBeNull();
+    expect(toTrip.slides[0].grade).toBeNull();
     expect(toTrip.grade).toBeNull();
     expect(gradeShownBy(t, toTrip, HOOK_PICTURE)).toEqual(grade('trip'));
   });
@@ -156,7 +157,7 @@ describe('moveGradeScope', () => {
   it('gives the PIECE a grade when it had none, so the chip does something', () => {
     const t = trip();
     const p = piece();
-    p.badge.grade = grade('hook');
+    p.slides[0].grade = grade('hook');
     const toPiece = moveGradeScope(t, p, HOOK_PICTURE, 'post');
     expect(gradeScopeOf(toPiece, HOOK_PICTURE)).toBe('post');
     expect(toPiece.grade).toEqual(grade('hook'));
@@ -165,10 +166,10 @@ describe('moveGradeScope', () => {
   it('touches one picture only', () => {
     const t = trip();
     const p = piece();
-    const moved = moveGradeScope(t, p, p.slides[1].id, 'slide');
-    expect(moved.slides[1].grade).toEqual(grade('trip'));
+    const moved = moveGradeScope(t, p, p.slides[2].id, 'slide');
+    expect(moved.slides[2].grade).toEqual(grade('trip'));
+    expect(moved.slides[1].grade).toBeNull();
     expect(moved.slides[0].grade).toBeNull();
-    expect(moved.badge.grade).toBeNull();
   });
 });
 
@@ -187,11 +188,11 @@ describe('writeGrade', () => {
     expect(onPost.post?.grade).toEqual(next);
 
     const onHook = writeGrade(t, p, HOOK_PICTURE, 'slide', next);
-    expect(onHook.post?.badge.grade).toEqual(next);
+    expect(onHook.post?.slides[0].grade).toEqual(next);
     expect(onHook.post?.grade).toBeNull();
 
-    const onSlide = writeGrade(t, p, p.slides[1].id, 'slide', next);
-    expect(onSlide.post?.slides.map((s) => s.grade)).toEqual([null, next]);
+    const onSlide = writeGrade(t, p, p.slides[2].id, 'slide', next);
+    expect(onSlide.post?.slides.map((s) => s.grade)).toEqual([null, null, next]);
   });
 });
 
@@ -201,27 +202,27 @@ describe('unboundGrades', () => {
     const p = piece();
     expect(unboundGrades(t, p, HOOK_PICTURE, gradeKey)).toEqual([]);
     p.grade = grade('piece');
-    expect(unboundGrades(t, p, p.slides[0].id, gradeKey)).toEqual([]);
+    expect(unboundGrades(t, p, p.slides[1].id, gradeKey)).toEqual([]);
   });
 
   it('names the looks the deck wears that the stack is not editing', () => {
     const t = trip();
     const p = piece();
-    p.badge.grade = grade('hook');
-    p.slides[0].grade = grade('a');
+    p.slides[0].grade = grade('hook');
+    p.slides[1].grade = grade('a');
     // Editing the HOOK's own look leaves everything else unbound — including
     // the slide that merely follows, whose look is the trip's.
     expect(unboundGrades(t, p, HOOK_PICTURE, gradeKey)).toEqual([grade('a'), grade('trip')]);
     // From a following picture, the two that departed are both unbound.
-    expect(unboundGrades(t, p, p.slides[1].id, gradeKey)).toEqual([grade('hook'), grade('a')]);
+    expect(unboundGrades(t, p, p.slides[2].id, gradeKey)).toEqual([grade('hook'), grade('a')]);
   });
 
   it('asks for one bake when several pictures wear the same look', () => {
     const t = trip();
     const p = piece();
-    p.badge.grade = grade('dlog');
     p.slides[0].grade = grade('dlog');
     p.slides[1].grade = grade('dlog');
+    p.slides[2].grade = grade('dlog');
     expect(unboundGrades(t, p, null, gradeKey)).toEqual([grade('dlog')]);
   });
 });

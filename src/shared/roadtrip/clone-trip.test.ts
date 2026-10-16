@@ -27,7 +27,7 @@ function sample(): TripDoc {
       {
         ...a,
         projectId: 'studio-project-here',
-        media: { name: 'DJI_0001.MP4', size: 10, lastModified: 5, hash: 'abc' },
+        slides: [{ ...a.slides[0], media: { name: 'DJI_0001.MP4', size: 10, lastModified: 5, hash: 'abc' } }],
       },
       b,
     ],
@@ -80,7 +80,7 @@ describe('cloneTrip', () => {
 
   it('keeps the media reference but drops the Studio link of this browser', () => {
     const { doc } = cloneTrip(sample(), { name: 'x', sourceId: 'local' });
-    expect(doc.posts[0].media).toEqual({ name: 'DJI_0001.MP4', size: 10, lastModified: 5, hash: 'abc' });
+    expect(doc.posts[0].slides[0].media).toEqual({ name: 'DJI_0001.MP4', size: 10, lastModified: 5, hash: 'abc' });
     expect(doc.posts[0].projectId).toBeNull();
   });
 

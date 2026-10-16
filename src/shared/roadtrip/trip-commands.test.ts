@@ -13,19 +13,27 @@ import {
 const ref = (name: string) => ({ name, size: 1, lastModified: 0 }) as never;
 
 describe('withPictures', () => {
-  it('puts the first picture on the hook and the rest on slides, in order', () => {
+  it('puts the pictures on the slides in order, the first keeping the badge', () => {
     const post = createTripPost('carousel', '2026-09-02', '');
     const out = withPictures(post, [ref('a.jpg'), ref('b.jpg'), ref('c.jpg')]);
-    expect(out.media).toMatchObject({ name: 'a.jpg' });
-    expect(out.slides.map((s) => (s.media as { name: string }).name)).toEqual(['b.jpg', 'c.jpg']);
+    expect(out.slides.map((s) => (s.media as { name: string }).name)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+    expect(out.slides.map((s) => s.pieceBadge ?? false)).toEqual([true, false, false]);
   });
 
   it('keeps what a slide already carries and drops the slides past the list', () => {
+    const base = createTripPost('carousel', '2026-09-02', '');
     const kept = { ...createPostSlide(ref('old.jpg')), caption: 'kept', seconds: 5 };
-    const post = { ...createTripPost('carousel', '2026-09-02', ''), slides: [kept, createPostSlide(ref('gone.jpg'))] };
+    const post = { ...base, slides: [base.slides[0], kept, createPostSlide(ref('gone.jpg'))] };
     const out = withPictures(post, [ref('a.jpg'), ref('new.jpg')]);
-    expect(out.slides).toHaveLength(1);
-    expect(out.slides[0]).toMatchObject({ id: kept.id, caption: 'kept', seconds: 5, media: { name: 'new.jpg' } });
+    expect(out.slides).toHaveLength(2);
+    expect(out.slides[1]).toMatchObject({ id: kept.id, caption: 'kept', seconds: 5, media: { name: 'new.jpg' } });
+  });
+
+  it('keeps the closing card last', () => {
+    const base = createTripPost('carousel', '2026-09-02', '');
+    const post = { ...base, slides: [...base.slides, { ...createPostSlide(), card: 'trip' as const }] };
+    const out = withPictures(post, [ref('a.jpg'), ref('b.jpg')]);
+    expect(out.slides.map((s) => s.card ?? null)).toEqual([null, null, 'trip']);
   });
 
   it('refuses an empty list', () => {

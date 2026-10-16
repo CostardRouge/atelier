@@ -18,6 +18,7 @@ import { isDefaultDevelop } from '../../shared/develop/develop';
 import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
 import type { HookBlock, Shade } from '../../shared/shades/shades';
 import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
+import { badgeSlideOf, closesWithCard } from '../../shared/roadtrip/piece-slides';
 import type { GradeScope } from './use-trip-grade';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { useVerb } from '../../shared/ui/use-verb';
@@ -85,6 +86,9 @@ export default function StudioLink({
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const sendOpen = useVerb();
+  // What crosses is the slide the piece's badge sits on: its picture's
+  // correction goes with the badge (`piece-slides.ts`).
+  const badgeSlide = badgeSlideOf(post);
 
   const refresh = useCallback(async () => {
     const all = await listProjects();
@@ -113,10 +117,11 @@ export default function StudioLink({
         hookInjection(elements, hookSeconds, shades, post.title || 'Trip hook', block),
       );
       // The closing card goes with the hook — into the project's outro slot —
-      // when the piece closes with the CTA. Unticked, a previously sent card
-      // is taken back out. An outro the author composed THEMSELVES in the
-      // Studio is never overwritten; it is reported instead.
-      const card = post.includeCta ? ctaOutro(cta, aspect) : null;
+      // when the piece ENDS on it (the outro can only close the footage).
+      // Without one there, a previously sent card is taken back out. An outro
+      // the author composed THEMSELVES in the Studio is never overwritten; it
+      // is reported instead.
+      const card = closesWithCard(post) ? ctaOutro(cta, aspect) : null;
       const applied = withCtaOutro(next, card);
       let ctaHeld: string | null = null;
       if (applied === null) {
@@ -131,7 +136,7 @@ export default function StudioLink({
       // the Studio for it is theirs, and stays.
       const developed = withHookDevelop(
         next,
-        post.media ? { name: post.media.name, hash: post.media.hash, settings: post.badge.develop } : null,
+        badgeSlide?.media ? { name: badgeSlide.media.name, hash: badgeSlide.media.hash, settings: badgeSlide.develop } : null,
       );
       next = developed.doc;
       const developHeld = developed.held
@@ -314,8 +319,8 @@ export default function StudioLink({
 
           {/* What a send carries, in one line (`photo-develop.md` §7.7). */}
           <p className="m-0 text-2xs text-faint leading-snug">
-            A send carries the badge{post.includeCta ? ', the closing card' : ''}
-            {post.badge.develop && !isDefaultDevelop(post.badge.develop) ? ' and the picture’s correction' : ''}; the
+            A send carries the badge{closesWithCard(post) ? ', the closing card' : ''}
+            {badgeSlide?.develop && !isDefaultDevelop(badgeSlide.develop) ? ' and the picture’s correction' : ''}; the
             picture&rsquo;s crop and the trip&rsquo;s title style stay here.
           </p>
           {/* Two grades, one file: say which one the Studio export will use. */}

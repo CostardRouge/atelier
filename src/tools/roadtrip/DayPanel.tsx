@@ -16,6 +16,7 @@ import {
 } from '../../shared/roadtrip/trip-types';
 import { DayMenu, type Menu } from './DayHeatmap';
 import useDayThumbs from './use-day-thumbs';
+import { pieceMediaOf } from '../../shared/roadtrip/piece-slides';
 
 interface DayPanelProps {
   trip: TripDoc;
@@ -151,7 +152,7 @@ function PostRow({
           {post.publishedAt === null
             ? 'draft'
             : `published ${formatPublished(post.publishedAt)}`}
-          {post.media && <> · {post.media.name}</>}
+          {pieceMediaOf(post) && <> · {pieceMediaOf(post)!.name}</>}
         </span>
       </span>
 

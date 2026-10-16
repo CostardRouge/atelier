@@ -11,8 +11,9 @@
  * never departed is a `null`, not a copy of the trip's grade.
  *
  * A picture is named by its KEY, the convention `develop-apply.ts` already
- * uses: `'hook'` for the piece's opener, a slide id for a content picture,
- * `null` for the closing card (which has no picture and can never depart).
+ * uses: its slide's id (every slide has one since v34 — the hook's old
+ * `'hook'` key went with it), `null` for the closing card (which has no
+ * picture and can never depart).
  *
  * Pure and DOM-free.
  */
@@ -24,29 +25,25 @@ import { emptyGrade, type TripDoc, type TripGrade, type TripPost } from './trip-
 /** Which picture of a piece a grade is read for. `null` is the closing card. */
 export type PictureKey = string | null;
 
-/** The key that names a piece's opener. */
-export const HOOK_PICTURE: PictureKey = 'hook';
-
 /** Where a look is written: the trip, one piece, or one picture of it. */
 export type GradeScope = 'trip' | 'post' | 'slide';
 
 /** What grading one picture of a deck needs to know about it. */
 export interface GradedPicture {
   kind: DeckSlideKind;
-  slideId: string | null;
+  slideId: string;
   grade: TripGrade | null;
   develop: DevelopSettings | null;
 }
 
 /** The key of the picture a deck slide draws. */
 export function pictureKeyOf(picture: Pick<GradedPicture, 'kind' | 'slideId'>): PictureKey {
-  return picture.kind === 'hook' ? HOOK_PICTURE : picture.slideId;
+  return picture.kind === 'cta' ? null : picture.slideId;
 }
 
 /** The grade this one picture carries of its own, or null when it follows. */
 export function ownGrade(post: TripPost, picture: PictureKey): TripGrade | null {
   if (picture === null) return null;
-  if (picture === HOOK_PICTURE) return post.badge.grade ?? null;
   return post.slides.find((s) => s.id === picture)?.grade ?? null;
 }
 
@@ -83,7 +80,7 @@ export function sameGradeRung(post: TripPost, a: PictureKey, b: PictureKey): boo
  * say "every picture goes through the trip's grade" only when that is true.
  */
 export function countOwnGrades(post: TripPost): number {
-  let n = post.badge.grade ? 1 : 0;
+  let n = 0;
   for (const slide of post.slides) if (slide.grade) n += 1;
   return n;
 }
@@ -91,7 +88,6 @@ export function countOwnGrades(post: TripPost): number {
 /** The post with one picture's own grade set or cleared. */
 function setOwnGrade(post: TripPost, picture: PictureKey, grade: TripGrade | null): TripPost {
   if (picture === null) return post;
-  if (picture === HOOK_PICTURE) return { ...post, badge: { ...post.badge, grade } };
   return {
     ...post,
     slides: post.slides.map((s) => (s.id === picture ? { ...s, grade } : s)),
@@ -161,7 +157,6 @@ export function unboundGrades(
     const key = keyOf(grade);
     if (!seen.has(key)) seen.set(key, grade);
   };
-  add(HOOK_PICTURE);
-  for (const slide of post.slides) add(slide.id);
+  for (const slide of post.slides) if (!slide.card) add(slide.id);
   return [...seen.values()];
 }
