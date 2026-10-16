@@ -378,6 +378,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   if (cols * rows > 20_000) return;
   const px = (x: number, y: number) => [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f] as const;
   ctx.save();
+  ctx.globalAlpha *= map.gridStrength;
   if (map.grid === 'lines') {
     ctx.strokeStyle = map.gridColour;
     ctx.lineWidth = Math.max(0.5, 0.8 * unit);

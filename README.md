@@ -3359,8 +3359,8 @@ the rest folds behind **N more**, remembered in this browser.
   atlas opens). The **map glyph beside Play** is the same Streets switch, one
   click from the picture. Then looks (Transit, Aurora, Ember, Neon, Papier,
   Blueprint, Golden hour, Ink, plus *Surprise me*) and the map's details
-  (how the land is drawn and its colour, grid, vignette, ground colour, place
-  names).
+  (how the land is drawn and its colour, a grid — its colour on the same row,
+  and how strongly it shows —, vignette, ground colour, place names).
 - **Flights.** Trails (tail, width, afterglow; taper, fade, ghost network,
   smoothing), drones (size, pulse, take-off and landing ripples; pulse rate,
   halo, altitude drawn as height with a ground shadow and a thread) and colour

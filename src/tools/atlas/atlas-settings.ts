@@ -93,6 +93,8 @@ export interface MapSettings {
   landColour: string;
   grid: GridMode;
   gridColour: string;
+  /** How strongly the grid shows, 0.1..1. */
+  gridStrength: number;
   vignette: number;
   tileTone: TileTone;
   /** How much of the background colour is laid over the tiles, 0..1. */
@@ -237,6 +239,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     landColour: '#060609',
     grid: 'off',
     gridColour: '#2a2840',
+    gridStrength: 1,
     vignette: 0.35,
     tileTone: 'night',
     tileDim: 0.45,
@@ -642,6 +645,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       landColour: hex(m.landColour, d.map.landColour),
       grid: oneOf(m.grid, GRIDS, d.map.grid),
       gridColour: hex(m.gridColour, d.map.gridColour),
+      gridStrength: num(m.gridStrength, d.map.gridStrength, 0.1, 1),
       vignette: num(m.vignette, d.map.vignette, 0, 1),
       tileTone: oneOf(m.tileTone, TONES, d.map.tileTone),
       tileDim: num(m.tileDim, d.map.tileDim, 0, 1),

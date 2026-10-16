@@ -533,12 +533,13 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             { id: 'dots', label: 'Dots' },
           ]}
         />
+        {s.map.grid !== 'off' && <input type="color" aria-label="Grid colour" value={s.map.gridColour} onChange={(e) => map({ gridColour: e.target.value })} className={swatchClass} />}
       </FieldRow>
+      {s.map.grid !== 'off' && <Slider label="Grid shows" value={s.map.gridStrength} min={0.1} max={1} step={0.05} format={pct} onChange={(v) => map({ gridStrength: v })} />}
       <Slider label="Vignette" value={s.map.vignette} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ vignette: v })} />
       <AtlasMore id="atlas.map">
         <Colour label="Ground" value={s.map.background} onChange={(v) => map({ background: v })} />
         {s.map.land !== 'off' && <Colour label="Land colour" value={s.map.landColour} onChange={(v) => map({ landColour: v })} />}
-        {s.map.grid !== 'off' && <Colour label="Grid colour" value={s.map.gridColour} onChange={(v) => map({ gridColour: v })} />}
         <SwitchRow label="Place names on the map" checked={s.map.labels} onChange={(v) => map({ labels: v })} />
       </AtlasMore>
     </InspectorSection>

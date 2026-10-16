@@ -83,3 +83,7 @@ His ask after the layers: drag the overlay's pieces like in Develop / the Studio
 ## The story's words are kept inside the frame (2026-10-16)
 
 His report: a long intro title ran off both edges. **Decision**: a `TextLine` may carry `fit: { maxW, mode }` and `paintOverlay` EXPANDS it into one block per line before laying the stack (`breakLines` / `fitSize`, pure, `atlas-text.ts`): `wrap` breaks between words at 84 % of the area's width (`STORY_TEXT_WIDTH`), the author's own `\n` kept, a single word wider than that shrunk rather than cut; `shrink` puts it on one line and lowers its size until it fits. Any text holding a `\n` is split even without a fit, since `drawOverlays` draws one line per element. The intro's `titleSize` also sizes the outro's title (the title is one thing). **How to apply**: a new long text in the overlay gets a `fit` rather than its own wrapping; a size setting multiplies the block's `size`, never the theme's scale.
+
+## A control's own colour sits on its row (2026-10-16)
+
+He asked for the grid's colour, which existed — fourth line behind «4 more» in Map details, never found. **Decision**: the swatch now sits on the Grid row itself beside Lines / Dots (with *Grid shows*, `map.gridStrength`, under it). **How to apply**: what only qualifies one control (its colour, its strength) goes on that control's row or right under it, never in the section's fold, where it reads as missing.
