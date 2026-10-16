@@ -99,10 +99,14 @@ export default function ExportTab({
   // Studio's own control, shared through the file-keyed store, so a clip
   // transcoded here is the one every export reads from then on.
   const transcode = useTranscode(undecodable);
-  // What the HOOK SLIDE says it is, not what its file happens to be: a
-  // photograph with an animated badge is a video now, and a clip the author
-  // set to Image is not. The deck decides; this panel delivers.
-  const hookIsVideoSlide = slides[0]?.medium === 'video';
+  // What the slide carrying the BADGE says it is, not what its file happens
+  // to be: a photograph with an animated badge is a video now, and a clip the
+  // author set to Image is not. The deck decides; this panel delivers. It is
+  // the hook when it opens the piece, and named by its place otherwise.
+  const lead = slides.find((s) => s.pieceBadge) ?? slides[0];
+  const hookIsVideoSlide = lead?.medium === 'video';
+  const leadName = !lead || lead.position === 1 ? 'the hook' : `slide ${lead.position}`;
+  const LeadName = leadName.charAt(0).toUpperCase() + leadName.slice(1);
 
   return (
     <div className="flex flex-col">
@@ -132,17 +136,17 @@ export default function ExportTab({
               <p>
                 The export buttons are pinned at the bottom of this tab: the piece, and in their
                 menu every slide as a still (what a browser with no video encoder can still
-                write, or a contact sheet of a reel), the open slide as a PNG, and the hook as a
-                video.{' '}
+                write, or a contact sheet of a reel), the open slide as a PNG, and {leadName} —
+                the slide carrying the badge — as a video.{' '}
                 {hookIsVideoSlide
                   ? hookIsVideo
-                    ? slides[0].speed !== 1
-                      ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
-                      : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
-                    : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
+                    ? lead.speed !== 1
+                      ? `${LeadName}’s clip starts on its in point and plays at ${lead.speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                      : `${LeadName}’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through`
+                    : `${LeadName} is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy`
                   : hookFile
-                    ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
-                    : 'Give the hook a picture from the Library first'}
+                    ? `${LeadName} goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card`
+                    : `Give ${leadName} a picture from the Library first`}
                 {graded || ownGrades > 0
                   ? ownGrades > 0
                     ? `, and each picture goes through the grade it wears — ${

@@ -1713,10 +1713,11 @@ export default function PostEditor({
       verbs.push({ id: 'slide', label: 'This slide as a PNG', hint: `the slide open on the stage, numbered as in the deck`, run: () => void exports.exportDeck(slide.position) });
     }
     if (slides[leadIndex]?.medium === 'video' && canEncode) {
-      verbs.push({ id: 'hook', label: 'The hook as a video', hint: `MP4 · ${hookLength.toFixed(1)} s · 1080`, run: () => void exports.exportHookClip() });
+      const lead = slides[leadIndex];
+      verbs.push({ id: 'hook', label: lead.position === 1 ? 'The hook as a video' : `Slide ${lead.position} (the badge) as a video`, hint: `MP4 · ${hookLength.toFixed(1)} s · 1080`, run: () => void exports.exportHookClip() });
     }
     return verbs;
-  }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength]);
+  }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength, leadIndex]);
 
   // --- the open piece's commands (`shared/commands/`, `trip-commands.ts`) ---
   // Written through `onChangePost`, the funnel every panel writes through, so

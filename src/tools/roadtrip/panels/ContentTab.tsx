@@ -281,7 +281,7 @@ export default function ContentTab({
         )}
 
         {slide.kind === 'cta' && (
-          <FieldRow label="Card" hint="The trip’s call to action, shared by every deck that closes with it.">
+          <FieldRow label="Card" hint="The trip’s call to action, shared with every piece that shows it — only where it sits is this piece’s.">
             <Button size="sm" onClick={onEditClosingCard}>
               Edit in the trip’s settings
             </Button>
