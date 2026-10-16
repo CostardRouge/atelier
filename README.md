@@ -1595,10 +1595,10 @@ overview and of the piece editor — and `⌘Z` / `⇧⌘Z` — step the whole t
 and forward: a badge moved, a leg resized, a piece added or deleted, the look
 you were trying out.
 
-**A post is a deck.** The hook is slide one; add as many content pictures after
-it as you like, each with its own optional caption, and close on the trip's
+**A post is a deck.** The hook is slide one; add as many pictures after it as
+you like, each with its own optional caption, and add the trip's
 **call-to-action card** — headline, sentence, link and a **QR code**, edited
-once in the trip's own settings and appended to every deck that asks for it. A
+once in the trip's own settings and shown by every piece that holds it. A
 reel or a single photo is the same model with a deck of one, so a piece can be
 re-cut into a carousel without being rebuilt. **Export the piece** writes every slide in the
 format the deck says it is — a still as a PNG, what moves as an MP4 — into a
@@ -1624,9 +1624,23 @@ the needle is the one open; ▶ or `Space` plays **the whole piece**, slide afte
 slide, on the stage. The open slide's cell carries a **grip at each end**: drag
 one to make a picture hold the screen longer or shorter, or to move a clip's in
 or out point — the other end stays put, and the change is written once, when you
-let go (the Content tab's *On screen* slider is the same number). `⋯` moves the open picture earlier or later, removes it, or
-closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
-and a call to action that came second would stop being either.
+let go (the Content tab's *On screen* slider is the same number). `+` adds the
+active picture.
+
+**Every slide moves.** Hold a slide on the band for a moment — a quick drag
+still moves through the piece — and carry it where it should go: the band slides
+under it at either edge and a bar shows where it will land. `⋯` moves the open
+slide to the start, earlier, later or to the end, removes a picture (a piece
+keeps at least one), and adds or removes the trip's card; `⌥←` / `⌥→` on the
+band move the open slide. A slide takes everything it holds with it — its
+picture, opener, shades, words and badge — so the first slide is simply the one
+that opens: it is the piece's cover, and the picture an agent calls slide 1. The
+trip's card can sit anywhere too; its words stay the trip's. The **piece's
+badge** stays with the slide that carries it: if another picture now opens the
+piece, its Content tab says so and offers *Bring the badge here* (its opener
+comes too when that slide has none of its own), any other slide's Look tab
+offers *Carry the piece's badge here*, and a badge that is not on the first slide
+is marked `★` on the band.
 
 **How long a slide lasts.** The Content tab's *Slide* section says it as a sum
 — *On screen 6.4 s: Virée 5.9 s + 0.5 s on the picture* — and names who decides
@@ -1661,14 +1675,14 @@ with one verb to deliver the other. A slide may last up to a minute; pieces
 made before this rule keep their length to the frame.
 
 **Any slide can hold what the hook holds.** Being first is what makes a slide
-the hook; what it *carries* is each slide's own. Open a content slide and the
+the hook; what it *carries* is each slide's own. Open another slide and the
 Look tab offers it an **opener** of its own — three legs in one day can be
 three itineraries in one carousel, a Virée halfway through is a second reason
 to keep swiping — plus its own **shades**, and a **badge**: *Off*, a **chapter
 mark** (the piece's badge at about a third of its size, in a corner, its
 words rewritable for that slide — `NOON · 12`) or *Full*. The badge keeps the piece's look on
 every slide it sits on, so a deck still wears one signature. The Content tab
-gives every slide but the closing card free **Text** lines: type, drag one on
+gives every slide but the trip's card free **Text** lines: type, drag one on
 the picture, size it, give it its own ink or the trip's. A line can **blend**
 with the picture under it (multiply, screen, overlay, soft light, difference,
 luminosity) or **mask** it: *Picture in the letters* lays a wash of your
@@ -1784,10 +1798,12 @@ scene, so a second send replaces the first and never touches the grade, the
 trim, the telemetry elements or your own intro. The piece's **shades** go too,
 whole, as the scene's own: the same gradients, arriving and leaving with the
 hook. A shade that follows the badge is sent as the shape it draws at that
-moment, since nothing in the Studio is a badge to follow. When the piece **closes
-with the trip's call to action**, the send also writes that card into the
-project's **outro** — the same closing card the carousel export appends as its
-last slide, appended here after the footage of the reel — under the same
+moment, since nothing in the Studio is a badge to follow. What crosses is the
+slide that carries the piece's badge. When the piece **ends on the trip's call
+to action**, the send also writes that card into the project's **outro** — the
+same card the carousel exports as its last slide, appended here after the
+footage of the reel; a card placed earlier in the piece stays in Trips, and the
+panel says so — under the same
 rules: a resend replaces it, unlinking removes it, and an outro you composed
 yourself in the Studio is never overwritten (the panel tells you the card
 stayed behind instead). The hook picture's **correction** — its exposure,

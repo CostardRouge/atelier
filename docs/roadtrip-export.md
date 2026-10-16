@@ -4,7 +4,11 @@
 further than planned: a clip slide (hook or content) PLAYS on the stage, is
 cut on the Studio's trim bar and carries a SPEED (v16, `videoSpeed`) —
 `roadtrip.md`, «A clip slide has an in point, a screen time and a SPEED». The
-combined reel (P4's last item) is still not built.
+combined reel (P4's last item) is still not built. **2026-10-16**: the
+unified slides it waited for are built (v34: one `post.slides` list, the hook
+being `slides[0]` and the card a slide — `roadtrip.md`, «Slides are FREE»), so
+`PostBadge.hookSeconds` below now reads `slides[0].seconds` and the reel can be
+written over one list.
 
 The direction is the maintainer's — "exporter la vidéo du hook
 plus les autres éléments… un raccourci, qu'on importe et qu'on utilise ce que
