@@ -1139,6 +1139,56 @@ export function pointAt(path: RoadPath, s: number): { point: PlanPoint; index: n
  */
 export const ROAD_HEADING_KM = 1;
 
+/** How many of the road's samples (or runs of them) `smoothHeadingAt` reads at most. */
+const HEADING_SEGMENTS = 256;
+
+/** The error function (Abramowitz & Stegun 7.1.26, within 1.5e-7) — smooth, so a weight read through it never steps. */
+function erf(x: number): number {
+  const a = Math.abs(x);
+  const t = 1 / (1 + 0.3275911 * a);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a);
+  return x < 0 ? -y : y;
+}
+
+/**
+ * The direction of travel at `s` with the road's bends smoothed over a bell of
+ * `sigma` plan units: the tangent of the path convolved with a Gaussian, i.e.
+ * every segment's direction weighted by the share of the bell it covers —
+ * exactly, through `erf`, so the weight of a sample never steps as the vehicle
+ * moves. A chord (`headingAt`) is a box: a bend jolts the vehicle as it enters
+ * the chord's front end and again as it leaves its back one, which is the
+ * tremble in a tight turn; a bell has no edge. Past either end of the path
+ * the road contributes nothing. A bell wider than `HEADING_SEGMENTS` of the
+ * road's samples (a whole trip seen from afar) reads them in runs anchored to
+ * fixed indices, each run's chord weighted by its share of the bell — a run
+ * is then a sliver of the bell, and a frame costs the same at every zoom.
+ */
+export function smoothHeadingAt(path: RoadPath, s: number, sigma: number): { x: number; y: number } {
+  const { points, cum } = path;
+  if (points.length < 2 || !(sigma > 0)) return headingAt(path, s);
+  const lo = Math.max(0, s - 4 * sigma);
+  const hi = Math.min(path.length, s + 4 * sigma);
+  const k = 1 / (sigma * Math.SQRT2);
+  const first = pointAt(path, lo).index;
+  const last = pointAt(path, hi).index;
+  const run = 2 ** Math.max(0, Math.ceil(Math.log2((last - first + 1) / HEADING_SEGMENTS)));
+  let x = 0;
+  let y = 0;
+  for (let i = first - (first % run); i <= last; i += run) {
+    const j = Math.min(points.length - 1, i + run);
+    const span = cum[j] - cum[i];
+    const a = Math.max(lo, cum[i]);
+    const b = Math.min(hi, cum[j]);
+    if (span <= 0 || b <= a) continue;
+    const w = (erf((b - s) * k) - erf((a - s) * k)) / span;
+    x += w * (points[j].x - points[i].x);
+    y += w * (points[j].y - points[i].y);
+  }
+  const len = Math.hypot(x, y);
+  // A road that doubles back on itself inside the bell cancels out: read a chord there.
+  return len > 1e-9 ? { x: x / len, y: y / len } : headingAt(path, s, 2 * sigma);
+}
+
 /**
  * The unit direction of travel at `s`, blended across a corner so the vehicle
  * turns rather than snaps. On the trip's road (`path.km`) it is read over a
