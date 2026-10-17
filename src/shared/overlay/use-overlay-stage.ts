@@ -17,6 +17,9 @@ import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
 import type { CubeLut } from '../lib/cube-parser';
 import { createLutRenderer, type LutRenderer } from '../lut/lut-gl';
+import { makeFrameGrader } from '../lut/frame-grader';
+import { holdGrades, type HeldGrader } from '../lut/held-grader';
+import type { RenderPass } from '../render/graph';
 import type { Interpolation } from '../lut/interpolate';
 import {
   boxForId,
@@ -45,6 +48,14 @@ interface StageParams {
    * settled (see still-frame.ts); nothing else about editing changes.
    */
   still?: ImageBitmap | null;
+  /**
+   * The passes a STILL is drawn through around its cube — the rest of a
+   * Develop picture's edit (`carried-edit.ts`) — or null. `key` names what
+   * they draw; `at` builds them for the size the stage grades at. A still
+   * that carries them is graded by a pass grader held for it, once per
+   * change, since a still has no clock; a clip never takes this path.
+   */
+  stillPasses?: { key: string; at: (width: number, height: number) => { pre: RenderPass[]; passes: RenderPass[] } } | null;
   cues: Cue[];
   elements: OverlayElement[];
   selectedId: string | null;
@@ -129,6 +140,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const originRef = useRef(params.originSeconds ?? 0);
   const compareRef = useRef(params.compare ?? false);
   const stillRef = useRef(params.still ?? null);
+  const stillPassesRef = useRef(params.stillPasses ?? null);
   const splitRef = useRef(0.5);
   cuesRef.current = params.cues;
   elementsRef.current = params.elements;
@@ -146,6 +158,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   originRef.current = params.originSeconds ?? 0;
   compareRef.current = params.compare ?? false;
   stillRef.current = params.still ?? null;
+  stillPassesRef.current = params.stillPasses ?? null;
 
   const needsRedraw = useRef(true);
 
@@ -240,6 +253,43 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     () => () => {
       graderRef.current?.renderer.dispose();
       graderRef.current = null;
+      passGraderRef.current?.grader.dispose();
+      passGraderRef.current = null;
+    },
+    [],
+  );
+
+  /**
+   * The still's pass grader, when it carries passes: held for the still, its
+   * size, its passes and its look, so a repaint draws the held grade and a
+   * new look is swapped in place rather than a new WebGL2 context.
+   */
+  const passGraderRef = useRef<{ key: string; lut: CubeLut | null; grader: HeldGrader } | null>(null);
+  /** The still the held pass grade was taken from. */
+  const stillGradedRef = useRef<ImageBitmap | null>(null);
+  const passGraderFor = useCallback(
+    (still: ImageBitmap, w: number, h: number, lut: CubeLut | null): HeldGrader | null => {
+      const wanted = stillPassesRef.current;
+      const cur = passGraderRef.current;
+      if (!wanted) {
+        cur?.grader.dispose();
+        passGraderRef.current = null;
+        return null;
+      }
+      const key = `${wanted.key}|${w}x${h}`;
+      if (cur && cur.key === key && stillGradedRef.current === still) {
+        if (cur.lut !== lut && cur.grader.setLut) {
+          cur.grader.setLut(lut);
+          cur.lut = lut;
+        }
+        return cur.grader;
+      }
+      cur?.grader.dispose();
+      const { pre, passes } = wanted.at(w, h);
+      const grader = holdGrades(makeFrameGrader(lut as CubeLut, w, h, intensityRef.current, passes, pre));
+      passGraderRef.current = { key, lut, grader };
+      stillGradedRef.current = still;
+      return grader;
     },
     [],
   );
@@ -281,6 +331,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     // A still never announces itself the way a video's `seeked`/`loadeddata`
     // do: swapping the decoded picture IS the only signal there is.
     params.still,
+    params.stillPasses?.key,
   ]);
 
   // Composite + (optional) selection outline. Returns false if not ready.
@@ -311,7 +362,20 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     // display-oriented, as the export's output is.
     const lut = lutRef.current;
     let source: CanvasImageSource = frame.src;
-    if (lut) {
+    const still = stillRef.current;
+    const held = still ? passGraderFor(still, vw, vh, lut) : null;
+    if (held && still) {
+      // A still carrying passes: graded once through its own pass grader and
+      // drawn from the held copy until the still, its size, its passes or its
+      // look change. A frame past the budget is scaled into the stage first,
+      // as below, so the grader takes the stage's size.
+      let graded: CanvasImageSource = still;
+      if (density > 1) {
+        ctx.drawImage(still, 0, 0, vw, vh);
+        graded = canvas;
+      }
+      source = held.render(graded);
+    } else if (lut) {
       let g = graderRef.current;
       if (!g) {
         g = ensureGrader();

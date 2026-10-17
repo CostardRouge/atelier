@@ -27,6 +27,7 @@ import {
   type DevelopPreset,
   type DevelopSettings,
 } from '../develop/develop';
+import type { CarriedEdit } from '../develop/carried-record';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import type { FilmTexture } from '../film/film-texture';
@@ -83,7 +84,7 @@ import { readTripRoad, type TripRoad } from './road-track';
 import { defaultSlideLength, lengthFromLegacy, readSlideLength, type SlideLength } from './slide-length';
 import { leadSlideOf } from './piece-slides';
 
-export const TRIP_DOC_VERSION = 34;
+export const TRIP_DOC_VERSION = 35;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -740,6 +741,14 @@ export interface PostSlide {
   develop: DevelopSettings | null;
   /** This picture's own grade, or null to follow the piece — see `PostBadge.grade`. */
   grade: TripGrade | null;
+  /**
+   * The rest of a Develop picture's edit, taken from a roll (v35, item 34 of
+   * `docs/lightroom-gaps.md`): its perspective, lens, detail, repair, layers
+   * and vignette, drawn as passes around this slide's cube — over this
+   * slide's own picture only, and only while it is the file the edit was made
+   * on (`carriedOn`). Copied, never linked. Optional: absent is none.
+   */
+  edit?: CarriedEdit | null;
   /** Several pictures in this slide's frame, this one first — see `PostBadge.collage`. */
   collage: SlideCollage | null;
   /** The author's own line over this picture; empty draws nothing. */
@@ -1227,6 +1236,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * v31 → v32 gives the trip its ROAD (`TripDoc.road`, `road-track.ts`): the
  * GPS track kept beside the places, null on every stored trip, so nothing
  * composed before it changes its line until a track is written.
+ *
+ * v34 → v35 lets a slide hold the rest of a Develop picture's edit
+ * (`PostSlide.edit`, optional). No stored slide holds one, so nothing a trip
+ * draws changes; the number moves so a build that cannot draw an edit
+ * refuses a file that holds one instead of exporting it without.
  *
  * v33 → v34 puts EVERY slide in one list (`postFromV33`, his pick B of the
  * free-slides lab, 2026-10-16): the hook's picture and everything about it

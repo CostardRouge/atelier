@@ -285,6 +285,13 @@ sheet, and **Apply to N other media** writes the same numbers onto every other
 photo and clip of the project, each under its own hash, while Done writes the
 one in hand. **Presets** are the same personal book as in Trips (below).
 
+**From Develop** works here as in Trips: a roll holding the media with work on
+it is named under the correction, and **Use** takes its develop and its
+perspective, lens, detail, repair, layers and vignette — drawn over a
+photograph by the stage and the still export. The look stays in Develop,
+since the Studio's is the whole project's; the edit is kept with the media's
+correction, under the same hash.
+
 **Output transform.** Conversion LUTs (D-Log→709, Apple Log→709, S-Log→709)
 are authored for a Rec.709 reference display — BT.1886, gamma 2.4, a dark
 grading suite. A browser shows roughly gamma 2.2, so those looks arrive
@@ -1769,6 +1776,21 @@ and how far they overlap. A wheel colours without brightening; only the
 the sheet says so — an 8-bit picture has nothing above white to give back;
 developing a RAW is what the next phases are for (`docs/photo-develop.md`).
 
+**From Develop.** When a roll of the Develop tool holds the slide's picture
+with work on it, a **From Develop** row under the correction names that roll,
+and **Use** takes the picture's whole edit: its develop and its look into the
+slide's own fields — where they stay yours to change — and its perspective,
+lens, detail, repair, layers with their masks, and post-crop vignette, drawn
+by the stage, the rail, the PNG deck and the painted clip. Its crop and border
+stay in Develop: the frame is the slide's. It is a **copy** with where it came
+from, not a link: a later change in Develop is offered as **Update**, never
+pushed, and the ✕ takes the edit off while the correction and the look stay.
+It belongs to the file it was made on — a slide given another picture draws
+none of it — and a picture developed on its sensor is refused, the slide
+drawing the camera's own render. Several rolls holding the picture are listed
+behind the row's ⋯. The Develop sheet itself shows the correction and the
+look; it says so when the picture also carries an edit it does not draw.
+
 **The same light on many pictures.** The sheet's header has **Copy** and
 **Paste** — one set of numbers kept for the session, never stored, and the
 same clipboard the Studio's sheet reads, so a correction crosses the two tools
@@ -2049,6 +2071,14 @@ drops the steps above the one you edit from. Both are kept in the roll, so
 they are still there after a reload or on another device, where **⌘Z** is
 not; a variant made *as edited* takes them along. A picture edited before
 the history existed lists its sections in a standard order and says so.
+
+**Into Trips and the Studio.** A picture's work here is taken from the other
+side: a Trips slide or a Studio media showing the same file lists this roll
+in a **From Develop** row, and **Use** copies the develop, the look (Trips
+only — the Studio's look is the project's) and every pass — perspective,
+lens, detail, repair, layers, vignette — which their stages and exports then
+draw. The crop and the border stay here, and a later change is offered there
+as an update rather than pushed (see Trips, «From Develop»).
 
 **Clips.** A roll takes a video the way it takes a photograph: from a folder
 or a drop (the clip alone — its `.srt` flight log stays the Studio's), from

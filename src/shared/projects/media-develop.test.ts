@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from '../develop/develop';
-import { normaliseDevelops, restoreDevelop, saveDevelop, writeDevelop } from './media-develop';
+import { DEFAULT_KEYSTONE } from '../render/geometry';
+import type { CarriedEdit } from '../develop/carried-edit';
+import { normaliseDevelops, restoreCarried, restoreDevelop, saveDevelop, writeDevelop } from './media-develop';
 
 const lifted = { ...DEFAULT_DEVELOP, exposure: 0.7 };
 
@@ -63,5 +65,31 @@ describe('writeDevelop', () => {
     const map = writeDevelop({}, 'DJI_0001', lifted, 'h1');
     expect(writeDevelop(map, 'DJI_0001', { ...DEFAULT_DEVELOP }, 'h1')).toEqual({});
     expect(writeDevelop(map, 'DJI_0002', null, null)).toBe(map);
+  });
+});
+
+describe('an edit taken from Develop rides the develop’s entry', () => {
+  const lifted = { ...DEFAULT_DEVELOP, exposure: 0.4 };
+  const edit: CarriedEdit = {
+    from: { roll: 'r', rollName: 'Roll', picture: 'p', label: 'DJI_0001.JPG', media: { name: 'DJI_0001.JPG', size: 1, lastModified: 1 }, at: 1 },
+    values: { perspective: { ...DEFAULT_KEYSTONE, vertical: 12 } },
+  };
+
+  it('is written with the develop, kept by a later develop write, kept when the develop goes back to as shot', () => {
+    let map = writeDevelop({}, 'DJI_0001', lifted, 'h1', edit);
+    expect(restoreCarried(map.DJI_0001, 'h1')).toBe(edit);
+    map = writeDevelop(map, 'DJI_0001', { ...lifted, exposure: 1 }, 'h1');
+    expect(restoreCarried(map.DJI_0001, 'h1')).toBe(edit);
+    map = writeDevelop(map, 'DJI_0001', null, 'h1');
+    expect(restoreDevelop(map.DJI_0001, 'h1')).toBeNull();
+    expect(restoreCarried(map.DJI_0001, 'h1')).toBe(edit);
+    // Taken off: nothing left, the entry goes.
+    expect(writeDevelop(map, 'DJI_0001', null, 'h1', null)).toEqual({});
+  });
+
+  it('is refused over another file of the same name, and read back from storage', () => {
+    const map = writeDevelop({}, 'DJI_0001', null, 'h1', edit);
+    expect(restoreCarried(map.DJI_0001, 'other')).toBeNull();
+    expect(normaliseDevelops(JSON.parse(JSON.stringify(map)))).toEqual(map);
   });
 });

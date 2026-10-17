@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { DevelopSettings } from '../../../shared/develop/develop';
 import DevelopSection from '../../../shared/develop/DevelopSection';
 import GradePanel from '../../../shared/lut/GradePanel';
@@ -82,6 +83,8 @@ interface PictureTabProps {
   onOpenDevelop: () => void;
   /** Back to as shot. */
   onResetDevelop: () => void;
+  /** The slide's edit from Develop (`FromDevelopRow`) — about its own picture, the collage's first cell. */
+  fromDevelop?: ReactNode;
   /** Several pictures in this slide's frame, or null for one. */
   collage: SlideCollage | null;
   /** The slide's own picture, framing and develop — the collage's first cell. */
@@ -186,6 +189,7 @@ export default function PictureTab({
   develop,
   onOpenDevelop,
   onResetDevelop,
+  fromDevelop = null,
   collage,
   lead,
   selectedCell,
@@ -468,7 +472,9 @@ export default function PictureTab({
           openTitle={(collage ? cellFile : slideFile) ? 'Open the Develop sheet' : 'Tick a picture first'}
           onOpen={onOpenDevelop}
           onReset={onResetDevelop}
-        />
+        >
+          {(!collage || selectedCell === 0) && fromDevelop}
+        </DevelopSection>
       )}
 
       <InspectorSection

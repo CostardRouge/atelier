@@ -1606,6 +1606,68 @@ His «avec tes recommandations». Rules (`snapshots.ts`, pure; `HistoryPanel.tsx
   three commands. Not on his Mac or iPhone; no hover preview (the stage is
   the preview, ⌘Z the safety net).
 
+## A picture's edit TAKEN into Trips or the Studio (2026-10-17, item 34 of `docs/lightroom-gaps.md`)
+
+His «avec tes recommandations». The hosts «gain rendering, not panels»
+(`photo-editor.md` §4), so the edit is drawn there and edited here. Rules:
+
+- **PULLED, copied, never linked.** The host lists the rolls of this browser
+  that hold its file (`offersFor`, `sameMediaRef`, re-read on focus —
+  `use-develop-offers.ts`) in a «From Develop» row under its correction
+  (`FromDevelopRow`, a child of `DevelopSection`); **Use** writes BY VALUE.
+  Develop never writes into a trip or a project (a document is edited by the
+  tool that holds it, and a link would need the roll on every device). A
+  later change is an **Update** offered when the picture's last journal
+  step is newer than `from.at` (`carriedIsStale`), never pushed.
+- **What crosses where.** The develop and (Trips only) the look go into the
+  host's OWN fields — `PostSlide.develop` / `.grade`, the Studio's develop
+  entry —, where they stay the host's to edit; what Use lists is what it
+  writes (a null develop or look leaves the host's alone). The passes
+  (`CARRIED_SECTIONS`: perspective, lens + an `onRender` lens profile,
+  detail, repair, layers with subject masks, vignette) are a `CarriedEdit`
+  beside them, drawn through the one `picturePasses` (`picture-passes.ts`,
+  out of `roll-render.ts` so a host does not import the export) with
+  `aspect: 'original'`, no framing, `raw: false`. The crop and border STAY
+  (the frame is the host's), said in the verb's title. The Studio's look is
+  the project's, so it never crosses there.
+- **Refused**: a develop made on the SENSOR (`isRawDevelop`) — the hosts draw
+  the camera's render, where those numbers mean something else. A clip
+  crosses its develop (and look) only.
+- **The origin is kept even with no pass** (`CarriedEdit` always carries
+  `from`), so the row can say where the develop came from and offer an
+  update; renderers read `drawnEdit` (made on THIS file — `from.media` against
+  the host's ref — AND drawing a pass), the row reads `carriedOn`. A slide
+  given another picture draws none of it, with no write needed.
+- **Where it is stored.** Trips: `PostSlide.edit` (v35 — no stored slide
+  holds one; the number moved so an older build refuses a `.roadtrip.json`
+  holding one rather than exporting without it), resolved to `DeckSlide.edit`
+  by `deckSlides`, a collage's FIRST cell only. Studio: `SavedDevelop.edit`,
+  on the develop's own entry under its hash, so the history, the save and
+  the sync carry it with no new field (an entry with an edit and an as-shot
+  develop survives; `writeDevelop` keeps the edit unless given one).
+- **Trap — a module cycle.** `project-types → media-develop → (carried-edit →
+  roll-types → crop-aspect → project-types)` loaded `ASPECT_PRESETS` as
+  undefined and failed ten spec files at import. The stored shape and its
+  reader live in `carried-record.ts`, which reads each section through its
+  own reader and takes only TYPES from `roll-types`; a document model imports
+  that, never `carried-edit.ts`.
+- **Renderers**: Trips' stage (`BadgeStage.graderFor`: `setPasses` on the held
+  grader, keyed on `carriedKey` + masks in/out), the rail, `badgeToPng`
+  (`editPasses`), the painted clip (`gradedOnce`); the Studio's stage (a held
+  PASS grader for a still that carries passes, beside the live
+  `createLutRenderer` it keeps for everything else) and `exportPhotoVariant`
+  (`opts.edit`). Kernels in the FILE's pixels (`carriedPassesOver`: the
+  grader's width over `natural`). Subject masks are asked once per file and
+  SIZE (`carried-rasters.ts`, 24 held) — the export segments at its own size
+  rather than upscaling the stage's. The Develop SHEET does not draw the
+  passes and says so in its `note`.
+- Driven headless at 1280 × 900: Trips — the row, Use (develop +
+  perspective + vignette), the stage and `trips.snapshot` drawing them, v35
+  stored, ✕ taking them off; Studio — Use, the stage's corner darkened by the
+  vignette, `exportPhotoVariant` with and without, ✕. Update was checked by
+  spec only; nothing on his Mac or phone, and the bridge to the Studio
+  (`roadtrip-hook` scene) does not carry a slide's edit.
+
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure) + an **Auto** button in the
