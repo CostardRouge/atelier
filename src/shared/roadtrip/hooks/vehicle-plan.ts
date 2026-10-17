@@ -193,11 +193,13 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
     const stageRef = to.leg !== null ? stages[to.leg]?.vehicle : undefined;
     const landRef: VehicleRef = stageRef ?? dayRef;
     const landSource: SegmentSource = stageRef ? 'stage' : 'trip';
-    if (to.source?.flown) {
+    // The place the hop arrives at: the stop's own, or a grouped halt's first member.
+    const via = to.source ?? to.reachedAt;
+    if (via?.flown) {
       raw.push({ s0, s1, ref: landRef, source: 'place', hidden: true });
       continue;
     }
-    const placed = to.source?.arriveBy;
+    const placed = via?.arriveBy;
     if (placed) {
       raw.push({ s0, s1, ref: placed, source: 'place', ...riding(placed, landRef, fleet) });
       continue;
@@ -211,7 +213,7 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
     // On the water: the place's own boat for this crossing, else the stage's
     // vehicle if it is a boat, else the rule's boat.
     const waterRef: VehicleRef =
-      to.source?.crossBy ??
+      via?.crossBy ??
       (vehicleKind(refModel(landRef, fleet)) === 'boat' ? landRef : { borrow: crossings!.boat });
     const w0 = Math.max(s0, Math.min(s1, terrain.water.s0));
     const w1 = Math.max(w0, Math.min(s1, terrain.water.s1));
