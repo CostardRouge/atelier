@@ -226,15 +226,18 @@ function roadSentence(plan: DrivePlan, ctx: HookContext, vehicles: DriveVehicles
   else if (!input.land) parts.push('Reading the coastline — the road is driven whole until it arrives');
   else if (!water.length) parts.push('No hop crosses water');
   else {
-    const boat = vehicleModel(refModel(water[0].ref, input.fleet)).short;
+    // Every boat that sails, once each: a crossing may carry its own (`crossBy`).
+    const boat = [...new Set(water.map((seg) => vehicleModel(refModel(seg.ref, input.fleet)).short))].join(', ');
     const where = vehicles.hops
       .map((hop, h) => (hop?.water ? `${stops[h].name || `stop ${h + 1}`} → ${stops[h + 1].name || `stop ${h + 2}`}` : null))
       .filter((x): x is string => x !== null);
     const aboard = o.boarding && water.some((seg) => seg.rider) ? `, the ${vehicleModel(refModel(water.find((seg) => seg.rider)!.rider!, input.fleet)).short} aboard` : '';
     parts.push(`${where.length} crossing${where.length > 1 ? 's' : ''} by ${boat}${aboard}: ${where.slice(0, 3).join(', ')}${where.length > 3 ? '…' : ''}`);
   }
-  const placed = vehicles.segments.filter((seg) => seg.source === 'place').length;
+  const placed = vehicles.segments.filter((seg) => seg.source === 'place' && !seg.hidden).length;
   if (placed) parts.push(`${placed} hop${placed > 1 ? 's' : ''} picked by hand`);
+  const flown = vehicles.segments.filter((seg) => seg.hidden).length;
+  if (flown) parts.push(`${flown} not driven`);
   const staged = new Set(vehicles.segments.filter((seg) => seg.source === 'stage').map((seg) => refModel(seg.ref, input.fleet)));
   if (staged.size) parts.push(`stages on ${[...staged].map((m) => vehicleModel(m).short).join(', ')}`);
   return `${parts.join(' · ')}.`;

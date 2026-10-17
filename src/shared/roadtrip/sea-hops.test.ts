@@ -41,6 +41,11 @@ describe('the hops of a trip that cross the sea', () => {
     expect(seaHops([stage('a', '2026-03-01', [MELBOURNE, byHand, HOBART])], SHIPPED, RULE)).toEqual([]);
   });
 
+  it('leaves out a hop that was not driven', () => {
+    const flown = { ...DEVONPORT, flown: true as const };
+    expect(seaHops([stage('a', '2026-03-01', [MELBOURNE, flown, HOBART])], SHIPPED, RULE)).toEqual([]);
+  });
+
   it('skips a place with no position and a place met twice in a row', () => {
     const lost: TripPlace = { ...place('Somewhere', 0, 0), coords: null };
     const hops = seaHops([stage('a', '2026-03-01', [MELBOURNE, lost, MELBOURNE, DEVONPORT])], SHIPPED, RULE);

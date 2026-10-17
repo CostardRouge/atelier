@@ -52,6 +52,7 @@ import LocatePicturePanel from './LocatePicturePanel';
 import StagesPanel, { StageCard } from './StagesPanel';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import SailNudge from './SailNudge';
+import TripRouteBand from './TripRouteBand';
 import PageBar from '../../shared/ui/PageBar';
 import { useAtLeast, useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -699,6 +700,8 @@ export default function TripOverview({
     [model.stages, stepTarget, onSelectDate],
   );
   const [offMapOpen, setOffMapOpen] = useState(false);
+  /** The Trajet band, as a sheet on a phone's map (it is a card in the aside on a wide screen). */
+  const [routeOpen, setRouteOpen] = useState(false);
   /**
    * «Fix…» / «Add a place…» (was «Locate…»): open the stage — as a tap on its dial would, the day moving
    * into it — where its place is edited: the aside's card, or the legs sheet.
@@ -1079,6 +1082,13 @@ export default function TripOverview({
           </div>
         </BottomSheet>
       )}
+      {routeOpen && (
+        <BottomSheet open onClose={() => setRouteOpen(false)} title="Vehicles" hint="hop by hop" snaps={[0.62, 0.92]}>
+          <div className="px-4 pt-2 pb-4">
+            <TripRouteBand trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />
+          </div>
+        </BottomSheet>
+      )}
       {locating && (
         <LocatePicturePanel
           trip={trip}
@@ -1193,6 +1203,18 @@ export default function TripOverview({
           // sheets are the calendar's own, so the open day travels with the switch.
           <>
             {yearMap && <div className="px-2">{yearMap}</div>}
+            <div className="flex-none flex px-2 pb-1.5">
+              <button
+                type="button"
+                onClick={() => setRouteOpen(true)}
+                title="Every hop from place to place, its vehicle and why — one tap to change it"
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-line-strong bg-surface font-mono text-2xs text-ink-soft whitespace-nowrap cursor-pointer pointer-coarse:min-h-11"
+                data-route-chip
+              >
+                <span className="w-3.5 h-3.5 [&>svg]:w-full [&>svg]:h-full" aria-hidden="true">{Icons.swap}</span>
+                Vehicles, hop by hop
+              </button>
+            </div>
             <div className="flex-1 min-h-0 flex px-2 pb-2">
               {mapView(
                 <MapStageBar
@@ -1494,6 +1516,9 @@ export default function TripOverview({
                 {stageCard}
               </div>
             )}
+            <div className="bg-surface border border-line rounded-paper-lg px-5 pb-5 pt-3">
+              <TripRouteBand trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />
+            </div>
           </aside>
         </div>
       ) : onList ? (

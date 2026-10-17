@@ -1482,6 +1482,19 @@ two shores lie much further apart round the coast than across it). A river or
 a lake is not on that map: a river cruise is set on its place by hand. The
 panel says what the road will do, for example «2 crossings by Spirit of
 Tasmania, the Prado aboard: Melbourne → Devonport, Hobart → Melbourne».
+
+All of this can be read and changed in one place: the overview's **Map** view
+lists every **hop** from place to place, stage by stage, under the water rule's
+switch and boat (a card beside the map on a wide screen, *Vehicles, hop by
+hop* on a phone). Each row shows the hop's kilometres, a bar of its road and its
+sea (blue where it sails, amber where the vehicle drives over the water), the
+vehicle that makes it and why: *set here*, *water*, *stage* or *trip*. A tap
+opens three choices: one vehicle for the **whole hop**, a **boat for this
+crossing** alone (K'gari on the Viper while Bass Strait keeps the Spirit of
+Tasmania, with the road on either side unchanged), or **Not driven** for a
+flight or a train. Virée then fades the vehicle out after the stop and back in
+before the next one, and dashes the trail between them. The sea is read on
+the straight line between two places, so its kilometres are rough.
 When the boat that takes a crossing is a **ferry** (the water rule's boat, or
 the one a place was reached by) and the road's vehicle is a car, the car
 **boards** it there. It drives to the quay and stops, and the ship docks just

@@ -149,5 +149,7 @@ export function hookPlace(place: TripPlace, lat: number, lon: number): HookPlace
   if (place.arrived) out.arrived = place.arrived;
   if (place.left) out.left = place.left;
   if (place.arriveBy) out.arriveBy = place.arriveBy;
+  if (place.crossBy) out.crossBy = place.crossBy;
+  if (place.flown) out.flown = true;
   return out;
 }

@@ -7,10 +7,12 @@
  *
  * 1. the PIECE forces one vehicle for its whole road (the opener's own
  *    `vehicle` option, a boat borrowed for the day);
- * 2. the PLACE says how it was reached (`TripPlace.arriveBy`): that whole hop;
+ * 2. the PLACE says how it was reached (`TripPlace.arriveBy`): that whole hop
+ *    — or that it was not driven at all (`flown`), the vehicle hidden along it;
  * 3. WATER: under the trip's rule (`TripDoc.crossings.auto`), the part of a
- *    hop that crosses it sails — the stage's own vehicle if it is a boat,
- *    else the rule's boat — from the shore it leaves to the shore it reaches;
+ *    hop that crosses it sails — the place's own boat for that crossing
+ *    (`crossBy`), else the stage's vehicle if it is a boat, else the rule's
+ *    boat — from the shore it leaves to the shore it reaches;
  * 4. the STAGE the hop arrives in names a vehicle (`TripStage.vehicle`);
  * 5. the TRIP: the vehicle of the piece's day (its stage's, else the main).
  *
@@ -47,6 +49,8 @@ export interface VehicleSegment {
   source: SegmentSource;
   /** On a FERRY's stretch: the car it carries — what the road would drive there without it. */
   rider?: VehicleRef;
+  /** A hop NOT driven (`TripPlace.flown`): the painter draws no vehicle along it and dashes its line. */
+  hidden?: true;
 }
 
 export interface DriveVehicles {
@@ -189,6 +193,10 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
     const stageRef = to.leg !== null ? stages[to.leg]?.vehicle : undefined;
     const landRef: VehicleRef = stageRef ?? dayRef;
     const landSource: SegmentSource = stageRef ? 'stage' : 'trip';
+    if (to.source?.flown) {
+      raw.push({ s0, s1, ref: landRef, source: 'place', hidden: true });
+      continue;
+    }
     const placed = to.source?.arriveBy;
     if (placed) {
       raw.push({ s0, s1, ref: placed, source: 'place', ...riding(placed, landRef, fleet) });
@@ -200,8 +208,11 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
       raw.push({ s0, s1, ref: landRef, source: landSource });
       continue;
     }
-    // On the water the stage's own vehicle sails if it is a boat; else the rule's boat.
-    const waterRef: VehicleRef = vehicleKind(refModel(landRef, fleet)) === 'boat' ? landRef : { borrow: crossings!.boat };
+    // On the water: the place's own boat for this crossing, else the stage's
+    // vehicle if it is a boat, else the rule's boat.
+    const waterRef: VehicleRef =
+      to.source?.crossBy ??
+      (vehicleKind(refModel(landRef, fleet)) === 'boat' ? landRef : { borrow: crossings!.boat });
     const w0 = Math.max(s0, Math.min(s1, terrain.water.s0));
     const w1 = Math.max(w0, Math.min(s1, terrain.water.s1));
     if (w0 > s0) raw.push({ s0, s1: w0, ref: landRef, source: landSource });
@@ -217,6 +228,7 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
       sameRef(last.ref, seg.ref) &&
       last.source === seg.source &&
       sameRider(last.rider, seg.rider) &&
+      !last.hidden === !seg.hidden &&
       Math.abs(last.s1 - seg.s0) < 1e-6
     )
       last.s1 = seg.s1;
@@ -315,7 +327,14 @@ export interface DriveRoad {
   transitions: readonly RoadTransition[];
   /** Every crossing a ferry carries the car over, with the beats it drives aboard and off; empty when it boards none. */
   crossings: readonly RoadCrossing[];
+  /** The stretches NOT driven (`TripPlace.flown`), in arc length — the trail is dashed along them. */
+  hidden: readonly { s0: number; s1: number }[];
+  /** How much of the vehicle shows at a moment, 0 to 1: it fades out as a run over a hop not driven starts and back in as it ends. */
+  shown(t: number, moment: DriveMoment): number;
 }
+
+/** The share of a hop not driven over which the vehicle fades out at its start, and back in at its end. */
+export const FLOWN_FADE_SHARE = 0.12;
 
 /** A ferry carrying the car: the water, the two beats, and the car as it is dressed the day it boards. */
 export interface RoadCrossing {
@@ -403,7 +422,20 @@ export function driveRoad(plan: DrivePlan, input: RoadInput): { road: DriveRoad;
       crossings.push({ s0: first.s0, s1: last.s1, board, alight, rider: resolveRef(first.rider!, input.fleet, day) });
     }
   }
-  return { road: { at, transitions, crossings }, vehicles };
+  const hidden = vehicles.segments.filter((seg) => seg.hidden).map(({ s0, s1 }) => ({ s0, s1 }));
+  const shown = (t: number, m: DriveMoment): number => {
+    if (!hidden.length) return 1;
+    const phase = phases.find((p) => t < p.end);
+    if (!phase || phase.kind !== 'run') return 1;
+    if (!segmentAt(vehicles.segments, lookupS(phases, docks, t, m.s, plan.path.length)).hidden) return 1;
+    const range = hidden.find((r) => m.s >= r.s0 - 1e-9 && m.s <= r.s1 + 1e-9);
+    if (!range) return 1;
+    // Faded in arc length, so a run that does not halt at the hop's ends still fades at them.
+    const edge = (range.s1 - range.s0) * FLOWN_FADE_SHARE;
+    if (edge <= 0) return 0;
+    return Math.max(0, Math.min(1, Math.max(1 - (m.s - range.s0) / edge, 1 - (range.s1 - m.s) / edge)));
+  };
+  return { road: { at, transitions, crossings, hidden, shown }, vehicles };
 }
 
 /**
