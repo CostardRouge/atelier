@@ -24,10 +24,11 @@ Today it ships ten tools, converging into a few editors:
   a DJI clip and export an MP4 with the telemetry burned in.
 - **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
   walk the aircraft along it (the base map is opt-in — see below).
-- **Flight Atlas** *(experimental)* — draw every drone flight you select on one
-  map and animate them together, the way the Perth bus map draws a city's day:
-  a faint network of every route, comets for what is in the air, a clock and a
-  count in the corner; export it as an MP4 or a PNG.
+- **Flight Atlas** *(experimental)* — draw a set of drone flights on one map
+  and animate them together, the way the Perth bus map draws a city's day: a
+  faint network of every route, comets for what is in the air, a clock and a
+  count in the corner; export it as an MP4 or a PNG. Each **atlas** is kept on
+  this device, logs included, in a gallery like Trips', the Studio's and Develop's.
 - **Composer** — combine a clip, its flight map and a draggable telemetry
   readout into one framed composition (aspect, layout, LUT), preview it live,
   and export it to MP4.
@@ -3341,16 +3342,44 @@ coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
 
 ## Flight Atlas tool (experimental)
 
-Every DJI flight selected in the Library — a clip with its `.srt`, or a loose
-`.srt` log — drawn together on one map and animated. Only the **GPS track** of
-each log is read (four fixes a second, timed by the log's own wall clock, so a
-time-lapse or a slow-motion clip runs at its real pace); of a clip beside it,
-only the few kilobytes of metadata that may name the aircraft. *Add .srt
-files* / *A folder* in the panel feed the Library directly, and with a Winnow
-connected, **From <instance>** opens the Winnow picker set for flights: a span
-of days, only the clips that carry a log, the Logbook with every flight's track
-drawn, everything ticked — and *Add N flights* brings each clip's `.srt`
-alone, never its video.
+A set of DJI flights — clips with their `.srt`, or loose `.srt` logs — drawn
+together on one map and animated. Only the **GPS track** of each log is read
+(four fixes a second, timed by the log's own wall clock, so a time-lapse or a
+slow-motion clip runs at its real pace); of a clip beside it, only the few
+kilobytes of metadata that may name the aircraft.
+
+**Atlases.** `/atlas` opens a gallery of atlases, as cards whose cover is the
+atlas's own poster, grouped by where they are kept; the whole card opens it,
+and its **⋯** renames it, clones it (the same sheet as a trip's: the name
+prefilled with the first free one), exports it as an `.atlas.json` file, and
+deletes it. *New atlas* starts one with the flights ticked in the Library, if
+any. An atlas keeps its name, every setting — the look, the timing, the
+camera, the overlay, the intro and the outro, its title, place, zone,
+spotlight picks and drone names included — its flights and the ones it hides;
+every change is saved as you go. The text of each log is kept **on this
+device** with it (once, shared by every atlas that draws it), so an atlas
+reopens from the gallery with no Library, no files and no instance. The
+presets and the makers' logos are kept on the device too, for every atlas.
+On the first visit, the settings remembered by the page before atlases
+existed, and the flights ticked in the Library, become the first atlas.
+
+What a browser's storage cannot promise, the gallery says: whether the browser
+agreed not to clear the site's data on its own (*Keep it durable* asks it), how
+much is in use, and **Back up everything** — every atlas, its logs, the presets
+and the logos in one `.atlas.json` file, the one copy that survives a cleared
+browser or a private window. Importing such a file always makes new atlases
+(each log is checked against the fingerprint its flight carries before it is
+kept); its presets and logos join the device's where it has none of that name.
+One tab edits an atlas at a time; another shows it read only.
+
+In the editor, *Add .srt files* / *A folder* add logs to the open atlas, a
+button adds the ones ticked in the Library, and with a Winnow connected, **From
+<instance>** opens the Winnow picker set for flights: a span of days, only the
+clips that carry a log, the Logbook with every flight's track drawn,
+everything ticked — and *Add N flights* brings each clip's `.srt` alone, never
+its video. *Remove N hidden* takes the hidden flights out of the atlas. When an
+atlas's logs are not on the device (an atlas file exported without them),
+*Find them in a folder* keeps the texts that match and nothing else.
 
 The panel shows **one layer at a time** — the things the picture shows, as
 chips at its top: *Intro*, *Map*, *Flights*, *Timing*, *Camera*, *Title*,
