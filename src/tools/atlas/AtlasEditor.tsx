@@ -139,8 +139,10 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
       const h = hostOf(m);
       if (h) hosts.set(h, (hosts.get(h) ?? 0) + 1);
     }
+    // The connected instance first: its logs can come back now, whatever another host holds.
+    if (connection && hosts.has(connection.id)) return { host: connection.id, count: hosts.get(connection.id) as number, connected: true };
     const [host, count] = [...hosts].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
-    return host ? { host, count, connected: connection?.id === host } : null;
+    return host ? { host, count, connected: false } : null;
   }, [missing, connection]);
   const fetching = useRef(false);
   const onFetchMissing = useCallback(async () => {
