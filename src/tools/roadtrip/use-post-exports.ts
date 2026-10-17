@@ -441,6 +441,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         },
         lut: looks.lutFor(inputs.hookSlide),
         film: looks.filmFor(inputs.hookSlide),
+        // The rest of a Develop picture's edit — a painted still's; a clip carries none.
+        edit: inputs.hookSlide.edit,
         onProgress,
         signal,
       };
@@ -553,6 +555,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       },
       lut: looks.lutFor(slide),
       film: looks.filmFor(slide),
+      // The rest of a Develop picture's edit — a painted still's; a clip carries none.
+      edit: slide.edit,
       onProgress,
     };
     // A collage is PAINTED, whatever its cells hold: every cell's picture

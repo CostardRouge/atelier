@@ -14,6 +14,7 @@ import {
 } from './deck';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_DEVELOP } from '../develop/develop';
+import { DEFAULT_KEYSTONE } from '../render/geometry';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
   badgeSlideFrom,
@@ -453,6 +454,24 @@ describe('deckSlides — the picture’s own develop', () => {
     // the piece's — the chain is resolved on read (`post-grade.ts`).
     expect(slides[1].grade).toBeNull();
     expect(slides[2].grade).toBeNull();
+  });
+
+  it('carries a Develop picture’s edit only over the file it was made on (v35)', () => {
+    const media = { name: 'IMG_2.JPG', size: 1, lastModified: 1 };
+    const edit: PostSlide['edit'] = {
+      from: { roll: 'r', rollName: 'Roll', picture: 'p', label: 'IMG_2.JPG', media, at: 1 },
+      values: { perspective: { ...DEFAULT_KEYSTONE, vertical: 10 } },
+    };
+    const kept = { ...createPostSlide(media), edit };
+    // The picture was replaced: the edit measured on the first one is not drawn.
+    const swapped = { ...createPostSlide({ name: 'IMG_3.JPG', size: 1, lastModified: 1 }), edit };
+    const t = trip();
+    t.cta = { ...t.cta, headline: 'Follow the trip' };
+    const slides = deckSlides(t, post({ includeCta: true, slides: [kept, swapped] }));
+    expect(slides[1].edit).toBe(edit);
+    expect(slides[2].edit).toBeNull();
+    expect(slides[0].edit).toBeNull();
+    expect(slides[3].edit).toBeNull();
   });
 });
 

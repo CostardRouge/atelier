@@ -15,6 +15,9 @@ import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { framingAt, framingOnClock, type FramingMotion, type MotionClock } from '../media/framing-motion';
 import { fitPhotoForRender } from '../media/photo-frame';
+import { carriedPassesOver, type CarriedEdit } from '../develop/carried-edit';
+import { carriedRasters } from '../develop/carried-rasters';
+import type { PicturePasses } from '../develop/picture-passes';
 import { decodeStill } from '../media/still-decode';
 import type { StillFit } from '../media/still-fit';
 import type { HalfImage } from '../render/half-image';
@@ -489,6 +492,19 @@ export async function renderBadge(
   drawOverlays(ctx, elementsFor(opts), null, w, h, overlayOptions(opts));
 }
 
+export const NO_PASSES: PicturePasses = { pre: [], passes: [] };
+
+/**
+ * A carried edit's passes over the picture it is drawn on, its subject masks
+ * asked first at that picture's size. Built per grader: a pass holds textures
+ * on the context it first drew on.
+ */
+export async function editPasses(edit: CarriedEdit | null | undefined, source: BadgeSource | null): Promise<PicturePasses> {
+  if (!edit || !source || source.width <= 0) return NO_PASSES;
+  const rasters = await carriedRasters(edit, () => source.image as TexImageSource, source);
+  return carriedPassesOver(edit, source, rasters);
+}
+
 /**
  * Render at full size and hand back a PNG — lossless, since text is the point.
  * A LUT, when given, is applied through a grader made for this one render and
@@ -508,6 +524,12 @@ export async function badgeToPng(
     film?: FilmTexture | null;
     /** A collage's cube per cell (its own develop baked in); absent leaves every cell as shot. */
     collageLuts?: readonly (CubeLut | null)[];
+    /**
+     * The rest of a Develop picture's edit (`DeckSlide.edit`), drawn as
+     * passes around the cube of the slide's own picture — a collage's first
+     * cell, never the others.
+     */
+    edit?: CarriedEdit | null;
   },
 ): Promise<Blob | null> {
   const canvas = document.createElement('canvas');
@@ -517,24 +539,33 @@ export async function badgeToPng(
   // copy is released with the grader. A clip's frame is never past it.
   // A texture with no look is still a render: the node is the only thing
   // that draws it.
-  const needsGrade = Boolean(opts.lut) || !isSilentTexture(opts.film);
+  const edit = opts.edit ?? null;
+  const needsGrade = Boolean(opts.lut) || !isSilentTexture(opts.film) || Boolean(edit);
   const fit =
     !opts.collage && needsGrade && opts.source && opts.source.width > 0 && opts.source.image instanceof ImageBitmap
       ? await fitPhotoForRender(opts.source.image)
       : null;
   const source: BadgeSource | null | undefined =
     fit && opts.source
-      ? { ...opts.source, image: fit.image, width: fit.width, height: fit.height }
+      ? {
+          ...opts.source,
+          image: fit.image,
+          width: fit.width,
+          height: fit.height,
+          natural: opts.source.natural ?? { width: opts.source.width, height: opts.source.height },
+        }
       : opts.source;
+  const edited = await editPasses(edit, opts.collage ? (opts.collage.items[0]?.source ?? null) : (source ?? null));
   const grader =
     !opts.collage && needsGrade && source && source.width > 0
-      ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], opts.film ?? null)
+      ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, edited.passes, edited.pre, opts.film ?? null)
       : null;
   // One grader per cell, for this one render, as the single picture's above.
   const cellGraders = (opts.collage?.items ?? []).map((item, i) => {
     const lut = opts.collageLuts?.[i] ?? null;
-    return (lut || !isSilentTexture(opts.film)) && item.source && item.source.width > 0
-      ? makeFrameGrader(lut as CubeLut, item.source.width, item.source.height, 1, [], [], opts.film ?? null)
+    const own = i === 0 ? edited : NO_PASSES;
+    return (lut || !isSilentTexture(opts.film) || own !== NO_PASSES) && item.source && item.source.width > 0
+      ? makeFrameGrader(lut as CubeLut, item.source.width, item.source.height, 1, own.passes, own.pre, opts.film ?? null)
       : null;
   });
   const collage = opts.collage

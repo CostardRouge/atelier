@@ -12,6 +12,7 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
+import type { CarriedEdit } from '../develop/carried-edit';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { framingOnClock, type MotionClock } from '../media/framing-motion';
 import { exportVariantVideo } from '../media/export-variant';
@@ -24,6 +25,7 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import { variantOutputSize, type ExportVariant } from '../projects/export-variants';
 import {
+  editPasses,
   loadBadgeSource,
   renderBadge,
   type BadgeSource,
@@ -194,6 +196,8 @@ export interface HookStillVideoOptions {
    * with `grainFps: 0` asks for.
    */
   film?: FilmTexture | null;
+  /** The rest of a Develop picture's edit (`DeckSlide.edit`), graded with it once — a collage's first cell only. */
+  edit?: CarriedEdit | null;
   /** The piece's prepared opener — see {@link HookVideoOptions.hook}. */
   hook?: ResolvedHook | null;
   elementsAt?: ElementsAt | null;
@@ -224,9 +228,12 @@ async function gradedOnce(
   source: BadgeSource,
   lut: CubeLut | null,
   film: FilmTexture | null = null,
+  edit: CarriedEdit | null = null,
 ): Promise<ImageBitmap | null> {
-  if ((!lut && isSilentTexture(film)) || source.width <= 0 || source.height <= 0) return null;
-  const grader = makeFrameGrader(lut as CubeLut, source.width, source.height, 1, [], [], film);
+  if ((!lut && isSilentTexture(film) && !edit) || source.width <= 0 || source.height <= 0) return null;
+  // The rest of a Develop picture's edit, around the cube — the PNG's chain.
+  const { pre, passes } = await editPasses(edit, source);
+  const grader = makeFrameGrader(lut as CubeLut, source.width, source.height, 1, passes, pre, film);
   try {
     return await createImageBitmap(grader.render(source.image) as CanvasImageSource);
   } finally {
@@ -243,7 +250,7 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
   const source = await loadBadgeSource(opts.file, 0, { maxEdge: exportEdge() });
   let graded: ImageBitmap | null = null;
   try {
-    graded = await gradedOnce(source, opts.lut ?? null, opts.film ?? null);
+    graded = await gradedOnce(source, opts.lut ?? null, opts.film ?? null, opts.edit ?? null);
     const picture = graded
       ? { image: graded as CanvasImageSource, width: source.width, height: source.height, release: () => {} }
       : source;
@@ -325,7 +332,8 @@ async function exportCollageStillVideo(
         items.push({ source: null, framing: item.framing, motion: item.motion });
         continue;
       }
-      const bitmap = await gradedOnce(item.source, collage.luts[i] ?? null, opts.film ?? null);
+      // The slide's edit is its own picture's: the first cell, never the others.
+      const bitmap = await gradedOnce(item.source, collage.luts[i] ?? null, opts.film ?? null, i === 0 ? (opts.edit ?? null) : null);
       if (bitmap) graded.push(bitmap);
       items.push({
         source: bitmap

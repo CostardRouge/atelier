@@ -138,6 +138,8 @@ export async function renderDeck(
         height: h,
         lut: opts.lutFor?.(slide) ?? null,
         film: opts.filmFor?.(slide) ?? null,
+        // The rest of a Develop picture's edit, over the slide's own picture.
+        edit: slide.edit,
       });
       if (blob) {
         out.push({

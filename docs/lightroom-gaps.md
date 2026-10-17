@@ -107,7 +107,7 @@ repeated here.
 | 31 | **Snapshots, a per-picture history panel** | roll-wide undo, lost on reload | M |
 | 32 | **Title, caption, keywords, copyright/creator** written into the file | none | M |
 | 33 | **Culling signals where one edits** — Winnow's picks/stars shown read-only, filter on them | **BUILT (pass 5)** — read live from the rows Winnow sends, never stored or written; a mark on each strip cell and table row, the strip filtered by picks / not rejected / stars (`develop-roll.md`) | S/M |
-| 34 | **Send a developed picture to Trips / a Studio project** with its whole edit | deferred after v1; the modal hosts carry the global develop only | L |
+| 34 | **Send a developed picture to Trips / a Studio project** with its whole edit | BUILT 2026-10-17 — taken from the host's «From Develop» row, the passes drawn by its stage and exports | L |
 | 35 | Import that COPIES off a card (+ backup) | references only; a card ejected goes dark unless previews are kept | M |
 | 36 | Full-screen key, grid/loupe keys, filmstrip virtualisation for 1 000+ | none | S each |
 
@@ -139,7 +139,13 @@ repeated here.
   moved by key (`develop-roll.md`, «The roll's ORDER»); 31 is BUILT the same
   day — the History tab, steps read off the journal and named snapshots
   (roll v8), going back as one undoable write (`develop-roll.md`, «History
-  and snapshots»).
+  and snapshots»); 34 is BUILT the same day — a Trips slide and a Studio
+  media TAKE a roll picture's whole edit from a «From Develop» row: its
+  develop and (in Trips) its look into the host's own fields, its
+  perspective, lens, detail, repair, layers and vignette as passes drawn by
+  the stage and every export, copied with its origin and offered as an
+  update, never linked (`develop-roll.md`, «A picture's edit TAKEN into Trips
+  or the Studio»). Pass 5 is DONE.
 - Later, and each its own brief: 19, 20, 22, 24, 35.
 
 ## 7. His to decide

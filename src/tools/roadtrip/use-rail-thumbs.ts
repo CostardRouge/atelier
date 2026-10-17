@@ -8,8 +8,11 @@ import {
   loadBadgeSource,
   loadCollageSources,
   renderBadge,
+  editPasses,
+  NO_PASSES,
   type BadgeSource,
 } from '../../shared/roadtrip/badge-render';
+import { carriedKey } from '../../shared/develop/carried-edit';
 import { collageMediaRefs, collageSettleSeconds } from '../../shared/roadtrip/collage';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
@@ -186,6 +189,8 @@ export default function useRailThumbs({
             rest,
             aspect,
             lutId(lut),
+            // The rest of a Develop picture's edit, drawn around the cube.
+            carriedKey(slide.edit),
             slide.videoTimeSeconds,
             file ? [file.name, file.size, file.lastModified] : null,
             slide.collage,
@@ -242,16 +247,20 @@ export default function useRailThumbs({
         ? await loadCollageSources(job.slide, job.slide.collage, resolve, { maxWidth: SOURCE_WIDTH })
         : null;
       const source = cells ? null : await sourceFor(job);
+      // The slide's carried edit, over its own picture — a collage's first cell.
+      const edit = job.slide.edit;
+      const edited = await editPasses(edit, cells ? (cells.items[0]?.source ?? null) : source);
       // A grader is a WebGL2 context: made for this one draw and disposed
       // straight after, exactly as `badgeToPng` does per slide.
       const grader =
-        job.lut && source && source.width > 0
-          ? makeFrameGrader(job.lut, source.width, source.height)
+        (job.lut || edit) && source && source.width > 0
+          ? makeFrameGrader(job.lut as CubeLut, source.width, source.height, 1, edited.passes, edited.pre)
           : null;
-      const cellGraders = (cells?.items ?? []).map((item) => {
+      const cellGraders = (cells?.items ?? []).map((item, i) => {
         const lut = lutFor({ ...job.slide, develop: item.develop });
-        return lut && item.source && item.source.width > 0
-          ? makeFrameGrader(lut, item.source.width, item.source.height)
+        const own = i === 0 ? edited : NO_PASSES;
+        return (lut || own !== NO_PASSES) && item.source && item.source.width > 0
+          ? makeFrameGrader(lut as CubeLut, item.source.width, item.source.height, 1, own.passes, own.pre)
           : null;
       });
       try {

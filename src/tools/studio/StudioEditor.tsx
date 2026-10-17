@@ -132,7 +132,11 @@ import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet, { type SheetDeckPicture } from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
+import { restoreCarried, restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
+import FromDevelopRow from '../../shared/develop/FromDevelopRow';
+import { savedMediaRef, type SavedMediaRef } from '../../shared/projects/media-ref';
+import { carriedKey, carriedPassesOver, drawnEdit, type EditOffer } from '../../shared/develop/carried-edit';
+import { carriedRasters, heldCarriedRasters } from '../../shared/develop/carried-rasters';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
 import ProjectSettingsModal, { type ProjectSettingsDraft } from './ProjectSettingsModal';
@@ -429,6 +433,30 @@ export default function StudioEditor({
           ],
     [otherMedia],
   );
+  // --- the edit from Develop ----------------------------------------------
+  // A roll picture's whole edit taken onto this media (item 34 of
+  // `docs/lightroom-gaps.md`): its develop into the media's own entry, its
+  // passes beside it — on the same entry, so the history, the save and the
+  // sync carry it with the develop. The look stays in Develop: the Studio's
+  // is the whole project's. Drawn over a STILL that is the file it was made
+  // on; a clip carries none.
+  const activeRef = useMemo<SavedMediaRef | null>(() => {
+    if (!activeFile) return null;
+    const assetId = knownIdentity(activeFile)?.assetId;
+    return { ...savedMediaRef(activeFile), ...(assetId ? { assetId } : {}), ...(activeHash ? { hash: activeHash } : {}) };
+  }, [activeFile, activeHash]);
+  const activeCarried = activeId ? restoreCarried(develops[activeId], activeHash) : null;
+  const activeEdit = activeImage ? drawnEdit(activeCarried, activeRef) : null;
+  function takeFromDevelop(offer: EditOffer) {
+    if (!activeId) return;
+    const settings = offer.develop ?? activeDevelop;
+    setDevelops((prev) => writeDevelop(prev, activeId, settings, activeHash, offer.edit));
+  }
+  function takeOffFromDevelop() {
+    if (!activeId) return;
+    setDevelops((prev) => writeDevelop(prev, activeId, activeDevelop, activeHash, null));
+  }
+
   // The cube every renderer here takes: the stack baked with THIS media's
   // stored develop. While the sheet is open its draft rides `lutStack.composed`,
   // which only the sheet paints from — the stage keeps the stored value.
@@ -1148,10 +1176,36 @@ export default function StudioEditor({
     }
   };
 
+  // The still's passes from Develop, built for the size the stage grades at;
+  // its subject masks asked of the model once, and the stage drawn again
+  // when they land.
+  const [rasterTick, setRasterTick] = useState(0);
+  useEffect(() => {
+    if (!activeEdit || !photo) return;
+    let live = true;
+    void carriedRasters(activeEdit, () => photo, photo).then(() => {
+      if (live) setRasterTick((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, [activeEdit, photo]);
+  const stillPasses = useMemo(() => {
+    if (!activeEdit || !photo) return null;
+    const rasters = heldCarriedRasters(activeEdit, photo);
+    const natural = photoNatural ?? { width: photo.width, height: photo.height };
+    return {
+      key: `${carriedKey(activeEdit)}|${rasters ? 'in' : 'out'}`,
+      at: (width: number, height: number) => carriedPassesOver(activeEdit, { width, height, natural }, rasters),
+    };
+    // `rasterTick` is not read: it asks again once the masks are in.
+  }, [activeEdit, photo, photoNatural, rasterTick]);
+
   const stage = useOverlayStage({
     videoRef,
     canvasRef,
     still: photo,
+    stillPasses,
     cues,
     elements: stageElements,
     selectedId: selectedElementId,
@@ -1546,6 +1600,7 @@ export default function StudioEditor({
       theme,
       timeShift,
       shades,
+      edit: activeEdit,
     });
     return blob;
   }
@@ -2884,7 +2939,16 @@ export default function StudioEditor({
                       setDevelopOpen(true);
                     }}
                     onReset={() => setActiveDevelop(null)}
-                  />
+                  >
+                    <FromDevelopRow
+                      media={activeRef}
+                      edit={activeCarried}
+                      onUse={takeFromDevelop}
+                      onTakeOff={takeOffFromDevelop}
+                      carriesLook={false}
+                      frameWord="the project’s look and frame are its own"
+                    />
+                  </DevelopSection>
                   <InspectorSection id="studio.grade" title="Grade">
                     <GradePanel
                       stack={lutStack}

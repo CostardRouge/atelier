@@ -23,6 +23,7 @@ export default function DevelopSection({
   openTitle = 'Open the Develop sheet',
   onOpen,
   onReset,
+  children,
 }: {
   /** The section's id, which keeps its fold remembered per editor. */
   id: string;
@@ -35,6 +36,8 @@ export default function DevelopSection({
   openTitle?: string;
   onOpen: () => void;
   onReset: () => void;
+  /** Rows after the correction — where it came from in Develop (`FromDevelopRow`). */
+  children?: ReactNode;
 }) {
   return (
     <InspectorSection id={id} title="Develop" badge={badge} info={info}>
@@ -54,6 +57,7 @@ export default function DevelopSection({
           Develop…
         </Button>
       </FieldRow>
+      {children}
     </InspectorSection>
   );
 }
