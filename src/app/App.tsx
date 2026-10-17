@@ -6,6 +6,7 @@ import AgentsGuide from './AgentsGuide';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
 import { REPO_URL } from './site';
+import { APP_VERSION } from './version';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import SourcePill from './SourcePill';
@@ -425,6 +426,10 @@ export default function App() {
           >
             Source on GitHub
           </a>
+          {/* Which release this build is (CHANGELOG.md), so a phone in hand
+              can say which one it runs. */}
+          <span className="w-[5px] h-[5px] rounded-full bg-accent inline-block" />
+          <span className="font-mono">v{APP_VERSION}</span>
         </footer>
       )}
     </div>
