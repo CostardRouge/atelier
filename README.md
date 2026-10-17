@@ -2019,10 +2019,38 @@ same selection and bar, the cells in four sizes from its ⋯ panel or with
 **−** / **=** — to sort and to
 act on many; it covers the picture and the band and leaves the inspector, so
 the numbers you are about to apply stay in view, and a click on a picture
-opens it and closes the sheet (on a phone it is the whole screen). **Focus**
+opens it and closes the sheet (on a phone it is the whole screen).
+
+**The roll's order is yours.** Drag a cell along the band or across the
+contact sheet and put it down where it belongs — with a mouse just carry it
+(a click still opens), with a finger hold it first, then move; a bar shows
+where it will land, the band slides at its edges so a long roll can be
+crossed, and **Esc** puts it back. A marked cell carries every marked
+picture with it, in their order. **⌥← / ⌥→** move the open picture one
+place, and a cell's menu sends one to the start or the end of the roll. The
+filter panel's **Order** row sorts the whole roll **by file name**
+(naturally: `DJI_0009` before `DJI_0010`), **by date** (oldest first — the
+capture time for a picture from your Winnow, the file's own date for one
+from a folder) or **turns it round**; a file's variants stay together after
+it, and a sort the roll is already in is greyed. A sort or a move rewrites
+the roll's one order — the band, ←/→, the sheet and the export's list all
+follow it — and **⌘Z** puts it back. **Focus**
 (**F**, or the ⤢ button above the picture) puts the band, the inspector and
 the page bar away and leaves the photograph alone; **←/→** still step, and
 **F**, ⤢ or **Esc** brings everything back.
+
+**History and snapshots.** The inspector's last tab, **History**, lists the
+picture's steps newest first — each with what it changed (`+1 EV · contrast
++30`, `from another picture`, `by an agent`) — down to *As shot*, and above
+them its **snapshots**: *Take* keeps every section of the picture as it
+stands (the develop, the crop, the look, the layers, the repair…) under a
+name you can change from its ⋯. A click on a step or a snapshot puts the
+picture back to it in one step of its own — **⌘Z** undoes the click, and
+nothing of the history is lost by looking back, unlike Lightroom's, which
+drops the steps above the one you edit from. Both are kept in the roll, so
+they are still there after a reload or on another device, where **⌘Z** is
+not; a variant made *as edited* takes them along. A picture edited before
+the history existed lists its sections in a standard order and says so.
 
 **Clips.** A roll takes a video the way it takes a photograph: from a folder
 or a drop (the clip alone — its `.srt` flight log stays the Studio's), from

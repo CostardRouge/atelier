@@ -4,7 +4,7 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
-export type WorkbenchTab = 'adjust' | 'detail' | 'layers' | 'crop' | 'export';
+export type WorkbenchTab = 'adjust' | 'detail' | 'layers' | 'crop' | 'export' | 'history';
 
 /** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
 export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
@@ -13,17 +13,20 @@ export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
   { id: 'layers', label: 'Layers' },
   { id: 'crop', label: 'Crop' },
   { id: 'export', label: 'Export' },
+  // Snapshots and the picture's steps (item 31, `snapshots.ts`): last, a look
+  // BACK at the work rather than a step of it.
+  { id: 'history', label: 'History' },
 ];
 
 /**
- * The tabs a CLIP has (2026-09-30, the crop added 2026-10-01): Adjust, Crop
- * and Export. A clip takes the global develop, the look and a crop — what the
+ * The tabs a CLIP has (2026-09-30, the crop added 2026-10-01, its History
+ * 2026-10-17): Adjust, Crop, Export and History. A clip takes the global develop, the look and a crop — what the
  * export grades and re-frames every frame through — and none of what Detail
  * and Layers write, which are passes over one still frame (`roll-types.ts`,
  * `isClipPicture`). A tab that cannot act on the picture is not drawn, and
  * its key does nothing.
  */
-export const CLIP_TABS: readonly WorkbenchTab[] = ['adjust', 'crop', 'export'];
+export const CLIP_TABS: readonly WorkbenchTab[] = ['adjust', 'crop', 'export', 'history'];
 
 /** The inspector's tabs for the picture in hand — every one for a photograph, a clip's three for a clip. */
 export function workbenchTabsFor(clip: boolean): readonly { id: WorkbenchTab; label: string }[] {
@@ -169,6 +172,8 @@ export interface EditorKeyPress {
 export type EditorKeyAction =
   | 'previous'
   | 'next'
+  | 'move-earlier'
+  | 'move-later'
   | 'hold'
   | 'zoom'
   | 'copy'
@@ -212,7 +217,7 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
 
 /**
  * What a key press means in the editor, or null when it belongs to someone
- * else. ←/→ move along the strip, `\` holds "before" (its release is the
+ * else. ←/→ move along the strip, ⌥←/⌥→ move the open picture IN it, `\` holds "before" (its release is the
  * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
@@ -230,7 +235,14 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * swept), a held `\` does not re-press.
  */
 export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
-  if (press.altKey) return null;
+  // ⌥← / ⌥→ carry the open picture one place along the band — the keyboard's
+  // twin of dragging it (item 29). Every other ⌥ chord is someone else's.
+  if (press.altKey) {
+    if (press.metaKey || press.ctrlKey || press.shiftKey || press.targetTypes) return null;
+    if (press.key === 'ArrowLeft') return 'move-earlier';
+    if (press.key === 'ArrowRight') return 'move-later';
+    return null;
+  }
   const mod = press.metaKey || press.ctrlKey;
   if (mod) {
     // A chord yields only to a field holding TEXT: a slider left focused by

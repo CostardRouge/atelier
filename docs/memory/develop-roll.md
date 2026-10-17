@@ -1518,6 +1518,94 @@ view. Rules:
   on are always drawn ahead of it; the reveal of the open cell takes the
   same `pad` as its margin, by arithmetic on the body's own scroll position.
 
+## The roll's ORDER is the document's: a cell is carried, the roll sorted (2026-10-17, item 29 of `docs/lightroom-gaps.md`)
+
+His «vas-y avec tes recommandations» on pass 5's first item. The grid itself
+already existed (the band pulled up, the contact sheet — face D above); what
+was missing was choosing the order. Rules:
+
+- **ONE order, the roll's.** A sort is a VERB that rewrites `roll.pictures`
+  (`sortRoll`: `name` natural through `Intl.Collator` numeric, `date` on
+  `ref.lastModified` — the capture instant for an instance's picture, the
+  file's date for a local one, named so in the README — `reverse` by
+  families), undone by ⌘Z, never a per-device VIEW sort beside a user order
+  as Lightroom has: a second order would leave ←/→, the sheet, the agent's
+  `develop.pictures` and a drag disagreeing about "next". A file's variants
+  compare equal (stable sort) and reverse keeps each run of one file's
+  pictures in its order. `rollSortedBy` greys a sort that would change
+  nothing, with its reason. The rows live in the FILTER chip's panel
+  (*Order*, a value-less glyph `choice` like *Thumbnails*), so the band and
+  the sheet both carry them.
+- **A move names a NEIGHBOUR, never an index** (`RollMoveAnchor`:
+  `{before}` · `{after}` · `start` · `end`, `movePicturesTo`): a drop on a
+  filtered band must leave the pictures it hides where they are. Several
+  pictures land together in their ROLL order whichever was grabbed; a move
+  that changes nothing is the same roll (no undo step). `stripDrop`
+  (pure, `roll-strip.ts`) gives a point a row — the one under it, else the
+  nearest — then a side: across the row's flow, or up the page on a row of
+  one cell (a column, a panorama); `dropAnchor` turns the slot into the
+  first shown picture not moving, else the last before it.
+- **The gesture** (`useCarry` in `RollBand.tsx`, shared by the band and the
+  sheet through `StripCells`): a MOUSE arms on press and lifts past
+  `PRESS_SLOP` (a click never travels; a modified press stays the
+  selection's); a FINGER arms only when its hold fires — the hold still
+  turns the selection on (or marks the cell inside it), so «hold, then move»
+  is the carry and «hold, release» stays the selection. The `ol` keeps a
+  permanent non-passive `touchmove` that cancels only while a finger is
+  armed: a listener added after `touchstart` is too late for Chrome's
+  compositor, and without it the scroller pans and cancels the pointer. The
+  machine listens on WINDOW, not the cell: a cell scrolled out of the drawn
+  window (`cellsInView`) unmounts under the carry. A marked cell carries
+  the marked pictures the strip SHOWS. Escape (capture phase,
+  `preventDefault`) puts back without stepping out of the selection. The
+  click a mouse release ends on is swallowed for ONE task (`setTimeout 0`) —
+  a 400 ms window ate the next real click; a hold's `swallow` is reset on
+  the next `pointerdown`, since a finger that carried never taps.
+- **⌥← / ⌥→** carry the open picture past its neighbour ON THE BAND (a
+  picture the band hides is stepped over, or the key would look dead); the
+  cell menu adds *Move to the start / end of the roll*. Agent commands
+  `develop.movePictures` and `develop.sortRoll`.
+- **Trap**: a route that names no picture opens the FIRST — moving it away
+  swapped the stage. `reorder` names the open picture in the route before
+  the write, in the same task.
+- Driven headless at 1440 × 1000 (mouse: carry, click, ⌥←/→, ⌘Z, Escape, a
+  selection of two, the three sorts, the sheet) and 390 × 844 touch (a swipe
+  scrolls and moves nothing; hold-then-move carries, the band sliding at its
+  edge; the next tap opens). Not on his Mac or iPhone — iOS's own long press
+  under the non-passive `touchmove` is unseen.
+
+## History and snapshots are read OFF the journal; going back is a write (2026-10-17, item 31 of `docs/lightroom-gaps.md`)
+
+His «avec tes recommandations». Rules (`snapshots.ts`, pure; `HistoryPanel.tsx`):
+
+- **No second record.** The steps ARE the journal (`pictureJournal`, synthetic
+  `earlier` steps included, said "standard order"); each row's state is
+  folded from `asShot(p)` and captioned by the making-of's own
+  `chapterCaption`. A SNAPSHOT is `RollPicture.snapshots` (roll v8): a name, a
+  time and `sectionValues(p, PICTURE_EDITS)` — every section, so a restore
+  writes them all. At most `SNAPSHOT_MAX` (24), refused with its reason.
+- **Going back is a WRITE, never a cut** (Lightroom drops the steps above
+  the one it edits from): `restoreState` + `update(…, 'restore')`, a new
+  `JournalVia` captioned `· restored`, one undo step; the list never loses a
+  row by being looked back on. An agent's restore journals `agent`, like
+  every command. Taking, renaming or removing a snapshot changes no section,
+  so it journals nothing (still an undo step: a document write).
+- Snapshots are never an edit, never carried by Apply-to/paste/presets, never
+  in an export mark's key (`KEYED` is a whitelist); a `clone` variant takes
+  them (and the journal) through `structuredClone`, a `fresh` one does not.
+- **The tab** is the inspector's sixth, `history`, last (a look back, not a
+  step of the work), on a clip too; no letter (H is help). The stage is the
+  preview: a restored develop reaches the sliders through the write-through
+  drafts like an undo does — measured: Adjust's exposure reads +1.00 EV after
+  a click on a +1 snapshot. On a phone the bottom bar holds seven cells at
+  390 px.
+- Agent commands: `develop.history`, `develop.saveSnapshot` (not
+  `develop.snapshot`, which is an IMAGE of the stage), `develop.restore`.
+- Driven headless at 1440 × 1000 and 390 × 844 touch: Take, an edit, a click
+  back, ⌘Z, a reload keeping both lists, *As shot*, a rename through ⋯, the
+  three commands. Not on his Mac or iPhone; no hover preview (the stage is
+  the preview, ⌘Z the safety net).
+
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure) + an **Auto** button in the

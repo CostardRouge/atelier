@@ -63,7 +63,7 @@ precondition of the row that depends on it.
 | What | Detail | Where | Who |
 | --- | --- | --- | --- |
 | Auto-develop §6, the model | B1–B4 are built (2026-10-13: the pairs kept, the training file written, the trainer in `training/`, its ONNX run as *My own* in the Auto row); what is left is his to run — a few hundred pairs, `make train-develop`, the two files loaded in Settings › Learning — and nothing was measured on a real model | `docs/auto-develop.md` §6, `training/PLAN.md` | Him |
-| Lightroom gaps, pass 5 | 29 a grid and reorder; 31 snapshots; 34 send a picture to Trips or the Studio | `docs/lightroom-gaps.md` §6 | Agent |
+| Lightroom gaps, pass 5 | 34 send a picture to Trips or the Studio (29, the roll's order, and 31, history and snapshots, built 2026-10-17) | `docs/lightroom-gaps.md` §6 | Agent |
 | Audit batches 6–7 (data) | DATA-03 the resume race, DATA-04 `beforeunload`, DATA-09 the version-change handler; DATA-05/06 the mark-and-sweep, DATA-10 the lattice cache's ceiling, DATA-07 the previews index | `docs/audit-2026-10-02.md` «Batches» | Agent (DATA-01/02 wait on §2) |
 | Audit batch 12 (accessibility) | A11Y-03 `useModalFocus` over one `Modal` (24 modals trap no focus), A11Y-02 the menu's keyboard, A11Y-04 the switch, A11Y-06 reduced motion, UX-02 to UX-06 | `docs/audit-2026-10-02.md` «Batches» | Agent (A11Y-01 waits on §2) |
 | Audit batches 9–10, 13 | FID-01 `graderFrom` over `picturePasses`; SHR-04 `media-ink.ts`, EXT-05's constants; ARC-04 the five god components export-hooks-first, TYPE-01/02, EXT-02 | `docs/audit-2026-10-02.md` | Agent (ARC-01/02 after his nod) |
@@ -93,7 +93,7 @@ precondition of the row that depends on it.
 ## 5. If the order is the agent's to pick
 
 1. ~~Auto-develop §6 (the dataset)~~ — built 2026-10-07; the pairs now accrue by themselves.
-2. Lightroom pass 5 (29, 31, 34): three commits, no question open.
+2. Lightroom pass 5 (34 — 29 and 31 built): one commit, no question open.
 3. Audit batches 6–7 and 12 minus the two decisions: data safety and focus
    traps, each a small commit with a spec.
 4. The phone layout audit's steps 4–6: the next commits of a plan already
