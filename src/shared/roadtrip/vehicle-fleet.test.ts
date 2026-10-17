@@ -126,5 +126,7 @@ describe('references and the water rule', () => {
     const read = readCrossings({ auto: false, boat: 'prado-j120', bridgeKm: 99, shoreKm: -1 });
     expect(read).toEqual({ auto: false, boat: DEFAULT_CROSSINGS.boat, bridgeKm: 20, shoreKm: 0 });
     expect(readCrossings({ boat: 'spirit-of-tasmania' }).boat).toBe('spirit-of-tasmania');
+    expect(readCrossings({ auto: false, asked: true }).asked).toBe(true);
+    expect('asked' in readCrossings({ auto: false, asked: 'yes' })).toBe(false);
   });
 });

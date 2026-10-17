@@ -51,6 +51,7 @@ import DayPanel from './DayPanel';
 import LocatePicturePanel from './LocatePicturePanel';
 import StagesPanel, { StageCard } from './StagesPanel';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
+import SailNudge from './SailNudge';
 import PageBar from '../../shared/ui/PageBar';
 import { useAtLeast, useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -1184,6 +1185,7 @@ export default function TripOverview({
           )}
         </div>
         )}
+        {!adjusting && <SailNudge trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />}
         </div>
 
         {onMap && !adjusting ? (
@@ -1417,6 +1419,8 @@ export default function TripOverview({
           )}
         </div>
       </div>
+
+      <SailNudge trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />
 
       {/* The same blocks as the phone, three to a row above 1180px and two
           below, the year map above them and the ruler between — which now

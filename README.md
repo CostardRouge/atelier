@@ -1458,7 +1458,9 @@ fleet, or a model borrowed for the day (the select beside its place style, in
 the stage's card, with its paint beside it for a borrowed model); a place can say how it was reached (its **Reached by**: a
 boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
 **water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
-new trip, off for one made before it) a hop that crosses the sea sails, from
+new trip, off for one made before it — such a trip's overview asks once,
+naming the hops that cross the sea: *Sail them*, *Choose the boat* or *Not
+now*) a hop that crosses the sea sails, from
 the shore it leaves to the shore it reaches, on the boat the rule names. Its
 **Fine settings** hold the two distances the coarse coastline needs: water
 narrower than the **bridge** length stays a road, and a stop within the

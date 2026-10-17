@@ -71,6 +71,12 @@ export interface TripCrossings {
   bridgeKm: number;
   /** A stop this close to a coast is ashore — the shipped coastline is 1:50m, and a harbour town can fall in its sea. */
   shoreKm: number;
+  /**
+   * The author has answered whether this trip sails (2026-10-17): the overview's
+   * nudge, or the switch itself. Absent on a trip older than the rule, whose
+   * `auto` the v31 migration turned off without asking — the nudge's only reader.
+   */
+  asked?: true;
 }
 
 export const DEFAULT_CROSSINGS: Readonly<TripCrossings> = Object.freeze({
@@ -159,6 +165,7 @@ export function readCrossings(raw: unknown, fallback: TripCrossings = DEFAULT_CR
     boat,
     bridgeKm: km(r.bridgeKm, CROSSING_LIMITS.bridgeKm, fallback.bridgeKm),
     shoreKm: km(r.shoreKm, CROSSING_LIMITS.shoreKm, fallback.shoreKm),
+    ...(r.asked === true ? { asked: true as const } : {}),
   };
 }
 
