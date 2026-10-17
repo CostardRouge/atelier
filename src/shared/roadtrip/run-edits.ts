@@ -29,7 +29,7 @@ export interface PieceEdits {
 const NONE: PieceEdits = { slides: [], everything: false };
 
 function slideName(slide: DeckSlide): string {
-  return slide.kind === 'hook' ? 'the hook' : slide.kind === 'cta' ? 'the closing card' : `slide ${slide.position}`;
+  return slide.kind === 'hook' ? 'the hook' : slide.kind === 'cta' ? 'the trip’s card' : `slide ${slide.position}`;
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -66,7 +66,8 @@ export function editedDuringExport(
     const changed =
       !later ||
       !same(slide, later) ||
-      (slide.kind === 'hook' && !same(sent.post.badge, now.post.badge));
+      // A badge wears the piece's look wherever it is drawn.
+      ((slide.pieceBadge || slide.badge !== null) && !same(sent.post.badge, now.post.badge));
     if (changed) slides.push(slideName(slide));
   }
   return { slides, everything };

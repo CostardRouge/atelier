@@ -1,15 +1,15 @@
 /**
  * A post as the ordered set of pictures that actually goes out — the deck.
  *
- * The agreed shape: an INTRO carrying the hook, any number of CONTENT
- * pictures, and a closing CALL TO ACTION taken from the trip's one template.
- * A reel is the same model with a deck of one; nothing branches on the post's
- * kind, which is why a piece can be re-cut from a single photo into a carousel
- * without being rebuilt.
+ * Since v34 a piece is ONE list of slides in swipe order, any of which may
+ * carry the piece's badge, an opener, shades and text, and any of which may be
+ * the trip's closing CARD. A reel is the same model with a deck of one;
+ * nothing branches on the post's kind, which is why a piece can be re-cut
+ * from a single photo into a carousel without being rebuilt.
  *
- * The CTA is not stored on the post. It is appended at render time from
- * `TripDoc.cta`, so editing it once changes the last slide of every deck —
- * which is the whole reason it lives on the trip.
+ * A card slide stores only its PLACE: its words are read at render time from
+ * `TripDoc.cta`, so editing the card once changes it in every deck — which is
+ * the whole reason it lives on the trip.
  *
  * Pure and DOM-free.
  */
@@ -29,7 +29,8 @@ import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
-import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
+import { hookContextFor, slideHookTiming } from './hooks/hook-context';
+import { isCardSlide } from './piece-slides';
 import type { HookLayer, HookSpan, ResolvedHook } from './hooks/hook-variant';
 import { resolveHook } from './hooks/registry';
 import { resolveLength, type ResolvedLength, type SlideLength } from './slide-length';
@@ -63,8 +64,10 @@ export interface DeckSlide {
   kind: DeckSlideKind;
   /** Position in the deck, 1-based — what the file name counts. */
   position: number;
-  /** Identifies a content slide for editing; the hook and CTA have none. */
-  slideId: string | null;
+  /** The `PostSlide` this is — every slide of the deck has one since v34. */
+  slideId: string;
+  /** Draws the piece's badge (`PostSlide.pieceBadge`) — its counter, words and look. */
+  pieceBadge: boolean;
   media: SavedMediaRef | null;
   videoTimeSeconds: number;
   /** How this slide's picture sits in the frame. The closing card has none. */
@@ -96,17 +99,13 @@ export interface DeckSlide {
   /** The author's own line over a content picture. */
   caption: string;
   /**
-   * The opener this slide plays, or null — the piece's own on the first
-   * slide, the slide's own elsewhere (`slide-capacities.ts`). A slide's
-   * position no longer decides whether it may hold one.
+   * The opener this slide plays, or null where it holds none. The slide that
+   * carries the piece's badge always has a list (empty = the badge variant).
    */
   hook: readonly HookLayer[] | null;
-  /** Darkening over the picture, under the overlays — the first slide's are the piece's. */
+  /** Darkening over the picture, under the overlays. */
   shades: readonly Shade[];
-  /**
-   * The slide's OWN badge. The first slide draws the piece's (`post.badge`)
-   * instead, so this is null there; the closing card never has one.
-   */
+  /** The slide's own CHAPTER mark, beside or instead of the piece's badge; never on the closing card. */
   badge: SlideBadge | null;
   /** Free text over the picture, drawn after the caption. */
   texts: readonly OverlayElement[];
@@ -128,9 +127,8 @@ export interface DeckSlide {
   spans: readonly HookSpan[];
   /**
    * What the author CHOSE, before resolution — so a panel can show which of
-   * the three is pressed without knowing whether this slide's value lives on
-   * the badge or on a `PostSlide`. Always `image` for the closing card, whose
-   * medium is structural.
+   * the three is pressed. Always `image` for the closing card, whose medium
+   * is structural.
    */
   chosen: SlideMedium;
   /** Why it came out that way. */
@@ -212,67 +210,38 @@ function timingOf(hook: ResolvedHook, length: SlideLength, seconds: number): Res
 }
 
 /**
- * The deck a post delivers. Always at least the hook; the CTA only when the
- * post asks for it AND the trip's template says something.
+ * The deck a post delivers: its slides in swipe order (v34, one list), a
+ * card slide only when the trip's card says something. The first slide's
+ * `kind` is `hook` — the slide that opens, whatever it holds — and a card is
+ * `cta` wherever it sits.
  */
 export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
-  // Each opener prepared ONCE here, at the slide's pace (`resolveHook`): its
-  // length both makes the slide leave as a video and, when the opener
-  // decides, is what the slide lasts.
-  const firstHook = resolveHook(post.badge.hook, hookContextFor(trip, post, 1, null, undefined, pieceHookTiming(post)));
-  const hookTiming = timingOf(firstHook, post.badge.length, post.badge.hookSeconds);
-  const hookSeconds = hookTiming.span;
-  const slides: DeckSlide[] = [
-    {
-      kind: 'hook',
-      position: 1,
-      slideId: null,
-      media: post.media,
-      videoTimeSeconds: post.badge.videoTimeSeconds,
-      framing: normaliseFraming(post.badge.framing),
-      motion: post.badge.motion ?? null,
-      develop: post.badge.develop ?? null,
-      grade: post.badge.grade ?? null,
-      collage: post.badge.collage ?? null,
-      caption: '',
-      hook: post.badge.hook,
-      shades: post.badge.shades,
-      badge: null,
-      texts: post.badge.texts ?? [],
-      ...resolveSlideMedium(
-        post.badge.medium,
-        // An opener that plays (the scrub) moves the hook exactly as an
-        // animated piece does: left as `auto`, it must leave as a video.
-        hookAnimates(post.badge.pieceStyles, post.badge.cascade) ||
-          hookSeconds > 0 ||
-          collageAnimates(post.badge.collage) ||
-          // A picture that moves in its frame moves the slide.
-          hasMotion(post.badge.motion) ||
-          collageCellsMove(post.badge.collage) ||
-          (post.badge.texts ?? []).some((el) => Boolean(el.animation)),
-        post.media?.name ?? null,
-      ),
-      chosen: post.badge.medium,
-      seconds: hookTiming.seconds,
-      length: post.badge.length,
-      timing: hookTiming,
-      openerSeconds: hookSeconds,
-      natural: hookTiming.natural,
-      spans: firstHook.spans,
-      speed: isClip(post.media?.name) ? clipSpeed(post.badge.videoSpeed) : 1,
-    },
-  ];
-
+  const slides: DeckSlide[] = [];
+  const cta = trip.cta;
+  const cardSays = Boolean(cta.headline.trim() || cta.body.trim() || cta.url.trim());
   for (const slide of post.slides) {
-    const opener = slide.hook?.length
-      ? resolveHook(slide.hook, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(slide)))
+    if (isCardSlide(slide)) {
+      if (cardSays) slides.push(cardDeckSlide(slide.id, slides.length + 1));
+      continue;
+    }
+    const piece = slide.pieceBadge === true;
+    // Each opener prepared ONCE here, at the slide's pace (`resolveHook`): its
+    // length both makes the slide leave as a video and, when the opener
+    // decides, is what the slide lasts. The slide carrying the piece's badge
+    // ALWAYS prepares one (an empty list falls back to the badge variant, as
+    // the hook always did); another slide only when it holds one.
+    const layers = piece ? (slide.hook ?? []) : slide.hook?.length ? slide.hook : null;
+    const opener = layers
+      ? resolveHook(layers, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(post, slide)))
       : null;
     const timing = opener ? timingOf(opener, slide.length, slide.seconds) : resolveLength(slide.length, slide.seconds, 0, 0);
     const openerSeconds = timing.span;
+    const position = slides.length + 1;
     slides.push({
-      kind: 'content',
-      position: slides.length + 1,
+      kind: position === 1 ? 'hook' : 'content',
+      position,
       slideId: slide.id,
+      pieceBadge: piece,
       media: slide.media,
       videoTimeSeconds: slide.videoTimeSeconds,
       framing: normaliseFraming(slide.framing),
@@ -281,21 +250,20 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       grade: slide.grade ?? null,
       collage: slide.collage ?? null,
       caption: slide.caption,
-      hook: slide.hook ?? null,
+      hook: layers,
       shades: slide.shades ?? [],
       badge: slide.badge ?? null,
       texts: slide.texts ?? [],
-      // A content slide moves when its collage's cells do, when a picture
-      // moves in its frame, and — now that any slide may hold them — when its
-      // own opener plays or its own text and badge animate.
+      // A slide moves when its badge animates (the piece's look, on whichever
+      // badge it draws), when its opener plays, when its collage's cells do,
+      // when a picture moves in its frame and when its own text animates.
       ...resolveSlideMedium(
         slide.medium,
-        collageAnimates(slide.collage) ||
+        ((piece || Boolean(slide.badge)) && hookAnimates(post.badge.pieceStyles, post.badge.cascade)) ||
+          openerSeconds > 0 ||
+          collageAnimates(slide.collage) ||
           hasMotion(slide.motion) ||
           collageCellsMove(slide.collage) ||
-          openerSeconds > 0 ||
-          (slide.badge !== null && slide.badge !== undefined &&
-            hookAnimates(post.badge.pieceStyles, post.badge.cascade)) ||
           (slide.texts ?? []).some((el) => Boolean(el.animation)),
         slide.media?.name ?? null,
       ),
@@ -309,46 +277,43 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
     });
   }
-
-  const cta = trip.cta;
-  const hasCta =
-    post.includeCta &&
-    Boolean(cta.headline.trim() || cta.body.trim() || cta.url.trim());
-  if (hasCta) {
-    slides.push({
-      kind: 'cta',
-      position: slides.length + 1,
-      slideId: null,
-      media: null,
-      videoTimeSeconds: 0,
-      framing: { ...DEFAULT_FRAMING },
-      motion: null,
-      develop: null,
-      // The closing card is drawn, not photographed: nothing to grade.
-      grade: null,
-      collage: null,
-      caption: '',
-      hook: null,
-      shades: [],
-      badge: null,
-      texts: [],
-      // The closing card carries no picture and nothing animated, so it is a
-      // still — and, inside a reel, the tail the Studio already appends, at
-      // the length that outro has always used.
-      medium: 'image',
-      reason: 'plain',
-      chosen: 'image',
-      seconds: OUTRO_SECONDS_DEFAULT,
-      length: CARD_LENGTH,
-      timing: resolveLength(CARD_LENGTH, OUTRO_SECONDS_DEFAULT, 0, 0),
-      openerSeconds: 0,
-      natural: 0,
-      spans: [],
-      speed: 1,
-    });
-  }
-
   return slides;
+}
+
+/** The trip's closing card as a slide of the deck. */
+function cardDeckSlide(slideId: string, position: number): DeckSlide {
+  return {
+    kind: 'cta',
+    position,
+    slideId,
+    pieceBadge: false,
+    media: null,
+    videoTimeSeconds: 0,
+    framing: { ...DEFAULT_FRAMING },
+    motion: null,
+    develop: null,
+    // The closing card is drawn, not photographed: nothing to grade.
+    grade: null,
+    collage: null,
+    caption: '',
+    hook: null,
+    shades: [],
+    badge: null,
+    texts: [],
+    // The closing card carries no picture and nothing animated, so it is a
+    // still — and, inside a reel, the tail the Studio already appends, at
+    // the length that outro has always used.
+    medium: 'image',
+    reason: 'plain',
+    chosen: 'image',
+    seconds: OUTRO_SECONDS_DEFAULT,
+    length: CARD_LENGTH,
+    timing: resolveLength(CARD_LENGTH, OUTRO_SECONDS_DEFAULT, 0, 0),
+    openerSeconds: 0,
+    natural: 0,
+    spans: [],
+    speed: 1,
+  };
 }
 
 /** Whether a media name is a clip, by the Library's own reading of it. */
@@ -450,10 +415,8 @@ export function contentSlideElements(
 /**
  * Move one item of an ordered list to another index, returning a new list.
  *
- * Used to reorder a deck's content slides by dragging. Indices are into the
- * POST's own slide list, not into the rendered deck: the hook and the closing
- * card have fixed places (a call to action that came third would not be one),
- * so only the middle is reorderable and the caller does that translation.
+ * Used to reorder a piece's slides — any of them, since v34: what a slide
+ * holds travels with it, so no position is structural.
  *
  * Out-of-range indices are clamped rather than rejected — a drop past the last
  * slide plainly means "put it last", and throwing there would only push the

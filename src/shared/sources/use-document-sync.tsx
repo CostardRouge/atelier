@@ -54,6 +54,13 @@ export interface DocumentSyncOptions<D extends SyncedDocument> {
    * editor saves itself (the Studio) passes nothing.
    */
   beforeFlush?: () => Promise<void>;
+  /**
+   * Whether this tab may push the document now — false while another tab of
+   * this browser edits it (`use-document-lock.tsx`): a read-only tab's copy is
+   * the store's, its record goes stale, and a push from it on tab hide would
+   * put that older copy over the editor's.
+   */
+  canPush?: () => boolean;
   /** A tool that holds a debounced local write drops it: the document is being replaced or deleted. */
   onDiscardPending?: () => void;
   /** The open document was replaced under the tool — the server's copy, or kept as local. */
@@ -140,7 +147,7 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
       const current = docRef.current;
       const rec = recordRef.current;
       if (!current || !rec || !remote || remote.sourceId !== current.sourceId) return;
-      if (pushing.current) return;
+      if (pushing.current || opts.current.canPush?.() === false) return;
       if (!shouldFlush(rec, Date.now(), force ? 0 : REMOTE_IDLE_MS)) return;
       pushing.current = true;
       try {

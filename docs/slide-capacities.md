@@ -11,7 +11,13 @@ badge and shades, free text on any slide — the first included — blend modes,
 and masked text).
 
 §1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
-still lists what is his to settle.
+still lists what is his to settle — **2026-10-16: questions 2 and 5 are
+answered by the free-slides model (v34, his pick B,
+https://claude.ai/artifact/AKjSTresxR1zQiUaX8u5wr)**: "hook" is the ROLE of the
+slide that opens, not a stored key (`HOOK_PICTURE` and `PostBadge`'s picture
+fields are gone, every slide lives in `post.slides`); what crosses the bridge
+is the slide carrying the piece's badge. The `PostBadge`/`PostSlide` merge §4
+deferred is DONE. `docs/memory/roadtrip.md`, «Slides are FREE».
 
 Read it before touching `shared/roadtrip/slide-render.ts`, `deck.ts`,
 `trip-types.ts`'s `PostBadge` / `PostSlide`, or before adding anything to

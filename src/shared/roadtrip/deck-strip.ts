@@ -292,11 +292,43 @@ export function slideMotionMarks(
 /**
  * What a slide holds beyond its picture, as the band says it — an opener ◆, a
  * badge #, words T — so a deck with a map at slide 4 reads as one before any
- * cell is opened. The first slide always holds the piece's own, which its
- * name already says; the closing card holds none of them.
+ * cell is opened, and ★ the piece's own badge where it is not on the first
+ * slide; the closing card holds none of them.
  */
 export function capacityMarks(slide: DeckSlide): string {
-  if (slide.kind !== 'content') return '';
+  if (slide.kind === 'cta') return '';
+  // On the first slide the piece's badge is what "Hook" already says; moved
+  // elsewhere it is marked ★, the slide's opener and words beside it.
+  if (slide.pieceBadge && slide.position === 1) return '';
   const holds = capacitiesOf(slide);
-  return `${holds.opener ? '◆' : ''}${holds.badge ? '#' : ''}${holds.text ? 'T' : ''}`;
+  return `${slide.pieceBadge ? '★' : ''}${holds.opener ? '◆' : ''}${holds.badge ? '#' : ''}${holds.text ? 'T' : ''}`;
+}
+
+/** The cell under a strip x, or null in a gap or past either end. */
+export function cellAtX(layout: StripLayout, x: number): number | null {
+  const i = layout.cells.findIndex((cell) => x >= cell.left && x <= cell.left + cell.width);
+  return i >= 0 ? i : null;
+}
+
+/**
+ * Where a lifted slide would land, as a SLOT between cells (0 before the
+ * first, `cells.length` after the last): the number of cells whose middle
+ * the pointer has passed.
+ */
+export function dropSlot(layout: StripLayout, x: number): number {
+  return layout.cells.filter((cell) => x > cell.left + cell.width / 2).length;
+}
+
+/** The index a slide lifted from `from` takes when it is dropped in `slot` — its own place counted out. */
+export function dropIndex(from: number, slot: number): number {
+  return slot > from ? slot - 1 : slot;
+}
+
+/** The strip x of a slot's gap, where the drop marker is drawn. */
+export function slotX(layout: StripLayout, slot: number, gapPx: number): number {
+  const cells = layout.cells;
+  if (cells.length === 0) return 0;
+  if (slot <= 0) return cells[0].left - gapPx / 2;
+  if (slot >= cells.length) return cells[cells.length - 1].left + cells[cells.length - 1].width + gapPx / 2;
+  return cells[slot].left - gapPx / 2;
 }

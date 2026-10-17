@@ -11,6 +11,7 @@ import {
   createTripDoc,
   createTripPost,
   createTripStage,
+  badgeSlideFrom,
   defaultPostBadge,
   hookDefaultsFrom,
   type TripDoc,
@@ -31,16 +32,26 @@ const picture = {
 function styledTrip(): TripDoc {
   const doc = createTripDoc('Australie', '2025-07-01', '2025-07-10');
   const reel = hookDefaultsFrom({
-    ...defaultPostBadge('reel'),
-    shades: [createShade({ strength: 0.4 }), createShade({ direction: 'top' })],
-    hook: [{ id: 'scrub', options: { picked: [picture], sweepSeconds: 2.5 } }],
+    badge: defaultPostBadge('reel'),
+    slides: [
+      {
+        ...badgeSlideFrom(null),
+        shades: [createShade({ strength: 0.4 }), createShade({ direction: 'top' })],
+        hook: [{ id: 'scrub', options: { picked: [picture], sweepSeconds: 2.5 } }],
+      },
+    ],
   });
   const photo = hookDefaultsFrom({
-    ...defaultPostBadge('photo'),
-    hook: [
+    badge: defaultPostBadge('photo'),
+    slides: [
       {
-        id: 'map',
-        options: { stops: [{ id: 's1', name: 'Uluru', lat: -25.3, lon: 131, picture }], size: 0.6 },
+        ...badgeSlideFrom(null),
+        hook: [
+          {
+            id: 'map',
+            options: { stops: [{ id: 's1', name: 'Uluru', lat: -25.3, lon: 131, picture }], size: 0.6 },
+          },
+        ],
       },
     ],
   });

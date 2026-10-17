@@ -7,7 +7,9 @@ import {
   createTripPost,
   createTripStage,
   type TripDoc,
+  type TripPost,
 } from './trip-types';
+import { postToV33 } from './legacy-post.fixture';
 import {
   TRIP_FILE_KIND,
   parseTripFile,
@@ -31,10 +33,20 @@ const trip = (): TripDoc => {
         ...post,
         title: 'Sunset over the gorge',
         projectId: 'studio-project-in-this-browser',
-        media: { name: 'DJI_0001.MP4', size: 100, lastModified: 5, hash: 'abc' },
+        slides: [{ ...post.slides[0], media: { name: 'DJI_0001.MP4', size: 100, lastModified: 5, hash: 'abc' } }],
       },
     ],
   };
+};
+
+/** A file an older build wrote: its posts in the shape that build stored (`legacy-post.fixture.ts`). */
+const olderFile = (version: number) => {
+  const file = toTripFile(trip());
+  return {
+    ...file,
+    version,
+    posts: file.posts.map((post) => postToV33(post as TripPost)),
+  } as unknown as Record<string, unknown>;
 };
 
 const roundTrip = (doc: TripDoc) => {
@@ -54,7 +66,7 @@ describe('the trip file', () => {
   });
 
   it('carries the media reference, hash included — that is how a trip finds its pictures elsewhere', () => {
-    expect(roundTrip(trip()).posts[0].media).toEqual({
+    expect(roundTrip(trip()).posts[0].slides[0].media).toEqual({
       name: 'DJI_0001.MP4',
       size: 100,
       lastModified: 5,
@@ -104,7 +116,7 @@ describe('the trip file', () => {
   });
 
   it('lands a file written before grades existed on an empty grade', () => {
-    const file = { ...toTripFile(trip()), version: 9 } as Record<string, unknown>;
+    const file = olderFile(9);
     delete file.grade;
     (file.posts as Record<string, unknown>[]).forEach((p) => delete p.grade);
     const r = parseTripFile(JSON.stringify(file));
@@ -115,44 +127,45 @@ describe('the trip file', () => {
 
   it('carries a slide’s develop and the trip’s presets, and lands an older file on none', () => {
     const doc = trip();
-    doc.posts[0].badge.develop = { ...DEFAULT_DEVELOP, exposure: 0.7, highlights: -40 };
+    doc.posts[0].slides[0].develop = { ...DEFAULT_DEVELOP, exposure: 0.7, highlights: -40 };
     doc.developPresets = [
       { id: 'p1', name: 'Desert noon', settings: { ...DEFAULT_DEVELOP, whites: -20 } },
     ];
     const file = roundTrip(doc);
-    expect(file.posts[0].badge.develop).toEqual(doc.posts[0].badge.develop);
+    expect(file.posts[0].slides[0].develop).toEqual(doc.posts[0].slides[0].develop);
     expect(file.developPresets).toEqual(doc.developPresets);
     // `tripDocFromFile` spreads `createTripDoc`, so a field forgotten there
     // compiles and drops silently — this line is what catches it.
     expect(tripDocFromFile(file).developPresets).toEqual(doc.developPresets);
-    expect(tripDocFromFile(file).posts[0].badge.develop).toEqual(doc.posts[0].badge.develop);
+    expect(tripDocFromFile(file).posts[0].slides[0].develop).toEqual(doc.posts[0].slides[0].develop);
 
-    const old = { ...toTripFile(trip()), version: 14 } as Record<string, unknown>;
+    const old = olderFile(14);
     delete old.developPresets;
     (old.posts as Record<string, Record<string, unknown>>[]).forEach((p) => delete p.badge.develop);
     const r = parseTripFile(JSON.stringify(old));
     if (!r.ok) throw new Error(r.error);
     expect(r.file.developPresets).toEqual([]);
-    expect(r.file.posts[0].badge.develop).toBeNull();
+    expect(r.file.posts[0].slides[0].develop).toBeNull();
   });
 
   it('carries a PICTURE’s own grade, and lands an older file on "follow the piece"', () => {
     const own = { layers: [], output: 'rec709-to-srgb' as const };
     const doc = trip();
-    doc.posts[0].badge.grade = own;
-    doc.posts[0].slides = [createPostSlide({ name: 'b.jpg', size: 1, lastModified: 1 })];
-    doc.posts[0].slides[0].grade = own;
+    doc.posts[0].slides = [
+      { ...doc.posts[0].slides[0], grade: own },
+      { ...createPostSlide({ name: 'b.jpg', size: 1, lastModified: 1 }), grade: own },
+    ];
     const file = roundTrip(doc);
-    expect(file.posts[0].badge.grade).toEqual(own);
     expect(file.posts[0].slides[0].grade).toEqual(own);
-    expect(tripDocFromFile(file).posts[0].badge.grade).toEqual(own);
+    expect(file.posts[0].slides[1].grade).toEqual(own);
     expect(tripDocFromFile(file).posts[0].slides[0].grade).toEqual(own);
+    expect(tripDocFromFile(file).posts[0].slides[1].grade).toEqual(own);
 
-    const old = { ...toTripFile(trip()), version: 21 } as Record<string, unknown>;
+    const old = olderFile(21);
     (old.posts as Record<string, Record<string, unknown>>[]).forEach((p) => delete p.badge.grade);
     const r = parseTripFile(JSON.stringify(old));
     if (!r.ok) throw new Error(r.error);
-    expect(r.file.posts[0].badge.grade).toBeNull();
+    expect(r.file.posts[0].slides[0].grade).toBeNull();
   });
 
   it('carries how the trip writes its places and its own state codes, through a file AND onto a new document', () => {
@@ -284,7 +297,7 @@ describe('parseTripFile — every rejection says something actionable', () => {
     // The route is the legs' business now. An older backup still parses, and
     // the line it used to hold is simply not read back — the legs it carries
     // are what says where the trip went.
-    const file = { ...toTripFile(trip()), version: 26, destination: 'Perth \u2192 Cairns' };
+    const file = { ...olderFile(26), destination: 'Perth \u2192 Cairns' };
     const r = parseTripFile(JSON.stringify(file));
     expect(r.ok).toBe(true);
     if (r.ok) {
@@ -312,7 +325,7 @@ describe('parseTripFile — every rejection says something actionable', () => {
   });
 
   it('reads a file written before the document had a source', () => {
-    const file = { ...toTripFile(trip()), version: 9 };
+    const file = olderFile(9);
     const r = parseTripFile(JSON.stringify(file));
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.file.version).toBe(TRIP_DOC_VERSION);
@@ -334,7 +347,7 @@ describe('tripDocFromFile', () => {
     expect(doc.updatedAt).toBe(1234);
     expect(doc.version).toBe(TRIP_DOC_VERSION);
     expect(doc.name).toBe('Australie');
-    expect(doc.posts[0].media?.hash).toBe('abc');
+    expect(doc.posts[0].slides[0].media?.hash).toBe('abc');
     expect(doc.posts[0].projectId).toBeNull();
   });
 
@@ -391,9 +404,10 @@ describe('the trip file — a slide’s capacities (v29)', () => {
 
   it('opens a file written before v29 with every slide bare', () => {
     const doc = trip();
-    doc.posts[0].slides = [createPostSlide(null)];
+    doc.posts[0].slides = [doc.posts[0].slides[0], createPostSlide(null)];
     const old = JSON.parse(serializeTripFile(toTripFile(doc)));
     old.version = 28;
+    old.posts = old.posts.map((post: TripPost) => postToV33(post));
     for (const s of old.posts[0].slides) {
       delete s.hook;
       delete s.shades;
@@ -403,7 +417,7 @@ describe('the trip file — a slide’s capacities (v29)', () => {
     const result = parseTripFile(JSON.stringify(old));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const [bare] = result.file.posts[0].slides;
+    const [, bare] = result.file.posts[0].slides;
     expect(bare.hook).toBeNull();
     expect(bare.badge).toBeNull();
     expect(bare.shades).toEqual([]);

@@ -11,6 +11,10 @@ import {
   xAtTime,
   slideMotionMarks,
   capacityMarks,
+  cellAtX,
+  dropIndex,
+  dropSlot,
+  slotX,
   anchorOf,
   anchoredOffset,
   localAtOffset,
@@ -168,7 +172,8 @@ describe('capacityMarks', () => {
     const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
     edit(slide);
     const doc = createTripDoc('Australia', '2025-03-01', '2025-03-10');
-    const post = { ...createTripPost('carousel', '2025-03-05', ''), slides: [slide] };
+    const base = createTripPost('carousel', '2025-03-05', '');
+    const post = { ...base, slides: [base.slides[0], slide] };
     return deckSlides(doc, post);
   };
 
@@ -176,6 +181,16 @@ describe('capacityMarks', () => {
     const [first, bare] = slides(() => {});
     expect(capacityMarks(first)).toBe('');
     expect(capacityMarks(bare)).toBe('');
+  });
+
+  it('marks the piece’s badge with a star where it is not on the first slide', () => {
+    const doc = createTripDoc('Australia', '2025-03-01', '2025-03-10');
+    const base = createTripPost('carousel', '2025-03-05', '');
+    const other = { ...createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 }), pieceBadge: true, hook: [{ id: 'map', options: {} }] };
+    const post = { ...base, slides: [{ ...base.slides[0], pieceBadge: false, hook: null }, other] };
+    const [first, held] = deckSlides(doc, post);
+    expect(capacityMarks(first)).toBe('');
+    expect(capacityMarks(held)).toBe('★◆');
   });
 
   it('marks an opener, a badge and words, in that order', () => {
@@ -268,5 +283,41 @@ describe('resizing keeps the other end still', () => {
   it('leaves the needle on the end an edge was pulled past', () => {
     expect(localAtOffset(layout, 1, 100)).toBe(0);
     expect(localAtOffset(layout, 1, 400)).toBe(3);
+  });
+});
+
+describe('reordering on the band', () => {
+  // Cells of 5 s, 3 s and 3 s at 40 px a second, 2 px apart: 0–200, 202–322, 324–444.
+  const band = stripLayout([5, 3, 3], 40, 24, 2);
+
+  it('finds the cell under a point, and none in a gap', () => {
+    expect(cellAtX(band, 10)).toBe(0);
+    expect(cellAtX(band, 250)).toBe(1);
+    expect(cellAtX(band, 201)).toBeNull();
+    expect(cellAtX(band, 900)).toBeNull();
+  });
+
+  it('counts the middles passed to name the slot', () => {
+    expect(dropSlot(band, -40)).toBe(0);
+    expect(dropSlot(band, 99)).toBe(0);
+    expect(dropSlot(band, 101)).toBe(1);
+    expect(dropSlot(band, 263)).toBe(2);
+    expect(dropSlot(band, 1000)).toBe(3);
+  });
+
+  it('lands a slide where it was dropped, its own place counted out', () => {
+    // The first slide dropped after the last: it becomes the last.
+    expect(dropIndex(0, 3)).toBe(2);
+    // The last slide dropped before the first: it becomes the first.
+    expect(dropIndex(2, 0)).toBe(0);
+    // Dropped back where it was, either side of itself.
+    expect(dropIndex(1, 1)).toBe(1);
+    expect(dropIndex(1, 2)).toBe(1);
+  });
+
+  it('draws the marker in the gap of its slot', () => {
+    expect(slotX(band, 0, 2)).toBe(-1);
+    expect(slotX(band, 1, 2)).toBe(201);
+    expect(slotX(band, 3, 2)).toBe(445);
   });
 });

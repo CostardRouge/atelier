@@ -23,8 +23,9 @@ import {
 } from '../../shared/projects/reconcile';
 import { pullProject, pushOnce } from '../../shared/projects/project-remote';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
+import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
 import ProjectGallery from './ProjectGallery';
-import StudioEditor from './StudioEditor';
+import StudioEditor, { type StudioSaveControl } from './StudioEditor';
 
 /** The gallery sub-route; `/studio` itself is the editor. */
 /** This tool's own route; every sub-route hangs off it. */
@@ -94,6 +95,11 @@ export default function StudioTool() {
     if (mine && !requestedId && path !== HOME_ROUTE && !open) navigate(HOME_ROUTE);
   }, [mine, requestedId, path, open]);
 
+  /** One editor per project across this browser's tabs, read by the sync machine and the editor. */
+  const lockRef = useRef<DocumentLock | null>(null);
+  /** The editor's autosave, handed up so the project can change tabs without losing it. */
+  const saveControl = useRef<StudioSaveControl | null>(null);
+
   // --- the remote machine ---------------------------------------------------
   // Shared with every document kind (`use-document-sync.tsx`); this tool only
   // says how a project is stored and carried, and what replacing one does.
@@ -112,6 +118,7 @@ export default function StudioTool() {
   const sync = useDocumentSync<ProjectDoc>({
     doc: open?.doc ?? null,
     driver: syncDriver,
+    canPush: () => lockRef.current?.canWrite() ?? true,
     // The editor seeds its own state from the prop at mount, so a document
     // replaced under it (take theirs, keep as local) remounts it.
     onReplace: (doc) =>
@@ -122,6 +129,28 @@ export default function StudioTool() {
     },
   });
   const { resume, adopt, edited } = sync;
+
+  // One editor per project across this browser's tabs (`use-document-lock.tsx`):
+  // another tab shows it read only, refreshed when this one saves. A reload
+  // remounts the editor, which seeds its state from the document at mount.
+  const lock = useDocumentLock<ProjectDoc>({
+    kind: 'project',
+    id: open?.doc.id ?? null,
+    flush: async () => {
+      await saveControl.current?.flush();
+    },
+    discard: () => saveControl.current?.discard(),
+    load: async (id) => (await getProject(id)) ?? null,
+    onReload: (doc, editing) => {
+      const show = (next: ProjectDoc) =>
+        setOpen((prev) => (prev && prev.doc.id === next.id ? { ...prev, doc: next, generation: prev.generation + 1 } : prev));
+      show(doc);
+      // Taken from another tab, which kept its sync record moving: read it again.
+      if (editing) void resume(doc).then((r) => r?.replaced && show(r.doc));
+    },
+  });
+  lockRef.current = lock;
+  const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
 
   /** List a project's folder (asking permission if needed) and load it. */
   const openProject = useCallback(
@@ -250,6 +279,7 @@ export default function StudioTool() {
     (doc: ProjectDoc) => {
       setOpen((prev) => (prev && prev.doc.id === doc.id ? { ...prev, doc } : prev));
       edited(doc);
+      lockRef.current?.saved(doc);
     },
     [edited],
   );
@@ -272,15 +302,23 @@ export default function StudioTool() {
   }
 
   return (
-    <StudioEditor
-      key={`${open.doc.id}:${open.generation}`}
-      project={open.doc}
-      reconciliation={open.reconciliation}
-      onShowProjects={() => navigate(HOME_ROUTE)}
-      onDocSaved={handleDocSaved}
-      onRepoint={() => void repoint()}
-      onForgetMissing={() => void forgetMissing()}
-      headerExtra={sync.pill}
-    />
+    <div className="flex flex-col flex-1 min-h-0 gap-3">
+      {lock.band}
+      {/* Inert while another tab edits the project: nothing here can write it. */}
+      <div ref={editorRef} className="contents">
+        <StudioEditor
+          key={`${open.doc.id}:${open.generation}`}
+          project={open.doc}
+          reconciliation={open.reconciliation}
+          onShowProjects={() => navigate(HOME_ROUTE)}
+          onDocSaved={handleDocSaved}
+          onRepoint={() => void repoint()}
+          onForgetMissing={() => void forgetMissing()}
+          headerExtra={sync.pill}
+          canWrite={lock.canWrite}
+          saveControl={saveControl}
+        />
+      </div>
+    </div>
   );
 }

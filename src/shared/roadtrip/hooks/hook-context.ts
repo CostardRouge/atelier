@@ -25,6 +25,7 @@ import { resolveHook } from './registry';
 import { resolveRef, vehicleRefForDay } from '../vehicle-fleet';
 import { landIfLoaded } from '../../map/load-terrain';
 import { tripRoadLine } from '../road-track';
+import { leadSlideOf } from '../piece-slides';
 
 /** What an opener is told about time on the slide it plays on. */
 export interface HookTiming {
@@ -42,26 +43,30 @@ export interface HookTiming {
   counterMode?: CounterMode;
 }
 
-/** The first slide's timing: the piece's own badge, as it always was. */
-export function pieceHookTiming(post: TripPost): HookTiming {
-  return {
-    durationSeconds: post.badge.durationSeconds,
-    screenSeconds: post.badge.hookSeconds,
-    length: post.badge.length,
-    counterMode: post.badge.mode,
-  };
-}
-
 /**
- * Another slide's timing. With no badge of its own, its opener lives for the
- * slide and is told no counter — so a sweep that steps the numeral has no
- * numeral to step, rather than stepping one the slide does not draw.
+ * A slide's timing for its opener. The slide that carries the piece's badge
+ * is told the piece's counter and the badge's own life; another is told its
+ * chapter mark's, or — with no badge at all — lives for the slide and is told
+ * no counter, so a sweep that steps the numeral has no numeral to step rather
+ * than stepping one the slide does not draw.
  */
-export function slideHookTiming(slide: {
-  seconds: number;
-  length: SlideLength;
-  badge: { durationSeconds: number; mode: CounterMode } | null;
-}): HookTiming {
+export function slideHookTiming(
+  post: Pick<TripPost, 'badge'>,
+  slide: {
+    seconds: number;
+    length: SlideLength;
+    badge: { durationSeconds: number; mode: CounterMode } | null;
+    pieceBadge?: boolean;
+  },
+): HookTiming {
+  if (slide.pieceBadge) {
+    return {
+      durationSeconds: post.badge.durationSeconds,
+      screenSeconds: slide.seconds,
+      length: slide.length,
+      counterMode: post.badge.mode,
+    };
+  }
   return {
     durationSeconds: slide.badge?.durationSeconds ?? slide.seconds,
     screenSeconds: slide.seconds,
@@ -76,7 +81,7 @@ export function hookContextFor(
   aspect: number,
   content: BadgeContent | null,
   pictures?: ReadonlyMap<string, HookPicture>,
-  timing: HookTiming = pieceHookTiming(post),
+  timing: HookTiming = leadTiming(post),
 ): HookContext {
   const dayRef = vehicleRefForDay(trip.vehicles ?? [], trip.stages ?? [], post.date);
   return {
@@ -128,7 +133,16 @@ export function openerMoves(
   return resolveHook(layers, hookContextFor(trip, post, 1, null, undefined, timing)).seconds > 0;
 }
 
-/** Whether the piece's own opener — the first slide's — plays anything. */
+/** Whether the opener on the slide carrying the piece's badge plays anything. */
 export function hookMoves(trip: TripDoc, post: TripPost): boolean {
-  return openerMoves(trip, post, post.badge.hook, pieceHookTiming(post));
+  const lead = leadSlideOf(post);
+  return lead ? openerMoves(trip, post, lead.hook, slideHookTiming(post, lead)) : false;
+}
+
+/** The timing of the slide carrying the piece's badge — what an opener is told by default. */
+function leadTiming(post: TripPost): HookTiming {
+  const lead = leadSlideOf(post);
+  return lead
+    ? slideHookTiming(post, lead)
+    : { durationSeconds: post.badge.durationSeconds, screenSeconds: post.badge.durationSeconds, counterMode: post.badge.mode };
 }

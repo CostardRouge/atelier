@@ -81,8 +81,9 @@ import {
 import { DEFAULT_PLACE_STYLE } from './place-style';
 import { readTripRoad, type TripRoad } from './road-track';
 import { defaultSlideLength, lengthFromLegacy, readSlideLength, type SlideLength } from './slide-length';
+import { leadSlideOf } from './piece-slides';
 
-export const TRIP_DOC_VERSION = 33;
+export const TRIP_DOC_VERSION = 34;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -312,8 +313,74 @@ export type SlideMedium = 'auto' | 'image' | 'video';
 /** How long a slide is on screen, when nothing says otherwise. */
 export const DEFAULT_SLIDE_SECONDS = 3;
 
-/** How one post's badge counts and where it sits. */
+/**
+ * The PIECE's badge: how it counts, what it says, how it looks and where it
+ * sits, wherever it is drawn. Since v34 it holds nothing about a picture —
+ * the slide that carries it (`PostSlide.pieceBadge`, the first one unless the
+ * author moved it) owns its picture, framing, develop, look, length, opener,
+ * shades and text like every other slide.
+ */
 export interface PostBadge {
+  mode: CounterMode;
+  layout: BadgeLayout;
+  /**
+   * What the kicker says about WHEN — see time-ago.ts. Replaces the v3
+   * "show anniversary" boolean, which announced an anniversary on any date a
+   * year or more later, most of which were not one.
+   */
+  timeAgo: TimeAgoMode;
+  /**
+   * The day this post is read on. Null = whatever today actually is. Set it to
+   * compose a post ahead of the day it goes out, so the temporal line reads
+   * correctly then rather than now.
+   */
+  referenceDate: IsoDate | null;
+  /** Set the place behind the marker glyph. */
+  showPin: boolean;
+  /**
+   * Credit the camera under the badge — body, lens, focal length, aperture,
+   * shutter, ISO, as the hook's picture itself records them. The LINE is never
+   * stored: it is measured from the picture in hand at every render, so a
+   * re-export, a swapped photograph or a proxy whose source vouches for its
+   * EXIF all say the truth rather than a stale copy of it.
+   */
+  showExif: boolean;
+  /**
+   * How the credit is COMPOSED: which facts, in what order, in which of the
+   * plate layouts, under the badge or in a cell of its own
+   * (`overlay/camera-plate.ts`). Optional, no migration: a piece that never
+   * chose has none and keeps the plain line of six facts under the badge it
+   * always drew. What the facts SAY is still read from the picture.
+   */
+  camera?: CameraPlateSpec;
+  /** How long the badge lasts, in seconds — what an exit animation lands on. */
+  durationSeconds: number;
+  /** The frame the piece is composed for, from `ASPECT_PRESETS`. */
+  aspectId: string;
+  /**
+   * ONE entrance for every piece of the badge, spread over time by where the
+   * pieces sit (`badge-layout.ts`, `readCascade`) — or null, where each piece
+   * keeps the entrance its own style says, with its hand-typed delay. When
+   * set it replaces every piece's entrance; exits stay per piece. A look,
+   * so `hookDefaultsFrom` carries it to the next piece of the kind.
+   */
+  cascade: BadgeCascade | null;
+  /**
+   * Free text replacing a computed piece, per piece. An empty string means
+   * "computed", never "blank": clearing the field gives the derived value
+   * back, so an override is never a one-way door.
+   */
+  textOverrides: Partial<Record<BadgePiece, string>>;
+  /** How each piece departs from the trip's theme — case, colour, panel, animation. */
+  pieceStyles: BadgePieceStyles;
+}
+
+/**
+ * The badge as v33 stored it, the first slide's picture, length and opener
+ * included — read by the migrations alone (`migrateTripDoc`), never by a
+ * renderer. v34 moved everything about the PICTURE to `slides[0]`.
+ */
+export interface PostBadgeV33 {
   mode: CounterMode;
   layout: BadgeLayout;
   /**
@@ -519,7 +586,11 @@ export interface HookDefaults {
 export type HookDefaultsByKind = Partial<Record<PostKind, HookDefaults>>;
 
 /** What a piece's look is, lifted out of it so it can be saved on the trip. */
-export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
+export function hookDefaultsFrom(post: Pick<TripPost, 'badge' | 'slides'>): HookDefaults {
+  const { badge } = post;
+  // The slide the badge sits on carries the delivery, length, shades and
+  // opener a new piece of the kind starts with.
+  const slide = leadSlideOf(post) ?? badgeSlideFrom(null);
   return {
     aspectId: badge.aspectId,
     mode: badge.mode,
@@ -528,14 +599,14 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     showExif: badge.showExif,
     ...(badge.camera ? { camera: structuredClone(badge.camera) } : {}),
     durationSeconds: badge.durationSeconds,
-    medium: badge.medium,
-    hookSeconds: badge.hookSeconds,
-    length: { ...badge.length },
+    medium: slide.medium,
+    hookSeconds: slide.seconds,
+    length: { ...slide.length },
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
     cascade: badge.cascade ? structuredClone(badge.cascade) : null,
-    shades: badge.shades.map((shade) => ({ ...shade, id: newId() })),
-    hook: structuredClone(badge.hook),
+    shades: slide.shades.map((shade) => ({ ...shade, id: newId() })),
+    hook: structuredClone(slide.hook ?? []),
   };
 }
 
@@ -567,37 +638,88 @@ export function defaultPostBadge(
     showExif: defaults?.showExif ?? false,
     ...(defaults?.camera ? { camera: structuredClone(defaults.camera) } : {}),
     durationSeconds: defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION,
+    aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
+    textOverrides: {},
+    pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
+    cascade: defaults?.cascade ? structuredClone(defaults.cascade) : null,
+  };
+}
+
+/**
+ * A new piece's first slide: the one that carries its badge, dressed with
+ * the trip's saved look for the kind — its delivery, length, shades and
+ * opener. What is about ONE picture (the frame, the develop, the look, the
+ * words over it) is never inherited.
+ */
+export function badgeSlideFrom(
+  defaults?: HookDefaults | null,
+  media: SavedMediaRef | null = null,
+): PostSlide {
+  return {
+    ...createPostSlide(media),
     medium: defaults?.medium ?? 'auto',
-    hookSeconds:
+    seconds:
       defaults?.hookSeconds ??
       defaultHookSeconds(defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION),
     // A new piece's opener decides, unless the defaults it starts from were
     // saved from a piece whose length was fixed.
     length: defaults?.length ? { ...defaults.length } : defaultSlideLength(),
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
-    aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
-    videoTimeSeconds: 0,
-    // Never inherited, like the frame: a speed is about the clip in hand.
-    videoSpeed: 1,
-    framing: { ...DEFAULT_FRAMING },
-    // Never inherited, like the frame it moves.
-    motion: null,
-    develop: null,
-    grade: null,
-    collage: null,
-    textOverrides: {},
-    pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
-    cascade: defaults?.cascade ? structuredClone(defaults.cascade) : null,
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
-    // Never inherited: words over a picture belong to that picture.
-    texts: [],
+    pieceBadge: true,
   };
 }
 
 /**
- * A picture after the hook, in a carousel. It carries no badge: the counter
- * has done its work on the first slide, and repeating it would stop the hook
- * being one.
+ * A piece put back on the trip's saved look for its kind: the badge's look
+ * and counter, and on the slide that carries the badge its delivery, length,
+ * shades and opener. What belongs to THIS piece stays — the day it is read
+ * on, the author's own words, the clip's frame, everything about its pictures.
+ */
+export function withSavedLook(post: TripPost, defaults: HookDefaults): TripPost {
+  const fresh = badgeSlideFrom(defaults);
+  const lead = leadSlideOf(post);
+  return {
+    ...post,
+    badge: {
+      ...defaultPostBadge(post.kind, defaults),
+      referenceDate: post.badge.referenceDate,
+      textOverrides: post.badge.textOverrides,
+    },
+    slides: post.slides.map((slide) =>
+      slide === lead
+        ? { ...slide, medium: fresh.medium, seconds: fresh.seconds, length: fresh.length, shades: fresh.shades, hook: fresh.hook }
+        : slide,
+    ),
+  };
+}
+
+/** The trip's closing card, as a slide of this piece (`PostSlide.card`). */
+export function createCardSlide(): PostSlide {
+  return { ...createPostSlide(null), card: 'trip' };
+}
+
+/**
+ * The piece with the trip's card in it or out of it: added at the END (where
+ * a closing card is read, and where the Studio can take it as the outro),
+ * removed from wherever it was. Unchanged when it already says so.
+ */
+export function withCardSlide(post: TripPost, on: boolean): TripPost {
+  const has = post.slides.some((slide) => slide.card === 'trip');
+  if (has === on) return post;
+  return {
+    ...post,
+    slides: on ? [...post.slides, createCardSlide()] : post.slides.filter((slide) => slide.card !== 'trip'),
+  };
+}
+
+/**
+ * One slide of a piece, in the order it is swiped (v34: EVERY slide, the
+ * first included — the old split between a hook kept on `PostBadge` and
+ * content kept here is gone). Its position decides nothing it holds: what it
+ * draws travels with it when it moves. The first slide is the piece's cover
+ * (its thumbnail); the slide that carries the piece's badge is what crosses
+ * to the Studio (`piece-slides.ts`).
  */
 export interface PostSlide {
   id: string;
@@ -653,6 +775,20 @@ export interface PostSlide {
    * a slide's text is words, never a reading the picture cannot back.
    */
   texts: OverlayElement[];
+  /**
+   * Draws the PIECE's badge (`post.badge`: its counter, words, look and
+   * place) — at most one slide of a piece, the first by default. It travels
+   * with its slide; a chapter mark (`badge`) is a different, smaller thing.
+   * Optional: absent is false (v34).
+   */
+  pieceBadge?: boolean;
+  /**
+   * This slide is the trip's closing CARD (`TripDoc.cta`), drawn by
+   * reference — its words, link and colours are the trip's, shared by every
+   * piece; only its PLACE in the deck is this piece's. Nothing else on the
+   * slide is read (v34, replacing `TripPost.includeCta`).
+   */
+  card?: 'trip';
 }
 
 export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
@@ -690,23 +826,17 @@ export interface TripPost {
   endDate: IsoDate | null;
   /** Working title, for finding it again in a list. Not published copy. */
   title: string;
-  /**
-   * The picture the badge goes over. A HINT for re-finding the file in the
-   * library, never the post's identity: the maintainer re-exports through
-   * Capture One and the Studio, so name, size and mtime all change under him.
-   * A post whose media has gone is a normal post that still tells its day.
-   */
-  media: SavedMediaRef | null;
   /** How this post's badge counts and where it sits. */
   badge: PostBadge;
   /**
-   * The pictures after the hook. Empty for a single photo or a reel; a
-   * carousel is the same model with more of them, so nothing branches on
-   * `kind` and a piece can be re-cut without being rebuilt.
+   * Every slide of the piece, in swipe order — never empty: a single photo
+   * or a reel is a deck of one, a carousel is the same model with more, so
+   * nothing branches on `kind` and a piece can be re-cut without being
+   * rebuilt. A picture's media is a HINT for re-finding the file in the
+   * library, never the slide's identity: the maintainer re-exports through
+   * Capture One and the Studio, so name, size and mtime all change under him.
    */
   slides: PostSlide[];
-  /** Close the deck with the trip's call-to-action slide. */
-  includeCta: boolean;
   /**
    * When it actually went out, or null while it is still a draft. Kept as a
    * timestamp rather than a flag so the overview can tell "planned for that
@@ -935,14 +1065,11 @@ export function duplicateTripPost(post: TripPost, suffix = ' (copy)'): TripPost 
     ...structuredClone(post),
     id: newId(),
     title: post.title.trim() ? `${post.title.trim()}${suffix}` : '',
-    badge: {
-      ...structuredClone(post.badge),
-      shades: post.badge.shades.map((shade) => ({ ...shade, id: newId() })),
-    },
+    badge: structuredClone(post.badge),
     slides: post.slides.map((slide) => ({
       ...structuredClone(slide),
       id: newId(),
-      // Fresh like the badge's own, so no two pieces share a shade's identity.
+      // Fresh, so no two pieces share a shade's identity.
       shades: (slide.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     })),
     projectId: null,
@@ -957,6 +1084,7 @@ export function createTripPost(
   title: string,
   endDate: IsoDate | null = null,
   defaults?: HookDefaults | null,
+  media: SavedMediaRef | null = null,
 ): TripPost {
   return {
     id: newId(),
@@ -964,16 +1092,13 @@ export function createTripPost(
     date,
     endDate,
     title: title.trim(),
-    media: null,
     badge: defaultPostBadge(kind, defaults),
-    slides: [],
-    // Never, whatever the kind. A carousel IS the shape that most often ends
-    // on a call to action, but starting one with a card nobody asked for put
-    // a slide the author had not composed between the pictures and the way to
-    // add another — and it is one click to add, on the rail, where it is
-    // seen. Same rule as the migration's: nothing gains a call to action on
-    // its own.
-    includeCta: false,
+    // One slide, carrying the badge. Never a closing card, whatever the kind:
+    // a carousel IS the shape that most often ends on a call to action, but
+    // starting one with a card nobody asked for put a slide the author had
+    // not composed between the pictures and the way to add another — and it
+    // is one click to add, on the rail, where it is seen.
+    slides: [badgeSlideFrom(defaults, media)],
     projectId: null,
     grade: null,
     publishedAt: null,
@@ -1103,6 +1228,12 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * GPS track kept beside the places, null on every stored trip, so nothing
  * composed before it changes its line until a track is written.
  *
+ * v33 → v34 puts EVERY slide in one list (`postFromV33`, his pick B of the
+ * free-slides lab, 2026-10-16): the hook's picture and everything about it
+ * leave `TripPost.media` and `PostBadge` for `slides[0]`, which carries the
+ * piece's badge (`PostSlide.pieceBadge`), and `includeCta` becomes a card
+ * slide (`PostSlide.card`). Position then decides nothing a slide holds.
+ *
  * v20 → v21 REPAIRS the car. The Itinerary branch numbered its Route
  * conversion v19 while `main` took v19 for the car, and a trip opened on that
  * branch before the renumber was stamped v19 with no car at all — so the car
@@ -1169,9 +1300,19 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * the trip's one CTA template. Every existing post becomes a deck of one,
  * which is exactly what it already was, so nothing changes shape.
  */
+/** A post as v33 stored it: the hook's picture on the post and the badge, the closing card a flag. */
+export type TripPostV33 = Omit<TripPost, 'badge'> & {
+  media: SavedMediaRef | null;
+  includeCta: boolean;
+  badge: PostBadgeV33;
+};
+
+/** A trip as the migrations below read it — its posts in the v33 shape until the v34 block moves them. */
+type LegacyTripDoc = Omit<TripDoc, 'posts'> & { posts: TripPostV33[] };
+
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
-  const migrated = { ...doc };
+  const migrated = { ...doc } as unknown as LegacyTripDoc;
   // The one vehicle a trip had before v31, read by the blocks that wrote it
   // and folded into the fleet by the last one.
   const legacy = migrated as TripDoc & { car?: unknown };
@@ -1202,7 +1343,8 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     migrated.posts = (migrated.posts ?? []).map((post) => ({
       ...post,
       media: post.media ?? null,
-      badge: post.badge ?? defaultPostBadge(post.kind),
+      // Read whole by the v34 block, which fills what a v1 badge never had.
+      badge: post.badge ?? (defaultPostBadge(post.kind) as PostBadgeV33),
     }));
   }
   if (migrated.version < 5) {
@@ -1660,7 +1802,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     // every slide keeping its length to the frame (`lengthFromLegacy`); both
     // keys are then deleted, never left for a reader to misread.
     migrated.posts = (migrated.posts ?? []).map((post) => {
-      const { hookAuto, ...badge } = post.badge as PostBadge & { hookAuto?: boolean };
+      const { hookAuto, ...badge } = post.badge as PostBadgeV33 & { hookAuto?: boolean };
       return {
         ...post,
         badge: {
@@ -1689,8 +1831,68 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     );
   }
 
-  migrated.version = TRIP_DOC_VERSION;
-  return migrated;
+  // v34: every slide in ONE list (see above). The block that moves the
+  // posts out of their v33 shape runs last, so every block before it reads
+  // the shape it was written for.
+  const posts =
+    migrated.version < 34
+      ? (migrated.posts ?? []).map(postFromV33)
+      : (migrated.posts as unknown as TripPost[]);
+  return { ...migrated, posts, version: TRIP_DOC_VERSION } as TripDoc;
+}
+
+/**
+ * A v33 post as one list of slides (v34): the hook's picture, framing,
+ * motion, develop, look, collage, delivery, length, opener, shades and text
+ * become `slides[0]`, which carries the piece's badge; the content slides
+ * follow untouched; `includeCta` becomes a card slide at the end. Ids are
+ * DERIVED from the post's, so a trip migrated on two devices names its slides
+ * alike. What the badge keeps is the piece's: counter, words, look, place.
+ * Every stored piece draws the same frames afterwards.
+ */
+export function postFromV33(post: TripPostV33): TripPost {
+  const { media, includeCta, badge: legacy, ...rest } = post;
+  const {
+    medium,
+    hookSeconds,
+    length,
+    shades,
+    videoTimeSeconds,
+    videoSpeed,
+    framing,
+    motion,
+    develop,
+    grade,
+    collage,
+    hook,
+    texts,
+    hookShelf,
+    ...badge
+  } = legacy as Partial<PostBadgeV33> & PostBadge;
+  const first: PostSlide = {
+    id: `hook-${post.id}`,
+    media: media ?? null,
+    videoTimeSeconds: videoTimeSeconds ?? 0,
+    videoSpeed: videoSpeed ?? 1,
+    framing: framing ?? { ...DEFAULT_FRAMING },
+    motion: motion ?? null,
+    develop: develop ?? null,
+    grade: grade ?? null,
+    collage: collage ?? null,
+    caption: '',
+    medium: medium ?? 'auto',
+    seconds: hookSeconds ?? defaultHookSeconds(badge.durationSeconds ?? DEFAULT_BADGE_DURATION),
+    length: lengthOf(length),
+    // The first slide always prepared an opener, the badge variant standing in for none.
+    hook: hook ?? defaultHookLayers(),
+    ...(hookShelf ? { hookShelf } : {}),
+    shades: shades ?? [],
+    badge: null,
+    texts: texts ?? [],
+    pieceBadge: true,
+  };
+  const card: PostSlide[] = includeCta ? [{ ...createCardSlide(), id: `card-${post.id}` }] : [];
+  return { ...rest, badge, slides: [first, ...(post.slides ?? []), ...card] };
 }
 
 /** Rule D's *Fit to the slide* was on for one of these openers (read by the v33 migration alone). */

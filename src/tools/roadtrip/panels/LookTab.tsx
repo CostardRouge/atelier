@@ -75,6 +75,8 @@ interface LookTabProps {
   onShades: (shades: Shade[]) => void;
   /** Another slide's own badge: set, re-placed, or taken off with null. */
   onSlideBadge: (badge: SlideBadge | null) => void;
+  /** Put the PIECE's badge on this slide (`withBadgeOn`) — it travels with its slide. */
+  onBadgeHere?: () => void;
   /** How the opener's pictures are coming along — its panel says so. */
   hookPictureStatus?: HookPictureStatus;
   /** The piece in hand — chosen above the tabs, or by a click on the stage. */
@@ -116,6 +118,7 @@ export default function LookTab({
   shades,
   onShades,
   onSlideBadge,
+  onBadgeHere,
   hookPictureStatus,
   piece,
   onChangeTrip,
@@ -125,7 +128,8 @@ export default function LookTab({
   placingShade = null,
   onPlaceShade,
 }: LookTabProps) {
-  const isHook = slide.kind === 'hook';
+  /** The open slide carries the PIECE's badge — its look is edited here. */
+  const isHook = slide.pieceBadge;
   const isCta = slide.kind === 'cta';
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
   const setPieceStyle = (style: BadgePieceStyle) =>
@@ -371,17 +375,27 @@ export default function LookTab({
               <>
                 <p>
                   A badge on this slide. A chapter mark is the piece’s badge at a third of
-                  its size — a marker for the next leg, the next hour — so the first slide’s
+                  its size — a marker for the next leg, the next hour — so the piece’s own
                   badge stays the one dominant number of the piece.
                 </p>
                 <p>
-                  Its look is the first slide’s: the pieces’ styles, the cascade and the
-                  trip’s title style are set there, so every badge of the piece wears one
-                  signature. What it says is set on the Content tab.
+                  Its look is the piece’s: the pieces’ styles, the cascade and the trip’s
+                  title style are set on the slide carrying the piece’s badge, so every badge
+                  of the piece wears one signature. What it says is set on the Content tab.
+                </p>
+                <p>
+                  The piece’s own badge can sit on any slide, and goes where its slide goes.
                 </p>
               </>
             }
           >
+            {onBadgeHere && (
+              <FieldRow label="" hint="The piece’s badge, at its size — it leaves the slide it is on.">
+                <Button size="sm" onClick={onBadgeHere}>
+                  Carry the piece’s badge here
+                </Button>
+              </FieldRow>
+            )}
             <FieldRow label="Badge">
               <Segmented
                 label="Badge on this slide"

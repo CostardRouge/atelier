@@ -3,31 +3,40 @@ import { describePlan, exportPlan } from './export-plan';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
+  badgeSlideFrom,
+  createCardSlide,
   createPostSlide,
   defaultPostBadge,
   defaultTripCover,
   emptyGrade,
   type PostKind,
+  type PostSlide,
   type TripDoc,
   type TripPost,
 } from './trip-types';
+import type { SavedMediaRef } from '../projects/project-types';
 
-const post = (over: Partial<TripPost> = {}, kind: PostKind = 'carousel'): TripPost => ({
-  id: 'p1',
-  kind,
-  date: '2025-03-27',
-  endDate: null,
-  title: 'Kalbarri cliffs',
-  media: { name: 'IMG_HOOK.JPG', size: 10, lastModified: 1 },
-  badge: defaultPostBadge(kind),
-  slides: [],
-  includeCta: false,
-  projectId: null,
-  grade: null,
-  publishedAt: null,
-  createdAt: 0,
-  ...over,
-});
+/** A piece: its first slide carrying the badge over `media`, then `slides`, then the card when asked. */
+const post = (
+  over: Partial<Omit<TripPost, 'slides'>> & { media?: SavedMediaRef | null; slides?: PostSlide[]; includeCta?: boolean } = {},
+  kind: PostKind = 'carousel',
+): TripPost => {
+  const { media = { name: 'IMG_HOOK.JPG', size: 10, lastModified: 1 }, slides = [], includeCta = false, ...rest } = over;
+  return {
+    id: 'p1',
+    kind,
+    date: '2025-03-27',
+    endDate: null,
+    title: 'Kalbarri cliffs',
+    badge: defaultPostBadge(kind),
+    slides: [{ ...badgeSlideFrom(null, media), id: 'hook' }, ...slides, ...(includeCta ? [createCardSlide()] : [])],
+    projectId: null,
+    grade: null,
+    publishedAt: null,
+    createdAt: 0,
+    ...rest,
+  };
+};
 
 const trip = (over: Partial<TripDoc> = {}): TripDoc =>
   ({
@@ -87,7 +96,7 @@ describe('exportPlan', () => {
     const p = post({
       slides: [createPostSlide({ name: 'CLIP.MP4', size: 1, lastModified: 1 })],
     });
-    p.badge.medium = 'video';
+    p.slides[0].medium = 'video';
     const plan = exportPlan(trip(), p, { ...ALL_THERE, canEncode: false });
     expect(plan.videos).toBe(0);
     expect(plan.files).toBe(0);
@@ -126,14 +135,14 @@ describe('exportPlan', () => {
 
   it('delivers the closing card as a still whatever the rest does', () => {
     const p = post({ includeCta: true });
-    p.badge.medium = 'video';
+    p.slides[0].medium = 'video';
     const plan = exportPlan(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p, ALL_THERE);
     expect(plan.items.slice(-1)[0]).toMatchObject({ kind: 'cta', medium: 'image' });
   });
 
   it('says a re-timed clip ships silent, and an as-shot one does not', () => {
     const fast = post({ media: { name: 'CLIP.MP4', size: 1, lastModified: 1 } });
-    fast.badge.videoSpeed = 2;
+    fast.slides[0].videoSpeed = 2;
     const plan = exportPlan(trip(), fast, ALL_THERE);
     expect(plan.items[0]).toMatchObject({ medium: 'video', speed: 2, silent: true });
 
@@ -146,7 +155,7 @@ describe('exportPlan', () => {
 
   it('does not call a re-timed clip silent once it goes out as an image', () => {
     const fast = post({ media: { name: 'CLIP.MP4', size: 1, lastModified: 1 } });
-    fast.badge.videoSpeed = 2;
+    fast.slides[0].videoSpeed = 2;
     const plan = exportPlan(trip(), fast, { ...ALL_THERE, imagesOnly: true });
     expect(plan.items[0].silent).toBe(false);
   });

@@ -19,7 +19,8 @@ import { BADGE_PIECES, COUNTER_MODES, type BadgePiece, type CounterMode } from '
 import { deckSlides } from './deck';
 import { HOOK_VARIANTS, hookVariantById } from './hooks/registry';
 import { switchHookVariant, type HookLayer, type HookShelf } from './hooks/hook-variant';
-import { createPostSlide, type PostBadge, type TripDoc, type TripPost } from './trip-types';
+import { createPostSlide, type PostBadge, type PostSlide, type TripDoc, type TripPost } from './trip-types';
+import { hasCardSlide, isCardSlide, leadSlideOf, pictureSlides } from './piece-slides';
 
 /** A trip as an agent lists it. */
 export function tripSummary(trip: TripDoc) {
@@ -42,8 +43,8 @@ export function pieceLine(post: TripPost) {
     date: post.date,
     ...(post.endDate ? { endDate: post.endDate } : {}),
     title: post.title || null,
-    pictures: (post.media ? 1 : 0) + post.slides.filter((s) => s.media).length,
-    opener: post.badge.hook[0]?.id ?? null,
+    pictures: post.slides.filter((s) => s.media).length,
+    opener: leadSlideOf(post)?.hook?.[0]?.id ?? null,
     published: post.publishedAt ? new Date(post.publishedAt).toISOString().slice(0, 10) : null,
   };
 }
@@ -70,10 +71,11 @@ export function pieceDetail(trip: TripDoc, post: TripPost) {
     aspect: post.badge.aspectId,
     counter: post.badge.mode,
     words: post.badge.textOverrides,
-    callToAction: post.includeCta,
+    callToAction: hasCardSlide(post),
     slides: deckSlides(trip, post).map((s) => ({
       position: s.position,
       kind: s.kind,
+      ...(s.pieceBadge ? { badge: true } : {}),
       picture: s.media?.name ?? null,
       medium: s.medium,
       seconds: Math.round(s.seconds * 100) / 100,
@@ -93,20 +95,19 @@ export function pieceDetail(trip: TripDoc, post: TripPost) {
 }
 
 /**
- * The piece with these pictures, in this order: the first is the HOOK (the
- * piece's own picture, under its badge), the rest its slides. A slide already
- * there keeps everything it carries — its timing, its opener, its words —
- * and only changes picture; a slide past the list is dropped, one beyond the
- * old count is made fresh.
+ * The piece with these pictures, in this order, on its picture slides. A
+ * slide already there keeps everything it carries — its badge, its timing,
+ * its opener, its words — and only changes picture; a slide past the list is
+ * dropped, one beyond the old count is made fresh. The closing card stays
+ * last if the piece has one, and a piece whose badge slide was dropped gets
+ * its badge back on the first.
  */
 export function withPictures(post: TripPost, refs: readonly SavedMediaRef[]): TripPost {
-  if (refs.length === 0) throw new CommandError('invalid', 'give at least one picture — the first is the hook');
-  const [hook, ...rest] = refs;
-  const slides = rest.map((ref, i) => {
-    const kept = post.slides[i];
-    return kept ? { ...kept, media: ref } : createPostSlide(ref);
-  });
-  return { ...post, media: hook, slides };
+  if (refs.length === 0) throw new CommandError('invalid', 'give at least one picture — the first opens the piece');
+  const kept = pictureSlides(post);
+  const slides: PostSlide[] = refs.map((ref, i) => (kept[i] ? { ...kept[i], media: ref } : createPostSlide(ref)));
+  if (!slides.some((s) => s.pieceBadge)) slides[0] = { ...slides[0], pieceBadge: true, hook: slides[0].hook ?? [] };
+  return { ...post, slides: [...slides, ...post.slides.filter(isCardSlide)] };
 }
 
 /** The openers an agent may choose from. */

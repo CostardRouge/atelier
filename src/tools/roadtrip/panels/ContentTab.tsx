@@ -38,11 +38,17 @@ import { DateField } from '../../../shared/ui/DateField';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, Readout, SelectField, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
 import type { TrimRange } from '../../../shared/media/trim';
+import { badgeMoveCarriesOpener, badgeSlideOf } from '../../../shared/roadtrip/piece-slides';
 
 interface ContentTabProps {
   trip: TripDoc;
   post: TripPost;
   slide: DeckSlide;
+  /**
+   * Put the piece's badge on the open slide (`withBadgeOn`) — offered where
+   * the piece opens without it, or where no slide carries it any more.
+   */
+  onBadgeHere?: () => void;
   /**
    * What the OPEN slide's badge says — the piece's on the first slide, the
    * slide's own elsewhere — or null when it draws none or cannot be counted.
@@ -66,7 +72,7 @@ interface ContentTabProps {
   /** The camera credit names a body on the TRIP, once for every piece. */
   onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
-  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds' | 'length' | 'hook'>>) => void;
+  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds' | 'length' | 'hook' | 'shades'>>) => void;
   /** Write the open slide's OWN badge — another slide's words, counter and line. */
   patchSlideBadge: (patch: Partial<SlideBadge>) => void;
   /** The open slide's lines of free text, and where they are written. */
@@ -119,15 +125,22 @@ export default function ContentTab({
   textFieldRef,
   captionFieldRef,
   onEditClosingCard,
+  onBadgeHere,
 }: ContentTabProps) {
-  const isHook = slide.kind === 'hook';
-  /** The open slide's opener — the piece's on the first slide, the slide's own elsewhere — as the band and the deck read it. */
-  const openerLayers = isHook ? post.badge.hook : (post.slides.find((s) => s.id === slide.slideId)?.hook ?? null);
+  /** The open slide carries the PIECE's badge (wherever it sits). */
+  const isHook = slide.pieceBadge;
+  const slideShades = post.slides.find((s) => s.id === slide.slideId)?.shades ?? [];
+  // Where the piece's badge is, by its place in the deck, or null where no slide carries it.
+  const badgeSlide = badgeSlideOf(post);
+  const badgeAt = badgeSlide ? post.slides.indexOf(badgeSlide) + 1 : null;
+  const badgeBringsOpener = badgeMoveCarriesOpener(post, slide.slideId);
+  /** The open slide's opener, as the band and the deck read it. */
+  const openerLayers = post.slides.find((s) => s.id === slide.slideId)?.hook ?? null;
   const openerVariant = openerLayers?.[0] ? hookVariantById(openerLayers[0].id) : undefined;
   // What the opener NEEDS at its own pace — never the sped-up length.
   const opener = openerVariant && slide.natural > 0 ? { name: openerVariant.name, seconds: slide.natural } : null;
   /** Back to the opener deciding, at its own pace with a new slide's hold. */
-  const followOpener = () => (isHook ? patchBadge({ length: defaultSlideLength() }) : patchSlide({ length: defaultSlideLength() }));
+  const followOpener = () => patchSlide({ length: defaultSlideLength() });
   /**
    * The badge this slide's words are written to: the piece's on the first
    * slide, the slide's own elsewhere, none where the slide draws no badge.
@@ -213,7 +226,7 @@ export default function ContentTab({
   const timeLine = timeOptions.find((p) => p.id === badge?.timeAgo)?.text ?? null;
 
   const slideName =
-    slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
+    slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Trip’s card' : `Picture ${slide.position}`;
 
   return (
     <div className="flex flex-col">
@@ -238,6 +251,24 @@ export default function ContentTab({
           </>
         }
       >
+        {/* The piece's badge travels with its slide (v34): said where the piece
+            opens without it, or where no slide carries it any more, with the
+            one verb that brings it here. Never a refusal — opening on a bare
+            picture may be the point. */}
+        {slide.kind !== 'cta' && !slide.pieceBadge && onBadgeHere && (badgeAt === null || slide.position === 1) && (
+          <div className="flex flex-col gap-2 mx-4 my-2 px-3 py-2.5 rounded-paper border border-warn-line bg-warn-wash text-xs text-ink leading-snug">
+            <span>
+              {badgeAt === null
+                ? 'No slide carries the piece’s badge.'
+                : `This piece opens without its badge — it is on slide ${badgeAt}.`}
+            </span>
+            <span>
+              <Button size="sm" onClick={onBadgeHere}>
+                {badgeBringsOpener ? 'Bring the badge and its opener here' : badgeAt === null ? 'Put the badge here' : 'Bring the badge here'}
+              </Button>
+            </span>
+          </div>
+        )}
         {badge && (
           <FieldRow
             label={isHook ? 'Text' : 'Badge text'}
@@ -265,7 +296,7 @@ export default function ContentTab({
           </FieldRow>
         )}
 
-        {slide.kind === 'content' && (
+        {slide.kind !== 'cta' && (
           <FieldRow label="Caption">
             <input
               ref={captionFieldRef}
@@ -279,7 +310,7 @@ export default function ContentTab({
         )}
 
         {slide.kind === 'cta' && (
-          <FieldRow label="Card" hint="The trip’s call to action, shared by every deck that closes with it.">
+          <FieldRow label="Card" hint="The trip’s call to action, shared with every piece that shows it — only where it sits is this piece’s.">
             <Button size="sm" onClick={onEditClosingCard}>
               Edit in the trip’s settings
             </Button>
@@ -297,13 +328,11 @@ export default function ContentTab({
             animated={slide.reason === 'animated' || slide.reason === 'settled'}
             clipSeconds={clipSeconds}
             clip={clip}
-            onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
+            onMedium={(medium) => patchSlide({ medium })}
             // Every control writes inside the owner the author picked; the
             // seconds are written only where they ARE the length.
             onLength={(edit) =>
-              isHook
-                ? patchBadge({ length: edit.length, ...(edit.seconds !== undefined ? { hookSeconds: edit.seconds } : {}) })
-                : patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) })
+              patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) })
             }
             openerName={opener?.name ?? null}
           />
@@ -654,6 +683,8 @@ export default function ContentTab({
             post={post}
             exif={exif}
             patchBadge={patchBadge}
+            shades={slideShades}
+            onShades={(shades) => patchSlide({ shades })}
             onChangeTrip={onChangeTrip}
           />
         </InspectorSection>

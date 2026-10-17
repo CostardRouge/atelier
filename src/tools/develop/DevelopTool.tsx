@@ -23,6 +23,7 @@ import { openPictureId, pictureAfterRestore } from '../../shared/develop/roll-ed
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
+import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
 import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { rollSummary } from '../../shared/develop/develop-commands';
@@ -105,6 +106,8 @@ export default function DevelopTool() {
   const flushRef = useRef<() => Promise<void>>(async () => {});
   /** The undo stack, read by the sync machine through a ref like the flush. */
   const historyRef = useRef<DocumentHistory<RollDoc | null> | null>(null);
+  /** One editor per roll across this browser's tabs, read by the funnels below. */
+  const lockRef = useRef<DocumentLock | null>(null);
 
   // --- the remote machine --------------------------------------------------
   const syncDriver = useMemo<DocumentSyncDriver<RollDoc>>(
@@ -123,6 +126,7 @@ export default function DevelopTool() {
     doc: open,
     driver: syncDriver,
     kind: ROLL_DOC_KIND,
+    canPush: () => lockRef.current?.canWrite() ?? true,
     beforeFlush: () => flushRef.current(),
     onDiscardPending: () => {
       pending.current = null;
@@ -134,6 +138,27 @@ export default function DevelopTool() {
     },
   });
   const { edited, resume, clear } = sync;
+
+  // One editor per roll across this browser's tabs (`use-document-lock.tsx`):
+  // another tab shows it read only, refreshed when this one saves.
+  const lock = useDocumentLock<RollDoc>({
+    kind: 'roll',
+    id: open?.id ?? null,
+    flush: () => flushRef.current(),
+    discard: () => {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      pending.current = null;
+    },
+    load: async (id) => (await listRolls()).find((r) => r.id === id) ?? null,
+    onReload: (doc, editing) => {
+      replaceOpen(doc);
+      // Taken from another tab, which kept its sync record moving: read it again.
+      if (editing) void resume(doc).then((r) => r?.replaced && replaceOpen(r.doc));
+    },
+  });
+  lockRef.current = lock;
+  const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
 
   /**
    * The document replaced UNDER the tool — by the pill's verbs, or by a
@@ -151,10 +176,14 @@ export default function DevelopTool() {
   const flush = useCallback(async () => {
     const doc = pending.current;
     pending.current = null;
-    if (!doc) return;
+    // A tab that lost the roll to another never writes it.
+    if (!doc || !lockRef.current?.canWrite()) return;
     const ok = await putRoll(doc);
     setStorageFailed(!ok);
-    if (ok) edited(doc);
+    if (ok) {
+      edited(doc);
+      lockRef.current?.saved(doc);
+    }
   }, [edited]);
   flushRef.current = flush;
 
@@ -167,6 +196,8 @@ export default function DevelopTool() {
 
   const handleChange = useCallback(
     (doc: RollDoc) => {
+      // Read only: another tab edits this roll (its band says so).
+      if (lockRef.current && !lockRef.current.canWrite()) return;
       setOpen(doc);
       pending.current = doc;
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
@@ -353,6 +384,9 @@ export default function DevelopTool() {
       clear();
       return;
     }
+    // A read-only tab never asks: the editing tab does, and the record it
+    // would read is the other tab's.
+    if (lock.state !== 'editing' && lock.state !== 'free') return;
     if (resumedFor.current === open.id) return;
     resumedFor.current = open.id;
     void resume(open).then((r) => {
@@ -360,7 +394,7 @@ export default function DevelopTool() {
       // mirror on the undo stack, and one ⌘Z pushed it over the newer copy.
       if (r?.replaced) replaceOpen(r.doc);
     });
-  }, [open, resume, clear]);
+  }, [open, resume, clear, lock.state]);
 
   const handleOpen = useCallback((doc: RollDoc) => {
     // The gallery lists what the store held when it MOUNTED, and the roll
@@ -384,24 +418,28 @@ export default function DevelopTool() {
           full). Your edits are still on screen.
         </p>
       )}
+      {!showGallery && lock.band}
       {showGallery ? (
         <RollGallery openRollId={open?.id ?? null} onOpen={handleOpen} />
       ) : (
-        <RollEditor
-          key={open.id}
-          roll={open}
-          pictureId={route.pictureId}
-          onBack={() => navigate(DEVELOP_HOME)}
-          onChange={handleChange}
-          // A step along the strip replaces the entry, so Back leaves the roll.
-          onOpenPicture={(id) => navigate(developPath(rollRef(open), id), { replace: true })}
-          headerExtra={
-            <>
-              {history.control}
-              {sync.pill}
-            </>
-          }
-        />
+        // Inert while another tab edits the roll: nothing here can write it.
+        <div ref={editorRef} className="contents">
+          <RollEditor
+            key={open.id}
+            roll={open}
+            pictureId={route.pictureId}
+            onBack={() => navigate(DEVELOP_HOME)}
+            onChange={handleChange}
+            // A step along the strip replaces the entry, so Back leaves the roll.
+            onOpenPicture={(id) => navigate(developPath(rollRef(open), id), { replace: true })}
+            headerExtra={
+              <>
+                {history.control}
+                {sync.pill}
+              </>
+            }
+          />
+        </div>
       )}
     </div>
   );

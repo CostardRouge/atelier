@@ -29,7 +29,7 @@ import type { TimeAgoMode } from './time-ago';
 import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from '../shades/shades';
 import { resolveHook } from './hooks/registry';
-import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
+import { hookContextFor, slideHookTiming } from './hooks/hook-context';
 import { hookElementsAt, windowedBadge, type ElementsAt } from './hooks/hook-elements';
 import type { HookPicture, ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
@@ -50,8 +50,7 @@ export interface SlideRender {
   /** How this slide's picture sits in its frame. */
   framing: Framing;
   /**
-   * The slide's OPENER, prepared — the piece's own on the first slide, the
-   * slide's own elsewhere, null where a slide holds none. It is
+   * The slide's OPENER, prepared, or null where a slide holds none. It is
    * time-parameterised rather than resolved at a moment, which is what keeps
    * this module free of the badge's clock: the caller paints it at whatever
    * second it is drawing.
@@ -99,13 +98,11 @@ export function slideRender(
     };
   }
 
-  // From here one path serves every slide that is a photograph. What differs
-  // is only WHERE its capacities are read: the first slide's are the piece's
-  // own (`post.badge`), every other slide's are its own (`slide-capacities.ts`).
-  // A slide's position used to decide whether it could hold an opener, a badge
-  // or shades at all; now it decides only where they are stored.
-  const isFirst = slide.kind === 'hook';
-  const spec = isFirst ? pieceBadge(post, slide) : slideBadge(post, slide);
+  // From here one path serves every slide that is a photograph, wherever it
+  // sits: its opener, shades and text are its own, and the badge it draws is
+  // the piece's where it carries it (`pieceBadge`), else its own chapter mark.
+  const piece = slide.pieceBadge;
+  const spec = piece ? pieceBadge(post, slide) : slideBadge(post, slide);
   const content = slideBadgeContent(trip, post, slide, exif);
 
   // The opener's pictures reach it here or not at all. A sweep does not need
@@ -113,12 +110,11 @@ export function slideRender(
   // own picture is the frame — but an ITINERARY still shows its stops' photos
   // at rest, pinned or on a card. A caller with none (a pure test, a surface
   // that has not decoded yet) gets a map without them rather than a stand-in.
-  // The first slide ALWAYS prepares one (an empty list falls back to the
-  // badge variant, as it always did); another slide only when it holds one.
-  const layers = isFirst ? post.badge.hook : slide.hook;
-  const timing = isFirst
-    ? pieceHookTiming(post)
-    : slideHookTiming({ seconds: slide.seconds, length: slide.length, badge: slide.badge });
+  // The slide carrying the badge ALWAYS prepares one (an empty list falls
+  // back to the badge variant, as the hook always did — `deckSlides` hands
+  // it a list); another slide only when it holds one.
+  const layers = slide.hook;
+  const timing = slideHookTiming(post, { seconds: slide.seconds, length: slide.length, badge: slide.badge, pieceBadge: piece });
   const hook = layers
     ? resolveHook(layers, hookContextFor(trip, post, aspect, content, pictures, timing))
     : null;
@@ -132,13 +128,11 @@ export function slideRender(
     content && spec
       ? windowedBadge(badgeElements(content, spec.layout, aspect, styles, spec.durationSeconds, cascade), hook?.badgeWindow)
       : [];
-  // What a slide says besides its badge: the caption (a content slide's), then
-  // the free text — drawn UNDER the badge, so a line that masks the picture
-  // (`knockout.ts`) never masks the signature with it. A first slide with no
-  // free text draws exactly the badge's elements, as it always did.
-  const words = isFirst
-    ? [...slide.texts]
-    : [...contentSlideElements(slide.caption, aspect), ...slide.texts];
+  // What a slide says besides its badge: its caption, then the free text —
+  // drawn UNDER the badge, so a line that masks the picture (`knockout.ts`)
+  // never masks the signature with it. A slide with neither draws exactly the
+  // badge's elements, as the hook always did.
+  const words = [...contentSlideElements(slide.caption, aspect), ...slide.texts];
   const badgeAt =
     spec && hook
       ? hookElementsAt(hook, content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
@@ -147,7 +141,7 @@ export function slideRender(
   return {
     elements: words.length ? [...words, ...badge] : badge,
     theme: trip.theme,
-    shades: isFirst ? post.badge.shades : slide.shades.length ? slide.shades : undefined,
+    shades: slide.shades.length ? slide.shades : undefined,
     // A shade set to follow the hook ends at the badge block's own edge, so
     // the block travels with the render: handing null instead (which the PNG
     // export used to do) silently falls back to the plain reach, and the
@@ -162,8 +156,8 @@ export function slideRender(
 }
 
 /**
- * What a slide's badge SAYS — the piece's own on the first slide, the slide's
- * own elsewhere, null where the slide draws none (or on the closing card).
+ * What a slide's badge SAYS — the piece's where the slide carries it, its own
+ * chapter mark's otherwise, null where it draws none (or on the closing card).
  * Exported for the editor, whose fields show the computed words as their
  * placeholder: one function, so a field never suggests what the badge does not
  * draw.
@@ -175,8 +169,8 @@ export function slideBadgeContent(
   exif?: ExifData | null,
 ): BadgeContent | null {
   if (slide.kind === 'cta') return null;
-  const isFirst = slide.kind === 'hook';
-  const spec = isFirst ? pieceBadge(post, slide) : slideBadge(post, slide);
+  const piece = slide.pieceBadge;
+  const spec = piece ? pieceBadge(post, slide) : slideBadge(post, slide);
   if (!spec) return null;
   return badgeContent(trip, post, {
     mode: spec.mode,
@@ -184,11 +178,12 @@ export function slideBadgeContent(
     timeAgo: spec.timeAgo,
     referenceDate: post.badge.referenceDate,
     showPin: post.badge.showPin,
-    // The camera credit is measured from the HOOK's picture; on another slide
-    // it would credit a photograph that is not the one under it.
-    showExif: isFirst ? post.badge.showExif : false,
-    exif: isFirst ? (exif ?? null) : null,
-    camera: isFirst ? (post.badge.camera ?? null) : null,
+    // The camera credit is measured from the picture UNDER the piece's badge
+    // (the caller reads that one); on a chapter mark it would credit a
+    // photograph that is not the one under it.
+    showExif: piece ? post.badge.showExif : false,
+    exif: piece ? (exif ?? null) : null,
+    camera: piece ? (post.badge.camera ?? null) : null,
     cameraNames: trip.cameraNames ?? null,
     overrides: spec.textOverrides,
   });
@@ -209,7 +204,7 @@ interface BadgeSpec {
   textOverrides: Partial<Record<BadgePiece, string>>;
 }
 
-/** The piece's own badge, which the first slide always draws. */
+/** The piece's own badge, on the slide that carries it. */
 function pieceBadge(post: TripPost, slide: DeckSlide): BadgeSpec {
   return {
     mode: post.badge.mode,
@@ -227,11 +222,9 @@ function slideBadge(post: TripPost, slide: DeckSlide): BadgeSpec | null {
 }
 
 /**
- * When a still of a slide that is NOT the first is taken: past its own
- * opener, its badge's entrance (the piece's look, so the piece's timing), its
- * free text's entrances and its collage's cells. The first slide's rest is
- * the caller's — the stage's own clock already reads the piece's badge and
- * opener there, and that is what the hook's thumbnail is taken from.
+ * When a still of a slide is taken: past its own opener, its badge's entrance
+ * (the piece's look, so the piece's timing), its free text's entrances and
+ * its collage's cells.
  */
 export function slideSettleSeconds(
   post: TripPost,
@@ -239,7 +232,7 @@ export function slideSettleSeconds(
   render: Pick<SlideRender, 'hook'>,
   aspect: number,
 ): number {
-  const badge = slide.badge ? badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade) : 0;
+  const badge = slide.badge || slide.pieceBadge ? badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade) : 0;
   return Math.max(
     badge,
     render.hook?.seconds ?? 0,

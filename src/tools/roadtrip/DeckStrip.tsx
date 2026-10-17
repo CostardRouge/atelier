@@ -32,6 +32,13 @@
  * is at sea its rail is STRIPED, with a tick where it docks (the sailing
  * stripe, face A, `sail-spans.ts`), so a cut that falls mid-crossing is seen.
  *
+ * Any slide MOVES (v34, what it holds goes with it): a press held still on a
+ * cell for `HOLD_MS` lifts it — a drag before that scrubs, as it always did,
+ * since dragging this band IS the transport — and the pointer carries it,
+ * the band sliding under it at either edge, a bar in the gap saying where it
+ * lands. ⋯ has Move to the start / earlier / later / to the end, and ⌥← ⌥→
+ * on the band move the open slide.
+ *
  * The strip is laid out by `shared/roadtrip/deck-strip.ts`: a fixed number of
  * pixels a second with a floor, so a clip keeps its size wherever it sits and
  * a half-second slide is still something a finger lands on. The band claims
@@ -45,10 +52,14 @@ import {
   anchorOf,
   anchoredOffset,
   capacityMarks,
+  cellAtX,
+  dropIndex,
+  dropSlot,
   localAtOffset,
   locate,
   resizedClip,
   resizedStill,
+  slotX,
   snapToEdge,
   stepSlide,
   stripLayout,
@@ -100,7 +111,7 @@ interface DeckStripProps {
   onSelect: (index: number) => void;
   onAdd: () => void;
   onRemove: () => void;
-  /** Indices into `post.slides`, content pictures only. */
+  /** Two deck positions, 0-based: the slide at `from` lands at `to`. */
   onMove: (from: number, to: number) => void;
   includeCta: boolean;
   onIncludeCta: (on: boolean) => void;
@@ -168,6 +179,16 @@ const SNAP_PX = 10;
 const SEA = '#5aa0d0';
 /** How close to the opener's natural end the grip rests on it. */
 const MAGNET_PX = 6;
+/** A grip held this close to the band's edge, pulled toward it, slides the band so the end keeps growing. */
+const EDGE_PX = 28;
+/** The fastest the band slides under a grip held at its very edge, px per frame. */
+const EDGE_STEP_PX = 3;
+/** How far past the open cell an end is still grabbed under a finger. */
+const GRIP_HALO_PX = 24;
+/** How long a press must rest on a cell before it lifts the slide — a drag before that scrubs, as it always did. */
+const HOLD_MS = 380;
+/** How far inside the band's edge a let-go end is put back: clear of the edge's fade (w-8) and a grip wide. */
+const KEEP_PX = 56;
 
 const pillBase =
   'flex-none rounded-full border font-mono tracking-[0.04em] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
@@ -201,7 +222,7 @@ function gripWord(grip: GripDraft | null): string {
 }
 
 function slideName(slide: DeckSlide): string {
-  return slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
+  return slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Trip’s card' : `Picture ${slide.position}`;
 }
 
 export default function DeckStrip({
@@ -254,6 +275,58 @@ export default function DeckStrip({
   // Resizing, the strip keeps the cell's OTHER end where it was on screen.
   const offset = sizing ? anchoredOffset(layout, index, sizing.edge, sizing.anchor) : xAtTime(layout, shown);
 
+  // A slide LIFTED to be moved: a press held still on a cell picks it up (a
+  // drag before that scrubs, as it always did), the pointer carries it, and
+  // the band slides under it at either edge (`pan`, px) without moving the
+  // piece's clock. Released, it lands in the slot the marker shows.
+  const [lift, setLiftState] = useState<{ from: number; x: number; pan: number; slot: number } | null>(null);
+  // The live value, written at once: the edge's frame loop and the pointer
+  // both move the lift between two renders, and must not undo each other.
+  const liftRef = useRef(lift);
+  const setLift = (next: typeof lift) => {
+    liftRef.current = next;
+    setLiftState(next);
+  };
+  const offsetRef = useRef(offset);
+  offsetRef.current = offset;
+  const holdTimer = useRef(0);
+  const liftRaf = useRef(0);
+  useEffect(
+    () => () => {
+      window.clearTimeout(holdTimer.current);
+      cancelAnimationFrame(liftRaf.current);
+    },
+    [],
+  );
+  const canMove = !orderLocked && !trimming && slides.length > 1;
+  /** The strip x under a screen x, with the band's lift pan. */
+  const stripXAt = (clientX: number, pan: number): number | null => {
+    const box = viewport.current?.getBoundingClientRect();
+    if (!box) return null;
+    return offsetRef.current + pan + (clientX - (box.left + box.width / 2));
+  };
+  const moveLift = (clientX: number, pan: number) => {
+    const at = stripXAt(clientX, pan);
+    const l = liftRef.current;
+    if (at === null || !l) return;
+    setLift({ ...l, x: clientX, pan, slot: dropSlot(layoutRef.current, at) });
+  };
+  // At either edge the band slides under the lifted slide, so a long piece is
+  // crossed without letting go — faster the deeper the pointer.
+  const liftTick = () => {
+    liftRaf.current = 0;
+    const l = liftRef.current;
+    const box = viewport.current?.getBoundingClientRect();
+    if (!l || !box) return;
+    const into = l.x > box.right - EDGE_PX ? l.x - (box.right - EDGE_PX) : l.x < box.left + EDGE_PX ? -(box.left + EDGE_PX - l.x) : 0;
+    if (into === 0) return;
+    const step = Math.sign(into) * Math.max(1, Math.round((EDGE_STEP_PX * 2 * Math.min(Math.abs(into), EDGE_PX)) / EDGE_PX));
+    const max = layoutRef.current.width - offsetRef.current;
+    const pan = Math.max(-offsetRef.current, Math.min(max, l.pan + step));
+    if (pan !== l.pan) moveLift(l.x, pan);
+    liftRaf.current = requestAnimationFrame(liftTick);
+  };
+
   const viewport = useRef<HTMLDivElement>(null);
   const timeRef = useRef(time);
   timeRef.current = time;
@@ -305,13 +378,35 @@ export default function DeckStrip({
       velocity: 0,
       moved: false,
     };
+    // Held still, the press lifts the slide under it.
+    window.clearTimeout(holdTimer.current);
+    if (!canMove) return;
+    const x0 = e.clientX;
+    holdTimer.current = window.setTimeout(() => {
+      const d = drag.current;
+      const at = stripXAt(x0, 0);
+      if (!d || d.moved || at === null) return;
+      const from = cellAtX(layoutRef.current, at);
+      if (from === null) return;
+      d.moved = true;
+      if (playing) onTogglePlay();
+      setHeld(null);
+      setLift({ from, x: x0, pan: 0, slot: from });
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate?.(8);
+    }, HOLD_MS);
   };
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
+    if (liftRef.current) {
+      moveLift(e.clientX, liftRef.current.pan);
+      if (!liftRaf.current) liftRaf.current = requestAnimationFrame(liftTick);
+      return;
+    }
     const dx = e.clientX - d.x0;
     if (!d.moved && Math.abs(dx) < TAP_SLOP_PX) return;
+    window.clearTimeout(holdTimer.current);
     d.moved = true;
     const dt = e.timeStamp - d.lastAt;
     if (dt > 0) d.velocity = (e.clientX - d.lastX) / dt;
@@ -325,7 +420,18 @@ export default function DeckStrip({
   const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     drag.current = null;
+    window.clearTimeout(holdTimer.current);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    const lifted = liftRef.current;
+    if (lifted) {
+      cancelAnimationFrame(liftRaf.current);
+      liftRaf.current = 0;
+      setLift(null);
+      // A gesture the browser took back drops nothing.
+      const to = dropIndex(lifted.from, lifted.slot);
+      if (e.type !== 'pointercancel' && to !== lifted.from) onMove(lifted.from, to);
+      return;
+    }
     if (!d) return;
     if (!d.moved) {
       // A tap opens the slide under the finger, on its start; a tap on the
@@ -399,7 +505,14 @@ export default function DeckStrip({
     range: TrimRange | null;
     moved: boolean;
     draft: Sizing | null;
+    /** The finger's last x, and how far the band has slid under it at the edge (px, + to the right). */
+    x: number;
+    slid: number;
+    /** What the band slid without the length changing — the magnet, or a bound reached. */
+    stuck: number;
   } | null>(null);
+  const edgeRaf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(edgeRaf.current), []);
 
   const onGripDown = (e: PointerEvent<HTMLSpanElement>, edge: StripEdge) => {
     if (e.button !== 0) return;
@@ -418,7 +531,57 @@ export default function DeckStrip({
       range: clip ? clip.range : null,
       moved: false,
       draft: null,
+      x: e.clientX,
+      slid: 0,
+      stuck: 0,
     };
+  };
+
+  /** The draft for the finger's distance plus what the band slid: the fixed end slides with the band, so the moving end stays under the finger. */
+  const redraft = (d: NonNullable<typeof sizeDrag.current>): Sizing | null => {
+    const dx = d.x - d.x0 + d.slid;
+    const anchor = d.anchor - d.slid;
+    if (d.range && clip) {
+      const range = resizedClip(d.range, d.edge, dx, pxPerSecond, clip.speed, clip.duration, MIN_LENGTH, MAX_HOOK_SECONDS, FRAME_STEP);
+      return { edge: d.edge, anchor, seconds: screenSecondsOf(range, clip.speed), range, grip: null };
+    }
+    if (!resize) return null;
+    const raw = resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max);
+    const open = slides[index];
+    // Read through the slide's owner: the cell ends where the slide would.
+    const grip = open ? gripDraft(open.length, open.timing, raw, MAGNET_PX / pxPerSecond, resize) : null;
+    return { edge: d.edge, anchor, seconds: grip?.seconds ?? raw, range: null, grip };
+  };
+
+  // A phone's band is narrower than a slide: an end pulled against the
+  // band's edge slides the band, faster the deeper the finger, and stops
+  // where the length does (a ceiling, the floor) rather than leave the finger.
+  const edgeTick = () => {
+    edgeRaf.current = 0;
+    const d = sizeDrag.current;
+    const box = viewport.current?.getBoundingClientRect();
+    if (!d || !d.moved || !box) return;
+    const into = d.x > d.x0 ? d.x - (box.right - EDGE_PX) : d.x < d.x0 ? box.left + EDGE_PX - d.x : 0;
+    if (!(into > 0)) return;
+    const step = Math.sign(d.x - d.x0) * Math.max(1, Math.round((EDGE_STEP_PX * Math.min(into, EDGE_PX)) / EDGE_PX));
+    const before = d.draft?.seconds;
+    d.slid += step;
+    const draft = redraft(d);
+    if (!draft) return;
+    if (Math.abs(draft.seconds - (before ?? draft.seconds)) < 1e-9) {
+      // Past the magnet's reach it is a bound: the band gives back what it slid for nothing.
+      d.stuck += step;
+      if (Math.abs(d.stuck) > 2 * MAGNET_PX + EDGE_STEP_PX) {
+        d.slid -= d.stuck;
+        d.stuck = 0;
+        d.draft = redraft(d);
+        setSizing(d.draft);
+        return;
+      }
+    } else d.stuck = 0;
+    d.draft = draft;
+    setSizing(draft);
+    edgeRaf.current = requestAnimationFrame(edgeTick);
   };
 
   const onGripMove = (e: PointerEvent<HTMLSpanElement>) => {
@@ -428,24 +591,18 @@ export default function DeckStrip({
     const dx = e.clientX - d.x0;
     if (!d.moved && Math.abs(dx) < TAP_SLOP_PX) return;
     d.moved = true;
-    let draft: Sizing | null = null;
-    if (d.range && clip) {
-      const range = resizedClip(d.range, d.edge, dx, pxPerSecond, clip.speed, clip.duration, MIN_LENGTH, MAX_HOOK_SECONDS, FRAME_STEP);
-      draft = { edge: d.edge, anchor: d.anchor, seconds: screenSecondsOf(range, clip.speed), range, grip: null };
-    } else if (resize) {
-      const raw = resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max);
-      const open = slides[index];
-      // Read through the slide's owner: the cell ends where the slide would.
-      const grip = open ? gripDraft(open.length, open.timing, raw, MAGNET_PX / pxPerSecond, resize) : null;
-      draft = { edge: d.edge, anchor: d.anchor, seconds: grip?.seconds ?? raw, range: null, grip };
-    }
+    d.x = e.clientX;
+    const draft = redraft(d);
     d.draft = draft;
     setSizing(draft);
+    if (!edgeRaf.current) edgeRaf.current = requestAnimationFrame(edgeTick);
   };
 
   const onGripUp = (e: PointerEvent<HTMLSpanElement>) => {
     const d = sizeDrag.current;
     sizeDrag.current = null;
+    cancelAnimationFrame(edgeRaf.current);
+    edgeRaf.current = 0;
     e.stopPropagation();
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     setSizing(null);
@@ -466,10 +623,28 @@ export default function DeckStrip({
       MIN_CELL_PX,
       GAP_PX,
     );
-    resize.onChange(draft.seconds, localAtOffset(next, index, anchoredOffset(next, index, draft.edge, draft.anchor)));
+    let at = anchoredOffset(next, index, draft.edge, draft.anchor);
+    // An end let go against the band's edge is left under its fade, half
+    // clipped: the band slides it back in so the next press finds it.
+    const box = viewport.current?.getBoundingClientRect();
+    const cellAt = next.cells[index];
+    if (box && cellAt) {
+      const needle = box.left + box.width / 2;
+      const end = needle + (draft.edge === 'end' ? cellAt.left + cellAt.width : cellAt.left) - at;
+      if (end > box.right - KEEP_PX) at += end - (box.right - KEEP_PX);
+      else if (end < box.left + KEEP_PX) at -= box.left + KEEP_PX - end;
+    }
+    resize.onChange(draft.seconds, localAtOffset(next, index, at));
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // ⌥← / ⌥→ move the open slide — the drag's keyboard twin.
+    if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const to = index + (e.key === 'ArrowLeft' ? -1 : 1);
+      if (canMove && to >= 0 && to < slides.length) onMove(index, to);
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     // A focused slider owns Space in the suite's key guard, so the band plays
     // the piece itself rather than going deaf to the transport key.
@@ -489,15 +664,16 @@ export default function DeckStrip({
   };
 
   const slide = slides[index];
-  const ci = slide?.kind === 'content' ? index - 1 : -1;
-  const contentCount = slides.filter((s) => s.kind === 'content').length;
   const hasCard = slides.some((s) => s.kind === 'cta');
+  // A piece keeps at least one picture: the last one is cleared, never removed.
+  const pictures = slides.filter((s) => s.kind !== 'cta').length;
 
   // Whether the open cell wears its grips: never on the closing card (its
   // length is the outro's), and on a clip only once its length is known.
   // While the piece plays they stay, and a press pauses it.
   const grips =
     !trimming &&
+    !lift &&
     slide?.kind !== 'cta' &&
     (clip ? clip.duration > 0 : Boolean(resize));
   // A finger's width on a phone, a pointer's beside a mouse.
@@ -516,10 +692,16 @@ export default function DeckStrip({
 
   const lockedWhy = orderLocked ? 'Locked while exporting — the run follows the deck’s order' : undefined;
   const menu: OverflowItem[] = [];
-  if (ci >= 0) {
+  // Any slide moves — what it holds goes with it (v34). Held on the band, it
+  // is dragged; these are the same moves for a keyboard and a short reach.
+  if (slide && slides.length > 1) {
+    const last = slides.length - 1;
+    const why = lockedWhy ?? 'Hold a slide on the band to drag it, or ⌥← ⌥→';
     menu.push(
-      { id: 'earlier', label: 'Move earlier', disabled: ci === 0 || orderLocked, title: lockedWhy, onSelect: () => onMove(ci, ci - 1) },
-      { id: 'later', label: 'Move later', disabled: ci >= contentCount - 1 || orderLocked, title: lockedWhy, onSelect: () => onMove(ci, ci + 1) },
+      { id: 'start', label: 'Move to the start', disabled: index === 0 || orderLocked, title: why, onSelect: () => onMove(index, 0) },
+      { id: 'earlier', label: 'Move earlier', disabled: index === 0 || orderLocked, title: why, onSelect: () => onMove(index, index - 1) },
+      { id: 'later', label: 'Move later', disabled: index === last || orderLocked, title: why, onSelect: () => onMove(index, index + 1) },
+      { id: 'end', label: 'Move to the end', disabled: index === last || orderLocked, title: why, onSelect: () => onMove(index, last) },
     );
   }
   // On a phone the ticks toggle lives here rather than on the row: a clip
@@ -533,13 +715,17 @@ export default function DeckStrip({
       onSelect: sound.onToggle,
     });
   }
+  // The trip's card is a slide like the others: added at the end, moved like
+  // any slide, taken out from here. Its words are the trip's, shared.
   if (!includeCta) {
-    menu.push({ id: 'cta-on', label: 'Close with the call to action', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(true) });
+    menu.push({ id: 'cta-on', label: 'Add the trip’s card', disabled: orderLocked, title: lockedWhy ?? 'At the end — move it like any slide', onSelect: () => onIncludeCta(true) });
   } else {
-    menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the closing card…' : 'Write the closing card…', onSelect: onEditClosingCard });
-    menu.push({ id: 'cta-off', label: 'End on the last picture', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
+    menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the trip’s card…' : 'Write the trip’s card…', onSelect: onEditClosingCard });
+    menu.push({ id: 'cta-off', label: 'Remove the trip’s card', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
   }
-  if (ci >= 0) menu.push({ id: 'remove', label: 'Remove this picture', danger: true, disabled: orderLocked, title: lockedWhy, onSelect: onRemove });
+  if (slide && slide.kind !== 'cta' && pictures > 1) {
+    menu.push({ id: 'remove', label: 'Remove this picture', danger: true, disabled: orderLocked, title: lockedWhy, onSelect: onRemove });
+  }
 
   const slideLoop = loopScope === 'slide';
   const length = drawn[index] ?? 0;
@@ -686,11 +872,17 @@ export default function DeckStrip({
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onKeyDown={onKeyDown}
-          className="relative h-14 overflow-hidden rounded-[10px] bg-paper-2 border border-line touch-pan-y select-none cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          // A held finger lifts a slide; the browser's own long-press menu must not answer it.
+          onContextMenu={(e) => e.preventDefault()}
+          data-lift={lift ? `${lift.from}>${lift.slot}` : undefined}
+          title={canMove ? 'Drag to move through the piece · hold a slide to move it' : undefined}
+          className={`relative h-14 overflow-hidden rounded-[10px] bg-paper-2 border border-line touch-pan-y select-none [-webkit-touch-callout:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            lift ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'
+          }`}
         >
           <div
             className="absolute top-2.5 bottom-1.5 left-1/2"
-            style={{ width: layout.width, transform: `translateX(${-offset}px)` }}
+            style={{ width: layout.width, transform: `translateX(${-(offset + (lift?.pan ?? 0))}px)` }}
           >
             {layout.cells.map((cell, i) => {
               const s = slides[i];
@@ -707,7 +899,7 @@ export default function DeckStrip({
               const rule = video ? 'rgba(0,0,0,0.55)' : 'var(--color-paper)';
               const holds = capacityMarks(s);
               const label =
-                (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
+                (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'Card' : String(s.position)) +
                 (holds ? ` ${holds}` : '') +
                 ` ${seconds(drawn[i] ?? 0)}` +
                 // The pace the opener runs at, when the slide speeds it up —
@@ -730,7 +922,7 @@ export default function DeckStrip({
                   key={s.slideId ?? s.kind}
                   className={`absolute top-0 bottom-0 rounded-[6px] overflow-hidden ${
                     video ? 'bg-frame' : 'bg-paper border border-dashed border-line-strong'
-                  } ${i === index ? 'ring-2 ring-accent' : ''}`}
+                  } ${i === index && !lift ? 'ring-2 ring-accent' : ''} ${lift?.from === i ? 'opacity-30' : ''}`}
                   style={{
                     left: cell.left,
                     width: cell.width,
@@ -782,6 +974,9 @@ export default function DeckStrip({
                     // The crossings are on the slide's clock at its pace; a held grip re-paces them.
                     const f = s.timing.scale > 0 ? pace / s.timing.scale : 1;
                     const at = (t: number) => Math.min(cell.width, Math.max(0, t * f * k));
+                    // A mark the slide's end cuts off is not drawn: a dock pinned to the edge reads as one that happens.
+                    const shown = (sp: (typeof s.spans)[number]) =>
+                      (sp.kind === 'alight' ? sp.end : sp.start) * f * k < cell.width - 0.5;
                     return (
                       <>
                         {/* A rail along the foot: bright under the opener, faint under the hold. */}
@@ -791,7 +986,7 @@ export default function DeckStrip({
                           style={{ width: span * k }}
                         />
                         {/* Where the opener is at sea, striped on its rail; a tick where it docks (face A). */}
-                        {s.spans.map((sp) =>
+                        {s.spans.filter(shown).map((sp) =>
                           sp.kind === 'sail' ? (
                             <span
                               key={`sail-${sp.start}`}
@@ -874,6 +1069,37 @@ export default function DeckStrip({
                 </div>
               );
             })}
+            {/* Where a lifted slide will land: a bar in the gap of its slot. */}
+            {lift && dropIndex(lift.from, lift.slot) !== lift.from && (
+              <span
+                data-drop-slot={lift.slot}
+                className="absolute -top-1.5 -bottom-1 w-1 -ml-0.5 rounded-full bg-accent pointer-events-none"
+                style={{ left: slotX(layout, lift.slot, GAP_PX) }}
+                aria-hidden="true"
+              />
+            )}
+            {/* Under a finger an end is grabbed beyond its drawing too, OUTSIDE
+                the cell, so a short slide's two narrow grips stay two targets
+                that never overlap (T of docs/touch-targets.md). */}
+            {grips &&
+              coarse &&
+              layout.cells[index] &&
+              (['start', 'end'] as const).map((edge) => {
+                const cell = layout.cells[index];
+                return (
+                  <span
+                    key={`halo-${edge}`}
+                    data-grip-halo={edge}
+                    aria-hidden="true"
+                    onPointerDown={(e) => onGripDown(e, edge)}
+                    onPointerMove={onGripMove}
+                    onPointerUp={onGripUp}
+                    onPointerCancel={onGripUp}
+                    className="absolute inset-y-0 cursor-ew-resize touch-pan-y"
+                    style={{ left: edge === 'start' ? cell.left - GRIP_HALO_PX : cell.left + cell.width, width: GRIP_HALO_PX }}
+                  />
+                );
+              })}
           </div>
           <div
             className="absolute inset-y-0 left-0 w-8 pointer-events-none"
@@ -885,6 +1111,29 @@ export default function DeckStrip({
             style={{ background: 'linear-gradient(270deg, var(--color-paper-2), transparent)' }}
             aria-hidden="true"
           />
+          {/* The lifted slide, carried under the pointer. */}
+          {lift && slides[lift.from] && (() => {
+            const box = viewport.current?.getBoundingClientRect();
+            const thumb = thumbFor(slides[lift.from]);
+            const w = Math.round(CELL_PX * Math.max(aspect, 0.6));
+            return (
+              <div
+                className="absolute top-1.5 bottom-1 rounded-[6px] overflow-hidden ring-2 ring-accent shadow-[0_6px_18px_rgba(0,0,0,0.35)] bg-frame pointer-events-none -rotate-2"
+                style={{
+                  left: (box ? lift.x - box.left : 0) - w / 2,
+                  width: w,
+                  backgroundImage: thumb ? `url(${thumb})` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+                aria-hidden="true"
+              >
+                <span className="absolute left-1 top-0.5 font-mono text-3xs text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
+                  {slides[lift.from].kind === 'cta' ? 'Card' : String(lift.from + 1)}
+                </span>
+              </div>
+            );
+          })()}
           {/* The needle: where the piece is, always in the middle. */}
           <div className="absolute left-1/2 top-1 bottom-0.5 w-0.5 -ml-px bg-ink pointer-events-none" aria-hidden="true">
             <span

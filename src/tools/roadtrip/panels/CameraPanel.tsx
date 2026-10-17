@@ -26,7 +26,7 @@ import { drawOverlays } from '../../../shared/overlay/draw-overlays';
 import { ensureOverlayFonts } from '../../../shared/overlay/fonts';
 import type { Anchor } from '../../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../../shared/overlay/title-styles';
-import { MAX_SHADES, createShade } from '../../../shared/shades/shades';
+import { MAX_SHADES, createShade, type Shade } from '../../../shared/shades/shades';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import IconButton from '../../../shared/ui/IconButton';
@@ -159,9 +159,12 @@ function LayoutTile({
 interface CameraPanelProps {
   trip: TripDoc;
   post: TripPost;
-  /** The hook picture's effective EXIF, read in the editor; null says nothing. */
+  /** The effective EXIF of the picture under the badge, read in the editor; null says nothing. */
   exif: ExifData | null;
   patchBadge: (patch: Partial<PostBadge>) => void;
+  /** The shades of the slide the badge sits on — a bar may ask for one under it. */
+  shades: readonly Shade[];
+  onShades: (shades: Shade[]) => void;
   onChangeTrip: (trip: TripDoc) => void;
 }
 
@@ -171,7 +174,7 @@ interface CameraPanelProps {
  * A piece that never opens these rows keeps the plain line it always drew;
  * the first control touched writes the choice onto the piece.
  */
-export default function CameraPanel({ trip, post, exif, patchBadge, onChangeTrip }: CameraPanelProps) {
+export default function CameraPanel({ trip, post, exif, patchBadge, shades, onShades, onChangeTrip }: CameraPanelProps) {
   const spec = readPlateSpec(post.badge.camera ?? null);
   const setSpec = (patch: Partial<CameraPlateSpec>) => patchBadge({ camera: { ...spec, ...patch } });
   const names = trip.cameraNames;
@@ -221,13 +224,11 @@ export default function CameraPanel({ trip, post, exif, patchBadge, onChangeTrip
 
   const barEdge = spec.place !== 'badge' && spec.place.startsWith('top-') ? 'top' : 'bottom';
   const addShade = () => {
-    if (post.badge.shades.length >= MAX_SHADES) return;
-    patchBadge({
-      shades: [
-        ...post.badge.shades,
-        createShade({ direction: barEdge, reach: 0.24, strength: 0.7, core: 0.4, falloff: 'in-out' }),
-      ],
-    });
+    if (shades.length >= MAX_SHADES) return;
+    onShades([
+      ...shades,
+      createShade({ direction: barEdge, reach: 0.24, strength: 0.7, core: 0.4, falloff: 'in-out' }),
+    ]);
   };
 
   const placeHint = (() => {
@@ -402,7 +403,7 @@ export default function CameraPanel({ trip, post, exif, patchBadge, onChangeTrip
             </FieldRow>
           )}
 
-          {spec.layout === 'bar' && post.badge.shades.length < MAX_SHADES && (
+          {spec.layout === 'bar' && shades.length < MAX_SHADES && (
             <FieldRow label="" hint="A soft dark band along that edge, so the bar reads over any sky.">
               <Button size="sm" icon={Icons.plus} onClick={addShade}>
                 Shade under the bar

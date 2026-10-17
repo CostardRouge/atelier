@@ -125,11 +125,13 @@ import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shar
 import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
+  withCardSlide,
   type PostBadge,
   type PostSlide,
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
+import { closesWithCard, hasCardSlide, leadSlideOf, withBadgeOn } from '../../shared/roadtrip/piece-slides';
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
@@ -262,6 +264,10 @@ function pickOf(index: number | null, count: number): CardPick {
  * stay in step: opening a post points the Library at its picture, and picking
  * another one there re-points the post.
  */
+/** Stable empties, so a memo keyed on them does not change every render. */
+const NO_LAYERS: HookLayer[] = [];
+const NO_SHADES: Shade[] = [];
+
 export default function PostEditor({
   trip,
   post,
@@ -347,10 +353,7 @@ export default function PostEditor({
   // when it lands — `hookContextFor` reads it, so the stage, the rail and
   // the exports then name the same groups.
   const [townsTick, setTownsTick] = useState(0);
-  const deckLayersForTowns = useMemo(
-    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
-    [post.badge.hook, post.slides],
-  );
+  const deckLayersForTowns = useMemo(() => post.slides.flatMap((s) => s.hook ?? []), [post.slides]);
   useEffect(() => {
     if (!wantsTowns(deckLayersForTowns) || townsIfLoaded()) return;
     let alive = true;
@@ -396,8 +399,16 @@ export default function PostEditor({
   );
   const slideIndex = Math.min(selected, slides.length - 1);
   const slide = slides[slideIndex];
-  const isHook = slide.kind === 'hook';
+  /** The open slide draws the PIECE's badge — the stage then draws the badge memos below. */
+  const carriesBadge = slide.pieceBadge;
+  /** The open slide is the COVER — the first, whose still stands for the piece. */
+  const isCover = slideIndex === 0;
   const isCta = slide.kind === 'cta';
+  // The slide that carries the piece's badge (`piece-slides.ts`), wherever it
+  // sits: its picture, opener, text and length are what the badge, its
+  // exports and the Studio bridge are built from.
+  const leadPostSlide = leadSlideOf(post);
+  const leadIndex = leadPostSlide ? slides.findIndex((s) => s.slideId === leadPostSlide.id) : -1;
   /**
    * Which picture of the piece the panels treat: the key the develop verbs
    * and the grade chain both address a picture by (`post-grade.ts`). The
@@ -431,11 +442,7 @@ export default function PostEditor({
   );
   const cell = collage ? collageCellAt(lead, collage, cellIndex) : null;
 
-  /**
-   * Write the open slide's lead and collage in one go — the hook's live on
-   * the badge, a carousel picture's on its slide, the split every per-picture
-   * field already makes.
-   */
+  /** Write the open slide's lead and collage in one go, on its own record. */
   const writeLead = useCallback(
     (next: { lead: CollageLead; collage: SlideCollage | null }) => {
       const fields = {
@@ -445,14 +452,10 @@ export default function PostEditor({
         motion: next.lead.motion,
         collage: next.collage,
       };
-      if (slide.kind === 'hook') {
-        onChangePost({ ...post, media: fields.media, badge: { ...post.badge, ...fields } });
-      } else if (slide.slideId) {
-        onChangePost({
-          ...post,
-          slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, ...fields } : s)),
-        });
-      }
+      onChangePost({
+        ...post,
+        slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, ...fields } : s)),
+      });
     },
     [slide, post, onChangePost],
   );
@@ -558,7 +561,7 @@ export default function PostEditor({
   const librarySlide = useMemo<DeckSlide>(
     () =>
       collage && cellIndex > 0
-        ? { ...slide, media: cell?.media ?? null, slideId: `${slide.slideId ?? slide.kind}#${cellIndex}` }
+        ? { ...slide, media: cell?.media ?? null, slideId: `${slide.slideId}#${cellIndex}` }
         : slide,
     [slide, collage, cellIndex, cell?.media],
   );
@@ -570,7 +573,7 @@ export default function PostEditor({
     () => (collage ? Array.from({ length: cellCount }, (_, i) => collageCellAt(lead, collage, i).media) : []),
     [collage, cellCount, lead],
   );
-  const collageFetch = useCollageRefetch(slide.slideId ?? slide.kind, collageRefs, lib.assets, lib.addFiles);
+  const collageFetch = useCollageRefetch(slide.slideId, collageRefs, lib.assets, lib.addFiles);
 
   // The Library and the open slide point at the same picture, both ways —
   // and a picture the pool lost to a reload is fetched back from the instance
@@ -621,7 +624,7 @@ export default function PostEditor({
     [cellFiles],
   );
   // The selection is one slide's: a new slide starts on its lead.
-  const slideKeyForCell = slide.slideId ?? slide.kind;
+  const slideKeyForCell = slide.slideId;
   useEffect(() => setSelectedCellState(0), [slideKeyForCell]);
   const isVideo = Boolean(slideFile && !slideFile.type.startsWith('image/'));
   // The stage's numbers are only this slide's once they describe THIS file:
@@ -630,13 +633,13 @@ export default function PostEditor({
   const sourceReady = srcInfo.file === slideFile;
   const duration = sourceReady ? srcInfo.duration : 0;
 
-  // --- the hook's own picture, whichever slide is open ---------------------
-  // The stage reports the OPEN slide's source; the hook clip export, the
-  // camera credit and the Studio bridge are about the piece and must work
-  // from a carousel's second slide too, so the hook's file and dimensions are
+  // --- the picture under the piece's badge, whichever slide is open --------
+  // The stage reports the OPEN slide's source; the badge slide's clip export,
+  // the camera credit and the Studio bridge are about the piece and must work
+  // from any other slide too, so the badge slide's file and dimensions are
   // kept apart. `resolve` itself sits above, beside the collage's cells, which
   // need it first.
-  const hookFile = isHook ? slideFile : resolve(post.media);
+  const hookFile = carriesBadge ? slideFile : resolve(leadPostSlide?.media ?? null);
   const hookIsVideo = Boolean(hookFile && !hookFile.type.startsWith('image/'));
 
   /**
@@ -689,16 +692,21 @@ export default function PostEditor({
       ),
     [slides, clipDurations],
   );
-  // How long the first slide lasts; the badge's exit lands on its END
+  // How long the badge's slide lasts; the badge's exit lands on its END
   // (`badgeExitAt`) — never an absolute life, so shortening the slide never
   // cuts the exit — unless the slide is too short to let the badge rest.
-  const hookLife = lengths[0] ?? post.badge.hookSeconds;
+  const hookLife = lengths[leadIndex] ?? leadPostSlide?.seconds ?? post.badge.durationSeconds;
   const hookExit = badgeExitAt(hookLife, post.badge.pieceStyles, post.badge.cascade);
 
-  // The first slide's words: its own free text, then its badge over it (a
-  // masked line must not mask the signature — `slide-render.ts`) — the
-  // elements every export of the hook and the Studio bridge burn in.
-  const hookTexts = post.badge.texts;
+  // The badge slide's words: its caption and free text, then the badge over
+  // them (a masked line must not mask the signature — `slide-render.ts`) —
+  // the elements every export of that slide and the Studio bridge burn in.
+  const leadCaption = leadPostSlide?.caption ?? '';
+  const leadTexts = leadPostSlide?.texts;
+  const hookTexts = useMemo(
+    () => [...contentSlideElements(leadCaption, aspect), ...(leadTexts ?? [])],
+    [leadCaption, leadTexts, aspect],
+  );
   const hookElementsAlways = useMemo(() => {
     const badge = content
       ? badgeElements(
@@ -741,15 +749,12 @@ export default function PostEditor({
   // the picture it lands on read as one look — which is now a chain, since a
   // picture of the deck may carry a look of its own (`post-grade.ts`).
   const grade = useTripGrade(trip, post, picture, onChangeTrip, onChangePost);
-  const flashLut = grade.lutFor({ ...slides[0], develop: null });
+  const flashLut = grade.lutFor({ ...slides[Math.max(0, leadIndex)], develop: null });
   // Every opener of the deck asks for its pictures through ONE pass, so they
   // share one pixel budget: any slide may hold an opener now, and three
   // itineraries of twelve stops must not each decode as if it were alone
   // (`docs/slide-capacities.md` §10).
-  const deckLayers = useMemo(
-    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
-    [post.badge.hook, post.slides],
-  );
+  const deckLayers = useMemo(() => post.slides.flatMap((s) => s.hook ?? []), [post.slides]);
   const { pictures: hookPictures, status: hookPictureStatus, ready: hookPicturesReady } = useHookPictures(
     deckLayers,
     baseHookCtx,
@@ -761,12 +766,11 @@ export default function PostEditor({
     [baseHookCtx, hookPictures],
   );
 
-  // The piece's opener, prepared once per change of what it reads — never per
-  // frame: the transport's clock reaches it at PAINT time, inside the stage.
-  const hook = useMemo(
-    () => resolveHook(post.badge.hook, hookCtx),
-    [post.badge.hook, hookCtx],
-  );
+  // The badge slide's opener, prepared once per change of what it reads —
+  // never per frame: the transport's clock reaches it at PAINT time, inside
+  // the stage. An empty list is the badge variant, as the hook always had.
+  const leadLayers = leadPostSlide?.hook ?? NO_LAYERS;
+  const hook = useMemo(() => resolveHook(leadLayers, hookCtx), [leadLayers, hookCtx]);
   // The badge inside the window its opener gives it (Virée's card: the badge
   // and the card are never on screen together) — what the stage draws and
   // every export of the hook burns in.
@@ -775,10 +779,10 @@ export default function PostEditor({
     [hookElementsAlways, hook.badgeWindow],
   );
   const elements = useMemo(() => {
-    if (isHook) return hookElements;
+    if (carriesBadge) return hookElements;
     if (isCta) return cta.elements;
     return contentSlideElements(slide.caption, aspect);
-  }, [isHook, isCta, hookElements, cta.elements, slide.caption, aspect]);
+  }, [carriesBadge, isCta, hookElements, cta.elements, slide.caption, aspect]);
   // Only an opener that rewrites the badge's words gets elements per frame;
   // every other piece keeps the ones built above, once per edit. The cascade
   // goes in too: `hookElements` above and `slideRender` (the exports, the
@@ -795,7 +799,7 @@ export default function PostEditor({
       post.badge.cascade,
     );
     // The free text rides along, or a counting numeral would hide it.
-    return at && hookTexts?.length ? (t: number) => [...hookTexts, ...at(t)] : at;
+    return at && hookTexts.length ? (t: number) => [...hookTexts, ...at(t)] : at;
   }, [
     hook,
     content,
@@ -807,15 +811,16 @@ export default function PostEditor({
     hookTexts,
   ]);
 
-  // Every slide that is not the first composes through the one function the
-  // deck, the rail and the exports use — its own badge, opener, shades and
-  // words — so the stage cannot draw a slide the export would not deliver.
+  // Every slide that does not carry the piece's badge composes through the
+  // one function the deck, the rail and the exports use — its own chapter
+  // mark, opener, shades and words — so the stage cannot draw a slide the
+  // export would not deliver.
   const openRender = useMemo(
-    () => (isHook || isCta ? null : slideRender(trip, post, slide, aspect, hookPictures, hookExif)),
-    [isHook, isCta, trip, post, slide, aspect, hookPictures, hookExif],
+    () => (carriesBadge || isCta ? null : slideRender(trip, post, slide, aspect, hookPictures, hookExif)),
+    [carriesBadge, isCta, trip, post, slide, aspect, hookPictures, hookExif],
   );
-  /** The opener on the OPEN slide — the piece's on the first, the slide's own elsewhere. */
-  const openHook = isHook ? hook : (openRender?.hook ?? null);
+  /** The opener on the OPEN slide. */
+  const openHook = carriesBadge ? hook : (openRender?.hook ?? null);
   /** Each slide's opener length, for the band's marks — the deck measured it once (`deckSlides`). */
   const openerSecondsBySlide = useMemo(() => slides.map((s) => s.openerSeconds), [slides]);
 
@@ -830,7 +835,6 @@ export default function PostEditor({
   const cellMotion = cell ? cell.motion : slide.motion;
 
   const patchSlide = (patch: Partial<PostSlide>) => {
-    if (!slide.slideId) return;
     onChangePost({
       ...post,
       slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, ...patch } : s)),
@@ -838,39 +842,33 @@ export default function PostEditor({
   };
 
   // --- what the OPEN slide holds, wherever it sits ----------------------------
-  // A slide's position no longer decides whether it may hold an opener, a
-  // badge or shades (`slide-capacities.ts`). The first slide reads and writes
-  // them on the piece's badge, as it always did; every other slide on its own
-  // record. Everything below edits "the open slide's" and never asks which.
+  // A slide's position decides nothing it holds (v34): every slide reads and
+  // writes its opener, shades and text on its own record, and the piece's
+  // badge is drawn by the slide that carries it. Everything below edits "the
+  // open slide's" and never asks which.
 
-  /** The open slide's opener: the piece's on the first slide, its own elsewhere. */
-  const openLayers = useMemo(
-    () => (isHook ? post.badge.hook : isCta ? [] : [...(slide.hook ?? [])]),
-    [isHook, isCta, post.badge.hook, slide.hook],
-  );
+  /** The open slide's opener. */
+  const openLayers = useMemo(() => (isCta ? NO_LAYERS : [...(slide.hook ?? [])]), [isCta, slide.hook]);
   /** What the open slide's other openers were given (`switchHookVariant`). */
-  const openShelf = isHook
-    ? post.badge.hookShelf
-    : isCta
-      ? undefined
-      : post.slides.find((s) => s.id === slide.slideId)?.hookShelf;
-  /** The shelf is written only when a switch changed it, as the piece's always was. */
+  const openShelf = isCta ? undefined : post.slides.find((s) => s.id === slide.slideId)?.hookShelf;
+  /**
+   * The shelf is written only when a switch changed it. The slide carrying
+   * the badge keeps an empty list rather than none — that is its badge variant.
+   */
   const setOpenLayers = (layers: HookLayer[], shelf?: HookShelf) =>
-    isHook
-      ? patchBadge(shelf ? { hook: layers, hookShelf: shelf } : { hook: layers })
-      : patchSlide({ hook: layers.length ? layers : null, ...(shelf ? { hookShelf: shelf } : {}) });
+    patchSlide({ hook: layers.length || carriesBadge ? layers : null, ...(shelf ? { hookShelf: shelf } : {}) });
   /** What the open slide's badge says — its fields' placeholder, its opener's context. */
   const openContent = useMemo(
-    () => (isHook ? content : slideBadgeContent(trip, post, slide)),
-    [isHook, content, trip, post, slide],
+    () => (carriesBadge ? content : slideBadgeContent(trip, post, slide)),
+    [carriesBadge, content, trip, post, slide],
   );
   /** What the open slide's opener is prepared against: its own time, the deck's pictures. */
   const openCtx = useMemo<HookContext>(
     () =>
-      isHook
+      carriesBadge
         ? hookCtx
-        : hookContextFor(trip, post, aspect, openContent, hookPictures, slideHookTiming(slide)),
-    [isHook, hookCtx, trip, post, aspect, openContent, hookPictures, slide],
+        : hookContextFor(trip, post, aspect, openContent, hookPictures, slideHookTiming(post, slide)),
+    [carriesBadge, hookCtx, trip, post, aspect, openContent, hookPictures, slide],
   );
   /**
    * The opener as CONTENT on the stage: where its drawing sits, and what a
@@ -894,24 +892,19 @@ export default function PostEditor({
   };
 
   /** The open slide's badge placement, or null where it draws none. */
-  const openBadgeLayout = isHook ? post.badge.layout : (slide.badge?.layout ?? null);
+  const openBadgeLayout = carriesBadge ? post.badge.layout : (slide.badge?.layout ?? null);
   /** Write the open slide's own badge (never the piece's — that is `patchBadge`). */
   const patchSlideBadge = (patch: Partial<SlideBadge>) => {
     if (!slide.badge) return;
     patchSlide({ badge: { ...slide.badge, ...patch } });
   };
   /** The open slide's shades, and where a shade that follows the badge ends. */
-  const openShades = isHook ? post.badge.shades : isCta ? [] : slide.shades;
-  const openBlock = isHook ? block : (openRender?.block ?? null);
-  const setOpenShades = (shades: Shade[]) =>
-    isHook ? patchBadge({ shades }) : patchSlide({ shades });
+  const openShades = isCta ? NO_SHADES : slide.shades;
+  const openBlock = carriesBadge ? block : (openRender?.block ?? null);
+  const setOpenShades = (shades: Shade[]) => patchSlide({ shades });
   /** The open slide's free text, and where it is written. */
-  const openTexts = useMemo<readonly OverlayElement[]>(
-    () => (isHook ? (post.badge.texts ?? []) : isCta ? [] : slide.texts),
-    [isHook, isCta, post.badge.texts, slide.texts],
-  );
-  const setOpenTexts = (texts: OverlayElement[]) =>
-    isHook ? patchBadge({ texts }) : patchSlide({ texts });
+  const openTexts = useMemo<readonly OverlayElement[]>(() => (isCta ? [] : slide.texts), [isCta, slide.texts]);
+  const setOpenTexts = (texts: OverlayElement[]) => patchSlide({ texts });
   /** Where each line sits, for the stage to drag one — keyed by its id. */
   const movableTexts = useMemo(
     () => new Map(openTexts.map((el) => [el.id, { x: el.x, y: el.y }])),
@@ -967,13 +960,16 @@ export default function PostEditor({
   async function addSlide() {
     if (exports.run) return;
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
-    onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
+    // After the last picture: a closing card stays the last thing it was.
+    const at = closesWithCard(post) ? post.slides.length - 1 : post.slides.length;
+    const added = createPostSlide(ref);
+    onChangePost({ ...post, slides: [...post.slides.slice(0, at), added, ...post.slides.slice(at)] });
     // Land on what was just added, which is where the author is looking.
-    setSelected(post.slides.length + 1);
+    setSelected(Math.min(at, slides.length));
   }
 
   function removeSlide() {
-    if (!slide.slideId || exports.run) return;
+    if (exports.run) return;
     onChangePost({
       ...post,
       slides: post.slides.filter((s) => s.id !== slide.slideId),
@@ -981,11 +977,15 @@ export default function PostEditor({
     setSelected(Math.max(0, slideIndex - 1));
   }
 
+  /** Move a slide between two DECK positions (0-based) — the piece's own list, by id. */
   function moveSlideTo(from: number, to: number) {
-    if (to < 0 || to >= post.slides.length || from === to || exports.run) return;
-    onChangePost({ ...post, slides: moveItem(post.slides, from, to) });
+    if (to < 0 || to >= slides.length || from === to || exports.run) return;
+    const a = post.slides.findIndex((s) => s.id === slides[from]?.slideId);
+    const b = post.slides.findIndex((s) => s.id === slides[to]?.slideId);
+    if (a < 0 || b < 0) return;
+    onChangePost({ ...post, slides: moveItem(post.slides, a, b) });
     // Follow the slide that moved, so the stage keeps showing what was dragged.
-    setSelected(to + 1);
+    setSelected(to);
   }
 
   // --- the clip under the open slide: its stretch, its playhead ------------
@@ -995,7 +995,7 @@ export default function PostEditor({
   // speed (`clipSlice`), never stored a second time; the playhead is session
   // state, reset to the in point whenever another slide or picture opens.
   const isClipSlide = isVideo && duration > 0;
-  const slideKey = slide.slideId ?? slide.kind;
+  const slideKey = slide.slideId;
   const clipRange = useMemo<TrimRange>(
     () => clipSlice(slide.videoTimeSeconds, slide.seconds, slide.speed, duration),
     [slide.videoTimeSeconds, slide.seconds, slide.speed, duration],
@@ -1023,20 +1023,14 @@ export default function PostEditor({
       const seconds = screenSecondsOf(range, slide.speed);
       // A clip's cut IS its length: the slide is fixed at it (`fixedFrom`).
       const length = fixedFrom(slide.length);
-      if (slide.kind === 'hook') {
-        patchBadge({ videoTimeSeconds: range.start, hookSeconds: seconds, length });
-      } else if (slide.slideId) {
-        onChangePost({
-          ...post,
-          slides: post.slides.map((s) =>
-            s.id === slide.slideId
-              ? { ...s, videoTimeSeconds: range.start, seconds, length }
-              : s,
-          ),
-        });
-      }
+      onChangePost({
+        ...post,
+        slides: post.slides.map((s) =>
+          s.id === slide.slideId ? { ...s, videoTimeSeconds: range.start, seconds, length } : s,
+        ),
+      });
     },
-    [slide, post, patchBadge, onChangePost],
+    [slide, post, onChangePost],
   );
 
   /**
@@ -1053,18 +1047,14 @@ export default function PostEditor({
         speed,
       );
       const length = fixedFrom(slide.length);
-      if (slide.kind === 'hook') {
-        patchBadge({ videoSpeed: speed, hookSeconds: seconds, length });
-      } else if (slide.slideId) {
-        onChangePost({
-          ...post,
-          slides: post.slides.map((s) =>
-            s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds, length } : s,
-          ),
-        });
-      }
+      onChangePost({
+        ...post,
+        slides: post.slides.map((s) =>
+          s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds, length } : s,
+        ),
+      });
     },
-    [slide, clipRange, post, patchBadge, onChangePost],
+    [slide, clipRange, post, onChangePost],
   );
 
   // --- the piece's transport: every slide, one after the other --------------
@@ -1074,7 +1064,7 @@ export default function PostEditor({
   // still the seconds its inspector gives it — and the durations of clips the
   // stage has already decoded are remembered, so a stored 5s over a 3s clip
   // reads 3 on the band before that slide is opened again.
-  const slideKeys = useMemo(() => slides.map((s) => s.slideId ?? s.kind), [slides]);
+  const slideKeys = useMemo(() => slides.map((s) => s.slideId), [slides]);
   // Playback always loops; this says over what — the whole piece, or the slide
   // under the needle. The band's pill and `L` switch it.
   const [loopScope, setLoopScope] = useState<LoopScope>('piece');
@@ -1109,7 +1099,7 @@ export default function PostEditor({
     const lead = (i: number | null): SheetDeckPicture | null => {
       if (i === null) return null;
       const s = slides[i];
-      return { id: `${s.slideId ?? s.kind}:0`, name: s.media?.name ?? '', file: resolve(s.media) };
+      return { id: `${s.slideId}:0`, name: s.media?.name ?? '', file: resolve(s.media) };
     };
     const [previous, next] = [beside(-1), beside(1)];
     return {
@@ -1186,7 +1176,7 @@ export default function PostEditor({
   // Another slide rests past its own opener, badge, text and cells — the rest
   // its thumbnail and its PNG are taken at (`slideSettleSeconds`).
   const otherRest = openRender ? slideSettleSeconds(post, slide, openRender, aspect) : collageSettle;
-  const badgeTime = !isHook
+  const badgeTime = !carriesBadge
     ? stillAtRest
       ? otherRest
       : deck.local
@@ -1195,7 +1185,7 @@ export default function PostEditor({
         ? Math.max(settle, collageSettle)
         : Math.max(0, (playhead - clipRange.start) / slide.speed)
       : stillAtRest
-        ? Math.max(settle, hook.seconds, collageSettle, textsSettleSeconds(hookTexts ?? []))
+        ? Math.max(settle, hook.seconds, collageSettle, textsSettleSeconds(leadTexts ?? []))
         : deck.local;
 
   // ——— The picture's pan and zoom, edited as CARDS (`motion-cards.ts`,
@@ -1580,7 +1570,7 @@ export default function PostEditor({
       // Called from the decode of the file this render hands the stage, so
       // `slideFile` here IS the file these numbers describe.
       setSrcInfo({ ...info, file: slideFile });
-      if (isHook) setHookInfo(info);
+      if (carriesBadge) setHookInfo(info);
       if (info.duration > 0 && slideFile) {
         const name = slideFile.name.toLowerCase();
         setClipDurations((known) =>
@@ -1588,20 +1578,18 @@ export default function PostEditor({
         );
       }
     },
-    [isHook, slideFile],
+    [carriesBadge, slideFile],
   );
 
-  // How long the burned-in hook clip runs. It lives on the DOCUMENT since
-  // 2026-09-09 (`badge.hookSeconds`): it was session state while a length was
-  // only an export choice, and it stopped being only that when every slide
-  // gained a screen time. Still clamped on read — a stored 8s over a 3s clip
-  // must not claim a file it cannot write.
+  // How long the badge slide's burned-in clip runs: its screen time, on the
+  // DOCUMENT like every slide's. Still clamped on read — a stored 8s over a
+  // 3s clip must not claim a file it cannot write.
   const hookLength = hookSecondsWithin(
-    lengths[0] ?? post.badge.hookSeconds,
+    lengths[leadIndex] ?? leadPostSlide?.seconds ?? post.badge.durationSeconds,
     post.badge.durationSeconds,
     hookInfo.duration,
-    post.badge.videoTimeSeconds,
-    post.badge.videoSpeed,
+    leadPostSlide?.videoTimeSeconds ?? 0,
+    leadPostSlide?.videoSpeed ?? 1,
   );
 
   // A clip's in point must stay inside the clip: switching to a shorter video
@@ -1609,16 +1597,11 @@ export default function PostEditor({
   // Any slide, not only the hook — a carousel picture is re-pointed too.
   useEffect(() => {
     if (!isVideo || duration <= 0 || slide.videoTimeSeconds <= duration) return;
-    if (slide.kind === 'hook') patchBadge({ videoTimeSeconds: 0 });
-    else if (slide.slideId) {
-      onChangePost({
-        ...post,
-        slides: post.slides.map((s) =>
-          s.id === slide.slideId ? { ...s, videoTimeSeconds: 0 } : s,
-        ),
-      });
-    }
-  }, [isVideo, duration, slide, post, patchBadge, onChangePost]);
+    onChangePost({
+      ...post,
+      slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, videoTimeSeconds: 0 } : s)),
+    });
+  }, [isVideo, duration, slide, post, onChangePost]);
 
   // --- the grade: the Studio's stack, bound to the trip or to this piece ----
   // (bound above, beside the opener's pictures, which wear it too)
@@ -1674,7 +1657,7 @@ export default function PostEditor({
     post,
     aspect,
     slideCount: slides.length,
-    hookSlide: slides[0],
+    hookSlide: slides[Math.max(0, leadIndex)],
     // A still is taken SETTLED, never at the transport's time: a PNG caught
     // mid-entrance is a picture nobody composed. Only the still/PNG path
     // reads this — the video paths below drive their own per-frame clock
@@ -1729,11 +1712,12 @@ export default function PostEditor({
     if (slides.length > 1) {
       verbs.push({ id: 'slide', label: 'This slide as a PNG', hint: `the slide open on the stage, numbered as in the deck`, run: () => void exports.exportDeck(slide.position) });
     }
-    if (slides[0]?.medium === 'video' && canEncode) {
-      verbs.push({ id: 'hook', label: 'The hook as a video', hint: `MP4 · ${hookLength.toFixed(1)} s · 1080`, run: () => void exports.exportHookClip() });
+    if (slides[leadIndex]?.medium === 'video' && canEncode) {
+      const lead = slides[leadIndex];
+      verbs.push({ id: 'hook', label: lead.position === 1 ? 'The hook as a video' : `Slide ${lead.position} (the badge) as a video`, hint: `MP4 · ${hookLength.toFixed(1)} s · 1080`, run: () => void exports.exportHookClip() });
     }
     return verbs;
-  }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength]);
+  }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength, leadIndex]);
 
   // --- the open piece's commands (`shared/commands/`, `trip-commands.ts`) ---
   // Written through `onChangePost`, the funnel every panel writes through, so
@@ -1781,7 +1765,7 @@ export default function PostEditor({
     {
       id: 'trips.openSlide',
       title: 'Open a slide',
-      description: 'Put a slide of the piece on the stage, by its 1-based position (1 is the hook).',
+      description: 'Put a slide of the piece on the stage, by its 1-based position (1 is the first).',
       params: { position: { type: 'number', description: 'The slide’s position, from 1.', integer: true, min: 1 } },
       run: (p) => {
         const target = slideAt(p.position);
@@ -1814,7 +1798,7 @@ export default function PostEditor({
       id: 'trips.setOpener',
       title: 'Open a slide with an opener',
       description:
-        'Give a slide (the open one unless named; 1 is the hook) an opener from trips.openers, with options patched over what it had or its defaults. Switching keeps what the previous opener was given, as the picker does. Options are checked by name and type only — look at the result with trips.snapshot. One undo step.',
+        'Give a slide (the open one unless named; 1 is the first) an opener from trips.openers, with options patched over what it had or its defaults. Switching keeps what the previous opener was given, as the picker does. Options are checked by name and type only — look at the result with trips.snapshot. One undo step.',
       params: {
         opener: { type: 'string', description: 'The opener id, from trips.openers.' },
         options: { type: 'object', description: 'Options to write over the opener’s current ones.', optional: true },
@@ -1824,15 +1808,9 @@ export default function PostEditor({
         const target = slideAt(p.position);
         if (target.kind === 'cta') throw new CommandError('invalid', 'the closing card holds no opener');
         const now = postNow.current;
-        const stored = target.kind === 'hook' ? undefined : now.slides.find((x) => x.id === target.slideId);
-        const layers = target.kind === 'hook' ? now.badge.hook : (stored?.hook ?? []);
-        const shelf = target.kind === 'hook' ? now.badge.hookShelf : stored?.hookShelf;
-        const next = withOpener(layers, shelf, p.opener as string, p.options as Record<string, unknown> | undefined);
-        writePost(
-          target.kind === 'hook'
-            ? { ...now, badge: { ...now.badge, hook: next.hook, hookShelf: next.shelf } }
-            : { ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, hook: next.hook, hookShelf: next.shelf } : x)) },
-        );
+        const stored = now.slides.find((x) => x.id === target.slideId);
+        const next = withOpener(stored?.hook ?? [], stored?.hookShelf, p.opener as string, p.options as Record<string, unknown> | undefined);
+        writePost({ ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, hook: next.hook, hookShelf: next.shelf } : x)) });
         return { position: target.position, opener: next.hook[0].id, options: next.hook[0].options };
       },
     },
@@ -1869,18 +1847,18 @@ export default function PostEditor({
         const next: TripPost = {
           ...now,
           ...(typeof p.title === 'string' ? { title: p.title.trim() } : {}),
-          ...(typeof p.callToAction === 'boolean' ? { includeCta: p.callToAction } : {}),
+          ...(typeof p.callToAction === 'boolean' ? { slides: withCardSlide(now, p.callToAction).slides } : {}),
           ...(p.aspect !== undefined ? { badge: { ...now.badge, aspectId: readAspect(p.aspect) } } : {}),
         };
         writePost(next);
-        return { title: next.title || null, aspect: next.badge.aspectId, callToAction: next.includeCta };
+        return { title: next.title || null, aspect: next.badge.aspectId, callToAction: hasCardSlide(next) };
       },
     },
     {
       id: 'trips.slideLength',
       title: 'Set how long a slide lasts',
       description:
-        'Who decides a slide’s length (the open slide unless named; 1 is the hook): owner "opener" — the opener at a pace (1 its own, 0.5 twice as fast, never under its floor) then a hold in seconds — or owner "fixed" — the slide lasts `seconds`, and a longer opener is sped up to fit ("fit") or cut ("cut"). Anything not named is kept. trips.piece reports each slide’s length, what its opener needs and its pace. One undo step.',
+        'Who decides a slide’s length (the open slide unless named; 1 is the first): owner "opener" — the opener at a pace (1 its own, 0.5 twice as fast, never under its floor) then a hold in seconds — or owner "fixed" — the slide lasts `seconds`, and a longer opener is sped up to fit ("fit") or cut ("cut"). Anything not named is kept. trips.piece reports each slide’s length, what its opener needs and its pace. One undo step.',
       params: {
         position: { type: 'number', description: 'The slide’s position, from 1; the open slide when absent.', integer: true, min: 1, optional: true },
         owner: { type: 'string', description: 'Who decides.', enum: ['opener', 'fixed'], optional: true },
@@ -1904,11 +1882,7 @@ export default function PostEditor({
               }
             : { owner: 'fixed', over: (p.over as LengthOver | undefined) ?? (was.owner === 'fixed' ? was.over : 'fit') };
         const seconds = typeof p.seconds === 'number' ? p.seconds : undefined;
-        writePost(
-          target.kind === 'hook'
-            ? { ...now, badge: { ...now.badge, length, ...(seconds !== undefined ? { hookSeconds: seconds } : {}) } }
-            : { ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, length, ...(seconds !== undefined ? { seconds } : {}) } : x)) },
-        );
+        writePost({ ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, length, ...(seconds !== undefined ? { seconds } : {}) } : x)) });
         return { position: target.position, length };
       },
     },
@@ -1916,7 +1890,7 @@ export default function PostEditor({
       id: 'trips.develop',
       title: 'Correct a slide’s picture',
       description:
-        'Write develop sliders on a slide’s picture (the open slide unless named; 1 is the hook), as ABSOLUTE values inside each range — exposure in EV −3..3, the others −100..100: exposure, brightness, contrast, highlights, shadows, whites, blacks, temperature, tint, saturation, vibrance. Everything not named is kept; values: {} with reset: true puts the picture back as shot. One undo step.',
+        'Write develop sliders on a slide’s picture (the open slide unless named; 1 is the first), as ABSOLUTE values inside each range — exposure in EV −3..3, the others −100..100: exposure, brightness, contrast, highlights, shadows, whites, blacks, temperature, tint, saturation, vibrance. Everything not named is kept; values: {} with reset: true puts the picture back as shot. One undo step.',
       params: {
         values: { type: 'object', description: 'Slider → value, e.g. {"exposure": 0.4, "vibrance": 20}.' },
         position: { type: 'number', description: 'The slide’s position, from 1; the open slide when absent.', integer: true, min: 1, optional: true },
@@ -1930,11 +1904,7 @@ export default function PostEditor({
         const values = p.values as Record<string, unknown>;
         const base = p.reset === true ? null : target.develop;
         const develop = Object.keys(values).length === 0 && p.reset === true ? null : withDevelopValues(base, values);
-        writePost(
-          target.kind === 'hook'
-            ? { ...now, badge: { ...now.badge, develop } }
-            : { ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, develop } : x)) },
-        );
+        writePost({ ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, develop } : x)) });
         return { position: target.position, controls: developControls(develop).filter((c) => c.value !== 0) };
       },
     },
@@ -2129,13 +2099,13 @@ export default function PostEditor({
   }, [slideIndex]);
 
   const moveBlockTo = (x: number, y: number) =>
-    isHook
+    carriesBadge
       ? patchBadge({ layout: { ...post.badge.layout, x, y } })
       : patchSlideBadge({ layout: { ...slide.badge!.layout, x, y } });
 
   /**
    * A shade whose centre the stage is placing (the Look tab's "Place on the
-   * picture"). Only on the hook, only while the Look tab is the one open, and
+   * picture"). Only on a picture, only while the Look tab is the one open, and
    * only while the shade still has a centre to move — anything else drops it,
    * so the stage is never left taking presses for a panel nobody can see.
    */
@@ -2160,10 +2130,11 @@ export default function PostEditor({
     setOpenShades(openShades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)));
 
   /**
-   * Keep a small picture of the hook beside the trip, so a day opened months
-   * later shows what is sitting in it rather than a file name. Debounced and
-   * taken only from the hook — the stage redraws on every frame of the badge's
-   * transport, and writing each one would be a write per animation frame.
+   * Keep a small picture of the COVER — the first slide, whatever it holds —
+   * beside the trip, so a day opened months later shows what is sitting in it
+   * rather than a file name. Debounced and taken only from the cover — the
+   * stage redraws on every frame of the badge's transport, and writing each
+   * one would be a write per animation frame.
    *
    * Never while the piece's picture is MISSING. A piece that names no picture
    * is a badge over nothing and is worth storing as it is; a piece that names
@@ -2192,7 +2163,7 @@ export default function PostEditor({
   }, [composedView]);
   const captureThumb = useCallback(
     (canvas: HTMLCanvasElement) => {
-      if (!isHook || missingRef.current || !settledRef.current) return;
+      if (!isCover || missingRef.current || !settledRef.current) return;
       if (thumbTimer.current !== null) window.clearTimeout(thumbTimer.current);
       thumbTimer.current = window.setTimeout(() => {
         if (missingRef.current || !settledRef.current) return;
@@ -2201,7 +2172,7 @@ export default function PostEditor({
         });
       }, 700);
     },
-    [isHook, post.id],
+    [isCover, post.id],
   );
   useEffect(
     () => () => {
@@ -2252,9 +2223,9 @@ export default function PostEditor({
       onAdd={() => void addSlide()}
       onRemove={removeSlide}
       onMove={moveSlideTo}
-      includeCta={post.includeCta}
+      includeCta={hasCardSlide(post)}
       onIncludeCta={(on) => {
-        if (!exports.run) onChangePost({ ...post, includeCta: on });
+        if (!exports.run) onChangePost(withCardSlide(post, on));
       }}
       orderLocked={exports.run !== null}
       onEditClosingCard={() => setTripSheet('cta')}
@@ -2312,8 +2283,7 @@ export default function PostEditor({
                 // A grip never changes who owns the length: under the opener's
                 // rule it writes a pace and a hold, a fixed one its seconds.
                 const edit = lengthByHand(slide.length, slide.timing, seconds);
-                if (isHook) patchBadge({ length: edit.length, ...(edit.seconds !== undefined ? { hookSeconds: edit.seconds } : {}) });
-                else patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) });
+                patchSlide({ length: edit.length, ...(edit.seconds !== undefined ? { seconds: edit.seconds } : {}) });
                 deck.goTo(slideIndex, local);
               },
             }
@@ -2533,10 +2503,10 @@ export default function PostEditor({
             elements={openRender ? openRender.elements : elements}
             theme={isCta ? null : trip.theme}
             timeSeconds={badgeTime}
-            shades={isHook ? post.badge.shades : openRender?.shades}
-            block={isHook ? block : (openRender?.block ?? null)}
+            shades={carriesBadge ? (slide.shades.length ? slide.shades : undefined) : openRender?.shades}
+            block={carriesBadge ? block : (openRender?.block ?? null)}
             hook={openHook}
-            elementsAt={isHook ? hookElementsAt : (openRender?.elementsAt ?? null)}
+            elementsAt={carriesBadge ? hookElementsAt : (openRender?.elementsAt ?? null)}
             background={isCta ? trip.cta.background : undefined}
             qr={ctaQr}
             lut={lut}
@@ -2634,7 +2604,7 @@ export default function PostEditor({
         {/* The piece in hand, rendered ONCE above the body: the Content and
             Look tabs both edit it, and two copies of the same six chips read
             as two different controls. A click on the stage picks one too. */}
-        {(isHook || slide.badge) && (tab === 'content' || tab === 'look') && (
+        {(carriesBadge || slide.badge) && (tab === 'content' || tab === 'look') && (
           <div className="flex-none">
             <FieldRow label="Piece" hint="Or click it on the picture.">
               <PiecePicker piece={piece} onPiece={selectPiece} />
@@ -2659,6 +2629,7 @@ export default function PostEditor({
               patchBadge={patchBadge}
               patchSlide={patchSlide}
               patchSlideBadge={patchSlideBadge}
+              onBadgeHere={() => onChangePost(withBadgeOn(post, slide.slideId))}
               texts={openTexts}
               onTexts={setOpenTexts}
               textFieldRef={textFieldRef}
@@ -2679,6 +2650,7 @@ export default function PostEditor({
               shades={openShades}
               onShades={setOpenShades}
               onSlideBadge={(badge) => patchSlide({ badge })}
+              onBadgeHere={() => onChangePost(withBadgeOn(post, slide.slideId))}
               hookPictureStatus={hookPictureStatus}
               piece={piece}
               onChangeTrip={onChangeTrip}
@@ -2824,10 +2796,8 @@ export default function PostEditor({
         lookHeader={<GradeScopeChips grade={grade} />}
         footerHint={
           collage && cellIndex > 0
-            ? `writes to cell ${cellIndex + 1} of ${isHook ? 'the hook' : `slide ${slide.position}`}`
-            : isHook
-              ? 'writes to the hook'
-              : `writes to slide ${slide.position}`
+            ? `writes to cell ${cellIndex + 1} of slide ${slide.position}`
+            : `writes to slide ${slide.position}`
         }
         applyTo={developApplyTo}
         deck={sheetDeck}
@@ -2843,7 +2813,7 @@ export default function PostEditor({
         land={tripSheetLand}
         ctaFieldRefs={ctaFieldRefs}
         onChangeTrip={onChangeTrip}
-        patchBadge={patchBadge}
+        onChangePost={onChangePost}
         onClose={() => setTripSheet(null)}
         deduceSources={deduceSources}
         onDeduceFrom={onDeduceFrom}

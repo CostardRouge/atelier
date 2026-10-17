@@ -106,11 +106,19 @@ through the Batch API. Price is not the issue; local-first is.
    and every day without them is dataset lost, so they come before any model
    and before approach 3. Approach 2's model trains when there is enough; 3
    accelerates that moment, since what it writes and he corrects is data.
-3. **Approach 3 is NOT decided.** It is the suite's fourth network exception
-   (`local-first.md`): opt-in, off by default, a reduced proxy only, the RAW
-   never, stated in the README's callout. Where the key lives (browser
-   `localStorage`, or relayed by his Winnow, which keeps "Atelier is a
-   client") is his call — see §8.
+3. **Approach 3 is CLOSED (2026-10-16, his call): the agent bridge IS the
+   assistant.** Since the MCP bridge (`agent-commands.md`, 2026-10-09) a
+   Claude he runs on his own machine sees the picture (`develop.snapshot`,
+   `develop.compare`), writes the whole record by parts (`develop.set`,
+   `develop.curve`…), renders and looks again, and batches a roll
+   (`develop.autoAll`, `atelier_batch`) — C1, C2, C4 and C5 of §7 with no
+   key in the browser, no fourth network exception and no second command
+   layer inside the app. Atelier itself calls no language model, ever, unless
+   he reopens this. What the bridge does NOT give, accepted: the assistant on
+   a phone or a tablet (the bridge is loopback to his computer — a one-tap
+   develop there is approach 2's *My own*), and C3 (points → Subject layers),
+   which waits on layers and masks reaching the commands
+   (`docs/agent-autonomy.md`), not on an in-app assistant.
 4. **An automatic verb SETS, says, and never invents.** The rules Auto tone
    fixed (`develop.md`) hold for every verb here: measured on the picture as
    shot so a second press is the same answer; solved against this suite's own
@@ -233,7 +241,7 @@ the eleven sliders are written as ONE value switch. B3 is the `training/`
 workspace (M6). Local-first unchanged. Rules and what was driven:
 `docs/memory/develop-roll.md`, «A model of his OWN».
 
-## 7. Approach 3 — the assistant, when decided
+## 7. Approach 3 — the assistant (CLOSED 2026-10-16, kept as record — §4.3)
 
 **C1 — The seam, opt-in.** `shared/assist/` with ONE function: a reduced
 proxy (1024 px), the as-shot stats, the EXIF summary and the sliders' spec
@@ -263,10 +271,8 @@ tests, and it goes toward "the browser is the runtime today, not forever".
 
 ## 8. His to decide
 
-- The fourth network exception at all: may a reduced proxy leave for
-  Anthropic, opt-in?
-- If yes, the key's home: the browser (`localStorage`, no Winnow change) or
-  a Winnow relay (cleaner, one route on his server).
+- ~~The fourth network exception, and the key's home~~ — closed 2026-10-16:
+  the agent bridge is the assistant, Atelier calls no language model (§4.3).
 - ~~Whether B1's vignette may be kept with the roll~~ — a settings row since
   2026-10-07 (Develop's settings → Learning), kept by default, his to switch.
 - The A1 thresholds and the A2 confidence floor are taste constants, named

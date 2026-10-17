@@ -198,7 +198,6 @@ export default function PictureTab({
   onUseActiveInCell,
   onClearCell,
 }: PictureTabProps) {
-  const isHook = slide.kind === 'hook';
   const isCta = slide.kind === 'cta';
   const { stack, scope } = grade;
   /**
@@ -289,10 +288,7 @@ export default function PictureTab({
                     duration={duration}
                     value={slide.videoTimeSeconds}
                     label="In point"
-                    onChange={(v) => {
-                      if (isHook) patchBadge({ videoTimeSeconds: v });
-                      else patchSlide({ videoTimeSeconds: v });
-                    }}
+                    onChange={(v) => patchSlide({ videoTimeSeconds: v })}
                   />
                 </div>
               </FieldRow>

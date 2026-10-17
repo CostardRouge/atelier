@@ -13,6 +13,7 @@ import {
 import type { IsoDate } from './trip-days';
 import { DEFAULT_CTA } from './cta-slide';
 import {
+  badgeSlideFrom,
   defaultPostBadge,
   type TripDoc,
   type TripPost,
@@ -26,10 +27,8 @@ const post = (date: IsoDate, end: IsoDate | null = null): TripPost => ({
   date,
   endDate: end,
   title: '',
-  media: null,
   badge: defaultPostBadge('photo'),
-  slides: [],
-  includeCta: false,
+  slides: [badgeSlideFrom(null)],
   projectId: null,
   grade: null,
   publishedAt: null,
@@ -474,7 +473,8 @@ describe('counterPieces — a mode that cannot count says why', () => {
     const still = counterPieces(doc, post('2025-03-27'), 'drive-days', DEFAULT_BADGE_WORDS);
     expect(still!.unavailable).toMatch(/Virée/);
     expect(still!.headline).toBe('27');
-    const driven = { ...post('2025-03-27'), badge: { ...post('2025-03-27').badge, hook: [{ id: 'drive', options: {} }] } };
+    const base = post('2025-03-27');
+    const driven = { ...base, slides: [{ ...base.slides[0], hook: [{ id: 'drive', options: {} }] }] };
     // At rest, before the opener speaks: true readings, never the road's total.
     expect(counterPieces(doc, driven, 'drive-days', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'Day', headline: '27', counter: 'of 310', unavailable: null });
     expect(counterPieces(doc, driven, 'drive-km', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'km', headline: '0', counter: null });

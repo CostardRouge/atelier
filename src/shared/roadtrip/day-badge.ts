@@ -54,6 +54,7 @@ import {
   type CameraPlateSpec,
   type CameraWords,
 } from '../overlay/camera-plate';
+import { leadSlideOf } from './piece-slides';
 
 /** What the headline counts. */
 export type CounterMode =
@@ -407,7 +408,7 @@ export function counterPieces(
     // and the base below — the day of the trip — is true whenever it does
     // not speak. Without Virée there is no vehicle to follow, and saying so is
     // the rule for every mode that cannot count.
-    const driven = post.badge.hook?.some((layer) => layer.id === 'drive') ?? false;
+    const driven = leadSlideOf(post)?.hook?.some((layer) => layer.id === 'drive') ?? false;
     if (driven) {
       // At rest, before the vehicle moves: the day of the trip, no distance, the
       // first stop — true readings, each overwritten the moment the vehicle is.

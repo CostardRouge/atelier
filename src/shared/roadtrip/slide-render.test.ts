@@ -8,30 +8,39 @@ import { DEFAULT_FRAMING } from '../media/framing';
 import { contentSlideElements, deckSlides } from './deck';
 import { slideRender } from './slide-render';
 import {
+  badgeSlideFrom,
+  createCardSlide,
   createPostSlide,
   defaultPostBadge,
   defaultTripCover,
   type PostKind,
+  type PostSlide,
   type TripDoc,
   type TripPost,
 } from './trip-types';
+import type { SavedMediaRef } from '../projects/project-types';
 
-const post = (over: Partial<TripPost> = {}, kind: PostKind = 'carousel'): TripPost => ({
-  id: 'p1',
-  kind,
-  date: '2025-03-27',
-  endDate: null,
-  title: 'Kalbarri cliffs',
-  media: { name: 'DJI_0001.JPG', size: 10, lastModified: 1 },
-  badge: defaultPostBadge(kind),
-  slides: [],
-  includeCta: false,
-  projectId: null,
-  grade: null,
-  publishedAt: null,
-  createdAt: 0,
-  ...over,
-});
+/** A piece: its first slide carrying the badge over `media`, then `slides`, then the card when asked. */
+const post = (
+  over: Partial<Omit<TripPost, 'slides'>> & { media?: SavedMediaRef | null; slides?: PostSlide[]; includeCta?: boolean; first?: Partial<PostSlide> } = {},
+  kind: PostKind = 'carousel',
+): TripPost => {
+  const { media = { name: 'DJI_0001.JPG', size: 10, lastModified: 1 }, slides = [], includeCta = false, first = {}, ...rest } = over;
+  return {
+    id: 'p1',
+    kind,
+    date: '2025-03-27',
+    endDate: null,
+    title: 'Kalbarri cliffs',
+    badge: defaultPostBadge(kind),
+    slides: [{ ...badgeSlideFrom(null, media), id: 'hook', ...first }, ...slides, ...(includeCta ? [createCardSlide()] : [])],
+    projectId: null,
+    grade: null,
+    publishedAt: null,
+    createdAt: 0,
+    ...rest,
+  };
+};
 
 const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 5,
@@ -85,7 +94,8 @@ describe('slideRender', () => {
         p.badge.durationSeconds,
       ),
     );
-    expect(render.shades).toBe(p.badge.shades);
+    // No shade on the slide: none drawn, exactly as an empty stack drew none.
+    expect(render.shades).toBeUndefined();
     // A shade that follows the hook needs the block, or it falls back to the
     // plain reach and lands somewhere else than in the preview.
     expect(render.block).toEqual(badgeBlockExtent(content, p.badge.layout, ASPECT));
@@ -95,14 +105,11 @@ describe('slideRender', () => {
   it('lands the badge’s exit on the slide’s end, and keeps it on a slide too short to rest', () => {
     const t = trip();
     const fade = { preset: 'fade' as const, duration: 0.5, easing: 'out' as const };
-    const badge = (hookSeconds: number) => ({
-      ...defaultPostBadge('carousel'),
-      length: { owner: 'fixed' as const, over: 'cut' as const },
-      hookSeconds,
-      pieceStyles: { kicker: { animation: { in: fade, out: fade } } },
-    });
-    const windowOf = (hookSeconds: number) => {
-      const p = post({ badge: badge(hookSeconds) });
+    const windowOf = (seconds: number) => {
+      const p = post({
+        badge: { ...defaultPostBadge('carousel'), pieceStyles: { kicker: { animation: { in: fade, out: fade } } } },
+        first: { length: { owner: 'fixed', over: 'cut' }, seconds },
+      });
       const render = slideRender(t, p, deckSlides(t, p)[0], ASPECT);
       return render.elements.find((el) => el.animation)?.window;
     };
@@ -126,10 +133,7 @@ describe('slideRender', () => {
   it('carries each slide’s own framing', () => {
     const t = trip();
     const framing = { ...DEFAULT_FRAMING, scale: 2.5, x: 0.1, y: -0.2, rotation: 90, flipY: true };
-    const p = post({
-      badge: { ...defaultPostBadge('carousel'), framing },
-      slides: [createPostSlide(null)],
-    });
+    const p = post({ first: { framing }, slides: [createPostSlide(null)] });
     const [hook, content] = deckSlides(t, p);
 
     expect(slideRender(t, p, hook, ASPECT).framing).toEqual(framing);
@@ -281,7 +285,7 @@ describe('slideRender — free text on the first slide (v29)', () => {
     const doc = trip({ posts: [p] });
     const before = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
     const line = { ...contentSlideElements('x', ASPECT)[0], id: 'text:a', text: 'Day one' };
-    p.badge.texts = [line];
+    p.slides[0].texts = [line];
     const after = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
     expect(after.elements).toEqual([line, ...before.elements]);
     expect(after.block).toEqual(before.block);
@@ -289,7 +293,7 @@ describe('slideRender — free text on the first slide (v29)', () => {
 
   it('reads a first slide stored before its text existed as having none', () => {
     const p = post();
-    delete (p.badge as { texts?: unknown }).texts;
+    delete (p.slides[0] as { texts?: unknown }).texts;
     const doc = trip({ posts: [p] });
     const render = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
     expect(render.elements.every((el) => el.id.startsWith('piece:'))).toBe(true);

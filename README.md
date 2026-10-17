@@ -1595,10 +1595,10 @@ overview and of the piece editor — and `⌘Z` / `⇧⌘Z` — step the whole t
 and forward: a badge moved, a leg resized, a piece added or deleted, the look
 you were trying out.
 
-**A post is a deck.** The hook is slide one; add as many content pictures after
-it as you like, each with its own optional caption, and close on the trip's
+**A post is a deck.** The hook is slide one; add as many pictures after it as
+you like, each with its own optional caption, and add the trip's
 **call-to-action card** — headline, sentence, link and a **QR code**, edited
-once in the trip's own settings and appended to every deck that asks for it. A
+once in the trip's own settings and shown by every piece that holds it. A
 reel or a single photo is the same model with a deck of one, so a piece can be
 re-cut into a carousel without being rebuilt. **Export the piece** writes every slide in the
 format the deck says it is — a still as a PNG, what moves as an MP4 — into a
@@ -1624,9 +1624,23 @@ the needle is the one open; ▶ or `Space` plays **the whole piece**, slide afte
 slide, on the stage. The open slide's cell carries a **grip at each end**: drag
 one to make a picture hold the screen longer or shorter, or to move a clip's in
 or out point — the other end stays put, and the change is written once, when you
-let go (the Content tab's *On screen* slider is the same number). `⋯` moves the open picture earlier or later, removes it, or
-closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
-and a call to action that came second would stop being either.
+let go (the Content tab's *On screen* slider is the same number). `+` adds the
+active picture.
+
+**Every slide moves.** Hold a slide on the band for a moment — a quick drag
+still moves through the piece — and carry it where it should go: the band slides
+under it at either edge and a bar shows where it will land. `⋯` moves the open
+slide to the start, earlier, later or to the end, removes a picture (a piece
+keeps at least one), and adds or removes the trip's card; `⌥←` / `⌥→` on the
+band move the open slide. A slide takes everything it holds with it — its
+picture, opener, shades, words and badge — so the first slide is simply the one
+that opens: it is the piece's cover, and the picture an agent calls slide 1. The
+trip's card can sit anywhere too; its words stay the trip's. The **piece's
+badge** stays with the slide that carries it: if another picture now opens the
+piece, its Content tab says so and offers *Bring the badge here* (its opener
+comes too when that slide has none of its own), any other slide's Look tab
+offers *Carry the piece's badge here*, and a badge that is not on the first slide
+is marked `★` on the band.
 
 **How long a slide lasts.** The Content tab's *Slide* section says it as a sum
 — *On screen 6.4 s: Virée 5.9 s + 0.5 s on the picture* — and names who decides
@@ -1638,31 +1652,37 @@ stop, the recap's beats) the slide grows with it. A slide can instead be
 **Fixed** at a number of **Seconds** — for a reel cut to a beat — and then asks
 one question of a longer opener: **speed it up** to end with the slide (the
 default), or **cut it**, hatched at the end of its cell. The opener is never run
-faster than the time it takes to see a picture (0.35 s on its shortest beat);
-a fixed length under that runs it at that pace and cuts the rest, and says so.
+faster than the time it takes to see a picture or drive a leg (0.35 s on its
+shortest beat — a short drive to a ferry's port is one); a fixed length under
+that runs it at that pace and cuts the rest, and says so.
 The numbers are the suite's sliders: drag, tap, or hold (Enter) to type one.
 
 On the band under the picture the open slide's cell draws its parts — a bright
 rail under the opener, a faint one under the hold, the opener's own end dashed
-when it is sped up, the stretch where Virée is at sea striped blue with a tick where the car drives aboard and off — and its end grip negotiates: past the opener's end it
-drags the hold, inside it the pace, resting on the opener's end and stopping at
-the fastest pace allowed, the cell saying which (*hold 2.5s*, *68%*, *fastest
-35%*). Pressing a grip pauses a playing piece. A clip's cut is its length, so
-trimming a clip fixes it. The badge's exit lands on the slide's end, except on
-a slide too short to let it rest after its entrance, where it simply stays.
+when it is sped up, the stretch where Virée is at sea striped blue with a tick
+where the car drives aboard and off (a cut slide draws only what it keeps) —
+and its end grip negotiates: past the opener's end it drags the hold, inside it
+the pace, resting on the opener's end and stopping at the fastest pace allowed,
+the cell saying which (*hold 2.5s*, *68%*, *fastest 35%*). Under a finger an
+end is also grabbed just outside its cell, a grip held against the band's edge
+slides the band so the slide keeps growing, and an end let go there is brought
+back into view. Pressing a grip pauses a playing piece. A clip's cut is its
+length, so trimming a clip fixes it. The badge's exit lands on the slide's end,
+except on a slide too short to let it rest after its entrance, where it simply
+stays.
 *Goes out as* says whether the slide leaves as a video or an image and why,
 with one verb to deliver the other. A slide may last up to a minute; pieces
 made before this rule keep their length to the frame.
 
 **Any slide can hold what the hook holds.** Being first is what makes a slide
-the hook; what it *carries* is each slide's own. Open a content slide and the
+the hook; what it *carries* is each slide's own. Open another slide and the
 Look tab offers it an **opener** of its own — three legs in one day can be
 three itineraries in one carousel, a Virée halfway through is a second reason
 to keep swiping — plus its own **shades**, and a **badge**: *Off*, a **chapter
 mark** (the piece's badge at about a third of its size, in a corner, its
 words rewritable for that slide — `NOON · 12`) or *Full*. The badge keeps the piece's look on
 every slide it sits on, so a deck still wears one signature. The Content tab
-gives every slide but the closing card free **Text** lines: type, drag one on
+gives every slide but the trip's card free **Text** lines: type, drag one on
 the picture, size it, give it its own ink or the trip's. A line can **blend**
 with the picture under it (multiply, screen, overlay, soft light, difference,
 luminosity) or **mask** it: *Picture in the letters* lays a wash of your
@@ -1778,10 +1798,12 @@ scene, so a second send replaces the first and never touches the grade, the
 trim, the telemetry elements or your own intro. The piece's **shades** go too,
 whole, as the scene's own: the same gradients, arriving and leaving with the
 hook. A shade that follows the badge is sent as the shape it draws at that
-moment, since nothing in the Studio is a badge to follow. When the piece **closes
-with the trip's call to action**, the send also writes that card into the
-project's **outro** — the same closing card the carousel export appends as its
-last slide, appended here after the footage of the reel — under the same
+moment, since nothing in the Studio is a badge to follow. What crosses is the
+slide that carries the piece's badge. When the piece **ends on the trip's call
+to action**, the send also writes that card into the project's **outro** — the
+same card the carousel exports as its last slide, appended here after the
+footage of the reel; a card placed earlier in the piece stays in Trips, and the
+panel says so — under the same
 rules: a resend replaces it, unlinking removes it, and an outro you composed
 yourself in the Studio is never overwritten (the panel tells you the card
 stayed behind instead). The hook picture's **correction** — its exposure,
@@ -2965,6 +2987,23 @@ instance would need a credential of its own, which is not built. The timeline
 and the write-back are built against Winnow's forthcoming API and will be
 re-checked when it lands; the trip bucket is the patch under
 `docs/winnow-patches/` until it does.
+
+### Two tabs, one document
+
+A trip, a Studio project or a Develop roll is edited by **one tab at a time**
+in a browser. The first tab to open it edits it; any other tab shows it read
+only under a band — *Open in another tab — read only here* — refreshed each
+time the editing tab saves (at once if it is on screen, otherwise when you come
+back to it). **Edit here** hands the document over: the editing tab writes what
+it still holds, turns read only, and this one takes it. A tab that does not
+answer within a second and a half has the document taken, and its last unsaved
+edits are dropped rather than written over yours. Closing the editing tab, or
+leaving the document, lets a waiting tab take it by itself. The preset book is
+not opened like a document: every tab reads the stored book before writing it
+and shows the others' changes as they land, so two tabs never drop each other's
+presets. Between devices nothing changes: a document kept on a Winnow is still
+guarded by its revision (the sync pill). Browsers without Web Locks keep the old
+behaviour.
 
 ### Online
 

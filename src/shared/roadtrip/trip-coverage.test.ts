@@ -13,6 +13,7 @@ import type { IsoDate } from './trip-days';
 import { DEFAULT_CTA } from './cta-slide';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 import {
+  badgeSlideFrom,
   defaultPostBadge,
   type PostKind,
   type TripDoc,
@@ -33,10 +34,8 @@ const post = (
   title: `post ${seq}`,
   projectId: null,
   grade: null,
-  media: null,
   badge: defaultPostBadge(opts.kind ?? 'photo'),
-  slides: [],
-  includeCta: false,
+  slides: [badgeSlideFrom(null)],
   publishedAt: opts.published ? 1_700_000_000_000 : null,
   createdAt: 1_600_000_000_000,
 });

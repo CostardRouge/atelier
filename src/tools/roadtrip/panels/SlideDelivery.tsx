@@ -99,7 +99,7 @@ export default function SlideDelivery({ slide, animated, clipSeconds, clip, onMe
           : 'the slide’s ceiling'
         : length.owner === 'fixed' && length.over === 'cut'
           ? 'you asked to cut it'
-          : `faster would show a picture for less than ${FIT_FLOOR_SECONDS} s`;
+          : `faster would run its shortest step, a picture or a leg, under ${FIT_FLOOR_SECONDS} s`;
       return `${run}, its last ${s1(timing.cut)} cut — ${why}.`;
     }
     return `${run} + ${s1(timing.hold)} on the picture.`;
@@ -172,7 +172,7 @@ export default function SlideDelivery({ slide, animated, clipSeconds, clip, onMe
             label="Pace"
             hint={
               timing.floored
-                ? `${opener} runs at ${percent(timing.scale)}, its fastest: no picture is shown for less than ${FIT_FLOOR_SECONDS} s.`
+                ? `${opener} runs at ${percent(timing.scale)}, its fastest: no picture or leg lasts under ${FIT_FLOOR_SECONDS} s.`
                 : paceId === ''
                   ? `${percent(length.pace)}, set on the band.`
                   : undefined

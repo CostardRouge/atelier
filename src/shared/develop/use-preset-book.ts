@@ -43,6 +43,7 @@ import {
   putSyncRecord,
 } from './roll-store';
 import { newRollId } from './roll-types';
+import { onDocMessage, postDocMessage } from '../sources/doc-channel';
 
 /**
  * The preset book, LIVE — one module-level state every Develop host reads:
@@ -92,9 +93,29 @@ function schedulePush() {
   }, REMOTE_IDLE_MS + 50);
 }
 
+/**
+ * The book as the STORE holds it, when another tab of this browser wrote it
+ * since this one last read — taken into this tab's state first. Every edit
+ * starts from it, so two tabs adding presets never drop each other's (DATA-02
+ * of the audit: the book is a list that merges, not a document one tab opens,
+ * so it reads before it writes rather than holding a lock).
+ */
+async function latest(): Promise<PresetBook | null> {
+  if (!state.book) return null;
+  const stored = await getPresetBook();
+  const held = state.book;
+  if (held && stored && stored.id === held.id && stored.updatedAt > held.updatedAt) {
+    emit({ ...state, book: stored });
+    return stored;
+  }
+  return held;
+}
+
 /** Write the book here, and mark it dirty for its instance when it is kept on one. */
 async function commit(book: PresetBook) {
   await putPresetBook(book);
+  // The other tabs show it at once (`latest`).
+  postDocMessage({ type: 'book', updatedAt: book.updatedAt });
   if (!isRemoteSource(book.sourceId)) {
     emit({ book, record: null });
     return;
@@ -224,6 +245,9 @@ export function ensurePresetBook(): Promise<void> {
       await commit(book);
     }
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onHidden);
+    onDocMessage((m) => {
+      if (m.type === 'book') void latest();
+    });
     await resumeRemote();
   })();
   return loading;
@@ -237,23 +261,26 @@ export async function presetsNow(): Promise<readonly DevelopPreset[]> {
 
 export async function saveToPresetBook(name: string, settings: DevelopSettings, look: SavedGrade | null = null) {
   await ensurePresetBook();
-  if (!state.book) return;
-  const next = savePresetInBook(state.book, name, settings, newRollId(), Date.now(), look);
-  if (next !== state.book) await commit(next);
+  const base = await latest();
+  if (!base) return;
+  const next = savePresetInBook(base, name, settings, newRollId(), Date.now(), look);
+  if (next !== base) await commit(next);
 }
 
 export async function cloneInPresetBook(id: string, name: string) {
   await ensurePresetBook();
-  if (!state.book) return;
-  const next = clonePresetInBook(state.book, id, name, newRollId());
-  if (next !== state.book) await commit(next);
+  const base = await latest();
+  if (!base) return;
+  const next = clonePresetInBook(base, id, name, newRollId());
+  if (next !== base) await commit(next);
 }
 
 export async function removeFromPresetBook(id: string) {
   await ensurePresetBook();
-  if (!state.book) return;
-  const next = removePresetFromBook(state.book, id);
-  if (next !== state.book) await commit(next);
+  const base = await latest();
+  if (!base) return;
+  const next = removePresetFromBook(base, id);
+  if (next !== base) await commit(next);
 }
 
 /** Who signs a delivered picture, read once the book has loaded — the agent's door to `useDeliveryIdentity`. */
@@ -265,9 +292,10 @@ export async function identityNow(): Promise<DeliveryIdentity> {
 /** Sign delivered pictures as `identity` — written to the book, and so to every device that finds it. */
 export async function setDeliveryIdentity(identity: DeliveryIdentity) {
   await ensurePresetBook();
-  if (!state.book) return;
-  const next = withIdentity(state.book, identity);
-  if (next !== state.book) await commit(next);
+  const base = await latest();
+  if (!base) return;
+  const next = withIdentity(base, identity);
+  if (next !== base) await commit(next);
 }
 
 /**
