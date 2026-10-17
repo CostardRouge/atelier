@@ -3438,9 +3438,11 @@ the rest folds behind **N more**, remembered in this browser.
   itself (or the text colour, the accent, white, black); no backing, a shadow
   or a plate; its size; the maker written in front of a bare model (DJI by
   default); and, name by name, which words are light (a tap on a word). The
-  logo is **yours to import** — an SVG or a transparent PNG from your own
-  files, kept on this device only and never in a preset — drawn in the ink
-  or as the file is; Atelier ships no maker's logo, and without one the
+  logo is **yours to import** — an SVG (one copied out of a web page, with
+  no namespace or no size, included), or a PNG or JPEG whose plain background
+  — white, any one colour, or the grey checkerboard image sites bake in — is
+  taken out (a switch keeps it), from your own files, kept on this device
+  only and never in a preset — drawn in the ink or as the file is; Atelier ships no maker's logo, and without one the
   maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits — under the clock by default, or in a spot
