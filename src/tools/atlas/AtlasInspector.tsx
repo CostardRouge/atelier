@@ -448,11 +448,13 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       <Slider label="Size" value={s.head.size} min={0} max={12} step={0.1} format={(v) => (v === 0 ? 'hidden' : `${v.toFixed(1)} px`)} onChange={(v) => head({ size: v })} />
       <Slider label="Pulse" value={s.head.pulse} min={0} max={1} step={0.01} format={pct} onChange={(v) => head({ pulse: v })} />
       <Slider label="Ripples" value={s.head.ripple} min={0} max={1} step={0.01} format={pct} onChange={(v) => head({ ripple: v })} hint="A ring that spreads where a flight takes off and lands." />
+      {s.head.ripple > 0 && <Slider label="Ripple size" value={s.head.rippleSize} min={0.3} max={3} step={0.05} format={pct} onChange={(v) => head({ rippleSize: v })} />}
       <AtlasMore id="atlas.heads">
         <Slider label="Pulse rate" value={s.head.pulseRate} min={0.1} max={5} step={0.1} format={(v) => `${v.toFixed(1)} /s`} onChange={(v) => head({ pulseRate: v })} />
         <Slider label="Halo" value={s.head.halo} min={0} max={1} step={0.01} format={pct} onChange={(v) => head({ halo: v })} />
         <Slider label="Altitude" value={s.head.lift} min={0} max={150} step={1} format={(v) => (v === 0 ? 'flat' : `${v} px/100 m`)} onChange={(v) => head({ lift: v })} hint="Lift each line by its height above take-off — tilt the camera to see it as relief." />
         {s.head.lift > 0 && <SwitchRow label="Shadow on the ground" checked={s.head.shadow} onChange={(v) => head({ shadow: v })} />}
+        {s.head.lift > 0 && s.head.shadow && <Slider label="Shadow size" value={s.head.shadowSize} min={0.3} max={3} step={0.05} format={pct} onChange={(v) => head({ shadowSize: v })} />}
         {s.head.lift > 0 && <SwitchRow label="Thread from the drone to its shadow" checked={s.head.tether} onChange={(v) => head({ tether: v })} />}
       </AtlasMore>
     </InspectorSection>
@@ -537,11 +539,15 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         {s.map.grid !== 'off' && <input type="color" aria-label="Grid colour" value={s.map.gridColour} onChange={(e) => map({ gridColour: e.target.value })} className={swatchClass} />}
       </FieldRow>
       {s.map.grid !== 'off' && <Slider label="Grid shows" value={s.map.gridStrength} min={0.1} max={1} step={0.05} format={pct} onChange={(v) => map({ gridStrength: v })} />}
+      {s.map.grid !== 'off' && <Slider label="Grid spacing" value={s.map.gridStep} min={0.25} max={4} step={0.05} format={pct} onChange={(v) => map({ gridStep: v })} />}
+      {s.map.grid !== 'off' && <Slider label={s.map.grid === 'dots' ? 'Dot size' : 'Line weight'} value={s.map.gridWeight} min={0.3} max={4} step={0.05} format={pct} onChange={(v) => map({ gridWeight: v })} />}
       <Slider label="Vignette" value={s.map.vignette} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ vignette: v })} />
       <AtlasMore id="atlas.map">
         <Colour label="Ground" value={s.map.background} onChange={(v) => map({ background: v })} />
         {s.map.land !== 'off' && <Colour label="Land colour" value={s.map.landColour} onChange={(v) => map({ landColour: v })} />}
+        {s.map.land !== 'off' && <Slider label="Coast width" value={s.map.coastWidth} min={0.3} max={4} step={0.05} format={pct} onChange={(v) => map({ coastWidth: v })} />}
         <SwitchRow label="Place names on the map" checked={s.map.labels} onChange={(v) => map({ labels: v })} />
+        {s.map.labels && <Slider label="Place names size" value={s.map.labelSize} min={0.4} max={3} step={0.05} format={pct} onChange={(v) => map({ labelSize: v })} />}
       </AtlasMore>
     </InspectorSection>
   );

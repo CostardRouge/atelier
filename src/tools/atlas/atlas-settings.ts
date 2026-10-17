@@ -73,6 +73,10 @@ export interface HeadSettings {
   shadow: boolean;
   /** With a lift: a thread from the head down to its shadow. */
   tether: boolean;
+  /** The take-off and landing ring's reach, times its default. */
+  rippleSize: number;
+  /** The shadow on the ground (its trace and the dot under the head), times its default. */
+  shadowSize: number;
 }
 
 export interface ColourSettings {
@@ -96,12 +100,20 @@ export interface MapSettings {
   gridColour: string;
   /** How strongly the grid shows, 0.1..1. */
   gridStrength: number;
+  /** The grid's spacing, times its default (about 90 px on a 1080 frame). */
+  gridStep: number;
+  /** The grid's lines and dots, times their default thickness. */
+  gridWeight: number;
+  /** The coastline's line, times its default thickness. */
+  coastWidth: number;
   vignette: number;
   tileTone: TileTone;
   /** How much of the background colour is laid over the tiles, 0..1. */
   tileDim: number;
   /** Place names over the map. */
   labels: boolean;
+  /** Their size, times the default. */
+  labelSize: number;
 }
 
 export interface CameraSettings {
@@ -244,7 +256,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     hold: 2,
   },
   trail: { length: 0.18, taper: 0.7, width: 2.4, smooth: true, afterglow: 0.35, decay: 0, ghost: 0.32, ghostWidth: 1.3 },
-  head: { size: 3.2, pulse: 0.35, pulseRate: 1.2, ripple: 0.5, halo: 0.6, lift: 0, shadow: true, tether: true },
+  head: { size: 3.2, pulse: 0.35, pulseRate: 1.2, ripple: 0.5, halo: 0.6, lift: 0, shadow: true, tether: true, rippleSize: 1, shadowSize: 1 },
   colour: { by: 'single', palette: 'perth', trail: '#5fd3e6', head: '#ffffff', ghost: '#6d4bd8', glow: 0.55, additive: true },
   map: {
     background: '#1e1f26',
@@ -253,10 +265,14 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     grid: 'off',
     gridColour: '#2a2840',
     gridStrength: 1,
+    gridStep: 1,
+    gridWeight: 1,
+    coastWidth: 1,
     vignette: 0.35,
     tileTone: 'night',
     tileDim: 0.45,
     labels: true,
+    labelSize: 1,
   },
   camera: {
     frame: 'all',
@@ -643,6 +659,8 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       halo: num(h.halo, d.head.halo, 0, 1),
       lift: num(h.lift, d.head.lift, 0, 200),
       shadow: bool(h.shadow, d.head.shadow),
+      rippleSize: num(h.rippleSize, d.head.rippleSize, 0.3, 3),
+      shadowSize: num(h.shadowSize, d.head.shadowSize, 0.3, 3),
       tether: bool(h.tether, d.head.tether),
     },
     colour: {
@@ -661,10 +679,14 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       grid: oneOf(m.grid, GRIDS, d.map.grid),
       gridColour: hex(m.gridColour, d.map.gridColour),
       gridStrength: num(m.gridStrength, d.map.gridStrength, 0.1, 1),
+      gridStep: num(m.gridStep, d.map.gridStep, 0.25, 4),
+      gridWeight: num(m.gridWeight, d.map.gridWeight, 0.3, 4),
+      coastWidth: num(m.coastWidth, d.map.coastWidth, 0.3, 4),
       vignette: num(m.vignette, d.map.vignette, 0, 1),
       tileTone: oneOf(m.tileTone, TONES, d.map.tileTone),
       tileDim: num(m.tileDim, d.map.tileDim, 0, 1),
       labels: bool(m.labels, d.map.labels),
+      labelSize: num(m.labelSize, d.map.labelSize, 0.4, 3),
     },
     camera: {
       frame: oneOf(cam.frame, FRAMES, d.camera.frame),

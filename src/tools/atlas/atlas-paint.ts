@@ -324,7 +324,7 @@ function paintLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   const y = Math.floor(rect.y);
   const w = Math.ceil(rect.x + rect.w) - x;
   const h = Math.ceil(rect.y + rect.h) - y;
-  const key = [m.a, m.b, m.c, m.d, m.e - x, m.f - y, w, h, map.land, map.landColour, unit, pxPerWorld].join(',');
+  const key = [m.a, m.b, m.c, m.d, m.e - x, m.f - y, w, h, map.land, map.landColour, map.coastWidth, unit, pxPerWorld].join(',');
   const held = landRasters.get(ctx.canvas);
   const same = held !== undefined && held.key === key && held.land === scene.land;
   if (same && held.surface) {
@@ -356,7 +356,7 @@ function drawLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPer
   ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
   ctx.fillStyle = map.landColour;
   ctx.strokeStyle = map.landColour;
-  ctx.lineWidth = (fill ? 0.8 : 1.4) * unit / pxPerWorld;
+  ctx.lineWidth = ((fill ? 0.8 : 1.4) * map.coastWidth * unit) / pxPerWorld;
   ctx.lineJoin = 'round';
   for (const ring of ringsOf(scene.land)) {
     if (!meets(ring.box, box)) continue;
@@ -370,7 +370,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   const { map } = scene.settings;
   if (map.grid === 'off') return;
   // A power-of-two step that lands near 90 px on a 1080 frame.
-  const want = (90 * unit) / pxPerWorld;
+  const want = (90 * unit * map.gridStep) / pxPerWorld;
   const step = 2 ** Math.round(Math.log2(want));
   const x0 = Math.floor(box.x0 / step) * step;
   const y0 = Math.floor(box.y0 / step) * step;
@@ -382,7 +382,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   ctx.globalAlpha *= map.gridStrength;
   if (map.grid === 'lines') {
     ctx.strokeStyle = map.gridColour;
-    ctx.lineWidth = Math.max(0.5, 0.8 * unit);
+    ctx.lineWidth = Math.max(0.5, 0.8 * unit * map.gridWeight);
     ctx.beginPath();
     for (let c = 0; c < cols; c++) {
       const x = x0 + c * step;
@@ -401,7 +401,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
     ctx.stroke();
   } else {
     ctx.fillStyle = map.gridColour;
-    const r = Math.max(0.8, 1.3 * unit);
+    const r = Math.max(0.8, 1.3 * unit * map.gridWeight);
     for (let c = 0; c < cols; c++) {
       for (let k = 0; k < rows; k++) {
         const [x, y] = px(x0 + c * step, y0 + k * step);
@@ -415,7 +415,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
 function paintLabels(ctx: Ctx2D, scene: PaintScene, m: Affine, unit: number, rect: Rect): void {
   if (!scene.settings.map.labels) return;
   const ink = parseHex(scene.settings.hud.theme.style.color);
-  const size = Math.round(12.5 * unit * scene.settings.hud.scale);
+  const size = Math.round(12.5 * unit * scene.settings.hud.scale * scene.settings.map.labelSize);
   ctx.save();
   ctx.font = `500 ${size}px 'JetBrains Mono', monospace`;
   ctx.textAlign = 'center';
@@ -427,7 +427,7 @@ function paintLabels(ctx: Ctx2D, scene: PaintScene, m: Affine, unit: number, rec
     const wx = (p.box.x0 + p.box.x1) / 2;
     const wy = p.box.y0;
     const x = m.a * wx + m.c * wy + m.e;
-    const y = m.b * wx + m.d * wy + m.f - 14 * unit;
+    const y = m.b * wx + m.d * wy + m.f - 14 * unit * scene.settings.map.labelSize;
     if (x < rect.x - 50 || y < rect.y - 20 || x > rect.x + rect.w + 50 || y > rect.y + rect.h + 20) return;
     const text = name.toUpperCase();
     const w = ctx.measureText(text).width;
@@ -610,7 +610,7 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
       if (count >= 2) {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = rgba(lineColour(scene, fi, now), 0.16 * dim);
-        ctx.lineWidth = width0 * 0.7;
+        ctx.lineWidth = width0 * 0.7 * s.head.shadowSize;
         trace(ctx, count, smooth, true);
         ctx.stroke();
       }
@@ -671,11 +671,11 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
       const ripple = s.head.ripple;
       if (ripple > 0 && st.sinceStart >= 0 && st.sinceStart < RIPPLE_S) {
         const p = positionAt(f, 0);
-        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceStart / RIPPLE_S, ripple, unit, lineColour(scene, fi, 0), dim, bright);
+        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceStart / RIPPLE_S, ripple, unit * s.head.rippleSize, lineColour(scene, fi, 0), dim, bright);
       }
       if (ripple > 0 && st.sinceEnd >= 0 && st.sinceEnd < RIPPLE_S) {
         const p = positionAt(f, f.duration);
-        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceEnd / RIPPLE_S, ripple * 0.7, unit, lineColour(scene, fi, f.duration), dim, bright);
+        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceEnd / RIPPLE_S, ripple * 0.7, unit * s.head.rippleSize, lineColour(scene, fi, f.duration), dim, bright);
       }
       if (st.phase !== 'flying' || s.head.size <= 0) continue;
       const p = positionAt(f, st.flightT);
@@ -693,7 +693,7 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
         ctx.stroke();
         ctx.fillStyle = rgba(headColour, 0.4 * dim);
         ctx.beginPath();
-        ctx.ellipse(x, gy, 2.2 * unit, 1.2 * unit * s.camera.tilt, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, gy, 2.2 * unit * s.head.shadowSize, 1.2 * unit * s.head.shadowSize * s.camera.tilt, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       // Each head breathes on its own phase, so a swarm shimmers instead of blinking.
