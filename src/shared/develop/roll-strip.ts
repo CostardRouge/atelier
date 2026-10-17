@@ -223,6 +223,79 @@ export interface StripLayout {
   columns: number;
 }
 
+/**
+ * Where a picture carried over a layout would land (item 29): the SLOT — an
+ * index among the layout's cells, `cells.length` past the last — and the bar
+ * that says it, in layout pixels. The point is first given a ROW (the one it
+ * is over, else the nearest), then a side within it: the half of the cell
+ * across the row's own flow, and on a row of one cell — a column, a lone
+ * panorama — the half of it up the page. Null for an empty layout.
+ */
+export interface StripDrop {
+  slot: number;
+  bar: { x: number; y: number; w: number; h: number };
+}
+
+/** How thick the drop bar is drawn. */
+export const DROP_BAR = 3;
+
+export function stripDrop(cells: readonly StripCell[], point: { x: number; y: number }): StripDrop | null {
+  if (cells.length === 0) return null;
+  // Rows: runs of cells laid at one height, in layout order.
+  const rows: { from: number; to: number; top: number; bottom: number }[] = [];
+  cells.forEach((c, i) => {
+    const row = rows[rows.length - 1];
+    if (row && Math.abs(cells[row.from].y - c.y) < 0.5) {
+      row.to = i;
+      row.bottom = Math.max(row.bottom, c.y + c.h + c.cap);
+    } else rows.push({ from: i, to: i, top: c.y, bottom: c.y + c.h + c.cap });
+  });
+  const row = rows.reduce((best, r) => (rowDistance(r, point.y) < rowDistance(best, point.y) ? r : best), rows[0]);
+  const height = row.bottom - row.top;
+  if (row.from === row.to) {
+    const c = cells[row.from];
+    const before = point.y < c.y + (c.h + c.cap) / 2;
+    return {
+      slot: before ? row.from : row.from + 1,
+      bar: { x: c.x, y: before ? c.y - DROP_BAR : c.y + c.h + c.cap, w: c.w, h: DROP_BAR },
+    };
+  }
+  let slot = row.to + 1;
+  for (let i = row.from; i <= row.to; i++) {
+    if (point.x < cells[i].x + cells[i].w / 2) {
+      slot = i;
+      break;
+    }
+  }
+  // The bar stands in the gap the slot names: before its cell, or after the row's last.
+  const x =
+    slot > row.to
+      ? cells[row.to].x + cells[row.to].w
+      : slot === row.from
+        ? cells[slot].x - DROP_BAR
+        : (cells[slot - 1].x + cells[slot - 1].w + cells[slot].x - DROP_BAR) / 2;
+  return { slot, bar: { x, y: row.top, w: DROP_BAR, h: height } };
+}
+
+function rowDistance(row: { top: number; bottom: number }, y: number): number {
+  return y < row.top ? row.top - y : y > row.bottom ? y - row.bottom : 0;
+}
+
+/**
+ * The slot a drop chose, as the picture it lands BESIDE (`RollMoveAnchor`):
+ * the first shown picture from the slot on that is not itself moving, else
+ * the last before it. Null where every picture shown is moving.
+ */
+export function dropAnchor(
+  shownIds: readonly string[],
+  moving: ReadonlySet<string>,
+  slot: number,
+): { before: string } | { after: string } | null {
+  for (let i = slot; i < shownIds.length; i++) if (!moving.has(shownIds[i])) return { before: shownIds[i] };
+  for (let i = Math.min(slot, shownIds.length) - 1; i >= 0; i--) if (!moving.has(shownIds[i])) return { after: shownIds[i] };
+  return null;
+}
+
 /** The middle aspect of a roll — what the band's own height is sized against, so it does not move from one picture to the next. */
 export function medianAspect(items: readonly StripItem[]): number {
   if (items.length === 0) return 1.5;

@@ -380,6 +380,7 @@ export default function PictureWorkbench({
   onSelectAll,
   onEscape,
   onBand,
+  onMovePicture,
   onSheet,
   onThumbs,
   focused = false,
@@ -498,6 +499,8 @@ export default function PictureWorkbench({
   onEscape?: () => boolean;
   /** `B` — the band folded to its rail ↔ back to its size. */
   onBand?: () => void;
+  /** ⌥← / ⌥→ — the open picture carried one place along the band (item 29). */
+  onMovePicture?: (step: 1 | -1) => void;
   /** `G` — the contact sheet over the stage ↔ closed. */
   onSheet?: () => void;
   /** The picture alone (`F`): the inspector is not drawn and the ⤢ verb says so. */
@@ -1520,8 +1523,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
   // What the next writes are BY, when not the hand: the `Auto` switch run as
   // the picture opened sets it before applying and lets it go once the
@@ -1949,6 +1952,12 @@ export default function PictureWorkbench({
           if (!callbacks.current.onSelectAll) return;
           e.preventDefault();
           callbacks.current.onSelectAll();
+          return;
+        case 'move-earlier':
+        case 'move-later':
+          if (!callbacks.current.onMovePicture) return;
+          e.preventDefault();
+          callbacks.current.onMovePicture(action === 'move-later' ? 1 : -1);
           return;
         case 'band':
           if (!callbacks.current.onBand) return;

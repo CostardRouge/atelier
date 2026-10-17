@@ -169,6 +169,8 @@ export interface EditorKeyPress {
 export type EditorKeyAction =
   | 'previous'
   | 'next'
+  | 'move-earlier'
+  | 'move-later'
   | 'hold'
   | 'zoom'
   | 'copy'
@@ -212,7 +214,7 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
 
 /**
  * What a key press means in the editor, or null when it belongs to someone
- * else. ←/→ move along the strip, `\` holds "before" (its release is the
+ * else. ←/→ move along the strip, ⌥←/⌥→ move the open picture IN it, `\` holds "before" (its release is the
  * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
@@ -230,7 +232,14 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * swept), a held `\` does not re-press.
  */
 export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
-  if (press.altKey) return null;
+  // ⌥← / ⌥→ carry the open picture one place along the band — the keyboard's
+  // twin of dragging it (item 29). Every other ⌥ chord is someone else's.
+  if (press.altKey) {
+    if (press.metaKey || press.ctrlKey || press.shiftKey || press.targetTypes) return null;
+    if (press.key === 'ArrowLeft') return 'move-earlier';
+    if (press.key === 'ArrowRight') return 'move-later';
+    return null;
+  }
   const mod = press.metaKey || press.ctrlKey;
   if (mod) {
     // A chord yields only to a field holding TEXT: a slider left focused by

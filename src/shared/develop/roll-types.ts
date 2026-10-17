@@ -857,6 +857,91 @@ export function movePicture(roll: RollDoc, from: number, to: number, now: number
   return { ...roll, pictures, updatedAt: now };
 }
 
+/**
+ * Where moved pictures land (item 29): beside a picture that stays, or at
+ * either end of the ROLL. A drop on a filtered band names its neighbour,
+ * never an index — the pictures the band hides keep their own places.
+ */
+export type RollMoveAnchor = { before: string } | { after: string } | 'start' | 'end';
+
+/**
+ * Move SEVERAL pictures at once, in the order they hold on the roll, to land
+ * together at `anchor` — a drag of the selection keeps its pictures' own
+ * order, whichever was grabbed. An anchor that is itself moving, or off the
+ * roll, moves nothing; a move that leaves the order as it was hands back the
+ * same roll, so no undo step is made of it.
+ */
+export function movePicturesTo(roll: RollDoc, ids: readonly string[], anchor: RollMoveAnchor, now: number = Date.now()): RollDoc {
+  const moving = new Set(ids);
+  const moved = roll.pictures.filter((p) => moving.has(p.id));
+  if (moved.length === 0) return roll;
+  const rest = roll.pictures.filter((p) => !moving.has(p.id));
+  let at: number;
+  if (anchor === 'start') at = 0;
+  else if (anchor === 'end') at = rest.length;
+  else {
+    const near = 'before' in anchor ? anchor.before : anchor.after;
+    const i = rest.findIndex((p) => p.id === near);
+    if (i < 0) return roll;
+    at = 'before' in anchor ? i : i + 1;
+  }
+  const pictures = [...rest.slice(0, at), ...moved, ...rest.slice(at)];
+  return sameOrder(pictures, roll.pictures) ? roll : { ...roll, pictures, updatedAt: now };
+}
+
+/** The orders a roll can be put in (item 29): by file name, by date, or turned round. */
+export type RollSort = 'name' | 'date' | 'reverse';
+
+const NAME_ORDER = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
+/**
+ * The roll's pictures in a new ORDER — a verb that rewrites the roll, undone
+ * by ⌘Z, never a view of it: the band, ←/→, the sheet and the agent read one
+ * order. `name` is natural (`DJI_0009` before `DJI_0010`); `date` is the
+ * file's own date, oldest first — the capture instant for a picture fetched
+ * from an instance (`captureMtime`), the file's for a local one — with the
+ * name as its tie-break; `reverse` turns the roll round. A file's variants
+ * share its keys and stay together after it in their own order, and turning
+ * round keeps each family in its order too. Already in that order: the same
+ * roll back.
+ */
+export function sortRoll(roll: RollDoc, by: RollSort, now: number = Date.now()): RollDoc {
+  const pictures = sortedPictures(roll.pictures, by);
+  return sameOrder(pictures, roll.pictures) ? roll : { ...roll, pictures, updatedAt: now };
+}
+
+/** Whether `sortRoll(roll, by)` would change nothing — the panel greys that row. */
+export function rollSortedBy(pictures: readonly RollPicture[], by: RollSort): boolean {
+  if (by === 'reverse') return families(pictures).length < 2;
+  return sameOrder(sortedPictures(pictures, by), pictures);
+}
+
+function sortedPictures(pictures: readonly RollPicture[], by: RollSort): RollPicture[] {
+  if (by === 'reverse') return families(pictures).reverse().flat();
+  const byName = (a: RollPicture, b: RollPicture) => NAME_ORDER.compare(a.ref.name, b.ref.name);
+  const compare =
+    by === 'name'
+      ? (a: RollPicture, b: RollPicture) => byName(a, b) || a.ref.lastModified - b.ref.lastModified
+      : (a: RollPicture, b: RollPicture) => a.ref.lastModified - b.ref.lastModified || byName(a, b);
+  // Stable: a file's variants compare equal and keep their order.
+  return [...pictures].sort(compare);
+}
+
+/** Runs of pictures sharing one file — an original and the variants made after it. */
+function families(pictures: readonly RollPicture[]): RollPicture[][] {
+  const out: RollPicture[][] = [];
+  for (const p of pictures) {
+    const last = out[out.length - 1];
+    if (last && sameMediaRef(last[0].ref, p.ref)) last.push(p);
+    else out.push([p]);
+  }
+  return out;
+}
+
+function sameOrder(a: readonly RollPicture[], b: readonly RollPicture[]): boolean {
+  return a.length === b.length && a.every((p, i) => p === b[i]);
+}
+
 /** One picture's own fields changed; its id and ref never move. */
 export function patchPicture(
   roll: RollDoc,
