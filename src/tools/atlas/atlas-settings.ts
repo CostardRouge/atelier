@@ -124,6 +124,12 @@ export interface CameraSettings {
   picked: string[];
 }
 
+/** The overlay pieces that take a size of their own. */
+export type PieceSize = 'dates' | 'stats' | 'clock' | 'counter' | 'curve' | 'card' | 'credits';
+export const PIECE_SIZES: readonly PieceSize[] = ['dates', 'stats', 'clock', 'counter', 'curve', 'card', 'credits'];
+/** A piece's size, times its default. */
+export const PIECE_SIZE = { min: 0.4, max: 3 } as const;
+
 export interface HudSettings {
   /**
    * The overlay's text style — the Studio's and Trips' title styles
@@ -163,6 +169,8 @@ export interface HudSettings {
   spotCard: boolean;
   spotCardAt: Spot;
   credit: boolean;
+  /** Each overlay piece's own size, times its default (the title's is `titleSize`, the sticker's in px). */
+  sizes: Record<PieceSize, number>;
   /** Where the credits sit: under the clock (wherever it is), or a spot of their own. */
   creditsAt: Spot | 'clock';
   /** Pieces dragged off their spot on the stage, where they were let go (`atlas-place.ts`). */
@@ -288,6 +296,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     spotCard: true,
     spotCardAt: 'tr',
     credit: true,
+    sizes: { dates: 1, stats: 1, clock: 1, counter: 1, curve: 1, card: 1, credits: 1 },
     creditsAt: 'clock',
     free: {},
   },
@@ -710,6 +719,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       spotCard: bool(u.spotCard, d.hud.spotCard),
       spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
+      sizes: Object.fromEntries(PIECE_SIZES.map((k) => [k, num(obj(u.sizes)[k], d.hud.sizes[k], PIECE_SIZE.min, PIECE_SIZE.max)])) as Record<PieceSize, number>,
       creditsAt: oneOf(u.creditsAt, [...SPOTS, 'clock'] as const, d.hud.creditsAt),
       free: Object.fromEntries(
         PIECES.flatMap((piece) => {

@@ -884,7 +884,8 @@ export function overlayLayout(
 
   if (hud.title) put('title', { kind: 'text', text: hud.title, size: 58 * z, gapAfter: hud.subtitle ? 0 : 0.25, owner: 'title' });
   if (hud.subtitle) put('title', { kind: 'text', text: hud.subtitle, size: 26 * z, weight: 500, gapAfter: 0.5, owner: 'title' });
-  if (hud.dates && scene.dateRange) put('dates', { kind: 'text', text: scene.dateRange, size: 22, label: true, gapAfter: 0.25, owner: 'clock' });
+  const sz = hud.sizes;
+  if (hud.dates && scene.dateRange) put('dates', { kind: 'text', text: scene.dateRange, size: 22 * sz.dates, label: true, gapAfter: 0.25, owner: 'clock' });
   if (hud.drone !== 'off') {
     const names = new Set<string>();
     scene.flights.forEach((_, i) => {
@@ -905,12 +906,12 @@ export function overlayLayout(
     const alt = metric ? `${Math.round(p.alt)} m` : `${Math.round(p.alt * 3.28084)} ft`;
     const speed = metric ? `${Math.round(p.speed * 3.6)} km/h` : `${Math.round((p.speed * 3.6) / 1.609344)} mph`;
     const dist = metric ? `${live.km.toFixed(2)} km` : `${(live.km / 1.609344).toFixed(2)} mi`;
-    const blocks: Block[] = [{ kind: 'text', text: f.name, size: 28, weight: 600 }];
+    const blocks: Block[] = [{ kind: 'text', text: f.name, size: 28 * sz.card, weight: 600 }];
     const when = f.startWall !== null ? `${formatDate(f.startWall)} · ${formatTimeOfDay(f.startWall)}` : null;
-    if (when) blocks.push({ kind: 'text', text: when, size: 18, label: true });
+    if (when) blocks.push({ kind: 'text', text: when, size: 18 * sz.card, label: true });
     const drone = scene.aircraft[spot.flight];
-    if (drone) blocks.push({ kind: 'text', text: drone, size: 18, label: true, accent: true });
-    blocks.push({ kind: 'row', size: 30, items: [
+    if (drone) blocks.push({ kind: 'text', text: drone, size: 18 * sz.card, label: true, accent: true });
+    blocks.push({ kind: 'row', size: 30 * sz.card, items: [
       { value: alt, label: 'Height' },
       { value: speed, label: 'Speed' },
       { value: dist, label: 'Flown' },
@@ -920,13 +921,13 @@ export function overlayLayout(
 
   const kind = resolvedClock(hud.clock, choreo.mode);
   const lines = frame.poster ? null : clockLines(kind, scene.schedule, t);
-  if (lines?.small) put('clock', { kind: 'text', text: lines.small, size: 28, weight: 500, owner: 'clock' });
-  if (lines) put('clock', { kind: 'text', text: lines.big, size: 100, owner: 'clock' });
+  if (lines?.small) put('clock', { kind: 'text', text: lines.small, size: 28 * sz.clock, weight: 500, owner: 'clock' });
+  if (lines) put('clock', { kind: 'text', text: lines.big, size: 100 * sz.clock, owner: 'clock' });
   if (hud.counter && !frame.poster) {
-    put('clock', { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
+    put('clock', { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28 * sz.counter, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
   }
   if (hud.graph && !frame.poster && scene.activity.length > 1) {
-    put('clock', { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50, owner: 'clock' });
+    put('clock', { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50 * sz.curve, scale: sz.curve, owner: 'clock' });
   }
 
   if (hud.stats.length) {
@@ -937,14 +938,14 @@ export function overlayLayout(
       // Only a counting numeral rolls: a total held still would freeze mid-roll.
       return { value: r.text, label: r.label, odometer: live ? r.odometer : undefined };
     });
-    put('stats', hud.statsLayout === 'row' ? { kind: 'row', items, size: 44, owner: 'stats' } : { kind: 'column', items, size: 32, owner: 'stats' });
+    put('stats', hud.statsLayout === 'row' ? { kind: 'row', items, size: 44 * sz.stats, owner: 'stats' } : { kind: 'column', items, size: 32 * sz.stats, owner: 'stats' });
   }
 
   const credits: string[] = [];
   if (hud.credit) credits.push(`Data: DJI flight telemetry · ${scene.flights.length} flight${scene.flights.length === 1 ? '' : 's'}`);
   // The tiles' licence asks for its credit wherever they are shown — never a switch.
   if (tilesDrawn) credits.push('Map © OpenStreetMap contributors');
-  for (const line of credits) put('credits', { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
+  for (const line of credits) put('credits', { kind: 'text', text: line, size: 14 * sz.credits, weight: 500, owner: 'clock' });
 
   return {
     spots,

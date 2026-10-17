@@ -82,6 +82,8 @@ export interface CurveBlock {
   ends: [string, string];
   /** Height, px on a 1080 short side. */
   size: number;
+  /** Its width and its end labels, times their defaults (absent: 1). */
+  scale?: number;
 }
 
 /** A logo a sticker can draw: any picture a canvas takes, and its width over its height. */
@@ -296,7 +298,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
       case 'column':
         return b.items.length * heightOf(b) * 1.04;
       case 'curve':
-        return b.size * unit + 44 * unit;
+        return b.size * unit + 44 * unit * (b.scale ?? 1);
       case 'sticker': {
         const m = stickerMetrics(b.size * unit, b.backing);
         return b.items.length * m.boxH + (b.items.length - 1) * m.between + (b.gapAfter ?? 0) * m.boxH;
@@ -391,7 +393,7 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
           stickers.push({ block: b, item, x, y: y + i * (m.boxH + m.between), alpha: blockAlpha });
         });
       } else {
-        const w = colW;
+        const w = Math.min(lines.right - lines.left, colW * (b.scale ?? 1));
         const x = align === 'left' ? ax : align === 'center' ? ax - w / 2 : ax - w;
         hit(b, w, h);
         curves.push({ block: b, x, y: y + 6 * unit, w, h: b.size * unit, alpha: blockAlpha });
@@ -469,7 +471,7 @@ function drawCurve(ctx: Ctx2D, b: CurveBlock, x: number, y: number, w: number, h
   ctx.moveTo(x, base + 0.5);
   ctx.lineTo(x + w, base + 0.5);
   ctx.stroke();
-  const label = 16 * unit;
+  const label = 16 * unit * (b.scale ?? 1);
   ctx.font = `500 ${label}px '${theme.style.fontFamily}', 'Space Grotesk', sans-serif`;
   ctx.fillStyle = rgba(ink, 0.6);
   ctx.textBaseline = 'alphabetic';

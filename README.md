@@ -3446,7 +3446,9 @@ the rest folds behind **N more**, remembered in this browser.
   maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits — under the clock by default, or in a spot
-  of their own (*Credits at*), and dragged on their own like every piece.
+  of their own (*Credits at*), and dragged on their own like every piece. Every piece takes a **size** of its own beside where it sits —
+  the title, the dates, the statistics, the clock, the count, the curve, the
+  spotlight card, the credits, the sticker — on top of the overall *Text size*.
 - **Export** (the foot). Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
   rate (30/60), the **social apps' zones** — *Ignore*, or *Keep clear*: every
   word moves out of where Reels, TikTok and Shorts draw their own interface

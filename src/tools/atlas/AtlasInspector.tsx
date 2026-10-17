@@ -26,6 +26,8 @@ import {
   LOOK_PRESETS,
   MOTION_PRESETS,
   SPOTS,
+  PIECE_SIZE,
+  type PieceSize,
   surpriseLook,
   themeWith,
   type AtlasSettings,
@@ -171,6 +173,19 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   }, [layer, setDrawingZone]);
 
   /** A piece's Where row: its spot, or the word that it was placed by hand. */
+  /** A piece's own size, beside where it sits. */
+  const sizeRow = (key: PieceSize, label = 'Size') => (
+    <Slider
+      label={label}
+      value={s.hud.sizes[key]}
+      min={PIECE_SIZE.min}
+      max={PIECE_SIZE.max}
+      step={0.05}
+      format={pct}
+      onChange={(v) => update((cur) => ({ ...cur, hud: { ...cur.hud, sizes: { ...cur.hud.sizes, [key]: v } } }))}
+    />
+  );
+
   const where = (piece: Exclude<PieceId, 'credits'>) => (
     <SpotRow label="Where" value={s.hud[PIECE_SPOT[piece]] as Spot} free={!!s.hud.free[piece]} onChange={(v) => update((cur) => withPlacement(cur, piece, { spot: v }))} />
   );
@@ -795,6 +810,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
     <InspectorSection id="atlas.stats" title="Statistics" marked={s.hud.stats.length > 0} info="What the flights add up to, measured from the tracks: live (the numbers grow as the animation flies) or the totals throughout.">
       <AtlasStatChips label="Statistics shown" value={s.hud.stats} onChange={(v) => hud({ stats: v })} />
       {s.hud.stats.length > 0 && where('stats')}
+      {s.hud.stats.length > 0 && sizeRow('stats')}
       {s.hud.stats.length > 0 && (
         <AtlasMore id="atlas.stats">
           <FieldRow label="Count">
@@ -828,7 +844,9 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           ]}
         />
       </FieldRow>
+      {s.hud.clock !== 'off' && sizeRow('clock', 'Clock size')}
       <SwitchRow label="Count what is flying" checked={s.hud.counter} onChange={(v) => hud({ counter: v })} />
+      {s.hud.counter && sizeRow('counter', 'Count size')}
       <AtlasMore id="atlas.clock">
         {s.hud.counter && (
           <FieldRow label="Words">
@@ -836,6 +854,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           </FieldRow>
         )}
         <SwitchRow label="Activity curve" checked={s.hud.graph} onChange={(v) => hud({ graph: v })} />
+        {s.hud.graph && sizeRow('curve', 'Curve size')}
         <SwitchRow label="Data credit" checked={s.hud.credit} onChange={(v) => hud({ credit: v })} hint="The map's own credit is always written when its tiles are drawn." />
         <FieldRow
           label="Credits at"
@@ -860,6 +879,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             ]}
           />
         </FieldRow>
+        {sizeRow('credits', 'Credits size')}
         {where('clock')}
       </AtlasMore>
     </InspectorSection>
@@ -869,6 +889,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
     <InspectorSection id="atlas.info" title="Dates and the spotlight card" marked={s.hud.dates || s.hud.spotCard} info="The span of the flights shown, and a card for the flight the spotlight follows.">
       <SwitchRow label="Date range" checked={s.hud.dates} onChange={(v) => hud({ dates: v })} hint={p.dateRange ?? 'No flight carries a date.'} hintShown />
       {s.hud.dates && where('dates')}
+      {s.hud.dates && sizeRow('dates', 'Dates size')}
       <SwitchRow
         label="A card for the drone in the spotlight"
         checked={s.hud.spotCard}
@@ -877,6 +898,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         hintShown={!s.camera.spotlight.on}
       />
       {s.hud.spotCard && where('card')}
+      {s.hud.spotCard && sizeRow('card', 'Card size')}
     </InspectorSection>
   );
 

@@ -107,3 +107,7 @@ His ask: rename each drone from the Sticker layer instead of going to the flight
 ## The credits are a piece of their own (2026-10-16)
 
 His ask: place the mandatory credits (data line, © OpenStreetMap) apart from the clock stack. **Decision**: a seventh piece, `credits`, owned by the Clock layer; `hud.creditsAt` is `'clock'` (the default, where every saved atlas keeps them: they ride the clock's stack — its spot or its hand placement) or a spot; dragged, they are held as `hud.free.credits`. The blocks always carry `piece: 'credits'`, so a press on them drags them alone even while they sit under the clock. **How to apply**: a piece that may live inside another's stack routes through `put`'s host (`creditsAt === 'clock'` → the clock's place) and keeps its own `piece` tag; its *Where* row needs the extra «With the clock» choice (`SelectField`, not `SpotRow`).
+
+## Every overlay piece has its own size (2026-10-16)
+
+His audit ask («liste de tous ces éléments où il manquerait un paramètre size»), then «toute la liste, un réglage par élément». **Decision**: `hud.sizes` (dates, stats, clock, counter, curve, card, credits — 0.4–3, default 1) multiplies each block's base size in `overlayLayout`, on top of `hud.scale` (the overall Text size) — the title keeps `titleSize`, the sticker its px size; a curve's `scale` widens it and its end labels too. Each Size row sits beside its piece's *Where*. **How to apply**: a new piece gets a key in `PIECE_SIZES` and its row, never a size baked into the painter alone.
