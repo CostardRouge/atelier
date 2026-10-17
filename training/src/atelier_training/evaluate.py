@@ -70,6 +70,7 @@ def evaluate(
         save_image(drawn[pid], grids_dir / (pid.replace("/", "__") + ".jpg"), quality=88)
     summary["split"] = which_split
     summary["grids"] = shown
+    summary["years"] = by_year(summary["pairs"], {p.id: p.captured for p in chosen})
     (out_dir / f"{which_split}.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     log(f"{which_split}: {len(chosen)} pairs — PSNR {summary['psnr']:.2f} dB, "
         f"ΔE2000 mean {summary['de2000_mean']:.2f} (95th pct {summary['de2000_p95']:.2f}), "
@@ -88,8 +89,26 @@ def evaluate(
     worst = summary.get("groups", [])[:5]
     if len(summary.get("groups", [])) > 1:
         log("worst groups: " + ", ".join(f"{g['group']} ΔE {g['de2000_mean']:.2f}" for g in worst))
+    if summary["years"]:
+        log("by capture year: " + " · ".join(f"{y['year']} ΔE {y['de2000_mean']:.2f} "
+                                             f"(nothing {y['identity_de2000_mean']:.2f}, {y['pairs']} pairs)"
+                                             for y in summary["years"]))
     log(f"grids: {len(shown)} written to {grids_dir}")
     return summary
+
+
+def by_year(rows: list[dict], captured: dict[str, str | None]) -> list[dict]:
+    """The mean ΔE of the rows per year their original was captured, oldest first; rows with no date are left
+    out (FiveK, a local folder). Whether an old style is what the model misses shows here."""
+    years: dict[str, list[dict]] = {}
+    for row in rows:
+        when = captured.get(row["id"])
+        if when and when[:4].isdigit():
+            years.setdefault(when[:4], []).append(row)
+    return [{"year": y, "pairs": len(r),
+             "de2000_mean": float(np.mean([x["de2000_mean"] for x in r])),
+             "identity_de2000_mean": float(np.mean([x["identity_de2000_mean"] for x in r]))}
+            for y, r in sorted(years.items())]
 
 
 def latest_eval(run: Run) -> dict | None:

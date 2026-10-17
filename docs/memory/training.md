@@ -132,6 +132,17 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   lr decay), information the picture does not carry (camera, ISO, hour,
   series — what DevelopNet already reads), FiveK pretraining. How to apply:
   try those before any bigger model, and judge a run on its grids too.
+- **FiveK pretraining helps by ~0.2 ΔE00 only** (2026-10-17, measured on his
+  Mac, MPS 56 ms a step): 60 epochs on 4 999 FiveK pairs (expert C, input =
+  the DNG rendered by rawpy) plateau at 8.5 validation from epoch ~35 (PSNR
+  21.4, below the paper's ~25 dB because the paper's input is Lightroom's
+  neutral render); fine-tuned 60 epochs on his pairs (`configs/finetune.toml`,
+  lr 5e-5, `val_fraction` forced to 0.1 so the split is the earlier runs'):
+  11.31 against 11.46–11.54 from scratch. Not data quantity, then. His own
+  reading: his pairs mix years of styles; `train.since` (pairs captured on or
+  after a date, from each Winnow group's `winnow.json`) and `eval`'s «by
+  capture year» line exist to test exactly that. How to apply: judge a
+  `since` run on ITS validation only — it holds other groups.
 - **The weighing CNN sees the WHOLE picture during training** (`train.
   whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
   training CROP (a quarter of a 512 px picture, at full detail) while eval

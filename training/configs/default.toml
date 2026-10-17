@@ -62,6 +62,7 @@ keep_in_memory = true    # hold the prepared pairs in RAM after the first epoch 
 skip_misaligned = true   # leave out of TRAINING a pair whose edit does not line up with its input (structure < 0.5)
 subset = 0               # >0: train on this many pairs only, scored at every validation — the memorising test
 whole_thumbnail = true   # the weighing CNN sees the WHOLE picture while the LUT learns on a crop (false: the crop)
+since = ""               # "2024" or "2024-06-01": train and validate only on YOUR pairs captured since then (FiveK kept)
 
 # ---- The develop predictor (M6): the picture as shot → DevelopSettings' eleven sliders. ----
 [develop]

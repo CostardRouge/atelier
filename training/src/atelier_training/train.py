@@ -25,7 +25,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 
 from .config import Config, merge
-from .data import Pair, PairDataset, pair_structure, read_index, split
+from .data import Pair, PairDataset, pair_structure, read_index, since_filter, split
 from .device import pick_device
 from .metrics import STRUCTURE_FLOOR, best_global_map, coarse, delta_e2000, score, srgb_to_lab, structure
 from .model.lut3d import AdaptiveLUT
@@ -207,6 +207,11 @@ def train(
         run = Run(folder=folder, config=cfg, device=device)
         state = None
 
+    since = str(tcfg.get("since", "") or "")
+    if since:
+        pairs, older, undated = since_filter(pairs, since)
+        log(f"since {since}: {len(pairs)} pair(s) kept, {older} captured earlier and {undated} with no capture "
+            "date left out of training AND validation")
     train_pairs, val_pairs = split(pairs, float(tcfg.get("val_fraction", 0.1)), int(tcfg.get("seed", 1)))
     left_out: list[Pair] = []
     if bool(tcfg.get("skip_misaligned", True)):
