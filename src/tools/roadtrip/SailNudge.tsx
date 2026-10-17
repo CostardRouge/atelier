@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { loadLandIndex, landIfLoaded } from '../../shared/map/load-terrain';
-import type { LandIndex } from '../../shared/map/terrain';
+import { useMemo } from 'react';
 import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import { seaHops, shouldAskToSail } from '../../shared/roadtrip/sea-hops';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
+import { useLandIndex } from './use-land-index';
 
 /**
  * One question for a trip older than the water rule (2026-10-17, face B of
@@ -24,17 +23,7 @@ export default function SailNudge({
   onOpenVehicle: () => void;
 }) {
   const ask = shouldAskToSail(trip.crossings);
-  const [land, setLand] = useState<LandIndex | null>(() => landIfLoaded());
-  useEffect(() => {
-    if (!ask || land) return;
-    let live = true;
-    loadLandIndex()
-      .then((index) => live && setLand(index))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [ask, land]);
+  const land = useLandIndex(ask);
   const hops = useMemo(
     () => (ask && land ? seaHops(trip.stages, land, trip.crossings) : []),
     [ask, land, trip.stages, trip.crossings],
