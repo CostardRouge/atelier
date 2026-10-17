@@ -4,7 +4,7 @@ import Segmented from '../../shared/ui/Segmented';
 import AtlasMore from './AtlasMore';
 import AtlasStatChips from './AtlasStatChips';
 import type { AtlasSettings } from './atlas-settings';
-import { INTRO_LENGTH, LINE_SIZE, STATS_SIZE, TEXT_SIZE, type DiveFrom, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
+import { INTRO_LENGTH, LINE_SIZE, PIN_SIZE, STATS_SIZE, TEXT_SIZE, type DiveFrom, type IntroBehind, type IntroFit, type IntroInto, type IntroSettings, type IntroStyle, type OutroSettings, type OutroStyle } from './atlas-story';
 
 type Update = (fn: (s: AtlasSettings) => AtlasSettings) => void;
 
@@ -159,6 +159,9 @@ export function IntroSection({ settings: s, update, autoTitle, autoLine, hasStic
       )}
       {on && (
         <AtlasMore id="atlas.intro">
+          {intro.style === 'dive' && (
+            <SliderRow label="Pin size" value={intro.pinSize} min={PIN_SIZE.min} max={PIN_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ pinSize: v })} />
+          )}
           {intro.style === 'title' && (
             <FieldRow label="Behind">
               <Segmented<IntroBehind>
@@ -314,6 +317,9 @@ export function OutroSection({ settings: s, update, hasSticker }: Omit<StoryProp
         <FieldRow label="Last line" align="start">
           <TextAreaField label="The outro's last line" value={outro.line} placeholder="Nothing" onChange={(v) => set({ line: v })} />
         </FieldRow>
+      )}
+      {on && outro.line.trim() && (
+        <SliderRow label="Last line size" value={outro.lineSize} min={LINE_SIZE.min} max={LINE_SIZE.max} step={0.05} format={pct} onChange={(v) => set({ lineSize: v })} />
       )}
       {on && (
         <AtlasMore id="atlas.outro">

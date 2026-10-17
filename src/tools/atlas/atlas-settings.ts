@@ -22,7 +22,7 @@ import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
 import type { SafeMode } from './atlas-safe';
 import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
-import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
+import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, PIN_SIZE, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
@@ -753,6 +753,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       lineSize: num(ii.lineSize, di.lineSize, LINE_SIZE.min, LINE_SIZE.max),
       fit: oneOf(ii.fit, ['wrap', 'shrink'] as const, di.fit),
       diveFrom: oneOf(ii.diveFrom, DIVE_FROMS, di.diveFrom),
+      pinSize: num(ii.pinSize, di.pinSize, PIN_SIZE.min, PIN_SIZE.max),
     },
     outro: {
       style: oneOf(oo.style, ['summary', 'pull', 'fade', 'none'] as const, dO.style),
@@ -764,6 +765,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       columns: oneOf(oo.columns, [2, 3, 4] as const, dO.columns),
       sticker: bool(oo.sticker, dO.sticker),
       line: str(oo.line, dO.line, 200),
+      lineSize: num(oo.lineSize, dO.lineSize, LINE_SIZE.min, LINE_SIZE.max),
     },
   };
 }
