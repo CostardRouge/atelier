@@ -3,6 +3,9 @@ import { filmTextureKey, isSilentTexture, type FilmTexture } from '../../shared/
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
+import { carriedKey, carriedPassesOver, type CarriedEdit } from '../../shared/develop/carried-edit';
+import { carriedRasters, heldCarriedRasters } from '../../shared/develop/carried-rasters';
+import type { RenderPass } from '../../shared/render/graph';
 import { stageFrameSize } from '../../shared/overlay/stage-size';
 import { stageBudget } from '../../shared/media/still-decode';
 import {
@@ -165,6 +168,12 @@ interface BadgeStageProps {
    * so (`render-film.md`).
    */
   film?: FilmTexture | null;
+  /**
+   * The rest of a Develop picture's edit (`DeckSlide.edit`): its perspective,
+   * lens, detail, repair, layers and vignette, drawn as passes around `lut`
+   * over the slide's own picture — a collage's first cell.
+   */
+  edit?: CarriedEdit | null;
   /** How the picture sits in the frame. */
   framing?: Framing | null;
   /**
@@ -326,6 +335,7 @@ export default function BadgeStage({
   qr,
   lut = null,
   film = null,
+  edit = null,
   framing = null,
   onFraming,
   selectedId = null,
@@ -787,13 +797,40 @@ export default function BadgeStage({
     w: number;
     h: number;
     grader: HeldGrader;
+    /** What the carried edit's passes were built from: its key, and whether its masks were in. */
+    edit: string;
   } | null>(null);
   const filmKey = filmTextureKey(film);
+  const editKey = carriedKey(edit);
+  // A carried edit's subject masks arrive after the first paint: the stage
+  // draws without them, then once more when they land.
+  const [rasterSeq, setRasterSeq] = useState(0);
+  /** What the carried edit's passes would be built from now: the edit, and whether its masks are in. */
+  const editStateFor = useCallback(
+    (source: BadgeSource): string => (edit ? `${editKey}|${heldCarriedRasters(edit, source) ? 'in' : 'out'}` : ''),
+    [edit, editKey],
+  );
+  /** The carried edit's passes at the grader's size, and the key they were built under. */
+  const editPassesFor = useCallback(
+    (source: BadgeSource, size: { w: number; h: number }): { key: string; pre: RenderPass[]; passes: RenderPass[] } => {
+      if (!edit) return { key: '', pre: [], passes: [] };
+      const asked = { width: source.width, height: source.height };
+      const key = editStateFor(source);
+      const rasters = heldCarriedRasters(edit, asked);
+      if (!rasters) {
+        void carriedRasters(edit, () => source.image as TexImageSource, asked).then(() => setRasterSeq((n) => n + 1));
+      }
+      // Kernels in the FILE's pixels, drawn at the grader's size.
+      const scaled = { width: size.w, height: size.h, natural: source.natural ?? { width: source.width, height: source.height } };
+      return { key, ...carriedPassesOver(edit, scaled, rasters) };
+    },
+    [edit, editStateFor],
+  );
   const graderFor = useCallback((source: BadgeSource | null): HeldGrader | null => {
     const cur = graderRef.current;
     // A texture with no look is still a render: the node is the only thing
-    // that draws it.
-    if ((!lut && isSilentTexture(film)) || !source || source.width <= 0) {
+    // that draws it — and so is a carried edit.
+    if ((!lut && isSilentTexture(film) && !edit) || !source || source.width <= 0) {
       cur?.grader.dispose();
       graderRef.current = null;
       return null;
@@ -805,6 +842,7 @@ export default function BadgeStage({
       cur.grader.setLut(lut);
       cur.lut = lut;
     }
+    const size = stageFrameSize(source.width, source.height, stageBudget());
     if (cur && cur.lut === lut && cur.w === source.width && cur.h === source.height) {
       // The texture alone moved: SWAP it rather than rebuilding, or the grain
       // slider is a new WebGL2 context per step (`render-core.md`).
@@ -812,16 +850,22 @@ export default function BadgeStage({
         cur.grader.setFilm(film);
         cur.film = filmKey;
       }
+      // The carried edit changed, or its masks came in: its passes swapped.
+      if (cur.film === filmKey && cur.edit !== editStateFor(source) && cur.grader.setPasses) {
+        const next = editPassesFor(source, size);
+        cur.grader.setPasses(next.passes, next.pre);
+        cur.edit = next.key;
+      }
       if (cur.film === filmKey) return cur.grader;
     }
     cur?.grader.dispose();
-    const size = stageFrameSize(source.width, source.height, stageBudget());
+    const passes = editPassesFor(source, size);
     const grader = holdGrades(
-      makeFrameGrader(lut as CubeLut, size.w, size.h, 1, [], [], film),
+      makeFrameGrader(lut as CubeLut, size.w, size.h, 1, passes.passes, passes.pre, film),
     );
-    graderRef.current = { lut, film: filmKey, w: source.width, h: source.height, grader };
+    graderRef.current = { lut, film: filmKey, w: source.width, h: source.height, grader, edit: passes.key };
     return grader;
-  }, [lut, film, filmKey]);
+  }, [lut, film, filmKey, edit, editStateFor, editPassesFor]);
   // One held grader per collage cell, keyed on its cube and its source size —
   // the lead's is `graderFor` above. Disposed with the stage.
   const cellGradersRef = useRef<Map<number, { lut: CubeLut; w: number; h: number; grader: HeldGrader }>>(
@@ -1015,6 +1059,8 @@ export default function BadgeStage({
     cellSeq,
     lut,
     filmKey,
+    editKey,
+    rasterSeq,
     selectedCell,
     groundSeq,
   ]);

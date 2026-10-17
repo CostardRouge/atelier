@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { describeDevelop } from '../../shared/develop/develop';
 import type { SelectionModifiers } from '../../shared/develop/roll-editor';
 import type { PictureAvailability } from '../../shared/develop/roll-media';
@@ -19,6 +20,9 @@ import {
   cellAspect,
   cellsInView,
   columnLayout,
+  dropAnchor,
+  stripDrop,
+  type StripDrop,
   type StripItem,
   type StripKind,
   type StripLayout,
@@ -34,6 +38,7 @@ import {
   pictureLabel,
   variantNumber,
   type PictureEdit,
+  type RollMoveAnchor,
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
@@ -83,6 +88,13 @@ export interface StripCellsProps {
   onDeliver: (id: string, action: DeliverAction) => void;
   /** A variant of this picture as it stands (⌘' on the open one). */
   onVariant: (id: string) => void;
+  /**
+   * Carry pictures to another place on the roll (item 29): a cell dragged —
+   * a mouse past the slop, a finger after its hold — or the menu's Move
+   * verbs. A selected cell carries the shown selection with it. Absent,
+   * nothing moves.
+   */
+  onMove?: (ids: string[], anchor: RollMoveAnchor) => void;
   /** Leave ignored pictures out (the open one always stays). */
   hideIgnored?: boolean;
   /** Winnow's word on each picture it answered for (`use-roll-culling.ts`). */
@@ -319,6 +331,14 @@ export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: stri
  * — and only the cells NEAR what that scroller shows (`cellsInView`, one box
  * of margin each side, the open cell always): a roll of hundreds put every
  * cell in the DOM at open (`docs/audit-2026-10-02.md`, PERF-03).
+ *
+ * A cell is also CARRIED to another place on the roll (item 29): a mouse
+ * that presses one and travels past the slop lifts it — a click never
+ * travels — and a finger lifts it by moving after the hold that turned the
+ * selection on, the gesture a phone's photo grid means "pick this up" by. A
+ * marked cell carries every marked picture the strip shows, in their roll
+ * order. A bar says where they will land; the scroller slides at its edges
+ * so a long roll can be crossed; Escape puts them back where they were.
  */
 export function StripCells({
   shown,
@@ -338,6 +358,8 @@ export function StripCells({
   onRemove,
   onDeliver,
   onVariant,
+  onMove,
+  pictures,
   culling,
   rollChoice = null,
   heldId = null,
@@ -348,26 +370,39 @@ export function StripCells({
   // handlers for the life of the strip. Without this every cell re-rendered
   // on every tick of the open picture's sliders (the audit of 2026-09-22),
   // a roll of hundreds of cells for one picture's change.
-  const latest = useRef({ onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant });
-  latest.current = { onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant };
+  const latest = useRef({ onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant, onMove });
+  latest.current = { onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant, onMove };
+  // What a carry reads when it starts and lands, never a stale render's.
+  const strip = useRef({ shown, layout, selectedIds });
+  strip.current = { shown, layout, selectedIds };
   const [menu, setMenu] = useState<{ id: string; rect: AnchorRect } | null>(null);
+  const carry = useCarry(strip, latest);
   const handlers = useMemo<CellHandlers>(
     () => ({
       open: (id) => latest.current.onOpen(id),
       selectClick: (id, mods) => latest.current.onSelectClick(id, mods),
       press: (id) => latest.current.onPress(id),
       menu: (id, rect) => setMenu({ id, rect }),
+      arm: carry.arm,
     }),
-    [],
+    [carry.arm],
   );
   const pictureById = useMemo(() => new Map(shown.map((p) => [p.id, p])), [shown]);
   const drawn = useMemo(() => cellsInView(layout.cells, view, layout.axis, openId), [layout, view, openId]);
   const menuPicture = menu ? shown.find((p) => p.id === menu.id) ?? null : null;
   const menuRect = useCallback(() => menu?.rect ?? null, [menu]);
   const closeMenu = useCallback(() => setMenu(null), []);
+  const lift = carry.lift;
+  const lifted = useMemo(() => new Set(lift?.ids ?? []), [lift]);
+  const ends = { first: pictures[0]?.id ?? null, last: pictures[pictures.length - 1]?.id ?? null };
   return (
     <>
-      <ol className="relative m-0 p-0 list-none" style={{ width: layout.width, height: layout.height }}>
+      <ol
+        ref={carry.olRef}
+        className={`relative m-0 p-0 list-none ${lift ? 'cursor-grabbing' : ''}`}
+        style={{ width: layout.width, height: layout.height }}
+        data-carry={lift ? `${lift.ids.join(',')}>${lift.drop?.slot ?? '-'}` : undefined}
+      >
         {drawn.map((cell) => {
           const p = pictureById.get(cell.id);
           if (!p) return null;
@@ -398,15 +433,26 @@ export function StripCells({
               departs={rollChoice && departsFromRoll(rollChoice, p) ? CHOICE_WORDS[rollChoice] : null}
               held={p.id === heldId}
               written={written?.has(p.id) ?? false}
+              lifted={lifted.has(p.id)}
+              movable={Boolean(onMove)}
               handlers={handlers}
             />
           );
         })}
+        {/* Where a carried picture will land: a bar in the gap of its slot. */}
+        {lift?.drop && !lift.still && (
+          <li
+            aria-hidden="true"
+            className="absolute rounded-full bg-accent pointer-events-none shadow-[0_0_0_1px_var(--color-paper)]"
+            style={{ left: lift.drop.bar.x, top: lift.drop.bar.y, width: lift.drop.bar.w, height: lift.drop.bar.h }}
+          />
+        )}
       </ol>
+      {lift && <CarryGhost lift={lift} thumbs={thumbs} pictures={pictureById} />}
       {menu && menuPicture && (
         <AnchoredMenu
           anchorRect={menuRect}
-          items={pictureMenu(menuPicture, menuPicture.id === openId, selecting, latest.current)}
+          items={pictureMenu(menuPicture, menuPicture.id === openId, selecting, ends, latest.current)}
           onClose={closeMenu}
           align="start"
           label={`Actions for ${pictureLabel(menuPicture)}`}
@@ -416,12 +462,209 @@ export function StripCells({
   );
 }
 
+/** A carry in flight: what moves, where the pointer is, where it would land. */
+interface Lift {
+  ids: string[];
+  x: number;
+  y: number;
+  drop: StripDrop | null;
+  /** The slot is where the pictures already are: a drop there moves nothing, and no bar is drawn. */
+  still: boolean;
+}
+
+/** How near the scroller's edge a carried picture slides it, and how fast at the very edge (px per frame). */
+const CARRY_EDGE = 40;
+const CARRY_SPEED = 14;
+
+/**
+ * The carry's machine (item 29), apart from the cells so a cell only ARMS
+ * it: a press arms, travelling past the slop lifts, the window follows the
+ * pointer wherever it goes (a cell scrolled out of the drawn window is
+ * unmounted under it), and letting go lands the pictures through the host's
+ * `onMove`. A finger reaches here only after its hold, and the strip's own
+ * non-passive `touchmove` keeps the scroller from taking the gesture from
+ * then on — an `ol` asking the browser to wait on every touch, the one cost.
+ */
+function useCarry(
+  strip: RefObject<{ shown: readonly RollPicture[]; layout: StripLayout; selectedIds: ReadonlySet<string> }>,
+  host: RefObject<{ onMove?: (ids: string[], anchor: RollMoveAnchor) => void }>,
+) {
+  const olRef = useRef<HTMLOListElement>(null);
+  const [lift, setLiftState] = useState<Lift | null>(null);
+  // The live value, written at once: the edge's frame loop and the pointer
+  // both move the lift between two renders and must not undo each other.
+  const liftRef = useRef<Lift | null>(null);
+  const setLift = (next: Lift | null) => {
+    liftRef.current = next;
+    setLiftState(next);
+  };
+  const armed = useRef<{ id: string; x: number; y: number; pointerId: number; touch: boolean } | null>(null);
+  const raf = useRef(0);
+  const quiet = useRef(false);
+  const off = useRef<(() => void) | null>(null);
+
+  const place = (ids: string[], x: number, y: number): Lift => {
+    const ol = olRef.current;
+    const { shown, layout } = strip.current!;
+    const r = ol?.getBoundingClientRect();
+    const drop = r ? stripDrop(layout.cells, { x: x - r.left, y: y - r.top }) : null;
+    // Where the pictures already stand among those shown: a slot inside or
+    // beside an unbroken run of them moves nothing.
+    const at = ids.map((id) => shown.findIndex((p) => p.id === id)).filter((i) => i >= 0).sort((a, b) => a - b);
+    const run = at.length > 0 && at[at.length - 1] - at[0] === at.length - 1;
+    const still = !drop || (run && drop.slot >= at[0] && drop.slot <= at[at.length - 1] + 1);
+    return { ids, x, y, drop, still };
+  };
+
+  const end = (land: boolean) => {
+    cancelAnimationFrame(raf.current);
+    raf.current = 0;
+    off.current?.();
+    off.current = null;
+    const was = liftRef.current;
+    armed.current = null;
+    if (!was) return;
+    setLift(null);
+    // The click a mouse's release ends on is the carry's, not an open: it is
+    // dispatched in the same task as the release, so the quiet ends after it.
+    quiet.current = true;
+    window.setTimeout(() => {
+      quiet.current = false;
+    }, 0);
+    if (!land || !was.drop || was.still) return;
+    const anchor = dropAnchor(
+      strip.current!.shown.map((p) => p.id),
+      new Set(was.ids),
+      was.drop.slot,
+    );
+    if (anchor) host.current!.onMove?.(was.ids, anchor);
+  };
+
+  // At either edge of its scroller the strip slides under the carried
+  // picture, faster the deeper the pointer, so a long roll is crossed.
+  const tick = () => {
+    raf.current = 0;
+    const l = liftRef.current;
+    const box = olRef.current?.parentElement;
+    if (!l || !box) return;
+    const r = box.getBoundingClientRect();
+    const axis = strip.current!.layout.axis;
+    const [p, lo, hi] = axis === 'x' ? [l.x, r.left, r.right] : [l.y, r.top, r.bottom];
+    const depth = p < lo + CARRY_EDGE ? -(lo + CARRY_EDGE - p) : p > hi - CARRY_EDGE ? p - (hi - CARRY_EDGE) : 0;
+    if (depth === 0) return;
+    const by = Math.sign(depth) * Math.min(CARRY_SPEED, Math.ceil((Math.abs(depth) / CARRY_EDGE) * CARRY_SPEED));
+    if (axis === 'x') box.scrollLeft += by;
+    else box.scrollTop += by;
+    setLift(place(l.ids, l.x, l.y));
+    raf.current = requestAnimationFrame(tick);
+  };
+
+  const arm = useCallback((id: string, at: { x: number; y: number; pointerId: number; touch: boolean }) => {
+    if (!host.current?.onMove) return;
+    off.current?.();
+    armed.current = { id, ...at };
+    const onMoveEvent = (e: PointerEvent) => {
+      const a = armed.current;
+      if (!a || e.pointerId !== a.pointerId) return;
+      if (!liftRef.current) {
+        if (Math.hypot(e.clientX - a.x, e.clientY - a.y) <= PRESS_SLOP) return;
+        // What is carried: the marked pictures the strip shows, in roll
+        // order, when the grabbed one is among them — else that one alone.
+        const { shown, selectedIds } = strip.current!;
+        const ids = selectedIds.has(a.id) ? shown.filter((p) => selectedIds.has(p.id)).map((p) => p.id) : [a.id];
+        setLift(place(ids, e.clientX, e.clientY));
+      } else {
+        setLift(place(liftRef.current.ids, e.clientX, e.clientY));
+      }
+      if (!raf.current) raf.current = requestAnimationFrame(tick);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (armed.current && e.pointerId === armed.current.pointerId) end(e.type === 'pointerup');
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !liftRef.current) return;
+      // Put back: the editor's own Escape must not also step out of the selection.
+      e.preventDefault();
+      e.stopPropagation();
+      end(false);
+    };
+    window.addEventListener('pointermove', onMoveEvent);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('keydown', onKey, true);
+    off.current = () => {
+      window.removeEventListener('pointermove', onMoveEvent);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('keydown', onKey, true);
+    };
+    // `strip` and `host` are refs, and the helpers read only refs: one arm for the strip's life.
+  }, []);
+
+  useEffect(() => {
+    const ol = olRef.current;
+    if (!ol) return;
+    // A finger that held a cell owns the gesture from then on: the scroller
+    // would otherwise start panning on its first move and cancel the pointer.
+    const onTouchMove = (e: TouchEvent) => {
+      if (armed.current?.touch && e.cancelable) e.preventDefault();
+    };
+    // The click a carry ends on opens nothing and marks nothing.
+    const onClick = (e: MouseEvent) => {
+      if (quiet.current) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    };
+    ol.addEventListener('touchmove', onTouchMove, { passive: false });
+    ol.addEventListener('click', onClick, true);
+    return () => {
+      ol.removeEventListener('touchmove', onTouchMove);
+      ol.removeEventListener('click', onClick, true);
+      off.current?.();
+      cancelAnimationFrame(raf.current);
+    };
+  }, []);
+
+  return { olRef, lift, arm };
+}
+
+/** What follows the pointer while pictures are carried: the first one's thumbnail, and how many go. */
+function CarryGhost({ lift, thumbs, pictures }: { lift: Lift; thumbs: ReadonlyMap<string, Blob>; pictures: ReadonlyMap<string, RollPicture> }) {
+  const first = lift.ids[0];
+  const url = useObjectUrl(thumbs.get(first) ?? null);
+  const picture = pictures.get(first);
+  return createPortal(
+    <div
+      aria-hidden="true"
+      className="fixed z-[80] pointer-events-none -translate-x-1/2 -translate-y-full"
+      style={{ left: lift.x, top: lift.y - 12 }}
+    >
+      <div className="relative h-16 rounded-[6px] overflow-hidden bg-frame shadow-paper-soft ring-2 ring-accent">
+        {url ? (
+          <img src={url} alt="" className="block h-full w-auto max-w-[8rem] object-cover" draggable={false} />
+        ) : (
+          <span className="grid h-full w-24 place-items-center px-1 font-mono text-3xs text-on-media">{picture ? pictureLabel(picture) : ''}</span>
+        )}
+        {lift.ids.length > 1 && (
+          <span className="absolute right-1 top-1 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-accent text-paper font-mono text-3xs tabular-nums">
+            {lift.ids.length}
+          </span>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** The gestures on a cell, one set for every cell and for the strip's life. */
 interface CellHandlers {
   open: (id: string) => void;
   selectClick: (id: string, mods: SelectionModifiers) => void;
   press: (id: string) => void;
   menu: (id: string, rect: AnchorRect) => void;
+  /** A press that may become a carry (`useCarry`): a mouse at once, a finger after its hold. */
+  arm: (id: string, at: { x: number; y: number; pointerId: number; touch: boolean }) => void;
 }
 
 /**
@@ -434,12 +677,14 @@ function pictureMenu(
   p: RollPicture,
   open: boolean,
   selecting: boolean,
+  ends: { first: string | null; last: string | null },
   host: {
     onOpen: (id: string) => void;
     onSelect: (id: string) => void;
     onDeliver: (id: string, action: DeliverAction) => void;
     onVariant: (id: string) => void;
     onRemove: (p: RollPicture) => void;
+    onMove?: (ids: string[], anchor: RollMoveAnchor) => void;
   },
 ): OverflowItem[] {
   const ignored = isIgnored(p);
@@ -468,6 +713,14 @@ function pictureMenu(
     title: "Lightroom's virtual copy — the same file with its own develop, crop, look and words (⌘' on the open picture)",
     onSelect: () => host.onVariant(p.id),
   });
+  // A finger's way to carry one picture far, and a mouse's to skip the trip.
+  const move = host.onMove;
+  if (move && ends.first !== p.id) {
+    items.push({ id: 'move-start', label: 'Move to the start of the roll', title: 'Or drag it along the band — ⌥← / ⌥→ carry the open picture one place', onSelect: () => move([p.id], 'start') });
+  }
+  if (move && ends.last !== p.id) {
+    items.push({ id: 'move-end', label: 'Move to the end of the roll', title: 'Or drag it along the band — ⌥← / ⌥→ carry the open picture one place', onSelect: () => move([p.id], 'end') });
+  }
   items.push({ id: 'remove', label: 'Take it off the roll…', title: 'The file stays where it is', danger: true, onSelect: () => host.onRemove(p) });
   return items;
 }
@@ -492,6 +745,8 @@ const Cell = memo(function Cell({
   departs,
   held,
   written,
+  lifted,
+  movable,
   handlers,
 }: {
   picture: RollPicture;
@@ -518,6 +773,10 @@ const Cell = memo(function Cell({
   held: boolean;
   /** A verb has just written this picture: a tick, for a moment. */
   written: boolean;
+  /** Carried elsewhere right now: its cell is left as a faint mark of where it was. */
+  lifted: boolean;
+  /** The host takes a carry: a press is armed for it. */
+  movable: boolean;
   handlers: CellHandlers;
 }) {
   const remote = remoteClient && remoteId !== null ? { client: remoteClient, id: remoteId } : null;
@@ -537,12 +796,26 @@ const Cell = memo(function Cell({
   useEffect(() => clearPress, []);
   const onPointerDown = (e: ReactPointerEvent) => {
     lastPointer.current = e.pointerType;
-    if (e.pointerType !== 'touch' || selecting) return;
+    // A new gesture: a hold's swallow that no click consumed (the finger
+    // carried the picture away and never tapped) is spent.
+    swallow.current = false;
+    const at = { x: e.clientX, y: e.clientY, pointerId: e.pointerId, touch: e.pointerType === 'touch' };
+    if (e.pointerType !== 'touch') {
+      // A mouse arms a carry at once — travelling past the slop is what a
+      // click never does; a modified press is the selection's alone.
+      if (movable && e.button === 0 && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) handlers.arm(picture.id, at);
+      return;
+    }
     clearPress();
     const timer = window.setTimeout(() => {
       press.current = null;
       swallow.current = true;
-      handlers.press(picture.id);
+      // Held outside the selection, it turns the selection on with this
+      // picture; held inside it, it marks the picture if it was not. Either
+      // way the finger may now carry it.
+      if (!selecting) handlers.press(picture.id);
+      else if (!selected) handlers.selectClick(picture.id, { shiftKey: false, metaKey: true, ctrlKey: false });
+      if (movable) handlers.arm(picture.id, at);
     }, LONG_PRESS_MS);
     press.current = { x: e.clientX, y: e.clientY, timer };
   };
@@ -586,7 +859,9 @@ const Cell = memo(function Cell({
   const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, departs, unreachable: unreachable && !!url });
   return (
     <li
-      className={`group absolute snap-start select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
+      className={`group absolute snap-start select-none [-webkit-touch-callout:none] ${
+        lifted ? 'opacity-30' : ignored && !open ? 'opacity-35 hover:opacity-70' : ''
+      }`}
       style={{ left: x, top: y, width: w, height: h + cap }}
       data-picture={picture.id}
       onContextMenu={onContextMenu}

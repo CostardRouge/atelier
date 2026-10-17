@@ -67,8 +67,11 @@ import { readRollChoice, type RollChoice } from './roll-choice';
  * `RollDoc.opensOn` (2026-10-02) needed no bump, like the rendition: absent
  * reads as null, which is what every roll did until then — each picture
  * opens where it opens.
+ * v8 (2026-10-17): `RollPicture.snapshots` — named states of a picture's
+ * edit (item 31 of `docs/lightroom-gaps.md`). Absent reads as none, so
+ * nothing migrates; the bump says a v7 build would drop them.
  */
-export const ROLL_DOC_VERSION = 7;
+export const ROLL_DOC_VERSION = 8;
 
 /** A picture's look, after its own develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
@@ -261,6 +264,16 @@ export interface RollPicture {
    */
   journal?: JournalStep[];
   /**
+   * NAMED states of the picture's edit, oldest first (v8, `snapshots.ts`,
+   * item 31 of `docs/lightroom-gaps.md`): every section's value at the moment
+   * it was kept — Lightroom's snapshots, beside the journal's own steps in
+   * the History tab. Restoring one is a write like any other (one undo step,
+   * journaled `via: 'restore'`). Never an edit, never copied by Apply-to, a
+   * paste or a preset, never in an export mark's key; a `clone` variant
+   * takes them, a `fresh` one does not. Absent and empty mean the same.
+   */
+  snapshots?: PictureSnapshot[];
+  /**
    * What the author changed about this picture's making-of (v7,
    * `timelapse-options.ts`): chapters folded away, captions rewritten. A
    * document write like any other — one undo step, synced — and never an
@@ -275,7 +288,17 @@ export interface RollPicture {
  * made through a command (`shared/commands/`) — kept apart so a model
  * learning the author's taste can leave it out (`training-dump.ts`).
  */
-export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier' | 'auto' | 'agent';
+export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier' | 'auto' | 'agent' | 'restore';
+
+/** A picture's edit as it stood when it was kept under a name (v8, `snapshots.ts`). */
+export interface PictureSnapshot {
+  id: string;
+  name: string;
+  /** When it was taken (ms since the epoch). */
+  at: number;
+  /** EVERY section's value at that moment — a restore writes them all. */
+  values: SectionValues;
+}
 
 /**
  * A step's VALUES: the sections it changed, as they stood after it — the
@@ -544,7 +567,34 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
       const makingOf = readMakingOf(raw.makingOf);
       return makingOf ? { makingOf } : {};
     })(),
+    // v8: absent on every roll written before snapshots existed.
+    ...(() => {
+      const snapshots = readSnapshots(raw.snapshots);
+      return snapshots.length > 0 ? { snapshots } : {};
+    })(),
   };
+}
+
+/** How many snapshots one picture keeps. */
+export const SNAPSHOT_MAX = 24;
+
+/**
+ * Stored snapshots: one with no id or no time is dropped, a missing name reads
+ * as `Snapshot`, every section's value through its own reader, at most
+ * `SNAPSHOT_MAX`, in time order.
+ */
+export function readSnapshots(raw: unknown): PictureSnapshot[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PictureSnapshot[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!isRecord(item) || typeof item.id !== 'string' || !item.id || seen.has(item.id)) continue;
+    if (typeof item.at !== 'number' || !Number.isFinite(item.at)) continue;
+    seen.add(item.id);
+    const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 80) : 'Snapshot';
+    out.push({ id: item.id, name, at: item.at, values: readSectionValues(item.values, PICTURE_EDITS) });
+  }
+  return out.sort((a, b) => a.at - b.at).slice(0, SNAPSHOT_MAX);
 }
 
 /**
@@ -589,7 +639,7 @@ export const PICTURE_EDITS: readonly PictureEdit[] = [
 ];
 
 const EDIT_IDS: ReadonlySet<string> = new Set(PICTURE_EDITS);
-const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier', 'auto', 'agent']);
+const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier', 'auto', 'agent', 'restore']);
 
 /** A step's stored values read through the same readers a picture's fields are. */
 function readSectionValues(raw: unknown, sections: readonly PictureEdit[]): SectionValues {
@@ -855,6 +905,91 @@ export function movePicture(roll: RollDoc, from: number, to: number, now: number
   const [moved] = pictures.splice(from, 1);
   pictures.splice(target, 0, moved);
   return { ...roll, pictures, updatedAt: now };
+}
+
+/**
+ * Where moved pictures land (item 29): beside a picture that stays, or at
+ * either end of the ROLL. A drop on a filtered band names its neighbour,
+ * never an index — the pictures the band hides keep their own places.
+ */
+export type RollMoveAnchor = { before: string } | { after: string } | 'start' | 'end';
+
+/**
+ * Move SEVERAL pictures at once, in the order they hold on the roll, to land
+ * together at `anchor` — a drag of the selection keeps its pictures' own
+ * order, whichever was grabbed. An anchor that is itself moving, or off the
+ * roll, moves nothing; a move that leaves the order as it was hands back the
+ * same roll, so no undo step is made of it.
+ */
+export function movePicturesTo(roll: RollDoc, ids: readonly string[], anchor: RollMoveAnchor, now: number = Date.now()): RollDoc {
+  const moving = new Set(ids);
+  const moved = roll.pictures.filter((p) => moving.has(p.id));
+  if (moved.length === 0) return roll;
+  const rest = roll.pictures.filter((p) => !moving.has(p.id));
+  let at: number;
+  if (anchor === 'start') at = 0;
+  else if (anchor === 'end') at = rest.length;
+  else {
+    const near = 'before' in anchor ? anchor.before : anchor.after;
+    const i = rest.findIndex((p) => p.id === near);
+    if (i < 0) return roll;
+    at = 'before' in anchor ? i : i + 1;
+  }
+  const pictures = [...rest.slice(0, at), ...moved, ...rest.slice(at)];
+  return sameOrder(pictures, roll.pictures) ? roll : { ...roll, pictures, updatedAt: now };
+}
+
+/** The orders a roll can be put in (item 29): by file name, by date, or turned round. */
+export type RollSort = 'name' | 'date' | 'reverse';
+
+const NAME_ORDER = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
+/**
+ * The roll's pictures in a new ORDER — a verb that rewrites the roll, undone
+ * by ⌘Z, never a view of it: the band, ←/→, the sheet and the agent read one
+ * order. `name` is natural (`DJI_0009` before `DJI_0010`); `date` is the
+ * file's own date, oldest first — the capture instant for a picture fetched
+ * from an instance (`captureMtime`), the file's for a local one — with the
+ * name as its tie-break; `reverse` turns the roll round. A file's variants
+ * share its keys and stay together after it in their own order, and turning
+ * round keeps each family in its order too. Already in that order: the same
+ * roll back.
+ */
+export function sortRoll(roll: RollDoc, by: RollSort, now: number = Date.now()): RollDoc {
+  const pictures = sortedPictures(roll.pictures, by);
+  return sameOrder(pictures, roll.pictures) ? roll : { ...roll, pictures, updatedAt: now };
+}
+
+/** Whether `sortRoll(roll, by)` would change nothing — the panel greys that row. */
+export function rollSortedBy(pictures: readonly RollPicture[], by: RollSort): boolean {
+  if (by === 'reverse') return families(pictures).length < 2;
+  return sameOrder(sortedPictures(pictures, by), pictures);
+}
+
+function sortedPictures(pictures: readonly RollPicture[], by: RollSort): RollPicture[] {
+  if (by === 'reverse') return families(pictures).reverse().flat();
+  const byName = (a: RollPicture, b: RollPicture) => NAME_ORDER.compare(a.ref.name, b.ref.name);
+  const compare =
+    by === 'name'
+      ? (a: RollPicture, b: RollPicture) => byName(a, b) || a.ref.lastModified - b.ref.lastModified
+      : (a: RollPicture, b: RollPicture) => a.ref.lastModified - b.ref.lastModified || byName(a, b);
+  // Stable: a file's variants compare equal and keep their order.
+  return [...pictures].sort(compare);
+}
+
+/** Runs of pictures sharing one file — an original and the variants made after it. */
+function families(pictures: readonly RollPicture[]): RollPicture[][] {
+  const out: RollPicture[][] = [];
+  for (const p of pictures) {
+    const last = out[out.length - 1];
+    if (last && sameMediaRef(last[0].ref, p.ref)) last.push(p);
+    else out.push([p]);
+  }
+  return out;
+}
+
+function sameOrder(a: readonly RollPicture[], b: readonly RollPicture[]): boolean {
+  return a.length === b.length && a.every((p, i) => p === b[i]);
 }
 
 /** One picture's own fields changed; its id and ref never move. */

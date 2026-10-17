@@ -84,9 +84,20 @@ fix — and the chord is NEVER a share of the piece (2026-10-09, his report of
 a trembling car): 3 % of the path was 1.3 km on a day and 600 km on a piece
 driving the whole trip, which pointed the car at a far town while it slid
 through every bend. The plan's default is `ROAD_HEADING_KM` (1 km) on the
-ground; the painter passes its own, two vehicle lengths ON SCREEN
-(`HEADING_LENGTHS`), so close up the car follows its bend and from afar a
-town's streets do not spin it. Measured locally on his track (never committed): 143 simulated stops,
+ground. **The painter reads a BELL, not a chord** (2026-10-17, his «le ruban
+tremble encore un peu dans les virages serrés»): `smoothHeadingAt` — the
+road's tangent convolved with a Gaussian of σ = 0.7 vehicle lengths ON SCREEN
+(`HEADING_SIGMA`, as wide as the old two-length chord), each segment weighted
+exactly through `erf`. A box chord jolts twice per bend (its front end, then
+its back end, crossing every polygon corner of the sampled line): measured in
+Virée's own plan + camera on synthetic hairpins and 300 m bends, the peak
+angular acceleration fell 4–7× close up, ~4× under Navigation and 20–50×
+under Calm, slip unchanged. The bell moves only the DIRECTION: smoothing the
+position too was tried and rejected — it stood the car up to 37 px off its
+own line. A bell spanning more than 256 samples (a whole trip seen from
+afar) reads them in power-of-two runs anchored to fixed indices, so a frame
+costs ~0.015 ms at every zoom (0.44 ms per call uncapped over 8 000 samples). Close up the car follows its bend; from afar a town's streets, and a
+hairpin smaller than the car, do not spin it. Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
 

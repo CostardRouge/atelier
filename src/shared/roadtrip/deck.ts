@@ -23,6 +23,7 @@ import { classifyPart } from '../library/assets';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import { hasMotion, type FramingMotion } from '../media/framing-motion';
 import type { DevelopSettings } from '../develop/develop';
+import { drawnEdit, type CarriedEdit } from '../develop/carried-edit';
 import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
@@ -91,6 +92,13 @@ export interface DeckSlide {
    * asks it for the cube rather than reading this.
    */
   grade: TripGrade | null;
+  /**
+   * The rest of a Develop picture's edit (`PostSlide.edit`), resolved: null
+   * unless it was made on this slide's own picture and draws a pass
+   * (`drawnEdit`). Drawn as passes around the cube of the slide's picture —
+   * its first cell in a collage, never the others.
+   */
+  edit: CarriedEdit | null;
   /**
    * Several pictures in this slide's frame, or null for one. `media`,
    * `framing` and `develop` above are its first cell (`collage.ts`).
@@ -248,6 +256,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       motion: slide.motion ?? null,
       develop: slide.develop ?? null,
       grade: slide.grade ?? null,
+      edit: drawnEdit(slide.edit, slide.media),
       collage: slide.collage ?? null,
       caption: slide.caption,
       hook: layers,
@@ -294,6 +303,7 @@ function cardDeckSlide(slideId: string, position: number): DeckSlide {
     develop: null,
     // The closing card is drawn, not photographed: nothing to grade.
     grade: null,
+    edit: null,
     collage: null,
     caption: '',
     hook: null,

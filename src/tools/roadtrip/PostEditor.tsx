@@ -18,6 +18,8 @@ import {
 } from '../../shared/roadtrip/collage';
 import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet, { type SheetDeck, type SheetDeckPicture } from '../../shared/develop/DevelopSheet';
+import FromDevelopRow from '../../shared/develop/FromDevelopRow';
+import { carriedWords, type EditOffer } from '../../shared/develop/carried-edit';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
@@ -924,6 +926,32 @@ export default function PostEditor({
   );
   /** The SELECTED cell's own correction. */
   const cellDevelop = cell ? cell.develop : slide.develop;
+  /**
+   * The open slide's edit from Develop, as STORED — its origin even where it
+   * draws nothing (the deck's `slide.edit` is what draws). Taking one writes
+   * the develop and the look it lists into the slide's own fields and its
+   * passes beside them, in one step; taking it off leaves those two, each
+   * with its own way back (item 34 of `docs/lightroom-gaps.md`).
+   */
+  const storedEdit = isCta ? null : (post.slides.find((s) => s.id === slide.slideId)?.edit ?? null);
+  const takeFromDevelop = useCallback(
+    (offer: EditOffer) =>
+      onChangePost({
+        ...post,
+        slides: post.slides.map((s) =>
+          s.id === slide.slideId
+            ? {
+                ...s,
+                ...(offer.develop ? { develop: offer.develop } : {}),
+                ...(offer.look ? { grade: { layers: offer.look.layers, output: offer.look.output, film: offer.look.film ?? null } } : {}),
+                edit: offer.edit,
+              }
+            : s,
+        ),
+      }),
+    [post, slide.slideId, onChangePost],
+  );
+  const takeOffFromDevelop = () => patchSlide({ edit: null });
   const [developOpen, setDevelopOpen] = useState(false);
   // The sheet's time-savers (`docs/photo-develop.md` §8): the presets are the
   // person's own book, drawn by the sheet itself; the trip adds two batch verbs that write a COPY onto each target now — the open
@@ -2511,6 +2539,7 @@ export default function PostEditor({
             qr={ctaQr}
             lut={lut}
             film={isCta ? null : filmFor(slide)}
+            edit={slide.edit}
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}
@@ -2719,6 +2748,17 @@ export default function PostEditor({
               develop={cellDevelop}
               onOpenDevelop={() => setDevelopOpen(true)}
               onResetDevelop={() => setDevelop(null)}
+              fromDevelop={
+                isCta ? null : (
+                  <FromDevelopRow
+                    media={slide.media}
+                    edit={storedEdit}
+                    onUse={takeFromDevelop}
+                    onTakeOff={takeOffFromDevelop}
+                    frameWord="the frame is this slide’s own"
+                  />
+                )
+              }
               collage={collage}
               lead={lead}
               selectedCell={cellIndex}
@@ -2801,6 +2841,11 @@ export default function PostEditor({
         }
         applyTo={developApplyTo}
         deck={sheetDeck}
+        note={
+          cellIndex === 0 && slide.edit
+            ? `Its ${carriedWords(slide.edit)} from Develop ${carriedWords(slide.edit).includes(' · ') ? 'are' : 'is'} drawn on the stage and in every export, not in this sheet.`
+            : null
+        }
       />
     )}
 

@@ -22,6 +22,8 @@ import { rawDecodeEdge } from '../raw/raw-budget';
 import type { Cue } from '../telemetry/srt-parser';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import { carriedPassesOver, type CarriedEdit } from '../develop/carried-edit';
+import { carriedRasters } from '../develop/carried-rasters';
 import { maxRenderSize } from '../render/graph-grader';
 import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
 import { drawOverlays } from '../overlay/draw-overlays';
@@ -165,6 +167,12 @@ export interface PhotoRenderOptions {
    * the bitmap's own size, as before.
    */
   frame?: PixelSize | null;
+  /**
+   * The rest of a Develop picture's edit (`carried-edit.ts`): its passes
+   * around the cube, graded at the same density, before the crop — the
+   * stage's own chain.
+   */
+  edit?: CarriedEdit | null;
 }
 
 /**
@@ -192,10 +200,21 @@ export async function exportPhotoVariant(
   // at what the GPU can take on one edge; past it the picture is fitted first.
   // A texture with no look is still a render: the node is the only thing that
   // draws it.
-  const needsGpu = Boolean(opts.lut) || !isSilentTexture(opts.film);
+  const edit = opts.edit ?? null;
+  const needsGpu = Boolean(opts.lut) || !isSilentTexture(opts.film) || Boolean(edit);
   const fit = needsGpu ? await fitPhotoForRender(bitmap) : null;
+  // The carried passes, their subject masks asked at the size graded; the
+  // kernels in the delivered file's pixels.
+  const edited =
+    edit && fit
+      ? carriedPassesOver(
+          edit,
+          { width: fit.width, height: fit.height, natural: frame },
+          await carriedRasters(edit, () => fit.image, { width: fit.width, height: fit.height }),
+        )
+      : { pre: [], passes: [] };
   const grader = needsGpu && fit
-    ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, opts.intensity, [], [], opts.film ?? null)
+    ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, opts.intensity, edited.passes, edited.pre, opts.film ?? null)
     : null;
   try {
     const source = grader && fit ? grader.render(fit.image) : bitmap;

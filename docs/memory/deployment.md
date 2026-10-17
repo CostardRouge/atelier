@@ -133,3 +133,20 @@ the cap is 100 and `timeout-minutes` is the real stop.
 Sonnet, ~42 turns; a Haiku side model appears in `modelUsage` and is normal).
 On a subscription that is quota, not an invoice, but it is the figure to
 multiply before putting this workflow on every repository.
+
+## Versions and releases ride the same deploy (2026-10-17)
+
+**Decision**: Atelier carries one SemVer version in the root `package.json`
+(1.0.0 « Sepia »), `CHANGELOG.md` as the source, and `.github/release.mjs` +
+`.github/workflows/release.yml` (identical across the portfolio, C13 in
+`second-brain`) tag and publish each section on `main`. The deploy itself is
+unchanged. **Why**: the owner made SemVer mandatory on every repo that ships,
+and his site will show each project's version and changelog. **How to apply**:
+the home footer reads the version through `src/app/version.ts`, a named JSON
+import so the bundle carries only the string; the agent bridge keeps its own
+v1, v2… apart. 0.1.0–0.12.0 are backfilled sections (`<!-- commit: sha -->`):
+GitHub refuses the workflow's own token a tag on a commit whose workflows differ
+from `main`'s, so `release.yml` skips them with a warning and `second-brain`'s
+"Backfill releases" workflow publishes them with the owner's token. **Trap**: a
+tag or release made with `GITHUB_TOKEN` triggers no other workflow, so a deploy
+that should follow a release must run inside `release.yml`'s publish job.

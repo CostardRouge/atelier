@@ -24,9 +24,8 @@ import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection, LensProfileTerms } from '../render/lens';
-import { geometryPasses, hasGeometry } from '../render/picture-geometry';
+import { hasGeometry } from '../render/picture-geometry';
 import { drawingLayers, subjectLayersForRender, type AdjustLayer } from './layer';
-import { layerPasses } from './layer-render';
 import { needsSubjectRasters, resolveSubjectRasters } from './subject-rasters';
 import { segmentationView } from './segment-view';
 import type { BrushRaster } from '../render/brush-raster';
@@ -39,10 +38,8 @@ import { decodeRaw } from '../raw/raw-decoder';
 import { rawDecodeCap, rawDecodeEdge } from '../raw/raw-budget';
 import { deviceClass } from '../lib/device-class';
 import { isDefaultDetail, type DetailSettings } from '../render/detail';
-import { detailPasses } from '../render/detail-pass';
 import type { Patch } from '../render/repair';
-import { makeRepairPass } from '../render/repair-pass';
-import { getDitherPreference, type RenderPass } from '../render/graph';
+import { getDitherPreference } from '../render/graph';
 import { maxRenderSize } from '../render/graph-grader';
 import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
@@ -56,12 +53,11 @@ import type { ExportExif } from '../exif/stamp-exif';
 import { srgbIcc } from '../exif/icc-srgb';
 import { OUTPUT_SHARPEN_AMOUNT, sharpenBands } from './output-sharpen';
 import { watermarkLayout, type Watermark } from './watermark';
-import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
 import type { PostCropVignette } from '../render/post-vignette';
-import { postVignettePass } from './vignette-frame';
+import { picturePasses } from './picture-passes';
 
 export interface RollRenderOptions {
   /** The run's cancel: a RAW's decode drops its turn on it (the render is one draw and never looks). */
@@ -205,59 +201,9 @@ export interface RollRendered {
   subjects?: { asked: number; resolved: number };
 }
 
-/** What a picture's pass chain is built from: its settings, on either side of its cube. */
-export type PassSettings = Pick<
-  RollRenderOptions,
-  'keystone' | 'lens' | 'lensProfile' | 'layers' | 'detail' | 'repair' | 'vignette' | 'calibration' | 'aspect' | 'framing'
->;
-
-export interface PicturePasses {
-  /** BEFORE the cube, on the source: the camera's shading (RAW), the repair, the noise passes. */
-  pre: RenderPass[];
-  /** AFTER it: the geometry, the layers with their rasters, the sharpen, the post-crop vignette. */
-  passes: RenderPass[];
-}
-
-/**
- * The pass chain a picture's settings ask for — ONE function for the
- * delivery, its darker HDR twin and every state of a making-of video
- * (`docs/develop-timelapse.md` §3.4), so a render is never assembled two ways.
- *
- * `raw` says which path this is: the sensor's data takes the camera's own
- * calibration — its shading grid FIRST of all, ahead of the repair
- * (`render-gain-map.md`), and its warp in the geometry — while a render or a
- * proxy has had both applied by the camera, and applying them twice would
- * lift the corners into white. `scale` is the decode's density over the
- * source's (the file's, the sensor's): kernels are stated in SOURCE pixels.
- * Only the aspect reaches the vignette: its map is in [0,1] and asks for no
- * size. A pass holds textures on the context it first drew on, so every
- * grader takes a chain of its own.
- */
-export function picturePasses(
-  opts: PassSettings,
-  ar: number,
-  scale: number,
-  rasters: ReadonlyMap<string, BrushRaster> | null,
-  raw: boolean,
-): PicturePasses {
-  // Noise and fringe BEFORE the cube, on the source; sharpen AFTER every warp
-  // and layer, so nothing resamples it (`detail.ts`, «Order»). Repair FIRST, on
-  // the source: a copied pixel then takes the same develop, look, warp and
-  // layer as its neighbours, and a denoise sees a repaired picture.
-  const { pre: detailPre, post } = detailPasses(opts.detail, scale);
-  const repairPass = makeRepairPass(opts.repair ?? [], ar);
-  const gainPass = raw ? makeGainMapPass(opts.calibration?.gain) : null;
-  const geometry = raw ? { ...opts, cameraWarp: opts.calibration?.warp ?? null } : opts;
-  return {
-    pre: [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre],
-    passes: [
-      ...geometryPasses(geometry, ar),
-      ...layerPasses(opts.layers, ar, undefined, rasters),
-      ...post,
-      ...vignettePasses(opts, { width: ar, height: 1 }),
-    ],
-  };
-}
+// The pass chain lives in its own module so a host that only DRAWS a
+// picture (Trips, the Studio — item 34) does not take the export with it.
+export { picturePasses, type PassSettings, type PicturePasses } from './picture-passes';
 
 /** The subjects of a delivery, segmented on `image`, and the count the run reports. */
 async function segmentFor(
@@ -453,17 +399,6 @@ async function renderFromRaw(raw: { file: File; gain: number; profile?: ProfileR
  */
 function withCalibration(opts: RollRenderOptions) {
   return { ...opts, cameraWarp: opts.calibration?.warp ?? null };
-}
-
-/**
- * The post-crop vignette for this delivery, in the frame its crop cuts —
- * after the sharpen, as the stage draws it. One place, so the SDR base and
- * the HDR rendition cannot be vignetted differently.
- */
-function vignettePasses(opts: PassSettings, source: PictureSize) {
-  const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
-  const pass = postVignettePass(opts.vignette, source.width, source.height, ratio, opts.framing);
-  return pass ? [pass] : [];
 }
 
 /** A grader's canvas copied to a 2D canvas, so a second render cannot replace it. */

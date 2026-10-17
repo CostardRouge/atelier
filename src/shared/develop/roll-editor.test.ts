@@ -94,6 +94,15 @@ describe('openAfterRemovals', () => {
 });
 
 describe('editorKeyAction', () => {
+  it('carries the open picture along the band on ⌥← / ⌥→, and leaves every other ⌥ chord alone', () => {
+    expect(editorKeyAction(press({ key: 'ArrowLeft', altKey: true }))).toBe('move-earlier');
+    expect(editorKeyAction(press({ key: 'ArrowRight', altKey: true, repeat: true }))).toBe('move-later');
+    expect(editorKeyAction(press({ key: 'ArrowRight', altKey: true, shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'ArrowRight', altKey: true, metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'ArrowLeft', altKey: true, targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', altKey: true }))).toBeNull();
+  });
+
   it('maps the editor keys', () => {
     expect(editorKeyAction(press({ key: 'ArrowLeft' }))).toBe('previous');
     expect(editorKeyAction(press({ key: 'ArrowRight', repeat: true }))).toBe('next');
@@ -318,7 +327,7 @@ describe('pictureAfterRestore', () => {
 describe('workbenchTabsFor', () => {
   it('gives a photograph every tab and a clip its three — Adjust, Crop and Export', () => {
     expect(workbenchTabsFor(false)).toBe(WORKBENCH_TABS);
-    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(['adjust', 'crop', 'export']);
+    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(['adjust', 'crop', 'export', 'history']);
     expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(CLIP_TABS);
   });
 });

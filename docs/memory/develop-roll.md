@@ -1518,6 +1518,156 @@ view. Rules:
   on are always drawn ahead of it; the reveal of the open cell takes the
   same `pad` as its margin, by arithmetic on the body's own scroll position.
 
+## The roll's ORDER is the document's: a cell is carried, the roll sorted (2026-10-17, item 29 of `docs/lightroom-gaps.md`)
+
+His «vas-y avec tes recommandations» on pass 5's first item. The grid itself
+already existed (the band pulled up, the contact sheet — face D above); what
+was missing was choosing the order. Rules:
+
+- **ONE order, the roll's.** A sort is a VERB that rewrites `roll.pictures`
+  (`sortRoll`: `name` natural through `Intl.Collator` numeric, `date` on
+  `ref.lastModified` — the capture instant for an instance's picture, the
+  file's date for a local one, named so in the README — `reverse` by
+  families), undone by ⌘Z, never a per-device VIEW sort beside a user order
+  as Lightroom has: a second order would leave ←/→, the sheet, the agent's
+  `develop.pictures` and a drag disagreeing about "next". A file's variants
+  compare equal (stable sort) and reverse keeps each run of one file's
+  pictures in its order. `rollSortedBy` greys a sort that would change
+  nothing, with its reason. The rows live in the FILTER chip's panel
+  (*Order*, a value-less glyph `choice` like *Thumbnails*), so the band and
+  the sheet both carry them.
+- **A move names a NEIGHBOUR, never an index** (`RollMoveAnchor`:
+  `{before}` · `{after}` · `start` · `end`, `movePicturesTo`): a drop on a
+  filtered band must leave the pictures it hides where they are. Several
+  pictures land together in their ROLL order whichever was grabbed; a move
+  that changes nothing is the same roll (no undo step). `stripDrop`
+  (pure, `roll-strip.ts`) gives a point a row — the one under it, else the
+  nearest — then a side: across the row's flow, or up the page on a row of
+  one cell (a column, a panorama); `dropAnchor` turns the slot into the
+  first shown picture not moving, else the last before it.
+- **The gesture** (`useCarry` in `RollBand.tsx`, shared by the band and the
+  sheet through `StripCells`): a MOUSE arms on press and lifts past
+  `PRESS_SLOP` (a click never travels; a modified press stays the
+  selection's); a FINGER arms only when its hold fires — the hold still
+  turns the selection on (or marks the cell inside it), so «hold, then move»
+  is the carry and «hold, release» stays the selection. The `ol` keeps a
+  permanent non-passive `touchmove` that cancels only while a finger is
+  armed: a listener added after `touchstart` is too late for Chrome's
+  compositor, and without it the scroller pans and cancels the pointer. The
+  machine listens on WINDOW, not the cell: a cell scrolled out of the drawn
+  window (`cellsInView`) unmounts under the carry. A marked cell carries
+  the marked pictures the strip SHOWS. Escape (capture phase,
+  `preventDefault`) puts back without stepping out of the selection. The
+  click a mouse release ends on is swallowed for ONE task (`setTimeout 0`) —
+  a 400 ms window ate the next real click; a hold's `swallow` is reset on
+  the next `pointerdown`, since a finger that carried never taps.
+- **⌥← / ⌥→** carry the open picture past its neighbour ON THE BAND (a
+  picture the band hides is stepped over, or the key would look dead); the
+  cell menu adds *Move to the start / end of the roll*. Agent commands
+  `develop.movePictures` and `develop.sortRoll`.
+- **Trap**: a route that names no picture opens the FIRST — moving it away
+  swapped the stage. `reorder` names the open picture in the route before
+  the write, in the same task.
+- Driven headless at 1440 × 1000 (mouse: carry, click, ⌥←/→, ⌘Z, Escape, a
+  selection of two, the three sorts, the sheet) and 390 × 844 touch (a swipe
+  scrolls and moves nothing; hold-then-move carries, the band sliding at its
+  edge; the next tap opens). Not on his Mac or iPhone — iOS's own long press
+  under the non-passive `touchmove` is unseen.
+
+## History and snapshots are read OFF the journal; going back is a write (2026-10-17, item 31 of `docs/lightroom-gaps.md`)
+
+His «avec tes recommandations». Rules (`snapshots.ts`, pure; `HistoryPanel.tsx`):
+
+- **No second record.** The steps ARE the journal (`pictureJournal`, synthetic
+  `earlier` steps included, said "standard order"); each row's state is
+  folded from `asShot(p)` and captioned by the making-of's own
+  `chapterCaption`. A SNAPSHOT is `RollPicture.snapshots` (roll v8): a name, a
+  time and `sectionValues(p, PICTURE_EDITS)` — every section, so a restore
+  writes them all. At most `SNAPSHOT_MAX` (24), refused with its reason.
+- **Going back is a WRITE, never a cut** (Lightroom drops the steps above
+  the one it edits from): `restoreState` + `update(…, 'restore')`, a new
+  `JournalVia` captioned `· restored`, one undo step; the list never loses a
+  row by being looked back on. An agent's restore journals `agent`, like
+  every command. Taking, renaming or removing a snapshot changes no section,
+  so it journals nothing (still an undo step: a document write).
+- Snapshots are never an edit, never carried by Apply-to/paste/presets, never
+  in an export mark's key (`KEYED` is a whitelist); a `clone` variant takes
+  them (and the journal) through `structuredClone`, a `fresh` one does not.
+- **The tab** is the inspector's sixth, `history`, last (a look back, not a
+  step of the work), on a clip too; no letter (H is help). The stage is the
+  preview: a restored develop reaches the sliders through the write-through
+  drafts like an undo does — measured: Adjust's exposure reads +1.00 EV after
+  a click on a +1 snapshot. On a phone the bottom bar holds seven cells at
+  390 px.
+- Agent commands: `develop.history`, `develop.saveSnapshot` (not
+  `develop.snapshot`, which is an IMAGE of the stage), `develop.restore`.
+- Driven headless at 1440 × 1000 and 390 × 844 touch: Take, an edit, a click
+  back, ⌘Z, a reload keeping both lists, *As shot*, a rename through ⋯, the
+  three commands. Not on his Mac or iPhone; no hover preview (the stage is
+  the preview, ⌘Z the safety net).
+
+## A picture's edit TAKEN into Trips or the Studio (2026-10-17, item 34 of `docs/lightroom-gaps.md`)
+
+His «avec tes recommandations». The hosts «gain rendering, not panels»
+(`photo-editor.md` §4), so the edit is drawn there and edited here. Rules:
+
+- **PULLED, copied, never linked.** The host lists the rolls of this browser
+  that hold its file (`offersFor`, `sameMediaRef`, re-read on focus —
+  `use-develop-offers.ts`) in a «From Develop» row under its correction
+  (`FromDevelopRow`, a child of `DevelopSection`); **Use** writes BY VALUE.
+  Develop never writes into a trip or a project (a document is edited by the
+  tool that holds it, and a link would need the roll on every device). A
+  later change is an **Update** offered when the picture's last journal
+  step is newer than `from.at` (`carriedIsStale`), never pushed.
+- **What crosses where.** The develop and (Trips only) the look go into the
+  host's OWN fields — `PostSlide.develop` / `.grade`, the Studio's develop
+  entry —, where they stay the host's to edit; what Use lists is what it
+  writes (a null develop or look leaves the host's alone). The passes
+  (`CARRIED_SECTIONS`: perspective, lens + an `onRender` lens profile,
+  detail, repair, layers with subject masks, vignette) are a `CarriedEdit`
+  beside them, drawn through the one `picturePasses` (`picture-passes.ts`,
+  out of `roll-render.ts` so a host does not import the export) with
+  `aspect: 'original'`, no framing, `raw: false`. The crop and border STAY
+  (the frame is the host's), said in the verb's title. The Studio's look is
+  the project's, so it never crosses there.
+- **Refused**: a develop made on the SENSOR (`isRawDevelop`) — the hosts draw
+  the camera's render, where those numbers mean something else. A clip
+  crosses its develop (and look) only.
+- **The origin is kept even with no pass** (`CarriedEdit` always carries
+  `from`), so the row can say where the develop came from and offer an
+  update; renderers read `drawnEdit` (made on THIS file — `from.media` against
+  the host's ref — AND drawing a pass), the row reads `carriedOn`. A slide
+  given another picture draws none of it, with no write needed.
+- **Where it is stored.** Trips: `PostSlide.edit` (v35 — no stored slide
+  holds one; the number moved so an older build refuses a `.roadtrip.json`
+  holding one rather than exporting without it), resolved to `DeckSlide.edit`
+  by `deckSlides`, a collage's FIRST cell only. Studio: `SavedDevelop.edit`,
+  on the develop's own entry under its hash, so the history, the save and
+  the sync carry it with no new field (an entry with an edit and an as-shot
+  develop survives; `writeDevelop` keeps the edit unless given one).
+- **Trap — a module cycle.** `project-types → media-develop → (carried-edit →
+  roll-types → crop-aspect → project-types)` loaded `ASPECT_PRESETS` as
+  undefined and failed ten spec files at import. The stored shape and its
+  reader live in `carried-record.ts`, which reads each section through its
+  own reader and takes only TYPES from `roll-types`; a document model imports
+  that, never `carried-edit.ts`.
+- **Renderers**: Trips' stage (`BadgeStage.graderFor`: `setPasses` on the held
+  grader, keyed on `carriedKey` + masks in/out), the rail, `badgeToPng`
+  (`editPasses`), the painted clip (`gradedOnce`); the Studio's stage (a held
+  PASS grader for a still that carries passes, beside the live
+  `createLutRenderer` it keeps for everything else) and `exportPhotoVariant`
+  (`opts.edit`). Kernels in the FILE's pixels (`carriedPassesOver`: the
+  grader's width over `natural`). Subject masks are asked once per file and
+  SIZE (`carried-rasters.ts`, 24 held) — the export segments at its own size
+  rather than upscaling the stage's. The Develop SHEET does not draw the
+  passes and says so in its `note`.
+- Driven headless at 1280 × 900: Trips — the row, Use (develop +
+  perspective + vignette), the stage and `trips.snapshot` drawing them, v35
+  stored, ✕ taking them off; Studio — Use, the stage's corner darkened by the
+  vignette, `exportPhotoVariant` with and without, ✕. Update was checked by
+  spec only; nothing on his Mac or phone, and the bridge to the Studio
+  (`roadtrip-hook` scene) does not carry a slide's edit.
+
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure) + an **Auto** button in the

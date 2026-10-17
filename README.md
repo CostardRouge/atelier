@@ -285,6 +285,13 @@ sheet, and **Apply to N other media** writes the same numbers onto every other
 photo and clip of the project, each under its own hash, while Done writes the
 one in hand. **Presets** are the same personal book as in Trips (below).
 
+**From Develop** works here as in Trips: a roll holding the media with work on
+it is named under the correction, and **Use** takes its develop and its
+perspective, lens, detail, repair, layers and vignette — drawn over a
+photograph by the stage and the still export. The look stays in Develop,
+since the Studio's is the whole project's; the edit is kept with the media's
+correction, under the same hash.
+
 **Output transform.** Conversion LUTs (D-Log→709, Apple Log→709, S-Log→709)
 are authored for a Rec.709 reference display — BT.1886, gamma 2.4, a dark
 grading suite. A browser shows roughly gamma 2.2, so those looks arrive
@@ -1784,6 +1791,21 @@ and how far they overlap. A wheel colours without brightening; only the
 the sheet says so — an 8-bit picture has nothing above white to give back;
 developing a RAW is what the next phases are for (`docs/photo-develop.md`).
 
+**From Develop.** When a roll of the Develop tool holds the slide's picture
+with work on it, a **From Develop** row under the correction names that roll,
+and **Use** takes the picture's whole edit: its develop and its look into the
+slide's own fields — where they stay yours to change — and its perspective,
+lens, detail, repair, layers with their masks, and post-crop vignette, drawn
+by the stage, the rail, the PNG deck and the painted clip. Its crop and border
+stay in Develop: the frame is the slide's. It is a **copy** with where it came
+from, not a link: a later change in Develop is offered as **Update**, never
+pushed, and the ✕ takes the edit off while the correction and the look stay.
+It belongs to the file it was made on — a slide given another picture draws
+none of it — and a picture developed on its sensor is refused, the slide
+drawing the camera's own render. Several rolls holding the picture are listed
+behind the row's ⋯. The Develop sheet itself shows the correction and the
+look; it says so when the picture also carries an edit it does not draw.
+
 **The same light on many pictures.** The sheet's header has **Copy** and
 **Paste** — one set of numbers kept for the session, never stored, and the
 same clipboard the Studio's sheet reads, so a correction crosses the two tools
@@ -2032,10 +2054,46 @@ same selection and bar, the cells in four sizes from its ⋯ panel or with
 **−** / **=** — to sort and to
 act on many; it covers the picture and the band and leaves the inspector, so
 the numbers you are about to apply stay in view, and a click on a picture
-opens it and closes the sheet (on a phone it is the whole screen). **Focus**
+opens it and closes the sheet (on a phone it is the whole screen).
+
+**The roll's order is yours.** Drag a cell along the band or across the
+contact sheet and put it down where it belongs — with a mouse just carry it
+(a click still opens), with a finger hold it first, then move; a bar shows
+where it will land, the band slides at its edges so a long roll can be
+crossed, and **Esc** puts it back. A marked cell carries every marked
+picture with it, in their order. **⌥← / ⌥→** move the open picture one
+place, and a cell's menu sends one to the start or the end of the roll. The
+filter panel's **Order** row sorts the whole roll **by file name**
+(naturally: `DJI_0009` before `DJI_0010`), **by date** (oldest first — the
+capture time for a picture from your Winnow, the file's own date for one
+from a folder) or **turns it round**; a file's variants stay together after
+it, and a sort the roll is already in is greyed. A sort or a move rewrites
+the roll's one order — the band, ←/→, the sheet and the export's list all
+follow it — and **⌘Z** puts it back. **Focus**
 (**F**, or the ⤢ button above the picture) puts the band, the inspector and
 the page bar away and leaves the photograph alone; **←/→** still step, and
 **F**, ⤢ or **Esc** brings everything back.
+
+**History and snapshots.** The inspector's last tab, **History**, lists the
+picture's steps newest first — each with what it changed (`+1 EV · contrast
++30`, `from another picture`, `by an agent`) — down to *As shot*, and above
+them its **snapshots**: *Take* keeps every section of the picture as it
+stands (the develop, the crop, the look, the layers, the repair…) under a
+name you can change from its ⋯. A click on a step or a snapshot puts the
+picture back to it in one step of its own — **⌘Z** undoes the click, and
+nothing of the history is lost by looking back, unlike Lightroom's, which
+drops the steps above the one you edit from. Both are kept in the roll, so
+they are still there after a reload or on another device, where **⌘Z** is
+not; a variant made *as edited* takes them along. A picture edited before
+the history existed lists its sections in a standard order and says so.
+
+**Into Trips and the Studio.** A picture's work here is taken from the other
+side: a Trips slide or a Studio media showing the same file lists this roll
+in a **From Develop** row, and **Use** copies the develop, the look (Trips
+only — the Studio's look is the project's) and every pass — perspective,
+lens, detail, repair, layers, vignette — which their stages and exports then
+draw. The crop and the border stay here, and a later change is offered there
+as an update rather than pushed (see Trips, «From Develop»).
 
 **Clips.** A roll takes a video the way it takes a photograph: from a folder
 or a drop (the clip alone — its `.srt` flight log stays the Studio's), from

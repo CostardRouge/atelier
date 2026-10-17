@@ -15,6 +15,9 @@ import {
   createRollDoc,
   migrateRollDoc,
   movePicture,
+  movePicturesTo,
+  rollSortedBy,
+  sortRoll,
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
@@ -121,6 +124,43 @@ describe('editing the strip', () => {
     expect(movePicture(doc, 2, -5, 3).pictures.map((p) => p.ref.name)).toEqual(['c', 'a', 'b']);
     expect(movePicture(doc, 1, 1, 3)).toBe(doc);
     expect(movePicture(doc, 9, 0, 3)).toBe(doc);
+  });
+
+  it('moves several pictures together, in their roll order, beside a picture that stays', () => {
+    const doc = roll(['a', 'b', 'c', 'd', 'e']);
+    const names = (r: RollDoc) => r.pictures.map((p) => p.ref.name).join('');
+    // Grabbed in any order, they land in the order they held.
+    expect(names(movePicturesTo(doc, ['p4', 'p2'], { before: 'p1' }, 3))).toBe('bdace');
+    expect(names(movePicturesTo(doc, ['p1', 'p3'], { after: 'p5' }, 3))).toBe('bdeac');
+    expect(names(movePicturesTo(doc, ['p5'], 'start', 3))).toBe('eabcd');
+    expect(names(movePicturesTo(doc, ['p1'], 'end', 3))).toBe('bcdea');
+    expect(movePicturesTo(doc, ['p1', 'p2'], { before: 'p3' }, 3)).toBe(doc);
+    expect(movePicturesTo(doc, ['p2'], { before: 'p2' }, 3)).toBe(doc);
+    expect(movePicturesTo(doc, ['p2'], { before: 'nope' }, 3)).toBe(doc);
+    expect(movePicturesTo(doc, ['nope'], 'start', 3)).toBe(doc);
+    expect(movePicturesTo(doc, ['p3'], 'start', 3).updatedAt).toBe(3);
+  });
+
+  it('sorts the roll by name naturally, by date, or turns it round — each family kept together', () => {
+    n = 0;
+    const doc = addPictures(
+      createRollDoc('r', 'local', 1, 'r1'),
+      [ref('DJI_0010.JPG', { lastModified: 30 }), ref('DJI_0009.JPG', { lastModified: 50 }), ref('dji_0100.jpg', { lastModified: 10 })],
+      2,
+      ids,
+    );
+    // A variant of the first file, made after it.
+    const withVariant = addVariant(doc, 'p1', 'fresh', 'v1', 3);
+    const names = (r: RollDoc) => r.pictures.map((p) => `${p.ref.name}${p.variant ? `#${p.variant}` : ''}`);
+    expect(names(sortRoll(withVariant, 'name', 4))).toEqual(['DJI_0009.JPG', 'DJI_0010.JPG', 'DJI_0010.JPG#2', 'dji_0100.jpg']);
+    expect(names(sortRoll(withVariant, 'date', 4))).toEqual(['dji_0100.jpg', 'DJI_0010.JPG', 'DJI_0010.JPG#2', 'DJI_0009.JPG']);
+    expect(names(sortRoll(withVariant, 'reverse', 4))).toEqual(['dji_0100.jpg', 'DJI_0009.JPG', 'DJI_0010.JPG', 'DJI_0010.JPG#2']);
+    const byName = sortRoll(withVariant, 'name', 4);
+    expect(sortRoll(byName, 'name', 5)).toBe(byName);
+    expect(rollSortedBy(byName.pictures, 'name')).toBe(true);
+    expect(rollSortedBy(byName.pictures, 'date')).toBe(false);
+    expect(rollSortedBy(byName.pictures, 'reverse')).toBe(false);
+    expect(rollSortedBy(roll(['a']).pictures, 'reverse')).toBe(true);
   });
 
   it('removes pictures by id, and hands back the same roll when none match', () => {

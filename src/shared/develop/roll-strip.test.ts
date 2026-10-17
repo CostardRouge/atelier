@@ -15,6 +15,9 @@ import {
   columnLayout,
   columnsForWidth,
   defaultStripPrefs,
+  dropAnchor,
+  stripDrop,
+  DROP_BAR,
   foldBelow,
   heightForRows,
   justifyRows,
@@ -287,5 +290,35 @@ describe('the band’s filter', () => {
     const shown = stripFilterCounts(all, cullingOf, true);
     expect(shown.get('all')).toBe(4);
     expect(shown.get('ignored')).toBe(1);
+  });
+});
+
+describe('where a carried picture lands', () => {
+  // Two rows: a, b, c side by side, then d alone (a panorama).
+  const cell = (id: string, x: number, y: number, w: number, h: number) => ({ id, x, y, w, h, cap: 0 });
+  const cells = [cell('a', 0, 0, 100, 80), cell('b', 104, 0, 100, 80), cell('c', 208, 0, 100, 80), cell('d', 0, 84, 308, 80)];
+
+  it('takes the side of the cell across a row, the bar in the gap', () => {
+    expect(stripDrop(cells, { x: 10, y: 40 })).toEqual({ slot: 0, bar: { x: -DROP_BAR, y: 0, w: DROP_BAR, h: 80 } });
+    expect(stripDrop(cells, { x: 90, y: 40 })?.slot).toBe(1);
+    expect(stripDrop(cells, { x: 90, y: 40 })?.bar.x).toBe((100 + 104 - DROP_BAR) / 2);
+    expect(stripDrop(cells, { x: 300, y: 40 })).toEqual({ slot: 3, bar: { x: 308, y: 0, w: DROP_BAR, h: 80 } });
+  });
+
+  it('takes the half up the page on a row of one cell, and the nearest row off the cells', () => {
+    expect(stripDrop(cells, { x: 280, y: 100 })).toEqual({ slot: 3, bar: { x: 0, y: 84 - DROP_BAR, w: 308, h: DROP_BAR } });
+    expect(stripDrop(cells, { x: 10, y: 150 })).toEqual({ slot: 4, bar: { x: 0, y: 164, w: 308, h: DROP_BAR } });
+    expect(stripDrop(cells, { x: 150, y: -30 })?.slot).toBe(1);
+    expect(stripDrop(cells, { x: 150, y: 400 })?.slot).toBe(4);
+    expect(stripDrop([], { x: 0, y: 0 })).toBeNull();
+  });
+
+  it('names the picture a slot lands beside, never one that is moving', () => {
+    const shown = ['a', 'b', 'c', 'd'];
+    expect(dropAnchor(shown, new Set(['b']), 0)).toEqual({ before: 'a' });
+    expect(dropAnchor(shown, new Set(['b']), 1)).toEqual({ before: 'c' });
+    expect(dropAnchor(shown, new Set(['b']), 4)).toEqual({ after: 'd' });
+    expect(dropAnchor(shown, new Set(['c', 'd']), 3)).toEqual({ after: 'b' });
+    expect(dropAnchor(['a'], new Set(['a']), 0)).toBeNull();
   });
 });
