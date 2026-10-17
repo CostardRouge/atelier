@@ -89,6 +89,11 @@ def evaluate(
     worst = summary.get("groups", [])[:5]
     if len(summary.get("groups", [])) > 1:
         log("worst groups: " + ", ".join(f"{g['group']} ΔE {g['de2000_mean']:.2f}" for g in worst))
+    v = summary["variants"]
+    if v["groups"]:
+        log(f"{v['groups']} group(s) hold several edits of one original ({v['pairs']} pairs): the edits differ "
+            f"from their own mean by ΔE2000 {v['spread_de2000_mean']:.2f} — seeing only the original, no model "
+            f"does much better on them; this one scores {v['model_de2000_mean']:.2f} there")
     if summary["years"]:
         log("by capture year: " + " · ".join(f"{y['year']} ΔE {y['de2000_mean']:.2f} "
                                              f"(nothing {y['identity_de2000_mean']:.2f}, {y['pairs']} pairs)"

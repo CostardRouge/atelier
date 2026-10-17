@@ -132,6 +132,7 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
     model.eval()
     ds = PairDataset(pairs)
     rows: list[dict] = []
+    targets: dict[str, list[tuple[int, np.ndarray, tuple]]] = {}  # per group: the edits, for their spread
     for i in range(len(ds)):
         a, b, _, pid = ds[i]
         a, b = a.unsqueeze(0).to(device), b.unsqueeze(0).to(device)
@@ -151,6 +152,7 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
                  ceiling_coarse_de2000_mean=float(delta_e2000(srgb_to_lab(coarse(ceiling)), lab_t).mean()),
                  structure=None if lined != lined else lined, id=pid)  # None: too flat to judge
         rows.append(s)
+        targets.setdefault(f"{pairs[i].source}/{pairs[i].group}", []).append((i, tgt, src.shape))
         if keep:
             keep(pid, a[0], b[0], out[0])
     keys = ("psnr", "de76_mean", "de76_p95", "de2000_mean", "de2000_p95")
@@ -174,7 +176,27 @@ def evaluate_pairs(model: AdaptiveLUT, pairs: list[Pair], device: str,
                "psnr": float(np.mean([r["psnr"] for r in rs if np.isfinite(r["psnr"])] or [0])),
                "de2000_mean": float(np.mean([r["de2000_mean"] for r in rs]))} for g, rs in by_group.items()]
     summary["groups"] = sorted(groups, key=lambda g: -g["de2000_mean"])
+    summary["variants"] = variant_spread(targets, rows)
     return summary
+
+
+def variant_spread(targets: dict[str, list[tuple[int, np.ndarray, tuple]]], rows: list[dict]) -> dict:
+    """Groups holding SEVERAL edits of one original, cut alike: each edit's ΔE00 to the mean of its group's
+    edits. A model that sees only the original answers once for all of them, so that spread is about the best
+    it can score on those pairs — the part of the error that is his choosing, not the model's failing."""
+    spread, model, groups = [], [], 0
+    for edits in targets.values():
+        if len(edits) < 2 or len({(t.shape, shape) for _, t, shape in edits}) != 1:
+            continue
+        groups += 1
+        mean = np.mean([t for _, t, _ in edits], axis=0)
+        lab_mean = srgb_to_lab(mean)
+        for i, t, _ in edits:
+            spread.append(float(delta_e2000(srgb_to_lab(t), lab_mean).mean()))
+            model.append(rows[i]["de2000_mean"])
+    return {"groups": groups, "pairs": len(spread),
+            "spread_de2000_mean": float(np.mean(spread)) if spread else float("nan"),
+            "model_de2000_mean": float(np.mean(model)) if model else float("nan")}
 
 
 def train(
