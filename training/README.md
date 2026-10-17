@@ -341,6 +341,12 @@ reste entier. `make eval` donne aussi l'erreur **par année de prise de vue**
 modèle rate. Un run `since` ne se compare qu'à un autre run du même `since`,
 sa validation ne contenant pas les mêmes groupes.
 
+**Plusieurs retouches d'un même original** : `make eval` mesure aussi de
+combien elles diffèrent de leur moyenne. Le modèle ne voit que l'original et
+donne une seule réponse pour toutes ; cet écart est donc à peu près le mieux
+qu'il puisse faire sur ces paires-là — la part de l'erreur qui vient de tes
+choix, pas de lui.
+
 **Une retouche recadrée, tournée ou redressée** est retrouvée dans son
 original par `ingest` (`align.py`, par corrélation de luminance ; un
 redressement jusqu'à ±6°) et la paire est préparée sur les mêmes pixels. Une

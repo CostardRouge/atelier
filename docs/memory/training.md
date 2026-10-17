@@ -142,7 +142,15 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   reading: his pairs mix years of styles; `train.since` (pairs captured on or
   after a date, from each Winnow group's `winnow.json`) and `eval`'s «by
   capture year» line exist to test exactly that. How to apply: judge a
-  `since` run on ITS validation only — it holds other groups.
+  `since` run on ITS validation only — it holds other groups. MEASURED the
+  same day: his pairs were all CAPTURED 2024–2026 and the error does not
+  fall with the year (model/doing-nothing 0.53 · 0.53 · 0.59, 2026 the
+  worst), so capture year is not the split — and a capture date is not an
+  EDIT date: no Winnow row Atelier reads carries an export date. Next
+  suspect, measured by `eval` since: several edits of ONE original (his
+  groups are one original + N edits) are different answers to one input,
+  and their spread around their own mean bounds what any input-only model
+  scores on them («N group(s) hold several edits…»).
 - **The weighing CNN sees the WHOLE picture during training** (`train.
   whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
   training CROP (a quarter of a 512 px picture, at full detail) while eval
