@@ -163,7 +163,7 @@ export const TOOLS: Tool[] = [
     label: 'Flight Atlas',
     subtitle: 'Every flight · experimental',
     blurb:
-      'Draw every drone flight you select on one map and animate them together — staggered, in relay, on the hour flown or day by day — with trails, glows and a clock. Only the GPS track of each log is read.',
+      'Draw a set of drone flights on one map and animate them together — staggered, in relay, on the hour flown or day by day — with trails, glows and a clock. Each atlas is kept on this device, logs included. Only the GPS track of each log is read.',
     Component: AtlasTool,
     preload: LOAD.atlas,
     accepts: ['video+telemetry', 'telemetry'],

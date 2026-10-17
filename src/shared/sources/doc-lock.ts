@@ -24,7 +24,7 @@ export const DOC_LOCK_CHANNEL = 'atelier:documents';
 export const YIELD_TIMEOUT_MS = 1500;
 
 /** The kinds of document one tab edits at a time. */
-export type LockedKind = 'trip' | 'project' | 'roll';
+export type LockedKind = 'trip' | 'project' | 'roll' | 'atlas';
 
 /** The Web Lock a document is edited under — one name per kind and id. */
 export function lockName(kind: LockedKind, id: string): string {

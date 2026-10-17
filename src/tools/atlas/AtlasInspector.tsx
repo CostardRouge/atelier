@@ -64,6 +64,19 @@ interface AtlasInspectorProps {
   reading: { done: number; total: number } | null;
   empty: readonly string[];
   onAddFiles: (files: File[]) => void;
+  /** Telemetry clips and logs ticked in the Library — offered to the atlas. */
+  librarySelected: number;
+  onAddLibrary: () => void;
+  /** Flights whose log this device does not keep. */
+  missing: number;
+  /** Logs picked to bring the missing ones back — only matching texts are kept. */
+  onFindMissing: (files: File[]) => void;
+  /** Take the hidden flights out of the atlas. */
+  onRemoveHidden: () => void;
+  /** The Winnow clips the atlas already draws, `<host>/<id>`. */
+  winnowHeld: ReadonlySet<string>;
+  /** What an add is doing, or what it did. */
+  adding: string | null;
   tilesOn: boolean;
   setTilesOn: (on: boolean) => void;
   onFit: () => void;
@@ -156,6 +169,7 @@ function LayerButton({ id, label, on, onPick, foot }: { id: AtlasLayer; label: R
  */
 export default function AtlasInspector(p: AtlasInspectorProps) {
   const { settings: s, update } = p;
+  const missingRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const [surprise, setSurprise] = useState(1);
@@ -251,7 +265,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       id="atlas.flights"
       title="Flights"
       badge={<span className="font-mono text-2xs text-muted tabular-nums">{shown}/{p.flights.length}</span>}
-      info="Every DJI telemetry log (.srt) selected in the Library becomes a flight. Only the GPS track is read — never the video. From a connected Winnow, only each clip's .srt is downloaded. Hover a flight to single it out on the map."
+      info="This atlas's flights: DJI telemetry logs (.srt) added from files, a folder, the Library's ticked clips or a connected Winnow. Only the GPS track is read — never the video — and each log's text is kept on this device with the atlas, so it reopens without the files. Hover a flight to single it out on the map."
     >
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-1.5">
@@ -261,7 +275,12 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           <Button size="sm" variant="ghost" onClick={() => folderRef.current?.click()}>
             {Icons.folder} A folder
           </Button>
-          <AtlasWinnow onAdd={p.onAddFiles} />
+          {p.librarySelected > 0 && (
+            <Button size="sm" variant="ghost" onClick={p.onAddLibrary} title="Add the telemetry clips and logs ticked in the Library — a flight already here is skipped">
+              {Icons.plus} {p.librarySelected} ticked in the Library
+            </Button>
+          )}
+          <AtlasWinnow onAdd={p.onAddFiles} held={p.winnowHeld} />
           <input
             ref={fileRef}
             type="file"
@@ -285,6 +304,30 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             }}
           />
         </div>
+        {p.missing > 0 && (
+          <div className="flex flex-col gap-1.5 px-3 py-2 rounded-control border border-warn-line bg-warn-wash text-xs text-warn">
+            <span>
+              {p.missing} log{p.missing === 1 ? ' is' : 's are'} not on this device — {p.missing === 1 ? 'its flight is' : 'their flights are'} left out until {p.missing === 1 ? 'it comes' : 'they come'} back.
+            </span>
+            <span>
+              <Button size="sm" variant="ghost" onClick={() => missingRef.current?.click()}>
+                {Icons.folder} Find them in a folder
+              </Button>
+            </span>
+            <input
+              ref={missingRef}
+              type="file"
+              multiple
+              className="hidden"
+              {...({ webkitdirectory: '' } as Record<string, string>)}
+              onChange={(e) => {
+                p.onFindMissing([...(e.target.files ?? [])].filter((f) => /\.srt$/i.test(f.name)));
+                e.target.value = '';
+              }}
+            />
+          </div>
+        )}
+        {p.adding && <p className="m-0 text-xs text-muted" role="status">{p.adding}</p>}
         {p.reading && (
           <p className="m-0 text-xs text-muted font-mono tabular-nums">
             Reading logs… {p.reading.done}/{p.reading.total}
@@ -323,11 +366,16 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             <Button size="sm" variant="ghost" onClick={() => p.setHidden(new Set(p.flights.map((f) => f.id)))}>
               Hide all
             </Button>
+            {p.hidden.size > 0 && (
+              <Button size="sm" variant="ghost" onClick={p.onRemoveHidden} title="Take the hidden flights out of this atlas — their files are untouched">
+                Remove {p.hidden.size} hidden
+              </Button>
+            )}
           </div>
         )}
         <ul className="m-0 p-0 list-none flex flex-col max-h-[calc(var(--app-h)*0.32)] overflow-y-auto border border-line rounded-control divide-y divide-line">
           {p.flights.length === 0 && !p.reading && (
-            <li className="px-3 py-3 text-sm text-muted">No flight yet — select DJI clips or loose .srt logs in the Library, or add some here.</li>
+            <li className="px-3 py-3 text-sm text-muted">No flight yet — add DJI logs (.srt) from files, a folder, the Library or your Winnow.</li>
           )}
           {p.flights.map((f, i) => {
             const off = p.hidden.has(f.id);

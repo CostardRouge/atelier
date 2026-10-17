@@ -1,6 +1,4 @@
 import { useMemo, useRef, useState } from 'react';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { assetRemoteId, splitAssetsBySource } from '../../shared/library/asset-source';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import WinnowPicker from '../../shared/sources/winnow/picker/WinnowPicker';
 import { addFlightLogs } from '../../shared/sources/winnow/picker/flight-logs';
@@ -15,40 +13,27 @@ import { Icons } from '../../shared/ui/icons';
  * FLIGHTS — a span of days (the last one used there), only the clips that
  * carry a DJI log (asked of the server as clips, then narrowed to those with
  * a `.srt`), the Logbook with every track read, everything ticked — and an
- * add that brings each clip's `.srt` ALONE, never its video. The logs land in
- * the Library like any file; the Library selects what it adds, so the atlas
- * draws them at once.
+ * add that brings each clip's `.srt` ALONE, never its video, into the open
+ * atlas (its text kept with it on this device, its Winnow id beside it).
  *
  * Drawn only while an instance is connected; the panel's file and folder
  * buttons stay the way in for logs on disk.
  */
-export default function AtlasWinnow({ onAdd }: { onAdd: (files: File[]) => void }) {
+export default function AtlasWinnow({ onAdd, held }: { onAdd: (files: File[]) => void; held: ReadonlySet<string> }) {
   const { connection, client } = useWinnowConnection();
-  const lib = useAssetLibrary();
   const [open, setOpen] = useState(false);
   const onAddRef = useRef(onAdd);
   onAddRef.current = onAdd;
-
-  // The clips whose log the Library already holds — drawn, never ticked twice.
-  const held = useMemo(() => {
-    const out = new Set<string>();
-    if (!connection) return out;
-    for (const a of splitAssetsBySource(lib.assets).remote.get(connection.id) ?? []) {
-      const rid = assetRemoteId(a);
-      if (rid && a.parts.srt) out.add(rid);
-    }
-    return out;
-  }, [lib.assets, connection]);
 
   const host = useMemo<PickerHost | null>(
     () =>
       connection && client
         ? {
             title: `Add flights from ${connection.id}`,
-            destination: 'Library · Flight Atlas',
+            destination: 'this atlas',
             start: { day: todayIso(), scope: 'span', view: 'book', tracks: true },
             held: (row) => held.has(`${connection.id}/${row.id}`),
-            heldLabel: 'in library',
+            heldLabel: 'in this atlas',
             // A log is a few hundred kilobytes of text: ticking every flight costs little.
             openTicks: 'all',
             accepts: (row) => logStateOf(row) === 'with',

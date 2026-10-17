@@ -1,247 +1,221 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { selectedUsableAssets } from '../../shared/library/capabilities';
-import { allowTiles, tilesAllowed } from '../../shared/map/osm-tiles';
-import { useSurface } from '../../shared/ui/use-surface';
-import IconButton from '../../shared/ui/IconButton';
-import { Icons } from '../../shared/ui/icons';
-import AtlasInspector from './AtlasInspector';
-import AtlasStage from './AtlasStage';
-import AtlasTransport from './AtlasTransport';
-import { AtlasTiles } from './atlas-tiles';
-import { visibleBox, type AtlasView } from './atlas-view';
-import type { WorldBox } from './atlas-flight';
-import { PlayClock } from './play-clock';
-import { useAtlasExport, type ExportKind } from './use-atlas-export';
-import { useAtlasFlights, type FlightSource } from './use-atlas-flights';
-import { useAtlasLogos } from './atlas-logos';
-import { useAtlasScene } from './use-atlas-scene';
-import { useAtlasSettings } from './use-atlas-settings';
-import { parseLayer, type AtlasLayer } from './atlas-layers';
-import { withPlacement, type PieceId, type Placement } from './atlas-place';
+import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
+import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
+import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
+import type { AtlasDoc } from './atlas-doc';
+import { ATLAS_BASE, ATLAS_HOME, atlasFromRef, atlasPath, atlasRef, parseAtlasPath } from './atlas-route';
+import { ATLAS_DOC_KIND, pullAtlas, pushOnce } from './atlas-remote';
+import { askPersistence, deleteAtlas, deleteSyncRecord, getAtlas, getSyncRecord, listAtlases, putAtlas, putSyncRecord } from './atlas-store';
+import AtlasEditor, { type SaveState } from './AtlasEditor';
+import AtlasGallery from './AtlasGallery';
 
-const LAYER_KEY = 'atelier.atlas.layer';
-
-function readLayer(): AtlasLayer {
-  try {
-    return parseLayer(localStorage.getItem(LAYER_KEY));
-  } catch {
-    return 'map';
-  }
-}
-
-/** What the atlas reads: anything carrying a DJI telemetry log. */
-const ATLAS_KINDS = ['video+telemetry', 'telemetry'] as const;
+const SAVE_DEBOUNCE_MS = 600;
 
 /**
- * Flight Atlas — EXPERIMENTAL. Every drone flight the Library holds, drawn
- * together on one map and animated, the way the Perth bus map draws a city's
- * day: a faint network of every route, comets for what is in the air, a
- * clock and a count in the corner. Only the GPS track of each `.srt` is
- * read; the videos are never opened.
+ * The Flight Atlas's shell — atlases first, like Develop's rolls
+ * (`develop/DevelopTool.tsx`): `/atlas/home` lists them, `/atlas/<atlas>` opens
+ * one in the editor. Only the shell knows about documents and persistence.
  *
- * Nothing is a document: the flights are the Library's selection, the dials
- * are a per-browser convenience (`use-atlas-settings.ts`), and what leaves is
- * an MP4 or a PNG painted by the preview's own painter.
+ * Edits save LOCAL NOW (a short debounce into `atelier-atlas`) and, for an
+ * atlas kept on a connected instance whose bucket keeps atlases, REMOTE ON
+ * IDLE through the one shared sync machine. One tab edits an atlas at a time
+ * (`use-document-lock.tsx`); another shows it read only.
  */
 export default function AtlasTool() {
-  useSurface('darkroom');
-  const lib = useAssetLibrary();
-  const [settings, update, reset] = useAtlasSettings();
-  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
-  const [focusId, setFocusId] = useState<string | null>(null);
-  const [freeView, setFreeView] = useState<AtlasView | null>(null);
-  // The tiles switch is OFF every time the atlas opens (`local-first.md`).
-  const [tilesOn, setTilesOnState] = useState(false);
-  const [paintSeq, setPaintSeq] = useState(0);
+  const path = useHashRoute();
+  const ref = parseAtlasPath(path);
+  const [open, setOpen] = useState<AtlasDoc | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('saved');
 
-  const sources = useMemo<FlightSource[]>(
-    () =>
-      selectedUsableAssets(ATLAS_KINDS, lib.assets, lib.selection).flatMap((a) =>
-        a.parts.srt ? [{ id: a.id, name: a.baseName, srt: a.parts.srt, video: a.parts.video ?? null }] : [],
-      ),
-    [lib.assets, lib.selection],
-  );
-  const { flights, reading, empty, aircraft } = useAtlasFlights(sources);
-  const logos = useAtlasLogos();
-  const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft, logos);
-
-  const clock = useRef(new PlayClock()).current;
-  const storyRef = useRef(scene.core.story);
-  storyRef.current = scene.core.story;
-  // The inspector's layer: one of its chips, or whatever was clicked on the stage.
-  const [layer, setLayerState] = useState<AtlasLayer>(readLayer);
-  const setLayer = useCallback((next: AtlasLayer) => {
-    // Opening the intro or the outro plays it, unless the playhead is already in it.
-    const st = storyRef.current;
-    if (next === 'intro' && st.intro > 0 && clock.t >= st.intro) {
-      clock.seek(0);
-      clock.setPlaying(true);
-    } else if (next === 'outro' && st.outro > 0 && clock.t < st.intro + st.flights) {
-      clock.seek(st.intro + st.flights);
-      clock.setPlaying(true);
-    }
-    setLayerState(next);
-    try {
-      localStorage.setItem(LAYER_KEY, next);
-    } catch {
-      /* the layer holds for the session */
-    }
-  }, [clock]);
-  useEffect(() => clock.setTotal(scene.core.story.total), [clock, scene.core.story.total]);
-  // Start playing the first time there is something to play.
-  const started = useRef(false);
+  const persistAsked = useRef(false);
   useEffect(() => {
-    if (!started.current && scene.core.flights.length > 0 && !reading) {
-      started.current = true;
-      clock.setPlaying(true);
-    }
-  }, [clock, scene.core.flights.length, reading]);
-
-  const tiles = useMemo(() => (tilesOn ? new AtlasTiles(() => setPaintSeq((n) => n + 1)) : null), [tilesOn]);
-  useEffect(() => () => tiles?.dispose(), [tiles]);
-  useEffect(() => tiles?.setTone(settings.map.tileTone), [tiles, settings.map.tileTone]);
-  useEffect(() => setPaintSeq((n) => n + 1), [settings.map.tileTone]);
-
-  const setTilesOn = useCallback((on: boolean) => {
-    if (on && !tilesAllowed()) allowTiles(true);
-    setTilesOnState(on);
+    if (persistAsked.current) return;
+    persistAsked.current = true;
+    // Asked once per visit: a browser that agrees keeps the atlases from eviction.
+    void askPersistence();
   }, []);
 
-  const stickerNames = useMemo(() => [...new Set(scene.core.aircraft.filter((n): n is string => !!n))], [scene.core.aircraft]);
-  const streetsSwitch = useMemo(() => ({ on: tilesOn, set: setTilesOn }), [tilesOn, setTilesOn]);
+  const mine = isWithinRoute(path, ATLAS_BASE);
+  useEffect(() => {
+    if (mine && path !== ATLAS_HOME && !ref) navigate(ATLAS_HOME, { replace: true });
+  }, [mine, path, ref]);
 
-  const onFreeView = useCallback(
-    (view: AtlasView) => {
-      setFreeView(view);
-      if (settings.camera.frame !== 'free') update((s) => ({ ...s, camera: { ...s.camera, frame: 'free' } }));
-    },
-    [settings.camera.frame, update],
+  // Load the atlas the route names — keyed on the reference, so editing it never reloads.
+  const loadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!mine || !ref) return;
+    if (loadedRef.current === ref && open) return;
+    if (open && atlasFromRef(ref, [open])) {
+      loadedRef.current = ref;
+      return;
+    }
+    loadedRef.current = ref;
+    let alive = true;
+    void listAtlases().then((all) => {
+      if (!alive || loadedRef.current !== ref) return;
+      const found = atlasFromRef(ref, all);
+      if (found) setOpen(found);
+      else navigate(ATLAS_HOME, { replace: true });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [mine, ref, open]);
+
+  // --- the local save machine ---------------------------------------------
+  const saveTimer = useRef<number | null>(null);
+  const pending = useRef<AtlasDoc | null>(null);
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+  const lockRef = useRef<DocumentLock | null>(null);
+  const openRef = useRef<AtlasDoc | null>(null);
+  openRef.current = open;
+
+  const syncDriver = useMemo<DocumentSyncDriver<AtlasDoc>>(
+    () => ({
+      getRecord: getSyncRecord,
+      putRecord: putSyncRecord,
+      deleteRecord: deleteSyncRecord,
+      putDoc: putAtlas,
+      deleteDoc: deleteAtlas,
+      push: pushOnce,
+      pull: (remote, id, etag) => pullAtlas(remote, id, etag),
+    }),
+    [],
   );
-  const onFit = useCallback(() => {
-    setFreeView(null);
-    update((s) => ({ ...s, camera: { ...s.camera, frame: 'all' } }));
-  }, [update]);
-
-  const focus = useMemo(() => {
-    if (!focusId) return null;
-    const i = scene.core.flights.findIndex((f) => f.id === focusId);
-    return i >= 0 ? i : null;
-  }, [focusId, scene.core.flights]);
-
-  const exporter = useAtlasExport(settings);
-  const onExport = useCallback(
-    (kind: ExportKind) => {
-      clock.setPlaying(false);
-      void exporter.run({ kind, at: clock.t }, scene.core, scene.viewAt, tilesOn);
+  const sync = useDocumentSync<AtlasDoc>({
+    doc: open,
+    driver: syncDriver,
+    kind: ATLAS_DOC_KIND,
+    canPush: () => lockRef.current?.canWrite() ?? true,
+    beforeFlush: () => flushRef.current(),
+    onDiscardPending: () => {
+      pending.current = null;
     },
-    [clock, exporter, scene.core, scene.viewAt, tilesOn],
+    onReplace: (doc) => replaceOpen(doc),
+    onDeleted: () => {
+      setOpen(null);
+      navigate(ATLAS_HOME);
+    },
+  });
+  const { edited, resume, clear } = sync;
+
+  const lock = useDocumentLock<AtlasDoc>({
+    kind: 'atlas',
+    id: open?.id ?? null,
+    flush: () => flushRef.current(),
+    discard: () => {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      pending.current = null;
+    },
+    load: getAtlas,
+    onReload: (doc, editing) => {
+      replaceOpen(doc);
+      if (editing) void resume(doc).then((r) => r?.replaced && replaceOpen(r.doc));
+    },
+  });
+  lockRef.current = lock;
+  const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
+
+  function replaceOpen(doc: AtlasDoc) {
+    pending.current = null;
+    setOpen(doc);
+  }
+
+  const flush = useCallback(async () => {
+    const doc = pending.current;
+    pending.current = null;
+    if (!doc || !lockRef.current?.canWrite()) return;
+    const ok = await putAtlas(doc);
+    setSaveState(ok ? 'saved' : 'failed');
+    if (ok) {
+      edited(doc);
+      lockRef.current?.saved(doc);
+    }
+  }, [edited]);
+  flushRef.current = flush;
+
+  // Leaving the tool or the tab: what the debounce holds is written now.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void flushRef.current();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      void flushRef.current();
+    };
+  }, []);
+
+  /** Every edit, as a function of the atlas as it is NOW — two quick edits never undo each other. */
+  const change = useCallback(
+    (fn: (doc: AtlasDoc) => AtlasDoc) => {
+      if (lockRef.current && !lockRef.current.canWrite()) return;
+      const cur = pending.current ?? openRef.current;
+      if (!cur) return;
+      const next = fn(cur);
+      if (next === cur) return;
+      openRef.current = next;
+      setOpen(next);
+      pending.current = next;
+      setSaveState('saving');
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => {
+        saveTimer.current = null;
+        void flush();
+      }, SAVE_DEBOUNCE_MS);
+    },
+    [flush],
   );
 
-  // A zone is drawn on the map, or taken from the view on screen.
-  const [drawingZone, setDrawingZone] = useState(false);
-  const onZone = useCallback(
-    (zone: WorldBox) => {
-      setDrawingZone(false);
-      update((s) => ({ ...s, camera: { ...s.camera, frame: 'zone', zone } }));
-    },
-    [update],
-  );
-  const onZoneFromView = useCallback(() => {
-    const look = { bearing: settings.camera.bearing, tilt: settings.camera.tilt };
-    onZone(visibleBox(scene.viewAt(clock.t), look, scene.mapFrame.w, scene.mapFrame.h));
-  }, [onZone, scene, clock, settings.camera.bearing, settings.camera.tilt]);
+  // Opening a remote atlas: the mirror opens at once, the instance is asked.
+  const resumedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      resumedFor.current = null;
+      clear();
+      return;
+    }
+    if (lock.state !== 'editing' && lock.state !== 'free') return;
+    if (resumedFor.current === open.id) return;
+    resumedFor.current = open.id;
+    void resume(open).then((r) => {
+      if (r?.replaced) replaceOpen(r.doc);
+    });
+  }, [open, resume, clear, lock.state]);
 
-  const onPlace = useCallback((piece: PieceId, place: Placement) => update((s) => withPlacement(s, piece, place)), [update]);
+  const handleOpen = useCallback((doc: AtlasDoc) => {
+    // The copy in memory may carry edits the debounce had not written yet: kept unless the store's is newer.
+    setOpen((cur) => (cur && cur.id === doc.id && cur.updatedAt >= doc.updatedAt ? cur : doc));
+    loadedRef.current = atlasRef(doc);
+    navigate(atlasPath(atlasRef(doc)));
+  }, []);
 
-  const look = useMemo(() => ({ bearing: settings.camera.bearing, tilt: settings.camera.tilt }), [settings.camera.bearing, settings.camera.tilt]);
+  const onBack = useCallback(() => {
+    void flushRef.current();
+    navigate(ATLAS_HOME);
+  }, []);
 
-  const empties = flights.length === 0 && !reading;
-
+  const showGallery = !ref || !open;
   return (
-    <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Flight Atlas">
-      <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex flex-col gap-2 min-h-0 min-w-0 flex-[1.4] @min-[860px]:flex-none">
-          <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
-            <span className="font-semibold text-sm">Flight Atlas</span>
-            <span className="font-mono text-3xs uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-warn-line bg-warn-wash text-warn">
-              Experimental
-            </span>
-            <span className="font-mono text-2xs text-muted tabular-nums">
-              {reading
-                ? `reading ${reading.done}/${reading.total}…`
-                : `${scene.core.flights.length} flight${scene.core.flights.length === 1 ? '' : 's'} · ${scene.places.length} place${scene.places.length === 1 ? '' : 's'}`}
-            </span>
-            <span className="ml-auto flex items-center gap-1">
-              <IconButton size="sm" variant="ghost" label="Fit every flight" onClick={onFit}>
-                {Icons.map}
-              </IconButton>
-            </span>
-          </div>
-          <div className="relative flex-1 min-h-[220px] flex rounded-paper-lg bg-frame border border-line p-2">
-            <AtlasStage
-              core={scene.core}
-              viewAt={scene.viewAt}
-              clock={clock}
-              tiles={tiles}
-              focus={focus}
-              format={settings.format}
-              theme={settings.hud.theme}
-              look={look}
-              onFreeView={onFreeView}
-              drawingZone={drawingZone}
-              onZone={onZone}
-              paintSeq={paintSeq}
-              selected={layer}
-              onPick={setLayer}
-              onPlace={onPlace}
-            />
-            {empties && (
-              <div className="absolute inset-0 grid place-items-center p-6 pointer-events-none">
-                <p className="m-0 max-w-sm text-center text-sm text-on-media bg-black/55 px-4 py-3 rounded-paper">
-                  Select DJI clips — or loose <code className="font-mono">.srt</code> logs — in the Library, or add them from the panel (files,
-                  a folder, or your Winnow&rsquo;s logs alone): every flight&rsquo;s GPS track is drawn here, never its video.
-                </p>
-              </div>
-            )}
-          </div>
-          <AtlasTransport clock={clock} activity={scene.core.activity} story={scene.core.story} streets={streetsSwitch} />
-        </div>
-        <aside className="flex-1 min-h-0 flex flex-col overflow-hidden border border-line rounded-paper-lg bg-surface shadow-paper-soft @min-[860px]:flex-none" aria-label="Flight Atlas settings">
-          <AtlasInspector
-            layer={layer}
-            onLayer={setLayer}
-            settings={settings}
-            update={update}
-            onReset={() => {
-              reset();
-              setFreeView(null);
-            }}
-            flights={flights}
-            hidden={hidden}
-            setHidden={setHidden}
-            places={scene.places}
-            placeNames={scene.placeNames}
-            onFocus={setFocusId}
-            reading={reading}
-            empty={empty}
-            onAddFiles={lib.addFiles}
-            tilesOn={tilesOn}
-            setTilesOn={setTilesOn}
-            onFit={onFit}
-            drawingZone={drawingZone}
-            setDrawingZone={setDrawingZone}
-            onZoneFromView={onZoneFromView}
-            aircraftFound={scene.aircraftFound}
-            unnamed={scene.unnamed}
-            stickerNames={stickerNames}
-            dateRange={scene.core.dateRange}
-            total={scene.core.story.total}
-            exporter={exporter}
-            onExport={onExport}
+    <div className="flex flex-col flex-1 min-h-0 gap-3">
+      {/* Outside the inert editor: its «Edit here» must stay pressable. */}
+      {!showGallery && lock.band}
+      {showGallery ? (
+        <AtlasGallery openAtlasId={open?.id ?? null} onOpen={handleOpen} />
+      ) : (
+        <div ref={editorRef} className="contents">
+          <AtlasEditor
+            key={open.id}
+            doc={open}
+            change={change}
+            saveState={saveState}
+            onBack={onBack}
+            band={sync.pill ? <div className="flex justify-end">{sync.pill}</div> : null}
           />
-        </aside>
-      </div>
-    </section>
+        </div>
+      )}
+    </div>
   );
 }
