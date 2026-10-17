@@ -213,6 +213,19 @@ export interface TripPlace {
    * and over the water rule; absent = decided by those (`vehicle-plan.ts`).
    */
   arriveBy?: VehicleRef;
+  /**
+   * The boat that sails the WATER of the hop leading here when the road
+   * decides (2026-10-17, the Trajet band): only the sea part — the road on
+   * either side stays the stage's — where `arriveBy` would put the whole hop
+   * on the boat. Absent = the trip's water rule's boat.
+   */
+  crossBy?: VehicleRef;
+  /**
+   * The hop leading here was NOT driven — a flight, a train (2026-10-17): Virée
+   * hides the vehicle along it and draws its line dashed, the water rule never
+   * reads it. Over `arriveBy` and `crossBy`.
+   */
+  flown?: true;
 }
 
 /**

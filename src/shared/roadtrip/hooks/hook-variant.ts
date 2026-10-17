@@ -271,6 +271,10 @@ export interface HookPlace {
   left?: string;
   /** How it was reached — the vehicle of the hop that leads here (`TripPlace.arriveBy`). */
   arriveBy?: VehicleRef;
+  /** The boat for that hop's water only (`TripPlace.crossBy`). */
+  crossBy?: VehicleRef;
+  /** That hop was not driven (`TripPlace.flown`). */
+  flown?: true;
 }
 
 export interface HookStage {

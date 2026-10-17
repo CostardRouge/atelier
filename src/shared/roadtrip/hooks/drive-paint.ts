@@ -516,16 +516,38 @@ function paintMap(
     if (o.trail && moment.s > 0) {
       const { index } = pointOn(plan, moment.s);
       const carAt = at(moment.point);
-      g.beginPath();
-      g.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i <= index; i++) g.lineTo(pts[i].x, pts[i].y);
-      g.lineTo(carAt.x, carAt.y);
-      g.strokeStyle = halo;
-      g.lineWidth = 9 * u * lw;
-      g.stroke();
-      g.strokeStyle = o.trailColor;
-      g.lineWidth = 5.5 * u * lw;
-      g.stroke();
+      // A hop NOT driven (a flight) is no trail: its stretch is drawn dashed
+      // and thin, the driven runs either side solid (`TripPlace.flown`).
+      const hidden = scratch.road?.hidden ?? [];
+      const runs: { flown: boolean; points: { x: number; y: number }[] }[] = [];
+      const flownAt = (s: number) => hidden.some((r) => s > r.s0 && s < r.s1);
+      const trail = [...pts.slice(0, index + 1).map((p, i) => ({ p, s: plan.path.cum[i] })), { p: carAt, s: moment.s }];
+      for (let i = 1; i < trail.length; i++) {
+        const flown = hidden.length > 0 && flownAt((trail[i - 1].s + trail[i].s) / 2);
+        const last = runs[runs.length - 1];
+        if (last && last.flown === flown) last.points.push(trail[i].p);
+        else runs.push({ flown, points: [trail[i - 1].p, trail[i].p] });
+      }
+      for (const run of runs) {
+        g.beginPath();
+        g.moveTo(run.points[0].x, run.points[0].y);
+        for (let i = 1; i < run.points.length; i++) g.lineTo(run.points[i].x, run.points[i].y);
+        if (run.flown) {
+          g.setLineDash([3 * u * lw, 7 * u * lw]);
+          g.lineCap = 'round';
+          g.strokeStyle = o.trailColor;
+          g.lineWidth = 3.5 * u * lw;
+          g.stroke();
+          g.setLineDash([]);
+          continue;
+        }
+        g.strokeStyle = halo;
+        g.lineWidth = 9 * u * lw;
+        g.stroke();
+        g.strokeStyle = o.trailColor;
+        g.lineWidth = 5.5 * u * lw;
+        g.stroke();
+      }
     }
   }
 
@@ -616,7 +638,11 @@ function paintMap(
   for (const card of cards) paintCard(g, card, u);
 
   // The vehicle, its shadow first — and, on a ferry, the trip's vehicle driving on or off it.
-  {
+  // Over a hop not driven it fades out and back in (`DriveRoad.shown`).
+  const vehicleShown = scratch.road ? scratch.road.shown(t, moment) : 1;
+  if (vehicleShown > 0) {
+    g.save();
+    g.globalAlpha *= vehicleShown;
     const model = currentModel;
     const spec = current;
     // A ferry the road crosses by carries the road's own car: the ship docks
@@ -698,6 +724,7 @@ function paintMap(
     });
     if (rider && rider.front) paintRider(g, riding!, rider, onPaper, ink);
     if (change) paintChange(g, change, (t - change.t) / TRANSITION_SECONDS, p, vehiclePx, model.kind === 'boat', spec.color, ink);
+    g.restore();
   }
 
   // The furniture: a compass, a scale bar, the distance so far.

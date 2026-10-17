@@ -132,6 +132,29 @@ describe('the road’s vehicles', () => {
     expect(v.segments[1].ref).toEqual({ borrow: 'viper-jet' });
   });
 
+  it('sails a crossing on the place’s own boat, and only its water', () => {
+    const stops = road().stops.map((s, i) => (i === 2 ? { ...s, source: { name: s.name, lat: s.lat, lon: s.lon, crossBy: { borrow: 'viper-jet' as const } } } : s));
+    const { v } = vehiclesOf(road(stops));
+    expect(v.segments.map((s) => s.source)).toEqual(['trip', 'water', 'trip']);
+    expect(v.segments[1].ref).toEqual({ borrow: 'viper-jet' });
+  });
+
+  it('hides the vehicle along a hop that was not driven, and never reads its water', () => {
+    const stops = road().stops.map((s, i) =>
+      i === 2 ? { ...s, source: { name: s.name, lat: s.lat, lon: s.lon, flown: true as const, arriveBy: { borrow: 'viper-jet' as const } } } : s,
+    );
+    const { plan, v } = vehiclesOf(road(stops));
+    expect(v.segments.map((s) => [s.source, !!s.hidden])).toEqual([
+      ['trip', false],
+      ['place', true],
+      ['trip', false],
+    ]);
+    expect(v.segments[1].s0).toBeCloseTo(plan.path.stopS[1]);
+    expect(v.segments[1].s1).toBeCloseTo(plan.path.stopS[2]);
+    expect(v.hops[1]).toBeNull();
+    expect(ferryDocks(v)).toEqual([]);
+  });
+
   it('drives a stage on the vehicle it names, and keeps the water for the boat', () => {
     const stages = [STAGES[0], { ...STAGES[1], vehicle: { fleet: 'van' } }];
     const { v } = vehiclesOf(road(), { stages });
@@ -163,6 +186,25 @@ describe('the road over time', () => {
     const end = plan.at(plan.seconds);
     expect(r.at(plan.seconds, end)).toMatchObject({ color: '#232326', finish: 'matte' });
     for (let i = 1; i < r.transitions.length; i++) expect(r.transitions[i].t).toBeGreaterThan(r.transitions[i - 1].t);
+  });
+
+  it('fades the vehicle out over a hop not driven and shows it at the stops either side', () => {
+    const stops = road().stops.map((s, i) => (i === 2 ? { ...s, source: { name: s.name, lat: s.lat, lon: s.lon, flown: true as const } } : s));
+    const plan = drivePlan(road(stops), o)!;
+    const { road: r } = driveRoad(plan, input());
+    expect(r.hidden).toHaveLength(1);
+    // The moment the vehicle is halfway along the hop not driven, found on the timeline.
+    const s1 = plan.path.stopS[1];
+    const s2 = plan.path.stopS[2];
+    let mid = 0;
+    for (let t = 0; t <= plan.seconds; t += 0.01) if (plan.at(t).s <= (s1 + s2) / 2) mid = t;
+    expect(r.shown(mid, plan.at(mid))).toBe(0);
+    // At the stop it lands on, the vehicle stands whole again.
+    let landed = plan.seconds;
+    for (let t = plan.seconds; t >= 0; t -= 0.01) if (plan.at(t).s >= s2 - 1e-6) landed = t;
+    expect(r.shown(landed + 0.02, plan.at(landed + 0.02))).toBeGreaterThan(0.85);
+    // The road before it is driven, and shown whole.
+    expect(r.shown(0.01, plan.at(0.01))).toBe(1);
   });
 
   it('drives a borrowed vehicle the whole way, with no change to mark', () => {

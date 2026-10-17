@@ -10,8 +10,8 @@
  *
  * A hop runs from one located place to the next in the order the trip was
  * lived — stages by their first day, places in their own order — and is left
- * out when its destination says how it was reached (`arriveBy`): that hop is
- * the author's already.
+ * out when its destination says how it was reached (`arriveBy`) or that it was
+ * not driven (`flown`): that hop is the author's already.
  *
  * Pure and DOM-free.
  */
@@ -63,7 +63,7 @@ export function seaHops(
     for (const place of stage.places) {
       if (!place.coords) continue;
       const here = { name: place.name, ...place.coords };
-      if (prev && (prev.lat !== here.lat || prev.lon !== here.lon) && !place.arriveBy) {
+      if (prev && (prev.lat !== here.lat || prev.lon !== here.lon) && !place.arriveBy && !place.flown) {
         const terrain = hopTerrain(land, samplesBetween(prev, here), rule);
         if (terrain.water) out.push({ from: prev.name, to: here.name, waterKm: terrain.waterKm });
       }
