@@ -31,7 +31,7 @@ export default function CrossingsPanel({
           <SwitchRow
             label="On water, a boat by itself"
             checked={c.auto}
-            onChange={(auto) => set({ auto })}
+            onChange={(auto) => set({ auto, asked: true })}
             hint={
               <>
                 <p>

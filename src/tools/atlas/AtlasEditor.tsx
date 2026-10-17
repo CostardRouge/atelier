@@ -21,6 +21,8 @@ import { useAtlasScene } from './use-atlas-scene';
 import { DEFAULT_SETTINGS, sanitizeSettings, type AtlasSettings } from './atlas-settings';
 import { cleanAtlasName, withFlights, withoutFlights, type AtlasDoc } from './atlas-doc';
 import { ingestLogs, type IngestItem } from './atlas-ingest';
+import { fetchLogsBack, hostOf } from './atlas-refetch';
+import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { useAtlasCover } from './use-atlas-cover';
 import { parseLayer, type AtlasLayer } from './atlas-layers';
 import { withPlacement, type PieceId, type Placement } from './atlas-place';
@@ -128,6 +130,46 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
     },
     [missing, reload],
   );
+  // Logs that came from a Winnow are fetched back there — by themselves, once
+  // per atlas opened, when that instance is connected (the gallery lab's call 2).
+  const { connection, client } = useWinnowConnection();
+  const fromWinnow = useMemo(() => {
+    const hosts = new Map<string, number>();
+    for (const m of missing) {
+      const h = hostOf(m);
+      if (h) hosts.set(h, (hosts.get(h) ?? 0) + 1);
+    }
+    // The connected instance first: its logs can come back now, whatever another host holds.
+    if (connection && hosts.has(connection.id)) return { host: connection.id, count: hosts.get(connection.id) as number, connected: true };
+    const [host, count] = [...hosts].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
+    return host ? { host, count, connected: false } : null;
+  }, [missing, connection]);
+  const fetching = useRef(false);
+  const onFetchMissing = useCallback(async () => {
+    if (!client || !connection || fetching.current) return;
+    fetching.current = true;
+    try {
+      setAdding(`Fetching logs from ${connection.id}…`);
+      const got = await fetchLogsBack(client, connection.id, missing, (done, total) => setAdding(`Fetching logs from ${connection.id}… ${done}/${total}`));
+      const parts = [
+        got.found ? `${got.found} log${got.found === 1 ? '' : 's'} back from ${connection.id}` : `No log came back from ${connection.id}`,
+        got.gone ? `${got.gone} no longer there` : '',
+        got.changed ? `${got.changed} changed since (left out)` : '',
+        got.failed ? `${got.failed} could not be asked` : '',
+      ].filter(Boolean);
+      setAdding(`${parts.join(' · ')}.`);
+      reload();
+    } finally {
+      fetching.current = false;
+    }
+  }, [client, connection, missing, reload]);
+  const askedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fromWinnow?.connected || reading || askedFor.current === doc.id) return;
+    askedFor.current = doc.id;
+    void onFetchMissing();
+  }, [fromWinnow, reading, doc.id, onFetchMissing]);
+
   const onRemoveHidden = useCallback(() => change((d) => withoutFlights(d, d.hidden)), [change]);
   const logos = useAtlasLogos();
   const scene = useAtlasScene(flights, hidden, settings, freeView, aircraft, logos);
@@ -334,6 +376,8 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
             onAddLibrary={onAddLibrary}
             missing={missing.length}
             onFindMissing={(files) => void onFindMissing(files)}
+            fromWinnow={fromWinnow}
+            onFetchMissing={() => void onFetchMissing()}
             onRemoveHidden={onRemoveHidden}
             winnowHeld={winnowHeld}
             adding={adding}

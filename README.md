@@ -1465,7 +1465,9 @@ fleet, or a model borrowed for the day (the select beside its place style, in
 the stage's card, with its paint beside it for a borrowed model); a place can say how it was reached (its **Reached by**: a
 boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
 **water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
-new trip, off for one made before it) a hop that crosses the sea sails, from
+new trip, off for one made before it — such a trip's overview asks once,
+naming the hops that cross the sea: *Sail them*, *Choose the boat* or *Not
+now*) a hop that crosses the sea sails, from
 the shore it leaves to the shore it reaches, on the boat the rule names. Its
 **Fine settings** hold the two distances the coarse coastline needs: water
 narrower than the **bridge** length stays a road, and a stop within the
@@ -3428,7 +3430,12 @@ and the logos in one `.atlas.json` file, the one copy that survives a cleared
 browser or a private window. Importing such a file always makes new atlases
 (each log is checked against the fingerprint its flight carries before it is
 kept); its presets and logos join the device's where it has none of that name.
-One tab edits an atlas at a time; another shows it read only.
+One tab edits an atlas at a time; another shows it read only. With a Winnow
+connected that keeps atlases, **Keep on <instance>…** in the ⋯ keeps it there
+too, so it opens on another device: only the atlas travels, never a log's text,
+and there the flights that came from that Winnow fetch their logs back by
+themselves (each one checked against its fingerprint); a log added from a
+folder is asked for.
 
 In the editor, *Add .srt files* / *A folder* add logs to the open atlas, a
 button adds the ones ticked in the Library, and with a Winnow connected, **From
