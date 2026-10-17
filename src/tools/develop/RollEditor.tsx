@@ -107,12 +107,15 @@ import {
   type RollDoc,
   type RollMoveAnchor,
   type RollSort,
+  type SectionValues,
   type RollExport,
   type RollPicture,
   type VariantStart,
   readRollExport,
 } from '../../shared/develop/roll-types';
 import { journalRoll } from '../../shared/develop/journal';
+import { pictureHistory, removeSnapshot, renameSnapshot, restoreState, snapshotRefusal, takeSnapshot } from '../../shared/develop/snapshots';
+import HistoryPanel from './HistoryPanel';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { fileBaseName, type Asset } from '../../shared/library/assets';
 import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identity';
@@ -1187,6 +1190,71 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       },
     },
     {
+      id: 'develop.history',
+      title: 'Read a picture’s history',
+      description:
+        'A picture’s snapshots (named states kept on purpose) and its steps, newest first, each with a caption saying what it changed — the open picture unless named. Kept in the roll, so it outlives a reload where develop.undo does not. Go back to either with develop.restore.',
+      params: { picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        return {
+          picture: target.id,
+          snapshots: (target.snapshots ?? []).map((s) => ({ id: s.id, name: s.name, at: new Date(s.at).toISOString() })),
+          steps: pictureHistory(target).map((s) => ({
+            step: s.key,
+            caption: s.caption,
+            at: s.at === null ? null : new Date(s.at).toISOString(),
+            ...(s.current ? { current: true } : {}),
+            ...(s.reconstructed ? { reconstructed: true } : {}),
+          })),
+        };
+      },
+    },
+    {
+      id: 'develop.saveSnapshot',
+      title: 'Keep a picture’s state under a name',
+      description:
+        'A snapshot of the picture as it stands — every section, under a name (Snapshot N when absent) — to come back to with develop.restore. Not develop.snapshot, which is an IMAGE of the stage. One undo step.',
+      params: {
+        name: { type: 'string', description: 'The snapshot’s name.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        const refusal = snapshotRefusal(target);
+        if (refusal) throw new CommandError('unavailable', refusal);
+        const id = takePictureSnapshot(target.id, typeof p.name === 'string' ? p.name : '');
+        const kept = latest.current.pictures.find((x) => x.id === target.id)?.snapshots?.find((s) => s.id === id);
+        if (!kept) throw new CommandError('failed', 'the snapshot was not kept');
+        return { picture: target.id, snapshot: kept.id, name: kept.name };
+      },
+    },
+    {
+      id: 'develop.restore',
+      title: 'Put a picture back to a snapshot or a step',
+      description:
+        'Every section of the picture back to a snapshot (its id) or a step of its history (its `step` from develop.history, `shot` for as shot). One undo step, recorded as a step of its own — nothing of the history is lost.',
+      params: {
+        snapshot: { type: 'string', description: 'A snapshot id from develop.history.', optional: true },
+        step: { type: 'string', description: 'A step from develop.history, or shot.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        if ((p.snapshot === undefined) === (p.step === undefined)) throw new CommandError('invalid', 'name one: a snapshot or a step');
+        const values =
+          p.snapshot !== undefined
+            ? target.snapshots?.find((s) => s.id === p.snapshot)?.values
+            : pictureHistory(target).find((s) => s.key === p.step)?.values;
+        if (!values) throw new CommandError('invalid', p.snapshot !== undefined ? 'no such snapshot on this picture' : 'no such step on this picture');
+        const before = latest.current;
+        // An agent's write says so, like every command's (`agent-commands.md`).
+        restorePicture(target.id, values, 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, changed: latest.current !== before, edited: now ? pictureEdits(now) : [] };
+      },
+    },
+    {
       id: 'develop.variant',
       title: 'Make a variant',
       description:
@@ -1339,6 +1407,22 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const rollPhotos = useMemo(() => roll.pictures.filter((p) => !isClipPicture(p)).length, [roll.pictures]);
   const handleWords = useCallback(
     (id: string, words: { title?: string; caption?: string }) => update((r) => setPictureWords(r, id, words)),
+    [update],
+  );
+  // The History tab (item 31, `snapshots.ts`): going back to a snapshot or a
+  // step is a WRITE journaled `via: 'restore'` — one undo step, a step of its
+  // own on top of the history; taking, renaming and removing a snapshot are
+  // document writes that change no section, so they journal nothing.
+  const restorePicture = useCallback(
+    (id: string, values: SectionValues, via: JournalVia = 'restore') => update((r) => restoreState(r, id, values), via),
+    [update],
+  );
+  const takePictureSnapshot = useCallback(
+    (id: string, name: string): string | null => {
+      const sid = newRollId();
+      update((r) => takeSnapshot(r, id, name, sid));
+      return latest.current.pictures.find((p) => p.id === id)?.snapshots?.some((s) => s.id === sid) ? sid : null;
+    },
     [update],
   );
   const handleBorder = useCallback(
@@ -2661,6 +2745,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 return false;
               }}
               onWords={(words) => handleWords(open.id, words)}
+              historyPanel={
+                <HistoryPanel
+                  picture={open}
+                  onRestore={(values) => restorePicture(open.id, values)}
+                  onTake={(name) => void takePictureSnapshot(open.id, name)}
+                  onRename={(sid, name) => update((r) => renameSnapshot(r, open.id, sid, name))}
+                  onRemove={(sid) => update((r) => removeSnapshot(r, open.id, sid))}
+                />
+              }
               onSettings={() => setSettingsOpen(true)}
               timelapseOpen={timelapseOpen}
               onTimelapseOpen={setTimelapseOpen}

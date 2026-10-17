@@ -136,7 +136,10 @@ repeated here.
   with M2 (title, caption, rights); 33 (Winnow's culling, read-only) and 30
   (variants) are BUILT; 29 is BUILT 2026-10-17 — the grid was already the
   band and the contact sheet (face D), and a cell is now dragged, sorted and
-  moved by key (`develop-roll.md`, «The roll's ORDER»).
+  moved by key (`develop-roll.md`, «The roll's ORDER»); 31 is BUILT the same
+  day — the History tab, steps read off the journal and named snapshots
+  (roll v8), going back as one undoable write (`develop-roll.md`, «History
+  and snapshots»).
 - Later, and each its own brief: 19, 20, 22, 24, 35.
 
 ## 7. His to decide

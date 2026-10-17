@@ -1574,6 +1574,38 @@ was missing was choosing the order. Rules:
   edge; the next tap opens). Not on his Mac or iPhone — iOS's own long press
   under the non-passive `touchmove` is unseen.
 
+## History and snapshots are read OFF the journal; going back is a write (2026-10-17, item 31 of `docs/lightroom-gaps.md`)
+
+His «avec tes recommandations». Rules (`snapshots.ts`, pure; `HistoryPanel.tsx`):
+
+- **No second record.** The steps ARE the journal (`pictureJournal`, synthetic
+  `earlier` steps included, said "standard order"); each row's state is
+  folded from `asShot(p)` and captioned by the making-of's own
+  `chapterCaption`. A SNAPSHOT is `RollPicture.snapshots` (roll v8): a name, a
+  time and `sectionValues(p, PICTURE_EDITS)` — every section, so a restore
+  writes them all. At most `SNAPSHOT_MAX` (24), refused with its reason.
+- **Going back is a WRITE, never a cut** (Lightroom drops the steps above
+  the one it edits from): `restoreState` + `update(…, 'restore')`, a new
+  `JournalVia` captioned `· restored`, one undo step; the list never loses a
+  row by being looked back on. An agent's restore journals `agent`, like
+  every command. Taking, renaming or removing a snapshot changes no section,
+  so it journals nothing (still an undo step: a document write).
+- Snapshots are never an edit, never carried by Apply-to/paste/presets, never
+  in an export mark's key (`KEYED` is a whitelist); a `clone` variant takes
+  them (and the journal) through `structuredClone`, a `fresh` one does not.
+- **The tab** is the inspector's sixth, `history`, last (a look back, not a
+  step of the work), on a clip too; no letter (H is help). The stage is the
+  preview: a restored develop reaches the sliders through the write-through
+  drafts like an undo does — measured: Adjust's exposure reads +1.00 EV after
+  a click on a +1 snapshot. On a phone the bottom bar holds seven cells at
+  390 px.
+- Agent commands: `develop.history`, `develop.saveSnapshot` (not
+  `develop.snapshot`, which is an IMAGE of the stage), `develop.restore`.
+- Driven headless at 1440 × 1000 and 390 × 844 touch: Take, an edit, a click
+  back, ⌘Z, a reload keeping both lists, *As shot*, a rename through ⋯, the
+  three commands. Not on his Mac or iPhone; no hover preview (the stage is
+  the preview, ⌘Z the safety net).
+
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure) + an **Auto** button in the

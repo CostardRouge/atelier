@@ -2037,6 +2037,19 @@ follow it — and **⌘Z** puts it back. **Focus**
 the page bar away and leaves the photograph alone; **←/→** still step, and
 **F**, ⤢ or **Esc** brings everything back.
 
+**History and snapshots.** The inspector's last tab, **History**, lists the
+picture's steps newest first — each with what it changed (`+1 EV · contrast
++30`, `from another picture`, `by an agent`) — down to *As shot*, and above
+them its **snapshots**: *Take* keeps every section of the picture as it
+stands (the develop, the crop, the look, the layers, the repair…) under a
+name you can change from its ⋯. A click on a step or a snapshot puts the
+picture back to it in one step of its own — **⌘Z** undoes the click, and
+nothing of the history is lost by looking back, unlike Lightroom's, which
+drops the steps above the one you edit from. Both are kept in the roll, so
+they are still there after a reload or on another device, where **⌘Z** is
+not; a variant made *as edited* takes them along. A picture edited before
+the history existed lists its sections in a standard order and says so.
+
 **Clips.** A roll takes a video the way it takes a photograph: from a folder
 or a drop (the clip alone — its `.srt` flight log stays the Studio's), from
 the ticked Library, or from your Winnow, where the picker (below) lists
