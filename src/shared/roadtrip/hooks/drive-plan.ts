@@ -1001,32 +1001,45 @@ export function buildPath(points: readonly PlanPoint[], path: DrivePath, hops?: 
   // null where a curve's are shared out by arc length below.
   const local: (number | null)[] = [];
   const n = points.length;
+  // Where each stop sits ON the path: where a hop of the road reaches it or
+  // leaves it, so the vehicle stays on the road through a place instead of
+  // stepping off to its dot and back — a reversal at every place, read as a
+  // tremble — and the stop itself where no road hop touches it.
+  const on = points.map((p, i) => {
+    const before = i > 0 ? hops?.[i - 1]?.via : null;
+    if (before?.length) return before[before.length - 1];
+    const after = hops?.[i]?.via;
+    return after?.length ? after[0] : p;
+  });
   for (let i = 0; i < n - 1; i++) {
     stopIndex.push(sampled.length);
     const hop = hops?.[i];
-    if (hop?.via) {
-      sampled.push(points[i]);
+    if (hop?.via?.length) {
+      const { via, viaKm } = hop;
+      sampled.push(on[i]);
       local.push(0);
-      hop.via.forEach((p, k) => {
-        sampled.push(p);
-        local.push(hop.viaKm?.[k] ?? null);
-      });
+      // Its last point is the next stop's place on the path, laid by the next hop.
+      for (let k = 0; k < via.length - 1; k++) {
+        if (k === 0 && via[0] === on[i]) continue;
+        sampled.push(via[k]);
+        local.push(viaKm ? viaKm[k] - viaKm[0] : null);
+      }
       continue;
     }
     if (path === 'straight') {
-      sampled.push(points[i]);
+      sampled.push(on[i]);
       continue;
     }
-    const p0 = points[Math.max(0, i - 1)];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[Math.min(n - 1, i + 2)];
+    const p0 = on[Math.max(0, i - 1)];
+    const p1 = on[i];
+    const p2 = on[i + 1];
+    const p3 = on[Math.min(n - 1, i + 2)];
     for (let k = 0; k < SAMPLES_PER_SEGMENT; k++) {
       sampled.push(catmullRom(p0, p1, p2, p3, k / SAMPLES_PER_SEGMENT));
     }
   }
   stopIndex.push(sampled.length);
-  sampled.push(points[n - 1]);
+  sampled.push(on[n - 1]);
   while (local.length < sampled.length) local.push(null);
 
   const cum = [0];
@@ -1042,7 +1055,9 @@ export function buildPath(points: readonly PlanPoint[], path: DrivePath, hops?: 
   for (let i = 0; i < n - 1; i++) {
     const from = stopIndex[i];
     const to = stopIndex[i + 1];
-    const hopKm = hops[i]?.km ?? 0;
+    // On the road, the road between the two places it meets — not the steps to the dots.
+    const viaKm = hops[i]?.via?.length ? hops[i]!.viaKm : undefined;
+    const hopKm = viaKm?.length ? viaKm[viaKm.length - 1] - viaKm[0] : (hops[i]?.km ?? 0);
     const arc = cum[to] - cum[from];
     for (let j = from; j < to; j++) {
       const own = hops[i]?.via ? local[j] : null;

@@ -16,7 +16,15 @@ stops listed against the clock). A hop with no road under it — a stop off the
 road, a flight between, an order never driven — keeps its curve. A flight
 (> 200 km/h and > 50 km between two fixes) CUTS the line into pieces; a
 ferry (slow, over water) stays a straight hop. Verified on his track:
-Streaky Bay → Esperance follows the Eyre Highway for 1 557 km.
+Streaky Bay → Esperance follows the Eyre Highway for 1 557 km. **A hop is
+CUT where each stop MEETS the road** (2026-10-17): its foot on the segments
+either side of the nearest fix (`footOn`), never the nearest fix itself — a
+line keeps a fix every 2 km on a straight, so a cut at a fix ran up to a
+kilometre past the place and back at EVERY stop, a reversal the vehicle drove
+and the counter counted, read as a tremble. Virée's path goes through that
+foot and not the place's dot (`buildPath`'s `on`): the vehicle stays on the
+road through a place beside it, the dot is drawn where the place is, and a
+road hop counts only the road between its two feet.
 
 ## The vehicle DRIVES the road: three styles, the RIBBON by default (2026-10-13)
 

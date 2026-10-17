@@ -424,10 +424,11 @@ describe('the path', () => {
   });
 
   it('reads a road’s direction over a chord on the ground, whatever the piece’s length', () => {
-    // A road (1 plan unit = 1 km) east for 10 km, then north for `north` km.
+    // A road (1 plan unit = 1 km) east for 10 km, then north for `north` km,
+    // from where the first stop meets it.
     const road = (north: number) => {
       const via: { x: number; y: number }[] = [];
-      for (let x = 0.5; x < 10; x += 0.5) via.push({ x, y: 0 });
+      for (let x = 0; x < 10; x += 0.5) via.push({ x, y: 0 });
       for (let y = 0; y < north; y += 0.5) via.push({ x: 10, y });
       const viaKm = via.map((p) => p.x + p.y);
       return buildPath([{ x: 0, y: 0 }, { x: 10, y: north }], 'straight', [{ via, viaKm, km: 10 + north }]);
@@ -445,6 +446,25 @@ describe('the path', () => {
     // A caller's own chord (the painter's, in plan units) still wins.
     const long = road(2000);
     expect(headingAt(long, sAlong(long, 5), 600).y).toBeGreaterThan(0.5);
+  });
+
+  it('keeps the vehicle on the road through a place beside it, never out to its dot and back', () => {
+    // Three places 1 km north of a road running east; the road's hops meet
+    // them at x = 0, 10 and 20.
+    const along = (x0: number, x1: number) => {
+      const via: { x: number; y: number }[] = [];
+      for (let x = x0; x <= x1 + 1e-9; x += 0.5) via.push({ x, y: 0 });
+      return { via, viaKm: via.map((p) => p.x - x0 + 1), km: x1 - x0 + 2 };
+    };
+    const path = buildPath([{ x: 0, y: 1 }, { x: 10, y: 1 }, { x: 20, y: 1 }], 'curved', [along(0, 10), along(10, 20)]);
+    // It never turns back: every step heads east along the road.
+    for (let i = 1; i < path.points.length; i++) {
+      expect(path.points[i].y).toBe(0);
+      expect(path.points[i].x).toBeGreaterThanOrEqual(path.points[i - 1].x);
+    }
+    // The places sit on the road, and only the road is counted.
+    expect(path.stopS).toEqual([0, 10, 20]);
+    expect(path.km![path.km!.length - 1]).toBeCloseTo(20, 9);
   });
 
   it('smooths a road’s direction over a bell: a hairpin eases in and out where a chord jolts', () => {

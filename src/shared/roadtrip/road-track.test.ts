@@ -169,6 +169,25 @@ describe('roadBetween', () => {
     expect(home.km).toBeCloseTo(go.km, 0);
   });
 
+  it('cuts the road where each stop meets it, never at the nearest fix', () => {
+    // A fix every 13.3 km east; two places 300 m north of the road, the first
+    // just past a fix (its nearest fix behind it), the second just short of one.
+    const line = roadLine(drive({ lat: -30, lon: 120 }, 3), 'raw', 0);
+    const kmPerDeg = 111.32 * Math.cos((30 * Math.PI) / 180);
+    const at = (km: number) => ({ lat: -30 + 0.3 / 110.57, lon: 120 + km / kmPerDeg });
+    const a = at(18);
+    const b = at(198);
+    const hop = roadBetween(line, a, b)!;
+    // It starts and ends level with the places…
+    expect(Math.abs(hop.via[0].lon - a.lon) * kmPerDeg).toBeLessThan(0.01);
+    expect(Math.abs(hop.via[hop.via.length - 1].lon - b.lon) * kmPerDeg).toBeLessThan(0.01);
+    // …only ever going east, so nothing is driven twice…
+    for (let k = 1; k < hop.via.length; k++) expect(hop.via[k].lon).toBeGreaterThan(hop.via[k - 1].lon);
+    // …and counts the road between them plus the step on and off it.
+    // (Cut at the fixes it ran 4.7 km back and 2 km past: about 13 km too many.)
+    expect(hop.km).toBeCloseTo(distanceKm(a, b) + 2 * 0.3, 0);
+  });
+
   it('reads the road backwards for stops listed against the clock', () => {
     const line = roadLine(drive({ lat: -30, lon: 120 }, 3), 'raw', 0);
     const hop = roadBetween(line, { lat: -30, lon: 122.6 }, { lat: -30, lon: 120 });
