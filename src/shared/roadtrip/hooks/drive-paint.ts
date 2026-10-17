@@ -47,7 +47,7 @@ import {
   type View,
   wakeStrength,
 } from './drive-plan';
-import { cameraTrack, widestFrame } from './map-camera';
+import { cameraTrack, dashShift, widestFrame } from './map-camera';
 import {
   BASEMAP_FOR_EDGE,
   BASEMAP_MAX_PX,
@@ -217,7 +217,9 @@ export function driveBox(w: number, h: number, position: DriveOptions['position'
 export function driveTrack(plan: DrivePlan, o: DriveOptions, aspect: number): CameraTrack {
   const w = 1080;
   const h = w / Math.max(1e-6, aspect);
-  return cameraTrack(plan, o, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7);
+  const box = driveBox(w, h, o.position, o.size);
+  const track = cameraTrack(plan, o, box, CAR_PX * o.carSize * 0.7);
+  return o.camera === 'follow' ? { ...track, dash: dashShift(track, box.width, (t) => plan.at(t).s) } : track;
 }
 
 /** The drive's OpenStreetMap ground: the wide raster and the pyramid along the road (`basemap-strip.ts`). */
@@ -507,16 +509,25 @@ function paintMap(
 
   // The road: the whole path faint and dashed ahead, the trail solid behind.
   const pts = plan.path.points.map(at);
+  // A dash pattern is laid in screen pixels from where its line starts (`s0`
+  // along the path): under a zooming camera it is shifted back so its dashes
+  // stay on the ground at the vehicle instead of crawling (`dashShift`).
+  const dashOffset = (s0: number, period: number) => {
+    const d = view.scale * s0 - u * (track?.dash?.(t) ?? 0);
+    return ((d % period) + period) % period;
+  };
   if (pts.length > 1) {
     if (o.ahead !== 'hidden') {
       g.beginPath();
       g.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
       g.setLineDash(o.ahead === 'dashed' ? [7 * u * lw, 9 * u * lw] : []);
+      g.lineDashOffset = dashOffset(0, 16 * u * lw);
       g.strokeStyle = onPaper ? hexToRgba(o.aheadColor, o.ahead === 'faint' ? 0.35 : 0.6) : hexToRgba('#ffffff', 0.55);
       g.lineWidth = 3 * u * lw;
       g.stroke();
       g.setLineDash([]);
+      g.lineDashOffset = 0;
     }
     if (o.trail && moment.s > 0) {
       const { index } = pointOn(plan, moment.s);
@@ -524,14 +535,14 @@ function paintMap(
       // A hop NOT driven (a flight) is no trail: its stretch is drawn dashed
       // and thin, the driven runs either side solid (`TripPlace.flown`).
       const hidden = scratch.road?.hidden ?? [];
-      const runs: { flown: boolean; points: { x: number; y: number }[] }[] = [];
+      const runs: { flown: boolean; s0: number; points: { x: number; y: number }[] }[] = [];
       const flownAt = (s: number) => hidden.some((r) => s > r.s0 && s < r.s1);
       const trail = [...pts.slice(0, index + 1).map((p, i) => ({ p, s: plan.path.cum[i] })), { p: carAt, s: moment.s }];
       for (let i = 1; i < trail.length; i++) {
         const flown = hidden.length > 0 && flownAt((trail[i - 1].s + trail[i].s) / 2);
         const last = runs[runs.length - 1];
         if (last && last.flown === flown) last.points.push(trail[i].p);
-        else runs.push({ flown, points: [trail[i - 1].p, trail[i].p] });
+        else runs.push({ flown, s0: trail[i - 1].s, points: [trail[i - 1].p, trail[i].p] });
       }
       for (const run of runs) {
         g.beginPath();
@@ -539,11 +550,13 @@ function paintMap(
         for (let i = 1; i < run.points.length; i++) g.lineTo(run.points[i].x, run.points[i].y);
         if (run.flown) {
           g.setLineDash([3 * u * lw, 7 * u * lw]);
+          g.lineDashOffset = dashOffset(run.s0, 10 * u * lw);
           g.lineCap = 'round';
           g.strokeStyle = o.trailColor;
           g.lineWidth = 3.5 * u * lw;
           g.stroke();
           g.setLineDash([]);
+          g.lineDashOffset = 0;
           continue;
         }
         g.strokeStyle = halo;

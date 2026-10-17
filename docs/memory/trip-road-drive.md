@@ -105,7 +105,17 @@ position too was tried and rejected — it stood the car up to 37 px off its
 own line. A bell spanning more than 256 samples (a whole trip seen from
 afar) reads them in power-of-two runs anchored to fixed indices, so a frame
 costs ~0.015 ms at every zoom (0.44 ms per call uncapped over 8 000 samples). Close up the car follows its bend; from afar a town's streets, and a
-hairpin smaller than the car, do not spin it. Measured locally on his track (never committed): 143 simulated stops,
+hairpin smaller than the car, do not spin it. **The dashed road ahead is
+anchored to the GROUND under a zoom** (2026-10-17, his «les pointillés
+changent durant le driving ?»): a canvas lays a dash pattern in screen pixels
+from the line's start, so every step of a following camera's pull-back slid
+the dashes near a car 500 km down the road by whole dashes — they flickered
+(a dash jumped > 3 px on 32–42 % of frames under Calm/Navigation). The track
+bakes `dash` (`dashShift`: each step's change of scale times the car's arc
+length, at 4× the track's rate) and the painter sets `lineDashOffset` from
+it, the flown trail's dashes too: 0 % after, the residue under 0.2 px. The
+Itinerary's ahead dashes start at the PEN and so travel with it — untouched.
+Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
 

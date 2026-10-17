@@ -2169,6 +2169,12 @@ export interface CameraTrack {
   /** The follow view's width in kilometres, resolved — what the panel's slider shows. */
   viewKm: number;
   at(t: number): CameraFrame;
+  /**
+   * The shift, in px of the nominal 1080-wide frame, that keeps a dash
+   * pattern counted from the path's start on the ground at the subject while
+   * the camera zooms (`dashShift`); absent where nothing zooms.
+   */
+  dash?(t: number): number;
 }
 
 /** The plan's bounding box, over the path and the stops. */

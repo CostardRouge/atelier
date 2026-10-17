@@ -408,6 +408,46 @@ export function subjectTrack(
   return { seconds, whole, viewKm, at };
 }
 
+/**
+ * How far a dash pattern counted along a path from its start must SHIFT, in
+ * px of the box's frame, for its dashes to stay on the ground where the
+ * subject is while the camera zooms. A canvas lays a pattern in screen pixels
+ * from the line's start, so each step of a pull-back moved every dash near a
+ * subject 500 km down the road by whole dashes — they crawled and flickered
+ * under a following camera (measured 2026-10-17: a dash jumped more than 3 px
+ * on a third of the frames). Each step's change of scale times the subject's
+ * distance along its path (`along`, plan units) is taken back, baked at four
+ * times the track's rate (a dash is a few pixels) and read by interpolation;
+ * away from the subject the dashes breathe with the zoom, smoothly. Baked on
+ * first read.
+ */
+export function dashShift(track: CameraTrack, boxWidth: number, along: (t: number) => number): (t: number) => number {
+  let baked: number[] | null = null;
+  const fps = TRACK_FPS * 4;
+  const n = Math.ceil(Math.max(0, track.seconds) * fps) + 1;
+  const bake = (): number[] => {
+    const out = [0];
+    let scale = boxWidth / Math.max(1e-9, track.at(0).width);
+    let s = along(0);
+    for (let k = 1; k < n; k++) {
+      const t = k / fps;
+      const next = boxWidth / Math.max(1e-9, track.at(t).width);
+      const at = along(t);
+      out.push(out[k - 1] + (next - scale) * ((s + at) / 2));
+      scale = next;
+      s = at;
+    }
+    return out;
+  };
+  return (t) => {
+    baked ??= bake();
+    const f = Math.max(0, Math.min(n - 1, t * fps));
+    const i = Math.floor(f);
+    const j = Math.min(n - 1, i + 1);
+    return baked[i] + (baked[j] - baked[i]) * (f - i);
+  };
+}
+
 /** The widest the track ever sees, in plan units — what a basemap must cover. */
 export function widestFrame(track: CameraTrack): number {
   let widest = 0;
