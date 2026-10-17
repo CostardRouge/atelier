@@ -23,7 +23,7 @@ import { useElementWidth } from '../../shared/ui/use-element-width';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import PlacesEditor, { PlaceStyleSelect } from './PlacesEditor';
 import StageRuler from './StageRuler';
-import VehicleRefSelect from './VehicleRefSelect';
+import VehicleRefSelect from '../../shared/roadtrip/VehicleRefSelect';
 import { useLoupe } from './use-loupe';
 import { Icons } from '../../shared/ui/icons';
 import IconButton from '../../shared/ui/IconButton';
