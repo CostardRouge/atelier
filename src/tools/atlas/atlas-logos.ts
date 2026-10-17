@@ -12,6 +12,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { findGround, hasTransparency, keyOut } from './atlas-logo-key';
 import { drawableSvg, makerKey, svgWithViewBox, withSvgNamespace } from './atlas-sticker';
+import { base64ToBytes, bytesToBase64, type AtlasFileLogo } from './atlas-file';
 
 const DB_NAME = 'atelier-atlas-logos';
 const STORE = 'logos';
@@ -248,6 +249,49 @@ export async function forgetLogo(maker: string): Promise<void> {
   next.delete(key);
   publish(next);
   await write((store) => store.delete(key));
+}
+
+/** Every logo kept on this device, as a backup file carries them. */
+export async function exportLogos(): Promise<AtlasFileLogo[]> {
+  await load();
+  return [...records.values()].map((r) => ({
+    maker: r.maker,
+    fileName: r.fileName,
+    type: r.type,
+    data: bytesToBase64(r.bytes),
+    ...(r.keepGround ? { keepGround: true } : {}),
+  }));
+}
+
+/**
+ * Logos from a backup file, for the makers this device keeps none of — a logo
+ * already here wins. Each is decoded first like an import from disk, so a
+ * file that is no picture is left out. Answers how many were kept.
+ */
+export async function importLogos(incoming: readonly AtlasFileLogo[]): Promise<number> {
+  await load();
+  let kept = 0;
+  const next = new Map(logos);
+  for (const l of incoming) {
+    const maker = makerKey(l.maker);
+    if (!maker || records.has(maker)) continue;
+    let bytes: ArrayBuffer;
+    try {
+      bytes = base64ToBytes(l.data);
+    } catch {
+      continue;
+    }
+    if (bytes.byteLength > MAX_BYTES) continue;
+    const record: LogoRecord = { maker, fileName: l.fileName, type: l.type, bytes, addedAt: Date.now(), ...(l.keepGround ? { keepGround: true } : {}) };
+    const logo = await decode(record);
+    if (!logo) continue;
+    records.set(maker, record);
+    next.set(maker, logo);
+    await write((store) => store.put(record));
+    kept += 1;
+  }
+  if (kept) publish(next);
+  return kept;
 }
 
 /** The logos kept on this device, by maker key — read once, then live. */
