@@ -324,13 +324,22 @@ Pour interrompre un entraînement : `Ctrl-C` ; `--resume` repart de la
 dernière époque sauvegardée.
 
 **L'affinage sur tes paires** (`make finetune INIT=runs/<run FiveK>`) repart
-des poids FiveK avec un pas dix fois plus petit (`configs/finetune.toml`) et
+des poids FiveK avec un pas quatre fois plus petit (`configs/finetune.toml`) et
 garde un cinquième des **groupes** pour vérifier — jamais une retouche d'un
 original dont une autre retouche a servi à apprendre. `freeze_luts = true`
 dans ce fichier garde les looks appris sur FiveK et n'apprend que la façon
 de les doser par photo : utile avec peu de paires. `make eval` liste ensuite
 les groupes où le modèle est le plus loin de toi (tableau « worst groups »,
 aussi dans le tableau de bord).
+
+**Seulement tes retouches récentes** : `--set train.since=2024` (ou
+`2024-06-01`) ne garde de tes paires que celles dont l'original a été pris
+depuis cette date (lue dans le `winnow.json` de chaque groupe ; une paire
+sans date est écartée), pour l'entraînement comme pour la validation. FiveK
+reste entier. `make eval` donne aussi l'erreur **par année de prise de vue**
+(« by capture year ») : c'est elle qui dit si ton ancien style est ce que le
+modèle rate. Un run `since` ne se compare qu'à un autre run du même `since`,
+sa validation ne contenant pas les mêmes groupes.
 
 **Une retouche recadrée, tournée ou redressée** est retrouvée dans son
 original par `ingest` (`align.py`, par corrélation de luminance ; un

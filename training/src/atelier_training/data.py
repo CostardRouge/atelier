@@ -34,6 +34,18 @@ class Pair:
     group: str
     folder: Path
     label: str | None = None
+    captured: str | None = None  # the original's capture instant, from a Winnow group's winnow.json; None elsewhere
+
+
+def _captured_of(group_folder: Path, seen: dict[Path, str | None]) -> str | None:
+    if group_folder not in seen:
+        meta = group_folder / "winnow.json"
+        try:
+            seen[group_folder] = (json.loads(meta.read_text(encoding="utf-8")).get("original") or {}).get(
+                "captured_at") or None
+        except (OSError, ValueError):
+            seen[group_folder] = None
+    return seen[group_folder]
 
 
 def read_index(cache: Path, sources: list[str] | tuple[str, ...] | None = None) -> list[Pair]:
@@ -41,14 +53,33 @@ def read_index(cache: Path, sources: list[str] | tuple[str, ...] | None = None) 
     if not index.is_file():
         raise FileNotFoundError(f"{index} is missing: run `atelier-train ingest` first.")
     pairs: list[Pair] = []
+    seen: dict[Path, str | None] = {}
     for line in index.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         e = json.loads(line)
         if sources and e["source"] not in sources:
             continue
-        pairs.append(Pair(e["id"], e["source"], e["group"], cache / e["folder"], e.get("label")))
+        captured = _captured_of(Path(e["input"]).parent, seen) if e.get("input") else None
+        pairs.append(Pair(e["id"], e["source"], e["group"], cache / e["folder"], e.get("label"), captured))
     return pairs
+
+
+def since_filter(pairs: list[Pair], since: str) -> tuple[list[Pair], int, int]:
+    """Keep the pairs of the sources that carry no date (FiveK, synthetic) and the dated ones captured on or
+    after ``since`` (``YYYY`` or ``YYYY-MM-DD``). A pair of ``pairs`` with no date is left out: its age is
+    unknown. Returns the kept pairs, the count left out as older and the count left out as undated."""
+    kept, older, undated = [], 0, 0
+    for p in pairs:
+        if p.source != "pairs":
+            kept.append(p)
+        elif p.captured is None:
+            undated += 1
+        elif p.captured[:len(since)] < since:
+            older += 1
+        else:
+            kept.append(p)
+    return kept, older, undated
 
 
 def is_validation(group: str, fraction: float, seed: int = 0) -> bool:
