@@ -3372,7 +3372,12 @@ and the logos in one `.atlas.json` file, the one copy that survives a cleared
 browser or a private window. Importing such a file always makes new atlases
 (each log is checked against the fingerprint its flight carries before it is
 kept); its presets and logos join the device's where it has none of that name.
-One tab edits an atlas at a time; another shows it read only.
+One tab edits an atlas at a time; another shows it read only. With a Winnow
+connected that keeps atlases, **Keep on <instance>…** in the ⋯ keeps it there
+too, so it opens on another device: only the atlas travels, never a log's text,
+and there the flights that came from that Winnow fetch their logs back by
+themselves (each one checked against its fingerprint); a log added from a
+folder is asked for.
 
 In the editor, *Add .srt files* / *A folder* add logs to the open atlas, a
 button adds the ones ticked in the Library, and with a Winnow connected, **From

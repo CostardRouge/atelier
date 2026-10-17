@@ -71,6 +71,9 @@ interface AtlasInspectorProps {
   missing: number;
   /** Logs picked to bring the missing ones back — only matching texts are kept. */
   onFindMissing: (files: File[]) => void;
+  /** The instance most missing logs came from, how many, and whether it is connected here. */
+  fromWinnow: { host: string; count: number; connected: boolean } | null;
+  onFetchMissing: () => void;
   /** Take the hidden flights out of the atlas. */
   onRemoveHidden: () => void;
   /** The Winnow clips the atlas already draws, `<host>/<id>`. */
@@ -309,11 +312,21 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             <span>
               {p.missing} log{p.missing === 1 ? ' is' : 's are'} not on this device — {p.missing === 1 ? 'its flight is' : 'their flights are'} left out until {p.missing === 1 ? 'it comes' : 'they come'} back.
             </span>
-            <span>
+            <span className="flex flex-wrap gap-1.5">
+              {p.fromWinnow?.connected && (
+                <Button size="sm" variant="ghost" onClick={p.onFetchMissing}>
+                  {Icons.download} Fetch {p.fromWinnow.count} from {p.fromWinnow.host}
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => missingRef.current?.click()}>
                 {Icons.folder} Find them in a folder
               </Button>
             </span>
+            {p.fromWinnow && !p.fromWinnow.connected && (
+              <span>
+                {p.fromWinnow.count} came from {p.fromWinnow.host} — connect it on the Sources screen and they are fetched back by themselves.
+              </span>
+            )}
             <input
               ref={missingRef}
               type="file"
@@ -374,7 +387,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           </div>
         )}
         <ul className="m-0 p-0 list-none flex flex-col max-h-[calc(var(--app-h)*0.32)] overflow-y-auto border border-line rounded-control divide-y divide-line">
-          {p.flights.length === 0 && !p.reading && (
+          {p.flights.length === 0 && !p.reading && p.missing === 0 && (
             <li className="px-3 py-3 text-sm text-muted">No flight yet — add DJI logs (.srt) from files, a folder, the Library or your Winnow.</li>
           )}
           {p.flights.map((f, i) => {
