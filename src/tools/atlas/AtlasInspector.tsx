@@ -26,6 +26,8 @@ import {
   LOOK_PRESETS,
   MOTION_PRESETS,
   SPOTS,
+  PIECE_SIZE,
+  type PieceSize,
   surpriseLook,
   themeWith,
   type AtlasSettings,
@@ -171,6 +173,19 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   }, [layer, setDrawingZone]);
 
   /** A piece's Where row: its spot, or the word that it was placed by hand. */
+  /** A piece's own size, beside where it sits. */
+  const sizeRow = (key: PieceSize, label = 'Size') => (
+    <Slider
+      label={label}
+      value={s.hud.sizes[key]}
+      min={PIECE_SIZE.min}
+      max={PIECE_SIZE.max}
+      step={0.05}
+      format={pct}
+      onChange={(v) => update((cur) => ({ ...cur, hud: { ...cur.hud, sizes: { ...cur.hud.sizes, [key]: v } } }))}
+    />
+  );
+
   const where = (piece: Exclude<PieceId, 'credits'>) => (
     <SpotRow label="Where" value={s.hud[PIECE_SPOT[piece]] as Spot} free={!!s.hud.free[piece]} onChange={(v) => update((cur) => withPlacement(cur, piece, { spot: v }))} />
   );
@@ -433,11 +448,13 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       <Slider label="Size" value={s.head.size} min={0} max={12} step={0.1} format={(v) => (v === 0 ? 'hidden' : `${v.toFixed(1)} px`)} onChange={(v) => head({ size: v })} />
       <Slider label="Pulse" value={s.head.pulse} min={0} max={1} step={0.01} format={pct} onChange={(v) => head({ pulse: v })} />
       <Slider label="Ripples" value={s.head.ripple} min={0} max={1} step={0.01} format={pct} onChange={(v) => head({ ripple: v })} hint="A ring that spreads where a flight takes off and lands." />
+      {s.head.ripple > 0 && <Slider label="Ripple size" value={s.head.rippleSize} min={0.3} max={3} step={0.05} format={pct} onChange={(v) => head({ rippleSize: v })} />}
       <AtlasMore id="atlas.heads">
         <Slider label="Pulse rate" value={s.head.pulseRate} min={0.1} max={5} step={0.1} format={(v) => `${v.toFixed(1)} /s`} onChange={(v) => head({ pulseRate: v })} />
         <Slider label="Halo" value={s.head.halo} min={0} max={1} step={0.01} format={pct} onChange={(v) => head({ halo: v })} />
         <Slider label="Altitude" value={s.head.lift} min={0} max={150} step={1} format={(v) => (v === 0 ? 'flat' : `${v} px/100 m`)} onChange={(v) => head({ lift: v })} hint="Lift each line by its height above take-off — tilt the camera to see it as relief." />
         {s.head.lift > 0 && <SwitchRow label="Shadow on the ground" checked={s.head.shadow} onChange={(v) => head({ shadow: v })} />}
+        {s.head.lift > 0 && s.head.shadow && <Slider label="Shadow size" value={s.head.shadowSize} min={0.3} max={3} step={0.05} format={pct} onChange={(v) => head({ shadowSize: v })} />}
         {s.head.lift > 0 && <SwitchRow label="Thread from the drone to its shadow" checked={s.head.tether} onChange={(v) => head({ tether: v })} />}
       </AtlasMore>
     </InspectorSection>
@@ -522,11 +539,15 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         {s.map.grid !== 'off' && <input type="color" aria-label="Grid colour" value={s.map.gridColour} onChange={(e) => map({ gridColour: e.target.value })} className={swatchClass} />}
       </FieldRow>
       {s.map.grid !== 'off' && <Slider label="Grid shows" value={s.map.gridStrength} min={0.1} max={1} step={0.05} format={pct} onChange={(v) => map({ gridStrength: v })} />}
+      {s.map.grid !== 'off' && <Slider label="Grid spacing" value={s.map.gridStep} min={0.25} max={4} step={0.05} format={pct} onChange={(v) => map({ gridStep: v })} />}
+      {s.map.grid !== 'off' && <Slider label={s.map.grid === 'dots' ? 'Dot size' : 'Line weight'} value={s.map.gridWeight} min={0.3} max={4} step={0.05} format={pct} onChange={(v) => map({ gridWeight: v })} />}
       <Slider label="Vignette" value={s.map.vignette} min={0} max={1} step={0.01} format={pct} onChange={(v) => map({ vignette: v })} />
       <AtlasMore id="atlas.map">
         <Colour label="Ground" value={s.map.background} onChange={(v) => map({ background: v })} />
         {s.map.land !== 'off' && <Colour label="Land colour" value={s.map.landColour} onChange={(v) => map({ landColour: v })} />}
+        {s.map.land !== 'off' && <Slider label="Coast width" value={s.map.coastWidth} min={0.3} max={4} step={0.05} format={pct} onChange={(v) => map({ coastWidth: v })} />}
         <SwitchRow label="Place names on the map" checked={s.map.labels} onChange={(v) => map({ labels: v })} />
+        {s.map.labels && <Slider label="Place names size" value={s.map.labelSize} min={0.4} max={3} step={0.05} format={pct} onChange={(v) => map({ labelSize: v })} />}
       </AtlasMore>
     </InspectorSection>
   );
@@ -795,6 +816,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
     <InspectorSection id="atlas.stats" title="Statistics" marked={s.hud.stats.length > 0} info="What the flights add up to, measured from the tracks: live (the numbers grow as the animation flies) or the totals throughout.">
       <AtlasStatChips label="Statistics shown" value={s.hud.stats} onChange={(v) => hud({ stats: v })} />
       {s.hud.stats.length > 0 && where('stats')}
+      {s.hud.stats.length > 0 && sizeRow('stats')}
       {s.hud.stats.length > 0 && (
         <AtlasMore id="atlas.stats">
           <FieldRow label="Count">
@@ -828,7 +850,9 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           ]}
         />
       </FieldRow>
+      {s.hud.clock !== 'off' && sizeRow('clock', 'Clock size')}
       <SwitchRow label="Count what is flying" checked={s.hud.counter} onChange={(v) => hud({ counter: v })} />
+      {s.hud.counter && sizeRow('counter', 'Count size')}
       <AtlasMore id="atlas.clock">
         {s.hud.counter && (
           <FieldRow label="Words">
@@ -836,6 +860,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           </FieldRow>
         )}
         <SwitchRow label="Activity curve" checked={s.hud.graph} onChange={(v) => hud({ graph: v })} />
+        {s.hud.graph && sizeRow('curve', 'Curve size')}
         <SwitchRow label="Data credit" checked={s.hud.credit} onChange={(v) => hud({ credit: v })} hint="The map's own credit is always written when its tiles are drawn." />
         <FieldRow
           label="Credits at"
@@ -860,6 +885,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
             ]}
           />
         </FieldRow>
+        {sizeRow('credits', 'Credits size')}
         {where('clock')}
       </AtlasMore>
     </InspectorSection>
@@ -869,6 +895,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
     <InspectorSection id="atlas.info" title="Dates and the spotlight card" marked={s.hud.dates || s.hud.spotCard} info="The span of the flights shown, and a card for the flight the spotlight follows.">
       <SwitchRow label="Date range" checked={s.hud.dates} onChange={(v) => hud({ dates: v })} hint={p.dateRange ?? 'No flight carries a date.'} hintShown />
       {s.hud.dates && where('dates')}
+      {s.hud.dates && sizeRow('dates', 'Dates size')}
       <SwitchRow
         label="A card for the drone in the spotlight"
         checked={s.hud.spotCard}
@@ -877,6 +904,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
         hintShown={!s.camera.spotlight.on}
       />
       {s.hud.spotCard && where('card')}
+      {s.hud.spotCard && sizeRow('card', 'Card size')}
     </InspectorSection>
   );
 

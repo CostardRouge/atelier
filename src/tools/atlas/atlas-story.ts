@@ -41,6 +41,8 @@ export interface IntroSettings {
   fit: IntroFit;
   /** Where a world dive starts: the whole world filling the frame, or that close above the flights. */
   diveFrom: DiveFrom;
+  /** The pin a world dive lands on, times its default. */
+  pinSize: number;
 }
 
 export type DiveFrom = 'world' | 'continent' | 'country' | 'region';
@@ -70,10 +72,15 @@ export interface OutroSettings {
   sticker: boolean;
   /** A last line; empty draws none. */
   line: string;
+  /** Its size, times the default. */
+  lineSize: number;
 }
 
-export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true, titleSize: 1, lineSize: 1, fit: 'wrap', diveFrom: 'world' };
-export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, stats: ['flights', 'distance', 'time', 'maxAlt'], statsSize: 1, statsLayout: 'row', columns: 2, sticker: true, line: '' };
+export const INTRO_DEFAULTS: IntroSettings = { style: 'title', length: 4, behind: 'black', into: 'fade', title: '', line: '', sticker: true, titleSize: 1, lineSize: 1, fit: 'wrap', diveFrom: 'world', pinSize: 1 };
+export const OUTRO_DEFAULTS: OutroSettings = { style: 'summary', length: 4.5, stats: ['flights', 'distance', 'time', 'maxAlt'], statsSize: 1, statsLayout: 'row', columns: 2, sticker: true, line: '', lineSize: 1 };
+
+/** The dive's pin, times its default. */
+export const PIN_SIZE = { min: 0.4, max: 3 } as const;
 
 /** The outro's totals' size, times the default. */
 export const STATS_SIZE = { min: 0.5, max: 1.6 } as const;

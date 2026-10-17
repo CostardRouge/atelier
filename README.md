@@ -3384,8 +3384,8 @@ the rest folds behind **N more**, remembered in this browser.
   own; a preset keeps how they play, never their words. The title takes
   several lines (Enter starts one) and a **size**, and one too wide for the
   frame either goes on to more lines or gets smaller until it fits on one —
-  it never leaves the frame; the outro's title follows, and the second line
-  has its own size.
+  it never leaves the frame; the outro's title follows, and the second line,
+  the outro's last line and the dive's pin have their own size.
 - **The flight list** (the foot's *N flights*). Take-offs within 4 km of each other form a *place*, named
   offline from the shipped city index; a place chip shows or hides its
   flights (double-click: that place alone); hovering a flight singles it out.
@@ -3401,11 +3401,13 @@ the rest folds behind **N more**, remembered in this browser.
   atlas opens). The **map glyph beside Play** is the same Streets switch, one
   click from the picture. Then looks (Transit, Aurora, Ember, Neon, Papier,
   Blueprint, Golden hour, Ink, plus *Surprise me*) and the map's details
-  (how the land is drawn and its colour, a grid — its colour on the same row,
-  and how strongly it shows —, vignette, ground colour, place names).
+  (how the land is drawn, its colour and the coast's width, a grid — its
+  colour on the same row, how strongly it shows, its spacing and its line or
+  dot size —, vignette, ground colour, place names and their size).
 - **Flights.** Trails (tail, width, afterglow; taper, fade, ghost network,
-  smoothing), drones (size, pulse, take-off and landing ripples; pulse rate,
-  halo, altitude drawn as height with a ground shadow and a thread) and colour
+  smoothing), drones (size, pulse, take-off and landing ripples and their
+  size; pulse rate, halo, altitude drawn as height with a ground shadow — sized
+  too — and a thread) and colour
   (one, per flight, place, altitude, speed, date or hour, nine palettes; glow,
   additive light).
 - **Timing.** *Together*, *Cascade*, *Relay*, *Day clock* (every flight on one
@@ -3446,7 +3448,9 @@ the rest folds behind **N more**, remembered in this browser.
   maker is written in the heavy weight; a **card** for the drone in the spotlight (its name, day, aircraft,
   live height, speed and distance); a clock, the count of what is flying, the
   activity curve and the credits — under the clock by default, or in a spot
-  of their own (*Credits at*), and dragged on their own like every piece.
+  of their own (*Credits at*), and dragged on their own like every piece. Every piece takes a **size** of its own beside where it sits —
+  the title, the dates, the statistics, the clock, the count, the curve, the
+  spotlight card, the credits, the sticker — on top of the overall *Text size*.
 - **Export** (the foot). Ratio (16:9, 9:16, 1:1, 4:5, 3:2), resolution (720 to 4K), frame
   rate (30/60), the **social apps' zones** — *Ignore*, or *Keep clear*: every
   word moves out of where Reels, TikTok and Shorts draw their own interface

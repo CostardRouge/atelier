@@ -60,7 +60,7 @@ export function paintStory(
     const m = viewAffine(frame.view, look, rect.w, rect.h);
     const x = rect.x + m.a * scene.diveTo.x + m.c * scene.diveTo.y + m.e;
     const y = rect.y + m.b * scene.diveTo.x + m.d * scene.diveTo.y + m.f;
-    const unit = Math.min(rect.w, rect.h) / 1080;
+    const unit = (Math.min(rect.w, rect.h) / 1080) * s.intro.pinSize;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = intro.pin;
@@ -103,7 +103,7 @@ export function paintStory(
       head.push({ kind: 'text', text: ' ', size: 20 });
     }
     if (hasSticker && outro.sticker > 0.001) head.push({ ...sticker, gapAfter: 0.5, alpha: outro.sticker, owner: 'outro' });
-    const line: Block[] = lastLine ? [{ kind: 'text', text: lastLine, size: 28, weight: 500, alpha: outro.line, owner: 'outro', fit: wrap }] : [];
+    const line: Block[] = lastLine ? [{ kind: 'text', text: lastLine, size: 28 * s.outro.lineSize, weight: 500, alpha: outro.line, owner: 'outro', fit: wrap }] : [];
     if (outro.titleAt === 'top') draw({ ...base, spots: { tc: head, bc: line } });
     else draw({ ...base, spots: { mc: [...head, ...line] } });
   }
@@ -118,7 +118,7 @@ export function paintStory(
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, frame.width, frame.height);
     ctx.restore();
-    if (lastLine && outro.line > 0.001) draw({ ...base, spots: { mc: [{ kind: 'text', text: lastLine, size: 30, weight: 500, alpha: outro.line, owner: 'outro', fit: wrap }] } });
+    if (lastLine && outro.line > 0.001) draw({ ...base, spots: { mc: [{ kind: 'text', text: lastLine, size: 30 * s.outro.lineSize, weight: 500, alpha: outro.line, owner: 'outro', fit: wrap }] } });
   }
   return hits;
 }

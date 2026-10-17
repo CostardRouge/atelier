@@ -22,7 +22,7 @@ import { STAT_KEYS, type StatKey, type Units } from './atlas-stats';
 import { STICKER_DEFAULTS, type StickerInk, type StickerSettings } from './atlas-sticker';
 import type { SafeMode } from './atlas-safe';
 import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
-import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
+import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, PIN_SIZE, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
@@ -73,6 +73,10 @@ export interface HeadSettings {
   shadow: boolean;
   /** With a lift: a thread from the head down to its shadow. */
   tether: boolean;
+  /** The take-off and landing ring's reach, times its default. */
+  rippleSize: number;
+  /** The shadow on the ground (its trace and the dot under the head), times its default. */
+  shadowSize: number;
 }
 
 export interface ColourSettings {
@@ -96,12 +100,20 @@ export interface MapSettings {
   gridColour: string;
   /** How strongly the grid shows, 0.1..1. */
   gridStrength: number;
+  /** The grid's spacing, times its default (about 90 px on a 1080 frame). */
+  gridStep: number;
+  /** The grid's lines and dots, times their default thickness. */
+  gridWeight: number;
+  /** The coastline's line, times its default thickness. */
+  coastWidth: number;
   vignette: number;
   tileTone: TileTone;
   /** How much of the background colour is laid over the tiles, 0..1. */
   tileDim: number;
   /** Place names over the map. */
   labels: boolean;
+  /** Their size, times the default. */
+  labelSize: number;
 }
 
 export interface CameraSettings {
@@ -123,6 +135,12 @@ export interface CameraSettings {
   /** The flights the spotlight picks from under `picked`, by id. */
   picked: string[];
 }
+
+/** The overlay pieces that take a size of their own. */
+export type PieceSize = 'dates' | 'stats' | 'clock' | 'counter' | 'curve' | 'card' | 'credits';
+export const PIECE_SIZES: readonly PieceSize[] = ['dates', 'stats', 'clock', 'counter', 'curve', 'card', 'credits'];
+/** A piece's size, times its default. */
+export const PIECE_SIZE = { min: 0.4, max: 3 } as const;
 
 export interface HudSettings {
   /**
@@ -163,6 +181,8 @@ export interface HudSettings {
   spotCard: boolean;
   spotCardAt: Spot;
   credit: boolean;
+  /** Each overlay piece's own size, times its default (the title's is `titleSize`, the sticker's in px). */
+  sizes: Record<PieceSize, number>;
   /** Where the credits sit: under the clock (wherever it is), or a spot of their own. */
   creditsAt: Spot | 'clock';
   /** Pieces dragged off their spot on the stage, where they were let go (`atlas-place.ts`). */
@@ -236,7 +256,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     hold: 2,
   },
   trail: { length: 0.18, taper: 0.7, width: 2.4, smooth: true, afterglow: 0.35, decay: 0, ghost: 0.32, ghostWidth: 1.3 },
-  head: { size: 3.2, pulse: 0.35, pulseRate: 1.2, ripple: 0.5, halo: 0.6, lift: 0, shadow: true, tether: true },
+  head: { size: 3.2, pulse: 0.35, pulseRate: 1.2, ripple: 0.5, halo: 0.6, lift: 0, shadow: true, tether: true, rippleSize: 1, shadowSize: 1 },
   colour: { by: 'single', palette: 'perth', trail: '#5fd3e6', head: '#ffffff', ghost: '#6d4bd8', glow: 0.55, additive: true },
   map: {
     background: '#1e1f26',
@@ -245,10 +265,14 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     grid: 'off',
     gridColour: '#2a2840',
     gridStrength: 1,
+    gridStep: 1,
+    gridWeight: 1,
+    coastWidth: 1,
     vignette: 0.35,
     tileTone: 'night',
     tileDim: 0.45,
     labels: true,
+    labelSize: 1,
   },
   camera: {
     frame: 'all',
@@ -288,6 +312,7 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
     spotCard: true,
     spotCardAt: 'tr',
     credit: true,
+    sizes: { dates: 1, stats: 1, clock: 1, counter: 1, curve: 1, card: 1, credits: 1 },
     creditsAt: 'clock',
     free: {},
   },
@@ -634,6 +659,8 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       halo: num(h.halo, d.head.halo, 0, 1),
       lift: num(h.lift, d.head.lift, 0, 200),
       shadow: bool(h.shadow, d.head.shadow),
+      rippleSize: num(h.rippleSize, d.head.rippleSize, 0.3, 3),
+      shadowSize: num(h.shadowSize, d.head.shadowSize, 0.3, 3),
       tether: bool(h.tether, d.head.tether),
     },
     colour: {
@@ -652,10 +679,14 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       grid: oneOf(m.grid, GRIDS, d.map.grid),
       gridColour: hex(m.gridColour, d.map.gridColour),
       gridStrength: num(m.gridStrength, d.map.gridStrength, 0.1, 1),
+      gridStep: num(m.gridStep, d.map.gridStep, 0.25, 4),
+      gridWeight: num(m.gridWeight, d.map.gridWeight, 0.3, 4),
+      coastWidth: num(m.coastWidth, d.map.coastWidth, 0.3, 4),
       vignette: num(m.vignette, d.map.vignette, 0, 1),
       tileTone: oneOf(m.tileTone, TONES, d.map.tileTone),
       tileDim: num(m.tileDim, d.map.tileDim, 0, 1),
       labels: bool(m.labels, d.map.labels),
+      labelSize: num(m.labelSize, d.map.labelSize, 0.4, 3),
     },
     camera: {
       frame: oneOf(cam.frame, FRAMES, d.camera.frame),
@@ -710,6 +741,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       spotCard: bool(u.spotCard, d.hud.spotCard),
       spotCardAt: oneOf(u.spotCardAt, SPOTS, d.hud.spotCardAt),
       credit: bool(u.credit, d.hud.credit),
+      sizes: Object.fromEntries(PIECE_SIZES.map((k) => [k, num(obj(u.sizes)[k], d.hud.sizes[k], PIECE_SIZE.min, PIECE_SIZE.max)])) as Record<PieceSize, number>,
       creditsAt: oneOf(u.creditsAt, [...SPOTS, 'clock'] as const, d.hud.creditsAt),
       free: Object.fromEntries(
         PIECES.flatMap((piece) => {
@@ -743,6 +775,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       lineSize: num(ii.lineSize, di.lineSize, LINE_SIZE.min, LINE_SIZE.max),
       fit: oneOf(ii.fit, ['wrap', 'shrink'] as const, di.fit),
       diveFrom: oneOf(ii.diveFrom, DIVE_FROMS, di.diveFrom),
+      pinSize: num(ii.pinSize, di.pinSize, PIN_SIZE.min, PIN_SIZE.max),
     },
     outro: {
       style: oneOf(oo.style, ['summary', 'pull', 'fade', 'none'] as const, dO.style),
@@ -754,6 +787,7 @@ export function sanitizeSettings(value: unknown): AtlasSettings {
       columns: oneOf(oo.columns, [2, 3, 4] as const, dO.columns),
       sticker: bool(oo.sticker, dO.sticker),
       line: str(oo.line, dO.line, 200),
+      lineSize: num(oo.lineSize, dO.lineSize, LINE_SIZE.min, LINE_SIZE.max),
     },
   };
 }

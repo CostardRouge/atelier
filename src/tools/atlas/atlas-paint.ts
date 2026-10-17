@@ -324,7 +324,7 @@ function paintLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   const y = Math.floor(rect.y);
   const w = Math.ceil(rect.x + rect.w) - x;
   const h = Math.ceil(rect.y + rect.h) - y;
-  const key = [m.a, m.b, m.c, m.d, m.e - x, m.f - y, w, h, map.land, map.landColour, unit, pxPerWorld].join(',');
+  const key = [m.a, m.b, m.c, m.d, m.e - x, m.f - y, w, h, map.land, map.landColour, map.coastWidth, unit, pxPerWorld].join(',');
   const held = landRasters.get(ctx.canvas);
   const same = held !== undefined && held.key === key && held.land === scene.land;
   if (same && held.surface) {
@@ -356,7 +356,7 @@ function drawLand(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPer
   ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
   ctx.fillStyle = map.landColour;
   ctx.strokeStyle = map.landColour;
-  ctx.lineWidth = (fill ? 0.8 : 1.4) * unit / pxPerWorld;
+  ctx.lineWidth = ((fill ? 0.8 : 1.4) * map.coastWidth * unit) / pxPerWorld;
   ctx.lineJoin = 'round';
   for (const ring of ringsOf(scene.land)) {
     if (!meets(ring.box, box)) continue;
@@ -370,7 +370,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   const { map } = scene.settings;
   if (map.grid === 'off') return;
   // A power-of-two step that lands near 90 px on a 1080 frame.
-  const want = (90 * unit) / pxPerWorld;
+  const want = (90 * unit * map.gridStep) / pxPerWorld;
   const step = 2 ** Math.round(Math.log2(want));
   const x0 = Math.floor(box.x0 / step) * step;
   const y0 = Math.floor(box.y0 / step) * step;
@@ -382,7 +382,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
   ctx.globalAlpha *= map.gridStrength;
   if (map.grid === 'lines') {
     ctx.strokeStyle = map.gridColour;
-    ctx.lineWidth = Math.max(0.5, 0.8 * unit);
+    ctx.lineWidth = Math.max(0.5, 0.8 * unit * map.gridWeight);
     ctx.beginPath();
     for (let c = 0; c < cols; c++) {
       const x = x0 + c * step;
@@ -401,7 +401,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
     ctx.stroke();
   } else {
     ctx.fillStyle = map.gridColour;
-    const r = Math.max(0.8, 1.3 * unit);
+    const r = Math.max(0.8, 1.3 * unit * map.gridWeight);
     for (let c = 0; c < cols; c++) {
       for (let k = 0; k < rows; k++) {
         const [x, y] = px(x0 + c * step, y0 + k * step);
@@ -415,7 +415,7 @@ function paintGrid(ctx: Ctx2D, scene: PaintScene, m: Affine, box: WorldBox, pxPe
 function paintLabels(ctx: Ctx2D, scene: PaintScene, m: Affine, unit: number, rect: Rect): void {
   if (!scene.settings.map.labels) return;
   const ink = parseHex(scene.settings.hud.theme.style.color);
-  const size = Math.round(12.5 * unit * scene.settings.hud.scale);
+  const size = Math.round(12.5 * unit * scene.settings.hud.scale * scene.settings.map.labelSize);
   ctx.save();
   ctx.font = `500 ${size}px 'JetBrains Mono', monospace`;
   ctx.textAlign = 'center';
@@ -427,7 +427,7 @@ function paintLabels(ctx: Ctx2D, scene: PaintScene, m: Affine, unit: number, rec
     const wx = (p.box.x0 + p.box.x1) / 2;
     const wy = p.box.y0;
     const x = m.a * wx + m.c * wy + m.e;
-    const y = m.b * wx + m.d * wy + m.f - 14 * unit;
+    const y = m.b * wx + m.d * wy + m.f - 14 * unit * scene.settings.map.labelSize;
     if (x < rect.x - 50 || y < rect.y - 20 || x > rect.x + rect.w + 50 || y > rect.y + rect.h + 20) return;
     const text = name.toUpperCase();
     const w = ctx.measureText(text).width;
@@ -610,7 +610,7 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
       if (count >= 2) {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = rgba(lineColour(scene, fi, now), 0.16 * dim);
-        ctx.lineWidth = width0 * 0.7;
+        ctx.lineWidth = width0 * 0.7 * s.head.shadowSize;
         trace(ctx, count, smooth, true);
         ctx.stroke();
       }
@@ -671,11 +671,11 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
       const ripple = s.head.ripple;
       if (ripple > 0 && st.sinceStart >= 0 && st.sinceStart < RIPPLE_S) {
         const p = positionAt(f, 0);
-        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceStart / RIPPLE_S, ripple, unit, lineColour(scene, fi, 0), dim, bright);
+        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceStart / RIPPLE_S, ripple, unit * s.head.rippleSize, lineColour(scene, fi, 0), dim, bright);
       }
       if (ripple > 0 && st.sinceEnd >= 0 && st.sinceEnd < RIPPLE_S) {
         const p = positionAt(f, f.duration);
-        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceEnd / RIPPLE_S, ripple * 0.7, unit, lineColour(scene, fi, f.duration), dim, bright);
+        drawRipple(ctx, m, p.x, p.y, p.alt * liftPx, st.sinceEnd / RIPPLE_S, ripple * 0.7, unit * s.head.rippleSize, lineColour(scene, fi, f.duration), dim, bright);
       }
       if (st.phase !== 'flying' || s.head.size <= 0) continue;
       const p = positionAt(f, st.flightT);
@@ -693,7 +693,7 @@ function paintMap(ctx: Ctx2D, scene: PaintScene, frame: PaintFrame, rect: Rect, 
         ctx.stroke();
         ctx.fillStyle = rgba(headColour, 0.4 * dim);
         ctx.beginPath();
-        ctx.ellipse(x, gy, 2.2 * unit, 1.2 * unit * s.camera.tilt, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, gy, 2.2 * unit * s.head.shadowSize, 1.2 * unit * s.head.shadowSize * s.camera.tilt, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       // Each head breathes on its own phase, so a swarm shimmers instead of blinking.
@@ -884,7 +884,8 @@ export function overlayLayout(
 
   if (hud.title) put('title', { kind: 'text', text: hud.title, size: 58 * z, gapAfter: hud.subtitle ? 0 : 0.25, owner: 'title' });
   if (hud.subtitle) put('title', { kind: 'text', text: hud.subtitle, size: 26 * z, weight: 500, gapAfter: 0.5, owner: 'title' });
-  if (hud.dates && scene.dateRange) put('dates', { kind: 'text', text: scene.dateRange, size: 22, label: true, gapAfter: 0.25, owner: 'clock' });
+  const sz = hud.sizes;
+  if (hud.dates && scene.dateRange) put('dates', { kind: 'text', text: scene.dateRange, size: 22 * sz.dates, label: true, gapAfter: 0.25, owner: 'clock' });
   if (hud.drone !== 'off') {
     const names = new Set<string>();
     scene.flights.forEach((_, i) => {
@@ -905,12 +906,12 @@ export function overlayLayout(
     const alt = metric ? `${Math.round(p.alt)} m` : `${Math.round(p.alt * 3.28084)} ft`;
     const speed = metric ? `${Math.round(p.speed * 3.6)} km/h` : `${Math.round((p.speed * 3.6) / 1.609344)} mph`;
     const dist = metric ? `${live.km.toFixed(2)} km` : `${(live.km / 1.609344).toFixed(2)} mi`;
-    const blocks: Block[] = [{ kind: 'text', text: f.name, size: 28, weight: 600 }];
+    const blocks: Block[] = [{ kind: 'text', text: f.name, size: 28 * sz.card, weight: 600 }];
     const when = f.startWall !== null ? `${formatDate(f.startWall)} · ${formatTimeOfDay(f.startWall)}` : null;
-    if (when) blocks.push({ kind: 'text', text: when, size: 18, label: true });
+    if (when) blocks.push({ kind: 'text', text: when, size: 18 * sz.card, label: true });
     const drone = scene.aircraft[spot.flight];
-    if (drone) blocks.push({ kind: 'text', text: drone, size: 18, label: true, accent: true });
-    blocks.push({ kind: 'row', size: 30, items: [
+    if (drone) blocks.push({ kind: 'text', text: drone, size: 18 * sz.card, label: true, accent: true });
+    blocks.push({ kind: 'row', size: 30 * sz.card, items: [
       { value: alt, label: 'Height' },
       { value: speed, label: 'Speed' },
       { value: dist, label: 'Flown' },
@@ -920,13 +921,13 @@ export function overlayLayout(
 
   const kind = resolvedClock(hud.clock, choreo.mode);
   const lines = frame.poster ? null : clockLines(kind, scene.schedule, t);
-  if (lines?.small) put('clock', { kind: 'text', text: lines.small, size: 28, weight: 500, owner: 'clock' });
-  if (lines) put('clock', { kind: 'text', text: lines.big, size: 100, owner: 'clock' });
+  if (lines?.small) put('clock', { kind: 'text', text: lines.small, size: 28 * sz.clock, weight: 500, owner: 'clock' });
+  if (lines) put('clock', { kind: 'text', text: lines.big, size: 100 * sz.clock, owner: 'clock' });
   if (hud.counter && !frame.poster) {
-    put('clock', { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
+    put('clock', { kind: 'text', text: counterLine(activeAt(scene.slots, t), hud.noun), size: 28 * sz.counter, accent: true, weight: 600, gapAfter: 0.3, owner: 'clock' });
   }
   if (hud.graph && !frame.poster && scene.activity.length > 1) {
-    put('clock', { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50, owner: 'clock' });
+    put('clock', { kind: 'curve', activity: scene.activity, at: t / Math.max(1e-6, scene.schedule.total), ends: graphEnds(kind, scene.schedule), size: 50 * sz.curve, scale: sz.curve, owner: 'clock' });
   }
 
   if (hud.stats.length) {
@@ -937,14 +938,14 @@ export function overlayLayout(
       // Only a counting numeral rolls: a total held still would freeze mid-roll.
       return { value: r.text, label: r.label, odometer: live ? r.odometer : undefined };
     });
-    put('stats', hud.statsLayout === 'row' ? { kind: 'row', items, size: 44, owner: 'stats' } : { kind: 'column', items, size: 32, owner: 'stats' });
+    put('stats', hud.statsLayout === 'row' ? { kind: 'row', items, size: 44 * sz.stats, owner: 'stats' } : { kind: 'column', items, size: 32 * sz.stats, owner: 'stats' });
   }
 
   const credits: string[] = [];
   if (hud.credit) credits.push(`Data: DJI flight telemetry · ${scene.flights.length} flight${scene.flights.length === 1 ? '' : 's'}`);
   // The tiles' licence asks for its credit wherever they are shown — never a switch.
   if (tilesDrawn) credits.push('Map © OpenStreetMap contributors');
-  for (const line of credits) put('credits', { kind: 'text', text: line, size: 14, weight: 500, owner: 'clock' });
+  for (const line of credits) put('credits', { kind: 'text', text: line, size: 14 * sz.credits, weight: 500, owner: 'clock' });
 
   return {
     spots,
