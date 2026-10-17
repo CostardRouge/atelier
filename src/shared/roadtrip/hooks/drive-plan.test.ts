@@ -37,6 +37,7 @@ import {
   pointAt,
   roadMilestones,
   scaleBar,
+  smoothHeadingAt,
   stagePlaceDays,
   stopClock,
   viewAt,
@@ -444,6 +445,83 @@ describe('the path', () => {
     // A caller's own chord (the painter's, in plan units) still wins.
     const long = road(2000);
     expect(headingAt(long, sAlong(long, 5), 600).y).toBeGreaterThan(0.5);
+  });
+
+  it('smooths a road’s direction over a bell: a hairpin eases in and out where a chord jolts', () => {
+    // East 3 km, a half turn of 50 m radius drawn as a polygon of 15° corners
+    // (a sampled road's bend is corners too), west 3 km.
+    const via: { x: number; y: number }[] = [];
+    for (let x = 0.01; x < 3; x += 0.01) via.push({ x, y: 0 });
+    for (let a = 0; a <= 180; a += 15) via.push({ x: 3 + 0.05 * Math.sin((a * Math.PI) / 180), y: 0.05 - 0.05 * Math.cos((a * Math.PI) / 180) });
+    for (let x = 3; x > 0; x -= 0.01) via.push({ x, y: 0.1 });
+    const viaKm = via.map((_, i) => i * 0.01);
+    const path = buildPath([{ x: 0, y: 0 }, { x: 0, y: 0.1 }], 'straight', [{ via, viaKm, km: viaKm[viaKm.length - 1] }]);
+    const apex = path.length / 2;
+    // Far from the bend, the road's own direction; at its apex, square across it.
+    expect(smoothHeadingAt(path, 1, 0.1).x).toBeCloseTo(1, 6);
+    expect(smoothHeadingAt(path, path.length - 1, 0.1).x).toBeCloseTo(-1, 6);
+    expect(smoothHeadingAt(path, apex, 0.1).y).toBeGreaterThan(0.99);
+    // How sharply the RATE of turn changes from one step to the next: a
+    // chord's end crossing a corner steps it (the jolt), a bell never does.
+    const step = 0.001;
+    const jolt = (heading: (s: number) => { x: number; y: number }) => {
+      const angles: number[] = [];
+      for (let s = apex - 0.4; s <= apex + 0.4; s += step) {
+        const h = heading(s);
+        angles.push(Math.atan2(h.y, h.x));
+      }
+      let worst = 0;
+      for (let i = 1; i < angles.length - 1; i++) worst = Math.max(worst, Math.abs(angles[i + 1] - 2 * angles[i] + angles[i - 1]) / step);
+      return worst;
+    };
+    // The bell is as wide as the two-length chord it replaces (σ ≈ 0.35 × the chord).
+    const chord = jolt((s) => headingAt(path, s, 0.2));
+    const bell = jolt((s) => smoothHeadingAt(path, s, 0.07));
+    expect(bell).toBeLessThan(chord / 3);
+  });
+
+  it('reads a bell wider than its sample budget in runs, true to the whole and without a step', () => {
+    // 20 000 samples of a winding road; a bell spanning thousands of them.
+    const via: { x: number; y: number }[] = [];
+    let x = 0;
+    let y = 0;
+    let th = 0;
+    for (let i = 0; i < 20000; i++) {
+      th += Math.sin(i / 37) * 0.05;
+      x += Math.cos(th) * 0.7;
+      y += Math.sin(th) * 0.7;
+      via.push({ x, y });
+    }
+    const viaKm = via.map((_, i) => i * 0.7);
+    const path = buildPath([{ x: 0, y: 0 }, via[via.length - 1]], 'straight', [{ via, viaKm, km: viaKm[viaKm.length - 1] }]);
+    const sigma = 400;
+    // The direction integrated sample by sample, the long way.
+    const truth = (s: number) => {
+      let tx = 0;
+      let ty = 0;
+      for (let t = Math.max(0, s - 4 * sigma); t < Math.min(path.length, s + 4 * sigma); t += 0.35) {
+        const d = headingAt(path, t, 0);
+        const g = Math.exp(-((t - s) ** 2) / (2 * sigma * sigma));
+        tx += d.x * g;
+        ty += d.y * g;
+      }
+      return Math.atan2(ty, tx);
+    };
+    let prev: number | null = null;
+    for (let s = path.length * 0.3; s < path.length * 0.3 + 40; s += 0.5) {
+      const h = smoothHeadingAt(path, s, sigma);
+      const angle = Math.atan2(h.y, h.x);
+      if (s < path.length * 0.3 + 2) expect(Math.abs(angle - truth(s))).toBeLessThan(1e-3);
+      if (prev !== null) expect(Math.abs(angle - prev)).toBeLessThan(1e-3);
+      prev = angle;
+    }
+  });
+
+  it('keeps a direction where the road doubles back inside the bell', () => {
+    const via = [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }];
+    const path = buildPath([{ x: 0, y: 0 }, { x: 0, y: 0 }], 'straight', [{ via, viaKm: [1, 2, 3], km: 4 }]);
+    const h = smoothHeadingAt(path, 2, 0.5);
+    expect(Math.hypot(h.x, h.y)).toBeCloseTo(1, 6);
   });
 
   it('is a centripetal spline: the middle of a segment sits between its ends', () => {
