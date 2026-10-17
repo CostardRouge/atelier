@@ -134,7 +134,7 @@ export default function TripRouteBand({
               inherit={`Main vehicle · ${vehicleModel(main.spec.model).short}`}
               label={`What ${stageLabel(stage) || 'this stage'} drives`}
               onChange={(ref) => onChange(withStageVehicle(trip, stage.id, ref ?? null))}
-              className={`${inputClass} !h-8 !text-xs max-w-[11rem]`}
+              className={`${inputClass} max-w-[11rem]`}
             />
           </div>
           <ul className="m-0 p-0 list-none flex flex-col">
@@ -272,7 +272,7 @@ function HopEditor({ hop, trip, onChange }: { hop: TripHop; trip: TripDoc; onCha
               inherit={`The road decides · ${roadSays}`}
               label={`What makes ${hop.from.name} → ${hop.to.name}`}
               onChange={(ref) => onChange(withHopChoice(trip, place.id, ref ? { kind: 'vehicle', ref } : { kind: 'auto' }))}
-              className={`${inputClass} !h-8 !text-xs max-w-[13rem]`}
+              className={`${inputClass} max-w-[13rem]`}
             />
           </span>
         </FieldRow>
@@ -284,7 +284,7 @@ function HopEditor({ hop, trip, onChange }: { hop: TripHop; trip: TripDoc; onCha
             aria-label={`The boat for the crossing to ${hop.to.name}`}
             title={`The boat for the crossing to ${hop.to.name}`}
             onChange={(e) => onChange(withCrossBoat(trip, place.id, e.target.value ? { borrow: e.target.value as VehicleModelId } : null))}
-            className={`${inputClass} !h-8 !text-xs max-w-[13rem]`}
+            className={`${inputClass} max-w-[13rem]`}
           >
             <option value="">Not set here · {fallbackBoat}</option>
             {BOATS.map((b) => (
