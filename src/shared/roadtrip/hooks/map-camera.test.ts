@@ -7,6 +7,7 @@ import {
   WIDE_SECONDS,
   cameraPresetOf,
   cameraTrack,
+  dashShift,
   flyToWidth,
   gaussianSmooth,
   kmPerPlanUnit,
@@ -164,6 +165,24 @@ describe('the track', () => {
     }
   });
 
+  it('moves the map without a jolt when it holds the car on its leash', () => {
+    // A fast drive read far ahead: the leash holds, and the heading turns at its limit.
+    const o = opts({ ...CAMERA_PRESETS.navigation.values, lookAhead: 1.5, openWide: false, endWide: false, driveSeconds: 2 });
+    const plan = planOf(o);
+    const track = cameraTrack(plan, o, BOX, 20);
+    // The map's acceleration under a still point, frame to frame at 60 Hz.
+    let worst = 0;
+    const step = 1 / 60;
+    for (let t = 0.3; t <= plan.seconds - 0.3; t += step) {
+      const views = [t - step, t, t + step].map((u) => viewAt(plan, { x: 0, y: 0, ...BOX }, 20, o, plan.at(u), track, u));
+      const p = plan.at(t).point;
+      const [a, b, c] = views.map((v) => applyView(v, p));
+      worst = Math.max(worst, Math.hypot(a.x + c.x - 2 * b.x, a.y + c.y - 2 * b.y));
+    }
+    // 35 px before the last pass (a 3 000 km drive in two seconds at a 35 km view).
+    expect(worst).toBeLessThan(15);
+  });
+
   it('opens on the whole route and comes back to it at the end', () => {
     const o = opts({ ...CAMERA_PRESETS.calm.values, openWide: true, endWide: true });
     const plan = planOf(o);
@@ -183,5 +202,38 @@ describe('the track', () => {
     const b = viewAt(plan, { x: 0, y: 0, width: 1080, height: 1920 }, 20, o, plan.at(2), track, 2);
     expect(b.scale).toBeCloseTo(a.scale * 2, 6);
     expect(b.angle).toBeCloseTo(a.angle, 9);
+  });
+});
+
+describe('dashShift', () => {
+  // A camera that zooms in twofold over four seconds, then holds.
+  const zoom = {
+    seconds: 6,
+    whole: { centre: { x: 0, y: 0 }, width: 100, angle: 0 },
+    viewKm: 100,
+    at: (t: number) => ({ centre: { x: 0, y: 0 }, width: 100 / (1 + Math.min(1, t / 4)), angle: 0 }),
+  };
+
+  it('keeps the dashes still on the ground at a subject that waits while the camera zooms', () => {
+    const dash = dashShift(zoom, 800, () => 500);
+    const phase = (t: number) => (800 / zoom.at(t).width) * 500 - dash(t);
+    // Uncorrected, a dash 500 units down the road moves 4 000 px: hundreds of dashes.
+    for (const t of [0.5, 1.3, 2.71, 4, 5.9]) expect(phase(t)).toBeCloseTo(phase(0), 6);
+  });
+
+  it('lets the road scroll under a moving subject, the zoom taken back alone', () => {
+    const along = (t: number) => 300 + 20 * t;
+    const dash = dashShift(zoom, 800, along);
+    // How fast the phase runs at the subject: the scale times its own speed, never the zoom's part.
+    const at = (t: number) => (800 / zoom.at(t).width) * along(t) - dash(t);
+    const rate = (t: number) => (at(t + 0.01) - at(t - 0.01)) / 0.02;
+    for (const t of [1, 2.5, 3.5]) expect(rate(t)).toBeCloseTo((800 / zoom.at(t).width) * 20, 0);
+  });
+
+  it('shifts nothing under a camera that never zooms', () => {
+    const still = { ...zoom, at: () => zoom.whole };
+    const dash = dashShift(still, 800, (t) => 10 * t);
+    expect(dash(0)).toBe(0);
+    expect(dash(5)).toBe(0);
   });
 });
