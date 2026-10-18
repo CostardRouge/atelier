@@ -88,6 +88,15 @@ Today it ships ten tools, converging into a few editors:
 > the tab talks to `127.0.0.1` alone, to a program you started yourself — and
 > an agent's export is handed to that program, which writes it into the folder
 > you started it with.
+>
+> And one request that is not about your files at all: **visits are counted**,
+> lightly, with [Umami](https://umami.is) on the author's own server
+> (`insight.steevepommier.com`) — the home page's view and which tool was
+> opened, nothing else: never a document, a route inside a tool, a file name
+> or a position, and no cookie. A browser that says no (Do Not Track, Global
+> Privacy Control) is never counted, and `localStorage["umami.disabled"]`
+> switches it off in this browser; a build without a website id (a fork, a
+> local build) makes no such request.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each

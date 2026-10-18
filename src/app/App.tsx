@@ -13,6 +13,7 @@ import SourcePill from './SourcePill';
 import AgentPill from './AgentPill';
 import TaskPill from '../shared/ui/TaskPill';
 import { useHashRoute } from './use-hash-route';
+import { countScreen } from './audience';
 import BottomSheet from '../shared/ui/BottomSheet';
 import SectionRail from '../shared/ui/SectionRail';
 import { DEFAULT_SNAPS } from '../shared/ui/sheet-snap';
@@ -79,6 +80,14 @@ export default function App() {
         : agentsPath
           ? 'Agents — Atelier'
           : 'Atelier — a studio for your captures';
+  }, [tool, sourcesPath, agentsPath]);
+
+  // Audience measurement, light (`app/audience.ts`): the home page's view
+  // and a tool's opening, by its id — never the route inside it. Nothing is
+  // requested in a build without a website id, nor for a browser that says
+  // no (Do Not Track, Global Privacy Control).
+  useEffect(() => {
+    countScreen({ tool: tool?.id, home: !tool && !sourcesPath && !agentsPath });
   }, [tool, sourcesPath, agentsPath]);
 
   // The active view, guarded so a single tool's crash shows a recoverable
