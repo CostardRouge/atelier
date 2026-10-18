@@ -148,6 +148,7 @@ export function hookPlace(place: TripPlace, lat: number, lon: number): HookPlace
   if (place.style) out.style = place.style;
   if (place.arrived) out.arrived = place.arrived;
   if (place.left) out.left = place.left;
+  if (place.id) out.placeId = place.id;
   if (place.arriveBy) out.arriveBy = place.arriveBy;
   if (place.crossBy) out.crossBy = place.crossBy;
   if (place.flown) out.flown = true;

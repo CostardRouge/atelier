@@ -1480,8 +1480,10 @@ cuts a bay the road went round stays a road, while a strait such as Gibraltar
 sails (Africa and Eurasia are one land on that map, so a strait is water whose
 two shores lie much further apart round the coast than across it). A river or
 a lake is not on that map: a river cruise is set on its place by hand. The
-panel says what the road will do, for example «2 crossings by Spirit of
-Tasmania, the Prado aboard: Melbourne → Devonport, Hobart → Melbourne».
+panel lists the piece's own road hop by hop, the same rows as the overview's
+band below, read off what the frame draws (its grouped stops, its curve, the
+sea its coastline test found), and a tap on a hop that leads to one of the
+trip's places changes it there.
 
 All of this can be read and changed in one place: the overview's **Map** view
 lists every **hop** from place to place, stage by stage, under the water rule's
@@ -1493,8 +1495,9 @@ opens three choices: one vehicle for the **whole hop**, a **boat for this
 crossing** alone (K'gari on the Viper while Bass Strait keeps the Spirit of
 Tasmania, with the road on either side unchanged), or **Not driven** for a
 flight or a train. Virée then fades the vehicle out after the stop and back in
-before the next one, and dashes the trail between them. The sea is read on
-the straight line between two places, so its kilometres are rough.
+before the next one, and dashes the trail between them. The band reads the
+sea on the straight line between two places, so its kilometres are rough;
+the Virée panel's rows follow the piece's drawn road.
 When the boat that takes a crossing is a **ferry** (the water rule's boat, or
 the one a place was reached by) and the road's vehicle is a car, the car
 **boards** it there. It drives to the quay and stops, and the ship docks just

@@ -482,6 +482,12 @@ export interface DriveStop extends GeoPoint {
   /** The place this stop is, on the legs or the author's own list — what another opener reads it back as (`stop-source.ts`). */
   source?: HookPlace;
   /**
+   * On a halt GROUPED from nearby stops (`groupRoute`), which carries no
+   * `source`: the place the hop leading here arrives at — its first member —
+   * whose hop choices (`arriveBy`, `crossBy`, `flown`) the vehicle plan reads.
+   */
+  reachedAt?: HookPlace;
+  /**
    * WHEN the vehicle is here, as days of the trip on a continuous scale — day
    * 1.0 is the morning of day 1, day N + 1.0 the end of day N — so `arrive`
    * and `leave` bound the stay and the counter reads `floor`. From the
@@ -868,6 +874,7 @@ export function groupRoute(route: DriveRoute, o: Pick<DriveOptions, 'groupKm' | 
     }
     const states = [...new Set(members.flatMap((m) => m.states ?? []))];
     const name = groupName(route.stops, group, o.groupName, towns);
+    const reached = members[0].source ?? members[0].reachedAt;
     return {
       lat: anchor.lat,
       lon: anchor.lon,
@@ -881,6 +888,7 @@ export function groupRoute(route: DriveRoute, o: Pick<DriveOptions, 'groupKm' | 
       pictures,
       ...(group.members.length > 1 ? { members: group.members.length } : {}),
       ...(days ? { days } : {}),
+      ...(reached ? { reachedAt: reached } : {}),
     };
   });
   crowd(stops, leftOut);

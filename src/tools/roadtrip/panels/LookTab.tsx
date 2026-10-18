@@ -23,6 +23,7 @@ import {
 } from '../../../shared/roadtrip/slide-capacities';
 import Segmented from '../../../shared/ui/Segmented';
 import HookPicker from './HookPicker';
+import { withCrossBoat, withHopChoice } from '../../../shared/roadtrip/trip-hops';
 import PieceStylePanel from '../PieceStylePanel';
 import ShadesPanel from '../../../shared/shades/ShadesPanel';
 import { linkButton } from './ui';
@@ -169,6 +170,8 @@ export default function LookTab({
             pictureStatus={hookPictureStatus}
             onChange={onLayers}
             onConfigureVehicle={onConfigureVehicle}
+            onChooseHop={(placeId, choice) => onChangeTrip(withHopChoice(trip, placeId, choice))}
+            onCrossBoat={(placeId, boat) => onChangeTrip(withCrossBoat(trip, placeId, boat))}
             slideOpener={!isHook}
           />
         </InspectorSection>
