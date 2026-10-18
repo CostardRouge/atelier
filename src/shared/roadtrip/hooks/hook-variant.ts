@@ -33,6 +33,7 @@ import type { TripCrossings, TripVehicle, VehicleRef } from '../vehicle-fleet';
 import type { LandIndex } from '../../map/terrain';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
+import type { HopChoice } from '../trip-hops';
 import type { MapStop } from './stops';
 import type { OpenerChapter } from './opener-chapters';
 import type { GroupOptions, NamedTown } from './stop-clusters';
@@ -250,6 +251,8 @@ export interface HookBasemapWant {
  * way every other list of the suite does (`stopText`, `stops.ts`).
  */
 export interface HookPlace {
+  /** The trip place this is (`TripPlace.id`), on the legs — what a hop's choice is written to. Absent on a stop of the author's own. */
+  placeId?: string;
   name: string;
   lat: number;
   lon: number;
@@ -471,6 +474,15 @@ export interface HookPanelHost {
    * write the trip itself; absent, the panel says where the vehicle is set.
    */
   configureVehicle?(): void;
+  /**
+   * Write how the hop leading to a trip place is made — decided by the road,
+   * not driven, or one vehicle for the whole hop (`withHopChoice`), as the
+   * overview's Trajet band does. The shell's, like the garage: absent, the
+   * panel's hops are read only.
+   */
+  chooseHop?(placeId: string, choice: HopChoice): void;
+  /** Write the boat for that hop's water alone; null gives it back to the rule (`withCrossBoat`). */
+  chooseCrossBoat?(placeId: string, boat: VehicleRef | null): void;
   /**
    * Open the big picking map on these stops — pan, zoom, tap to add, drag to
    * move, towns to take a name from — and resolve the stops as the author

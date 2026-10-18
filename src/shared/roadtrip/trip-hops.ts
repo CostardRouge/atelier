@@ -27,14 +27,17 @@ import { vehicleKind } from './vehicle-spec';
 /** Why a hop is made the way it is — said on its row. */
 export type HopWhy = 'flown' | 'place' | 'water' | 'stage' | 'trip';
 
-export interface TripHop {
-  /** The place the hop leads to — where its choices are written. */
-  to: TripPlace;
-  from: TripPlace;
-  stageId: string;
-  /** Kilometres as the crow flies. */
+/**
+ * One hop as a row says it — the overview's band and the Virée panel alike
+ * (`HopList.tsx`): where it runs, how far, its make-up, what makes it and why.
+ */
+export interface HopLine {
+  key: string;
+  from: string;
+  to: string;
+  /** Kilometres — the crow's in the band, the drawn road's in Virée. */
   km: number;
-  /** The kilometres at sea on the straight line, split as road before, sea, road after; null with no coastline. */
+  /** The kilometres split as road before, sea, road after; null when no water was read. */
   sea: { before: number; water: number; after: number } | null;
   why: HopWhy;
   /** What drives the land of the hop (the whole hop when it does not sail). */
@@ -43,6 +46,23 @@ export interface TripHop {
   boat?: { ref: VehicleRef; own: boolean };
   /** At sea, but the rule is off: the land vehicle drives straight over it. */
   wet?: boolean;
+  /** The trip's place the hop leads to — where a choice is written; absent: the row is read only. */
+  place?: { id: string; arriveBy?: VehicleRef; crossBy?: VehicleRef; flown?: true };
+}
+
+/** A hop of the whole trip: a row, and the stage it arrives in. */
+export interface TripHop extends HopLine {
+  stageId: string;
+}
+
+/** The choices a place holds about the hop leading to it. */
+function placeChoices(place: Pick<TripPlace, 'id' | 'arriveBy' | 'crossBy' | 'flown'>): NonNullable<HopLine['place']> {
+  return {
+    id: place.id,
+    ...(place.arriveBy ? { arriveBy: place.arriveBy } : {}),
+    ...(place.crossBy ? { crossBy: place.crossBy } : {}),
+    ...(place.flown ? { flown: true as const } : {}),
+  };
 }
 
 /** About one land test every two kilometres; capped so a long flight stays cheap. */
@@ -123,7 +143,7 @@ function hopOf(
   const a = from.coords!;
   const b = to.coords!;
   const km = stepKm(a, b);
-  const base = { from, to, stageId: stage.id, km };
+  const base = { key: to.id, from: from.name, to: to.name, stageId: stage.id, km, place: placeChoices(to) };
   const landRef: VehicleRef = stage.vehicle ?? { fleet: main.id };
   const landWhy: HopWhy = stage.vehicle ? 'stage' : 'trip';
   if (to.flown) return { ...base, sea: null, why: 'flown', ref: landRef };

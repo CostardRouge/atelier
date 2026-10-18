@@ -34,7 +34,7 @@ import { DateField } from '../../shared/ui/DateField';
 import PlaceFixPanel, { type FixCandidate, type FixTab } from './PlaceFixPanel';
 import PlacesTable, { type PlacesTableRow } from './PlacesTable';
 import { takePlaceRequest, usePlaceRequest } from './place-request';
-import VehicleRefSelect from './VehicleRefSelect';
+import VehicleRefSelect from '../../shared/roadtrip/VehicleRefSelect';
 
 interface PlacesEditorProps {
   trip: TripDoc;

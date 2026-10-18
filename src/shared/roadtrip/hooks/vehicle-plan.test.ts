@@ -3,7 +3,7 @@ import { landIndex } from '../../map/terrain';
 import type { LandCollection } from '../../map/land';
 import { DEFAULT_CROSSINGS, type TripVehicle } from '../vehicle-fleet';
 import { DEFAULT_VEHICLE, defaultVehicleSpec } from '../vehicle-spec';
-import { DRIVE_DEFAULTS, drivePlan, type DriveRoute, type DriveStop } from './drive-plan';
+import { DRIVE_DEFAULTS, drivePlan, groupRoute, type DriveRoute, type DriveStop } from './drive-plan';
 import type { HookDay, HookStage } from './hook-variant';
 import { driveRoad, driveVehicles, ferryDocks, momentDay, segmentAt, type RoadInput } from './vehicle-plan';
 import { PLAN_SIZE } from './drive-plan';
@@ -153,6 +153,19 @@ describe('the road’s vehicles', () => {
     expect(v.segments[1].s1).toBeCloseTo(plan.path.stopS[2]);
     expect(v.hops[1]).toBeNull();
     expect(ferryDocks(v)).toEqual([]);
+  });
+
+  it('reads the hop choices of a grouped halt from the place it is reached at', () => {
+    // West B and East B grouped into one halt: its source is gone, its first member's choice is not.
+    const stops = road().stops.map((s, i) => (i === 2 ? { ...s, source: { name: s.name, lat: s.lat, lon: s.lon, flown: true as const } } : s));
+    const grouped = groupRoute(road(stops), { groupKm: 50, groupVisits: 'all', groupName: 'first' });
+    expect(grouped.stops).toHaveLength(3);
+    expect(grouped.stops[2].source).toBeUndefined();
+    const { v } = vehiclesOf(grouped);
+    expect(v.segments.map((s) => [s.source, !!s.hidden])).toEqual([
+      ['trip', false],
+      ['place', true],
+    ]);
   });
 
   it('drives a stage on the vehicle it names, and keeps the water for the boat', () => {
