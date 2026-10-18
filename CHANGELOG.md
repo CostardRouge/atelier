@@ -17,6 +17,12 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Trips and the Studio take a Develop picture's whole edit — its develop, its look (Trips) and its perspective, lens,
   detail, repair, layers and vignette — from a **From Develop** row, and offer an update when it changes in Develop.
 
+### Fixed
+
+- Trips: Virée's vehicle no longer trembles. It stays on the road through each place instead of running past it and
+  back, and rounds a hairpin instead of reversing in it. Under a following camera the dashes stay on the ground, the
+  place names keep their side, and the map no longer jolts.
+
 ## [1.0.0] - 2026-10-17 — Sepia
 
 The first numbered release: Atelier as it is deployed today.
