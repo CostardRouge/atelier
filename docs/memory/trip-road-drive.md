@@ -130,6 +130,14 @@ past the frame with the map, and FADES as an earlier name (or a card, weighed
 by how much it shows) comes over a box half a line roomier than it — a fade
 over ~20 px of motion, every answer continuous: 0.1–2 jumps a second left,
 during the wide shots' fast zooms. A still map keeps `placeLabels`' packing.
+**What is left, measured and NOT smoothed** (2026-10-17): a recap's run steps
+the car's speed at every place it rolls past (`knotAt` is piecewise linear in
+the cost, by `pace`) — speed steps p95 1.5 px/frame against 1.1 on a plain
+drive, the smaller cause; and at kilometres per frame the car's screen path
+follows real bends a few pixels across, which no bell the size of a few
+pixels changes. The bench that measured all of this (car, map, dashes and
+names frame by frame at 60 Hz in Virée's own plan and camera) lived in the
+session's scratchpad, never committed.
 Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.

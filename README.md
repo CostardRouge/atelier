@@ -1385,7 +1385,10 @@ the map, and it turns no faster than you allow), an establishing shot on the
 whole route and a closing one, a centred smoothing and a look-ahead, three
 presets (**Calm**, **Navigation**, **Documentary**) and the fine settings
 behind a link; the whole track is computed with the plan, so the preview, a
-seek and the file see one camera —, the recap (when the
+seek and the file see one camera; under it each place's name keeps the right
+of its dot and fades as another comes over it rather than jumping from side
+to side, and the dashes of the road ahead stay put on the ground as the view
+zooms —, the recap (when the
 badge's counter follows the drive — see *The badge can count WITH the car*
 above — its pace, its summary card and its milestones), and the sound: a tick
 at every stop on the same voices, deeper where a leg begins, the seat on
