@@ -99,6 +99,8 @@ instance (PUT), resume (GET with `If-None-Match`), a rename pushed after the
 idle with `If-Match`, Delete (DELETE with `If-Match`, thumbnails and record
 pruned).
 
+- **A roll over the instance's document cap is thinned on the WIRE only** (2026-10-18, his «1.1 MB, over the instance's cap of 1.0 MB»): the journals (up to 96 KB per picture) are what make a roll heavy, so `fitWireDoc` (`roll-remote.ts`) bounds every picture's journal down a ladder (48 → 0 KB, finest steps merged first) until the copy fits, leaving the local document whole and never touching an edit. A pull from another device therefore brings back the thinner story; if the roll is still over with no journal at all, the client's own refusal sentence stands. Snapshots (24 × a state per picture) are the next weight if that ever happens.
+
 ## The editor writes THROUGH, and the strip never remounts (2026-09-16, D6)
 
 `RollEditor` (the roll: bar, grid, filmstrip, thumbnails, verbs),
