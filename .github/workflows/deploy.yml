@@ -44,6 +44,9 @@ jobs:
         run: npm run build
         env:
           BASE_PATH: /
+          # Audience measurement: the site's id in the maintainer's Umami is
+          # in the code (src/shared/lib/audience.ts); set VITE_UMAMI_WEBSITE_ID
+          # here to override it, empty to switch measurement off.
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
