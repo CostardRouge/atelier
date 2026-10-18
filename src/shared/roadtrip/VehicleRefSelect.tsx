@@ -1,7 +1,7 @@
-import { vehicleLine } from '../../shared/roadtrip/vehicle-spec';
-import { VEHICLE_MODELS, vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
-import { swatchClass } from '../../shared/ui/Inspector';
-import { readVehicleRef, type TripVehicle, type VehicleRef } from '../../shared/roadtrip/vehicle-fleet';
+import { vehicleLine } from './vehicle-spec';
+import { VEHICLE_MODELS, vehicleModel } from './hooks/vehicle-registry';
+import { swatchClass } from '../ui/Inspector';
+import { readVehicleRef, type TripVehicle, type VehicleRef } from './vehicle-fleet';
 
 /** A reference as an option's value, and back. */
 function refValue(ref: VehicleRef | undefined): string {

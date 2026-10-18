@@ -23,8 +23,10 @@ import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import { FieldRow, SelectField, SwitchRow, ToggleField, swatchClass, SliderRow } from '../../ui/Inspector';
 import { DEFAULT_VEHICLE, vehicleLine, carriesVehicles, describeVehicle, vehicleFor, type VehicleSpec, type VehicleChoice } from '../vehicle-spec';
-import { fleetOf, mainVehicle } from '../vehicle-fleet';
-import { driveRoad, driveVehicles, ferryDocks, refModel, type DriveVehicles, type RoadInput } from './vehicle-plan';
+import { DEFAULT_CROSSINGS, fleetOf, mainVehicle } from '../vehicle-fleet';
+import HopList from '../HopList';
+import { driveHopLines } from './drive-hops';
+import { driveRoad, driveVehicles, ferryDocks, refModel, type RoadInput } from './vehicle-plan';
 import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from './vehicle-registry';
 import {
   DRIVE_DEFAULTS,
@@ -212,35 +214,14 @@ function planOf(route: DriveRoute, o: DriveOptions, ctx: HookContext): DrivePlan
 }
 
 /**
- * What the road will do with the trip's vehicles, said as a sentence: the
- * crossings it sails and on what, the hops picked by hand, the stages that
- * drive another vehicle — or why it reads no water (the rule off, the
- * coastline not yet here). The same `driveVehicles` the paint draws.
+ * What decides the water on this road, said in one line above its hops: the
+ * rule off, the coastline still on its way, or the boat a crossing takes.
  */
-function roadSentence(plan: DrivePlan, ctx: HookContext, vehicles: DriveVehicles, o: DriveOptions): string {
+function waterLine(ctx: HookContext): string {
   const input = roadInput(ctx, null);
-  const stops = plan.route.stops;
-  const parts: string[] = [];
-  const water = vehicles.segments.filter((seg) => seg.source === 'water');
-  if (!input.crossings?.auto) parts.push('The water rule is off in the trip settings');
-  else if (!input.land) parts.push('Reading the coastline — the road is driven whole until it arrives');
-  else if (!water.length) parts.push('No hop crosses water');
-  else {
-    // Every boat that sails, once each: a crossing may carry its own (`crossBy`).
-    const boat = [...new Set(water.map((seg) => vehicleModel(refModel(seg.ref, input.fleet)).short))].join(', ');
-    const where = vehicles.hops
-      .map((hop, h) => (hop?.water ? `${stops[h].name || `stop ${h + 1}`} → ${stops[h + 1].name || `stop ${h + 2}`}` : null))
-      .filter((x): x is string => x !== null);
-    const aboard = o.boarding && water.some((seg) => seg.rider) ? `, the ${vehicleModel(refModel(water.find((seg) => seg.rider)!.rider!, input.fleet)).short} aboard` : '';
-    parts.push(`${where.length} crossing${where.length > 1 ? 's' : ''} by ${boat}${aboard}: ${where.slice(0, 3).join(', ')}${where.length > 3 ? '…' : ''}`);
-  }
-  const placed = vehicles.segments.filter((seg) => seg.source === 'place' && !seg.hidden).length;
-  if (placed) parts.push(`${placed} hop${placed > 1 ? 's' : ''} picked by hand`);
-  const flown = vehicles.segments.filter((seg) => seg.hidden).length;
-  if (flown) parts.push(`${flown} not driven`);
-  const staged = new Set(vehicles.segments.filter((seg) => seg.source === 'stage').map((seg) => refModel(seg.ref, input.fleet)));
-  if (staged.size) parts.push(`stages on ${[...staged].map((m) => vehicleModel(m).short).join(', ')}`);
-  return `${parts.join(' · ')}.`;
+  if (!input.crossings?.auto) return 'On water: the water rule is off in the trip settings, so the road is driven whole.';
+  if (!input.land) return 'On water: reading the coastline — the road is driven whole until it arrives.';
+  return `On water: the ${vehicleModel(input.crossings.boat).short} by itself, unless a hop says otherwise.`;
 }
 
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
@@ -523,7 +504,23 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         <p className="m-0 text-xs text-ink-soft">{describeVehicle(car, vehicleModel(car.model).name)}</p>
-        {plan && roadVehicles && <p className="m-0 text-xs text-muted">{roadSentence(plan, ctx, roadVehicles, o)}</p>}
+        {plan && roadVehicles && (
+          // The road hop by hop, as the overview's Trajet band says it — the
+          // same rows, read off the vehicles this frame draws (face C).
+          <div className="flex flex-col gap-1" data-drive-hops>
+            <p className="m-0 text-xs text-muted">{waterLine(ctx)}</p>
+            <div className="max-h-72 overflow-y-auto overscroll-contain border border-line rounded-control px-2">
+              <HopList
+                lines={driveHopLines(plan.route.stops, plan.path, roadVehicles)}
+                fleet={roadInput(ctx, null).fleet}
+                ruleAuto={!!ctx.crossings?.auto}
+                ruleBoat={ctx.crossings?.boat ?? DEFAULT_CROSSINGS.boat}
+                onChoose={host?.chooseHop}
+                onCrossBoat={host?.chooseCrossBoat}
+              />
+            </div>
+          </div>
+        )}
         {borrowed && carriesVehicles(car.model) && vehicleModel(tripVehicle.model).kind === 'car' ? (
           <FieldRow
             label="Boarding"

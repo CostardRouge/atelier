@@ -43,6 +43,8 @@ import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registr
 import { tripPlaces, type MapStop } from '../../../shared/roadtrip/hooks/stops';
 import HookPicturesModal from '../HookPicturesModal';
 import StopsMapSheet from '../StopsMapSheet';
+import type { HopChoice } from '../../../shared/roadtrip/trip-hops';
+import type { VehicleRef } from '../../../shared/roadtrip/vehicle-fleet';
 
 interface HookPickerProps {
   /** The piece's stored layers; the picker writes the first and only the first. */
@@ -63,6 +65,10 @@ interface HookPickerProps {
    * picker has no trip to write to, and the variant's panel says so instead.
    */
   onConfigureVehicle?: () => void;
+  /** Writes how the hop leading to a trip place is made, from Virée's Trajet rows; absent, they are read only. */
+  onChooseHop?: (placeId: string, choice: HopChoice) => void;
+  /** Writes the boat for that hop's water alone. */
+  onCrossBoat?: (placeId: string, boat: VehicleRef | null) => void;
   /**
    * The picker is choosing a slide's OWN opener rather than the piece's. The
    * badge variant draws nothing beyond the badge, and on such a slide the
@@ -91,6 +97,8 @@ export default function HookPicker({
   pictureStatus,
   onChange,
   onConfigureVehicle,
+  onChooseHop,
+  onCrossBoat,
   slideOpener = false,
 }: HookPickerProps) {
   // A slide with no opener is showing the NONE card, the badge variant's.
@@ -121,18 +129,26 @@ export default function HookPicker({
   // Look tab crawled while the piece played (his report, 2026-10-09). The
   // callbacks are read through a ref, and the panel's element is memoised on
   // its options, its context and its host.
-  const latest = useRef({ layers, onChange, onConfigureVehicle });
-  latest.current = { layers, onChange, onConfigureVehicle };
+  const latest = useRef({ layers, onChange, onConfigureVehicle, onChooseHop, onCrossBoat });
+  latest.current = { layers, onChange, onConfigureVehicle, onChooseHop, onCrossBoat };
   const hasGarage = !!onConfigureVehicle;
   const configureVehicle = useCallback(() => latest.current.onConfigureVehicle?.(), []);
+  const hasHops = !!onChooseHop;
+  const chooseHop = useCallback((placeId: string, choice: HopChoice) => latest.current.onChooseHop?.(placeId, choice), []);
+  const chooseCrossBoat = useCallback(
+    (placeId: string, boat: VehicleRef | null) => latest.current.onCrossBoat?.(placeId, boat),
+    [],
+  );
   const host = useMemo<HookPanelHost>(
     () => ({
       choosePictures,
       pictureStatus,
       configureVehicle: hasGarage ? configureVehicle : undefined,
+      chooseHop: hasHops ? chooseHop : undefined,
+      chooseCrossBoat: hasHops ? chooseCrossBoat : undefined,
       editStopsOnMap,
     }),
-    [choosePictures, pictureStatus, hasGarage, configureVehicle, editStopsOnMap],
+    [choosePictures, pictureStatus, hasGarage, configureVehicle, hasHops, chooseHop, chooseCrossBoat, editStopsOnMap],
   );
   const onPanelChange = useCallback(
     (options: HookLayer['options']) =>

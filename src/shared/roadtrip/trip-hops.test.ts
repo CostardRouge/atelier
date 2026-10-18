@@ -39,7 +39,7 @@ describe('the trip’s hops', () => {
 
   it('lists each hop in the order it was lived, with what makes it and why', () => {
     const hops = tripHops(t, SHIPPED);
-    expect(hops.map((h) => `${h.from.name}→${h.to.name}:${h.why}`)).toEqual([
+    expect(hops.map((h) => `${h.from}→${h.to}:${h.why}`)).toEqual([
       'Geelong→Melbourne:trip',
       'Melbourne→Devonport:water',
       'Devonport→Hobart:trip',
