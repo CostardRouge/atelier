@@ -21,6 +21,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Fixed
 
+- Develop: a roll kept on a Winnow no longer stops saving once it passes the instance's 1 MB document cap. The saved
+  copy sheds the finest steps of the making-of histories to fit; this device keeps them all.
 - Trips: Virée's vehicle no longer trembles. It stays on the road through each place instead of running past it and
   back, and rounds a hairpin instead of reversing in it. Under a following camera the dashes stay on the ground, the
   place names keep their side, and the map no longer jolts.

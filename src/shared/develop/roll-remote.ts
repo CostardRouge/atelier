@@ -25,6 +25,7 @@ import {
   type PushOutcome,
   type RemoteSource,
 } from '../sources/doc-remote';
+import { boundJournal } from './journal';
 import { readRollDoc, type RollDoc } from './roll-types';
 import { toRollFile, rollDocFromFile } from './roll-file';
 import { deleteSyncRecord, getSyncRecord, putRoll, putSyncRecord } from './roll-store';
@@ -54,11 +55,52 @@ export function fromWireDoc(raw: unknown, id: string, sourceId: string): RollDoc
   return doc;
 }
 
+/**
+ * Room kept for the envelope (`kind`, `version`) around the document, which
+ * the client's cap counts too.
+ */
+const ENVELOPE_BYTES = 256;
+
+/** Per-picture journal ceilings tried in turn when the wire copy is over the cap. */
+const JOURNAL_LADDER = [48 * 1024, 24 * 1024, 12 * 1024, 4 * 1024, 1024, 0];
+
+/**
+ * The wire copy held under the instance's cap. A roll's weight is mostly its
+ * pictures' JOURNALS (up to 96 KB each, for the making-of), the one part that
+ * can lose grain without losing an edit: past the cap, every journal is
+ * bounded tighter (the finest steps merged first, `boundJournal`) until the
+ * document fits. Only the copy that travels is thinned — this device keeps
+ * the full story. A roll that is still over with the journals gone is returned
+ * as it is, and the client refuses it with its sentence.
+ */
+export function fitWireDoc(doc: RollDoc, maxBytes: number | null): Omit<RollDoc, 'sourceId'> {
+  const wire = toWireDoc(doc);
+  if (maxBytes === null) return wire;
+  const room = maxBytes - ENVELOPE_BYTES;
+  const size = (d: unknown) => new TextEncoder().encode(JSON.stringify(d)).byteLength;
+  if (size(wire) <= room) return wire;
+  let out = wire;
+  for (const bytes of JOURNAL_LADDER) {
+    out = {
+      ...wire,
+      pictures: wire.pictures.map((p) => {
+        if (!p.journal?.length) return p;
+        const journal = bytes === 0 ? [] : boundJournal(p.journal, { bytes });
+        const { journal: _drop, ...rest } = p;
+        void _drop;
+        return journal.length > 0 ? { ...rest, journal } : rest;
+      }),
+    };
+    if (size(out) <= room) break;
+  }
+  return out;
+}
+
 // --- push / pull -----------------------------------------------------------
 
 /** One PUT of the roll, guarded by the etag we hold. Never throws. */
 export function pushOnce(remote: RemoteSource, doc: RollDoc, etag: string | null): Promise<PushOutcome> {
-  return putDocOnce(remote, ROLL_DOC_KIND, doc.id, doc.version, toWireDoc(doc), etag);
+  return putDocOnce(remote, ROLL_DOC_KIND, doc.id, doc.version, fitWireDoc(doc, remote.maxBytes), etag);
 }
 
 /**
