@@ -100,9 +100,16 @@ exactly through `erf`. A box chord jolts twice per bend (its front end, then
 its back end, crossing every polygon corner of the sampled line): measured in
 Virée's own plan + camera on synthetic hairpins and 300 m bends, the peak
 angular acceleration fell 4–7× close up, ~4× under Navigation and 20–50×
-under Calm, slip unchanged. The bell moves only the DIRECTION: smoothing the
-position too was tried and rejected — it stood the car up to 37 px off its
-own line. A bell spanning more than 256 samples (a whole trip seen from
+under Calm, slip unchanged. Smoothing the POSITION over that same bell was
+tried and rejected — it stood the car up to 37 px off its own line; the
+position takes a bell of its own, 0.05 vehicle lengths (~6 px, `PLACE_SIGMA`,
+`smoothPointAt`, 2026-10-17), which rounds the CUSP a ribbon draws where
+sparse fixes double back (a switchback as a V a few metres across, where the
+car reversed in one frame): the jolt there fell 1.06 → 0.56 px under
+Navigation (the background's level) and 3.1 → 1.9 px at an 8 km view, the
+car's centre a few pixels off the line it covers. A wider position bell buys
+nothing elsewhere: what is left is real bends driven at kilometres per
+frame. A bell spanning more than 256 samples (a whole trip seen from
 afar) reads them in power-of-two runs anchored to fixed indices, so a frame
 costs ~0.015 ms at every zoom (0.44 ms per call uncapped over 8 000 samples). Close up the car follows its bend; from afar a town's streets, and a
 hairpin smaller than the car, do not spin it. **The dashed road ahead is

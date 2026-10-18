@@ -38,6 +38,7 @@ import {
   pointAt,
   scaleBar,
   smoothHeadingAt,
+  smoothPointAt,
   viewAt,
   wantsStopLabel,
   type CameraTrack,
@@ -82,6 +83,12 @@ export const CAR_PX = 118;
  * old two-length chord, without the chord's edges.
  */
 const HEADING_SIGMA = 0.7;
+/**
+ * …and its PLACE averaged over a bell this many of its lengths wide (a few
+ * pixels): a cusp of the road — a switchback its sparse fixes drew as a V — is
+ * rounded instead of reversed in one frame.
+ */
+const PLACE_SIGMA = 0.05;
 /** A card's long edge in 1080-units at size 1. */
 const CARD_PX = 190;
 
@@ -509,6 +516,10 @@ function paintMap(
 
   // The road: the whole path faint and dashed ahead, the trail solid behind.
   const pts = plan.path.points.map(at);
+  // Where the vehicle stands at `s`: on the trip's road, the road averaged over
+  // a few pixels so it rounds a cusp instead of bouncing off it.
+  const placeSigma = plan.path.km ? (PLACE_SIGMA * vehiclePx) / Math.max(1e-9, view.scale) : 0;
+  const vehicleAt = (s: number) => (placeSigma > 0 ? smoothPointAt(plan.path, s, placeSigma) : pointAt(plan.path, s).point);
   // A dash pattern is laid in screen pixels from where its line starts (`s0`
   // along the path): under a zooming camera it is shifted back so its dashes
   // stay on the ground at the vehicle instead of crawling (`dashShift`).
@@ -531,7 +542,7 @@ function paintMap(
     }
     if (o.trail && moment.s > 0) {
       const { index } = pointOn(plan, moment.s);
-      const carAt = at(moment.point);
+      const carAt = at(vehicleAt(moment.s));
       // A hop NOT driven (a flight) is no trail: its stretch is drawn dashed
       // and thin, the driven runs either side solid (`TripPlace.flown`).
       const hidden = scratch.road?.hidden ?? [];
@@ -676,7 +687,7 @@ function paintMap(
     // turn eases in and out instead of jolting at a chord's two ends.
     const sigma = plan.path.km ? (HEADING_SIGMA * vehiclePx) / Math.max(1e-9, view.scale) : 0;
     const roadHeading = (s: number) => (sigma > 0 ? smoothHeadingAt(plan.path, s, sigma) : headingAt(plan.path, s));
-    let shipPoint = moment.point;
+    let shipPoint = vehicleAt(moment.s);
     let shipHeading = roadHeading(moment.s);
     if (crossing) {
       const toPlan = scale / Math.max(1e-9, view.scale);
@@ -686,7 +697,7 @@ function paintMap(
         alight: dockReach('alight', model.length, riderLength) * toPlan,
       };
       const s = dockedS(crossing.crossing, crossing.ends, moment.s, reach);
-      shipPoint = pointAt(plan.path, s).point;
+      shipPoint = vehicleAt(s);
       shipHeading = roadHeading(s);
     }
     const p = at(shipPoint);
@@ -709,7 +720,7 @@ function paintMap(
       if (k > 0) {
         const own = turnedDir(roadHeading(moment.s));
         const ownLen = Math.hypot(own.x, own.y) || 1;
-        const shore = at(moment.point);
+        const shore = at(vehicleAt(moment.s));
         rider = onTheShore(rider, { fx: own.x / ownLen, fy: -own.y / ownLen, scale: carPx / riding!.model.length, x: shore.x, y: shore.y }, k);
       }
     }

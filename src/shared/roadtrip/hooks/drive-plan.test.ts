@@ -38,6 +38,7 @@ import {
   roadMilestones,
   scaleBar,
   smoothHeadingAt,
+  smoothPointAt,
   stagePlaceDays,
   stopClock,
   viewAt,
@@ -535,6 +536,39 @@ describe('the path', () => {
       if (prev !== null) expect(Math.abs(angle - prev)).toBeLessThan(1e-3);
       prev = angle;
     }
+  });
+
+  it('rounds the cusp of a road doubling back, and leaves a straight road where it is', () => {
+    // East 2 km to a V (the sparse fixes of a switchback), back west-north-west 2 km.
+    const via: { x: number; y: number }[] = [];
+    for (let x = 0; x <= 2; x += 0.01) via.push({ x, y: 0 });
+    for (let k = 1; k <= 200; k++) via.push({ x: 2 - k * 0.01, y: k * 0.0015 });
+    const viaKm = via.map((_, i) => i * 0.01);
+    const path = buildPath([via[0], via[via.length - 1]], 'straight', [{ via, viaKm, km: viaKm[viaKm.length - 1] }]);
+    const sigma = 0.05;
+    // A straight stretch comes back exactly; an end is held, not pulled off the road.
+    const mid = smoothPointAt(path, 1, sigma);
+    expect(mid.x).toBeCloseTo(1, 9);
+    expect(mid.y).toBeCloseTo(0, 9);
+    expect(smoothPointAt(path, 0, sigma).x).toBeLessThan(sigma);
+    // Through the V the vehicle no longer reverses in one step: its acceleration
+    // at the tip is a fraction of the bare line's, within a bell of the line.
+    const tip = 2;
+    const jolt = (point: (s: number) => { x: number; y: number }) => {
+      let worst = 0;
+      for (let s = tip - 0.2; s <= tip + 0.2; s += 0.02) {
+        const a = point(s - 0.02);
+        const b = point(s);
+        const c = point(s + 0.02);
+        worst = Math.max(worst, Math.hypot(a.x + c.x - 2 * b.x, a.y + c.y - 2 * b.y));
+      }
+      return worst;
+    };
+    const bare = jolt((s) => pointAt(path, s).point);
+    const bell = jolt((s) => smoothPointAt(path, s, sigma));
+    expect(bell).toBeLessThan(bare / 3);
+    const at = smoothPointAt(path, tip, sigma);
+    expect(Math.hypot(at.x - 2, at.y)).toBeLessThan(sigma);
   });
 
   it('keeps a direction where the road doubles back inside the bell', () => {

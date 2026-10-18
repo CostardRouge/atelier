@@ -1154,8 +1154,8 @@ export function pointAt(path: RoadPath, s: number): { point: PlanPoint; index: n
  */
 export const ROAD_HEADING_KM = 1;
 
-/** How many of the road's samples (or runs of them) `smoothHeadingAt` reads at most. */
-const HEADING_SEGMENTS = 256;
+/** How many of the road's samples (or runs of them) a bell (`smoothHeadingAt`, `smoothPointAt`) reads at most. */
+const BELL_SEGMENTS = 256;
 
 /** The error function (Abramowitz & Stegun 7.1.26, within 1.5e-7) — smooth, so a weight read through it never steps. */
 function erf(x: number): number {
@@ -1166,6 +1166,28 @@ function erf(x: number): number {
 }
 
 /**
+ * Every stretch of the path a bell of `sigma` round `s` reaches, as samples
+ * `i` → `j` and the part `[a, b]` of their arc length inside the bell. A bell
+ * wider than `BELL_SEGMENTS` of the road's samples (a whole trip seen from
+ * afar) reads them in runs anchored to fixed indices — a run is then a sliver
+ * of the bell, read as its chord, and a frame costs the same at every zoom.
+ */
+function underBell(path: RoadPath, s: number, sigma: number, visit: (i: number, j: number, a: number, b: number) => void): void {
+  const { points, cum } = path;
+  const lo = Math.max(0, s - 4 * sigma);
+  const hi = Math.min(path.length, s + 4 * sigma);
+  const first = pointAt(path, lo).index;
+  const last = pointAt(path, hi).index;
+  const run = 2 ** Math.max(0, Math.ceil(Math.log2((last - first + 1) / BELL_SEGMENTS)));
+  for (let i = first - (first % run); i <= last; i += run) {
+    const j = Math.min(points.length - 1, i + run);
+    const a = Math.max(lo, cum[i]);
+    const b = Math.min(hi, cum[j]);
+    if (cum[j] - cum[i] > 0 && b > a) visit(i, j, a, b);
+  }
+}
+
+/**
  * The direction of travel at `s` with the road's bends smoothed over a bell of
  * `sigma` plan units: the tangent of the path convolved with a Gaussian, i.e.
  * every segment's direction weighted by the share of the bell it covers —
@@ -1173,35 +1195,60 @@ function erf(x: number): number {
  * moves. A chord (`headingAt`) is a box: a bend jolts the vehicle as it enters
  * the chord's front end and again as it leaves its back one, which is the
  * tremble in a tight turn; a bell has no edge. Past either end of the path
- * the road contributes nothing. A bell wider than `HEADING_SEGMENTS` of the
- * road's samples (a whole trip seen from afar) reads them in runs anchored to
- * fixed indices, each run's chord weighted by its share of the bell — a run
- * is then a sliver of the bell, and a frame costs the same at every zoom.
+ * the road contributes nothing.
  */
 export function smoothHeadingAt(path: RoadPath, s: number, sigma: number): { x: number; y: number } {
   const { points, cum } = path;
   if (points.length < 2 || !(sigma > 0)) return headingAt(path, s);
-  const lo = Math.max(0, s - 4 * sigma);
-  const hi = Math.min(path.length, s + 4 * sigma);
   const k = 1 / (sigma * Math.SQRT2);
-  const first = pointAt(path, lo).index;
-  const last = pointAt(path, hi).index;
-  const run = 2 ** Math.max(0, Math.ceil(Math.log2((last - first + 1) / HEADING_SEGMENTS)));
   let x = 0;
   let y = 0;
-  for (let i = first - (first % run); i <= last; i += run) {
-    const j = Math.min(points.length - 1, i + run);
-    const span = cum[j] - cum[i];
-    const a = Math.max(lo, cum[i]);
-    const b = Math.min(hi, cum[j]);
-    if (span <= 0 || b <= a) continue;
-    const w = (erf((b - s) * k) - erf((a - s) * k)) / span;
+  underBell(path, s, sigma, (i, j, a, b) => {
+    const w = (erf((b - s) * k) - erf((a - s) * k)) / (cum[j] - cum[i]);
     x += w * (points[j].x - points[i].x);
     y += w * (points[j].y - points[i].y);
-  }
+  });
   const len = Math.hypot(x, y);
   // A road that doubles back on itself inside the bell cancels out: read a chord there.
   return len > 1e-9 ? { x: x / len, y: y / len } : headingAt(path, s, 2 * sigma);
+}
+
+/**
+ * Where the vehicle is at `s`, the road's position averaged over a bell of
+ * `sigma` plan units — exactly per segment, the path held at its ends past
+ * them. Sized to a few pixels on screen it rounds the CUSP a road takes where
+ * sparse fixes doubled back (a switchback the ribbon draws as a V a few metres
+ * across): followed exactly, the vehicle reversed in a single frame there — a
+ * jolt in every hairpin — while its centre stays within a few pixels of the
+ * line it covers.
+ */
+export function smoothPointAt(path: RoadPath, s: number, sigma: number): PlanPoint {
+  const { points, cum } = path;
+  if (points.length < 2 || !(sigma > 0)) return pointAt(path, s).point;
+  const k = 1 / (sigma * Math.SQRT2);
+  const g = (u: number) => Math.exp(-((u - s) ** 2) / (2 * sigma * sigma));
+  const c = sigma / Math.sqrt(2 * Math.PI);
+  let x = 0;
+  let y = 0;
+  let w = 0;
+  // The bell's tails past the ends rest on the end points.
+  const head = (1 + erf((0 - s) * k)) / 2;
+  const tail = (1 - erf((path.length - s) * k)) / 2;
+  x += points[0].x * head + points[points.length - 1].x * tail;
+  y += points[0].y * head + points[points.length - 1].y * tail;
+  w += head + tail;
+  underBell(path, s, sigma, (i, j, a, b) => {
+    // The stretch is the line from sample i to sample j over [cum_i, cum_j]:
+    // ∫ G·p over [a, b] from the bell's two first moments there.
+    const m0 = (erf((b - s) * k) - erf((a - s) * k)) / 2;
+    const m1 = s * m0 - c * (g(b) - g(a));
+    const span = cum[j] - cum[i];
+    const along = m1 - cum[i] * m0;
+    x += points[i].x * m0 + ((points[j].x - points[i].x) / span) * along;
+    y += points[i].y * m0 + ((points[j].y - points[i].y) / span) * along;
+    w += m0;
+  });
+  return w > 1e-12 ? { x: x / w, y: y / w } : pointAt(path, s).point;
 }
 
 /**
