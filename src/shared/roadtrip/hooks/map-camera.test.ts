@@ -165,6 +165,24 @@ describe('the track', () => {
     }
   });
 
+  it('moves the map without a jolt when it holds the car on its leash', () => {
+    // A fast drive read far ahead: the leash holds, and the heading turns at its limit.
+    const o = opts({ ...CAMERA_PRESETS.navigation.values, lookAhead: 1.5, openWide: false, endWide: false, driveSeconds: 2 });
+    const plan = planOf(o);
+    const track = cameraTrack(plan, o, BOX, 20);
+    // The map's acceleration under a still point, frame to frame at 60 Hz.
+    let worst = 0;
+    const step = 1 / 60;
+    for (let t = 0.3; t <= plan.seconds - 0.3; t += step) {
+      const views = [t - step, t, t + step].map((u) => viewAt(plan, { x: 0, y: 0, ...BOX }, 20, o, plan.at(u), track, u));
+      const p = plan.at(t).point;
+      const [a, b, c] = views.map((v) => applyView(v, p));
+      worst = Math.max(worst, Math.hypot(a.x + c.x - 2 * b.x, a.y + c.y - 2 * b.y));
+    }
+    // 35 px before the last pass (a 3 000 km drive in two seconds at a 35 km view).
+    expect(worst).toBeLessThan(15);
+  });
+
   it('opens on the whole route and comes back to it at the end', () => {
     const o = opts({ ...CAMERA_PRESETS.calm.values, openWide: true, endWide: true });
     const plan = planOf(o);

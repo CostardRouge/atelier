@@ -158,6 +158,18 @@ export const WIDE_SECONDS = 1.8;
 export const LEAD_ROOM = 0.15;
 /** How far from the vehicle the camera's centre may wander, as a share of the box's half-height. */
 export const KEEP_IN_FRAME = 0.7;
+/**
+ * Seconds of a last, light pass over a camera that smooths at all. The leash
+ * (`KEEP_IN_FRAME`) and the turn limit are CORNERS: on the leash the camera
+ * takes every jolt of the vehicle's raw position, and a turn stops dead at its
+ * limit — each a jolt of the whole map in one frame (measured 2026-10-17 under
+ * Navigation: the map jumped over 1 px on up to 14 % of frames, 27 px at
+ * worst; 2.2 % and 12 px after). Holding the leash again after the pass, even
+ * softly, tied the camera back to the raw vehicle and undid it; without it the
+ * vehicle leaves the map's box no further than it already did, at the end's
+ * wide shot.
+ */
+export const POST_SMOOTHING = 0.2;
 
 /**
  * The view width a flyTo would take at fraction `f` of a hop `d` long,
@@ -342,15 +354,16 @@ export function subjectTrack(
   }
   const smoothedWidth = gaussianSmooth(logWidth, (Math.max(0.35, o.smoothing) * fps) / 2);
 
-  // The frames, the whole route blended in at the open and the end.
-  const frames: CameraFrame[] = [];
+  // The follow view at each frame, then the whole route blended in at the open and the end.
+  const fx: number[] = [];
+  const fy: number[] = [];
   for (let k = 0; k < n; k++) {
     const t = k / fps;
     const w = Math.exp(smoothedWidth[k]);
     const unitsPerPx = w / box.width;
     let x = cx[k];
     let y = cy[k];
-    let a = angle[k];
+    const a = angle[k];
     if (o.orientation === 'heading') {
       // Lead room: the vehicle two thirds down the frame, the road ahead above it.
       const off = LEAD_ROOM * box.height * unitsPerPx;
@@ -371,6 +384,23 @@ export function subjectTrack(
       x = car.x + (dx / reach) * most;
       y = car.y + (dy / reach) * most;
     }
+    fx.push(x);
+    fy.push(y);
+  }
+  // The last light pass: the leash and the turn limit are corners. A camera
+  // asked to follow exactly (no smoothing) is left exact.
+  const post = o.smoothing > 0 ? POST_SMOOTHING * fps : 0;
+  const sx = gaussianSmooth(fx, post);
+  const sy = gaussianSmooth(fy, post);
+  const sa = gaussianSmooth(angle, post);
+  const sw = gaussianSmooth(smoothedWidth, post);
+  const frames: CameraFrame[] = [];
+  for (let k = 0; k < n; k++) {
+    const t = k / fps;
+    const w = Math.exp(sw[k]);
+    const x = sx[k];
+    const y = sy[k];
+    let a = sa[k];
     let mix = 1;
     if (o.openWide) mix = Math.min(mix, smoothstep(t / WIDE_SECONDS));
     if (o.endWide) mix = Math.min(mix, smoothstep((seconds - t) / WIDE_SECONDS));
