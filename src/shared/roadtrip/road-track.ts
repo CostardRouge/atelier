@@ -723,8 +723,56 @@ export function roadBetween(
   return back;
 }
 
+function pointOf(f: RoadFix): RoadPoint {
+  return f.km === undefined ? { lat: f.lat, lon: f.lon } : { lat: f.lat, lon: f.lon, km: f.km };
+}
+
+/**
+ * Where `p` meets the piece around its fix `i`: the nearest point of the two
+ * segments either side, and how far along the piece it lies (`at`, in fixes:
+ * `k + t` on the segment from fix `k`). A line keeps a fix every 2 km on a
+ * straight, so the nearest FIX can be a kilometre before or after the stop.
+ */
+function footOn(piece: readonly RoadFix[], i: number, p: LatLon): { at: number; point: RoadPoint } {
+  let best = { at: i, point: pointOf(piece[i]), d: Infinity };
+  for (const k of [i - 1, i]) {
+    if (k < 0 || k + 1 >= piece.length) continue;
+    const a = piece[k];
+    const b = piece[k + 1];
+    if (Math.abs(b.lon - a.lon) > 180 || Math.abs(p.lon - a.lon) > 180) continue;
+    const cos = Math.cos(((a.lat + b.lat) / 2) * RAD);
+    const bx = (b.lon - a.lon) * cos;
+    const by = b.lat - a.lat;
+    const px = (p.lon - a.lon) * cos;
+    const py = p.lat - a.lat;
+    const len2 = bx * bx + by * by;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, (px * bx + py * by) / len2)) : 0;
+    const d = (px - bx * t) ** 2 + (py - by * t) ** 2;
+    if (d >= best.d) continue;
+    const point: RoadPoint = { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t };
+    if (a.km !== undefined && b.km !== undefined) point.km = a.km + (b.km - a.km) * t;
+    best = { at: k + t, point, d };
+  }
+  return best;
+}
+
+/**
+ * The road between visits `i` and `j`, cut where each stop MEETS it rather
+ * than at the nearest fix: cut at a fix, the line ran past the stop and back
+ * (or back to it and on) at every stop — a reversal of up to a kilometre the
+ * vehicle drove at each place, the counter counting it too.
+ */
 function hopOf(piece: readonly RoadFix[], i: number, j: number, a: LatLon, b: LatLon, cursor: RoadCursor): RoadHop {
-  const via: RoadPoint[] = piece.slice(i, j + 1).map((f) => (f.km === undefined ? { lat: f.lat, lon: f.lon } : { lat: f.lat, lon: f.lon, km: f.km }));
+  const from = footOn(piece, i, a);
+  const to = footOn(piece, j, b);
+  let via: RoadPoint[];
+  if (to.at > from.at) {
+    via = [from.point];
+    for (let k = Math.floor(from.at) + 1; k < to.at; k++) via.push(pointOf(piece[k]));
+    via.push(to.point);
+  } else {
+    via = piece.slice(i, j + 1).map(pointOf);
+  }
   return { via, km: roadKms(a, via, b).km, cursor };
 }
 

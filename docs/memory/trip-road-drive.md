@@ -16,7 +16,15 @@ stops listed against the clock). A hop with no road under it — a stop off the
 road, a flight between, an order never driven — keeps its curve. A flight
 (> 200 km/h and > 50 km between two fixes) CUTS the line into pieces; a
 ferry (slow, over water) stays a straight hop. Verified on his track:
-Streaky Bay → Esperance follows the Eyre Highway for 1 557 km.
+Streaky Bay → Esperance follows the Eyre Highway for 1 557 km. **A hop is
+CUT where each stop MEETS the road** (2026-10-17): its foot on the segments
+either side of the nearest fix (`footOn`), never the nearest fix itself — a
+line keeps a fix every 2 km on a straight, so a cut at a fix ran up to a
+kilometre past the place and back at EVERY stop, a reversal the vehicle drove
+and the counter counted, read as a tremble. Virée's path goes through that
+foot and not the place's dot (`buildPath`'s `on`): the vehicle stays on the
+road through a place beside it, the dot is drawn where the place is, and a
+road hop counts only the road between its two feet.
 
 ## The vehicle DRIVES the road: three styles, the RIBBON by default (2026-10-13)
 
@@ -92,12 +100,45 @@ exactly through `erf`. A box chord jolts twice per bend (its front end, then
 its back end, crossing every polygon corner of the sampled line): measured in
 Virée's own plan + camera on synthetic hairpins and 300 m bends, the peak
 angular acceleration fell 4–7× close up, ~4× under Navigation and 20–50×
-under Calm, slip unchanged. The bell moves only the DIRECTION: smoothing the
-position too was tried and rejected — it stood the car up to 37 px off its
-own line. A bell spanning more than 256 samples (a whole trip seen from
+under Calm, slip unchanged. Smoothing the POSITION over that same bell was
+tried and rejected — it stood the car up to 37 px off its own line; the
+position takes a bell of its own, 0.05 vehicle lengths (~6 px, `PLACE_SIGMA`,
+`smoothPointAt`, 2026-10-17), which rounds the CUSP a ribbon draws where
+sparse fixes double back (a switchback as a V a few metres across, where the
+car reversed in one frame): the jolt there fell 1.06 → 0.56 px under
+Navigation (the background's level) and 3.1 → 1.9 px at an 8 km view, the
+car's centre a few pixels off the line it covers. A wider position bell buys
+nothing elsewhere: what is left is real bends driven at kilometres per
+frame. A bell spanning more than 256 samples (a whole trip seen from
 afar) reads them in power-of-two runs anchored to fixed indices, so a frame
 costs ~0.015 ms at every zoom (0.44 ms per call uncapped over 8 000 samples). Close up the car follows its bend; from afar a town's streets, and a
-hairpin smaller than the car, do not spin it. Measured locally on his track (never committed): 143 simulated stops,
+hairpin smaller than the car, do not spin it. **The dashed road ahead is
+anchored to the GROUND under a zoom** (2026-10-17, his «les pointillés
+changent durant le driving ?»): a canvas lays a dash pattern in screen pixels
+from the line's start, so every step of a following camera's pull-back slid
+the dashes near a car 500 km down the road by whole dashes — they flickered
+(a dash jumped > 3 px on 32–42 % of frames under Calm/Navigation). The track
+bakes `dash` (`dashShift`: each step's change of scale times the car's arc
+length, at 4× the track's rate) and the painter sets `lineDashOffset` from
+it, the flown trail's dashes too: 0 % after, the residue under 0.2 px. The
+Itinerary's ahead dashes start at the PEN and so travel with it — untouched.
+**Under a following camera the place NAMES are steady** (`steadyLabels`,
+2026-10-17): `placeLabels` re-decides each frame (right, left, above, below,
+or dropped), and as the map scrolled, zoomed and turned names well inside the
+frame jumped 14–95 times a second; now each keeps the right of its dot, runs
+past the frame with the map, and FADES as an earlier name (or a card, weighed
+by how much it shows) comes over a box half a line roomier than it — a fade
+over ~20 px of motion, every answer continuous: 0.1–2 jumps a second left,
+during the wide shots' fast zooms. A still map keeps `placeLabels`' packing.
+**What is left, measured and NOT smoothed** (2026-10-17): a recap's run steps
+the car's speed at every place it rolls past (`knotAt` is piecewise linear in
+the cost, by `pace`) — speed steps p95 1.5 px/frame against 1.1 on a plain
+drive, the smaller cause; and at kilometres per frame the car's screen path
+follows real bends a few pixels across, which no bell the size of a few
+pixels changes. The bench that measured all of this (car, map, dashes and
+names frame by frame at 60 Hz in Virée's own plan and camera) lived in the
+session's scratchpad, never committed.
+Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
 

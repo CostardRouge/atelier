@@ -219,3 +219,73 @@ export function placeLabels(
   });
   return placed;
 }
+
+/** A name as `steadyLabels` places it, with how much of it shows. */
+export interface SteadyLabel extends PlacedLabel {
+  alpha: number;
+}
+
+/** A box a name fades under, weighing `weight` (a card as it comes up); absent is whole. */
+export interface LabelCover {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  weight?: number;
+}
+
+/**
+ * A name is read for cover with this much room round it (in lines), so it
+ * starts fading BEFORE another touches it, and is gone once this share of
+ * that roomier box is covered — a fade over some twenty pixels of motion.
+ */
+const COVER_ROOM = 0.5;
+const COVER_FADE = 0.35;
+
+/**
+ * The names on a map that MOVES under a following camera. `placeLabels`
+ * decides afresh each frame — a side, or nothing — so as the map scrolled,
+ * zoomed and turned, names flipped from side to side and blinked out 17 to 74
+ * times a second (measured 2026-10-17 on a synthetic recap). Here every name
+ * keeps the right of its dot, runs past the frame with the map, and FADES as
+ * an earlier name or a covering box comes over it, by how much of it is
+ * covered inside the frame: every answer moves continuously with the map, so
+ * nothing jumps — and a name wholly outside the frame, which covers nothing
+ * that shows, is neither measured nor returned.
+ */
+export function steadyLabels(
+  points: readonly { x: number; y: number; name: string; wanted: boolean }[],
+  fontPx: number,
+  frame: { width: number; height: number },
+  dotRadius: number,
+  measure: (name: string) => number = (name) => Math.max(1, name.length) * fontPx * 0.55,
+  covers: readonly LabelCover[] = [],
+): SteadyLabel[] {
+  const gap = dotRadius + fontPx * 0.45;
+  const lineH = fontPx * 1.2;
+  const shown = covers.map((c) => ({ box: c, alpha: Math.max(0, Math.min(1, c.weight ?? 1)) }));
+  const out: SteadyLabel[] = [];
+  points.forEach((p, index) => {
+    if (!p.wanted || !p.name.trim()) return;
+    const x = p.x + gap;
+    if (x >= frame.width || p.y + lineH / 2 <= 0 || p.y - lineH / 2 >= frame.height) return;
+    const w = measure(p.name.trim());
+    if (x + w <= 0) return;
+    const box = { x0: x, y0: p.y - lineH / 2, x1: x + w, y1: p.y + lineH / 2 };
+    const room = COVER_ROOM * lineH;
+    const read = { x0: box.x0 - room, y0: box.y0 - room, x1: box.x1 + room, y1: box.y1 + room };
+    const area = (read.x1 - read.x0) * (read.y1 - read.y0);
+    let alpha = 1;
+    for (const o of shown) {
+      if (o.alpha <= 0) continue;
+      const ix = Math.min(read.x1, o.box.x1, frame.width) - Math.max(read.x0, o.box.x0, 0);
+      const iy = Math.min(read.y1, o.box.y1, frame.height) - Math.max(read.y0, o.box.y0, 0);
+      if (ix <= 0 || iy <= 0) continue;
+      const k = Math.min(1, (ix * iy) / area / COVER_FADE);
+      alpha *= 1 - o.alpha * k * k * (3 - 2 * k);
+    }
+    shown.push({ box, alpha });
+    if (alpha > 0.01) out.push({ index, x, y: p.y, align: 'left', side: 'right', alpha });
+  });
+  return out;
+}

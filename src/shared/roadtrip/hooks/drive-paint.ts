@@ -38,6 +38,7 @@ import {
   pointAt,
   scaleBar,
   smoothHeadingAt,
+  smoothPointAt,
   viewAt,
   wantsStopLabel,
   type CameraTrack,
@@ -47,7 +48,7 @@ import {
   type View,
   wakeStrength,
 } from './drive-plan';
-import { cameraTrack, widestFrame } from './map-camera';
+import { cameraTrack, dashShift, widestFrame } from './map-camera';
 import {
   BASEMAP_FOR_EDGE,
   BASEMAP_MAX_PX,
@@ -60,7 +61,7 @@ import { STRIP_TILES } from '../../map/tile-strip';
 import { paintGround, stripOver, wideOnly, type BasemapSet } from './basemap-strip';
 import { basemapRect, paintOsmCredit } from './basemap-paint';
 import { paintCount } from './map-paint';
-import { formatDistance, placeLabels } from './geo';
+import { formatDistance, placeLabels, steadyLabels } from './geo';
 import { paintTape } from './scrub-paint';
 import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
@@ -82,6 +83,12 @@ export const CAR_PX = 118;
  * old two-length chord, without the chord's edges.
  */
 const HEADING_SIGMA = 0.7;
+/**
+ * …and its PLACE averaged over a bell this many of its lengths wide (a few
+ * pixels): a cusp of the road — a switchback its sparse fixes drew as a V — is
+ * rounded instead of reversed in one frame.
+ */
+const PLACE_SIGMA = 0.05;
 /** A card's long edge in 1080-units at size 1. */
 const CARD_PX = 190;
 
@@ -217,7 +224,9 @@ export function driveBox(w: number, h: number, position: DriveOptions['position'
 export function driveTrack(plan: DrivePlan, o: DriveOptions, aspect: number): CameraTrack {
   const w = 1080;
   const h = w / Math.max(1e-6, aspect);
-  return cameraTrack(plan, o, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7);
+  const box = driveBox(w, h, o.position, o.size);
+  const track = cameraTrack(plan, o, box, CAR_PX * o.carSize * 0.7);
+  return o.camera === 'follow' ? { ...track, dash: dashShift(track, box.width, (t) => plan.at(t).s) } : track;
 }
 
 /** The drive's OpenStreetMap ground: the wide raster and the pyramid along the road (`basemap-strip.ts`). */
@@ -507,31 +516,44 @@ function paintMap(
 
   // The road: the whole path faint and dashed ahead, the trail solid behind.
   const pts = plan.path.points.map(at);
+  // Where the vehicle stands at `s`: on the trip's road, the road averaged over
+  // a few pixels so it rounds a cusp instead of bouncing off it.
+  const placeSigma = plan.path.km ? (PLACE_SIGMA * vehiclePx) / Math.max(1e-9, view.scale) : 0;
+  const vehicleAt = (s: number) => (placeSigma > 0 ? smoothPointAt(plan.path, s, placeSigma) : pointAt(plan.path, s).point);
+  // A dash pattern is laid in screen pixels from where its line starts (`s0`
+  // along the path): under a zooming camera it is shifted back so its dashes
+  // stay on the ground at the vehicle instead of crawling (`dashShift`).
+  const dashOffset = (s0: number, period: number) => {
+    const d = view.scale * s0 - u * (track?.dash?.(t) ?? 0);
+    return ((d % period) + period) % period;
+  };
   if (pts.length > 1) {
     if (o.ahead !== 'hidden') {
       g.beginPath();
       g.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
       g.setLineDash(o.ahead === 'dashed' ? [7 * u * lw, 9 * u * lw] : []);
+      g.lineDashOffset = dashOffset(0, 16 * u * lw);
       g.strokeStyle = onPaper ? hexToRgba(o.aheadColor, o.ahead === 'faint' ? 0.35 : 0.6) : hexToRgba('#ffffff', 0.55);
       g.lineWidth = 3 * u * lw;
       g.stroke();
       g.setLineDash([]);
+      g.lineDashOffset = 0;
     }
     if (o.trail && moment.s > 0) {
       const { index } = pointOn(plan, moment.s);
-      const carAt = at(moment.point);
+      const carAt = at(vehicleAt(moment.s));
       // A hop NOT driven (a flight) is no trail: its stretch is drawn dashed
       // and thin, the driven runs either side solid (`TripPlace.flown`).
       const hidden = scratch.road?.hidden ?? [];
-      const runs: { flown: boolean; points: { x: number; y: number }[] }[] = [];
+      const runs: { flown: boolean; s0: number; points: { x: number; y: number }[] }[] = [];
       const flownAt = (s: number) => hidden.some((r) => s > r.s0 && s < r.s1);
       const trail = [...pts.slice(0, index + 1).map((p, i) => ({ p, s: plan.path.cum[i] })), { p: carAt, s: moment.s }];
       for (let i = 1; i < trail.length; i++) {
         const flown = hidden.length > 0 && flownAt((trail[i - 1].s + trail[i].s) / 2);
         const last = runs[runs.length - 1];
         if (last && last.flown === flown) last.points.push(trail[i].p);
-        else runs.push({ flown, points: [trail[i - 1].p, trail[i].p] });
+        else runs.push({ flown, s0: trail[i - 1].s, points: [trail[i - 1].p, trail[i].p] });
       }
       for (const run of runs) {
         g.beginPath();
@@ -539,11 +561,13 @@ function paintMap(
         for (let i = 1; i < run.points.length; i++) g.lineTo(run.points[i].x, run.points[i].y);
         if (run.flown) {
           g.setLineDash([3 * u * lw, 7 * u * lw]);
+          g.lineDashOffset = dashOffset(run.s0, 10 * u * lw);
           g.lineCap = 'round';
           g.strokeStyle = o.trailColor;
           g.lineWidth = 3.5 * u * lw;
           g.stroke();
           g.setLineDash([]);
+          g.lineDashOffset = 0;
           continue;
         }
         g.strokeStyle = halo;
@@ -595,7 +619,7 @@ function paintMap(
   }
 
   // The cards, so the names can keep clear of them.
-  const cardBoxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  const cardBoxes: { x0: number; y0: number; x1: number; y1: number; weight: number }[] = [];
   const cards: Card[] = [];
   if (o.pictures === 'cards') {
     for (const { pop, rise, fade } of showing) {
@@ -609,27 +633,31 @@ function paintMap(
       const place = cardPlacement(stops[pop.stop], pop.rank, pop.key, { w: cw + 2 * border, h: ch + 2 * border }, frame, vehiclePx * 0.55, pop.stop);
       cards.push({ picture, x: place.x, y: place.y, w: cw, h: ch, border, angle: place.angle, rise, fade });
       const half = Math.hypot(cw + 2 * border, ch + 2 * border) / 2;
-      cardBoxes.push({ x0: place.x - half, y0: place.y - half, x1: place.x + half, y1: place.y + half });
+      // As much as the card shows (`paintCard`): a name fades as it comes up.
+      const weight = fade * Math.min(1, rise * 4);
+      cardBoxes.push({ x0: place.x - half, y0: place.y - half, x1: place.x + half, y1: place.y + half, weight });
     }
   }
 
   // The names, each the stop's own, never on top of another or of a card.
+  // Under a camera that moves they keep their side and FADE rather than
+  // jump (`steadyLabels`); a still map packs them round their dots.
   if (o.labels !== 'none' && plan.route.named) {
     const fontPx = 24 * u * o.labelSize;
     g.font = `600 ${fontPx}px ${LABEL_FONT}`;
     g.textBaseline = 'middle';
     const count = plan.route.stops.length;
-    const labels = placeLabels(
-      plan.route.stops.map((stop, i) => ({ x: stops[i].x, y: stops[i].y, name: stop.name, wanted: wantsStopLabel(o.labels, i, count) })),
-      fontPx,
-      frame,
-      dotR,
-      (name) => g.measureText(name).width,
-      cardBoxes,
-    );
+    const wanted = plan.route.stops.map((stop, i) => ({ x: stops[i].x, y: stops[i].y, name: stop.name, wanted: wantsStopLabel(o.labels, i, count) }));
+    const measure = (name: string) => g.measureText(name).width;
+    const labels =
+      track && o.camera === 'follow'
+        ? steadyLabels(wanted, fontPx, frame, dotR, measure, cardBoxes)
+        : placeLabels(wanted, fontPx, frame, dotR, measure, cardBoxes).map((label) => ({ ...label, alpha: 1 }));
+    const base = g.globalAlpha;
     for (const label of labels) {
       const reached = label.index <= moment.reached;
       const text = plan.route.stops[label.index].name;
+      g.globalAlpha = base * label.alpha;
       g.textAlign = label.align;
       g.lineWidth = 5 * u;
       g.strokeStyle = halo;
@@ -637,6 +665,7 @@ function paintMap(
       g.fillStyle = reached ? ink : hexToRgba(ink, 0.62);
       g.fillText(text, label.x, label.y);
     }
+    g.globalAlpha = base;
   }
 
   // The prints lie on the map; the vehicle, a toy standing on it, is drawn over them.
@@ -663,7 +692,7 @@ function paintMap(
     // turn eases in and out instead of jolting at a chord's two ends.
     const sigma = plan.path.km ? (HEADING_SIGMA * vehiclePx) / Math.max(1e-9, view.scale) : 0;
     const roadHeading = (s: number) => (sigma > 0 ? smoothHeadingAt(plan.path, s, sigma) : headingAt(plan.path, s));
-    let shipPoint = moment.point;
+    let shipPoint = vehicleAt(moment.s);
     let shipHeading = roadHeading(moment.s);
     if (crossing) {
       const toPlan = scale / Math.max(1e-9, view.scale);
@@ -673,7 +702,7 @@ function paintMap(
         alight: dockReach('alight', model.length, riderLength) * toPlan,
       };
       const s = dockedS(crossing.crossing, crossing.ends, moment.s, reach);
-      shipPoint = pointAt(plan.path, s).point;
+      shipPoint = vehicleAt(s);
       shipHeading = roadHeading(s);
     }
     const p = at(shipPoint);
@@ -696,7 +725,7 @@ function paintMap(
       if (k > 0) {
         const own = turnedDir(roadHeading(moment.s));
         const ownLen = Math.hypot(own.x, own.y) || 1;
-        const shore = at(moment.point);
+        const shore = at(vehicleAt(moment.s));
         rider = onTheShore(rider, { fx: own.x / ownLen, fy: -own.y / ownLen, scale: carPx / riding!.model.length, x: shore.x, y: shore.y }, k);
       }
     }

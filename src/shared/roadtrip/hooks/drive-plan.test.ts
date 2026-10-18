@@ -38,6 +38,7 @@ import {
   roadMilestones,
   scaleBar,
   smoothHeadingAt,
+  smoothPointAt,
   stagePlaceDays,
   stopClock,
   viewAt,
@@ -424,10 +425,11 @@ describe('the path', () => {
   });
 
   it('reads a road’s direction over a chord on the ground, whatever the piece’s length', () => {
-    // A road (1 plan unit = 1 km) east for 10 km, then north for `north` km.
+    // A road (1 plan unit = 1 km) east for 10 km, then north for `north` km,
+    // from where the first stop meets it.
     const road = (north: number) => {
       const via: { x: number; y: number }[] = [];
-      for (let x = 0.5; x < 10; x += 0.5) via.push({ x, y: 0 });
+      for (let x = 0; x < 10; x += 0.5) via.push({ x, y: 0 });
       for (let y = 0; y < north; y += 0.5) via.push({ x: 10, y });
       const viaKm = via.map((p) => p.x + p.y);
       return buildPath([{ x: 0, y: 0 }, { x: 10, y: north }], 'straight', [{ via, viaKm, km: 10 + north }]);
@@ -445,6 +447,25 @@ describe('the path', () => {
     // A caller's own chord (the painter's, in plan units) still wins.
     const long = road(2000);
     expect(headingAt(long, sAlong(long, 5), 600).y).toBeGreaterThan(0.5);
+  });
+
+  it('keeps the vehicle on the road through a place beside it, never out to its dot and back', () => {
+    // Three places 1 km north of a road running east; the road's hops meet
+    // them at x = 0, 10 and 20.
+    const along = (x0: number, x1: number) => {
+      const via: { x: number; y: number }[] = [];
+      for (let x = x0; x <= x1 + 1e-9; x += 0.5) via.push({ x, y: 0 });
+      return { via, viaKm: via.map((p) => p.x - x0 + 1), km: x1 - x0 + 2 };
+    };
+    const path = buildPath([{ x: 0, y: 1 }, { x: 10, y: 1 }, { x: 20, y: 1 }], 'curved', [along(0, 10), along(10, 20)]);
+    // It never turns back: every step heads east along the road.
+    for (let i = 1; i < path.points.length; i++) {
+      expect(path.points[i].y).toBe(0);
+      expect(path.points[i].x).toBeGreaterThanOrEqual(path.points[i - 1].x);
+    }
+    // The places sit on the road, and only the road is counted.
+    expect(path.stopS).toEqual([0, 10, 20]);
+    expect(path.km![path.km!.length - 1]).toBeCloseTo(20, 9);
   });
 
   it('smooths a road’s direction over a bell: a hairpin eases in and out where a chord jolts', () => {
@@ -515,6 +536,39 @@ describe('the path', () => {
       if (prev !== null) expect(Math.abs(angle - prev)).toBeLessThan(1e-3);
       prev = angle;
     }
+  });
+
+  it('rounds the cusp of a road doubling back, and leaves a straight road where it is', () => {
+    // East 2 km to a V (the sparse fixes of a switchback), back west-north-west 2 km.
+    const via: { x: number; y: number }[] = [];
+    for (let x = 0; x <= 2; x += 0.01) via.push({ x, y: 0 });
+    for (let k = 1; k <= 200; k++) via.push({ x: 2 - k * 0.01, y: k * 0.0015 });
+    const viaKm = via.map((_, i) => i * 0.01);
+    const path = buildPath([via[0], via[via.length - 1]], 'straight', [{ via, viaKm, km: viaKm[viaKm.length - 1] }]);
+    const sigma = 0.05;
+    // A straight stretch comes back exactly; an end is held, not pulled off the road.
+    const mid = smoothPointAt(path, 1, sigma);
+    expect(mid.x).toBeCloseTo(1, 9);
+    expect(mid.y).toBeCloseTo(0, 9);
+    expect(smoothPointAt(path, 0, sigma).x).toBeLessThan(sigma);
+    // Through the V the vehicle no longer reverses in one step: its acceleration
+    // at the tip is a fraction of the bare line's, within a bell of the line.
+    const tip = 2;
+    const jolt = (point: (s: number) => { x: number; y: number }) => {
+      let worst = 0;
+      for (let s = tip - 0.2; s <= tip + 0.2; s += 0.02) {
+        const a = point(s - 0.02);
+        const b = point(s);
+        const c = point(s + 0.02);
+        worst = Math.max(worst, Math.hypot(a.x + c.x - 2 * b.x, a.y + c.y - 2 * b.y));
+      }
+      return worst;
+    };
+    const bare = jolt((s) => pointAt(path, s).point);
+    const bell = jolt((s) => smoothPointAt(path, s, sigma));
+    expect(bell).toBeLessThan(bare / 3);
+    const at = smoothPointAt(path, tip, sigma);
+    expect(Math.hypot(at.x - 2, at.y)).toBeLessThan(sigma);
   });
 
   it('keeps a direction where the road doubles back inside the bell', () => {
