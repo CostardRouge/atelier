@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EARTH_RADIUS_KM, degreeWindow, fitProjection, formatDistance, haversineKm, placeLabels, projectionFor } from './geo';
+import { EARTH_RADIUS_KM, degreeWindow, fitProjection, formatDistance, haversineKm, placeLabels, projectionFor, steadyLabels } from './geo';
 
 const PERTH = { lat: -31.95, lon: 115.86 };
 const BROOME = { lat: -17.96, lon: 122.24 };
@@ -120,5 +120,41 @@ describe('degreeWindow', () => {
   it('takes every longitude where the circle reaches a pole', () => {
     expect(degreeWindow(89.9, 50).dLon).toBeNull();
     expect(degreeWindow(0, 30_000).dLon).toBeNull();
+  });
+});
+
+describe('steadyLabels', () => {
+  const frame = { width: 400, height: 400 };
+  const at = (x: number, y: number, name = 'Kalgoorlie') => ({ x, y, name, wanted: true });
+
+  it('keeps every name to the right of its dot, even at the frame’s edge', () => {
+    const labels = steadyLabels([at(100, 100), at(380, 300)], 20, frame, 4);
+    expect(labels.map((l) => l.side)).toEqual(['right', 'right']);
+    expect(labels.every((l) => l.alpha === 1)).toBe(true);
+  });
+
+  it('fades a name as an earlier one slides over it, a little at each step', () => {
+    // A second name sliding up onto the first, a pixel at a time.
+    let last = 1;
+    let worst = 0;
+    for (let y = 160; y >= 100; y -= 1) {
+      const [, second] = steadyLabels([at(100, 100), at(100, y, 'Norseman')], 20, frame, 4);
+      const alpha = second?.alpha ?? 0;
+      worst = Math.max(worst, Math.abs(alpha - last));
+      last = alpha;
+    }
+    expect(last).toBe(0);
+    expect(worst).toBeLessThan(0.25);
+  });
+
+  it('fades a name under a card only as much as the card shows', () => {
+    const card = { x0: 90, y0: 80, x1: 300, y1: 120 };
+    expect(steadyLabels([at(100, 100)], 20, frame, 4, undefined, [{ ...card, weight: 0 }])[0].alpha).toBe(1);
+    expect(steadyLabels([at(100, 100)], 20, frame, 4, undefined, [{ ...card, weight: 1 }])).toEqual([]);
+  });
+
+  it('leaves out a name wholly outside the frame, which covers nothing that shows', () => {
+    const labels = steadyLabels([at(500, 100), at(100, -40), at(100, 100)], 20, frame, 4);
+    expect(labels.map((l) => l.index)).toEqual([2]);
   });
 });

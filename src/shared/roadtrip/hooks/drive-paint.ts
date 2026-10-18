@@ -61,7 +61,7 @@ import { STRIP_TILES } from '../../map/tile-strip';
 import { paintGround, stripOver, wideOnly, type BasemapSet } from './basemap-strip';
 import { basemapRect, paintOsmCredit } from './basemap-paint';
 import { paintCount } from './map-paint';
-import { formatDistance, placeLabels } from './geo';
+import { formatDistance, placeLabels, steadyLabels } from './geo';
 import { paintTape } from './scrub-paint';
 import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
@@ -619,7 +619,7 @@ function paintMap(
   }
 
   // The cards, so the names can keep clear of them.
-  const cardBoxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  const cardBoxes: { x0: number; y0: number; x1: number; y1: number; weight: number }[] = [];
   const cards: Card[] = [];
   if (o.pictures === 'cards') {
     for (const { pop, rise, fade } of showing) {
@@ -633,27 +633,31 @@ function paintMap(
       const place = cardPlacement(stops[pop.stop], pop.rank, pop.key, { w: cw + 2 * border, h: ch + 2 * border }, frame, vehiclePx * 0.55, pop.stop);
       cards.push({ picture, x: place.x, y: place.y, w: cw, h: ch, border, angle: place.angle, rise, fade });
       const half = Math.hypot(cw + 2 * border, ch + 2 * border) / 2;
-      cardBoxes.push({ x0: place.x - half, y0: place.y - half, x1: place.x + half, y1: place.y + half });
+      // As much as the card shows (`paintCard`): a name fades as it comes up.
+      const weight = fade * Math.min(1, rise * 4);
+      cardBoxes.push({ x0: place.x - half, y0: place.y - half, x1: place.x + half, y1: place.y + half, weight });
     }
   }
 
   // The names, each the stop's own, never on top of another or of a card.
+  // Under a camera that moves they keep their side and FADE rather than
+  // jump (`steadyLabels`); a still map packs them round their dots.
   if (o.labels !== 'none' && plan.route.named) {
     const fontPx = 24 * u * o.labelSize;
     g.font = `600 ${fontPx}px ${LABEL_FONT}`;
     g.textBaseline = 'middle';
     const count = plan.route.stops.length;
-    const labels = placeLabels(
-      plan.route.stops.map((stop, i) => ({ x: stops[i].x, y: stops[i].y, name: stop.name, wanted: wantsStopLabel(o.labels, i, count) })),
-      fontPx,
-      frame,
-      dotR,
-      (name) => g.measureText(name).width,
-      cardBoxes,
-    );
+    const wanted = plan.route.stops.map((stop, i) => ({ x: stops[i].x, y: stops[i].y, name: stop.name, wanted: wantsStopLabel(o.labels, i, count) }));
+    const measure = (name: string) => g.measureText(name).width;
+    const labels =
+      track && o.camera === 'follow'
+        ? steadyLabels(wanted, fontPx, frame, dotR, measure, cardBoxes)
+        : placeLabels(wanted, fontPx, frame, dotR, measure, cardBoxes).map((label) => ({ ...label, alpha: 1 }));
+    const base = g.globalAlpha;
     for (const label of labels) {
       const reached = label.index <= moment.reached;
       const text = plan.route.stops[label.index].name;
+      g.globalAlpha = base * label.alpha;
       g.textAlign = label.align;
       g.lineWidth = 5 * u;
       g.strokeStyle = halo;
@@ -661,6 +665,7 @@ function paintMap(
       g.fillStyle = reached ? ink : hexToRgba(ink, 0.62);
       g.fillText(text, label.x, label.y);
     }
+    g.globalAlpha = base;
   }
 
   // The prints lie on the map; the vehicle, a toy standing on it, is drawn over them.

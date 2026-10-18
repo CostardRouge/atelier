@@ -122,6 +122,14 @@ bakes `dash` (`dashShift`: each step's change of scale times the car's arc
 length, at 4× the track's rate) and the painter sets `lineDashOffset` from
 it, the flown trail's dashes too: 0 % after, the residue under 0.2 px. The
 Itinerary's ahead dashes start at the PEN and so travel with it — untouched.
+**Under a following camera the place NAMES are steady** (`steadyLabels`,
+2026-10-17): `placeLabels` re-decides each frame (right, left, above, below,
+or dropped), and as the map scrolled, zoomed and turned names well inside the
+frame jumped 14–95 times a second; now each keeps the right of its dot, runs
+past the frame with the map, and FADES as an earlier name (or a card, weighed
+by how much it shows) comes over a box half a line roomier than it — a fade
+over ~20 px of motion, every answer continuous: 0.1–2 jumps a second left,
+during the wide shots' fast zooms. A still map keeps `placeLabels`' packing.
 Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
