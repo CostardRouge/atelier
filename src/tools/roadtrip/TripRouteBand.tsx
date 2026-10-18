@@ -92,14 +92,14 @@ export default function TripRouteBand({
               style={{ background: stageTint(trip.stages.indexOf(stage)) }}
               aria-hidden="true"
             />
-            <span className="flex-1 min-w-0 truncate text-xs text-ink font-medium">{stageLabel(stage) || 'Unnamed stage'}</span>
+            <span className="min-w-0 max-w-full truncate text-xs text-ink font-medium">{stageLabel(stage) || 'Unnamed stage'}</span>
             <VehicleRefSelect
               value={stage.vehicle}
               fleet={trip.vehicles}
               inherit={`Main vehicle · ${vehicleModel(main.spec.model).short}`}
               label={`What ${stageLabel(stage) || 'this stage'} drives`}
               onChange={(ref) => onChange(withStageVehicle(trip, stage.id, ref ?? null))}
-              className={`${inputClass} max-w-[11rem]`}
+              className={`${inputClass} min-w-0 flex-1 basis-44`}
             />
           </div>
           <HopList
