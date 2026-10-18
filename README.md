@@ -95,8 +95,9 @@ Today it ships ten tools, converging into a few editors:
 > opened, nothing else: never a document, a route inside a tool, a file name
 > or a position, and no cookie. A browser that says no (Do Not Track, Global
 > Privacy Control) is never counted, and `localStorage["umami.disabled"]`
-> switches it off in this browser; a build without a website id (a fork, a
-> local build) makes no such request.
+> switches it off in this browser; only the two deployed hosts are counted
+> (a fork or a local build never is), and a build with an empty
+> `VITE_UMAMI_WEBSITE_ID` makes no such request at all.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each

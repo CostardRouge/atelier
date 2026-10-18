@@ -8,10 +8,11 @@
  * his word: the home page's view and the opening of a tool, nothing else —
  * never a document, a route inside a tool, a file name or a position.
  *
- * Nothing here is secret: it all ends up in the bundle. The website id is a
- * build-time variable (`VITE_UMAMI_WEBSITE_ID`, set by `deploy.yml` from the
- * repository's variables), so a fork, a preview or a local build has none and
- * sends nothing — an empty id is the kill switch.
+ * Nothing here is secret: it all ends up in the bundle. The website id is in
+ * the code, overridden by `VITE_UMAMI_WEBSITE_ID` at build time; an EMPTY id
+ * is the kill switch (no script, no request), and a host outside the two
+ * allowed ones (localhost, a fork, a preview) loads the tracker but never
+ * counts.
  */
 
 export interface AudienceSettings {
@@ -25,6 +26,8 @@ export interface AudienceSettings {
 
 /** The maintainer's instance, its tracker named /insight: filter lists block /script.js. */
 export const AUDIENCE_SRC = 'https://insight.steevepommier.com/insight';
+/** Atelier's key in that dashboard; `VITE_UMAMI_WEBSITE_ID` overrides it, empty switches measurement off. */
+export const AUDIENCE_WEBSITE_ID = '9ec2b45f-ff04-4c9a-86c2-9ffee05da3d0';
 /** The site's own domain and its GitHub Pages address; anything else (localhost, a fork) never counts. */
 export const AUDIENCE_DOMAINS = ['atelier.steeve.website', 'costardrouge.github.io'] as const;
 /** Umami's own opt-out key: the tracker checks it before every send too. */
@@ -41,11 +44,11 @@ const list = (value: string): string[] =>
 /**
  * This build's settings, or null for no measurement: production builds only
  * (`npm run dev` and the tests never count) unless `VITE_UMAMI_DEV=true`;
- * nothing without `VITE_UMAMI_WEBSITE_ID`.
+ * nothing with an empty `VITE_UMAMI_WEBSITE_ID`.
  */
 export function audienceSettings(env: Env, production: boolean): AudienceSettings | null {
   if (!production && env.VITE_UMAMI_DEV !== 'true') return null;
-  const website = String(env.VITE_UMAMI_WEBSITE_ID ?? '').trim();
+  const website = String(env.VITE_UMAMI_WEBSITE_ID ?? AUDIENCE_WEBSITE_ID).trim();
   if (!website) return null;
   let src: string = AUDIENCE_SRC;
   try {

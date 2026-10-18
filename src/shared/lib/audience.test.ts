@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUDIENCE_SRC, audienceSettings, countedPath, declines } from './audience';
+import { AUDIENCE_SRC, AUDIENCE_WEBSITE_ID, audienceSettings, countedPath, declines } from './audience';
 
 describe('audienceSettings', () => {
   it('measures production builds only, unless asked', () => {
@@ -7,18 +7,19 @@ describe('audienceSettings', () => {
     expect(audienceSettings({ VITE_UMAMI_WEBSITE_ID: 'id', VITE_UMAMI_DEV: 'true' }, false)).not.toBeNull();
   });
 
-  it('is switched off by a missing or empty website id', () => {
-    expect(audienceSettings({}, true)).toBeNull();
+  it('is switched off by an empty website id', () => {
     expect(audienceSettings({ VITE_UMAMI_WEBSITE_ID: '' }, true)).toBeNull();
     expect(audienceSettings({ VITE_UMAMI_WEBSITE_ID: '  ' }, true)).toBeNull();
   });
 
-  it("reports to the maintainer's instance from the site's two hosts by default", () => {
-    expect(audienceSettings({ VITE_UMAMI_WEBSITE_ID: ' id ' }, true)).toEqual({
+  it("reports to the maintainer's instance, under the site's own key, from its two hosts by default", () => {
+    expect(audienceSettings({}, true)).toEqual({
       src: AUDIENCE_SRC,
-      website: 'id',
+      website: AUDIENCE_WEBSITE_ID,
       domains: 'atelier.steeve.website,costardrouge.github.io',
     });
+    expect(AUDIENCE_WEBSITE_ID).toMatch(/^[0-9a-f-]{36}$/);
+    expect(audienceSettings({ VITE_UMAMI_WEBSITE_ID: ' id ' }, true)?.website).toBe('id');
   });
 
   it('follows the environment, and ignores an unusable tracker address', () => {
