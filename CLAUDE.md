@@ -4,8 +4,9 @@ Agents read this file at the start of every session. These rules override the ag
 
 ## Context
 
-- **Atelier** — a local-first suite of browser tools for photo/video captures (DJI telemetry, LUT grading, culling, scopes, compositing). React 18 + TypeScript 5.7 + Vite 6 + Tailwind v4, no backend: everything runs client-side and no file ever leaves the machine. Deployed to GitHub Pages by `.github/workflows/deploy.yml` on every push to `main`. Package manager: **npm** — the lockfile is `package-lock.json` (it is the only one; keep it that way).
-- Commands: `npm run dev` (Vite dev server), `npm run build` (`tsc -b && vite build` → `dist/`), `npm test` (Vitest, `src/**/*.test.ts`), `npm run typecheck`, `npm run lint` (ESLint), `npm run preview`. CI (`.github/workflows/ci.yml`) runs typecheck + lint + test + build on every push and pull request — run the same four before you call a task done.
+- **Atelier** — a local-first suite of browser tools for photo/video captures (DJI telemetry, LUT grading, culling, scopes, compositing). React 18 + TypeScript 5.7 + Vite 6 + Tailwind v4, no backend: everything runs client-side and no file ever leaves the machine. Deployed to GitHub Pages by `.github/workflows/deploy.yml` on every push to `main`. Package manager: **npm** — the lockfile is `package-lock.json` (it is the only one; keep it that way). Node: **`.nvmrc` says 24** (what CI and a local `nvm use` run), `engines` keeps the floor at 22.
+- Commands: `npm run dev` (Vite dev server), `npm run build` (`tsc -b && vite build` → `dist/`), `npm test` (Vitest, `src/**/*.test.ts`), `npm run typecheck`, `npm run lint` (ESLint), `npm run preview`, `node .github/release.mjs check` (`CHANGELOG.md` against `package.json`, rule 4). CI (`.github/workflows/ci.yml`) runs typecheck + lint + test + build on every push and pull request, on the Node of `.nvmrc` — run the same four before you call a task done. `.github/dependabot.yml` raises npm packages and the workflows' actions weekly.
+- **This repository is PUBLIC** (measured 2026-10-19). So rule 3's public-repo restriction applies: a Registry block carries only `Project:`, ticked boxes and one `Log:` line — never a `Last point:` nor an open box. `registry.yml` reads the visibility itself, so nothing here needs changing if the repo goes private.
 - Several agent sessions may run **in parallel** on this repo. Git history must stay readable: **one commit = one task**.
 - **Local sessions: never `git push`** — the developer tests locally and pushes himself. **Cloud / web sessions (ephemeral container): push the working branch and open a pull request**, it is the only way the code gets out. Never push to `main` either way.
 
@@ -22,7 +23,7 @@ As soon as a task requested by the user is finished (feature, fix, refactor, con
    - If one file holds changes from this task AND another, prefer `git add -p <file>` to stage only the relevant hunks. If inextricable, stage the whole file and say so in the commit body ("also contains …").
    - Never stage: `.env` and any secret file, `.idea/`, `.vscode/`, `dist/`, `node_modules/`, `.mockups/`, `*.tsbuildinfo`, `.DS_Store` — unless the task is explicitly about them. If one of these turns out to be *tracked*, say so: it must be untracked and gitignored, not carefully avoided at every commit.
    - Check with `git diff --cached --stat` before committing.
-3. **Commit with a readable message** (format below). Always use a HEREDOC to keep title + body:
+3. **Commit with a readable message** (format below). Always use a HEREDOC to keep title + body, and end it with the attribution trailer(s) your harness asks for:
 
    ```bash
    git commit -m "$(cat <<'EOF'
@@ -31,12 +32,12 @@ As soon as a task requested by the user is finished (feature, fix, refactor, con
    Why this change, what it does concretely, non-obvious decisions.
    One line per idea. Mention the files/areas touched if useful.
 
-   Co-Authored-By: Claude <noreply@anthropic.com>
+   Co-Authored-By: …
    EOF
    )"
    ```
 
-4. **Do not push** (local sessions). End the reply with a recap: short hash + commit title + the list of files that were modified but deliberately **left uncommitted**, if any, so the user knows where every change comes from.
+4. **Push only from a cloud session** (see Context). End the reply with a recap: short hash + commit title + the list of files that were modified but deliberately **left uncommitted**, if any, so the user knows where every change comes from.
 5. If a git hook changes or refuses something: read the output, fix, recommit. Never `--no-verify`.
 
 ### Commit message format
@@ -184,6 +185,6 @@ agent bridge keeps its own number, v1, v2… (`bridge-version.ts`), apart from t
 
 ## Related files
 
-- `AGENTS.md`: points to this file for tools that do not read `CLAUDE.md`.
+- `AGENTS.md`: a symlink to this file, for tools that do not read `CLAUDE.md`.
 - `MEMORY.md` + `docs/memory/`: project long-term memory (rule 2).
 - `CHANGELOG.md`: what each release brought (rule 4); `.github/release.mjs` + `.github/workflows/release.yml` tag and publish it.
