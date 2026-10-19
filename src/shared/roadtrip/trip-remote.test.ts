@@ -25,6 +25,7 @@ function remote(fetchImpl: FetchLike, maxBytes: number | null = null): RemoteSou
     label: HOST,
     client: new WinnowClient({ baseUrl: `https://${HOST}`, auth: { mode: 'cookie' } }, fetchImpl),
     maxBytes,
+    summaries: false,
   };
 }
 

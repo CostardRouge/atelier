@@ -473,7 +473,8 @@ export default function ProjectGallery({
 
   /** A project kept there and not here yet: pull, mirror, then open. */
   async function handleOpenRemote(row: RemoteProjectRow) {
-    onOpen(await gallery.mirrorRemote(row));
+    const doc = await gallery.mirrorRemote(row);
+    if (doc) onOpen(doc);
   }
 
   /**

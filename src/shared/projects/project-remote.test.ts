@@ -23,6 +23,7 @@ function remote(fetchImpl: FetchLike): RemoteSource {
     label: HOST,
     client: new WinnowClient({ baseUrl: `https://${HOST}`, auth: { mode: 'cookie' } }, fetchImpl),
     maxBytes: null,
+    summaries: false,
   };
 }
 

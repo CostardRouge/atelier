@@ -21,6 +21,8 @@ export interface RemoteSource {
   client: WinnowClient;
   /** The instance's body cap, checked before a PUT; null when it declared none. */
   maxBytes: number | null;
+  /** The instance stores a summary beside each body and lists by it (Winnow 0056). */
+  summaries: boolean;
 }
 
 export function isRemoteSource(sourceId: string): boolean {
@@ -44,6 +46,7 @@ export function remoteFor(sourceId: string, kind?: string): RemoteSource | null 
     label: conn.id,
     client: new WinnowClient({ baseUrl: conn.baseUrl, auth: conn.auth }),
     maxBytes: conn.capabilities.documents.maxBytes ?? null,
+    summaries: conn.capabilities.documents.summaries === true,
   };
 }
 
@@ -91,12 +94,13 @@ export async function putDocOnce(
   version: number,
   wireDoc: unknown,
   etag: string | null,
+  summary?: Record<string, unknown>,
 ): Promise<PushOutcome> {
   try {
     const ack = await remote.client.putDoc(
       DOCS_APP,
       id,
-      { kind, version, doc: wireDoc },
+      { kind, version, doc: wireDoc, ...(summary && remote.summaries ? { summary } : {}) },
       etag,
       remote.maxBytes,
     );
