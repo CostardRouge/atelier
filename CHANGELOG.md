@@ -18,6 +18,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   detail, repair, layers and vignette — from a **From Develop** row, and offer an update when it changes in Develop.
 - Visits are counted lightly with the author's own Umami, cookie-free: the home page and which tool was opened, never
   a document or a file; a browser that says no (Do Not Track, Global Privacy Control) is never counted.
+- A link to Atelier unfurls with its own card in a chat, a feed or a search result, and the site tells crawlers its
+  address: a canonical address, a sitemap and a `robots.txt` that allows everyone.
 
 ### Fixed
 

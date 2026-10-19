@@ -375,6 +375,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/training.md` | `training/` (the local Python workspace that learns his editing style: uv, PyTorch/MLX, FiveK, his groups of pairs, the `.cube` export, `training/PLAN.md`) |
 | `docs/memory/flight-atlas.md` | the experimental Flight Atlas instrument (`src/tools/atlas/`) — every flight on one map, its choreography, painter, camera and tiles |
 | `docs/memory/tasks.md` | `src/shared/tasks/`, `TaskEdge`, `TaskPill` — progress, a cancel, a spinner, a "please wait" anywhere |
+| `docs/memory/public-page.md` | the head of `index.html` (canonical, OpenGraph), `public/robots.txt`, `public/sitemap.xml`, the social card and its generator, the legal notice (`#/legal`) and what it must say when measurement, a network exception or what the browser keeps changes |
 
 Not memory files, but read them before starting new work, or before touching
 anything about media sources or document storage:
