@@ -171,6 +171,12 @@ export default function WinnowScopeGrid({
                   box="w-full h-[74px]"
                 />
                 {pick && <PickBadge mark={pick} />}
+                {/* Why Suggest proposed it, in Winnow's own words. */}
+                {pick?.reason && (
+                  <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.72)] font-mono text-3xs text-on-media truncate text-left pointer-events-none">
+                    {pick.reason}
+                  </span>
+                )}
                 {r.media_type === 'video' && !pick && (
                   <span
                     className="absolute top-1 left-1 font-mono text-3xs text-on-media bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"

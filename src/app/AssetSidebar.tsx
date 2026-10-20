@@ -18,6 +18,7 @@ import IntakeVerb from './IntakeVerb';
 import IntakeBar from './IntakeBar';
 import PickBadge, { PICKED_RING, type PickMark } from './PickBadge';
 import { instantOf, orderPicks, type Pick } from '../shared/library/pick-order';
+import { suggestPicks } from '../shared/sources/winnow/suggest-picks';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
@@ -449,11 +450,14 @@ export default function AssetSidebar({
   const [afterOpen, setAfterOpen] = useState(false);
   const [together, setTogether] = useState(false);
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
+  /** Suggest's proposal, while it stands: how many it asked for, and why each one. */
+  const [suggested, setSuggested] = useState<{ count: number; reasons: ReadonlyMap<string, string> } | null>(null);
   const stopSelecting = useCallback(() => {
     setSelecting(false);
     setTicks([]);
     tickFiles.current.clear();
     setTogether(false);
+    setSuggested(null);
   }, []);
   const hasIntake = intake !== null;
   useEffect(() => {
@@ -465,6 +469,27 @@ export default function AssetSidebar({
   const toggleTick = (key: string, at: number | null, file: () => Promise<File | null>) => {
     tickFiles.current.set(key, file);
     setTicks((prev) => (prev.some((p) => p.key === key) ? prev.filter((p) => p.key !== key) : [...prev, { key, at }]));
+  };
+  /**
+   * Suggest (`suggest-picks.ts`): the instance's day read by Winnow's own
+   * culling and bursts, `count` frames spread over it, TICKED — a proposal
+   * the person keeps, drops or adds to before the verb writes anything. It
+   * replaces the instance's ticks, never the local ones.
+   */
+  const suggest = (count: number) => {
+    if (!intake) return;
+    const byId = new Map(remoteShown.map((r) => [r.id, r]));
+    const got = suggestPicks(remoteShown, count, (r) => intake.placeOf(fileBaseName(byId.get(r.id)?.filename ?? '')) !== null);
+    const picks: Pick[] = [];
+    for (const g of got) {
+      const row = byId.get(g.id);
+      if (!row) continue;
+      const key = `remote:${row.id}`;
+      tickFiles.current.set(key, async () => (await bringFile(row))?.file ?? null);
+      picks.push({ key, at: instantOf(row.captured_at) });
+    }
+    setTicks((prev) => [...prev.filter((p) => !p.key.startsWith('remote:')), ...picks]);
+    setSuggested({ count, reasons: new Map(got.map((g) => [`remote:${g.id}`, g.reason])) });
   };
   const pickMark = (
     key: string,
@@ -478,6 +503,7 @@ export default function AssetSidebar({
     const first = landsAfterOpen ? (intake.openAt ?? 0) + 1 : intake.next;
     return {
       held,
+      reason: k < 0 ? null : (suggested?.reasons.get(key) ?? null),
       order: k < 0 ? null : asOne ? `${first}·${k + 1}` : String(first + k),
       onTick: () => {
         if (held === null) toggleTick(key, at, file);
@@ -1279,6 +1305,42 @@ export default function AssetSidebar({
           busy={batchBusy}
           onCommit={() => void commitBatch()}
           onCancel={stopSelecting}
+          extra={
+            remoteTab && (scopeRows.rows?.length ?? 0) > 1 ? (
+              suggested ? (
+                <span className="inline-flex items-center h-8 rounded-full border border-line-strong bg-paper overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => suggest(Math.max(1, suggested.count - 1))}
+                    aria-label="Suggest one fewer"
+                    className="w-8 h-full border-0 bg-transparent text-ink cursor-pointer"
+                  >
+                    −
+                  </button>
+                  <span className="px-1 font-mono text-xs" title="Suggested from Winnow's picks and stars, one frame per burst, spread over the day — rejects left out">
+                    {suggested.count} suggested
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => suggest(Math.min(24, suggested.count + 1))}
+                    aria-label="Suggest one more"
+                    className="w-8 h-full border-0 bg-transparent text-ink cursor-pointer"
+                  >
+                    +
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => suggest(Math.min(6, scopeRows.rows?.length ?? 6))}
+                  title="Tick a few of this day for you — Winnow's picks and stars first, one frame per burst, spread over the day, rejects left out. Nothing is added until you press the verb."
+                  className="h-8 px-3 rounded-full border border-accent bg-accent-wash text-accent-ink text-xs cursor-pointer"
+                >
+                  Suggest
+                </button>
+              )
+            ) : undefined
+          }
         />
       )}
 

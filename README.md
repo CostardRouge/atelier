@@ -792,7 +792,12 @@ order is read before anything is written. The bar at the foot adds them in one
 step — **Add 5 slides** — in the order they were ticked or the order they were
 taken, at the end or right after the open slide, and from 2 to 9 pictures as
 **one collage** slide instead. A picture already in the piece is not offered
-again. One undo takes the whole batch back.
+again. One undo takes the whole batch back. On the Winnow tab the bar also
+offers **Suggest**: it ticks a few of the day for you — Winnow's picks and
+stars first, one frame per burst, rejects left out, spread over the day so a
+busy morning does not crowd out the evening — and writes under each tile why
+it was chosen («Pick · ★5», «best of 3», «covers 14:20»). − and + ask for one
+fewer or one more; you keep, drop or add before anything is written.
 
 **Stages** are the legs of the trip, each with its own span. They are what lets
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
