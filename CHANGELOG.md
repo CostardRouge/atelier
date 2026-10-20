@@ -11,6 +11,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Added
 
+- Develop: press and hold the picture still to see it as shot, until you lift — on a phone, a tablet or with a mouse.
+  A press that moves is still a swipe to the next picture, and a quick tap still hides the controls. On a touch
+  screen the "hold for before" button is gone; a computer keeps it, and the \\ key.
 - Develop: drag pictures along the roll or the contact sheet to reorder them (⌥←/→ moves the open one), and sort the
   roll by name, by date, or reversed.
 - Develop: each picture's history — its steps and named snapshots — opens from a glyph beside undo and redo (no extra

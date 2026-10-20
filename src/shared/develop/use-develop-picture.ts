@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import type { ProfileRequest, RawProfile } from '../raw/dng-color';
 import { toLinear } from '../lut/transfer';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
@@ -94,6 +94,7 @@ import { frameAffine } from './vignette-frame';
 import { readoutOf } from '../render/clipping';
 import { createReadoutStore, type ReadoutStore } from './readout-store';
 import type { DeckHands } from './stage-deck';
+import { HOLD_BEFORE_MS, holdArms, holdBroken } from './hold-before';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -593,6 +594,8 @@ export interface DevelopPicture {
     onPointerUp: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerLeave: (e: ReactPointerEvent<HTMLElement>) => void;
+    /** A finger held still is the HOLD's: Android's long-press menu must not open over it. */
+    onContextMenu: (e: ReactMouseEvent<HTMLElement>) => void;
   };
 }
 
@@ -1900,6 +1903,21 @@ export function useDevelopPicture({
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
   const fingers = useRef(0);
+  // A press held still on the picture shows it as shot (`hold-before.ts`):
+  // armed on the press, turned on by its timer, and once on it LOCKS the
+  // gesture — the deck neither follows nor pages, the divider stays, and the
+  // lift is no tap — until the press ends.
+  const hold = useRef<{ id: number; x: number; y: number; timer: number | null; on: boolean } | null>(null);
+  /** Ends the hold in progress; whether it had turned the picture to its before. */
+  const endHold = useCallback((): boolean => {
+    const h = hold.current;
+    if (!h) return false;
+    if (h.timer !== null) window.clearTimeout(h.timer);
+    hold.current = null;
+    if (h.on) setHolding(false);
+    return h.on;
+  }, []);
+  useEffect(() => () => void endHold(), [endHold]);
   const zoomedRef = useRef(false);
   // Nothing of this hook's owns a fitted pointer — the split is off and no
   // tool holds it — and there is a deck to hand it to: the machine offers the
@@ -1915,7 +1933,19 @@ export function useDevelopPicture({
     natural,
     resetKey: source,
     claim: (target) => wipeClaims(target, zoomedRef.current, freeRef.current),
-    drag: (start) => (freeRef.current ? (swipeRef.current?.drag(start) ?? null) : null),
+    drag: (start) => {
+      if (!freeRef.current) return null;
+      const deck = swipeRef.current?.drag(start) ?? null;
+      if (!deck) return null;
+      // Under a hold the deck stays put and its lift is no tap: cancelled,
+      // whatever the finger did, it settles back where it was.
+      return {
+        move: (m) => {
+          if (!hold.current?.on) deck.move(m);
+        },
+        end: (e) => deck.end(hold.current?.on ? { ...e, cancelled: true } : e),
+      };
+    },
     sweep: (dx) => {
       if (freeRef.current) swipeRef.current?.sweep(dx);
     },
@@ -2231,8 +2261,27 @@ export function useDevelopPicture({
     onPointerDown: (e) => {
       const touch = e.pointerType === 'touch';
       if (touch) fingers.current += 1;
-      // A second finger is the pinch's (`onTakeover`), never a wipe.
+      // A second finger is the pinch's (`onTakeover`), never a wipe — nor a hold.
+      if (touch && fingers.current > 1) endHold();
       if (dragging.current || (touch && fingers.current > 1)) return;
+      if (
+        !hold.current &&
+        source &&
+        cube &&
+        holdArms({ pointerType: e.pointerType, button: e.button, fingers: fingers.current, suspended, compare }) &&
+        !(e.target as Element | null)?.closest?.('button, [data-ring], [data-wipe-handle]')
+      ) {
+        const h = { id: e.pointerId, x: e.clientX, y: e.clientY, timer: null as number | null, on: false };
+        h.timer = window.setTimeout(() => {
+          h.timer = null;
+          if (hold.current !== h) return;
+          h.on = true;
+          setHolding(true);
+          // A tick under the finger where the device has one (Android); iOS gives the web none.
+          navigator.vibrate?.(8);
+        }, HOLD_BEFORE_MS);
+        hold.current = h;
+      }
       // Painting takes the pointer ahead of the wipe, and only from the
       // picture itself: a control laid over it keeps its press, and a point
       // outside the frame starts nothing.
@@ -2266,6 +2315,12 @@ export function useDevelopPicture({
     },
     onPointerMove: (e) => {
       trackReadout(e);
+      const h = hold.current;
+      if (h && h.id === e.pointerId) {
+        // Held: the finger may wander, nothing under it moves.
+        if (h.on) return;
+        if (holdBroken(e.clientX - h.x, e.clientY - h.y)) endHold();
+      }
       if (painting.current && paint) {
         const at = pointAt(e.clientX, e.clientY);
         // A pointer that leaves the picture mid-stroke does NOT end it: a hand
@@ -2281,17 +2336,20 @@ export function useDevelopPicture({
     },
     onPointerUp: (e) => {
       if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
+      const held = hold.current?.id === e.pointerId && endHold();
       if (painting.current) {
         painting.current = false;
         paint?.onEnd();
         return;
       }
-      // A finger that never travelled was a tap: it places the divider.
-      if (dragging.current && !dragging.current.live) wipeFrom(e);
+      // A finger that never travelled was a tap: it places the divider —
+      // unless it was holding the before.
+      if (dragging.current && !dragging.current.live && !held) wipeFrom(e);
       dragging.current = null;
     },
     onPointerCancel: (e) => {
       if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
+      if (hold.current?.id === e.pointerId) endHold();
       if (painting.current) {
         painting.current = false;
         // A cancelled stroke still ENDS: leaving it open would have the next
@@ -2300,9 +2358,14 @@ export function useDevelopPicture({
       }
       dragging.current = null;
     },
-    onPointerLeave: () => {
+    onPointerLeave: (e) => {
       readoutAt.current = null;
       readout.set(null);
+      // A mouse that leaves the frame would lift where the stage never hears it.
+      if (e.pointerType !== 'touch' && hold.current?.id === e.pointerId) endHold();
+    },
+    onContextMenu: (e) => {
+      if (hold.current) e.preventDefault();
     },
   };
 

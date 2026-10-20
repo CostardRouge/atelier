@@ -4,6 +4,7 @@ import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
 import TaskEdge from '../ui/TaskEdge';
 import { Icons } from '../ui/icons';
+import { useCoarsePointer } from '../ui/use-coarse-pointer';
 import { DECK_GAP, DECK_SETTLE_MS } from '../ui/use-media-viewer';
 import type { DevelopPicture } from './use-develop-picture';
 import type { SubjectPin } from '../render/mask';
@@ -229,6 +230,9 @@ export default function DevelopViewport({
 }) {
   const { view, source, problem, cube, holding, wipe, divider, handlers } = picture;
   const picking = Boolean(onPick && picture.picking && source);
+  // Under a finger the picture itself is held for its before (`hold-before.ts`):
+  // the pill is a mouse's way in and only takes room over a phone's photograph.
+  const coarse = useCoarsePointer();
   // The ring under the hand: which pointer, where it pressed, whether it has
   // travelled past the slop. One at a time — a second finger is the pinch's.
   const ringDrag = useRef<{ pointerId: number; x: number; y: number; travelled: boolean } | null>(null);
@@ -297,7 +301,7 @@ export default function DevelopViewport({
   return (
     <div
       ref={view.viewportRef}
-      className={`relative min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none ${
+      className={`relative min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none [-webkit-touch-callout:none] ${
         picking
           ? 'cursor-crosshair'
           : moving
@@ -697,20 +701,22 @@ export default function DevelopViewport({
           <span className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/86 text-ink-soft`}>
             {holding ? 'before' : wipe > 0 ? 'before · after' : 'after'}
           </span>
-          <button
-            type="button"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              picture.setHolding(true);
-            }}
-            onPointerUp={() => picture.setHolding(false)}
-            onPointerLeave={() => picture.setHolding(false)}
-            onPointerCancel={() => picture.setHolding(false)}
-            className={`absolute bottom-2 right-2.5 ${developPillClass} bg-surface/86 text-ink-soft cursor-pointer hover:border-accent`}
-            title="Hold to see the picture as shot"
-          >
-            ◐ hold for before
-          </button>
+          {!coarse && (
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                picture.setHolding(true);
+              }}
+              onPointerUp={() => picture.setHolding(false)}
+              onPointerLeave={() => picture.setHolding(false)}
+              onPointerCancel={() => picture.setHolding(false)}
+              className={`absolute bottom-2 right-2.5 ${developPillClass} bg-surface/86 text-ink-soft cursor-pointer hover:border-accent`}
+              title="Hold to see the picture as shot — or hold the picture itself"
+            >
+              ◐ hold for before
+            </button>
+          )}
         </>
       )}
     </div>

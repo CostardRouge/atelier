@@ -38,6 +38,7 @@ const GROUPS: readonly Group[] = [
     title: 'Judging it',
     rows: [
       { keys: '\\', what: 'hold to see the picture as shot' },
+      { keys: 'hold still', what: 'press the picture without moving to see it as shot, until you lift — a press that moves is a swipe' },
       { keys: 'Space', what: 'on a clip, play and pause — the develop and the look follow every frame' },
       { keys: 'drag', what: 'at the fit, wipe between before and after' },
       { keys: 'the divider’s handle', what: 'wipe at any zoom' },
