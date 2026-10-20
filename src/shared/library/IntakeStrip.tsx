@@ -1,16 +1,26 @@
-import type { MediaIntake } from '../shared/sources/media-scope';
+import type { MediaIntake } from '../sources/media-scope';
 
 /**
  * The work the active tool takes pictures into, drawn small at the head of
  * the Library's sheet — Trips' piece, slide by slide. On a phone the sheet
  * covers the band under the stage, and adding a picture is only worth it if
  * the piece is seen growing; on a computer the band is beside the Library
- * already, so this is a sheet's alone (a fact is said once).
+ * already, so this is a sheet's alone (a fact is said once) — and the
+ * Audition's, which covers the band the same way.
  */
-export default function IntakeStrip({ intake, note }: { intake: MediaIntake; note: string | null }) {
+export default function IntakeStrip({
+  intake,
+  note,
+  className = 'mx-3.5 mb-2.5',
+}: {
+  intake: MediaIntake;
+  note: string | null;
+  /** Where it sits — the Library's sheet by default. */
+  className?: string;
+}) {
   const count = intake.items.filter((i) => i.number !== null).length;
   return (
-    <div className="mx-3.5 mb-2.5 px-2.5 py-2 rounded-paper border border-line bg-paper/60 flex flex-col gap-1.5">
+    <div className={`${className} px-2.5 py-2 rounded-paper border border-line bg-paper/60 flex flex-col gap-1.5`}>
       <div className="flex items-baseline gap-1.5 text-xs text-ink-soft min-w-0">
         <span className="font-semibold text-ink">{intake.title}</span>
         <span className="font-mono">{count}</span>

@@ -126,14 +126,13 @@ import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
 import { usePublishMediaIntake, usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
-  createPostSlide,
   withCardSlide,
   type PostBadge,
   type PostSlide,
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
-import { closesWithCard, hasCardSlide, leadSlideOf, withBadgeOn } from '../../shared/roadtrip/piece-slides';
+import { hasCardSlide, leadSlideOf, withBadgeOn } from '../../shared/roadtrip/piece-slides';
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
@@ -141,6 +140,8 @@ import { openOpenerChapter } from './opener-chapter';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import { useSlideIntake } from './use-slide-intake';
+import AuditionSheet from './AuditionSheet';
+import { splitAssetsBySource } from '../../shared/library/asset-source';
 import GarageModal from './GarageModal';
 import { mainVehicle, replaceVehicle, withLookOn } from '../../shared/roadtrip/vehicle-fleet';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
@@ -1011,15 +1012,19 @@ export default function PostEditor({
   // The deck's ORDER is the run's while an export goes on (L2): its units are
   // slides by position, and a slide added, removed or moved mid-run would
   // shift every file name after it. Retouching a slide stays free.
-  async function addSlide() {
+  /**
+   * A copy of the open slide right after it — its picture, framing, develop,
+   * texts and everything on it — under a new id. The piece's badge stays on
+   * the slide that carries it: a copy is a picture, never a second badge.
+   */
+  function duplicateSlide() {
     if (exports.run) return;
-    const ref = activeFile ? await hashedMediaRef(activeFile) : null;
-    // After the last picture: a closing card stays the last thing it was.
-    const at = closesWithCard(post) ? post.slides.length - 1 : post.slides.length;
-    const added = createPostSlide(ref);
-    onChangePost({ ...post, slides: [...post.slides.slice(0, at), added, ...post.slides.slice(at)] });
-    // Land on what was just added, which is where the author is looking.
-    setSelected(Math.min(at, slides.length));
+    const at = post.slides.findIndex((s) => s.id === slide.slideId);
+    const from = post.slides[at];
+    if (!from || from.card) return;
+    const copy = { ...structuredClone(from), id: crypto.randomUUID(), pieceBadge: false };
+    onChangePost({ ...post, slides: [...post.slides.slice(0, at + 1), copy, ...post.slides.slice(at + 1)] });
+    setLandOn(copy.id);
   }
 
   function removeSlide() {
@@ -1760,6 +1765,15 @@ export default function PostEditor({
     thumbFor: railThumb,
   });
   usePublishMediaIntake(intake);
+  // The band's ＋: the day's pictures on the piece's own frame, kept or
+  // skipped one gesture at a time (`AuditionSheet`). A new slide follows the
+  // piece's look, so that is what each candidate is drawn through.
+  const [auditioning, setAuditioning] = useState(false);
+  const auditionLut = useMemo(
+    () => (auditioning ? lutFor({ kind: 'content', slideId: 'audition', grade: null, develop: null }) : null),
+    [auditioning, lutFor],
+  );
+  const localPool = useMemo(() => splitAssetsBySource(lib.assets).local, [lib.assets]);
   /** A Library picture dropped in the band's gap after deck slide `after`. */
   const insertAsset = useCallback(
     async (after: number, item: AssetDragItem): Promise<DropResult> => {
@@ -2324,7 +2338,8 @@ export default function PostEditor({
         if (at.index === slideIndex) followNeedle(at.local);
       }}
       onSelect={(i) => deck.goTo(i, 0)}
-      onAdd={() => void addSlide()}
+      onAdd={() => setAuditioning(true)}
+      onDuplicate={duplicateSlide}
       onRemove={removeSlide}
       onMove={moveSlideTo}
       includeCta={hasCardSlide(post)}
@@ -2985,6 +3000,17 @@ export default function PostEditor({
       />
     )}
 
+    {auditioning && (
+      <AuditionSheet
+        day={{ from: post.date, to: post.endDate ?? post.date }}
+        aspect={aspect}
+        lut={auditionLut}
+        intake={intake}
+        localAssets={localPool}
+        addToPool={lib.addFiles}
+        onClose={() => setAuditioning(false)}
+      />
+    )}
     {garageOpen && (
       <GarageModal
         trip={trip}

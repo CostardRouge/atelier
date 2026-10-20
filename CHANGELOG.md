@@ -21,6 +21,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   in one step — in tick or capture order, at the end or after the open slide, or as one collage of 2 to 9.
 - Trips: **Suggest** ticks a few pictures of the day from Winnow's picks, stars and bursts, spread over the day, each
   with the reason it was chosen; nothing is added until you press the verb.
+- Trips: the band's `+` opens the **Audition** — the day's pictures one at a time, each drawn cropped to the piece's
+  frame and through its look, kept with Add (A, or a swipe up) or passed with Skip, the piece growing at the foot.
 - Develop: press and hold the picture still to see it as shot, until you lift — on a phone, a tablet or with a mouse.
   A press that moves is still a swipe to the next picture, and a quick tap still hides the controls. On a touch
   screen the "hold for before" button is gone; a computer keeps it, and the \\ key.
@@ -42,6 +44,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   the licence.
 
 ### Changed
+
+- Trips: the band's `+` no longer copies the open picture into a new slide; **Duplicate this slide** in ⋯ copies the
+  whole slide instead.
 
 - The home page keeps its masthead on a phone, now with a third glyph beside the theme and GitHub at every width: the
   sources (green once a Winnow is connected).

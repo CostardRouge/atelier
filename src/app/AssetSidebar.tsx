@@ -13,7 +13,7 @@ import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useNeighbourDays } from '../shared/sources/winnow/use-neighbour-days';
 import { useMediaActions, useMediaIntake, useMediaScope, type IntakeOptions } from '../shared/sources/media-scope';
 import CollectCorner, { type CollectMark } from './CollectCorner';
-import IntakeStrip from './IntakeStrip';
+import IntakeStrip from '../shared/library/IntakeStrip';
 import IntakeVerb from './IntakeVerb';
 import IntakeBar from './IntakeBar';
 import PickBadge, { PICKED_RING, type PickMark } from './PickBadge';

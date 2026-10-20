@@ -111,8 +111,11 @@ interface DeckStripProps {
   /** Go to a moment of the piece; the band calls it at most once a frame. */
   onScrub: (t: number) => void;
   onSelect: (index: number) => void;
+  /** Add pictures — the band's ＋, which opens the day's pictures on the piece's frame. */
   onAdd: () => void;
   onRemove: () => void;
+  /** A copy of the open slide, right after it — ⋯. */
+  onDuplicate?: () => void;
   /** Two deck positions, 0-based: the slide at `from` lands at `to`. */
   onMove: (from: number, to: number) => void;
   includeCta: boolean;
@@ -246,6 +249,7 @@ export default function DeckStrip({
   onSelect,
   onAdd,
   onRemove,
+  onDuplicate,
   onMove,
   includeCta,
   onIncludeCta,
@@ -756,6 +760,11 @@ export default function DeckStrip({
     menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the trip’s card…' : 'Write the trip’s card…', onSelect: onEditClosingCard });
     menu.push({ id: 'cta-off', label: 'Remove the trip’s card', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
   }
+  // The ＋ used to copy the open picture into a new slide; that copy, now of
+  // the whole slide, is here.
+  if (slide && slide.kind !== 'cta' && onDuplicate) {
+    menu.push({ id: 'duplicate', label: 'Duplicate this slide', disabled: orderLocked, title: lockedWhy ?? 'A copy right after it — the picture, its framing and everything on it', onSelect: onDuplicate });
+  }
   if (slide && slide.kind !== 'cta' && pictures > 1) {
     menu.push({ id: 'remove', label: 'Remove this picture', danger: true, disabled: orderLocked, title: lockedWhy, onSelect: onRemove });
   }
@@ -872,7 +881,7 @@ export default function DeckStrip({
           </button>
         )}
         <OverflowMenu label={`More for ${slide ? slideName(slide) : 'this slide'}`} items={menu} side="above" size={iconSize} />
-        <IconButton size={iconSize} variant="ghost" label="Add the active picture to this piece" title={lockedWhy ?? 'Add the active picture to this piece'} disabled={orderLocked} onClick={onAdd}>
+        <IconButton size={iconSize} variant="ghost" label="Add pictures from the day" title={lockedWhy ?? 'Add pictures from the day — each shown on this piece’s frame, kept or skipped in one gesture'} disabled={orderLocked} onClick={onAdd}>
           {Icons.plus}
         </IconButton>
       </div>

@@ -799,6 +799,17 @@ busy morning does not crowd out the evening — and writes under each tile why
 it was chosen («Pick · ★5», «best of 3», «covers 14:20»). − and + ask for one
 fewer or one more; you keep, drop or add before anything is written.
 
+The band's **`+` opens the Audition**: the day's pictures — the piece's day on
+your Winnow and the Library's own files taken that day — one at a time, each
+drawn **as a slide of this piece would show it**, cropped to the piece's frame
+and through its look (a chip shows it as shot instead). **Add as slide N**
+keeps it and moves on, **Skip** moves on; on a computer `A` (or ↑) keeps, the
+arrows move, `⌫` takes back the last one kept, `Esc` closes; on a phone a swipe
+up keeps and a swipe sideways moves. A picture already in the piece is shown
+with its number, the day's strip under the picture jumps anywhere, and the
+piece grows at the foot. Nothing else is on screen, so a day is gone through
+with one thumb.
+
 **Stages** are the legs of the trip, each with its own span. They are what lets
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
@@ -1716,14 +1727,15 @@ the needle is the one open; ▶ or `Space` plays **the whole piece**, slide afte
 slide, on the stage. The open slide's cell carries a **grip at each end**: drag
 one to make a picture hold the screen longer or shorter, or to move a clip's in
 or out point — the other end stays put, and the change is written once, when you
-let go (the Content tab's *On screen* slider is the same number). `+` adds the
-active picture.
+let go (the Content tab's *On screen* slider is the same number). `+` opens the
+**Audition** (below).
 
 **Every slide moves.** Hold a slide on the band for a moment — a quick drag
 still moves through the piece — and carry it where it should go: the band slides
 under it at either edge and a bar shows where it will land. `⋯` moves the open
-slide to the start, earlier, later or to the end, removes a picture (a piece
-keeps at least one), and adds or removes the trip's card; `⌥←` / `⌥→` on the
+slide to the start, earlier, later or to the end, **duplicates** it (a copy right
+after it, with everything on it), removes a picture (a piece keeps at least one),
+and adds or removes the trip's card; `⌥←` / `⌥→` on the
 band move the open slide. A slide takes everything it holds with it — its
 picture, opener, shades, words and badge — so the first slide is simply the one
 that opens: it is the piece's cover, and the picture an agent calls slide 1. The
