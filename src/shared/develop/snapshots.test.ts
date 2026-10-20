@@ -13,9 +13,14 @@ import {
   differsFrom,
   nextSnapshotName,
   pictureHistory,
+  nextRollSnapshotName,
+  removeRollSnapshot,
   removeSnapshot,
+  renameRollSnapshot,
   renameSnapshot,
+  restoreRollSnapshot,
   restoreState,
+  takeRollSnapshot,
   snapshotRefusal,
   takeSnapshot,
   wholeState,
@@ -118,5 +123,48 @@ describe('snapshots', () => {
     expect(pic(read).snapshots).toEqual(pic(doc).snapshots);
     const junk = readRollDoc({ ...JSON.parse(JSON.stringify(doc)), pictures: [{ ...doc.pictures[0], snapshots: [{ id: '', at: 1 }, { id: 'x', name: 5, at: 2, values: {} }] }] })!;
     expect(pic(junk).snapshots!.map((s) => [s.id, s.name])).toEqual([['x', 'Snapshot']]);
+  });
+});
+
+describe('the roll’s snapshots', () => {
+  it('keeps every picture’s state under one name and one group, and goes back to it in one write', () => {
+    let doc = edit(roll(), (r) => patchPicture(r, 'p1', { develop: exposure(1) }, 10), 10);
+    expect(nextRollSnapshotName(doc)).toBe('Roll 1');
+    const took = takeRollSnapshot(doc, '', 'g1', (id) => `s-${id}`, 20);
+    expect(took).toMatchObject({ taken: 2, skipped: 0 });
+    doc = took.roll;
+    expect(doc.pictures.map((p) => p.snapshots?.[0])).toEqual([
+      expect.objectContaining({ id: 's-p1', name: 'Roll 1', group: 'g1' }),
+      expect.objectContaining({ id: 's-p2', name: 'Roll 1', group: 'g1' }),
+    ]);
+    // Both pictures move on, then come back together.
+    doc = edit(doc, (r) => patchPicture(patchPicture(r, 'p1', { develop: exposure(2) }, 30), 'p2', { develop: exposure(-1) }, 30), 30);
+    const back = restoreRollSnapshot(doc, 'g1', 40);
+    expect(pic(back, 'p1').develop?.exposure).toBe(1);
+    expect(pic(back, 'p2').develop?.exposure ?? 0).toBe(0);
+    expect(nextRollSnapshotName(back)).toBe('Roll 2');
+  });
+
+  it('skips a picture at the ceiling and says so', () => {
+    let doc = roll();
+    for (let k = 0; k < SNAPSHOT_MAX; k++) doc = takeSnapshot(doc, 'p2', '', `x${k}`, k);
+    const took = takeRollSnapshot(doc, 'All', 'g', (id) => `s-${id}`, 99);
+    expect(took).toMatchObject({ taken: 1, skipped: 1 });
+    expect(pic(took.roll, 'p2').snapshots).toHaveLength(SNAPSHOT_MAX);
+  });
+
+  it('renames and removes the group on every picture, the pictures untouched', () => {
+    let doc = takeRollSnapshot(roll(), 'A', 'g', (id) => `s-${id}`, 5).roll;
+    doc = renameRollSnapshot(doc, 'g', 'Before the sky', 6);
+    expect(doc.pictures.map((p) => p.snapshots?.[0].name)).toEqual(['Before the sky', 'Before the sky']);
+    const gone = removeRollSnapshot(doc, 'g', 7);
+    expect(gone.pictures.every((p) => !p.snapshots)).toBe(true);
+    expect(pic(gone, 'p1').develop).toEqual(pic(doc, 'p1').develop);
+  });
+
+  it('reads the group back from a stored roll', () => {
+    const doc = takeRollSnapshot(roll(), 'A', 'g', (id) => `s-${id}`, 5).roll;
+    const again = readRollDoc(JSON.parse(JSON.stringify(doc)))!;
+    expect(pic(again, 'p1').snapshots?.[0].group).toBe('g');
   });
 });

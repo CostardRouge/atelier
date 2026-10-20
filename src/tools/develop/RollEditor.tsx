@@ -114,8 +114,20 @@ import {
   readRollExport,
 } from '../../shared/develop/roll-types';
 import { journalRoll } from '../../shared/develop/journal';
-import { pictureHistory, removeSnapshot, renameSnapshot, restoreState, snapshotRefusal, takeSnapshot } from '../../shared/develop/snapshots';
-import HistoryPanel from './HistoryPanel';
+import {
+  pictureHistory,
+  removeRollSnapshot,
+  removeSnapshot,
+  renameRollSnapshot,
+  renameSnapshot,
+  restoreRollSnapshot,
+  restoreState,
+  snapshotRefusal,
+  takeRollSnapshot,
+  takeSnapshot,
+} from '../../shared/develop/snapshots';
+import HistoryControl from './HistoryControl';
+import type { DevelopUndo } from './use-develop-undo';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { fileBaseName, type Asset } from '../../shared/library/assets';
 import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identity';
@@ -207,6 +219,8 @@ interface RollEditorProps {
   onOpenPicture: (pictureId: string | null) => void;
   /** The sync pill, for a roll kept on an instance. */
   headerExtra?: ReactNode;
+  /** ↶ ↷ and what they step through (`use-develop-undo.ts`), drawn with the history menu. */
+  undo?: DevelopUndo;
 }
 
 /** Said when a delivery state is asked for while a run goes on (L2). */
@@ -232,7 +246,7 @@ const FILTER_ICONS: Partial<Record<StripFilterKey, ReactNode>> = {
   ignored: Icons.eyeOff,
 };
 
-export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
+export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra, undo }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
   const finger = useFingerSize();
@@ -1409,7 +1423,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, words: { title?: string; caption?: string }) => update((r) => setPictureWords(r, id, words)),
     [update],
   );
-  // The History tab (item 31, `snapshots.ts`): going back to a snapshot or a
+  // The history menu (item 31, `snapshots.ts`; a tab until 2026-10-20): going back to a snapshot or a
   // step is a WRITE journaled `via: 'restore'` — one undo step, a step of its
   // own on top of the history; taking, renaming and removing a snapshot are
   // document writes that change no section, so they journal nothing.
@@ -1422,6 +1436,27 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       const sid = newRollId();
       update((r) => takeSnapshot(r, id, name, sid));
       return latest.current.pictures.find((p) => p.id === id)?.snapshots?.some((s) => s.id === sid) ? sid : null;
+    },
+    [update],
+  );
+  // The roll's own snapshots (◆◆): the same name on every picture, one write each way.
+  const takeWholeRoll = useCallback(() => {
+    const group = newRollId();
+    let said = '';
+    update((r) => {
+      const took = takeRollSnapshot(r, '', group, () => newRollId());
+      said =
+        took.taken === 0
+          ? 'No snapshot taken — every picture already keeps the most it can'
+          : `Snapshot of ${took.taken} picture${took.taken === 1 ? '' : 's'}${took.skipped > 0 ? ` — ${took.skipped} already keep${took.skipped === 1 ? 's' : ''} the most it can` : ''}`;
+      return took.roll;
+    });
+    if (said) setNotice(said);
+  }, [update]);
+  const restoreWholeRoll = useCallback(
+    (group: string, name: string) => {
+      update((r) => restoreRollSnapshot(r, group), 'restore');
+      setNotice(`The roll back to “${name}” — ⌘Z undoes it`);
     },
     [update],
   );
@@ -2585,6 +2620,21 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
           trailing={
             <>
+              {undo && (
+                <HistoryControl
+                  undo={undo}
+                  roll={roll}
+                  picture={open}
+                  onRestore={(values) => open && restorePicture(open.id, values)}
+                  onTake={(name) => open && void takePictureSnapshot(open.id, name)}
+                  onRename={(sid, name) => open && update((r) => renameSnapshot(r, open.id, sid, name))}
+                  onRemove={(sid) => open && update((r) => removeSnapshot(r, open.id, sid))}
+                  onTakeRoll={takeWholeRoll}
+                  onRestoreRoll={restoreWholeRoll}
+                  onRenameRoll={(group, name) => update((r) => renameRollSnapshot(r, group, name))}
+                  onRemoveRoll={(group) => update((r) => removeRollSnapshot(r, group))}
+                />
+              )}
               {headerExtra}
               {/* Develop's settings open from inside the roll (his pick): the
                   device's choices, not the roll's — encoder, rendering, device, network. */}
@@ -2745,15 +2795,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 return false;
               }}
               onWords={(words) => handleWords(open.id, words)}
-              historyPanel={
-                <HistoryPanel
-                  picture={open}
-                  onRestore={(values) => restorePicture(open.id, values)}
-                  onTake={(name) => void takePictureSnapshot(open.id, name)}
-                  onRename={(sid, name) => update((r) => renameSnapshot(r, open.id, sid, name))}
-                  onRemove={(sid) => update((r) => removeSnapshot(r, open.id, sid))}
-                />
-              }
               onSettings={() => setSettingsOpen(true)}
               timelapseOpen={timelapseOpen}
               onTimelapseOpen={setTimelapseOpen}

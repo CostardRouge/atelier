@@ -366,7 +366,6 @@ export default function PictureWorkbench({
   onDeliver,
   deliveryTable = null,
   onWords,
-  historyPanel = null,
   onSettings,
   clipboard,
   onCopy,
@@ -471,8 +470,6 @@ export default function PictureWorkbench({
   onDeliver: (action: DeliverAction) => void;
   /** The Export tab's Pictures table — built by the editor, which holds the roll. */
   deliveryTable?: ReactNode;
-  /** The History tab — snapshots and the picture's steps, built by the editor, which holds the roll. */
-  historyPanel?: ReactNode;
   /** The picture's title and caption, written into its delivered file (M2). */
   onWords: (words: { title?: string; caption?: string }) => void;
   /** Open the sections sheet — the deliberate copy, apply to others, reset (`picture-sections.ts`). */
@@ -3368,8 +3365,6 @@ export default function PictureWorkbench({
               makingOf={clip ? null : makingOfRow}
               onHdrPreview={clip ? null : () => setHdrPreviewOpen(true)}
             />
-          ) : tab === 'history' ? (
-            historyPanel
           ) : null}
           {/* Inside the drawer's own scroll on a phone, where `sticky` pins it. */}
           {compact && (tab === 'export' || anyProgress) && deliverBar(true)}

@@ -13,7 +13,10 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 - Develop: drag pictures along the roll or the contact sheet to reorder them (⌥←/→ moves the open one), and sort the
   roll by name, by date, or reversed.
-- Develop: a History tab listing each picture's steps, with named snapshots; a click goes back to one, and ⌘Z undoes it.
+- Develop: each picture's history — its steps and named snapshots — opens from a glyph beside undo and redo (no extra
+  tab); a click goes back to one, and ⌘Z undoes it. Undo can step back the whole roll (the default) or only the open
+  photo, a choice kept on the device; ⌥⌘Z always steps the open photo. A snapshot can be taken of every picture at
+  once and brought back in one step.
 - Trips and the Studio take a Develop picture's whole edit — its develop, its look (Trips) and its perspective, lens,
   detail, repair, layers and vignette — from a **From Develop** row, and offer an update when it changes in Develop.
 - Visits are counted lightly with the author's own Umami, cookie-free: the home page and which tool was opened, never

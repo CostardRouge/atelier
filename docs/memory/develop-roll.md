@@ -1580,7 +1580,7 @@ was missing was choosing the order. Rules:
 
 ## History and snapshots are read OFF the journal; going back is a write (2026-10-17, item 31 of `docs/lightroom-gaps.md`)
 
-His «avec tes recommandations». Rules (`snapshots.ts`, pure; `HistoryPanel.tsx`):
+His «avec tes recommandations». Rules (`snapshots.ts`, pure; drawn by `HistoryControl.tsx` since 2026-10-20):
 
 - **No second record.** The steps ARE the journal (`pictureJournal`, synthetic
   `earlier` steps included, said "standard order"); each row's state is
@@ -1597,18 +1597,45 @@ His «avec tes recommandations». Rules (`snapshots.ts`, pure; `HistoryPanel.tsx
 - Snapshots are never an edit, never carried by Apply-to/paste/presets, never
   in an export mark's key (`KEYED` is a whitelist); a `clone` variant takes
   them (and the journal) through `structuredClone`, a `fresh` one does not.
-- **The tab** is the inspector's sixth, `history`, last (a look back, not a
-  step of the work), on a clip too; no letter (H is help). The stage is the
-  preview: a restored develop reaches the sliders through the write-through
-  drafts like an undo does — measured: Adjust's exposure reads +1.00 EV after
-  a click on a +1 snapshot. On a phone the bottom bar holds seven cells at
-  390 px.
+- **No tab since 2026-10-20** (his pick of two labs: variant 4 of
+  https://claude.ai/artifact/1caHRkXiJFytfFCBjhUeRK, and
+  https://claude.ai/artifact/9DWWRJzStAeFCMJDn5jP3n): the list opens from a
+  THIRD segment of the undo pair (`UndoRedo`'s `more`), a clock whose badge
+  counts the steps ↶ has (accent in the roll's scope, ink plus a small square
+  in the photo's). It saved the inspector a tab and the phone's bottom bar a
+  cell (six at 390 px). A popover, the same at every width; a snapshot's
+  Rename/Remove open INLINE, since a menu portalled out of the popover closes
+  it on its own press. The stage is the preview: a restore reaches the
+  sliders through the write-through drafts like an undo does.
+- **↶ ↷ step through the roll OR this photo, ONE record** (`picture-walk.ts`,
+  `use-develop-undo.ts`): the device's choice (`atelier.develop.undoScope`,
+  roll by default, never on the roll). The photo's walk is READ out of the
+  roll's undo record — the photo's distinct objects through it, a value seen
+  again read as a Back that cuts what followed — and each step is written as
+  a NEW roll step (labelled `walk:…` so it never coalesces), the other
+  pictures untouched. So switching reconciles nothing: no copy kept, merged or
+  reset. A walk holds while the photo IS the value it last wrote, else a
+  fresh one stands on the present. ⌥⌘Z / ⌥⇧⌘Z (`narrowUndoKeyAction`, read
+  off `code` — ⌥ turns Z into Ω on a Mac) walk the photo in either scope;
+  ⌘Z follows the scope (`useHistory`'s `enabled` stands down in the photo's).
+  Develop's record keeps 200 steps (his call; the suite's default stays 50).
+  In the photo's scope the list is the JOURNAL (it outlives a reload) under
+  the walk's undone values (a redo away); in the roll's, the session's
+  states captioned by `rollStepCaption`, a row a `jump` of that many. After a
+  reload the walk has no session to read: the journal rows still restore.
+- **◆◆ a snapshot of the ROLL** is one snapshot of the same name on every
+  picture sharing `PictureSnapshot.group` (optional, no roll version):
+  restored, renamed and removed in one write; a picture at `SNAPSHOT_MAX` is
+  skipped and said.
 - Agent commands: `develop.history`, `develop.saveSnapshot` (not
-  `develop.snapshot`, which is an IMAGE of the stage), `develop.restore`.
-- Driven headless at 1440 × 1000 and 390 × 844 touch: Take, an edit, a click
-  back, ⌘Z, a reload keeping both lists, *As shot*, a rename through ⋯, the
-  three commands. Not on his Mac or iPhone; no hover preview (the stage is
-  the preview, ⌘Z the safety net).
+  `develop.snapshot`, which is an IMAGE of the stage), `develop.restore`;
+  `develop.undo` / `develop.redo` take `scope: 'roll' | 'photo'` (roll by
+  default, whatever the device's choice).
+- Driven headless at 1440 × 900 and 390 × 844 touch (2026-10-20): a paste on
+  two pictures, the photo's ⌘Z / ⇧⌘Z touching only it, the roll's ⌘Z undoing
+  the walk's step, ⌥⌘Z in the roll's scope, ◆◆ taken and restored. Not on
+  his Mac or iPhone; no hover preview (the stage is the preview, ⌘Z the
+  safety net).
 
 ## A picture's edit TAKEN into Trips or the Studio (2026-10-17, item 34 of `docs/lightroom-gaps.md`)
 

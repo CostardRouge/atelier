@@ -298,6 +298,11 @@ export interface PictureSnapshot {
   at: number;
   /** EVERY section's value at that moment — a restore writes them all. */
   values: SectionValues;
+  /**
+   * Set when it was taken on EVERY picture of the roll at once (◆◆, 2026-10-20):
+   * the id the pictures' copies share, so the roll goes back to it in one write.
+   */
+  group?: string;
 }
 
 /**
@@ -592,7 +597,8 @@ export function readSnapshots(raw: unknown): PictureSnapshot[] {
     if (typeof item.at !== 'number' || !Number.isFinite(item.at)) continue;
     seen.add(item.id);
     const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 80) : 'Snapshot';
-    out.push({ id: item.id, name, at: item.at, values: readSectionValues(item.values, PICTURE_EDITS) });
+    const group = typeof item.group === 'string' && item.group ? { group: item.group } : {};
+    out.push({ id: item.id, name, at: item.at, values: readSectionValues(item.values, PICTURE_EDITS), ...group });
   }
   return out.sort((a, b) => a.at - b.at).slice(0, SNAPSHOT_MAX);
 }
