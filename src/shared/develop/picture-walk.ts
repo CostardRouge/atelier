@@ -25,7 +25,7 @@
  * Pure and DOM-free.
  */
 
-import { sectionsChanged } from './journal';
+import { asShot, foldJournal, pictureJournal, sectionsChanged } from './journal';
 import { pictureLabel, type RollDoc, type RollPicture } from './roll-types';
 import { chapterCaption } from './timelapse-chapters';
 
@@ -79,8 +79,42 @@ export function walkFor(prev: PictureWalk | null, states: readonly (RollDoc | nu
   const present = states[states.length - 1]?.pictures.find((p) => p.id === id);
   if (!present) return null;
   if (prev && prev.pictureId === id && prev.seq[prev.i] === present) return prev;
-  const seq = pictureSeq(states, id);
+  const session = pictureSeq(states, id);
+  // Before the session's first value lies the photo's JOURNAL, kept with the
+  // roll: the walk goes on back through it, so ↶ still has somewhere to go
+  // after a reload, where the session's record starts empty.
+  const seq = [...journalPast(session[0]), ...session];
   return { pictureId: id, seq, i: seq.length - 1 };
+}
+
+/**
+ * The photo's states BEFORE `p`, oldest first, read off its journal
+ * (`pictureJournal`, the reconstructed steps of a picture edited before the
+ * journal existed included): as shot, then the photo after each step but the
+ * last — the last being `p` itself. Each carries its journal cut to that step,
+ * so the history list reads what the photo is, and every other field of `p`
+ * (its file, words, snapshots, delivery) stays as it is: a step back is about
+ * the edit, never about the rest.
+ */
+export function journalPast(p: RollPicture | undefined): RollPicture[] {
+  if (!p) return [];
+  const { steps } = pictureJournal(p);
+  if (steps.length === 0) return [];
+  const recorded = p.journal ?? [];
+  const earlier = steps.length - recorded.length;
+  const withJournal = (q: RollPicture, kept: number): RollPicture => {
+    const { journal: _j, ...rest } = q;
+    void _j;
+    return kept > 0 ? { ...rest, journal: recorded.slice(0, kept) } : rest;
+  };
+  const shot = asShot(p);
+  const out = [withJournal(shot, 0)];
+  let at = shot;
+  for (let k = 0; k < steps.length - 1; k++) {
+    at = foldJournal(at, [steps[k]]);
+    out.push(withJournal(at, Math.max(0, k + 1 - earlier)));
+  }
+  return out;
 }
 
 /** The roll with the walk's photo put at `to`, and the walk standing there; null when there is nowhere to go. */
@@ -99,7 +133,7 @@ export function walkTo(roll: RollDoc, walk: PictureWalk, to: number, now: number
 
 /** What one step of the photo's walk changed, in the making-of's words. */
 export function pictureStepCaption(before: RollPicture | null, after: RollPicture): string {
-  if (!before) return 'As the session found it';
+  if (!before) return 'As shot';
   return pictureCaption(before, after);
 }
 

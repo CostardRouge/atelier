@@ -1623,8 +1623,13 @@ His «avec tes recommandations». Rules (`snapshots.ts`, pure; drawn by `History
   Develop's record keeps 200 steps (his call; the suite's default stays 50).
   In the photo's scope the list is the JOURNAL (it outlives a reload) under
   the walk's undone values (a redo away); in the roll's, the session's
-  states captioned by `rollStepCaption`, a row a `jump` of that many. After a
-  reload the walk has no session to read: the journal rows still restore.
+  states captioned by `rollStepCaption`, a row a `jump` of that many. Before
+  the session's first value the walk goes on through the JOURNAL
+  (`journalPast`, 2026-10-20, his ask): as shot, then the photo after each
+  step, each with its journal CUT at that step (so the list reads what the
+  photo is) and every other field kept — so ↶ steps back after a reload too,
+  where the record starts empty; a reconstructed (pre-v7) picture walks its
+  standard order. The badge then counts journal steps.
 - **◆◆ a snapshot of the ROLL** is one snapshot of the same name on every
   picture sharing `PictureSnapshot.group` (optional, no roll version):
   restored, renamed and removed in one write; a picture at `SNAPSHOT_MAX` is

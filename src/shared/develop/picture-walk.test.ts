@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
 import { journalRoll } from './journal';
 import { addPictures, createRollDoc, patchPicture, type RollDoc } from './roll-types';
-import { pictureSeq, pictureStepCaption, rollStepCaption, walkFor, walkTo } from './picture-walk';
+import { journalPast, pictureSeq, pictureStepCaption, rollStepCaption, walkFor, walkTo } from './picture-walk';
 
 const ref = (name: string) => ({ name, size: 100, lastModified: 1 });
 
@@ -115,8 +115,50 @@ describe('captions', () => {
     expect(rollStepCaption(s0, { ...s0, name: 'other' })).toBe('The roll’s settings');
   });
 
-  it('opens a photo’s walk on the state the session found', () => {
+  it('opens a photo’s walk on the photo as shot', () => {
     const [, s1] = session();
-    expect(pictureStepCaption(null, pic(s1, 'p1'))).toBe('As the session found it');
+    expect(pictureStepCaption(null, pic(s1, 'p1'))).toBe('As shot');
+  });
+});
+
+describe('the walk after a reload', () => {
+  /** A roll edited twice on p1, then reopened: the session's record holds ONE state. */
+  function reopened(): RollDoc {
+    const [, s1] = session();
+    // Far enough apart that the journal keeps two steps, not one merged.
+    const twice = edit(s1, 'p1', 2, 60_000);
+    return JSON.parse(JSON.stringify(twice)) as RollDoc;
+  }
+
+  it('goes on back through the photo’s journal, its journal cut at each step', () => {
+    const doc = reopened();
+    const walk = walkFor(null, [doc], 'p1')!;
+    expect(walk.seq.map((p) => p.develop?.exposure ?? 0)).toEqual([0, 1, 2]);
+    expect(walk.seq.map((p) => p.journal?.length ?? 0)).toEqual([0, 1, 2]);
+    const back = walkTo(doc, walk, 1, 30)!;
+    expect(pic(back.roll, 'p1').develop?.exposure).toBe(1);
+    expect(pic(back.roll, 'p1').journal).toHaveLength(1);
+    // Everything else of the photo stays: its file and its id.
+    expect(pic(back.roll, 'p1').ref).toEqual(pic(doc, 'p1').ref);
+    const shot = walkTo(back.roll, back.walk, 0, 31)!;
+    expect(pic(shot.roll, 'p1').develop ?? null).toBeNull();
+    expect(pic(shot.roll, 'p1').journal).toBeUndefined();
+    // And forward again to the very photo the roll opened on.
+    const again = walkTo(shot.roll, shot.walk, 2, 32)!;
+    expect(pic(again.roll, 'p1')).toBe(pic(doc, 'p1'));
+  });
+
+  it('reads a photo edited before the journal as its standard order, then as shot', () => {
+    const doc = patchPicture(roll(), 'p1', { develop: { ...DEFAULT_DEVELOP, exposure: 1 }, aspect: '4:5' }, 5);
+    const past = journalPast(pic(doc, 'p1'));
+    expect(past).toHaveLength(2);
+    expect(past[0].develop ?? null).toBeNull();
+    expect(past[0].aspect).toBe(pic(roll(), 'p1').aspect);
+    expect(past.every((p) => !p.journal)).toBe(true);
+  });
+
+  it('has nothing behind a photo never edited', () => {
+    expect(journalPast(pic(roll(), 'p1'))).toEqual([]);
+    expect(walkFor(null, [roll()], 'p1')!.seq).toHaveLength(1);
   });
 });
