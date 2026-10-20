@@ -30,6 +30,14 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Develop on a phone gives the photograph the screen: no masthead, one header line (back, the roll over the file,
+  undo, redo, history, ⋯), and while you browse the header, the band, the verbs and the bottom bar float over the
+  picture in frosted paper. A tap on the picture hides them all and another brings them back. With a panel open the
+  verbs sit in the panel's head instead of taking a row of their own. The masthead's links (other tools, sources,
+  theme, GitHub) and Develop's settings are in the ⋯.
+- Develop: the second ⚙ beside A/B is gone — *Apply or reset sections…* is now the last item of the ▾ beside Paste,
+  under what ⌘V carries, so the only ⚙ left is Develop's own settings. On a phone the file's name keeps its words and
+  its quality chip gives way first.
 - Develop: the zoom percentage opens a tidier panel — zoom out, Fit, 1:1 and zoom in, then smooth or pixel-exact drawing past 100 %, as
   icons with the current choice named, a separator, and *Crop to this view* with its shortcut.
 - Develop: the gallery lists the rolls kept on a Winnow by a small summary, so it opens without downloading every roll;

@@ -18,7 +18,7 @@
  */
 
 import { rubberBand, sweepCommit, swipeCommit } from '../ui/pan-zoom';
-import type { DragHandler, DragStart } from '../ui/zoom-gestures';
+import { DRAG_SLOP, type DragEnd, type DragHandler, type DragStart } from '../ui/zoom-gestures';
 
 /** Which way the roll goes on from the open picture — as ←/→ would step it. */
 export interface DeckNeighbours {
@@ -110,3 +110,13 @@ export function drawsInImg(file: Pick<File, 'name' | 'type'> | null): boolean {
 export function deckSweep(swept: number, travel: number, has: DeckNeighbours): -1 | 0 | 1 {
   return allowed(sweepCommit(swept, travel), has);
 }
+
+/**
+ * A free press that never left its slop and was not taken by a second finger
+ * or the browser: a TAP. On a phone's immersive stage it shows or hides the
+ * editor's chrome, iOS Photos' gesture (2026-10-20, pick C of the space lab).
+ */
+export function deckTapped(e: Pick<DragEnd, 'totalX' | 'totalY' | 'cancelled'>): boolean {
+  return !e.cancelled && Math.hypot(e.totalX, e.totalY) < DRAG_SLOP;
+}
+

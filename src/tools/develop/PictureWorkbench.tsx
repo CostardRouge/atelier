@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DevelopActionsGroup,
   DevelopApplySection,
@@ -326,6 +327,8 @@ export default function PictureWorkbench({
   file,
   stack,
   compact,
+  immersive = false,
+  nameSlot = null,
   sheetOpen,
   onSheetOpen,
   tab,
@@ -409,6 +412,13 @@ export default function PictureWorkbench({
   /** THIS picture's look (roll v5) — the stack follows the open picture; the draft rides it. */
   stack: LutStack;
   compact: boolean;
+  /**
+   * A phone's immersive layout (`shell-chrome.tsx`): the verbs float over the
+   * picture, or ride the drawer's head while a panel is up.
+   */
+  immersive?: boolean;
+  /** Where a phone's header wants the picture's NAME drawn (a portal), or null. */
+  nameSlot?: HTMLElement | null;
   sheetOpen: boolean;
   onSheetOpen: (open: boolean) => void;
   /** Which inspector tab is open — lifted to the editor so it survives stepping to another picture. */
@@ -1263,6 +1273,12 @@ export default function PictureWorkbench({
     neighbours: { previous: Boolean(neighbours?.previous), next: Boolean(neighbours?.next) },
     travel: () => (pictureRef.current?.view.viewportRef.current?.clientWidth ?? 0) + DECK_GAP,
     onStep,
+    // A phone's immersive stage: a tap shows or hides everything around the
+    // picture — the header, the verbs, the band, the shell's bar — the same
+    // switch as Focus (`RollEditor`, `shell-chrome.tsx`).
+    // Only over a BROWSED picture: with a panel up, or on the crop stage, a
+    // tap is the work's.
+    onTap: compact && immersive && (focused || (!sheetOpen && tab !== 'crop')) ? onFocusMode : undefined,
   });
   const picture = useDevelopPicture({
     file: shownFile,
@@ -2727,6 +2743,248 @@ export default function PictureWorkbench({
         ] as SettingsSection[])),
   ];
 
+  // The NAME and the VERBS are two blocks a phone places apart (2026-10-20,
+  // pick C of https://claude.ai/artifact/GunaDcNsUtVM3nW1xiyQ2V): the name
+  // rides the editor's one header line (`nameSlot`), the verbs float over
+  // the picture while it is browsed, ride the drawer's head while a panel is
+  // up, and stay in the column on the crop stage, whose handles reach every
+  // corner. Above a phone, and on a roll without that header, the toolbar
+  // is the one row it always was.
+  const nameNode = (
+      <div className="flex-1 min-w-0 flex items-baseline gap-2">
+        <DevelopBaseMenu
+          className="min-w-0"
+          name={pictureLabel(entry)}
+          chip={fidelity.chip}
+          rows={rows}
+          current={current}
+          base={wantsRaw ? rung : 'proxy'}
+          rungs={sensor ? rungs : []}
+          onRendition={(id) => {
+            // A file below the sensor: the base comes off with it, and
+            // the opening row is stored as nothing, one spelling.
+            if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null, rawProfile: null });
+            // A row of this picture asked for and no longer wanted stops
+            // coming — this reader lets go; an export that joined keeps it.
+            if (flight.current && flight.current.id !== id) flight.current.controller.abort();
+            // Under a roll's choice the opening row is a choice too — the
+            // one that keeps this picture off the roll's file.
+            onRendition(id === opening?.id && !rollChoice ? null : id);
+            const row = rows.find((r) => r.id === id);
+            setOffer(row ? roleOfRow(row) : null);
+          }}
+          onRemeter={() => {
+            // The stored number goes, the held decodes with it (a held
+            // decode answers with the gain it was asked for), and the
+            // next decode measures anew and stores what it finds.
+            patchDraft({ rawGain: null });
+            setFollowGain(null);
+            dropDecodedRaws();
+            picture.redecode();
+            tell('metering the exposure again from the sensor’s data');
+          }}
+          onBase={(next) => {
+            if (next === 'proxy') {
+              patchDraft({ base: null, rawGain: null, rawProfile: null });
+              return;
+            }
+            const climbing = baseRung(developNow.base) === 0;
+            // Newly on its sensor: the opening curve with it, so a RAW
+            // does not read flatter than its camera's JPEG by default.
+            // Auto, measured on the file's render once it is decoded —
+            // Standard where the render cannot be measured.
+            // Newly on its sensor: the camera profile too, resolved on
+            // the coming decode with the gain (`camera-profiles.md`).
+            patchDraft(
+              climbing
+                ? { base: next, rawProfile: PROFILE_PENDING, baseCurve: cloneBaseCurve(draft.draft.baseCurve) ?? { kind: 'auto' } }
+                : { base: next },
+            );
+            setOffer('sensor');
+            if (climbing && !draft.asShot) {
+              tell('your numbers now act on the RAW — another starting point');
+            }
+          }}
+          status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
+          gain={wantsRaw ? rawGain : null}
+          baseCurve={developNow.baseCurve ?? null}
+          offersProfileCurve={Boolean(profileCurve)}
+          onBaseCurve={(next) => patchDraft({ baseCurve: next })}
+          calibration={calibration?.summary ?? null}
+          roll={
+            onRollChoice && rollPhotos > 1 && !clip
+              ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason, count: rollPhotos }
+              : null
+          }
+        />
+        {told && (
+          <span className="flex-none font-mono text-xs text-accent-ink" role="status">
+            · {told}
+          </span>
+        )}
+      </div>
+  );
+  const verbsNode = (
+      <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
+      {compact && <span className="flex-1" />}
+      {/* The pill is drawn at EVERY width, phone included — the lightbox
+          hides it under 820px on the argument that the pinch is the gesture
+          there, and a stage that answers a pinch best-effort (the browser
+          can still take the fingers) needs the way in that always answers
+          (`frontend.md`, «what it costs»). On the crop it drives the
+          FRAMING's own zoom, which is what the picture is cropped by. */}
+      {source &&
+        (cropping ? (
+          <StageZoomControl zoom={cropZoom} hint="look closer: pinch, the wheel or Z — the crop stays" className="flex-none" />
+        ) : (
+          // How the picture is DRAWN hangs off the percentage, which was
+          // already the "back to the fit" button (that rung is now the
+          // menu's first). The mode used to be a pill INSERTED past 1:1,
+          // and inserting it slid every verb after it sideways — so a
+          // second press of `+` landed on `pixels`, which is the fault
+          // reported. Nothing is inserted now; the pill has one width.
+          <StageZoomControl
+            zoom={picture.view.zoom}
+            hint="wheel, pinch, or Z"
+            className="flex-none"
+            sections={zoomSections}
+            folded
+          />
+        ))}
+      {/* ONE well of verbs ends the row (variant E2): the three clipboard
+          glyphs, then — past a hairline — the two that are about this
+          stage. Loose pills read as five unrelated things; a block reads as
+          "what you can do here", and the row has one edge instead of five.
+
+          The split still says `A/B`, the Studio's own word for the same
+          gesture: one wipe control across the suite is one thing to learn.
+          While a mask tool holds the pointer the hook has suspended it
+          anyway, and the button draws that (dashed, faint) rather than
+          lying about a divider nobody can see. */}
+      <span className="relative flex-none inline-flex">
+      {/* Left of the glyphs where the bar has room; on a phone the well
+          starts near the screen's edge, so the word sits above it. */}
+      <VerbWord word={clipWord} side={compact ? 'aboveStart' : 'left'} />
+      <DevelopActionsGroup
+        className="flex-none"
+        size={touchSized ? 'md' : 'sm'}
+        clipboard={!cropping}
+        draft={draft.draft}
+        asShot={draft.asShot}
+        onReplace={draft.setDraft}
+        onTold={tell}
+        clip={{
+          ...clipboard,
+          canCopy: clipboard.canCopy || !draft.asShot,
+          onCopy: () => onCopy(draft.draft),
+          onPaste: pasteNow,
+        }}
+        verbs={{ copy: copyVerb, paste: pasteVerb }}
+        onOutcome={sayClip}
+        echo={taskScope}
+      >
+        {source && !cropping && (
+          <button
+            type="button"
+            className={`${abPill} ${
+              abHeld
+                ? 'border-line-strong border-dashed bg-paper-2 text-faint'
+                : compareOn
+                  ? 'border-accent bg-accent-wash text-accent-ink'
+                  : 'border-line-strong bg-surface text-muted hover:border-accent hover:text-accent-ink'
+            }`}
+            onClick={() => setCompareOn(!compareOn)}
+            aria-pressed={compareOn}
+            title={
+              abHeld
+                ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
+                : compareOn
+                  ? 'Before / after — the divider is on, and a drag across the picture places it'
+                  : 'Before / after — off: the whole picture is shown corrected'
+            }
+          >
+            A/B
+          </button>
+        )}
+        {/* The MASK VIEW — Hidden, Outline, Fill — as one glyph of fixed
+            width in the well, drawn on every tab so it never slides a verb
+            aside (`frontend.md`, a toolbar never inserts a control), lit
+            only where there is a mask to show: the Layers tab with a layer
+            open. A click steps it, like `M`. */}
+        {source && !cropping && (
+          <button
+            type="button"
+            className={`${helpVerb} ${
+              maskOpen && maskView !== 'off'
+                ? 'border-accent bg-accent-wash text-accent-ink'
+                : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
+            } disabled:opacity-35 disabled:cursor-default disabled:hover:text-muted`}
+            disabled={!maskOpen}
+            onClick={() => setMaskView((v) => nextMaskView(v))}
+            aria-label={`Mask view: ${MASK_VIEW_LABELS[maskView]}`}
+            title={
+              maskOpen
+                ? `Mask: ${MASK_VIEW_LABELS[maskView]} — click or M for ${MASK_VIEW_LABELS[nextMaskView(maskView)]}${
+                    maskView === 'off' ? '; its outline shows by itself while you pick or paint' : ''
+                  }`
+                : 'Mask view — open a layer on the Layers tab'
+            }
+          >
+            <MaskViewGlyph view={maskView} />
+          </button>
+        )}
+        {/* FOCUS — the picture alone, the band, the inspector and the page
+            bar away (`docs/develop-roll-browser.md`, face D): a verb at
+            every width, since a phone has no F and the way back must be
+            where the way in was. Lit while on, like the A/B. */}
+        {onFocusMode && !foldView && (
+          <button
+            type="button"
+            className={`${helpVerb} ${
+              focused
+                ? 'border-accent bg-accent-wash text-accent-ink'
+                : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
+            }`}
+            onClick={onFocusMode}
+            aria-pressed={focused}
+            title={focused ? 'Focus — the picture alone; F or Esc brings the rest back' : 'Focus — the picture alone, nothing else on screen (F)'}
+            aria-label="Focus — the picture alone"
+          >
+            ⤢
+          </button>
+        )}
+        {/* The legend that used to run along the bottom of the editor, as a
+            verb. Drawn at every width: on a phone there are no keys, but the
+            GESTURES it lists are exactly the ones a finger has to
+            discover. */}
+        {!foldView && (
+        <button
+          type="button"
+          className={`${helpVerb} border-transparent bg-transparent text-muted hover:text-accent-ink`}
+          onClick={() => setHelpOpen(true)}
+          title="Keys and gestures (H)"
+          aria-label="Keys and gestures"
+        >
+          ?
+        </button>
+        )}
+      </DevelopActionsGroup>
+      </span>
+      </div>
+  );
+  // On a phone's immersive layout the name lives in the header ONLY: with the
+  // header hidden (Focus, a tap) it is hidden with it, never dropped back here.
+  const nameInSlot = compact && immersive;
+  const verbsPlace: 'flow' | 'float' | 'drawer' | 'none' = !compact || !immersive
+    ? 'flow'
+    : focused
+      ? 'none'
+      : sheetOpen
+        ? 'drawer'
+        : cropping
+          ? 'flow'
+          : 'float';
+
   return (
     <>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : `${COLUMN_CLASS[columns.stage]} row-start-1 min-w-0 min-h-0 flex flex-col gap-2`}>
@@ -2735,241 +2993,19 @@ export default function PictureWorkbench({
             the verbs take a line of their own under it — `contents` at every
             other width keeps the desktop row the one flex line it was — and
             every verb grows to a finger's height (`md` rather than `sm`). */}
-        <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
-          {/* The NAME is the list of the capture's files (2026-09-22): the two
-              answered the same question — which bytes are on screen — so they
-              are one control, and the rendition stops costing a pill. Which is
-              what lets it be drawn at every width: as a chip of its own it was
-              hidden under 880px, and a phone could not reach it at all. */}
-          <div className="flex-1 min-w-0 flex items-baseline gap-2">
-            <DevelopBaseMenu
-              className="min-w-0"
-              name={pictureLabel(entry)}
-              chip={fidelity.chip}
-              rows={rows}
-              current={current}
-              base={wantsRaw ? rung : 'proxy'}
-              rungs={sensor ? rungs : []}
-              onRendition={(id) => {
-                // A file below the sensor: the base comes off with it, and
-                // the opening row is stored as nothing, one spelling.
-                if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null, rawProfile: null });
-                // A row of this picture asked for and no longer wanted stops
-                // coming — this reader lets go; an export that joined keeps it.
-                if (flight.current && flight.current.id !== id) flight.current.controller.abort();
-                // Under a roll's choice the opening row is a choice too — the
-                // one that keeps this picture off the roll's file.
-                onRendition(id === opening?.id && !rollChoice ? null : id);
-                const row = rows.find((r) => r.id === id);
-                setOffer(row ? roleOfRow(row) : null);
-              }}
-              onRemeter={() => {
-                // The stored number goes, the held decodes with it (a held
-                // decode answers with the gain it was asked for), and the
-                // next decode measures anew and stores what it finds.
-                patchDraft({ rawGain: null });
-                setFollowGain(null);
-                dropDecodedRaws();
-                picture.redecode();
-                tell('metering the exposure again from the sensor’s data');
-              }}
-              onBase={(next) => {
-                if (next === 'proxy') {
-                  patchDraft({ base: null, rawGain: null, rawProfile: null });
-                  return;
-                }
-                const climbing = baseRung(developNow.base) === 0;
-                // Newly on its sensor: the opening curve with it, so a RAW
-                // does not read flatter than its camera's JPEG by default.
-                // Auto, measured on the file's render once it is decoded —
-                // Standard where the render cannot be measured.
-                // Newly on its sensor: the camera profile too, resolved on
-                // the coming decode with the gain (`camera-profiles.md`).
-                patchDraft(
-                  climbing
-                    ? { base: next, rawProfile: PROFILE_PENDING, baseCurve: cloneBaseCurve(draft.draft.baseCurve) ?? { kind: 'auto' } }
-                    : { base: next },
-                );
-                setOffer('sensor');
-                if (climbing && !draft.asShot) {
-                  tell('your numbers now act on the RAW — another starting point');
-                }
-              }}
-              status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
-              gain={wantsRaw ? rawGain : null}
-              baseCurve={developNow.baseCurve ?? null}
-              offersProfileCurve={Boolean(profileCurve)}
-              onBaseCurve={(next) => patchDraft({ baseCurve: next })}
-              calibration={calibration?.summary ?? null}
-              roll={
-                onRollChoice && rollPhotos > 1 && !clip
-                  ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason, count: rollPhotos }
-                  : null
-              }
-            />
-            {told && (
-              <span className="flex-none font-mono text-xs text-accent-ink" role="status">
-                · {told}
-              </span>
-            )}
+        {(!nameInSlot || verbsPlace === 'flow') && (
+          <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
+            {!nameInSlot && nameNode}
+            {verbsPlace === 'flow' && verbsNode}
           </div>
-          <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
-          {compact && <span className="flex-1" />}
-          {/* The pill is drawn at EVERY width, phone included — the lightbox
-              hides it under 820px on the argument that the pinch is the gesture
-              there, and a stage that answers a pinch best-effort (the browser
-              can still take the fingers) needs the way in that always answers
-              (`frontend.md`, «what it costs»). On the crop it drives the
-              FRAMING's own zoom, which is what the picture is cropped by. */}
-          {source &&
-            (cropping ? (
-              <StageZoomControl zoom={cropZoom} hint="look closer: pinch, the wheel or Z — the crop stays" className="flex-none" />
-            ) : (
-              // How the picture is DRAWN hangs off the percentage, which was
-              // already the "back to the fit" button (that rung is now the
-              // menu's first). The mode used to be a pill INSERTED past 1:1,
-              // and inserting it slid every verb after it sideways — so a
-              // second press of `+` landed on `pixels`, which is the fault
-              // reported. Nothing is inserted now; the pill has one width.
-              <StageZoomControl
-                zoom={picture.view.zoom}
-                hint="wheel, pinch, or Z"
-                className="flex-none"
-                sections={zoomSections}
-                folded
-              />
-            ))}
-          {/* ONE well of verbs ends the row (variant E2): the three clipboard
-              glyphs, then — past a hairline — the two that are about this
-              stage. Loose pills read as five unrelated things; a block reads as
-              "what you can do here", and the row has one edge instead of five.
-
-              The split still says `A/B`, the Studio's own word for the same
-              gesture: one wipe control across the suite is one thing to learn.
-              While a mask tool holds the pointer the hook has suspended it
-              anyway, and the button draws that (dashed, faint) rather than
-              lying about a divider nobody can see. */}
-          <span className="relative flex-none inline-flex">
-          {/* Left of the glyphs where the bar has room; on a phone the well
-              starts near the screen's edge, so the word sits above it. */}
-          <VerbWord word={clipWord} side={compact ? 'aboveStart' : 'left'} />
-          <DevelopActionsGroup
-            className="flex-none"
-            size={touchSized ? 'md' : 'sm'}
-            clipboard={!cropping}
-            draft={draft.draft}
-            asShot={draft.asShot}
-            onReplace={draft.setDraft}
-            onTold={tell}
-            clip={{
-              ...clipboard,
-              canCopy: clipboard.canCopy || !draft.asShot,
-              onCopy: () => onCopy(draft.draft),
-              onPaste: pasteNow,
-            }}
-            verbs={{ copy: copyVerb, paste: pasteVerb }}
-            onOutcome={sayClip}
-            echo={taskScope}
-          >
-            {!cropping && (
-              <IconButton
-                label="Apply or reset sections"
-                title="Sections — apply some of this picture to other pictures, or reset them here"
-                size={touchSized ? 'md' : 'sm'}
-                onClick={onSettings}
-              >
-                {Icons.settings}
-              </IconButton>
-            )}
-            {source && !cropping && (
-              <button
-                type="button"
-                className={`${abPill} ${
-                  abHeld
-                    ? 'border-line-strong border-dashed bg-paper-2 text-faint'
-                    : compareOn
-                      ? 'border-accent bg-accent-wash text-accent-ink'
-                      : 'border-line-strong bg-surface text-muted hover:border-accent hover:text-accent-ink'
-                }`}
-                onClick={() => setCompareOn(!compareOn)}
-                aria-pressed={compareOn}
-                title={
-                  abHeld
-                    ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
-                    : compareOn
-                      ? 'Before / after — the divider is on, and a drag across the picture places it'
-                      : 'Before / after — off: the whole picture is shown corrected'
-                }
-              >
-                A/B
-              </button>
-            )}
-            {/* The MASK VIEW — Hidden, Outline, Fill — as one glyph of fixed
-                width in the well, drawn on every tab so it never slides a verb
-                aside (`frontend.md`, a toolbar never inserts a control), lit
-                only where there is a mask to show: the Layers tab with a layer
-                open. A click steps it, like `M`. */}
-            {source && !cropping && (
-              <button
-                type="button"
-                className={`${helpVerb} ${
-                  maskOpen && maskView !== 'off'
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
-                } disabled:opacity-35 disabled:cursor-default disabled:hover:text-muted`}
-                disabled={!maskOpen}
-                onClick={() => setMaskView((v) => nextMaskView(v))}
-                aria-label={`Mask view: ${MASK_VIEW_LABELS[maskView]}`}
-                title={
-                  maskOpen
-                    ? `Mask: ${MASK_VIEW_LABELS[maskView]} — click or M for ${MASK_VIEW_LABELS[nextMaskView(maskView)]}${
-                        maskView === 'off' ? '; its outline shows by itself while you pick or paint' : ''
-                      }`
-                    : 'Mask view — open a layer on the Layers tab'
-                }
-              >
-                <MaskViewGlyph view={maskView} />
-              </button>
-            )}
-            {/* FOCUS — the picture alone, the band, the inspector and the page
-                bar away (`docs/develop-roll-browser.md`, face D): a verb at
-                every width, since a phone has no F and the way back must be
-                where the way in was. Lit while on, like the A/B. */}
-            {onFocusMode && !foldView && (
-              <button
-                type="button"
-                className={`${helpVerb} ${
-                  focused
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
-                }`}
-                onClick={onFocusMode}
-                aria-pressed={focused}
-                title={focused ? 'Focus — the picture alone; F or Esc brings the rest back' : 'Focus — the picture alone, nothing else on screen (F)'}
-                aria-label="Focus — the picture alone"
-              >
-                ⤢
-              </button>
-            )}
-            {/* The legend that used to run along the bottom of the editor, as a
-                verb. Drawn at every width: on a phone there are no keys, but the
-                GESTURES it lists are exactly the ones a finger has to
-                discover. */}
-            {!foldView && (
-            <button
-              type="button"
-              className={`${helpVerb} border-transparent bg-transparent text-muted hover:text-accent-ink`}
-              onClick={() => setHelpOpen(true)}
-              title="Keys and gestures (H)"
-              aria-label="Keys and gestures"
-            >
-              ?
-            </button>
-            )}
-          </DevelopActionsGroup>
-          </span>
+        )}
+        {nameInSlot && nameSlot && createPortal(nameNode, nameSlot)}
+        {/* Over the picture, above the shell's glass bar (`--shell-bar-h`). */}
+        {verbsPlace === 'float' && (
+          <div className="absolute inset-x-0 z-20 bottom-[calc(var(--shell-bar-h,0px)+8px)] flex pointer-events-none [&>*]:pointer-events-auto">
+            {verbsNode}
           </div>
-        </div>
+        )}
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
@@ -3063,6 +3099,7 @@ export default function PictureWorkbench({
         // exists to judge — the colour that will leave — cannot be seen while
         // it is being set (`frontend.md`).
         compactAs="drawer"
+        head={verbsPlace === 'drawer' ? verbsNode : undefined}
         open={sheetOpen && !focused}
         onClose={() => onSheetOpen(false)}
         title={`${tabLabel} · ${pictureLabel(entry)}`}

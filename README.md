@@ -1999,8 +1999,9 @@ vignette, repair, layers. A section the copied picture never touched is never
 pasted, so a target keeps its own. The keys hold while a slider has the focus,
 and there is no ⇧ chord to collide with a browser's (Arc copies the page's URL
 on ⌘⇧C). **Shift-click** marks a range of the strip and **⌘/Ctrl-click** one
-picture, and the batch verbs then read the marks. The ⚙ glyph above the
-picture opens the same sections as a sheet, like Lightroom's Copy Settings,
+picture, and the batch verbs then read the marks. The ▾ beside Paste lists
+those sections (what ⌘V carries) and ends with *Apply or reset sections…*,
+which opens them as a sheet, like Lightroom's Copy Settings,
 for the deliberate gestures: *Apply to N selected / N other pictures* writes
 them across the roll, its **Copy** also carries a section left as shot (so the
 paste resets it), and **Reset** puts the ticked sections of
@@ -2024,8 +2025,21 @@ detail are ticked to start — what a roll shot with one body shares — and the
 ticks are remembered. A picture's file, its RAW base, its title and caption and
 whether it leaves are never carried. A cell of the band shows the
 picture as it was last seen in the editor — developed and cropped — and its
-pill says what is developed. On a phone the picture and the band share the
-screen and the three tabs open from the bottom bar.
+pill says what is developed.
+
+**On a phone the photograph has the screen.** With a picture open there is no
+`Atelier / Develop` masthead: one header line holds the back chevron, the
+roll's name over the picture's file (its menu of the capture's files), undo,
+redo and the history, and a **⋯** with the ways to add pictures, Develop's
+settings and what the masthead held (the other editors, every tool, the
+sources, the theme, the repository). While you browse, the header, the band
+(one short row under its header), the verbs and the bottom bar float over the
+picture in frosted paper, and the picture is framed on the whole screen — a
+portrait or a landscape fitted to the width falls between them. **A tap on the
+picture hides all of it**, and another brings it back (with A/B off and no tool
+armed — the same switch as *Focus* in the zoom panel). With a tab open from the
+bottom bar the panel rises under the picture and the verbs ride its head
+instead of taking a row; the crop stage keeps everything off its corners.
 
 **The band.** The roll's pictures run under the photograph as cells at their
 own shapes — a portrait narrow, a panorama wide — one row scrolling sideways
@@ -2486,7 +2500,7 @@ steps rather than failing, and says so: the chip above the photograph ends in
 `· 8-bit GPU`, and the picture's notes say what it costs — a highlight a step
 pushes above white is clipped before the next step can bring it back.
 
-**Develop's settings** (the ⚙ in a roll's bar) gather what belongs to this
+**Develop's settings** (the ⚙ in a roll's bar, the ⋯ on a phone) gather what belongs to this
 device rather than to a roll, and never travel with it, a preset or a paste:
 *Encoder* — which code writes a JPEG and, measured, the colour it keeps at
 85, 92, 99 and 100 % (the Export tab's *Encoder* line opens it) —,

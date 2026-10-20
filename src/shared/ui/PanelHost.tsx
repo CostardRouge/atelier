@@ -40,6 +40,8 @@ export interface PanelHostProps {
   onClose: () => void;
   /** The sheet's or drawer's header. Docked, the panel titles itself. */
   title: string;
+  /** A drawer's head row in place of its title (`DockedDrawer`'s `head`). */
+  head?: ReactNode;
   /** The docked box's own classes. Unused compact, where the host draws its frame. */
   className?: string;
   children: ReactNode;
@@ -51,13 +53,14 @@ export default function PanelHost({
   open,
   onClose,
   title,
+  head,
   className,
   children,
 }: PanelHostProps) {
   if (!asSheet) return <div className={className}>{children}</div>;
   if (compactAs === 'drawer') {
     return (
-      <DockedDrawer open={open} onClose={onClose} title={title}>
+      <DockedDrawer open={open} onClose={onClose} title={title} head={head}>
         {children}
       </DockedDrawer>
     );

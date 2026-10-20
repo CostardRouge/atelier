@@ -185,11 +185,11 @@ export function DevelopActionsGroup({
       </IconButton>
       {clip && (
         <OverflowMenu
-          label="What a paste carries"
+          label="Sections — what ⌘V carries, apply, reset"
           icon={Icons.down}
           size={size}
           align="start"
-          className="-ml-0.5 [&>button]:w-4 [&>button]:min-w-0 [&>button]:px-0"
+          className="-ml-0.5 [&>button]:w-6 [&>button]:min-w-0 [&>button]:px-0"
           items={clip.pasteMenu}
         />
       )}

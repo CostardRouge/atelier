@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sweepRestarts } from '../ui/pan-zoom';
 import { DECK_SETTLE_MS } from '../ui/use-media-viewer';
-import { deckCommit, deckOffset, deckSweep, type DeckHands, type DeckNeighbours } from './stage-deck';
+import { deckCommit, deckOffset, deckSweep, deckTapped, type DeckHands, type DeckNeighbours } from './stage-deck';
 
 /** A wheel gesture has no end event; this much quiet is its release. */
 const WHEEL_IDLE_MS = 140;
@@ -22,6 +22,8 @@ export interface StageDeckOptions {
   travel: () => number;
   /** Open the picture the deck landed on — the editor's own step, so a swipe and → agree. */
   onStep: (dir: -1 | 1) => void;
+  /** A free press that never moved (`deckTapped`): a phone's stage shows or hides its chrome. */
+  onTap?: () => void;
 }
 
 export interface StageDeck {
@@ -56,14 +58,14 @@ export interface StageDeck {
  * takes its place with no seam. So this hook never outlives a page, and
  * whatever it was told mid-flight it drops.
  */
-export function useStageDeck({ neighbours, travel, onStep }: StageDeckOptions): StageDeck {
+export function useStageDeck({ neighbours, travel, onStep, onTap }: StageDeckOptions): StageDeck {
   const [offset, setOffset] = useState(0);
   const [settling, setSettling] = useState(false);
   const [heading, setHeading] = useState<-1 | 1 | null>(null);
 
   // The hands are built once and read the world through a ref.
-  const live = useRef({ neighbours, travel, onStep });
-  live.current = { neighbours, travel, onStep };
+  const live = useRef({ neighbours, travel, onStep, onTap });
+  live.current = { neighbours, travel, onStep, onTap };
   /** A page is sliding. */
   const busy = useRef(false);
   const pending = useRef<-1 | 1 | null>(null);
@@ -183,6 +185,10 @@ export function useStageDeck({ neighbours, travel, onStep }: StageDeckOptions): 
               return;
             }
             if (busy.current) return;
+            if (deckTapped(e)) {
+              live.current.onTap?.();
+              return;
+            }
             const dir = deckCommit(e.totalX, live.current.travel(), e.speedX, live.current.neighbours);
             if (dir) page(dir);
             else settleBack();

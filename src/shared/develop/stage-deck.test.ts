@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SWEEP_COMMIT_PX, SWIPE_DISTANCE, rubberBand } from '../ui/pan-zoom';
-import { deckCommit, deckOffset, deckSweep, drawsInImg } from './stage-deck';
+import { DRAG_SLOP } from '../ui/zoom-gestures';
+import { deckCommit, deckOffset, deckSweep, deckTapped, drawsInImg } from './stage-deck';
 
 describe('drawsInImg', () => {
   it('draws what a browser decodes in an <img>, by type then by name', () => {
@@ -79,3 +80,16 @@ describe('deckSweep', () => {
     expect(deckSweep(-(SWEEP_COMMIT_PX + 1), travel, last)).toBe(0);
   });
 });
+
+describe('deckTapped', () => {
+  it('is a press that stayed inside the slop and ended by a lift', () => {
+    expect(deckTapped({ totalX: 0, totalY: 0, cancelled: false })).toBe(true);
+    expect(deckTapped({ totalX: 1, totalY: -1, cancelled: false })).toBe(true);
+  });
+  it('is not a drag, nor a press a second finger or the browser ended', () => {
+    expect(deckTapped({ totalX: DRAG_SLOP, totalY: 0, cancelled: false })).toBe(false);
+    expect(deckTapped({ totalX: 0, totalY: 40, cancelled: false })).toBe(false);
+    expect(deckTapped({ totalX: 0, totalY: 0, cancelled: true })).toBe(false);
+  });
+});
+

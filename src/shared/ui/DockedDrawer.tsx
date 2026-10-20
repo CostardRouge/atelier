@@ -49,6 +49,13 @@ export interface DockedDrawerProps {
   onClose: () => void;
   /** The drawer's own name, in its header and on the dialog. */
   title: string;
+  /**
+   * What the head row shows IN PLACE of the title — an editor's verbs, which
+   * then ride the panel instead of costing the picture a row of their own
+   * (Develop's phone, 2026-10-20). The title still names the region for a
+   * screen reader; the ✕ stays at the end.
+   */
+  head?: ReactNode;
   snaps?: SnapPoints;
   /** Which of those it opens at. Defaults to the middle one — the fifty-fifty. */
   initialSnap?: number;
@@ -59,6 +66,7 @@ export default function DockedDrawer({
   open,
   onClose,
   title,
+  head,
   snaps = DRAWER_SNAPS,
   initialSnap,
   children,
@@ -200,10 +208,16 @@ export default function DockedDrawer({
         <div className="flex-none h-3 grid place-items-center">
           <span className="block w-7 h-[3px] rounded-full bg-line-strong" />
         </div>
-        <div className="flex-none flex items-center gap-2 px-4 pb-1">
-          <h2 id={titleId} className="m-0 font-mono text-2xs tracking-[0.14em] uppercase text-muted font-normal truncate">
+        <div className={`flex-none flex items-center gap-2 pb-1 ${head ? 'pl-2 pr-4' : 'px-4'}`}>
+          <h2 id={titleId} className={head ? 'sr-only' : 'm-0 font-mono text-2xs tracking-[0.14em] uppercase text-muted font-normal truncate'}>
             {title}
           </h2>
+          {/* The verbs are pressed, never dragged: the head's drag stops at them. */}
+          {head && (
+            <div className="flex-1 min-w-0 flex cursor-default touch-auto" onPointerDown={(e) => e.stopPropagation()}>
+              {head}
+            </div>
+          )}
           <button
             type="button"
             onClick={requestClose}

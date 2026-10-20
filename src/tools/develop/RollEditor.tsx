@@ -146,6 +146,7 @@ import SettingsMenu, { type SettingsSection } from '../../shared/ui/SettingsMenu
 import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { GLASS, usePublishShellChrome, useShellExtras } from '../../shared/ui/shell-chrome';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
@@ -1723,6 +1724,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           setCarriedSections(now.includes(sec.id) ? now.filter((x) => x !== sec.id) : [...now, sec.id]);
         },
       })),
+      // The sheet that applies or resets sections opens from HERE, not from a
+      // gear of its own (2026-10-20, the space lab's two-gears board): the ▾
+      // is the one door to the ten sections, and Develop's only gear left is
+      // the device's settings.
+      {
+        id: 'sections',
+        label: 'Apply or reset sections…',
+        title: 'Write some sections of this picture onto others, or put some back as shot',
+        disabled: !open,
+        onSelect: () => setSettingsOpen(true),
+        rule: true,
+      },
     ];
     return {
       canCopy: !!open && isEdited(open),
@@ -2060,6 +2073,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
   // --- the band's size: the device's preference, held to what the column allows
   const drawerBand = compact && sheetOpen;
+  // Over a browsed picture on a phone (`floating`, below) the band is the
+  // same one short row, under its header: it sits over the photograph.
+  const shortBand = drawerBand || (compact && !!open && !sheetOpen && tab !== 'crop' && !focus);
   // Where the band stands on THIS device (`StripPrefs.place`, his Q1): under
   // the picture by default, or a COLUMN at its left or right on a desktop —
   // a phone's preference is read as `bottom` whatever it says.
@@ -2087,10 +2103,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [roll.pictures, thumbAspects],
   );
   /** The band's extent on its axis: its height under the picture, its width beside it. */
-  const bandSizeNow = drawerBand
+  const bandSizeNow = shortBand
     ? // With a phone's drawer up every row is the photograph's: one short row
       // of cells and no header, the size the strip had before it could be pulled.
-      56 + 2 * stripMetrics.pad
+      // Over a browsed picture the same row keeps its header (Select, the
+      // filter, the contact sheet), and is folded to that header on request.
+      drawerBand
+      ? 56 + 2 * stripMetrics.pad
+      : strip.folded
+        ? stripMetrics.head
+        : 56 + 2 * stripMetrics.pad + stripMetrics.head
     : strip.folded
       ? side
         ? stripMetrics.rail
@@ -2415,6 +2437,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ),
   );
 
+  // A phone's IMMERSIVE layout (2026-10-20, his pick C of the space lab
+  // https://claude.ai/artifact/GunaDcNsUtVM3nW1xiyQ2V): with a picture open
+  // the shell draws no masthead and lays its bottom bar over the editor, the
+  // header is ONE line, and while the picture is BROWSED (no panel up, not
+  // the crop stage) the header, the band and the verbs float over it in
+  // glass. Focus hides all of it, the shell's bar included.
+  const immersive = compact && !!open;
+  const floating = immersive && !sheetOpen && tab !== 'crop';
+  usePublishShellChrome(
+    useMemo(() => (immersive ? { immersive: true, floating, hidden: focus } : null), [immersive, floating, focus]),
+  );
+  const shellExtras = useShellExtras();
+  const [nameSlot, setNameSlot] = useState<HTMLElement | null>(null);
+
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -2591,6 +2627,42 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     </div>
   );
 
+  const historyControl = undo ? (
+    <HistoryControl
+      undo={undo}
+      roll={roll}
+      picture={open}
+      onRestore={(values) => open && restorePicture(open.id, values)}
+      onTake={(name) => open && void takePictureSnapshot(open.id, name)}
+      onRename={(sid, name) => open && update((r) => renameSnapshot(r, open.id, sid, name))}
+      onRemove={(sid) => open && update((r) => removeSnapshot(r, open.id, sid))}
+      onTakeRoll={takeWholeRoll}
+      onRestoreRoll={restoreWholeRoll}
+      onRenameRoll={(group, name) => update((r) => renameRollSnapshot(r, group, name))}
+      onRemoveRoll={(group) => update((r) => removeRollSnapshot(r, group))}
+    />
+  ) : null;
+  const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+  // The phone's ⋯: the ways in, Develop's settings, then what the masthead
+  // held (`shell-chrome.tsx`) — one menu where there used to be a bar, a gear
+  // and a masthead.
+  const moreItems: OverflowItem[] = [
+    ...addItems.map((it) => ({
+      ...it,
+      id: `add-${it.id}`,
+      label: typeof it.label === 'string' ? `Add ${lowerFirst(it.label)}` : it.label,
+      disabled: adding || it.disabled,
+    })),
+    {
+      id: 'develop-settings',
+      label: 'Develop settings',
+      title: 'This device’s choices: encoder, rendering, device, network',
+      onSelect: () => openDevelopSettings(),
+      rule: true,
+    },
+    ...(shellExtras?.menu ?? []),
+  ];
+
   return (
     <div
       className="relative flex flex-col flex-1 min-h-0 gap-2"
@@ -2615,26 +2687,33 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           chevron, the name one step smaller, and Add is its glyph (the menu
           still names every way in). The Trips overview's bar, the same fix. */}
       {/* In focus the bar goes with the band and the inspector: the picture, its own row, nothing else. */}
-      {!focus && (
+      {!focus && immersive && (
+        <div
+          className={`z-20 flex items-center gap-1 h-[46px] px-1 border border-line rounded-paper-lg ${
+            floating ? `absolute inset-x-0 top-1 ${GLASS}` : 'flex-none mt-1 bg-surface'
+          }`}
+        >
+          <IconButton variant="ghost" onClick={onBack} label="Back to the rolls">
+            {Icons.back}
+          </IconButton>
+          {/* The roll over the picture's own name — the list of the
+              capture's files, drawn here by the workbench (`nameSlot`). */}
+          <span className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+            <RollTitle name={roll.name} size="sm" onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))} />
+            <span ref={setNameSlot} className="min-w-0 flex text-xs" />
+          </span>
+          {shellExtras?.pills}
+          {headerExtra}
+          {historyControl}
+          <OverflowMenu label="More — add pictures, settings, the rest of Atelier" size="md" items={moreItems} />
+        </div>
+      )}
+      {!focus && !immersive && (
         <PageBar
           back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
           trailing={
             <>
-              {undo && (
-                <HistoryControl
-                  undo={undo}
-                  roll={roll}
-                  picture={open}
-                  onRestore={(values) => open && restorePicture(open.id, values)}
-                  onTake={(name) => open && void takePictureSnapshot(open.id, name)}
-                  onRename={(sid, name) => open && update((r) => renameSnapshot(r, open.id, sid, name))}
-                  onRemove={(sid) => open && update((r) => removeSnapshot(r, open.id, sid))}
-                  onTakeRoll={takeWholeRoll}
-                  onRestoreRoll={restoreWholeRoll}
-                  onRenameRoll={(group, name) => update((r) => renameRollSnapshot(r, group, name))}
-                  onRemoveRoll={(group) => update((r) => removeRollSnapshot(r, group))}
-                />
-              )}
+              {historyControl}
               {headerExtra}
               {/* Develop's settings open from inside the roll (his pick): the
                   device's choices, not the roll's — encoder, rendering, device, network. */}
@@ -2709,7 +2788,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             ref={columnRef}
             className={
               compact
-                ? 'flex-1 min-h-0 flex flex-col gap-2'
+                ? 'relative flex-1 min-h-0 flex flex-col gap-2'
                 : focus
                   ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-y-2'
                   : // The band standing beside the stage is a column of its own
@@ -2728,6 +2807,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               file={files.get(open.id) ?? null}
               stack={stack}
               compact={compact}
+              immersive={immersive}
+              nameSlot={immersive ? nameSlot : null}
               sheetOpen={sheetOpen}
               onSheetOpen={setSheetOpen}
               tab={tabs.some((t) => t.id === tab) ? tab : 'adjust'}
@@ -2825,14 +2906,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               className={
                 focus
                   ? 'hidden'
-                  : compact
+                  : floating
+                    ? // Over the picture, above the floating verbs (50 px + their 8 px and a gap).
+                      `absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+64px)] flex flex-col gap-1 min-w-0 px-1 pb-1 border border-line rounded-paper-lg ${GLASS}`
+                    : compact
                     ? 'flex flex-col gap-1 min-w-0 flex-none'
                     : side
                       ? `flex min-w-0 min-h-0 ${left ? 'col-start-1' : 'col-start-2'} row-start-1 row-span-2`
                       : 'flex flex-col gap-1 min-w-0 col-start-1 row-start-2'
               }
             >
-              {!side && statusLines}
+              {/* Over the picture the status lines would stand between it and
+                  the band; they come back with the panel, the band in the column. */}
+              {!side && !floating && statusLines}
               {/* V4: the band is the run's queue — each cell marked, and the
                   run's own hairline along its top (`TaskEdge`, the run's scope). */}
               <div className={side ? `relative flex-1 min-h-0 min-w-0 flex ${left ? 'flex-row-reverse' : 'flex-row'}` : 'relative flex-none flex flex-col'}>
@@ -2840,7 +2926,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     double-click (`BandGrip`); gone with a phone's drawer up,
                     where the band is one fixed row. Beside the stage it is
                     the band's edge that faces the picture. */}
-                {!drawerBand && (
+                {!shortBand && (
                   <BandGrip axis={side ? 'x' : 'y'} size={stripMetrics.grip} label="Resize the band" onDrag={onGripDrag} onEnd={onGripEnd} onToggle={toggleFolded} />
                 )}
                 <div className={side ? 'relative min-h-0 h-full' : 'relative'}>
@@ -2982,10 +3068,10 @@ function RollTitle({
 }: {
   name: string;
   onRename: (name: string) => void;
-  /** `md` in a phone's one-row bar, `lg` as a wide screen's heading. */
-  size?: 'lg' | 'md';
+  /** `sm` over the picture's name in a phone's one-line header, `md` in a one-row bar, `lg` as a wide screen's heading. */
+  size?: 'lg' | 'md' | 'sm';
 }) {
-  const face = size === 'lg' ? 'text-2xl' : 'text-xl';
+  const face = size === 'lg' ? 'text-2xl' : size === 'md' ? 'text-xl' : 'text-base';
   const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editing = draft !== null;

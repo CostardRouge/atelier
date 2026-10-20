@@ -286,7 +286,9 @@ export function DevelopBaseMenu({
     <>
       <span className="min-w-0 truncate font-mono text-xs text-ink-soft group-hover:text-accent-ink">{name}</span>
       {chip && (
-        <span className="min-w-0 truncate font-mono text-3xs tracking-[0.12em] uppercase text-faint group-hover:text-accent-ink">
+        // The chip gives way first: a name cut to `DJI_0…` says nothing,
+        // and the chip's words are in the menu it opens.
+        <span className="min-w-0 shrink-[8] truncate font-mono text-3xs tracking-[0.12em] uppercase text-faint group-hover:text-accent-ink">
           {chip}
         </span>
       )}
