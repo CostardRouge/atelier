@@ -735,10 +735,16 @@ rather than stopping at a fixed fraction of it — while the transport and the
 export button stay put. On a wide screen the badge holds still while its
 controls scroll beside it —
 the Studio's layout, and the reason is the same: you are watching the picture,
-not the panel. On a phone the picture and the band under it own the screen
-and nothing scrolls: the four tabs are the bottom bar, each raising its panel
-as a sheet over the picture, the band's controls are finger-sized, and the
-band keeps clear of the bar however tall the frame is.
+not the panel. On a phone the piece has the screen and nothing scrolls: no
+`Atelier / Trips` masthead, one header line (back, the piece's name over its
+day, undo, redo, the sync dot, Export as its glyph, and a ⋯ with Trip settings
+and the rest of Atelier), and the frame centred on the whole screen with the
+header, the band and the bottom bar floating over its margins in frosted
+paper. **A tap on the paper around the frame hides them all**, another brings
+them back (a tap on the frame itself selects and moves, as ever). The four
+tabs are the bottom bar: Content and Export rise as sheets, Picture and Look as
+a drawer under the picture, and then the header and the band take their rows
+again.
 
 A piece is renamed in place, by typing over its title — the same gesture as a
 Studio project's name.

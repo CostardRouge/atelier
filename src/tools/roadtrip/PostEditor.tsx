@@ -182,6 +182,8 @@ import { runClock } from '../../shared/ui/RunLockNotice';
 import { describePlan, exportPlan, type PieceExportPlan } from '../../shared/roadtrip/export-plan';
 import { useAvcEncodeSupport } from '../../shared/media/use-encode-support';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { GLASS, usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
@@ -316,6 +318,25 @@ export default function PostEditor({
       [compact, tab, inspectorOpen],
     ),
   );
+  // A phone's IMMERSIVE layout (2026-10-20, pick C of the space lab
+  // https://claude.ai/artifact/GunaDcNsUtVM3nW1xiyQ2V, Develop's first): no
+  // masthead, ONE header line, and while the piece is looked at — no drawer
+  // up — the header, the deck band and the shell's bar float over the stage
+  // in glass. A tap on the paper AROUND the frame hides them all (a tap ON the
+  // frame selects and moves, as ever). With the Picture or Look drawer up the
+  // header and the band keep their rows; a sheet tab covers the screen anyway.
+  const drawerUp = compact && inspectorOpen && (tab === 'picture' || tab === 'look');
+  const floating = compact && !drawerUp;
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const hidden = floating && chromeHidden;
+  useEffect(() => {
+    if (inspectorOpen) setChromeHidden(false);
+  }, [inspectorOpen]);
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating, hidden } : null), [compact, floating, hidden]));
+  /** A tap on the stage's own paper — never on the frame inside it — shows or hides the chrome. */
+  const onStageMargin = (e: React.MouseEvent<HTMLElement>) => {
+    if (floating && e.target === e.currentTarget) setChromeHidden((h) => !h);
+  };
   /** The trip-wide sheet, and which of its sections was asked for. */
   const [tripSheet, setTripSheetSection] = useState<TripSettingsSection | null>(null);
   // The closing card on the stage names its section; the ⚙ names none, so a phone opens on the list.
@@ -2341,7 +2362,7 @@ export default function PostEditor({
     <>
       <span className="inline-flex shrink-0 [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{Icons.export}</span>
       {/* The bar's one word yields to a status pill that is speaking. */}
-      <span className="tabular-nums group-has-[[data-speaks]]/bar:hidden">
+      <span className={`tabular-nums group-has-[[data-speaks]]/bar:hidden ${compact && !exportRunning ? 'hidden' : ''}`}>
         {exportRunning ? (exportPercent === null ? '…' : `${exportPercent} %`) : 'Export'}
       </span>
     </>
@@ -2360,7 +2381,11 @@ export default function PostEditor({
         // of one property are ordered by Tailwind, not by this string.
         exportRunning ? 'default' : 'primary',
         'md',
-        'relative overflow-hidden min-w-[6.0625rem] group-has-[[data-speaks]]/bar:min-w-0 group-has-[[data-speaks]]/bar:w-[2.125rem] group-has-[[data-speaks]]/bar:px-0',
+        // A phone's one header line has no room for the word at rest: the
+        // glyph, and the percentage once it runs.
+        compact && !exportRunning
+          ? 'relative overflow-hidden min-w-0 w-[2.125rem] px-0'
+          : 'relative overflow-hidden min-w-[6.0625rem] group-has-[[data-speaks]]/bar:min-w-0 group-has-[[data-speaks]]/bar:w-[2.125rem] group-has-[[data-speaks]]/bar:px-0',
       )}
     >
       {exportFace}
@@ -2388,7 +2413,8 @@ export default function PostEditor({
         // Every pixel this takes is one the picture does not get, and on a
         // phone the picture is the whole screen's job — 16px, which is also
         // what keeps iOS from zooming on focus.
-        compact ? 'flex-1 text-base' : 'w-full text-xl'
+        // On a phone it is the first line of the one header (`PhoneHeader`).
+        compact ? 'w-full text-base' : 'w-full text-xl'
       }`}
     />
   );
@@ -2411,7 +2437,7 @@ export default function PostEditor({
     // The `@container` is the section and the queried layout is its CHILD: a
     // container query only ever matches an ancestor, so classes like
     // `@min-[860px]:grid` on the container element itself never apply.
-    <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
+    <section className="@container relative flex-1 min-h-0 flex flex-col" aria-label="Hook">
     <div
       className={`flex-1 min-h-0 flex flex-col ${
         // Stacked on a TABLET the inspector is still in this column, so the
@@ -2425,6 +2451,30 @@ export default function PostEditor({
         compact ? 'gap-3' : 'gap-4 overflow-auto'
       } @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden`}
     >
+      {compact ? (
+        !hidden && (
+          <PhoneHeader
+            floating={floating}
+            back={{ label: 'Back to the overview', onClick: onBack }}
+            title={nameField}
+            subtitle={facts}
+            trailing={
+              <>
+                {headerExtra}
+                {exportButton}
+              </>
+            }
+            menu={[
+              {
+                id: 'trip-settings',
+                label: 'Trip settings',
+                title: 'The words, the closing card, what a new piece starts from',
+                onSelect: () => setTripSheet('words'),
+              },
+            ]}
+          />
+        )
+      ) : (
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
         {/* ONE row, and one LINE (2026-09-16): this bar lives in the
             inspector's 352px column, and once undo/redo joined it the row
@@ -2475,6 +2525,7 @@ export default function PostEditor({
           </>
         )}
       </div>
+      )}
 
       {/* The picture and, under it, the piece as ONE band (`DeckStrip`): the
           deck and its transport together, the same at every width — the
@@ -2494,10 +2545,11 @@ export default function PostEditor({
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
           // The clearance above the bar is the column's while the column is
           // last; with the Picture or Look drawer up under it, the drawer is.
-          compact ? (inspectorOpen && (tab === 'picture' || tab === 'look') ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
+          // Floating, the stage runs under the header, the band and the bar.
+          compact ? (drawerUp || floating ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
         }`}
       >
-        <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
+        <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center" onClick={onStageMargin}>
           <div
             style={{ '--fit': fitWidth === null ? '100%' : `${Math.round(fitWidth)}px` } as React.CSSProperties}
             /* `w-full` is load-bearing on a narrow screen: the row above
@@ -2505,7 +2557,12 @@ export default function PostEditor({
                from the badge's own measured box — the stage then measured a
                box the picture had sized, which is how a preview ends up
                measuring its own output. The column states its width instead. */
-            className="w-full flex-1 min-w-0 min-h-0 flex flex-col items-center @min-[860px]:max-w-[min(100%,var(--fit))]"
+            // Floating, the frame is CENTRED on the whole screen, so the
+            // header and the band over it fall in its margins.
+            className={`w-full flex-1 min-w-0 min-h-0 flex flex-col items-center @min-[860px]:max-w-[min(100%,var(--fit))] ${
+              floating ? 'justify-center' : ''
+            }`}
+            onClick={onStageMargin}
           >
           <BadgeStage
             file={slideFile}
@@ -2580,7 +2637,7 @@ export default function PostEditor({
             onFit={setFitWidth}
             caption={stageCaption}
           />
-          {compact && <div className="w-full flex-none mt-2">{deckStrip}</div>}
+          {compact && !floating && <div className="w-full flex-none mt-2">{deckStrip}</div>}
           </div>
         </div>
         {/* Wide, the band spans the picture's side of the editor. On a phone
@@ -2594,6 +2651,13 @@ export default function PostEditor({
           </div>
         )}
       </div>
+
+      {/* Floating, the deck band rides over the stage, above the shell's bar. */}
+      {compact && floating && !hidden && (
+        <div className={`absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] p-1.5 border border-line rounded-paper-lg ${GLASS}`}>
+          {deckStrip}
+        </div>
+      )}
 
       <PanelHost
         asSheet={compact}

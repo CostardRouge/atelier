@@ -33,6 +33,10 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Trips on a phone gives a piece the screen, as Develop does: no masthead, one header line (back, the piece over its
+  day, undo/redo, Export as its glyph, ⋯ with Trip settings and the rest of Atelier), and the header, the band and the
+  bottom bar float over the frame's margins. A tap on the paper around the frame hides them; with the Picture or Look
+  drawer up they keep their rows.
 - Develop: the Auto row no longer wraps onto two or three lines — it is one bar, **Auto** with the names of the
   verbs still on beside it, and a ▾ that opens Tone, Colour, Bands, My own and Pick grey, each a switch on its own line.
 - Develop on a phone gives the photograph the screen: no masthead, one header line (back, the roll over the file,
