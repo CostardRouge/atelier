@@ -30,6 +30,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Develop: the Auto row no longer wraps onto two or three lines — it is one bar, **Auto** with the names of the
+  verbs still on beside it, and a ▾ that opens Tone, Colour, Bands, My own and Pick grey, each a switch on its own line.
 - Develop on a phone gives the photograph the screen: no masthead, one header line (back, the roll over the file,
   undo, redo, history, ⋯), and while you browse the header, the band, the verbs and the bottom bar float over the
   picture in frosted paper. A tap on the picture hides them all and another brings them back. With a panel open the

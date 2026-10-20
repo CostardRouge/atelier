@@ -13,9 +13,14 @@ import type { AutoState } from './auto-slots';
  */
 const SHAPE = {
   /** The Adjust tab's Auto row: the workbench's pill. */
-  pill: 'px-3 py-[0.4rem] rounded-full font-semibold',
+  pill: 'px-3 py-[0.4rem] rounded-full font-semibold text-xs',
   /** Beside a shared `Button size="sm"` (the Crop tab). */
-  control: 'h-7 px-2.5 rounded-control font-medium',
+  control: 'h-7 px-2.5 rounded-control font-medium text-xs',
+  /**
+   * The Adjust tab's one `Auto`: the left half of a split bar as wide as the
+   * inspector, its ▾ the right half (`DevelopAuto.tsx`).
+   */
+  bar: 'z-[1] flex-1 min-w-0 h-9 pointer-coarse:h-11 px-3 rounded-l-control rounded-r-none font-semibold text-sm',
 } as const;
 
 /**
@@ -24,7 +29,7 @@ const SHAPE = {
  * the buttons beside it.
  */
 function look(state: AutoState | 'armed', shape: keyof typeof SHAPE): string {
-  const ground = shape === 'pill' ? 'bg-paper' : 'bg-surface';
+  const ground = shape === 'control' ? 'bg-surface' : 'bg-paper';
   switch (state) {
     case 'on':
       return 'border-accent bg-accent-wash text-accent-ink';
@@ -35,7 +40,7 @@ function look(state: AutoState | 'armed', shape: keyof typeof SHAPE): string {
     case 'armed':
       return `border-accent ${ground} text-accent-ink`;
     default:
-      return shape === 'pill'
+      return shape !== 'control'
         ? 'border-line-strong bg-paper text-ink-soft hover:border-accent hover:text-accent-ink'
         : 'border-line-strong bg-surface text-ink hover:bg-paper-2 hover:border-muted';
   }
@@ -93,7 +98,7 @@ export default function AutoSwitch({
   return (
     <button
       type="button"
-      className={`relative inline-flex items-center gap-1.5 whitespace-nowrap border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_SHAPE} ${VERB_GROUND} ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
+      className={`relative inline-flex items-center gap-1.5 whitespace-nowrap border cursor-pointer disabled:opacity-50 disabled:cursor-default transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_SHAPE} ${VERB_GROUND} ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
       aria-pressed={armed || state !== 'off'}
       disabled={disabled}
       title={armed ? undefined : state === 'off' ? hint : AUTO_SWITCH_TITLE[state]}

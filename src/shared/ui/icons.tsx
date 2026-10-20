@@ -283,6 +283,13 @@ export const Icons = {
   flag: icon(<path d="M5 21V4h11l-2 4 2 4H5" />),
   circleCheck: icon(<><circle cx="12" cy="12" r="8" /><path d="M8.5 12l2.5 2.5 4.5-5" /></>),
   stack: icon(<><rect x="4" y="7" width="13" height="10" rx="1.5" /><path d="M7 4h13v10" /></>),
+  /** The Develop Auto row (`DevelopAuto.tsx`): the one Auto, and each verb in its menu. */
+  wand: icon(<path d="M5 19 15 9M15 4v3M13.5 5.5h3M19 9v2M18 10h2" />),
+  levels: icon(<path d="M4 19h16M7 19v-5M12 19V6M17 19v-8" />),
+  whiteBalance: icon(<><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none" /></>),
+  squeeze: icon(<path d="M4 12h16M12 3v5M9.5 5.5 12 8l2.5-2.5M12 21v-5M9.5 18.5 12 16l2.5 2.5" />),
+  person: icon(<><circle cx="12" cy="8" r="3.5" /><path d="M5 20c1.2-3.6 4-5 7-5s5.8 1.4 7 5" /></>),
+  eyedropper: icon(<path d="M15 4l5 5-2.5 2.5-5-5zM13.5 7.5 5 16v3h3l8.5-8.5" />),
   sliders: icon(<><path d="M4 7h7M15 7h5M4 17h3M11 17h9" /><circle cx="13" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>),
   held: icon(<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M10 9v6M14 9v6" /></>),
   filter: icon(<path d="M4 5h16l-6 8v5l-4 2v-7z" />),

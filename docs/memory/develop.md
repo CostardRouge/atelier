@@ -488,6 +488,21 @@ specced) + `use-auto-memory.ts` + `AutoSwitch.tsx`. Rules:
   — measured `rgb(210,200,179)` on a lit switch; the old armed-dropper look had
   the same bug. `AutoSwitch` picks each state's colours whole.
 
+**The Auto ROW is one bar and a menu (2026-10-20, his pick D of the lab
+https://claude.ai/artifact/Wy9RR2chSzhYEXXYgAZhRN)**: six pills wrapped to two
+lines at 22rem and three at 18rem (≈330 px off, ≈380 lit, for ≈326 of room).
+Now `DevelopAutoSection` draws a split bar as wide as the panel — `AutoSwitch
+shape="bar"` running `all`, a mono summary of the verbs not `off` (Pick grey's
+armed state says *click something grey*), and a ▾ opening an `AnchoredPopover`
+(role dialog, stays open across toggles) where each verb is a whole-line
+`role="switch"` row with its state word and a `ToggleField`-looking mark
+(on filled, edited half, nothing dashed). Arming Pick grey CLOSES the menu (it
+would cover the picture). Rejected faces: A (master Auto in the header + short
+chips), B (one segmented well — reads as an exclusive choice), C (glyph tiles,
+54 px tall). Cost accepted: a verb is two clicks away, not one. A host without
+`all` gets a bar that only opens the menu. Driven in the pane at 1280 and 860
+(dark): toggles, Auto's take-back, Pick grey's arm and pick.
+
 **The Crop tab's Auto level and Crop to subject are switches too** (his
 question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over
 the generic `switchState` of `auto-slots.ts`, `use-crop-switches.ts` held by
@@ -690,7 +705,7 @@ Colour, Presence, Levels, Curve, the mixer, grading, Presets, Apply to…,
 Look on Adjust; Repair, Noise, Sharpen on Detail. **His rules**: the fold
 survives changing picture but is NEVER on the document — it lives in
 `sessionStorage` (`remember: 'session'`), so a reload keeps it and a new tab
-starts from the defaults; Auto is NOT foldable (one row of verbs), nor is
+starts from the defaults; Auto is NOT foldable (one bar), nor is
 Fringing (one slider) or an Apply-to with one verb — they wear the same
 header with no chevron (`foldable: false`). **Mine** (he left it to me):
 folded by default are Levels, Curve, the mixer and grading, what a pass over

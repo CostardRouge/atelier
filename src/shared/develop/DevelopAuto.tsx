@@ -1,3 +1,4 @@
+import { useRef, useState, type ReactNode } from 'react';
 import DevelopFold from './DevelopFold';
 import { autoBands, autoColour, autoTone, describeAutoBands, describeAutoTone, type SourceStats } from './auto-develop';
 import { developLinkClass } from './develop-classes';
@@ -11,7 +12,12 @@ import {
   type Levels,
 } from './curves';
 import type { AutoState, AutoVerb } from './auto-slots';
-import AutoSwitch from './AutoSwitch';
+import AutoSwitch, { AUTO_SWITCH_TITLE } from './AutoSwitch';
+import { Icons } from '../ui/icons';
+import { AnchoredPopover } from '../ui/OverflowMenu';
+import { PRESS_LOOK } from '../ui/press';
+import { useVerb } from '../ui/use-verb';
+import { VERB_INK, VERB_SHAPE, VerbHairline, verbAttrs } from '../ui/VerbMarks';
 import type { AutoMemory } from './use-auto-memory';
 import type { AutoAllVerb } from './use-auto-all';
 
@@ -67,14 +73,95 @@ export function runAutoVerb(verb: DevelopAutoVerb, stats: SourceStats, auto: Aut
   auto.apply('bands', { highlights: bands?.highlights ?? 0, shadows: bands?.shadows ?? 0 }, bands ? `auto bands · ${describeAutoBands(bands)}` : 'nothing to recover');
 }
 
+/** What a verb's row says beside its switch, by state. */
+const STATE_WORD: Readonly<Record<AutoState, string>> = {
+  off: '',
+  on: 'on',
+  nothing: 'changed nothing',
+  edited: 'moved since',
+};
+
+/** One verb as the menu draws it. */
+interface MenuVerb {
+  id: string;
+  /** Its row's name. */
+  label: string;
+  /** Its word in the bar's summary. */
+  short: string;
+  glyph: ReactNode;
+  hint: string;
+  state: AutoState;
+  /** A tool waiting for the picture (Pick grey's dropper). */
+  armed?: boolean;
+  /** Arms a tool rather than measuring the picture: answers at once. */
+  instant?: boolean;
+  disabled: boolean;
+  onClick: () => void | Promise<unknown>;
+}
+
+/** The switch drawn at a row's end: a `ToggleField`'s, with the row's four states. */
+function SwitchMark({ state }: { state: AutoState }) {
+  const track =
+    state === 'on'
+      ? 'bg-accent'
+      : state === 'edited'
+        ? 'bg-accent/45'
+        : state === 'nothing'
+          ? 'bg-paper-2 outline-dashed outline-1 -outline-offset-1 outline-muted'
+          : 'bg-line-strong';
+  return (
+    <span aria-hidden className={`relative flex-none w-9 h-5 rounded-full ${track}`}>
+      <span
+        className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-[0_1px_2px_rgba(27,24,19,0.25)] transition-transform duration-150 ease-paper ${
+          state === 'off' ? '' : 'translate-x-4'
+        }`}
+      />
+    </span>
+  );
+}
+
 /**
- * Auto — separate buttons, deliberately not one, and each a SWITCH.
+ * One verb of the menu: the whole line is the switch, so a finger takes it
+ * anywhere on its 44 px. A verb that measures and re-renders lives as a verb
+ * (`useVerb`), down while it works, exactly as the old pill did.
+ */
+function AutoMenuRow({ verb, echo }: { verb: MenuVerb; echo: string | null }) {
+  const run = useVerb();
+  const held = verb.armed || verb.state !== 'off';
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={held}
+      disabled={verb.disabled}
+      title={verb.armed ? undefined : verb.state === 'off' ? verb.hint : AUTO_SWITCH_TITLE[verb.state]}
+      className={`relative flex items-center gap-2.5 min-h-10 pointer-coarse:min-h-11 px-2 border-0 rounded-[9px] bg-transparent text-left cursor-pointer hover:bg-paper-2 disabled:opacity-50 disabled:cursor-default transition-colors duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_SHAPE} ${VERB_INK}`}
+      {...verbAttrs(run.phase)}
+      onClick={() => (verb.instant ? void verb.onClick() : run.run(async () => void (await verb.onClick()), { echo }))}
+    >
+      <span className="flex-none text-muted [&>svg]:w-4 [&>svg]:h-4">{verb.glyph}</span>
+      <span className="min-w-0 text-sm text-ink truncate">{verb.label}</span>
+      <span className={`ml-auto flex-none font-mono text-2xs whitespace-nowrap ${verb.armed ? 'text-accent-ink' : 'text-muted'}`}>
+        {verb.armed ? 'click the picture' : STATE_WORD[verb.state]}
+      </span>
+      <SwitchMark state={verb.armed ? 'on' : verb.state} />
+      <VerbHairline phase={run.phase} />
+    </button>
+  );
+}
+
+/**
+ * Auto — ONE bar, its verbs in a menu (2026-10-20, his pick D of the Auto row
+ * lab https://claude.ai/artifact/Wy9RR2chSzhYEXXYgAZhRN): the row of pills
+ * wrapped onto a second line in a 22rem inspector and onto a third at 18rem.
+ * The bar is as wide as the panel whatever the verbs: its left half runs the
+ * plan (`all`), its summary names the verbs that still hold their answer, and
+ * the ▾ opens every verb as a switch on its own line.
  *
- * Splitting tone from colour is the whole design: a stretch is almost always
- * an improvement, and a white balance is often exactly wrong, so they must not
- * share a click. Since 2026-10-02 a second click takes ONE verb back without
- * touching the others (`auto-slots.ts`, `use-auto-memory.ts`). The maths and
- * the reasons are in `auto-develop.ts`.
+ * Splitting tone from colour is still the whole design: a stretch is almost
+ * always an improvement, and a white balance is often exactly wrong, so they
+ * never share a click. Each is a SWITCH taken back alone (`auto-slots.ts`,
+ * `use-auto-memory.ts`). The maths and the reasons are in `auto-develop.ts`.
  */
 export function DevelopAutoSection({
   stats,
@@ -88,7 +175,7 @@ export function DevelopAutoSection({
   stats: SourceStats | null;
   /** The row's memory of its clicks, held by the host per picture (`useAutoMemory`). */
   auto: AutoMemory;
-  /** The one `Auto` running the plan's steps (`use-auto-all.ts`); omitted, the row is its verbs alone. */
+  /** The one `Auto` running the plan's steps (`use-auto-all.ts`); omitted, the bar only opens the menu. */
   all?: AutoAllVerb;
   /** His own model's verb; omitted, this device holds no model and the switch is not drawn. */
   own?: OwnModelVerb;
@@ -98,6 +185,8 @@ export function DevelopAutoSection({
   /** The task scope of the picture on the stage: a verb's re-render echoes on its edge (C4). */
   echo?: string | null;
 }) {
+  const [open, setOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   const ready = Boolean(stats && stats.total > 0);
   const notRead = 'the picture has not been read yet';
 
@@ -106,16 +195,62 @@ export function DevelopAutoSection({
     runAutoVerb(verb, stats, auto);
   };
 
-  const verbs: { verb: DevelopAutoVerb; label: string; hint?: string }[] = [
-    { verb: 'tone', label: 'Auto tone' },
-    { verb: 'colour', label: 'Auto colour' },
-    { verb: 'bands', label: 'Auto bands', hint: 'Lift the shadows and pull the highlights down where the picture leans' },
-  ];
+  const measured = (
+    verb: DevelopAutoVerb,
+    label: string,
+    glyph: ReactNode,
+    hint: string,
+  ): MenuVerb => {
+    const state = auto.state(verb);
+    return { id: verb, label, short: label, glyph, hint: ready ? hint : notRead, state, disabled: !ready && state === 'off', onClick: () => toggle(verb) };
+  };
 
-  const pickState = auto.state('pick');
+  const verbs: MenuVerb[] = [
+    measured('tone', 'Tone', Icons.levels, 'A black point, a white point and a midtone gamma, written into Levels'),
+    measured('colour', 'Colour', Icons.whiteBalance, 'Neutralise the average cast'),
+    measured('bands', 'Bands', Icons.squeeze, 'Lift the shadows and pull the highlights down where the picture leans'),
+  ];
+  if (own) {
+    verbs.push({
+      id: 'own',
+      label: 'My own',
+      short: 'Mine',
+      glyph: Icons.person,
+      hint: ready ? `The eleven sliders as your model (${own.run}) would set them` : notRead,
+      state: own.state,
+      disabled: !ready && own.state === 'off',
+      onClick: own.onClick,
+    });
+  }
+  if (onPicking) {
+    const state = auto.state('pick');
+    verbs.push({
+      id: 'pick',
+      label: 'Pick grey',
+      short: 'Grey',
+      glyph: Icons.eyedropper,
+      hint: ready ? 'Click something in the picture that should be grey' : notRead,
+      state,
+      armed: picking,
+      instant: true,
+      disabled: !ready && state === 'off' && !picking,
+      onClick: () => {
+        if (!picking && auto.turnOff('pick')) return;
+        onPicking(!picking);
+        // The dropper waits for the PICTURE, which the menu would cover.
+        if (!picking) setOpen(false);
+      },
+    });
+  }
+
+  const summary = picking ? 'click something grey' : verbs.filter((v) => v.state !== 'off').map((v) => v.short).join(' · ');
+  const summaryText = summary && (
+    <span className={`ml-auto min-w-0 truncate font-mono text-2xs font-normal ${picking ? 'text-accent-ink' : 'text-muted'}`}>{summary}</span>
+  );
+
   return (
-    // One row of verbs: not worth a fold, but drawn with the same header as
-    // the foldable sections under it.
+    // One bar: not worth a fold, but drawn with the same header as the
+    // foldable sections under it.
     <DevelopFold
       id="auto"
       title="Auto"
@@ -129,57 +264,62 @@ export function DevelopAutoSection({
       }
       foldable={false}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {all && (
-          <>
-            <AutoSwitch state={all.state} disabled={!ready && all.state === 'off'} hint={ready ? all.hint : notRead} echo={echo} onClick={all.onClick}>
-              Auto
-            </AutoSwitch>
-            <span aria-hidden className="w-px h-5 bg-line flex-none" />
-          </>
-        )}
-        {verbs.map(({ verb, label, hint }) => {
-          const state = auto.state(verb);
-          return (
-            <AutoSwitch
-              key={verb}
-              state={state}
-              disabled={!ready && state === 'off'}
-              hint={ready ? hint : notRead}
-              echo={echo}
-              onClick={() => toggle(verb)}
-            >
-              {label}
-            </AutoSwitch>
-          );
-        })}
-        {own && (
+      <div ref={barRef} className="flex min-w-0">
+        {all ? (
           <AutoSwitch
-            state={own.state}
-            disabled={!ready && own.state === 'off'}
-            hint={ready ? `The eleven sliders as your model (${own.run}) would set them` : notRead}
+            shape="bar"
+            state={all.state}
+            disabled={!ready && all.state === 'off'}
+            hint={ready ? all.hint : notRead}
             echo={echo}
-            onClick={own.onClick}
+            onClick={all.onClick}
           >
-            My own
+            <span className="flex-none [&>svg]:w-4 [&>svg]:h-4">{Icons.wand}</span>
+            Auto
+            {summaryText}
           </AutoSwitch>
-        )}
-        {onPicking && (
-          <AutoSwitch
-            state={pickState}
-            armed={picking}
-            disabled={!ready && pickState === 'off'}
-            hint={ready ? 'Click something in the picture that should be grey' : notRead}
-            instant
-            onClick={() => {
-              if (!picking && auto.turnOff('pick')) return;
-              onPicking(!picking);
-            }}
+        ) : (
+          <button
+            type="button"
+            className={`relative flex-1 min-w-0 inline-flex items-center gap-1.5 h-9 pointer-coarse:h-11 px-3 border border-line-strong rounded-l-control bg-paper text-sm font-semibold text-ink-soft whitespace-nowrap cursor-pointer hover:text-accent-ink ${PRESS_LOOK} data-pressed:bg-paper-2`}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            onClick={() => setOpen((on) => !on)}
           >
-            {picking ? 'Pick\u2026' : 'Pick grey'}
-          </AutoSwitch>
+            <span className="flex-none [&>svg]:w-4 [&>svg]:h-4">{Icons.wand}</span>
+            Auto
+            {summaryText}
+          </button>
         )}
+        <button
+          type="button"
+          aria-label="The Auto verbs"
+          title="The Auto verbs, one by one"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className={`touch-row relative flex-none grid place-items-center w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 -ml-px border border-line-strong rounded-r-control cursor-pointer transition-colors duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 [&>svg]:w-4 [&>svg]:h-4 ${
+            open ? 'bg-paper-2 text-ink' : 'bg-paper text-ink-soft hover:text-accent-ink'
+          }`}
+          onClick={() => setOpen((on) => !on)}
+        >
+          {Icons.down}
+        </button>
       </div>
+      {open && (
+        <AnchoredPopover
+          anchorRect={() => barRef.current?.getBoundingClientRect() ?? null}
+          onClose={() => setOpen(false)}
+          within={barRef}
+          role="dialog"
+          label="The Auto verbs"
+          className="w-[min(20rem,calc(100vw-2rem))] p-1.5"
+        >
+          {verbs.map((verb) => (
+            <AutoMenuRow key={verb.id} verb={verb} echo={echo} />
+          ))}
+          {all && <p className="m-0 px-2 pt-2 pb-1 border-t border-line mt-1 text-xs leading-relaxed text-muted">{all.hint}</p>}
+        </AnchoredPopover>
+      )}
     </DevelopFold>
   );
 }

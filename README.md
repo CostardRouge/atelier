@@ -1943,7 +1943,9 @@ Apply-to blocks; Borders starts closed). What a setting does is explained
 behind the small **ⓘ** beside its name rather than under it, so the column
 holds the controls; what a line says about the picture right now — why it
 leaves at this size, the copyright that will be written — stays in the open.
-The **Auto** verbs
+The **Auto** section is one bar: **Auto** runs the steps ticked in Settings ›
+Automatic, the bar names the verbs that still hold their answer, and its **▾**
+opens every verb on a line of its own, each with its switch. The verbs
 write numbers from the picture *as shot*, so pressing one twice gives the
 same answer: **Auto tone** stretches the range into Levels (a black point, a
 white point, a gamma — bent by a stop and a half at most, so a snow field
@@ -1971,7 +1973,7 @@ been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
 Pick grey share the white balance — the newer replaces the older, and turning
 it off gives back the balance from before either. The switches remember
 their clicks for the session only: after a reload they are off and the values
-stay. **My own**, drawn in the row once this device holds a model learned
+stay. **My own**, listed in that menu once this device holds a model learned
 from your rolls (Settings › Learning → *Your model*, the two files
 `training/` exports), writes the eleven sliders at once as your hand would
 set them on this picture — from the picture as shot, its light and the
