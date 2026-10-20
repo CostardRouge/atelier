@@ -2804,7 +2804,19 @@ export default function StudioEditor({
               />
             )}
 
-            <div className="flex flex-col flex-1 min-h-0 overflow-auto pr-0.5">
+            {/* On a phone the sheet already scrolls this column (`PanelHost`),
+                so it is no scroller of its own; docked, it scrolls DOWN only.
+                `overflow-auto` let a section's chevron (`-mr-1.5`, 4 px past
+                the edge) make it scroll SIDEWAYS, and the focus coming back
+                to "Develop…" after the sheet slid the column and cut its
+                left edge — Develop's inspector's recipe, `-mr-3 pr-3`. */}
+            <div
+              className={
+                compact
+                  ? 'flex flex-col'
+                  : 'flex flex-col flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain -mr-3 pr-3'
+              }
+            >
               {tab === 'overlay' && (
                 <>
                   <InspectorSection

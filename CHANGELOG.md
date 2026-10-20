@@ -57,6 +57,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Fixed
 
+- On a phone, the Studio's inspector panels no longer slide sideways and cut their left edge after the Develop
+  sheet closes.
 - On a phone, the Studio's Develop sheet opens over the Grade panel instead of under it.
 - On a phone, the Develop sheet's footer gives its message a line of its own above Cancel and Done instead of
   squeezing it into a column one word wide.
