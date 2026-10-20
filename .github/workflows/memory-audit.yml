@@ -38,7 +38,7 @@ jobs:
       # disk, exactly as a local session does — without this step it has no
       # repository to audit.
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
