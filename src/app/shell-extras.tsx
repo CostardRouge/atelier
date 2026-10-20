@@ -16,7 +16,7 @@ const THEME_WORD: Record<ThemePref, string> = { system: 'System', light: 'Light'
  * the other editors, every tool, the sources, the theme and the repository as
  * items of the tool's own ⋯, and the task and agent pills for its header.
  */
-export function useShellExtrasValue(tool: Tool | undefined, atHome = false): ShellExtras {
+export function useShellExtrasValue(tool: Tool | undefined): ShellExtras {
   const { pref, setPref } = useTheme();
   const { connection } = useWinnowConnection();
   return useMemo(() => {
@@ -24,14 +24,10 @@ export function useShellExtrasValue(tool: Tool | undefined, atHome = false): She
       window.location.hash = `#${path}`;
     };
     const editors = TOOLS.filter((t) => t.group === 'editor' && t.id !== tool?.id);
-    // On the home page every tool is the page itself: no item leads back to it.
-    const home: OverflowItem[] = atHome
-      ? []
-      : [{ id: 'tools', label: 'All tools', title: 'Atelier’s home: every tool', onSelect: go(HOME_PATH), rule: editors.length === 0 }];
     const next = nextThemePref(pref);
     const menu: OverflowItem[] = [
       ...editors.map((t, i) => ({ id: `tool-${t.id}`, label: t.label, title: `Open ${t.label}`, onSelect: go(t.path), rule: i === 0 })),
-      ...home,
+      { id: 'tools', label: 'All tools', title: 'Atelier’s home: every tool', onSelect: go(HOME_PATH), rule: editors.length === 0 },
       {
         id: 'sources',
         label: connection ? `Sources · ${connection.id}` : 'Sources · this browser only',
@@ -60,5 +56,5 @@ export function useShellExtrasValue(tool: Tool | undefined, atHome = false): She
         </>
       ),
     };
-  }, [tool?.id, atHome, pref, setPref, connection]);
+  }, [tool?.id, pref, setPref, connection]);
 }

@@ -5,8 +5,8 @@ import OverflowMenu, { type OverflowItem } from './OverflowMenu';
 import { GLASS, useShellExtras } from './shell-chrome';
 
 export interface PhoneHeaderProps {
-  /** The way back, as a chevron; none on the suite's home, which is where every way back leads. */
-  back?: { label: string; onClick: () => void };
+  /** The way back, as a chevron. */
+  back: { label: string; onClick: () => void };
   /** The document's name — a field or a title — on the first line. */
   title: ReactNode;
   /** What is open inside it, on the second line, smaller. */
@@ -33,8 +33,7 @@ export default function PhoneHeader({ back, title, subtitle, trailing, menu, men
   const shell = extras?.menu ?? [];
   const items: OverflowItem[] = [
     ...menu,
-    // A rule between the screen's items and the shell's, never above the first item.
-    ...shell.map((it, i) => (i === 0 ? { ...it, rule: menu.length > 0 } : it)),
+    ...shell.map((it, i) => (i === 0 && menu.length > 0 ? { ...it, rule: true } : it)),
   ];
   return (
     <div
@@ -42,12 +41,10 @@ export default function PhoneHeader({ back, title, subtitle, trailing, menu, men
         floating ? `absolute inset-x-0 top-1 ${GLASS}` : 'flex-none mt-1 bg-surface'
       }`}
     >
-      {back && (
-        <IconButton variant="ghost" onClick={back.onClick} label={back.label}>
-          {Icons.back}
-        </IconButton>
-      )}
-      <span className={`flex-1 min-w-0 flex flex-col justify-center gap-0.5 ${back ? '' : 'pl-2'}`}>
+      <IconButton variant="ghost" onClick={back.onClick} label={back.label}>
+        {Icons.back}
+      </IconButton>
+      <span className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
         {title}
         {subtitle}
       </span>
