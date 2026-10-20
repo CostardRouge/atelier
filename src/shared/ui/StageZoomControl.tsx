@@ -26,11 +26,11 @@ import type { ZoomControls } from './stage-zoom';
  * second button INSERTED past 1:1, which slid the whole bar sideways and put
  * `pixels` under a finger that had pressed `+` twice.
  *
- * `folded` (a phone, 2026-10-06) draws the panel ALONE, without the pill's
- * `−` and `+`: a phone's stage bar could not hold the pill and the Develop
- * well side by side. The caller then puts the two steps in the panel — the
- * pinch is the gesture there, and the panel is the way in that always
- * answers when the browser takes the fingers.
+ * `folded` draws the panel ALONE, without the pill's `−` and `+`, and the
+ * caller puts the two steps in the panel. First a phone's (2026-10-06: its
+ * stage bar could not hold the pill and the Develop well side by side), then
+ * the Develop stage's at every width (2026-10-20, his ask: one design on a
+ * computer and a phone, the steps beside Fit and 1:1).
  */
 export default function StageZoomControl({
   zoom,

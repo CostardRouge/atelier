@@ -2658,7 +2658,7 @@ export default function PictureWorkbench({
    * applies instead of vanishing below it, which is what used to move the bar
    * under the pointer.
    */
-  // A phone folds the zoom's ± and the view's verbs into the panel (`StageZoomControl`'s `folded`).
+  // A phone also folds the view's own verbs (Focus, Keys) into the panel.
   const foldView = compact && !cropping;
   const zoomNow = picture.view.zoom;
   const atOnePixel = Math.abs(zoomNow.scale - picture.view.onePixel) < 0.005;
@@ -2676,10 +2676,10 @@ export default function PictureWorkbench({
         else if (id === 'out') zoomNow.zoomOut();
         else if (id === 'in') zoomNow.zoomIn();
       },
+      // The steps live in the panel at every width (2026-10-20, his ask): the
+      // pill outside is the percentage alone, one design on a computer and a phone.
       options: [
-        ...(foldView
-          ? [{ id: 'out', icon: Icons.zoomOut, label: 'Zoom out', disabled: zoomNow.canZoomOut ? undefined : 'Already the widest view' }]
-          : []),
+        { id: 'out', icon: Icons.zoomOut, label: 'Zoom out', disabled: zoomNow.canZoomOut ? undefined : 'Already the widest view' },
         { id: 'fit', icon: Icons.zoomFit, label: 'Fit — the whole picture, in the room it has' },
         {
           id: 'one',
@@ -2687,9 +2687,7 @@ export default function PictureWorkbench({
           label: '100 % — one of the picture’s pixels per pixel of this screen',
           disabled: zoomNow.zoomTo ? undefined : 'This view cannot go to an exact scale',
         },
-        ...(foldView
-          ? [{ id: 'in', icon: Icons.zoomIn, label: 'Zoom in', disabled: zoomNow.canZoomIn ? undefined : 'Already the closest view' }]
-          : []),
+        { id: 'in', icon: Icons.zoomIn, label: 'Zoom in', disabled: zoomNow.canZoomIn ? undefined : 'Already the closest view' },
       ],
     },
     {
@@ -2841,7 +2839,7 @@ export default function PictureWorkbench({
                 hint="wheel, pinch, or Z"
                 className="flex-none"
                 sections={zoomSections}
-                folded={foldView}
+                folded
               />
             ))}
           {/* ONE well of verbs ends the row (variant E2): the three clipboard

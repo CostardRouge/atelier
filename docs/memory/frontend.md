@@ -743,8 +743,10 @@ name — `SettingsSection.note`), a *Past 100 %* row (smooth · pixels glyphs), 
 rule, *Crop to this view* with its key (greyed with its reason when the view is
 already the crop — actions take `disabled` now), and a `caption` foot naming the
 gestures, hidden under a finger. Every sentence moved into its glyph's tooltip.
-On a phone (`folded`) the pill draws no ±: the caller puts zoom out / in at the
-two ends of the Zoom row and Focus / Keys as actions below a rule. `SettingsMenu`
+The pill draws no ± at ANY width (`folded`, his follow-up the same day: «le
+même design sur ordinateur et téléphone»): zoom out / in sit at the two ends of
+the Zoom row, the pill outside is the percentage alone; a phone adds Focus /
+Keys as actions below a rule. Crop mode keeps the plain `− % +` pill. `SettingsMenu`
 takes `trigger.bare` like `OverflowMenu`. Driven headless at 1440 and 390 only.
 
 ## 2026-09-28 — A section whose controls no longer reach what they set is LOCKED, and says so
