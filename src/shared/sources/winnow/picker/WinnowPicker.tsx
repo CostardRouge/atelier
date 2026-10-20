@@ -194,6 +194,10 @@ export default function WinnowPicker({
   // What names the scope being listed: every reset keys on it, never on the
   // rows, which a span receives part by part.
   const scopeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${mediaType}|${device}|${generation}`;
+  // The same WITHOUT what the rail narrows a span by: a facet click re-asks
+  // the server, but a ticked row it hides stays ticked, as in a day or a
+  // folder — the ticks reset on a new PLACE only.
+  const placeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${host.narrow?.mediaType}|${generation}`;
 
   // The scope's rows, every page. A change of scope forgets the last answer
   // first, so a new day never shows the previous one's pictures for a frame.
@@ -400,7 +404,7 @@ export default function WinnowPicker({
     setAnchorId(null);
     setFocusId(null);
     setTicked(new Set());
-  }, [scopeKey]);
+  }, [placeKey]);
   useEffect(() => {
     if (!loaded) return;
     const { host: h, rows: all } = latest.current;

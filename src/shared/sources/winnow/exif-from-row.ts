@@ -24,6 +24,7 @@
 
 import type { ExifData } from '../../exif/exif-parser';
 import type { WinnowAssetRow } from './client';
+import { localWallMs } from './capture-moment';
 
 function finite(n: number | null | undefined): n is number {
   return typeof n === 'number' && Number.isFinite(n);
@@ -75,6 +76,20 @@ export function exifTimestampFromIso(iso: string | null | undefined): string | u
 }
 
 /**
+ * The row's capture as EXIF writes it — the hour where it was taken. A ZONED
+ * row (Winnow's `captured_at_source: 'exif'`, since its migration 0046) holds
+ * the true instant plus the place's offset, so its UTC fields are NOT the wall
+ * clock: the offset is put back (`localWallMs`), and an instant whose offset
+ * nobody knows gives no stamp rather than one off by hours.
+ */
+export function exifTimestampFromRow(
+  row: Pick<WinnowAssetRow, 'captured_at' | 'captured_at_source' | 'capture_offset_min' | 'exif_offset_min'>,
+): string | undefined {
+  const local = localWallMs(row);
+  return local === null ? undefined : exifTimestampFromIso(new Date(local).toISOString());
+}
+
+/**
  * The row as `ExifData`, or null when it holds nothing an element could draw.
  * Null is the honest answer: the fields then read `—`, exactly as they do for
  * a picture whose own EXIF was stripped.
@@ -91,7 +106,7 @@ export function exifFromRow(row: WinnowAssetRow): ExifData | null {
   }
   if (finite(row.absolute_altitude)) exif.gpsAltitude = row.absolute_altitude;
   if (finite(row.relative_altitude)) exif.relativeAltitude = row.relative_altitude;
-  const dateTimeOriginal = exifTimestampFromIso(row.captured_at);
+  const dateTimeOriginal = exifTimestampFromRow(row);
   if (dateTimeOriginal) exif.dateTimeOriginal = dateTimeOriginal;
   if (finite(row.width)) exif.pixelWidth = row.width;
   if (finite(row.height)) exif.pixelHeight = row.height;

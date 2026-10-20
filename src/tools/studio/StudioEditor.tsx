@@ -1964,6 +1964,7 @@ export default function StudioEditor({
         cues,
         lut,
         intensity: 1,
+        film: lutStack.film,
         theme,
         timeShift,
         scenes,

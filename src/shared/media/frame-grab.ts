@@ -14,6 +14,7 @@ import type { Cue } from '../telemetry/srt-parser';
 import { findCue } from '../telemetry/find-cue';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import { drawOverlays } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
@@ -27,6 +28,8 @@ export interface FrameGrabOptions {
   cues: Cue[];
   lut: CubeLut | null;
   intensity: number;
+  /** The grade's film texture — grain and halation — as the clip's export draws it. */
+  film?: FilmTexture | null;
   theme: StyleTheme | null;
   timeShift?: TimeShift | null;
   /** The project's scenes — so a still taken during the intro shows it. */
@@ -63,9 +66,14 @@ export async function grabFrame(
 
   // Grade exactly like the preview and the video export do.
   let source: CanvasImageSource = video;
-  const grader = opts.lut ? makeFrameGrader(opts.lut, w, h, opts.intensity) : null;
+  // A texture with no look is still a render: the film node is the only thing
+  // that draws it, as in `export-variant.ts` — the still must match the clip.
+  const grader =
+    opts.lut || !isSilentTexture(opts.film)
+      ? makeFrameGrader(opts.lut as CubeLut, w, h, opts.intensity, [], [], opts.film ?? null)
+      : null;
   try {
-    if (grader) source = grader.render(video);
+    if (grader) source = grader.render(video, video.currentTime);
     ctx.drawImage(source, 0, 0, w, h);
   } finally {
     grader?.dispose();

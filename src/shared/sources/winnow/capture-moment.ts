@@ -32,7 +32,7 @@ type MomentRow = Pick<WinnowAssetRow, 'captured_at' | 'gps_lat' | 'gps_lon' | 'c
 };
 
 /** The place's offset east of UTC in minutes, as Winnow knows it, or null. */
-function offsetOf(row: MomentRow): number | null {
+function offsetOf(row: Pick<MomentRow, 'capture_offset_min' | 'exif_offset_min'>): number | null {
   if (typeof row.capture_offset_min === 'number') return row.capture_offset_min;
   if (typeof row.exif_offset_min === 'number') return row.exif_offset_min;
   return null;
@@ -43,17 +43,28 @@ function offsetOf(row: MomentRow): number | null {
  * cannot be told: no date, or an instant whose place's offset nobody knows.
  */
 export function localMinutes(row: MomentRow): number | null {
-  if (!row.captured_at) return null;
-  const ms = Date.parse(row.captured_at);
-  if (!Number.isFinite(ms)) return null;
-  const off = offsetOf(row);
-  // A wall clock pinned to UTC: its UTC fields are the hour on the camera.
-  // So is a row from an instance older than the source column, whose
-  // zone-less EXIF was read in the server's (UTC) zone (`exif-from-row.ts`).
-  const local = row.captured_at_source === 'exif-wall' || row.captured_at_source == null ? ms : off === null ? null : ms + off * 60_000;
+  const local = localWallMs(row);
   if (local === null) return null;
   const d = new Date(local);
   return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+/**
+ * The place's wall clock as a millisecond count whose UTC fields ARE that
+ * clock, or null when it cannot be told: no date, or an instant whose place's
+ * offset nobody knows. The one rule `localMinutes` and the EXIF a proxy
+ * carries (`exif-from-row.ts`) share.
+ */
+export function localWallMs(row: Pick<MomentRow, 'captured_at' | 'captured_at_source' | 'capture_offset_min' | 'exif_offset_min'>): number | null {
+  if (!row.captured_at) return null;
+  const ms = Date.parse(row.captured_at);
+  if (!Number.isFinite(ms)) return null;
+  // A wall clock pinned to UTC: its UTC fields are the hour on the camera.
+  // So is a row from an instance older than the source column, whose
+  // zone-less EXIF was read in the server's (UTC) zone (`exif-from-row.ts`).
+  if (row.captured_at_source === 'exif-wall' || row.captured_at_source == null) return ms;
+  const off = offsetOf(row);
+  return off === null ? null : ms + off * 60_000;
 }
 
 /** The true instant, or null when only a wall clock with no known offset is held. */

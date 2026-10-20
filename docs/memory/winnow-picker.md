@@ -28,6 +28,9 @@ and reading belongs in a module the tests can hold.
   unfolded pile's frames), never on the whole day: filter by a body, press
   `4`, and that body's ★4+ are ticked. A ticked row nothing draws is COUNTED
   (`hiddenTicked`) and still added — never added in silence, never dropped.
+  In a SPAN the rail's facets also narrow the server's ask (`scopeKey`), but
+  the ticks reset on the PLACE alone (`placeKey`, 2026-10-20): a Device or
+  Type click used to wipe every tick there.
 - **Opening ticks** (`openingTicks`): `picks` ticks a culled scope's picks
   and, where Winnow picked nothing, everything not held EXCEPT the rejects;
   `none` ticks nothing (the Library: an add downloads); `all` is

@@ -295,7 +295,9 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const { rasters, subjects } = await segmentFor(opts, () => segmentationView(bitmap, source, opts));
     // Kernels are in the SOURCE's pixels: a picture fitted to the GPU's cap
     // scales them, exactly as the stage does.
-    const scale = gradedAt.width / source.width;
+    // Kernels are stated in the FILE's pixels, as on the stage and in the RAW
+    // branch below: a decode the export edge capped must not sharpen harder.
+    const scale = gradedAt.width / (natural.width || source.width);
     const chain = picturePasses(opts, ar, scale, rasters, false);
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, chain.passes, chain.pre, opts.film ?? null)

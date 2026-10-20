@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
-import { exifTimestampFromIso } from '../shared/sources/winnow/exif-from-row';
+import { exifTimestampFromRow } from '../shared/sources/winnow/exif-from-row';
 import { isoFromExifDateTime } from '../shared/roadtrip/media-date';
 import { formatIsoDate, WEEKDAYS, weekdayIndex } from '../shared/roadtrip/trip-days';
 import type { DaySpan } from '../shared/sources/scope-override';
@@ -357,7 +357,7 @@ function itemFromRow(row: WinnowAssetRow, client: WinnowClient): LightboxItem {
   // The capture as the camera wrote it — the app's standing rule: the hour on
   // a picture is the hour it was where it was taken, never a conversion of it
   // (`exif-from-row.ts`). Nothing is invented when the row has no time.
-  const stamp = exifTimestampFromIso(row.captured_at);
+  const stamp = exifTimestampFromRow(row);
   const day = isoFromExifDateTime(stamp);
   const clock = stamp ? stamp.slice(11, 16) : null;
   const facts = [

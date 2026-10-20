@@ -331,7 +331,9 @@ export async function keepPresetBookOn(targetSourceId: string): Promise<string |
     } catch (err) {
       return `Could not reach ${target.label}: ${failureOf(err).message}`;
     }
-    const moved = { ...book, sourceId: targetSourceId };
+    // A newer stamp, as the local branch gives: another tab's `latest()` keeps
+    // its HELD copy on a tie, and its next save would move the book back.
+    const moved = { ...book, sourceId: targetSourceId, updatedAt: Date.now() };
     next = existing ? mergeBooks(moved, existing.book) : moved;
     const outcome = await pushBookOnce(target, next, existing?.etag ?? null);
     if (!outcome.ok) return `Could not save your presets to ${target.label}: ${outcome.failure.message}`;
@@ -357,6 +359,8 @@ export async function keepPresetBookOn(targetSourceId: string): Promise<string |
   await deleteSyncRecord(book.id);
   if (record) await putSyncRecord(record);
   emit({ book: next, record });
+  // The other tabs take the moved book before their next write, as after a commit.
+  postDocMessage({ type: 'book', updatedAt: next.updatedAt });
   return null;
 }
 

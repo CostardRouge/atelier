@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exifFromRow, exifTimestampFromIso, parseShutterSeconds } from './exif-from-row';
+import { exifFromRow, exifTimestampFromIso, exifTimestampFromRow, parseShutterSeconds } from './exif-from-row';
 import { cueFromExif } from '../../exif/exif-cue';
 import type { WinnowAssetRow } from './client';
 
@@ -124,5 +124,15 @@ describe('exifFromRow', () => {
   it('leaves rel_alt absent for a camera that is not a drone', () => {
     const cue = cueFromExif(exifFromRow(row({ relative_altitude: null }))!);
     expect(cue?.data.rel_alt).toBeUndefined();
+  });
+});
+
+describe('exifTimestampFromRow', () => {
+  it('reads a wall clock (or an older row) as it is, and puts a zoned instant back on its place', () => {
+    expect(exifTimestampFromRow({ captured_at: '2025-07-09T08:30:15Z', captured_at_source: 'exif-wall' })).toBe('2025:07:09 08:30:15');
+    expect(exifTimestampFromRow({ captured_at: '2025-07-09T08:30:15Z' })).toBe('2025:07:09 08:30:15');
+    // 08:30 UTC in Brisbane (+10:00) was 18:30 there.
+    expect(exifTimestampFromRow({ captured_at: '2025-07-09T08:30:15Z', captured_at_source: 'exif', capture_offset_min: 600 })).toBe('2025:07:09 18:30:15');
+    expect(exifTimestampFromRow({ captured_at: '2025-07-09T08:30:15Z', captured_at_source: 'exif' })).toBeUndefined();
   });
 });

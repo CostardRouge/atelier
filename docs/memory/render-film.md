@@ -186,7 +186,7 @@ pass owns with a `sampler3D`.
 - **The Studio's STAGE.** It drives `createLutRenderer` frame by frame for its
   split and its strength rather than building a grader (`render-core.md`, «not
   retired»), so it previews no grain. Its EXPORTS carry it, both still and
-  clip. Putting the node there means building the multi-pass machinery in
+  clip — and its FRAME GRAB too since 2026-10-20 (`grabFrame` takes `film`). Putting the node there means building the multi-pass machinery in
   `lut-gl.ts` — the very thing `docs/film-simulation.md` §4.5 declined.
 - **Thumbnails**: rail thumbs and roll thumbs pass no texture at all, by
   design (§6) — a grain cell is invisible at that size and costs a node.

@@ -48,6 +48,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Faster sliders: a develop step no longer re-bakes a look held under 100 % or re-uploads it to the GPU, colour
   grading wheels bake quicker, and downloads and video exports no longer redraw every progress bar hundreds of times a
   second. A RAW exported on a phone is decoded at half size where the whole decode gave no more pixels.
+- Studio: a grabbed frame carries the look's grain and halation, as the clip's export does.
+- Winnow: a picture whose capture time carries its zone shows and exports the hour where it was taken, not UTC.
+- The Winnow picker: in a span of days, filtering by device or type no longer unticks everything.
+- Develop: moving the preset book to a Winnow is no longer undone by another open tab, and a capped still export
+  sharpens and denoises at the same strength as the stage.
 
 ## [1.0.0] - 2026-10-17 — Sepia
 
