@@ -771,6 +771,15 @@ on is chosen by **dragging along a filmstrip of the clip itself**, the way a
 phone gallery picks a cover — the thumbnails fill in as they decode, the
 preview follows the drag, and the arrows nudge frame by frame.
 
+**Pictures become new slides from the Library.** While a piece is open, every
+picture in the Library — a local file or a tile of the Winnow tab — carries a
+small **＋**: it adds that picture as a **new slide** (before the closing card)
+and leaves the Library open, so a day can be gone through and kept picture by
+picture. The ＋ then shows the slide's number, and pressing it again takes
+that slide back; a picture already in the piece shows its number in ink. A tap
+on the picture itself still puts it on the slide that is open. On a phone the
+Library's sheet draws the piece small at its head, growing as you add.
+
 **Stages** are the legs of the trip, each with its own span. They are what lets
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.

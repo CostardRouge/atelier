@@ -13,6 +13,13 @@ export interface InstancePicker {
    * piece from it) must not act on a fetch that failed.
    */
   pick: (row: WinnowAssetRow) => Promise<string | null>;
+  /**
+   * Fetch this row into the pool WITHOUT making it active — for a picture
+   * handed to something that takes it in (`MediaIntake`): activating would
+   * also put it on whatever the tool has open. A row already in the pool
+   * resolves at once with its asset id.
+   */
+  bring: (row: WinnowAssetRow) => Promise<string | null>;
   /** The row being fetched right now, so a tile can say so and the rest wait. */
   fetching: number | null;
   problem: RowsProblem | null;
@@ -36,19 +43,20 @@ export function usePickFromInstance(
   connectionId: string | null,
   /** `"<host>/<id>"` → the Library asset id it became. */
   inLibrary: ReadonlyMap<string, string>,
-  onPicked: (files: File[], assetId: string) => void,
+  /** `activate` is false for a `bring`: the files join the pool and nothing more. */
+  onPicked: (files: File[], assetId: string, activate: boolean) => void,
   onActivate: (assetId: string) => void,
 ): InstancePicker {
   const [fetching, setFetching] = useState<number | null>(null);
   const [problem, setProblem] = useState<RowsProblem | null>(null);
   const clearProblem = useCallback(() => setProblem(null), []);
 
-  const pick = useCallback(
-    async (row: WinnowAssetRow) => {
+  const fetchRow = useCallback(
+    async (row: WinnowAssetRow, activate: boolean) => {
       if (!client || !connectionId) return null;
       const have = inLibrary.get(`${connectionId}/${row.id}`);
       if (have) {
-        onActivate(have);
+        if (activate) onActivate(have);
         return have;
       }
       setFetching(row.id);
@@ -57,7 +65,7 @@ export function usePickFromInstance(
         const files = await materialize(client, connectionId, row, { fidelity: 'proxy' });
         if (!files.length) return null;
         const assetId = fileBaseName(files[0].name).toLowerCase();
-        onPicked(files, assetId);
+        onPicked(files, assetId, activate);
         return assetId;
       } catch (err) {
         // Cancelled from the pill: the person's own doing, nothing to report.
@@ -74,6 +82,8 @@ export function usePickFromInstance(
     },
     [client, connectionId, inLibrary, onActivate, onPicked],
   );
+  const pick = useCallback((row: WinnowAssetRow) => fetchRow(row, true), [fetchRow]);
+  const bring = useCallback((row: WinnowAssetRow) => fetchRow(row, false), [fetchRow]);
 
-  return { pick, fetching, problem, clearProblem };
+  return { pick, bring, fetching, problem, clearProblem };
 }

@@ -7,6 +7,7 @@ import type { ScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
 import type { AssetDragItem } from '../shared/library/asset-drag';
 import { useAssetDragSource } from '../shared/library/use-asset-drag';
+import CollectCorner, { type CollectMark } from './CollectCorner';
 
 interface WinnowScopeGridProps {
   connection: WinnowConnection;
@@ -52,6 +53,11 @@ interface WinnowScopeGridProps {
    * does not hold it yet. Absent, the tiles are not draggable.
    */
   dragItemFor?: (row: WinnowAssetRow) => AssetDragItem | null;
+  /**
+   * Where the active tool's intake has a row's picture, and the ＋ that adds
+   * it (`CollectCorner`). Absent when no tool takes pictures in.
+   */
+  collectFor?: (row: WinnowAssetRow) => CollectMark | null;
 }
 
 /**
@@ -88,6 +94,7 @@ export default function WinnowScopeGrid({
   onPreview,
   announce,
   dragItemFor,
+  collectFor,
 }: WinnowScopeGridProps) {
   const { rows, problem, reload } = scope;
   const { pick, fetching } = picker;
@@ -128,10 +135,12 @@ export default function WinnowScopeGrid({
           {shown.map((r, i) => {
             const have = inLibrary.get(`${connection.id}/${r.id}`);
             const active = have !== undefined && have === activeId;
+            const collect = r.media_type === 'photo' || r.media_type === 'video' ? (collectFor?.(r) ?? null) : null;
             return (
               <WinnowTile
                 key={r.id}
                 dragItem={dragItemFor?.(r) ?? null}
+                collect={collect}
                 onClick={() => (onPreview ? onPreview(i) : void pick(r))}
                 disabled={fetching !== null}
                 active={active}
@@ -171,7 +180,7 @@ export default function WinnowScopeGrid({
                     one the tool is on. Hiding the ✓ under the ring made a
                     click look like it had ticked the PREVIOUS tile — the
                     badge only ever appeared where the ring had just left. */}
-                {have && (
+                {have && !collect && (
                   <span
                     className={`absolute bottom-1 right-1 w-[14px] h-[14px] grid place-items-center rounded-full text-3xs leading-none border ${
                       active
@@ -231,6 +240,7 @@ export default function WinnowScopeGrid({
  */
 function WinnowTile({
   dragItem,
+  collect,
   onClick,
   disabled,
   active,
@@ -239,6 +249,8 @@ function WinnowTile({
   children,
 }: {
   dragItem: AssetDragItem | null;
+  /** The intake's corner — drawn beside the button, never inside it. */
+  collect: CollectMark | null;
   onClick: () => void;
   disabled: boolean;
   active: boolean;
@@ -250,7 +262,7 @@ function WinnowTile({
   // being fetched, which is exactly when its drag ends. A disabled button
   // cannot start a drag in the first place.
   const drag = useAssetDragSource(dragItem);
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
@@ -258,7 +270,7 @@ function WinnowTile({
       aria-pressed={active}
       title={title}
       {...drag.props}
-      className={`${className} ${
+      className={`${className} ${collect ? 'w-full' : ''} ${
         drag.lifted
           ? 'opacity-40 outline-dashed outline-[1.5px] outline-offset-[-1.5px] outline-accent'
           : ''
@@ -266,5 +278,14 @@ function WinnowTile({
     >
       {children}
     </button>
+  );
+  if (!collect) return button;
+  // A button inside a button is not markup: the corner sits beside the tile's
+  // button, over its bottom-right corner.
+  return (
+    <div className="relative">
+      {button}
+      <CollectCorner mark={collect} className="bottom-[3px] right-[3px]" />
+    </div>
   );
 }

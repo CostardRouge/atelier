@@ -124,7 +124,7 @@ import {
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
-import { usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
+import { usePublishMediaIntake, usePublishMediaScope, type MediaScope } from '../../shared/sources/media-scope';
 import {
   createPostSlide,
   withCardSlide,
@@ -140,6 +140,7 @@ import BadgeStage, { HOOK_ID } from './BadgeStage';
 import { openOpenerChapter } from './opener-chapter';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
+import { useSlideIntake } from './use-slide-intake';
 import GarageModal from './GarageModal';
 import { mainVehicle, replaceVehicle, withLookOn } from '../../shared/roadtrip/vehicle-fleet';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
@@ -1730,6 +1731,31 @@ export default function PostEditor({
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
+
+  // The open piece as somewhere the Library's pictures GO (`use-slide-intake.ts`):
+  // a tile's ＋, the lightbox's verb and a ticked batch add new slides, never
+  // replace the open one. A write lands first and the new slide is opened
+  // once the deck holds it — its index is only known after the rebuild.
+  const [landOn, setLandOn] = useState<string | null>(null);
+  useEffect(() => {
+    if (!landOn) return;
+    const at = slides.findIndex((s) => s.slideId === landOn);
+    if (at >= 0) {
+      setSelected(at);
+      setLandOn(null);
+    }
+  }, [landOn, slides]);
+  const intake = useSlideIntake({
+    post,
+    onChangePost,
+    slides,
+    open: slide,
+    aspect,
+    locked: exports.run ? 'Locked while exporting — the run follows the deck’s order' : null,
+    onLanded: setLandOn,
+    thumbFor: railThumb,
+  });
+  usePublishMediaIntake(intake);
 
   // What the primary export will write, slide by slide — the tab lists it,
   // the pinned bar says it in one line and presses it. Whether H.264 can

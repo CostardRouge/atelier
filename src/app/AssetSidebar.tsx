@@ -11,7 +11,9 @@ import type { LibraryHalf } from '../shared/sources/winnow/client';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useNeighbourDays } from '../shared/sources/winnow/use-neighbour-days';
-import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
+import { useMediaActions, useMediaIntake, useMediaScope, type IntakeOptions } from '../shared/sources/media-scope';
+import CollectCorner, { type CollectMark } from './CollectCorner';
+import IntakeStrip from './IntakeStrip';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
@@ -42,7 +44,8 @@ import { captureInput } from '../shared/develop/capture-files';
 import { useCaptureView } from '../shared/develop/use-capture-view';
 import { useSiblingFacts } from '../shared/develop/use-sibling-facts';
 import { renditionsOf, type Rendition } from '../shared/media/renditions';
-import { fileIdentity } from '../shared/library/assets';
+import { fileBaseName, fileIdentity } from '../shared/library/assets';
+import type { WinnowAssetRow } from '../shared/sources/winnow/client';
 import { knownIdentity, mediaOrigin } from '../shared/projects/media-identity';
 import { heldOriginal, heldVersion, subscribeHeld } from '../shared/sources/original-cache';
 import {
@@ -337,6 +340,94 @@ export default function AssetSidebar({
     activate,
   );
 
+  /**
+   * An instance's row brought into the pool WITHOUT activating it, and the
+   * file it became — for a drop and for an intake, whose target places the
+   * picture itself (activating would also put it on what the tool has open).
+   */
+  const bringFile = useCallback(
+    async (row: WinnowAssetRow): Promise<{ assetId: string; file: File } | null> => {
+      const assetId = await picker.bring(row);
+      if (!assetId) return null;
+      const media = picked.current.get(assetId)?.find((f) => !/\.srt$/i.test(f.name));
+      picked.current.delete(assetId);
+      if (media) return { assetId, file: media };
+      const asset = assetsRef.current.find((a) => a.id === assetId);
+      const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;
+      return file ? { assetId, file } : null;
+    },
+    [picker],
+  );
+
+  // --- What the active tool TAKES IN (`MediaIntake`) --------------------------
+  // Trips' open piece: a tile's ＋ adds its picture as a new slide. The files
+  // are handed over in order; nothing is activated.
+  const intake = useMediaIntake();
+  const intakeRef = useRef(intake);
+  intakeRef.current = intake;
+  /** The tiles whose pictures are on their way into the intake. */
+  const [adding, setAdding] = useState<ReadonlySet<string>>(() => new Set());
+  const [intakeProblem, setIntakeProblem] = useState<string | null>(null);
+  /** What the last add made, said over the piece in the sheet. */
+  const [intakeNote, setIntakeNote] = useState<string | null>(null);
+  const collect = useCallback(
+    async (keys: readonly string[], files: () => Promise<File[]>, options?: IntakeOptions) => {
+      if (!intakeRef.current || intakeRef.current.locked) return false;
+      setAdding((prev) => new Set([...prev, ...keys]));
+      setIntakeProblem(null);
+      try {
+        const got = await files();
+        // The tool may have closed the piece while the bytes travelled.
+        const into = intakeRef.current;
+        if (!got.length || !into) return false;
+        const first = into.next;
+        await into.add(got, options);
+        const made = options?.together ? 1 : got.length;
+        const noun = capitalise(into.noun);
+        // "After the open one" moves the numbers behind it, so only an add at the end names its number.
+        setIntakeNote(made > 1 ? `${made} ${into.noun}s added` : options?.afterOpen ? `${noun} added` : `${noun} ${first} added`);
+        return true;
+      } catch (err) {
+        if (!isAbortError(err)) {
+          setIntakeProblem(`Nothing was added: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return false;
+      } finally {
+        setAdding((prev) => {
+          const next = new Set(prev);
+          for (const k of keys) next.delete(k);
+          return next;
+        });
+      }
+    },
+    [],
+  );
+  /** What a tile says about the intake, and what its ＋ does — or null when there is none. */
+  const collectMark = (key: string, baseName: string, file: () => Promise<File | null>): CollectMark | null => {
+    if (!intake) return null;
+    const place = intake.placeOf(baseName);
+    return {
+      name: baseName,
+      place,
+      removable: place !== null && intake.removable(baseName),
+      noun: intake.noun,
+      locked: intake.locked,
+      busy: adding.has(key),
+      onAdd: () =>
+        void collect([key], async () => {
+          const f = await file();
+          return f ? [f] : [];
+        }),
+      onRemove: () => intake.remove(baseName),
+    };
+  };
+  const localMark = (a: Asset) =>
+    a.parts.image || a.parts.video
+      ? collectMark(`local:${a.id}`, a.baseName, async () => a.parts.image ?? a.parts.video ?? null)
+      : null;
+  const rowMark = (row: WinnowAssetRow) =>
+    collectMark(`remote:${row.id}`, fileBaseName(row.filename), async () => (await bringFile(row))?.file ?? null);
+
   const usableSelectedCount = selectedUsableAssets(
     accepts,
     lib.assets,
@@ -515,11 +606,11 @@ export default function AssetSidebar({
     lib.setActive(id);
   }
 
-  /** A picture fetched from the tiles: into the pool, then active. */
-  function pickFromSource(files: File[], assetId: string) {
+  /** A picture fetched from the tiles: into the pool, then active — unless it was only BROUGHT. */
+  function pickFromSource(files: File[], assetId: string, activate: boolean) {
     picked.current.set(assetId, files);
     lib.addFiles(files);
-    lib.setActive(assetId);
+    if (activate) lib.setActive(assetId);
   }
 
   async function handleDrop(e: React.DragEvent) {
@@ -965,6 +1056,14 @@ export default function AssetSidebar({
         </div>
       )}
 
+      {asSheet && intake && <IntakeStrip intake={intake} note={intakeNote} />}
+
+      {intakeProblem && (
+        <p role="alert" className="m-0 mx-3.5 mb-2 text-xs text-danger">
+          {intakeProblem}
+        </p>
+      )}
+
       <div className="flex-1 overflow-auto px-2 pb-2 min-h-0">
         {remoteTab && connection && client && (
           <div className="px-1.5 pb-2">
@@ -980,6 +1079,7 @@ export default function AssetSidebar({
               activeId={lib.activeId}
               picker={picker}
               onPreview={previewFirst ? setPreview : null}
+              collectFor={intake ? rowMark : undefined}
               dragItemFor={(row) => {
                 const key = `${connection.id}/${row.id}`;
                 const host = shortHost(connection.id);
@@ -990,18 +1090,9 @@ export default function AssetSidebar({
                   // fetched on drop, and the cell says so meanwhile.
                   origin: inLibrary.has(key) ? 'library' : 'instance',
                   sourceLabel: host,
-                  resolve: async () => {
-                    const assetId = await picker.pick(row);
-                    if (!assetId) return null;
-                    const media = picked.current
-                      .get(assetId)
-                      ?.find((f) => !/\.srt$/i.test(f.name));
-                    picked.current.delete(assetId);
-                    if (media) return { assetId, file: media };
-                    const asset = assetsRef.current.find((a) => a.id === assetId);
-                    const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;
-                    return file ? { assetId, file } : null;
-                  },
+                  // Brought, never activated: the target places the picture
+                  // itself (activating would also put it on the open slide).
+                  resolve: () => bringFile(row),
                 };
               }}
             />
@@ -1036,6 +1127,7 @@ export default function AssetSidebar({
                   onEnsure={() => lib.ensureMeta(a.id)}
                   onActivate={() => activate(a.id)}
                   onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
+                  collect={localMark(a)}
                   className="h-[66px]"
                 />
               ) : (
@@ -1050,6 +1142,7 @@ export default function AssetSidebar({
                   onActivate={() => activate(a.id)}
                   onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
                   onRemove={() => lib.remove(a.id)}
+                  collect={localMark(a)}
                 />
               ),
             )}
@@ -1279,6 +1372,8 @@ interface AssetRowProps {
   /** Look at it, large. Null for an asset there is nothing to look at. */
   onPreview: (() => void) | null;
   onRemove: () => void;
+  /** Where the active tool's intake has it, and its ＋ — null when no tool takes pictures in. */
+  collect?: CollectMark | null;
 }
 
 function AssetRow({
@@ -1291,6 +1386,7 @@ function AssetRow({
   onActivate,
   onPreview,
   onRemove,
+  collect = null,
 }: AssetRowProps) {
   // The row reads its own cover, so the one whose cover lands is the one
   // that re-renders — not the list, and not the tool beside it.
@@ -1391,6 +1487,21 @@ function AssetRow({
           </span>
         </div>
       </button>
+      {/* The intake's corner, beside the remove: a ＋ that adds the picture
+          as a new item of the tool's work, shown on hover like the ✕ (always
+          under a finger), or where it already sits. Its own fixed slot, so
+          nothing slides under the pointer when it appears. */}
+      {collect && usable && (
+        <span
+          className={`relative flex-none w-[26px] h-[26px] ${
+            collect.place === null && !collect.busy
+              ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 transition-opacity'
+              : ''
+          }`}
+        >
+          <CollectCorner mark={collect} className="inset-0 m-auto" />
+        </span>
+      )}
       <button
         type="button"
         onClick={onRemove}
@@ -1428,6 +1539,7 @@ function AssetTile({
   onEnsure,
   onActivate,
   onPreview,
+  collect = null,
   className,
 }: {
   asset: Asset;
@@ -1436,6 +1548,8 @@ function AssetTile({
   onEnsure: () => void;
   onActivate: () => void;
   onPreview: (() => void) | null;
+  /** Where the active tool's intake has it, and its ＋ — null when no tool takes pictures in. */
+  collect?: CollectMark | null;
   className: string;
 }) {
   const meta = useAssetMeta(asset.id);
@@ -1509,6 +1623,7 @@ function AssetTile({
           ⤢
         </button>
       )}
+      {collect && usable && <CollectCorner mark={collect} className="bottom-[3px] right-[3px]" />}
     </div>
   );
 }
@@ -1588,4 +1703,8 @@ function Cover({
       </span>
     </button>
   );
+}
+
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
