@@ -20,7 +20,7 @@ import {
 } from '../../shared/develop/roll-store';
 import { createRollDoc, type RollDoc } from '../../shared/develop/roll-types';
 import { openPictureId, pictureAfterRestore } from '../../shared/develop/roll-editor';
-import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
+import useDevelopUndo, { type DevelopUndo } from './use-develop-undo';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
@@ -105,7 +105,7 @@ export default function DevelopTool() {
   const pending = useRef<RollDoc | null>(null);
   const flushRef = useRef<() => Promise<void>>(async () => {});
   /** The undo stack, read by the sync machine through a ref like the flush. */
-  const historyRef = useRef<DocumentHistory<RollDoc | null> | null>(null);
+  const historyRef = useRef<DevelopUndo | null>(null);
   /** One editor per roll across this browser's tabs, read by the funnels below. */
   const lockRef = useRef<DocumentLock | null>(null);
 
@@ -212,12 +212,14 @@ export default function DevelopTool() {
   // Undo and redo over the whole roll, watched at the funnel above
   // (`shared/history/`): a picture added or dropped, reordered, developed,
   // cropped, the roll's own look. The label is the picture being worked on, so
-  // one picture's slider never merges into the next picture's.
-  const history = useHistory<RollDoc | null>({
-    value: open,
-    subject: open?.id ?? null,
+  // one picture's slider never merges into the next picture's. ↶ ↷ walk either
+  // that record or the open photo's part of it, as the device chose
+  // (`use-develop-undo.ts`, `picture-walk.ts`).
+  const history = useDevelopUndo({
+    open,
+    pictureId: route.pictureId,
+    write: handleChange,
     label: route.pictureId ? `picture:${route.pictureId}` : 'roll',
-    what: 'edit',
     onRestore: (doc) => {
       if (!doc) return;
       // The stack is the roll's: an undo may land on another picture than the
@@ -357,21 +359,33 @@ export default function DevelopTool() {
       id: 'develop.undo',
       title: 'Undo',
       description:
-        'Step the open roll back one edit — the same stack as ⌘Z, the agent’s own writes included. As for the author, writes less than 0.7 s apart on the same picture are ONE step: one undo takes them all back.',
-      available: () => (!open ? 'no roll is open' : history.canUndo ? true : 'nothing to undo'),
-      run: () => {
-        history.undo();
-        return { undone: true };
+        'Step back one edit — the same record as ⌘Z, the agent’s own writes included. `scope: "roll"` (the default) takes the roll’s newest step off, whatever picture it touched; `scope: "photo"` puts the OPEN picture alone back one value, as a new step, the others untouched (⌥⌘Z). Writes less than 0.7 s apart on the same picture are ONE step.',
+      params: { scope: { type: 'string', enum: ['roll', 'photo'], description: 'What to step back: the roll (default) or the open photo.', optional: true } },
+      available: () => (!open ? 'no roll is open' : history.roll.canUndo || history.photo.canUndo ? true : 'nothing to undo'),
+      run: (p) => {
+        const photo = p.scope === 'photo';
+        if (photo ? !history.photo.canUndo : !history.roll.canUndo) {
+          throw new CommandError('unavailable', photo ? 'nothing to undo on the open photo' : 'nothing to undo');
+        }
+        if (photo) history.photo.undo();
+        else history.roll.undo();
+        return { undone: true, scope: photo ? 'photo' : 'roll' };
       },
     },
     {
       id: 'develop.redo',
       title: 'Redo',
-      description: 'Step the open roll forward again after an undo.',
-      available: () => (!open ? 'no roll is open' : history.canRedo ? true : 'nothing to redo'),
-      run: () => {
-        history.redo();
-        return { redone: true };
+      description: 'Step forward again after an undo, in the same `scope` (roll by default, or the open photo).',
+      params: { scope: { type: 'string', enum: ['roll', 'photo'], description: 'What to step forward: the roll (default) or the open photo.', optional: true } },
+      available: () => (!open ? 'no roll is open' : history.roll.canRedo || history.photo.canRedo ? true : 'nothing to redo'),
+      run: (p) => {
+        const photo = p.scope === 'photo';
+        if (photo ? !history.photo.canRedo : !history.roll.canRedo) {
+          throw new CommandError('unavailable', photo ? 'nothing to redo on the open photo' : 'nothing to redo');
+        }
+        if (photo) history.photo.redo();
+        else history.roll.redo();
+        return { redone: true, scope: photo ? 'photo' : 'roll' };
       },
     },
   ]);
@@ -432,12 +446,8 @@ export default function DevelopTool() {
             onChange={handleChange}
             // A step along the strip replaces the entry, so Back leaves the roll.
             onOpenPicture={(id) => navigate(developPath(rollRef(open), id), { replace: true })}
-            headerExtra={
-              <>
-                {history.control}
-                {sync.pill}
-              </>
-            }
+            undo={history}
+            headerExtra={sync.pill}
           />
         </div>
       )}

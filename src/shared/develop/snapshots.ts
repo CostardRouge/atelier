@@ -5,7 +5,7 @@
  *
  * - The STEPS are the journal's (`journal.ts`): every write of the one
  *   updater, on the picture, saved with the roll — so a picture's history
- *   survives a reload, where the undo stack (fifty whole documents, in
+ *   survives a reload, where the undo stack (two hundred whole documents in Develop, in
  *   memory) does not. A picture edited before the journal existed reads its
  *   sections in the standard order, said as such (`pictureJournal`).
  * - The SNAPSHOTS are named states the author keeps on purpose
@@ -121,6 +121,70 @@ export function restoreState(roll: RollDoc, pictureId: string, values: SectionVa
     },
     now,
   );
+}
+
+// --- the roll's own snapshots (◆◆, 2026-10-20) ---------------------------------
+//
+// A snapshot of the WHOLE roll is one snapshot of the same name on every
+// picture, sharing a `group` id — so it needs no new storage, a variant cloned
+// from a picture takes its copy along, and a picture added later simply has
+// none. Going back to it is ONE write over every picture that holds it.
+
+/** The first `Roll N` none of the roll's pictures uses yet. */
+export function nextRollSnapshotName(roll: RollDoc): string {
+  const taken = new Set(roll.pictures.flatMap((p) => (p.snapshots ?? []).map((s) => s.name.toLowerCase())));
+  for (let n = 1; ; n++) if (!taken.has(`roll ${n}`)) return `Roll ${n}`;
+}
+
+/**
+ * Every picture's state kept under one name and one `group`; a picture at the
+ * ceiling is skipped, and `skipped` says how many were. `idFor` names each
+ * picture's copy.
+ */
+export function takeRollSnapshot(
+  roll: RollDoc,
+  name: string,
+  group: string,
+  idFor: (pictureId: string) => string,
+  now: number = Date.now(),
+): { roll: RollDoc; taken: number; skipped: number } {
+  const clean = name.trim().slice(0, 80) || nextRollSnapshotName(roll);
+  let taken = 0;
+  let skipped = 0;
+  const pictures = roll.pictures.map((p) => {
+    if (snapshotRefusal(p)) {
+      skipped++;
+      return p;
+    }
+    taken++;
+    const kept: PictureSnapshot = { id: idFor(p.id), name: clean, at: now, values: structuredClone(wholeState(p)), group };
+    return withSnapshots(p, [...(p.snapshots ?? []), kept]);
+  });
+  return { roll: taken > 0 ? { ...roll, pictures, updatedAt: now } : roll, taken, skipped };
+}
+
+/** Every picture holding the group's snapshot back to it, in one write; the caller journals it `via: 'restore'`. */
+export function restoreRollSnapshot(roll: RollDoc, group: string, now: number = Date.now()): RollDoc {
+  return roll.pictures.reduce((r, p) => {
+    const kept = p.snapshots?.find((s) => s.group === group);
+    return kept ? restoreState(r, p.id, kept.values, now) : r;
+  }, roll);
+}
+
+/** The group's snapshot renamed on every picture; a blank name changes nothing. */
+export function renameRollSnapshot(roll: RollDoc, group: string, name: string, now: number = Date.now()): RollDoc {
+  return roll.pictures.reduce((r, p) => {
+    const kept = p.snapshots?.find((s) => s.group === group);
+    return kept ? renameSnapshot(r, p.id, kept.id, name, now) : r;
+  }, roll);
+}
+
+/** The group's snapshot taken off every picture; the pictures stay as they are. */
+export function removeRollSnapshot(roll: RollDoc, group: string, now: number = Date.now()): RollDoc {
+  return roll.pictures.reduce((r, p) => {
+    const kept = p.snapshots?.find((s) => s.group === group);
+    return kept ? removeSnapshot(r, p.id, kept.id, now) : r;
+  }, roll);
 }
 
 /** The sections where the picture now differs from a state — none means it IS that state. */

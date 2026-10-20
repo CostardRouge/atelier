@@ -88,3 +88,21 @@ export function undoKeyAction(press: UndoKeyPress): UndoKeyAction {
   if (key === 'y' && !press.shiftKey) return 'redo';
   return null;
 }
+
+/**
+ * The same chord with ⌥ (Alt) held: ⌥⌘Z / ⌥⇧⌘Z, Ctrl+Alt+Z / Ctrl+Alt+Y.
+ *
+ * Where a tool keeps a SECOND, narrower walk through the same record — Develop
+ * stepping back the open photo alone while ⌘Z steps the roll — this is that
+ * walk's key, whatever the tool's ⌘Z is set to. Read off `code`, not `key`: on
+ * a Mac ⌥ turns the Z into Ω before the page sees it. A field holding text
+ * keeps it, as it keeps ⌘Z.
+ */
+export function narrowUndoKeyAction(press: UndoKeyPress & { code: string }): UndoKeyAction {
+  if (press.defaultPrevented || !press.altKey) return null;
+  if (press.metaKey === press.ctrlKey) return null;
+  if (fieldOwnsUndo(press.target)) return null;
+  if (press.code === 'KeyZ') return press.shiftKey ? 'redo' : 'undo';
+  if (press.code === 'KeyY' && !press.shiftKey) return 'redo';
+  return null;
+}

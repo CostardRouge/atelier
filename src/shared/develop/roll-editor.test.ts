@@ -327,7 +327,7 @@ describe('pictureAfterRestore', () => {
 describe('workbenchTabsFor', () => {
   it('gives a photograph every tab and a clip its three — Adjust, Crop and Export', () => {
     expect(workbenchTabsFor(false)).toBe(WORKBENCH_TABS);
-    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(['adjust', 'crop', 'export', 'history']);
+    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(['adjust', 'crop', 'export']);
     expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(CLIP_TABS);
   });
 });

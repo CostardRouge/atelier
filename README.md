@@ -2092,18 +2092,31 @@ follow it — and **⌘Z** puts it back. **Focus**
 the page bar away and leaves the photograph alone; **←/→** still step, and
 **F**, ⤢ or **Esc** brings everything back.
 
-**History and snapshots.** The inspector's last tab, **History**, lists the
-picture's steps newest first — each with what it changed (`+1 EV · contrast
-+30`, `from another picture`, `by an agent`) — down to *As shot*, and above
-them its **snapshots**: *Take* keeps every section of the picture as it
-stands (the develop, the crop, the look, the layers, the repair…) under a
-name you can change from its ⋯. A click on a step or a snapshot puts the
-picture back to it in one step of its own — **⌘Z** undoes the click, and
-nothing of the history is lost by looking back, unlike Lightroom's, which
-drops the steps above the one you edit from. Both are kept in the roll, so
-they are still there after a reload or on another device, where **⌘Z** is
-not; a variant made *as edited* takes them along. A picture edited before
-the history existed lists its sections in a standard order and says so.
+**Undo, history and snapshots.** Beside **↶ ↷** in the roll's bar sits a
+history glyph whose badge counts the steps ↶ can take; it opens the history
+(there is no History tab). Its top says what **↶ ↷** step through, a choice
+this device keeps: **The roll** (the default) takes the roll's newest step
+off whatever picture it touched — a paste onto twelve pictures goes back on
+all twelve at once — while **This photo** puts the open photo alone back one
+step and leaves the others as they are. Both walk the same record of the
+session (200 steps), so switching loses nothing: a photo's own steps back
+are steps the roll's ↶ then undoes in order. **⌥⌘Z** / **⌥⇧⌘Z** step the
+open photo whichever is chosen. Under it, the **snapshots**: *Photo* keeps
+every section of the open picture as it stands (the develop, the crop, the
+look, the layers, the repair…) under a name, *All N* keeps every picture of
+the roll under one name (◆◆) and puts them all back in one step; a
+snapshot's ⋯ renames or removes it. Then the steps: in *This photo*, the
+picture's own, newest first — each with what it changed (`+1 EV · contrast
++30`, `from another picture`, `by an agent`) — down to *As shot*, with what
+its ↶ undid above them, a redo away; in *The roll*, the session's steps
+with the picture each touched, a click undoing or redoing that many. A
+click on a photo's step or a snapshot puts it back in one step of its own —
+**⌘Z** undoes the click, and nothing of the history is lost by looking back,
+unlike Lightroom's, which drops the steps above the one you edit from. The
+photo's steps and the snapshots are kept in the roll, so they are still
+there after a reload or on another device, where **⌘Z** is not; a variant
+made *as edited* takes them along. A picture edited before the history
+existed lists its sections in a standard order and says so.
 
 **Into Trips and the Studio.** A picture's work here is taken from the other
 side: a Trips slide or a Studio media showing the same file lists this roll

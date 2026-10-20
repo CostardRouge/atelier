@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { undoKeyAction, type UndoKeyPress } from './undo-keys';
+import { narrowUndoKeyAction, undoKeyAction, type UndoKeyPress } from './undo-keys';
 import type { KeyTarget } from '../media/transport-keys';
 
 const press = (over: Partial<UndoKeyPress> = {}): UndoKeyPress => ({
@@ -66,5 +66,30 @@ describe('undoKeyAction', () => {
   it('ignores every other key', () => {
     expect(undoKeyAction(press({ key: 'x' }))).toBe(null);
     expect(undoKeyAction(press({ key: 'y', shiftKey: true }))).toBe(null);
+  });
+});
+
+describe('narrowUndoKeyAction', () => {
+  const alt = (over: Partial<UndoKeyPress & { code: string }> = {}) => ({ ...press({ key: 'Ω', altKey: true }), code: 'KeyZ', ...over });
+
+  it('reads ⌥ with the Z by its code, whatever the key turned into', () => {
+    expect(narrowUndoKeyAction(alt())).toBe('undo');
+    expect(narrowUndoKeyAction(alt({ shiftKey: true, key: '¸' }))).toBe('redo');
+    expect(narrowUndoKeyAction(alt({ metaKey: false, ctrlKey: true, code: 'KeyY', key: 'y' }))).toBe('redo');
+  });
+
+  it('wants ⌥ and exactly one of ⌘ / Ctrl', () => {
+    expect(narrowUndoKeyAction(alt({ altKey: false }))).toBe(null);
+    expect(narrowUndoKeyAction(alt({ metaKey: false }))).toBe(null);
+    expect(narrowUndoKeyAction(alt({ ctrlKey: true }))).toBe(null);
+  });
+
+  it('leaves a text field its own undo', () => {
+    expect(narrowUndoKeyAction(alt({ target: target({ tagName: 'INPUT', inputType: 'text' }) }))).toBe(null);
+    expect(narrowUndoKeyAction(alt({ target: target({ tagName: 'INPUT', inputType: 'range' }) }))).toBe('undo');
+  });
+
+  it('never takes a press already handled', () => {
+    expect(narrowUndoKeyAction(alt({ defaultPrevented: true }))).toBe(null);
   });
 });

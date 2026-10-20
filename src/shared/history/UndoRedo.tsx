@@ -16,6 +16,7 @@
  * buttons.
  */
 
+import type { ReactNode } from 'react';
 import { Icons } from '../ui/icons';
 
 /**
@@ -25,7 +26,7 @@ import { Icons } from '../ui/icons';
  * fade with it on one side only). The focus ring is drawn inside, since the
  * group clips what overflows its rounded corners.
  */
-const HALF =
+export const HALF =
   'inline-flex items-center justify-center w-[2.0625rem] h-full p-0 border-0 bg-transparent text-ink cursor-pointer ' +
   'transition-colors duration-150 ease-paper hover:bg-paper-2 ' +
   'disabled:text-faint disabled:cursor-default disabled:hover:bg-transparent ' +
@@ -49,9 +50,14 @@ export interface UndoRedoProps {
   onRedo: () => void;
   /** What is being stepped through, for the tooltip: "edit", "change". */
   what?: string;
+  /**
+   * A THIRD segment after the pair, under the same border (2026-10-20,
+   * Develop's history menu): the caller draws it bare with `HALF`'s look.
+   */
+  more?: ReactNode;
 }
 
-export default function UndoRedo({ canUndo, canRedo, onUndo, onRedo, what = 'change' }: UndoRedoProps) {
+export default function UndoRedo({ canUndo, canRedo, onUndo, onRedo, what = 'change', more }: UndoRedoProps) {
   const keys = shortcuts();
   const undo = canUndo ? `Undo the last ${what} (${keys.undo})` : `Nothing to undo (${keys.undo})`;
   const redo = canRedo ? `Redo the ${what} you undid (${keys.redo})` : `Nothing to redo (${keys.redo})`;
@@ -71,6 +77,12 @@ export default function UndoRedo({ canUndo, canRedo, onUndo, onRedo, what = 'cha
       <button type="button" className={HALF} aria-label={redo} title={redo} onClick={onRedo} disabled={!canRedo}>
         {Icons.redo}
       </button>
+      {more && (
+        <>
+          <span aria-hidden="true" className="w-px self-stretch bg-line" />
+          {more}
+        </>
+      )}
     </span>
   );
 }

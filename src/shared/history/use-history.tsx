@@ -57,6 +57,13 @@ export interface DocumentHistory<T> {
   reset: (value: T) => void;
   /** Close the open step, so the next edit starts a new one whatever the clock says. */
   seal: () => void;
+  /** Steps back and forward: `delta` < 0 undoes that many at once, > 0 redoes — a row of a history list. */
+  jump: (delta: number) => void;
+  /** The record as it stands, read synchronously — what a list of the steps is drawn from. */
+  read: () => HistoryState<T>;
+  /** How many steps back and forward there are now: the past's and the future's length. */
+  depth: number;
+  ahead: number;
   /** The two buttons, for the editor's `headerExtra` slot. */
   control: ReactNode;
 }
@@ -88,14 +95,16 @@ export default function useHistory<T>(options: HistoryOptions<T>): DocumentHisto
   const history = useRef<HistoryState<T>>(newHistory(value));
   const subjectRef = useRef<string | null>(subject);
   const readyRef = useRef(options.ready !== false);
-  const [steps, setSteps] = useState({ undo: false, redo: false });
+  const [steps, setSteps] = useState({ undo: false, redo: false, depth: 0, ahead: 0 });
 
   /** The record is a ref (a restore must read it synchronously); this is what the buttons see. */
   const publish = useCallback(() => {
     const h = history.current;
     setSteps((prev) => {
-      const next = { undo: hasUndo(h), redo: hasRedo(h) };
-      return prev.undo === next.undo && prev.redo === next.redo ? prev : next;
+      const next = { undo: hasUndo(h), redo: hasRedo(h), depth: h.past.length, ahead: h.future.length };
+      return prev.undo === next.undo && prev.redo === next.redo && prev.depth === next.depth && prev.ahead === next.ahead
+        ? prev
+        : next;
     });
   }, []);
 
@@ -132,6 +141,16 @@ export default function useHistory<T>(options: HistoryOptions<T>): DocumentHisto
 
   const undo = useCallback(() => step(undoState), [step]);
   const redo = useCallback(() => step(redoState), [step]);
+  const jump = useCallback(
+    (delta: number) =>
+      step((h) => {
+        let next = h;
+        for (let k = 0; k < Math.abs(delta); k++) next = delta < 0 ? undoState(next) : redoState(next);
+        return next;
+      }),
+    [step],
+  );
+  const read = useCallback(() => history.current, []);
 
   const reset = useCallback(
     (next: T) => {
@@ -182,5 +201,17 @@ export default function useHistory<T>(options: HistoryOptions<T>): DocumentHisto
     />
   );
 
-  return { canUndo: steps.undo, canRedo: steps.redo, undo, redo, reset, seal, control };
+  return {
+    canUndo: steps.undo,
+    canRedo: steps.redo,
+    undo,
+    redo,
+    reset,
+    seal,
+    jump,
+    read,
+    depth: steps.depth,
+    ahead: steps.ahead,
+    control,
+  };
 }
