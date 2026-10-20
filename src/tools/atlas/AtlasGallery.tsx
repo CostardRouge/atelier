@@ -643,7 +643,7 @@ export default function AtlasGallery({ openAtlasId, onOpen }: AtlasGalleryProps)
                         missing={0}
                         moveTargets={[]}
                         busy={busy[row.doc.id] ?? null}
-                        onOpen={() => void gallery.mirrorRemote(row).then(onOpen)}
+                        onOpen={() => void gallery.mirrorRemote(row).then((doc) => doc && onOpen(doc))}
                         onRename={() => undefined}
                         onExport={() => undefined}
                         onClone={() => setCloning(row.doc)}

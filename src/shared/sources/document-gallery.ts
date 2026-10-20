@@ -14,9 +14,16 @@ import { getWinnowConnection } from './winnow/store';
 
 /** One document as an instance lists it. */
 export interface RemoteDocRow<D> {
+  /** The document — or, on a `partial` row, the stand-in a card is drawn from. */
   doc: D;
   etag: string;
   updatedAt: string;
+  /**
+   * Listed by its summary: `doc` is a card, not the document, and the gallery
+   * fetches the document (`DocumentGalleryDriver.fetchRemote`) before it
+   * mirrors it. Nothing may be written from a partial row's `doc`.
+   */
+  partial?: true;
 }
 
 /** What this device knows about one instance's list of documents. */

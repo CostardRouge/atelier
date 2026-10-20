@@ -3,6 +3,7 @@ import AssetSidebar from './AssetSidebar';
 import LoadingState from '../shared/ui/LoadingState';
 import SourcesScreen from './SourcesScreen';
 import AgentsGuide from './AgentsGuide';
+import LegalNotice from './LegalNotice';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
 import { REPO_URL } from './site';
@@ -65,7 +66,11 @@ export default function App() {
   // `#/agents` — how to let an AI app edit in this tab (`AgentsGuide.tsx`);
   // a reading page of the shell, like the sources it hangs off.
   const agentsPath = path === '/agents';
-  const tool = sourcesPath || agentsPath ? undefined : toolForPath(path);
+  // `#/legal` — the legal notice (`LegalNotice.tsx`): who publishes and hosts
+  // the site, what it keeps and counts. Linked from the footer, not counted.
+  const legalPath = path === '/legal';
+  const reading = sourcesPath || agentsPath || legalPath;
+  const tool = reading ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
 
   // The tab's title names the screen: a browser's tab strip, its history and
@@ -79,16 +84,18 @@ export default function App() {
         ? 'Sources — Atelier'
         : agentsPath
           ? 'Agents — Atelier'
-          : 'Atelier — a studio for your captures';
-  }, [tool, sourcesPath, agentsPath]);
+          : legalPath
+            ? 'Legal notice — Atelier'
+            : 'Atelier — a studio for your captures';
+  }, [tool, sourcesPath, agentsPath, legalPath]);
 
   // Audience measurement, light (`app/audience.ts`): the home page's view
   // and a tool's opening, by its id — never the route inside it. Nothing is
   // requested in a build without a website id, nor for a browser that says
   // no (Do Not Track, Global Privacy Control).
   useEffect(() => {
-    countScreen({ tool: tool?.id, home: !tool && !sourcesPath && !agentsPath });
-  }, [tool, sourcesPath, agentsPath]);
+    countScreen({ tool: tool?.id, home: !tool && !reading });
+  }, [tool, reading]);
 
   // The active view, guarded so a single tool's crash shows a recoverable
   // panel instead of blanking the suite. Keyed by route, so navigating to
@@ -103,6 +110,8 @@ export default function App() {
         <SourcesScreen query={path.slice(sourcesPath.length + 1)} />
       ) : agentsPath ? (
         <AgentsGuide />
+      ) : legalPath ? (
+        <LegalNotice />
       ) : (
         <Suspense
           fallback={
@@ -434,6 +443,14 @@ export default function App() {
             rel="noreferrer"
           >
             Source on GitHub
+          </a>
+          <span className="w-[5px] h-[5px] rounded-full bg-accent inline-block" />
+          {/* Who publishes and hosts the site, what it keeps and counts. */}
+          <a
+            className="text-accent-ink underline underline-offset-[3px] font-semibold hover:text-accent"
+            href="#/legal"
+          >
+            Legal notice
           </a>
           {/* Which release this build is (CHANGELOG.md), so a phone in hand
               can say which one it runs. */}

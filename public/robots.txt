@@ -1,0 +1,16 @@
+# Atelier is a public page meant to be found, so everything is allowed — AI
+# crawlers included, training and answering alike: the owner's policy across
+# his sites (COMMON-PROJECT-SPEC C17; docs/memory/public-page.md). They fall
+# under the wildcard below, so there is nothing to name here — to change the
+# policy later, add a Disallow block per agent (GPTBot, CCBot,
+# Google-Extended, Applebot-Extended, Bytespider, meta-externalagent are the
+# training-corpus ones; OAI-SearchBot, ChatGPT-User, PerplexityBot and
+# ClaudeBot fetch to answer and cite).
+#
+# The app's screens are hash routes (#/develop, #/legal) and share this one
+# page: the sitemap lists the home alone.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://atelier.steeve.website/sitemap.xml
