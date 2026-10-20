@@ -111,7 +111,8 @@ export function parseCube(text: string): CubeLut | null {
 
     // A leading digit / sign means a data row; everything else is a keyword.
     const firstChar = line[0];
-    const looksNumeric = firstChar === '-' || firstChar === '.' || (firstChar >= '0' && firstChar <= '9');
+    const looksNumeric =
+      firstChar === '-' || firstChar === '+' || firstChar === '.' || (firstChar >= '0' && firstChar <= '9');
 
     if (!looksNumeric) {
       const titleMatch = line.match(TITLE_RE);
@@ -159,9 +160,14 @@ export function parseCube(text: string): CubeLut | null {
     // Guard against files declaring more rows than size**3.
     if (writeIndex + 3 > data.length) return null;
 
-    data[writeIndex++] = Number(triplet[1]);
-    data[writeIndex++] = Number(triplet[2]);
-    data[writeIndex++] = Number(triplet[3]);
+    // The row pattern admits `1.2.3` or `1e`: a NaN node would draw black.
+    const r = Number(triplet[1]);
+    const g = Number(triplet[2]);
+    const b = Number(triplet[3]);
+    if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null;
+    data[writeIndex++] = r;
+    data[writeIndex++] = g;
+    data[writeIndex++] = b;
   }
 
   if (!data || size <= 0) return null;

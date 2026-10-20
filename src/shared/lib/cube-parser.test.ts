@@ -103,4 +103,16 @@ describe('parseCube', () => {
     expect(lut).not.toBeNull();
     expect(lut!.size).toBe(2);
   });
+
+  it('refuses a row that is not three numbers rather than storing NaN', () => {
+    const damaged = `LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1.2.3\n`;
+    expect(parseCube(damaged)).toBeNull();
+  });
+
+  it('reads rows written with explicit + signs', () => {
+    const signed = `LUT_3D_SIZE 2\n+0 +0 +0\n+1 +0 +0\n+0 +1 +0\n+1 +1 +0\n+0 +0 +1\n+1 +0 +1\n+0 +1 +1\n+1 +1 +1\n`;
+    const lut = parseCube(signed);
+    expect(lut).not.toBeNull();
+    expect(Array.from(lut!.data.slice(21))).toEqual([1, 1, 1]);
+  });
 });

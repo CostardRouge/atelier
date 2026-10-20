@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatDuration } from './format';
+import { formatBytes, formatDuration, formatTimecode } from './format';
 
 describe('formatBytes', () => {
   it('formats bytes, KB, MB, GB', () => {
@@ -26,3 +26,18 @@ describe('formatDuration', () => {
     expect(formatDuration(NaN)).toBe('duration unavailable');
   });
 });
+
+describe('format boundaries', () => {
+  it('moves to the next unit when the rounded figure reaches 1000', () => {
+    expect(formatBytes(999_960)).toBe('1.0 MB');
+    expect(formatBytes(999_950_000)).toBe('1.0 GB');
+    expect(formatBytes(999_400)).toBe('999 KB');
+  });
+
+  it('does not floor a centisecond low on binary fractions', () => {
+    expect(formatTimecode(0.57)).toBe('0:00.57');
+    expect(formatTimecode(0.29)).toBe('0:00.29');
+    expect(formatTimecode(61.999)).toBe('1:01.99');
+  });
+});
+

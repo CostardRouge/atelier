@@ -26,6 +26,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Trips: Virée's vehicle no longer trembles. It stays on the road through each place instead of running past it and
   back, and rounds a hairpin instead of reversing in it. Under a following camera the dashes stay on the ground, the
   place names keep their side, and the map no longer jolts.
+- A `.cube` with a damaged row is refused instead of drawing black where that row lands, and a `.cube` written with
+  explicit `+` signs is read. Sizes just under a unit read `1.0 MB` rather than `1000 KB`, and a playhead at 0.57 s
+  reads `0:00.57`.
 
 ## [1.0.0] - 2026-10-17 — Sepia
 

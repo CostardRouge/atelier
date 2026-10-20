@@ -5,21 +5,25 @@ export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—';
   if (bytes < 1000) return `${bytes} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];
+  const shown = (v: number) => v.toFixed(v >= 100 ? 0 : 1);
   let value = bytes / 1000;
   let i = 0;
-  while (value >= 1000 && i < units.length - 1) {
+  // Judge the unit on the ROUNDED figure: 999 960 B is "1.0 MB", never "1000 KB".
+  while (Number(shown(value)) >= 1000 && i < units.length - 1) {
     value /= 1000;
     i++;
   }
-  return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[i]}`;
+  return `${shown(value)} ${units[i]}`;
 }
 
 /** Precise current-position readout: `M:SS.cs` (centiseconds). */
 export function formatTimecode(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.floor((seconds % 1) * 100);
+  // Whole centiseconds first, with an epsilon: 0.57 × 100 is 56.999… in binary.
+  const total = Math.floor(seconds * 100 + 1e-6);
+  const m = Math.floor(total / 6000);
+  const s = Math.floor(total / 100) % 60;
+  const cs = total % 100;
   return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 

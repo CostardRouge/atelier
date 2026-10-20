@@ -11,23 +11,27 @@
  * macrotask every browser runs at once — a zero `setTimeout` is NOT: after
  * a few nested turns browsers stretch it to 4 ms, and a whole-picture
  * conversion has a few hundred bands, so Safari would have paid a second of
- * waiting for nothing. The channel is made once and reused; a yield is
- * never in flight twice, since every caller awaits its own.
+ * waiting for nothing. The channel is made once and reused, and its answers
+ * go to a QUEUE: two subsystems (a RAW decode's bands, Flight Atlas's log
+ * loop) can yield at the same moment, and one handler per call let the
+ * second overwrite the first — whose awaiter then hung for ever.
  */
 let channel: MessageChannel | null = null;
+const waiting: Array<() => void> = [];
 
 export function yieldToMain(): Promise<void> {
   const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
   if (scheduler && typeof scheduler.yield === 'function') return scheduler.yield();
   if (typeof MessageChannel !== 'undefined') {
     channel ??= new MessageChannel();
-    const port = channel.port1 as MessagePort & { unref?: () => void };
+    const port = channel.port1;
     return new Promise((resolve) => {
-      port.onmessage = () => {
-        // Listening keeps a node process alive; a spec that yields once
-        // must not hang the runner on the way out.
-        port.onmessage = null;
-        resolve();
+      waiting.push(resolve);
+      // Listening keeps a node process alive; the handler is dropped once the
+      // queue is empty so a spec that yields does not hang the runner.
+      port.onmessage ??= () => {
+        waiting.shift()?.();
+        if (!waiting.length) port.onmessage = null;
       };
       channel!.port2.postMessage(null);
     });

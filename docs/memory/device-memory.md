@@ -50,6 +50,10 @@ is where a phone dies and why the rules below are about RAWs first.
   hundred bands — measured in node, 300 yields cost 338 ms through the timer
   and 48 ms through the channel; in Safari, which has no `scheduler`, the
   timer would have added about a second to every loupe and export.
+  **The channel's answers go to a QUEUE** (2026-10-20): a RAW decode's bands
+  and Flight Atlas's log loop can yield at the same moment, and one
+  `onmessage` per call let the second overwrite the first, whose awaiter
+  hung for ever (pinned by `yield-to-main.test.ts`).
 - **Three things the final pass fixed, each a rule** (2026-09-23): the four
   constant tables (BT.709 inverse, the sRGB encode, the sRGB bytes, the
   code→half map) are built ONCE per page and shared — a decode that rebuilt
