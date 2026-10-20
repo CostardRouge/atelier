@@ -123,7 +123,9 @@ export function createTranscodeStore(transcode: TranscodeFn): TranscodeStore {
         write(key, { status: 'error', ratio: null, file: null, error: message });
       })
       .finally(() => {
-        controllers.delete(key);
+        // Only free the slot this run owns: a cancelled QUEUED run settles
+        // minutes later, after a retry registered its own controller here.
+        if (controllers.get(key) === controller) controllers.delete(key);
         task.done();
       });
   };

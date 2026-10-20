@@ -182,12 +182,17 @@ export type MoveRollResult = { ok: true; doc: RollDoc } | { ok: false; error: st
  * Move a roll to another source, keeping its id so links survive. Through the
  * portable file, like a trip: the target is written and acknowledged FIRST,
  * the origin's copy deleted only then, so a failure leaves everything where
- * it was. Thumbnails are keyed by picture id and stay.
+ * it was.
  */
 export async function moveRoll(roll: RollDoc, targetSourceId: string, now: number = Date.now()): Promise<MoveRollResult> {
   if (targetSourceId === roll.sourceId) return { ok: true, doc: roll };
+  // The PICTURE ids are kept too: thumbnails, working previews, as-shot pairs
+  // and export marks are all keyed by them on this device, and an import's
+  // fresh ids would orphan every one. `rollDocFromFile` maps in order.
+  const ids = roll.pictures.map((p) => p.id);
+  let next = 0;
   const moved: RollDoc = {
-    ...rollDocFromFile(toRollFile(roll, now), now, targetSourceId),
+    ...rollDocFromFile(toRollFile(roll, now), now, targetSourceId, () => ids[next++]),
     id: roll.id,
     createdAt: roll.createdAt,
   };

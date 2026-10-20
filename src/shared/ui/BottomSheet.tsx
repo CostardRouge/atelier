@@ -98,14 +98,18 @@ export default function BottomSheet({
 
   // Every fresh open starts from the declared rest, never from wherever the
   // last drag left it: a sheet that reopens 92% tall because of a gesture two
-  // screens ago is a state nobody asked for.
+  // screens ago is a state nobody asked for. Keyed on `open` ALONE: callers
+  // pass `snaps` as an inline literal, and a new array on every parent render
+  // used to snap the open sheet back down at each tap inside it.
+  const rest = useRef(initialSnap ?? snaps[0]);
+  rest.current = initialSnap ?? snaps[0];
   useEffect(() => {
     if (open) {
-      setFraction(initialSnap ?? snaps[0]);
+      setFraction(rest.current);
       setClosing(false);
       closed.current = false;
     }
-  }, [open, initialSnap, snaps]);
+  }, [open]);
 
   // Escape closes it, like every other sheet in the suite. No primary action:
   // this is a panel you work from, so Enter belongs to whatever is focused

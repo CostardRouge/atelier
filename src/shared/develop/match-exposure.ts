@@ -16,7 +16,7 @@
  */
 
 import { percentile, type SourceStats } from './auto-develop';
-import { DEVELOP_RANGES, type DevelopSettings } from './develop';
+import { DEVELOP_RANGES, cloneDevelop, type DevelopSettings } from './develop';
 
 /** The widest offset harmonising will apply, in EV. */
 export const MATCH_MAX_EV = 2;
@@ -53,6 +53,8 @@ export function withExposureOffset(develop: DevelopSettings | null, ev: number):
   const { min, max } = DEVELOP_RANGES.exposure;
   const base = develop?.exposure ?? 0;
   const exposure = Math.round(Math.max(min, Math.min(max, base + ev)) * 100) / 100;
-  if (!develop) return exposure === 0 ? null : ({ exposure } as DevelopSettings);
+  // A WHOLE record from the default: a bare `{ exposure }` left every other
+  // slider undefined, which the cube's head read as NaN.
+  if (!develop) return exposure === 0 ? null : { ...cloneDevelop(null), exposure };
   return { ...develop, exposure };
 }

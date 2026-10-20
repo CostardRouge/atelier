@@ -39,6 +39,12 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   on "saving…" for good; an edit made while the instance's copy arrives on opening is kept and offered as a conflict
   instead of vanishing; an edit made during a long save is sent after it; saving resumes when the network comes back;
   and a late save of the previous document no longer marks the open one as changed.
+- Develop: moving a roll to another source (Keep on…) keeps its thumbnails, working previews and export marks instead
+  of losing them all. Matching exposure onto an untouched picture no longer exports it black.
+- Develop: a 16-bit PNG or a resized JPEG of a big picture drawn in bands is no longer smeared.
+- Phone sheets in Trips stay at the height you dragged them to when you tap inside them.
+- A cancelled H.264 transcode that is retried can be cancelled again; a failed HEIF decoder load no longer keeps its
+  memory for the rest of the visit.
 
 ## [1.0.0] - 2026-10-17 — Sepia
 

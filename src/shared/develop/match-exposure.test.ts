@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HISTOGRAM_BINS } from './histogram';
+import { DEFAULT_DEVELOP } from './develop';
 import { exposureOffset, linearMedian, withExposureOffset } from './match-exposure';
 
 /** Stats whose every pixel sits in the bin of this encoded luminance (0..255). */
@@ -35,7 +36,7 @@ describe('exposureOffset', () => {
 
 describe('withExposureOffset', () => {
   it('moves the exposure inside its range, from a null record too', () => {
-    expect(withExposureOffset(null, 0.5)).toEqual({ exposure: 0.5 });
+    expect(withExposureOffset(null, 0.5)).toEqual({ ...DEFAULT_DEVELOP, exposure: 0.5 });
     expect(withExposureOffset(null, 0)).toBeNull();
     expect(withExposureOffset({ exposure: 2.8, contrast: 10 } as never, 0.5)).toEqual({ exposure: 3, contrast: 10 });
     expect(withExposureOffset({ exposure: -0.4 } as never, -0.35)).toEqual({ exposure: -0.75 });

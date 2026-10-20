@@ -236,6 +236,28 @@ outgrew the ~150-line budget together:
   which exists because the halo is blurred in a buffer of the node's OWN size
   and so cannot be passes of this graph.
 
+## `readHalf` sizes EVERY target its plan uses (2026-10-20)
+
+An odd chain of three or more passes ends on target 0 but writes target 1 on
+the way; `readHalf` only (re)sized the targets up to the LAST one, so after a
+BANDED `render()` target 1 was still a band tall and the 16-bit read-back
+(PNG16, a resized JPEG cut from float) held a smeared band. It now sizes both
+targets for any chain longer than one. Not run through `check-render.mjs`
+here (no playwright in the repo): a gate row banding a 3-pass chain before
+`readHalf` is the check to add with TEST-01.
+
+## The look's texture is HANDED OVER when only the head moved (2026-10-20)
+
+Since the head runs per pixel, a develop step renews the `CubeLut` OBJECT
+around the same `data`; `GraphGrader.setLut` rebuilt the cube pass and
+re-uploaded up to 65³ texels on every slider step. `CubePass.withLut(next)`
+gives the new pass the old one's texture when `data` and `size` are the same
+(the old pass then frees nothing), and `LutRenderer.setLut` skips `uploadCube`
+for the lattice already on its texture (a wipe drag, a strength step). The
+pass `key` still reads `identityKey(lut)`, so the kept upstream redraws the
+cube when the head changed. **How to apply**: never mutate a `CubeLut.data`
+in place — identity of `data` is now what says the lattice is unchanged.
+
 ## Passes are SWAPPED, not rebuilt (2026-09-18)
 
 A look is baked into a cube, so a new look is rightly a new grader. A warp, a

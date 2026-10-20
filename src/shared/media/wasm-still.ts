@@ -232,7 +232,15 @@ function loadHeif(): Promise<HeifLib> {
 async function withHeif<T>(blob: Blob, work: (image: HeifImageLike, lib: HeifLib) => Promise<T> | T): Promise<T> {
   heifBusy++;
   if (heifIdle) clearTimeout(heifIdle);
-  const lib = await loadHeif();
+  let lib: HeifLib;
+  try {
+    lib = await loadHeif();
+  } catch (e) {
+    // A failed load must give its count back, or the heap is never released.
+    heifBusy--;
+    heifIdle = setTimeout(releaseHeif, HEIF_IDLE_MS);
+    throw e;
+  }
   const decoder = new lib.HeifDecoder();
   let images: HeifImageLike[] = [];
   try {

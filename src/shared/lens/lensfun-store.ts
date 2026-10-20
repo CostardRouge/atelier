@@ -87,15 +87,33 @@ export interface MatchRecord {
   at: number;
 }
 
+/** ONE connection for the visit: a lookup per picture used to open one each and never close it. */
+let dbOpening: Promise<IDBDatabase> | null = null;
+
 function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  dbOpening ??= new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: 'id' });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Step aside for a newer version or a deletion, and reopen on the next ask.
+      db.onversionchange = () => {
+        db.close();
+        dbOpening = null;
+      };
+      db.onclose = () => {
+        dbOpening = null;
+      };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
   });
+  dbOpening.catch(() => {
+    dbOpening = null;
+  });
+  return dbOpening;
 }
 
 async function readMatch(id: string): Promise<MatchRecord | null> {

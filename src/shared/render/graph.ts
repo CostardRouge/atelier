@@ -806,7 +806,11 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
       const plan = planPasses(list.length);
       const lastTo = (list.length === 1 ? 0 : (list.length - 1) % 2) as 0 | 1;
       plan[plan.length - 1] = { ...plan[plan.length - 1], to: lastTo };
-      for (let i = 0; i <= Math.max(0, lastTo); i += 1) {
+      // EVERY target the plan uses, at the render size: an odd chain of three
+      // or more ends on target 0 yet writes target 1 on the way, which a
+      // banded render just before had left a band tall.
+      const needed = list.length === 1 ? 1 : 2;
+      for (let i = 0; i < needed; i += 1) {
         if (!targetAt(i as 0 | 1, width, height)) return null;
       }
       upload(source);
