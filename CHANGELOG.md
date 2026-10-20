@@ -33,6 +33,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Trips' overview on a phone drops the masthead too: one header line holds the trip's name over its figures and the jump
+  to its longest silence, undo/redo, and a ⋯ with the views, Trip settings and the rest of Atelier. The calendar starts
+  a line higher.
 - The Studio on a phone gives a clip the screen, as Develop does: no masthead, one header line (back, the project over
   the clip, undo/redo, the save dot, ⋯ with project settings and the rest of Atelier), and the header, the transport and
   the bottom bar float over the stage. A tap on the frame around the picture hides them.

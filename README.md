@@ -807,7 +807,11 @@ this replaced gave a year-long trip a 6px cell — seven times too small for a
 finger — so the months stack one to a row, the column scrolling, and a day is
 a seventh of the width, ~47px, with nothing to invent; the map above is one
 tap per month. The ruler does not fit a phone and leaves it entirely (its job
-is done on the calendar itself, below).
+is done on the calendar itself, below). There is no `Atelier / Trips` masthead above
+it either: one header line holds the way back, the trip's name over its
+figures and the jump to its longest silence, undo, redo, the sync dot and a ⋯
+with the three views, the two ways of drawing a day, Trip settings and the
+rest of Atelier.
 A tap on a day **selects** it and never opens anything: the **strip** above
 the bottom bar re-reads — the date, the leg, and the day's pieces as their own
 hook thumbnails, three at most, then `+N`; on a day nothing came out of, the

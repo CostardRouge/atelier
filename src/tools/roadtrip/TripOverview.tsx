@@ -62,7 +62,7 @@ import Segmented from '../../shared/ui/Segmented';
 import { isShortTrip, tripBlocks, weekIndexOf, type MonthBlock } from '../../shared/roadtrip/month-grid';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import IconButton from '../../shared/ui/IconButton';
-import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
+import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import TripListView from './TripListView';
@@ -74,6 +74,8 @@ import TripMapView, { OffMapRows, type OffMapActions, type StagePicture } from '
 import StageDays from './StageDays';
 import MapStageBar from './MapStageBar';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 
 interface TripOverviewProps {
   trip: TripDoc;
@@ -125,10 +127,10 @@ function TripTitle({
 }: {
   name: string;
   onRename: (name: string) => void;
-  /** `md` is the size that sits in the bar on a phone; `lg` the heading of a wide screen. */
-  size?: 'lg' | 'md';
+  /** `sm` over the figures in a phone's one header line, `md` in a one-row bar, `lg` the heading of a wide screen. */
+  size?: 'lg' | 'md' | 'sm';
 }) {
-  const face = size === 'lg' ? 'text-2xl' : 'text-xl';
+  const face = size === 'lg' ? 'text-2xl' : size === 'md' ? 'text-xl' : 'text-base';
   const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editing = draft !== null;
@@ -912,6 +914,12 @@ export default function TripOverview({
       [compact, legsOpen, editingDetails, adjusting],
     ),
   );
+  // A phone's shell gives the overview the masthead's 48 pt too (2026-10-20,
+  // after the editors' pick C, https://claude.ai/artifact/GunaDcNsUtVM3nW1xiyQ2V):
+  // ONE header line in its row — never floating, since the calendar under it
+  // scrolls and every tap on it picks a day, so there is nothing to hide by a
+  // tap — with the trip over its figures and the masthead's links in the ⋯.
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false } : null), [compact]));
   // Every write of the settings sheet: stamped, and the open day kept inside
   // the trip — new dates may leave it outside, and the route says where you
   // are, so it follows rather than leave the panel on a day the calendar no
@@ -1114,6 +1122,32 @@ export default function TripOverview({
     </>
   );
 
+  // The trip's figures in one mono line — the second line of a phone's
+  // header. They may truncate; the jump to the longest silence may not — it
+  // is a VERB, a chip of its own pinned at the line's end.
+  const figures = (
+    <span className="flex items-center gap-1.5 min-w-0">
+      <p className="m-0 flex-1 min-w-0 px-1 font-mono text-2xs text-muted truncate">
+        <span className="text-ink-soft" title="Days told, of the trip's days">
+          {coverage.toldDays}/{coverage.totalDays} told
+        </span>
+        {' · '}
+        {coverage.publishedPosts} published
+        {drafted > 0 && ` · ${drafted} drafted`}
+      </p>
+      {coverage.longestGap && (
+        <button
+          type="button"
+          onClick={() => selectDate(coverage.longestGap!.start)}
+          title={`The longest silence, ${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
+          className="touch-row flex-none inline-flex items-center h-5 px-2 rounded-full border border-accent/40 bg-accent-wash font-mono text-3xs text-accent-ink whitespace-nowrap cursor-pointer"
+        >
+          {coverage.longestGap.length} d silent
+        </button>
+      )}
+    </span>
+  );
+
   if (compact) {
     // A phone: the calendar is the ONE day surface and takes the column
     // (`docs/roadtrip-overview-mobile.md` §8). The heading that costs ~110px
@@ -1125,26 +1159,21 @@ export default function TripOverview({
       // INSIDE its scroller and the strip runs edge to edge like the sheet it
       // pulls up into — a gutter outside a scroll box only clips.
       <section className="flex flex-col flex-1 min-h-0 overflow-hidden -mx-2" aria-label={`${trip.name} overview`}>
-        <div className="px-2">
-        <PageBar
-          back={{ label: 'Trips', onClick: onShowTrips, iconOnly: true }}
-          trailing={
-            <>
-              {headerExtra}
-              {/* The two view switches fold into ONE ⋯ on a phone: as two
-                  segmented pills they left the trip's name a few letters
-                  ("Australi…" at 360px). The view itself is on screen, so the
-                  switch need not say which one is shown. */}
-              <OverflowMenu label="Views and actions for this trip" items={viewItems} size="md" variant="default" />
-            </>
-          }
-        >
-          <span className="min-w-0 flex-1">
-            <TripTitle name={trip.name} onRename={rename} size="md" />
-          </span>
-        </PageBar>
+        <div className="px-2 pb-1.5">
+        <PhoneHeader
+          floating={false}
+          back={{ label: 'Back to the trips', onClick: onShowTrips }}
+          title={<TripTitle name={trip.name} onRename={rename} size="sm" />}
+          // The figures under the name: they were a line of their own.
+          subtitle={adjusting ? undefined : figures}
+          trailing={headerExtra}
+          // The two view switches, then the rest of Atelier: the view itself
+          // is on screen, so the switch need not say which one is shown.
+          menu={viewItems}
+          menuLabel="Views and actions for this trip, then the rest of Atelier"
+        />
 
-        {adjusting ? (
+        {adjusting && (
           /* The band of the mode, in place of the figures: which leg, its
              draft span, and the two ways out. Nothing else is on screen
              about anything else. */
@@ -1170,30 +1199,6 @@ export default function TripOverview({
               Done
             </Button>
           </div>
-        ) : (
-        // The figures may truncate; the jump to the longest silence may not —
-        // it is a VERB, and at the end of a truncated line it was cut off the
-        // screen. It is a chip of its own, pinned right.
-        <div className="flex items-center gap-2 mt-1.5 mb-1 min-w-0">
-          <p className="m-0 flex-1 min-w-0 font-mono text-2xs text-muted truncate">
-            <span className="text-ink-soft" title="Days told, of the trip's days">
-              {coverage.toldDays}/{coverage.totalDays} told
-            </span>
-            {' · '}
-            {coverage.publishedPosts} published
-            {drafted > 0 && ` · ${drafted} drafted`}
-          </p>
-          {coverage.longestGap && (
-            <button
-              type="button"
-              onClick={() => selectDate(coverage.longestGap!.start)}
-              title={`The longest silence, ${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
-              className="flex-none inline-flex items-center h-7 px-2.5 rounded-full border border-accent/40 bg-accent-wash font-mono text-2xs text-accent-ink whitespace-nowrap cursor-pointer"
-            >
-              {coverage.longestGap.length} day{coverage.longestGap.length === 1 ? '' : 's'} silent
-            </button>
-          )}
-        </div>
         )}
         {!adjusting && <SailNudge trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />}
         </div>
