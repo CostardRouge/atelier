@@ -176,6 +176,8 @@ export interface MediaIntake {
   together: { word: string; max: number } | null;
   /** How "after the open one" is said — "After slide 2" — or null when nothing is open. */
   afterOpen: string | null;
+  /** The open item's number — what a batch landing after it counts from — or null. */
+  openAt: number | null;
   /** What the work is called, said over its items — "This piece". */
   title: string;
   /**

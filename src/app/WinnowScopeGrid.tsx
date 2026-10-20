@@ -8,6 +8,7 @@ import type { InstancePicker } from '../shared/sources/winnow/use-pick';
 import type { AssetDragItem } from '../shared/library/asset-drag';
 import { useAssetDragSource } from '../shared/library/use-asset-drag';
 import CollectCorner, { type CollectMark } from './CollectCorner';
+import PickBadge, { PICKED_RING, type PickMark } from './PickBadge';
 
 interface WinnowScopeGridProps {
   connection: WinnowConnection;
@@ -58,6 +59,8 @@ interface WinnowScopeGridProps {
    * it (`CollectCorner`). Absent when no tool takes pictures in.
    */
   collectFor?: (row: WinnowAssetRow) => CollectMark | null;
+  /** In the Library's Select mode: a press ticks the row, and its number is drawn. */
+  pickFor?: (row: WinnowAssetRow) => PickMark | null;
 }
 
 /**
@@ -95,9 +98,10 @@ export default function WinnowScopeGrid({
   announce,
   dragItemFor,
   collectFor,
+  pickFor,
 }: WinnowScopeGridProps) {
   const { rows, problem, reload } = scope;
-  const { pick, fetching } = picker;
+  const { pick: pickRow, fetching } = picker;
   const shownProblem = picker.problem ?? problem;
 
   return (
@@ -135,19 +139,23 @@ export default function WinnowScopeGrid({
           {shown.map((r, i) => {
             const have = inLibrary.get(`${connection.id}/${r.id}`);
             const active = have !== undefined && have === activeId;
-            const collect = r.media_type === 'photo' || r.media_type === 'video' ? (collectFor?.(r) ?? null) : null;
+            const media = r.media_type === 'photo' || r.media_type === 'video';
+            const collect = media ? (collectFor?.(r) ?? null) : null;
+            const pick = media ? (pickFor?.(r) ?? null) : null;
             return (
               <WinnowTile
                 key={r.id}
                 dragItem={dragItemFor?.(r) ?? null}
                 collect={collect}
-                onClick={() => (onPreview ? onPreview(i) : void pick(r))}
-                disabled={fetching !== null}
-                active={active}
+                onClick={() => (pick ? pick.onTick() : onPreview ? onPreview(i) : void pickRow(r))}
+                disabled={pick ? pick.held !== null : fetching !== null}
+                active={pick ? pick.order !== null : active}
                 title={`${onPreview ? 'Look at' : 'Use'} ${r.filename}${
                   r.has_telemetry ? ' · flight log' : ''
                 }${have ? ' · in the library' : ''}${dragItemFor ? ' — or drag it onto the picture' : ''}`}
                 className={`relative block rounded-md overflow-hidden border bg-frame cursor-pointer p-0 disabled:cursor-wait transition-[border-color,opacity] ${
+                  pick?.order != null ? `border-accent ${PICKED_RING}` : ''
+                } ${pick?.held != null ? 'opacity-60' : ''} ${
                   active
                     ? 'border-accent shadow-[inset_0_0_0_2px_var(--color-accent)]'
                     : have
@@ -162,7 +170,8 @@ export default function WinnowScopeGrid({
                   label={r.media_type === 'video' ? 'video' : 'photo'}
                   box="w-full h-[74px]"
                 />
-                {r.media_type === 'video' && (
+                {pick && <PickBadge mark={pick} />}
+                {r.media_type === 'video' && !pick && (
                   <span
                     className="absolute top-1 left-1 font-mono text-3xs text-on-media bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"
                     aria-hidden="true"

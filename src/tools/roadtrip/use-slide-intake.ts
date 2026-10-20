@@ -141,6 +141,7 @@ export function useSlideIntake({
       locked,
       together: { word: 'collage', max: MAX_COLLAGE_PICTURES },
       afterOpen: open && open.kind !== 'cta' ? `After slide ${open.position}` : null,
+      openAt: open && open.kind !== 'cta' ? open.position : null,
       title: 'This piece',
       items,
     }),

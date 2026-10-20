@@ -15,6 +15,9 @@ import { useMediaActions, useMediaIntake, useMediaScope, type IntakeOptions } fr
 import CollectCorner, { type CollectMark } from './CollectCorner';
 import IntakeStrip from './IntakeStrip';
 import IntakeVerb from './IntakeVerb';
+import IntakeBar from './IntakeBar';
+import PickBadge, { PICKED_RING, type PickMark } from './PickBadge';
+import { instantOf, orderPicks, type Pick } from '../shared/library/pick-order';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
@@ -434,6 +437,79 @@ export default function AssetSidebar({
       : null;
   const rowMark = (row: WinnowAssetRow) =>
     collectMark(`remote:${row.id}`, fileBaseName(row.filename), async () => (await bringFile(row))?.file ?? null);
+
+  // --- Select mode: tick several, in order, and add them in one write -------
+  // The Library's own `selection` is a set and says nothing of order; the
+  // intake's ticks are a LIST, across both tabs, each remembering how its
+  // file is had (an instance's row is only brought on the verb).
+  const [selecting, setSelecting] = useState(false);
+  const [ticks, setTicks] = useState<readonly Pick[]>([]);
+  const tickFiles = useRef(new Map<string, () => Promise<File | null>>());
+  const [byTime, setByTime] = useState(false);
+  const [afterOpen, setAfterOpen] = useState(false);
+  const [together, setTogether] = useState(false);
+  const [batchBusy, setBatchBusy] = useState<string | null>(null);
+  const stopSelecting = useCallback(() => {
+    setSelecting(false);
+    setTicks([]);
+    tickFiles.current.clear();
+    setTogether(false);
+  }, []);
+  const hasIntake = intake !== null;
+  useEffect(() => {
+    if (!hasIntake) stopSelecting();
+  }, [hasIntake, stopSelecting]);
+  const order = useMemo(() => orderPicks(ticks, byTime), [ticks, byTime]);
+  const landsAfterOpen = afterOpen && intake?.openAt != null;
+  const asOne = together && intake?.together != null && order.length >= 2 && order.length <= intake.together.max;
+  const toggleTick = (key: string, at: number | null, file: () => Promise<File | null>) => {
+    tickFiles.current.set(key, file);
+    setTicks((prev) => (prev.some((p) => p.key === key) ? prev.filter((p) => p.key !== key) : [...prev, { key, at }]));
+  };
+  const pickMark = (
+    key: string,
+    baseName: string,
+    at: number | null,
+    file: () => Promise<File | null>,
+  ): PickMark | null => {
+    if (!selecting || !intake) return null;
+    const held = intake.placeOf(baseName);
+    const k = order.indexOf(key);
+    const first = landsAfterOpen ? (intake.openAt ?? 0) + 1 : intake.next;
+    return {
+      held,
+      order: k < 0 ? null : asOne ? `${first}·${k + 1}` : String(first + k),
+      onTick: () => {
+        if (held === null) toggleTick(key, at, file);
+      },
+    };
+  };
+  const localPick = (a: Asset) => {
+    const file = a.parts.image ?? a.parts.video;
+    return file ? pickMark(`local:${a.id}`, a.baseName, file.lastModified || null, async () => file) : null;
+  };
+  const rowPick = (row: WinnowAssetRow) =>
+    pickMark(`remote:${row.id}`, fileBaseName(row.filename), instantOf(row.captured_at), async () => (await bringFile(row))?.file ?? null);
+  const commitBatch = async () => {
+    const keys = order;
+    if (!keys.length) return;
+    setBatchBusy('Adding…');
+    const ok = await collect(
+      keys,
+      async () => {
+        const files: File[] = [];
+        for (const [i, key] of keys.entries()) {
+          if (keys.length > 1) setBatchBusy(`Getting ${i + 1} of ${keys.length}…`);
+          const file = await tickFiles.current.get(key)?.();
+          if (file) files.push(file);
+        }
+        return files;
+      },
+      { together: asOne, afterOpen: landsAfterOpen },
+    );
+    setBatchBusy(null);
+    if (ok) stopSelecting();
+  };
 
   const usableSelectedCount = selectedUsableAssets(
     accepts,
@@ -1058,7 +1134,17 @@ export default function AssetSidebar({
             }
             className="flex-1 min-w-0 font-sans text-xs px-3 py-1.5 border border-line rounded-full bg-surface text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
           />
-          {tabPool.length > 0 && (
+          {intake && !selecting && (
+            <button
+              type="button"
+              onClick={() => setSelecting(true)}
+              className="font-mono text-3xs tracking-[0.1em] uppercase text-ink border border-line-strong rounded-full px-2.5 py-1 hover:text-accent-ink hover:border-accent whitespace-nowrap touch-row"
+              title={`Tick several pictures and add them as ${intake.noun}s in one go`}
+            >
+              Select
+            </button>
+          )}
+          {!intake && tabPool.length > 0 && (
             <button
               type="button"
               onClick={() =>
@@ -1103,7 +1189,8 @@ export default function AssetSidebar({
               activeId={lib.activeId}
               picker={picker}
               onPreview={previewFirst ? setPreview : null}
-              collectFor={intake ? rowMark : undefined}
+              collectFor={intake && !selecting ? rowMark : undefined}
+              pickFor={selecting ? rowPick : undefined}
               dragItemFor={(row) => {
                 const key = `${connection.id}/${row.id}`;
                 const host = shortHost(connection.id);
@@ -1151,7 +1238,8 @@ export default function AssetSidebar({
                   onEnsure={() => lib.ensureMeta(a.id)}
                   onActivate={() => activate(a.id)}
                   onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
-                  collect={localMark(a)}
+                  collect={selecting ? null : localMark(a)}
+                  pick={localPick(a)}
                   className="h-[66px]"
                 />
               ) : (
@@ -1166,7 +1254,8 @@ export default function AssetSidebar({
                   onActivate={() => activate(a.id)}
                   onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
                   onRemove={() => lib.remove(a.id)}
-                  collect={localMark(a)}
+                  collect={selecting ? null : localMark(a)}
+                  pick={localPick(a)}
                 />
               ),
             )}
@@ -1177,7 +1266,23 @@ export default function AssetSidebar({
       {/* The tick count belongs to a LIST, not to a picker: a tool that reads
           the ACTIVE asset is not told anything by six boxes being ticked, and
           on a phone that line was two rows of screen saying nothing. */}
-      {!asTiles && (
+      {selecting && intake && (
+        <IntakeBar
+          intake={intake}
+          count={order.length}
+          byTime={byTime}
+          onByTime={setByTime}
+          afterOpen={afterOpen}
+          onAfterOpen={setAfterOpen}
+          together={together}
+          onTogether={setTogether}
+          busy={batchBusy}
+          onCommit={() => void commitBatch()}
+          onCancel={stopSelecting}
+        />
+      )}
+
+      {!asTiles && !selecting && (
       <div className="border-t border-line px-4 py-2.5 bg-paper/40 text-xs text-ink-soft flex flex-col gap-0.5">
         <span>
           <b className="text-ink">{lib.selection.size} selected</b>
@@ -1398,6 +1503,8 @@ interface AssetRowProps {
   onRemove: () => void;
   /** Where the active tool's intake has it, and its ＋ — null when no tool takes pictures in. */
   collect?: CollectMark | null;
+  /** In Select mode: what a press does and the number it will be added as. */
+  pick?: PickMark | null;
 }
 
 function AssetRow({
@@ -1411,6 +1518,7 @@ function AssetRow({
   onPreview,
   onRemove,
   collect = null,
+  pick = null,
 }: AssetRowProps) {
   // The row reads its own cover, so the one whose cover lands is the one
   // that re-renders — not the list, and not the tool beside it.
@@ -1454,7 +1562,13 @@ function AssetRow({
         drag.lifted ? LIFTED : ''
       }`}
     >
-      {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+      {/* The box draws no `::after`; its label grows the zone to 44 under a finger.
+          In Select mode the box is the pick's number instead — the row is the button. */}
+      {pick ? (
+        <span className="relative flex-none w-[22px] h-[22px]">
+          <PickBadge mark={pick} />
+        </span>
+      ) : (
       <label className="touch-halo flex-none inline-grid place-items-center">
         <input
           type="checkbox"
@@ -1464,6 +1578,7 @@ function AssetRow({
           aria-label={`Select ${asset.baseName}`}
         />
       </label>
+      )}
       {/* The cover is its own click target — looking at a picture and putting
           it to work are two different verbs, and a button inside a button is
           not markup. Same 80×56 for every row, always: this is the frame the
@@ -1482,10 +1597,10 @@ function AssetRow({
           this tool can't use (the row is already dimmed). */}
       <button
         type="button"
-        onClick={onActivate}
-        disabled={!usable}
-        aria-pressed={active}
-        title={[
+        onClick={pick ? pick.onTick : onActivate}
+        disabled={!usable || (pick !== null && pick.held !== null)}
+        aria-pressed={pick ? pick.order !== null : active}
+        title={pick ? (pick.held !== null ? `Already ${pick.held}` : pick.order ? `Untick ${asset.baseName}` : `Tick ${asset.baseName}`) : [
           usable
             ? `Use ${asset.baseName} in this tool`
             : `${asset.baseName} — not usable by this tool`,
@@ -1564,6 +1679,7 @@ function AssetTile({
   onActivate,
   onPreview,
   collect = null,
+  pick = null,
   className,
 }: {
   asset: Asset;
@@ -1574,6 +1690,8 @@ function AssetTile({
   onPreview: (() => void) | null;
   /** Where the active tool's intake has it, and its ＋ — null when no tool takes pictures in. */
   collect?: CollectMark | null;
+  /** In Select mode: what a press does and the number it will be added as. */
+  pick?: PickMark | null;
   className: string;
 }) {
   const meta = useAssetMeta(asset.id);
@@ -1597,13 +1715,17 @@ function AssetTile({
     >
       <button
         type="button"
-        onClick={onActivate}
-        disabled={!usable}
-        aria-pressed={active}
+        onClick={pick ? pick.onTick : onActivate}
+        disabled={!usable || (pick !== null && pick.held !== null)}
+        aria-pressed={pick ? pick.order !== null : active}
         title={
-          usable
-            ? `Use ${asset.baseName} here`
-            : `${asset.baseName} — not usable by this tool`
+          pick
+            ? pick.held !== null
+              ? `${asset.baseName} — already ${pick.held}`
+              : `${pick.order ? 'Untick' : 'Tick'} ${asset.baseName}`
+            : usable
+              ? `Use ${asset.baseName} here`
+              : `${asset.baseName} — not usable by this tool`
         }
         className="absolute inset-0 w-full h-full p-0 border-0 bg-transparent cursor-pointer disabled:cursor-default flex items-center justify-center"
       >
@@ -1625,7 +1747,7 @@ function AssetTile({
       <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-on-media truncate pointer-events-none">
         {asset.baseName}
       </span>
-      {pair && (
+      {pair && !pick && (
         <span className={`${scrim('top-[3px]')} pointer-events-none`} aria-hidden="true">
           {pair}
         </span>
@@ -1648,6 +1770,14 @@ function AssetTile({
         </button>
       )}
       {collect && usable && <CollectCorner mark={collect} className="bottom-[3px] right-[3px]" />}
+      {pick && (
+        <>
+          {pick.order !== null && (
+            <span className={`absolute inset-0 rounded-[10px] pointer-events-none ${PICKED_RING}`} aria-hidden="true" />
+          )}
+          <PickBadge mark={pick} />
+        </>
+      )}
     </div>
   );
 }

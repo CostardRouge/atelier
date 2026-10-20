@@ -17,6 +17,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Trips: a picture looked at large offers **Add as slide N** and **Add and next**, and the `A` key adds it, so a day can
   be paged through and kept one picture at a time.
 - Trips: drag a Library picture into a gap of the band under the stage to insert it there as a new slide.
+- Trips: **Select** in the Library ticks several pictures, each showing the slide number it will become, and adds them
+  in one step — in tick or capture order, at the end or after the open slide, or as one collage of 2 to 9.
 - Develop: press and hold the picture still to see it as shot, until you lift — on a phone, a tablet or with a mouse.
   A press that moves is still a swipe to the next picture, and a quick tap still hides the controls. On a touch
   screen the "hold for before" button is gone; a computer keeps it, and the \\ key.

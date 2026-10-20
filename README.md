@@ -786,6 +786,14 @@ also be **dragged into the band under the stage**: as soon as a drag starts,
 the gap after every slide opens, and dropping in one inserts the picture
 there as a new slide (a Winnow tile is fetched as it lands).
 
+To add **several at once**, press **Select** above the Library's pictures:
+each picture tapped then shows the number of the slide it will become, so the
+order is read before anything is written. The bar at the foot adds them in one
+step — **Add 5 slides** — in the order they were ticked or the order they were
+taken, at the end or right after the open slide, and from 2 to 9 pictures as
+**one collage** slide instead. A picture already in the piece is not offered
+again. One undo takes the whole batch back.
+
 **Stages** are the legs of the trip, each with its own span. They are what lets
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
