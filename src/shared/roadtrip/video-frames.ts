@@ -11,6 +11,8 @@
  * a strip whose clip is swapped mid-decode must not leave a decoder running.
  */
 
+import { deadline } from '../lib/abortable';
+
 export interface FilmstripRequest {
   file: File;
   /** Moments to grab, in seconds. */
@@ -86,7 +88,18 @@ export async function decodeFilmstrip(req: FilmstripRequest): Promise<void> {
  * because a seek past the last frame never fires `seeked` and would hang the
  * whole strip on its final cell.
  */
+/**
+ * How long a seek may take before the frame is given up — a browser that
+ * never fires `seeked` (a clip it half decodes, a backgrounded tab on a
+ * phone) used to hold whatever waited on it for good.
+ */
+export const SEEK_DEADLINE_MS = 15_000;
+
 export function seek(video: HTMLVideoElement, seconds: number): Promise<void> {
+  return deadline(seekOnce(video, seconds), SEEK_DEADLINE_MS, () => new Error('The clip did not deliver the frame in time.'));
+}
+
+function seekOnce(video: HTMLVideoElement, seconds: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
     const target = Math.min(Math.max(seconds, 0), Math.max(duration - 0.05, 0));

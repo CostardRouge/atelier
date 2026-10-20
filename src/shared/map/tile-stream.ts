@@ -30,6 +30,7 @@
  * cache in `osm-tiles.ts` is module state.
  */
 
+import { raceAbort } from '../lib/abortable';
 import { useSyncExternalStore } from 'react';
 import { TILE_WORKERS, decodePatch, decodedBudget, fetchPatch } from './osm-tiles';
 import { tileBox, type PyramidTile } from './tile-strip';
@@ -163,9 +164,13 @@ export class TileStream<B = ImageBitmap> {
   async ready(tiles: readonly number[], signal?: AbortSignal): Promise<void> {
     const pins = tiles.slice(0, this.cap);
     this.pinned = new Set(pins);
-    if (pins.some((i) => this.blobs[i] === undefined)) await this.fetchAll();
+    // Both waits are cut by the caller's signal the moment it aborts: the
+    // fetch runs on the stream's own clock (every tile times out on its
+    // own, `osm-tiles.ts`), but a run cancelled in the middle must not sit
+    // on it.
+    if (pins.some((i) => this.blobs[i] === undefined)) await raceAbort(this.fetchAll(), signal);
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    await Promise.all(pins.filter((i) => this.blobs[i]).map((i) => this.decode(i, true)));
+    await raceAbort(Promise.all(pins.filter((i) => this.blobs[i]).map((i) => this.decode(i, true))), signal);
   }
 
   progress(): StreamProgress {

@@ -51,7 +51,20 @@ import {
   type RunUnit,
 } from '../../shared/tasks/run-progress';
 import { isAbortError } from '../../shared/sources/fetch-options';
+import { childSignal, raceAbort, stallWatch, withDeadline } from '../../shared/lib/abortable';
 import type { ExifData } from '../../shared/exif/exif-parser';
+
+/**
+ * How long one slide may go without a word (a frame encoded, a phase said)
+ * before it is given up and the run moves on. A PNG renders in seconds and a
+ * clip reports every frame, so two minutes of silence is a renderer that
+ * stopped answering, never a slow one.
+ */
+const SLIDE_STALL_MS = 120_000;
+/** How long the whole run waits for the openers' tiles and pictures before drawing with what is in. */
+const GROUND_WAIT_MS = 120_000;
+/** How long choosing a still's pixels may wait for an original before the proxy is used. */
+const PIXELS_WAIT_MS = 60_000;
 
 export interface PostExportInputs {
   trip: TripDoc;
@@ -242,6 +255,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    */
   async function pixelsForStills(
     slides: readonly DeckSlide[],
+    signal?: AbortSignal,
   ): Promise<(ref: { name: string } | null) => File | null> {
     const base = inputs.resolve;
     const out = frameSize(inputs.aspect, DECK_LONG_EDGE);
@@ -252,9 +266,16 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
       try {
         // A picture that moves needs the pixels of its CLOSEST frame, not of its rest.
-        const chosen = await deliveryFor(file, deepestFraming(slide.framing, slide.motion), out, (line) => setExporting(line));
-        if (chosen.file !== file) swap.set(file, chosen.file);
-      } catch {
+        // Bounded and cut by a Cancel: an original that never finishes
+        // arriving (a phone's connection) leaves the slide to its proxy.
+        const chosen = await raceAbort(
+          withDeadline(deliveryFor(file, deepestFraming(slide.framing, slide.motion), out, (line) => setExporting(line)), PIXELS_WAIT_MS, () => null),
+          signal,
+          'Export cancelled',
+        );
+        if (chosen && chosen.file !== file) swap.set(file, chosen.file);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
         // Knowing nothing about a picture is never a reason to drop it: the
         // slide leaves from the file in hand, exactly as it always did.
       }
@@ -266,11 +287,53 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     };
   }
 
+  /**
+   * One slide's work under the run's cancel AND a stall watch of its own.
+   * Every renderer reads its signal between two awaits; a wait that never
+   * ends inside one (a seek, a tile, a codec that stopped answering) used
+   * to hold the run on that slide for good, with Cancel doing nothing. Here
+   * a Cancel is answered the moment it is pressed, whatever the renderer is
+   * waiting on, and a slide that has said nothing for `SLIDE_STALL_MS` is
+   * given up — said in the closing note — so the run moves on to the next.
+   */
+  async function guarded<T>(
+    signal: AbortSignal,
+    work: (own: AbortSignal, touch: () => void) => Promise<T>,
+  ): Promise<{ value: T; stalled: false } | { value: null; stalled: true }> {
+    const own = childSignal(signal);
+    const watch = stallWatch(SLIDE_STALL_MS, () => own.abort('stalled'));
+    try {
+      const value = await raceAbort(work(own.signal, watch.touch), own.signal, 'Export cancelled');
+      // A renderer that swallows its own abort (the deck renderer hands back
+      // what it made) still says so through the signal.
+      if (own.signal.aborted && !signal.aborted) return { value: null, stalled: true };
+      return { value, stalled: false };
+    } catch (err) {
+      if (isAbortError(err) && own.signal.aborted && !signal.aborted) return { value: null, stalled: true };
+      throw err;
+    } finally {
+      watch.stop();
+      own.release();
+    }
+  }
+  const stalledNote = (name: string) => `${name}: nothing happened for ${Math.round(SLIDE_STALL_MS / 1000)} s, so it was given up.`;
+
   const [progress, setProgress] = useState<number | null>(null);
   // The run as a TASK (`tasks.md`, T4): what the header's fill says, the
   // masthead's pill says too — and the pill carries the Cancel, which stops
   // between two slides or two frames and keeps what was made.
   const task = useRef<{ handle: TaskHandle; controller: AbortController } | null>(null);
+  /**
+   * One run at a time. Two runs over one `task` / `run` / `written` would
+   * end each other's task, show one's slides as the other's and leave the
+   * bar on a run nobody can cancel — the header's button and the bar's
+   * verbs already disable while a run goes on, this is the door itself.
+   */
+  const alreadyRunning = (): boolean => {
+    if (!task.current) return false;
+    setNote('An export is already running — wait for it to finish, or cancel it first.');
+    return true;
+  };
   const beginTask = (label: string) => {
     const controller = new AbortController();
     const handle = startTask({ label, scope: `piece:${inputs.post.id}`, progress: 0, cancel: () => controller.abort() });
@@ -316,10 +379,16 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   async function awaitGround(signal: AbortSignal): Promise<string | null> {
     if (!inputs.ready) return null;
     setExporting('Fetching the map tiles and pictures…');
-    await inputs.ready(signal);
+    // Bounded: a tile that never lands must not hold the whole run before
+    // its first slide; past the deadline the slides are drawn with the
+    // ground that is in, and the closing note says so.
+    const late = await withDeadline(inputs.ready(signal).then(() => false), GROUND_WAIT_MS, () => true);
     const now = latest.current;
     ground.current = { hook: now.hook, pictures: now.hookPictures };
-    return groundNote(now.pictureStatus);
+    const note = groundNote(now.pictureStatus);
+    if (!late) return note;
+    const waited = `the map tiles and pictures did not all arrive within ${Math.round(GROUND_WAIT_MS / 1000)} s, so the slides were drawn with what was in`;
+    return note ? `${note} ${waited}.` : `${waited}.`;
   }
   const sent = useRef<{ trip: TripDoc; post: TripPost; positions: number[] } | null>(null);
   const withEdits = (text: string) => {
@@ -383,7 +452,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    */
   async function exportHookClip() {
     const { hookFile, hookIsVideo, hookInfo, post, trip } = inputs;
-    if (!hookFile) return;
+    if (!hookFile || alreadyRunning()) return;
     // The looks as they are at the click, before anything awaits (`frozen-looks.ts`).
     const looks = freezeLooks([inputs.hookSlide], inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
@@ -610,6 +679,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * cannot be written says why instead of failing silently in the middle.
    */
   async function exportPiece(imagesOnly = false, to?: DeliveryTarget) {
+    if (alreadyRunning()) return;
     // The piece as it is AT THE CLICK, before anything awaits: the documents
     // are this render's, and the looks are asked now (`frozen-looks.ts`) —
     // the grade stack answers live, and a look nudged mid-run used to reach
@@ -648,7 +718,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       let resolve = inputs.resolve;
       if (stills.length) {
         setExporting('Choosing the pixels…');
-        resolve = await pixelsForStills(stills.map((i) => i.slide));
+        resolve = await pixelsForStills(stills.map((i) => i.slide), signal);
       }
 
       // In DECK ORDER, one slide at a time, each WRITTEN as soon as it is
@@ -662,44 +732,50 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         if (signal.aborted) break;
         enter(i);
         let file: { name: string; blob: Blob } | null = null;
-        if (item.medium === 'image') {
-          say('render', `Rendering ${item.name}`);
-          const out = await renderDeck({
-            signal,
-            trip: inputs.trip,
-            post: inputs.post,
-            aspect: inputs.aspect,
-            longEdge: DECK_LONG_EDGE,
-            timeSeconds: inputs.timeSeconds,
-            resolve,
-            pictures: livePictures(),
-            exif: inputs.exif,
-            lutFor: looks.lutFor,
-            filmFor: looks.filmFor,
-            include: (slide) => slide.position === item.position,
-          });
-          file = out[0] ?? null;
-        } else {
-          try {
+        try {
+          const done = await guarded(signal, async (own, touch) => {
+            if (item.medium === 'image') {
+              say('render', `Rendering ${item.name}`);
+              const out = await renderDeck({
+                signal: own,
+                trip: inputs.trip,
+                post: inputs.post,
+                aspect: inputs.aspect,
+                longEdge: DECK_LONG_EDGE,
+                timeSeconds: inputs.timeSeconds,
+                resolve,
+                pictures: livePictures(),
+                exif: inputs.exif,
+                lutFor: looks.lutFor,
+                filmFor: looks.filmFor,
+                include: (slide) => slide.position === item.position,
+              });
+              return out[0] ?? null;
+            }
             const blob = await renderSlideVideo(
               item,
               looks,
-              (p) => say('encode', p.ratio === null ? `${p.phase}…` : `Encoding ${item.name} · ${Math.round(p.ratio * 100)}%`, p.ratio),
+              (p) => {
+                touch();
+                say('encode', p.ratio === null ? `${p.phase}…` : `Encoding ${item.name} · ${Math.round(p.ratio * 100)}%`, p.ratio);
+              },
               // Not a failure — the file is delivered — but a departure from what
               // was composed, reported with the delivery like one.
               (reason) => failures.push(`${item.name}: ${reason}`),
-              signal,
+              own,
             );
-            file = { name: item.name, blob };
-          } catch (err) {
-            if (isAbortError(err)) break;
-            const failure = explainFailure(err, `${item.name} could not be encoded.`);
-            if (failure.note) failures.push(failure.note);
-            // The first clip this browser cannot decode gets the transcode
-            // offered; a second would be the same codec from the same camera.
-            if (failure.undecodable) {
-              setUndecodable((cur) => cur ?? inputs.resolve(item.slide.media));
-            }
+            return { name: item.name, blob };
+          });
+          if (done.stalled) failures.push(stalledNote(item.name));
+          else file = done.value;
+        } catch (err) {
+          if (isAbortError(err)) break;
+          const failure = explainFailure(err, `${item.name} could not be ${item.medium === 'image' ? 'rendered' : 'encoded'}.`);
+          if (failure.note) failures.push(failure.note);
+          // The first clip this browser cannot decode gets the transcode
+          // offered; a second would be the same codec from the same camera.
+          if (failure.undecodable) {
+            setUndecodable((cur) => cur ?? inputs.resolve(item.slide.media));
           }
         }
         if (!file) {
@@ -757,6 +833,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * in turn, which is the only thing a non-Chromium browser can do.
    */
   async function exportDeck(position?: number, to?: DeliveryTarget) {
+    if (alreadyRunning()) return;
     const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
@@ -770,25 +847,32 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     try {
       const lost = await awaitGround(signal);
       setExporting('Choosing the pixels…');
-      const resolve = await pixelsForStills(slides);
+      const resolve = await pixelsForStills(slides, signal);
+      const failures: string[] = [];
       for (const [i, slide] of slides.entries()) {
         if (signal.aborted) break;
         enter(i);
-        say('render', `Rendering ${slide.media?.name ?? 'the slide'}`);
-        const [file] = await renderDeck({
-          signal,
-          trip: inputs.trip,
-          post: inputs.post,
-          aspect: inputs.aspect,
-          longEdge: DECK_LONG_EDGE,
-          timeSeconds: inputs.timeSeconds,
-          resolve,
-          pictures: livePictures(),
-          exif: inputs.exif,
-          lutFor: looks.lutFor,
-          filmFor: looks.filmFor,
-          include: (s) => s.position === slide.position,
+        const name = slide.media?.name ?? 'the slide';
+        say('render', `Rendering ${name}`);
+        const done = await guarded(signal, async (own) => {
+          const [file] = await renderDeck({
+            signal: own,
+            trip: inputs.trip,
+            post: inputs.post,
+            aspect: inputs.aspect,
+            longEdge: DECK_LONG_EDGE,
+            timeSeconds: inputs.timeSeconds,
+            resolve,
+            pictures: livePictures(),
+            exif: inputs.exif,
+            lutFor: looks.lutFor,
+            filmFor: looks.filmFor,
+            include: (s) => s.position === slide.position,
+          });
+          return file ?? null;
         });
+        if (done.stalled) failures.push(stalledNote(name));
+        const file = done.value;
         if (!file) {
           finish(i, false);
           continue;
@@ -805,6 +889,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         withEdits(
           closingNote(slides.length - written.current.count, [
             ...(signal.aborted ? [`cancelled after ${made} of ${slides.length}`] : []),
+            ...failures,
             ...(lost ? [lost] : []),
           ]),
         ),

@@ -13,6 +13,7 @@
  * the file carries.
  */
 
+import { withDeadline } from '../lib/abortable';
 import type { SoundEvent } from './sound-event';
 import { scheduleVoice } from './voices';
 
@@ -106,8 +107,15 @@ export async function renderBed(
     playable.map((event) => ({ ...event, at: Math.max(0, event.at - lead) })),
     0,
   );
-  return limitPeak(await ctx.startRendering());
+  // iOS has been seen to never answer an offline render (a context made
+  // while the tab was away): past the deadline the clip ships silent and the
+  // caller is told, rather than the run holding on this slide for good.
+  const rendered = await withDeadline(ctx.startRendering(), BED_RENDER_DEADLINE_MS, () => null);
+  return rendered ? limitPeak(rendered) : null;
 }
+
+/** How long the browser may take to render a bed before the clip goes out silent. */
+export const BED_RENDER_DEADLINE_MS = 20_000;
 
 /** The highest a bed's samples may reach once rendered — just under full scale. */
 export const BED_CEILING = 0.98;
