@@ -55,6 +55,8 @@ import { pageScroll } from '../../shared/ui/page-scroll';
 import ClonedNotice from '../../shared/ui/ClonedNotice';
 import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import Button from '../../shared/ui/Button';
 import LoadingState from '../../shared/ui/LoadingState';
@@ -736,6 +738,10 @@ export default function TripGallery({
       [compact, documentSources.length],
     ),
   );
+  // A phone's shell gives the gallery the masthead's room (2026-10-20, as the
+  // Develop and Studio galleries): ONE header line in its row, over a list
+  // that scrolls — nothing floats and no tap hides, every tap opens a trip.
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false } : null), [compact]));
   const { urls, hasThumb } = useCoverThumbs(trips);
   const { cloned, setCloned, freshId } = useFreshClone(trips);
 
@@ -832,12 +838,46 @@ export default function TripGallery({
   }
 
   return (
+    <>
+    {compact && (
+      <PhoneHeader
+        floating={false}
+        back={{
+          label: 'Atelier — every tool',
+          onClick: () => {
+            window.location.hash = '#/';
+          },
+        }}
+        title={
+          <span className="font-serif text-base leading-tight px-1 truncate" aria-hidden="true">
+            Trips
+          </span>
+        }
+        subtitle={
+          <span className="font-mono text-2xs text-muted px-1 truncate">
+            {trips === null ? 'trips…' : `${trips.length} trip${trips.length === 1 ? '' : 's'}`}
+          </span>
+        }
+        // No Cards · Bands here: a phone always shows the cards.
+        menu={[
+          { id: 'new', label: 'New trip', onSelect: () => setCreating(true) },
+          {
+            id: 'import',
+            label: `Import a ${TRIP_FILE_EXTENSION} file…`,
+            onSelect: () => {
+              if (documentSources.length > 1) setImporting(true);
+              else void handleImport(DEFAULT_SOURCE_ID);
+            },
+          },
+        ]}
+      />
+    )}
     <section
       // The shell leaves no gutter between the fixed masthead and this
       // scroller, on purpose (`App.tsx`): a gap there is paper the content
       // gets clipped against. Breathing room belongs HERE instead, where it
       // scrolls away with the first row rather than holding it off the edge.
-      className={`${pageScroll} ${compact ? 'pt-3' : ''}`}
+      className={`${pageScroll} ${compact ? 'pt-1.5' : ''}`}
       aria-label="Trips"
     >
       {/* The masthead already says "Atelier / Trips" at every width, so the
@@ -1149,5 +1189,6 @@ export default function TripGallery({
         />
       )}
     </section>
+    </>
   );
 }

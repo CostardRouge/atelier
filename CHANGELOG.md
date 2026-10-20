@@ -33,6 +33,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Trips' gallery on a phone drops the masthead too: one header line (the way back to every tool, Trips and its count
+  of trips, a ⋯ with New trip, Import and the rest of Atelier).
 - The Studio's gallery on a phone drops the masthead too: one header line (the way back to every tool, Studio and its
   count of projects, a ⋯ with New project, Import and the rest of Atelier).
 - Develop's gallery on a phone drops the masthead too: one header line (the way back to every tool, Develop and its

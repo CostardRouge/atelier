@@ -1245,3 +1245,7 @@ His ask: browse the day's pictures and add each as a NEW slide as he goes, and t
 ## 2026-10-20 — The overview takes the masthead's room, but nothing floats
 
 The trip overview on a phone publishes `{ immersive: true, floating: false, hidden: false }` and draws `PhoneHeader` IN ITS ROW: the calendar under it scrolls and every tap on it picks a day, so a floating header would cover scrolled days and a tap has nothing to hide — the editors' pick C carried only as far as it pays here (the masthead's 48 pt and the figures' own line). The figures (`told · published · drafted`) are the header's second line, and the jump to the longest silence is a chip pinned at that line's end (`17 d silent`, `touch-row`), never truncated; the ⋯ is the old view menu (`viewItems`) with the shell's items appended. Driven at 393 × 852; the map and list views keep the same header.
+
+## 2026-10-20 — The gallery takes the masthead's room too, nothing floats
+
+`TripGallery` on a phone does what the Develop and Studio galleries do: `{ immersive: true, floating: false, hidden: false }` and a `PhoneHeader` outside its scroller — back to `#/`, «Trips» over the count, a ⋯ with New trip and Import, then the shell's items. **Cards · Bands is NOT in that ⋯**: a phone always draws the cards (`view === 'bands' && !compact`), so the switch would tick a view that never shows — tried, and taken back the same hour.

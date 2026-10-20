@@ -649,7 +649,9 @@ outside it entirely). Pieces are never moved and never deleted.
 
 **The calendar is the point.** `#/roadtrip` lists the trips as **cards with
 their cover** or, one toggle away, as **bands** — the trip you were on first
-with a Resume button, then one progress row per trip. A trip opens on every
+with a Resume button, then one progress row per trip (a phone always shows the
+cards, under one header line — back to every tool, Trips and its count, a ⋯
+with New trip, Import and the rest of Atelier — in place of the masthead). A trip opens on every
 day of it, as a **calendar of months**: one block per calendar month the trip
 touches, seven columns Monday to Sunday, the blocks side by side where the
 window is wide enough (three to a row above 1180px, two below, one on a phone)
