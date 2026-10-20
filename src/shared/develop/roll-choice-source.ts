@@ -82,7 +82,10 @@ export async function meterRaw(
     maxEdge: rawDecodeEdge('stage', deviceClass(), maxRenderSize()),
     signal,
     quiet: true,
-    withBytes: false,
+    // WITH the as-shot bytes, exactly the stage's ask: a bytes-less held
+    // decode is refused by the stage, which decoded the same picture again
+    // while this one sat in the ceiling, recallable by nobody else.
+    withBytes: true,
     hold: true,
   });
   return { gain: decoded.gain, profile: decoded.profile };

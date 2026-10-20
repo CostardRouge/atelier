@@ -28,10 +28,19 @@ export function useDevelopOffers(media: SavedMediaRef | null, edit: CarriedEdit 
   useEffect(() => {
     if (!wanted) return;
     let live = true;
+    // A tab return fires `visibilitychange` AND `focus`: one read, not two —
+    // each is a clone and a migration of every roll.
+    let reading = false;
     const load = () => {
-      void listRolls().then((all) => {
-        if (live) setRolls(all);
-      });
+      if (reading) return;
+      reading = true;
+      void listRolls()
+        .then((all) => {
+          if (live) setRolls(all);
+        })
+        .finally(() => {
+          reading = false;
+        });
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible') load();
@@ -44,7 +53,10 @@ export function useDevelopOffers(media: SavedMediaRef | null, edit: CarriedEdit 
       window.removeEventListener('focus', load);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [key, wanted]);
+    // Not on every slide's `key`: the list of rolls does not depend on which
+    // picture is open (the memo below filters it), and paging slides re-read
+    // the whole roll store each time.
+  }, [wanted]);
 
   return useMemo(() => {
     const held = carriedOn(edit, media);

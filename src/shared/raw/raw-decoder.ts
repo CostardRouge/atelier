@@ -412,7 +412,14 @@ export function wantsHalfSize(
   if (!width || !height) return false;
   const long = Math.max(width, height);
   const halfLong = long / 2;
-  if (opts.minLongEdge && halfLong < opts.minLongEdge) return false;
+  // What each path DELIVERS once the edge cap has boxed it: the whole picture
+  // capped to 4096 gives the half's own pixels (8064 → 4032 either way), at
+  // twice the edge, tiles on a phone and four times the work. The half is
+  // refused only where the whole really comes closer to the ask.
+  const cap = opts.maxEdge && Number.isFinite(opts.maxEdge) ? opts.maxEdge : Number.POSITIVE_INFINITY;
+  const wholeOut = long / Math.max(1, Math.ceil(long / cap));
+  const halfOut = halfLong / Math.max(1, Math.ceil(halfLong / cap));
+  if (opts.minLongEdge && halfOut < Math.min(opts.minLongEdge, wholeOut)) return false;
   if (opts.maxEdge && Number.isFinite(opts.maxEdge) && long > opts.maxEdge) return true;
   if (opts.budgetPixels) return width * height > opts.budgetPixels;
   return Boolean(opts.minLongEdge);
@@ -719,7 +726,7 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
       // A profile resolved here is the one the picture stores next: the
       // decode is held under that matrix too, so the next ask finds it.
       if (opts.profile === 'resolve' && decoded.profile) {
-        cache.remember(decodeCacheKey(file, { ...opts, profile: decoded.profile }), decoded, size);
+        cache.alias(decodeCacheKey(file, { ...opts, profile: decoded.profile }), key);
       }
     }
     return decoded;

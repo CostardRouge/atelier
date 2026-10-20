@@ -34,11 +34,17 @@ export async function trackedFetch<T>(init: TrackedFetchInit, run: (opts: FetchO
     detail: known ? formatBytes(known) : null,
     cancel: () => controller.abort(),
   });
+  // One update per ~80 ms (and always the last byte): a body streams in
+  // hundreds of chunks a second, and each update re-renders every task surface.
+  let lastAt = -Infinity;
   try {
     return await run({
       signal: controller.signal,
       onProgress: (done, total) => {
         const whole = total ?? known;
+        const now = performance.now();
+        if (now - lastAt < 80 && !(whole && done >= whole)) return;
+        lastAt = now;
         handle.update({
           progress: whole ? Math.min(1, done / whole) : null,
           detail: whole ? `${formatBytes(done)} of ${formatBytes(whole)}` : formatBytes(done),

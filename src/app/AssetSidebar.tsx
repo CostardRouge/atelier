@@ -246,6 +246,7 @@ export default function AssetSidebar({
     }
     return { inLibrary: media, logsInLibrary: logs };
   }, [remoteAssets]);
+
   /** Pool assets from the instance that the current span does not list. */
   const outOfScope = useMemo(() => {
     if (!connection) return [];
@@ -318,6 +319,12 @@ export default function AssetSidebar({
   // What each fetch brought, by the asset it became: a drop needs the FILE
   // before the pool has regrouped around it.
   const picked = useRef(new Map<string, File[]>());
+  // `picked` is a HAND-OFF between a pick and the pool's regroup, not a
+  // cache: once the asset is in the pool, `resolve` finds it there, so its
+  // files (memory-backed proxies) are let go here instead of for the session.
+  useEffect(() => {
+    for (const a of remoteAssets) picked.current.delete(a.id);
+  }, [remoteAssets]);
   const assetsRef = useRef(lib.assets);
   assetsRef.current = lib.assets;
 
@@ -989,6 +996,7 @@ export default function AssetSidebar({
                     const media = picked.current
                       .get(assetId)
                       ?.find((f) => !/\.srt$/i.test(f.name));
+                    picked.current.delete(assetId);
                     if (media) return { assetId, file: media };
                     const asset = assetsRef.current.find((a) => a.id === assetId);
                     const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;

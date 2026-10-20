@@ -54,7 +54,13 @@ export function readFlightLog(client: WinnowClient, row: WinnowAssetRow): Promis
   // `materialize` asks `heldLog` about on its way down the same list.
   const url = client.sidecarUrl(sidecar.id);
   const known = held.get(url);
-  if (known) return known;
+  if (known) {
+    // Least recently USED: a hit moves to the back, or a Logbook drawing more
+    // than KEEP clips evicted the ones it was showing and fetched them again.
+    held.delete(url);
+    held.set(url, known);
+    return known;
+  }
   const reading = slot(async () => {
     const got = await fetchLog(client, row);
     if (!got) throw new Error(`${row.filename} carries no flight log`);

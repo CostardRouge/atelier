@@ -102,6 +102,26 @@ export function activeLayers(layers: readonly LutLayer[]): LutLayer[] {
 }
 
 /**
+ * Lattices baked with NO develop tail, kept by what they were made of: the
+ * layers' cubes (by identity) and strengths, the output transform and the
+ * interpolation. With the head per pixel, a develop step that leaves the tail
+ * alone changes nothing a lattice holds — yet a look at 40 % (the default) or
+ * two looks re-walked the whole lattice on every slider step. Reusing the
+ * SAME `data` also lets the graders keep their uploaded texture.
+ */
+type Baked = { layers: Array<[CubeLut, number]>; output: OutputTransform; interpolation: Interpolation; size: number; data: Float32Array };
+const baked: Baked[] = [];
+const BAKED_KEPT = 8;
+
+function heldLattice(active: readonly LutLayer[], output: OutputTransform, interpolation: Interpolation): Baked | null {
+  for (const b of baked) {
+    if (b.output !== output || b.interpolation !== interpolation || b.layers.length !== active.length) continue;
+    if (b.layers.every(([lut, t], i) => active[i].lut === lut && active[i].intensity === t)) return b;
+  }
+  return null;
+}
+
+/**
  * Bake the stack into one LUT, or null when nothing is active AND no output
  * transform is asked for AND no develop is set (the caller then grades through
  * no LUT at all — the cheapest path).
@@ -157,6 +177,13 @@ export function composeLutStack(
   // eight times the lattice. The tail is smooth in three dimensions and takes
   // the same floor; the head, which is not, is never in the lattice.
   const size = Math.min(MAX_COMPOSED_SIZE, transform || correct ? Math.max(largest, TRANSFORM_MIN_SIZE) : largest);
+  const names = active.map((l) => l.name);
+  if (developed) names.unshift('Develop');
+  if (transform) names.push(transformLabel(output));
+  const held = correct ? null : heldLattice(active, output, interpolation);
+  if (held && held.size === size) {
+    return { size, data: held.data, title: names.join(' → '), domainMin: [0, 0, 0], domainMax: [1, 1, 1], head };
+  }
   const last = size - 1;
   const data = new Float32Array(size * size * size * 3);
 
@@ -199,9 +226,10 @@ export function composeLutStack(
     }
   }
 
-  const names = active.map((l) => l.name);
-  if (developed) names.unshift('Develop');
-  if (transform) names.push(transformLabel(output));
+  if (!correct) {
+    baked.unshift({ layers: active.map((l) => [l.lut, l.intensity]), output, interpolation, size, data });
+    if (baked.length > BAKED_KEPT) baked.pop();
+  }
 
   return {
     size,

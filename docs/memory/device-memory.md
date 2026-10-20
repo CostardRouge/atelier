@@ -141,6 +141,18 @@ smaller `CONSTRAINED_STAGE_EDGE`. What is left on the CPU side is the plane
 itself (six bytes a pixel of LibRaw's half) and the worker's heap during the
 decode; the tiled decode below is the way past the second.
 
+## Half size is decided on what each path DELIVERS after the edge cap (2026-10-20)
+
+`wantsHalfSize` refused LibRaw's half whenever it fell under `minLongEdge`,
+even where the edge cap boxed the whole decode to the very same pixels — a
+DJI DNG exported on a phone (min 4096, cap 4096) went whole, then TILED, to
+deliver 4032 px the half gives at a quarter of the work. The half is refused
+only where the whole, once capped, really comes closer to the ask. A decode
+resolved with a profile is known under its second key as an ALIAS
+(`DecodedCache.alias`), no longer counted twice against the ceiling; and the
+run's `meterRaw` decodes with the as-shot bytes, so the stage takes its held
+decode instead of decoding the picture again.
+
 ## Tiles: a big decode is cut into bands LibRaw decodes one at a time (2026-09-25)
 
 **Decision.** `decodeRaw` cuts a decode whose OUTPUT is past a per-device

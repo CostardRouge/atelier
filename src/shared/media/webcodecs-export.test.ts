@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  coalesceProgress,
   deriveBitrate,
   drawRotatedFrame,
   rotationFromMatrix,
@@ -201,5 +202,24 @@ describe('drawRotatedFrame', () => {
       'drawImage(0,0,1920,1080)',
       'restore',
     ]);
+  });
+});
+
+describe('coalesceProgress', () => {
+  it('keeps one encoding report per half percent, the first and the last, and every other phase', () => {
+    const seen: Array<number | null> = [];
+    const on = coalesceProgress((p) => seen.push(p.ratio));
+    on!({ phase: 'demuxing', ratio: null });
+    for (let i = 1; i <= 1000; i += 1) on!({ phase: 'encoding', ratio: i / 1000 });
+    on!({ phase: 'finalizing', ratio: null });
+    expect(seen[0]).toBeNull();
+    expect(seen[1]).toBe(0.001);
+    expect(seen[seen.length - 2]).toBe(1);
+    expect(seen[seen.length - 1]).toBeNull();
+    expect(seen.length).toBeLessThan(210);
+  });
+
+  it('passes nothing through when there is no listener', () => {
+    expect(coalesceProgress(undefined)).toBeUndefined();
   });
 });

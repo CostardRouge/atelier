@@ -89,13 +89,25 @@ function hash(text: string): string {
   return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
 }
 
+/**
+ * Keys already computed, per picture OBJECT. Every write replaces the picture
+ * it touches (the journal relies on that identity), so an entry can never be
+ * stale — and the roll editor sweeps this over every picture on every write,
+ * which serialised every brush stroke of every masked picture each time.
+ */
+const keyOf = new WeakMap<RollPicture, string>();
+
 /** The fingerprint of what a picture's delivered file is made of. */
 export function exportKey(picture: RollPicture): string {
+  const held = keyOf.get(picture);
+  if (held !== undefined) return held;
   const record: Record<string, unknown> = {};
   for (const field of KEYED) record[field] = picture[field];
   // An original aspect with no crop is the same file as no aspect at all.
   if (record.aspect === 'original') record.aspect = null;
-  return hash(stable(record));
+  const key = hash(stable(record));
+  keyOf.set(picture, key);
+  return key;
 }
 
 export function exportState(picture: RollPicture, marks: ExportMarks): ExportState {

@@ -61,8 +61,13 @@ describe('wantsHalfSize', () => {
     // of the worker's heap.
     expect(wantsHalfSize(6000, 4000, { maxEdge: 4096 })).toBe(true);
     expect(wantsHalfSize(4000, 3000, { maxEdge: 4096 })).toBe(false);
-    // Asked for 3500 px at least: the half (3000) falls short, so whole.
-    expect(wantsHalfSize(6000, 4000, { maxEdge: 4096, minLongEdge: 3500 })).toBe(false);
+    // Asked for 3500 px at least under a 4096 cap: the whole is boxed to 3000
+    // as well, so it buys nothing over the half.
+    expect(wantsHalfSize(6000, 4000, { maxEdge: 4096, minLongEdge: 3500 })).toBe(true);
+    // A DJI DNG on a phone's export: 4032 either way, the half is the cheap one.
+    expect(wantsHalfSize(8064, 4536, { maxEdge: 4096, minLongEdge: 4096 })).toBe(true);
+    // Where the cap leaves the whole its pixels, the half (3000) falls short: whole.
+    expect(wantsHalfSize(6000, 4000, { maxEdge: 8000, minLongEdge: 3500 })).toBe(false);
     expect(wantsHalfSize(6000, 4000, { maxEdge: Number.POSITIVE_INFINITY })).toBe(false);
   });
 });

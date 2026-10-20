@@ -30,6 +30,12 @@ export interface DecodedCache<T> {
   recall(key: string): T | null;
   /** Hold `value` under `key`, then let go of whatever no longer fits. */
   remember(key: string, value: T, bytes: number): void;
+  /**
+   * Answer `alias` with what `key` holds, counting its bytes ONCE: a decode
+   * resolved under one key and known by a second used to be remembered
+   * twice and weighed double against the ceiling. Dropped with `key`.
+   */
+  alias(alias: string, key: string): void;
   /** Drop everything. */
   clear(): void;
   /** How many bytes are held right now. */
@@ -39,21 +45,30 @@ export interface DecodedCache<T> {
 
 export function makeDecodedCache<T>(ceiling: () => number): DecodedCache<T> {
   const held = new Map<string, DecodedEntry<T>>();
+  const aliases = new Map<string, string>();
   let tick = 0;
   return {
     recall(key) {
-      const entry = held.get(key);
+      const entry = held.get(key) ?? held.get(aliases.get(key) ?? '');
       if (!entry) return null;
       entry.lastUsed = ++tick;
       return entry.value;
     },
     remember(key, value, bytes) {
+      aliases.delete(key);
       held.set(key, { value, bytes, lastUsed: ++tick });
       const entries: HeldEntry[] = [...held].map(([k, e]) => ({ key: k, bytes: e.bytes, lastUsed: e.lastUsed }));
       for (const k of toEvict(entries, ceiling())) held.delete(k);
+      for (const [a, k] of aliases) if (!held.has(k)) aliases.delete(a);
+    },
+    alias(alias, key) {
+      if (alias === key || !held.has(key)) return;
+      held.delete(alias);
+      aliases.set(alias, key);
     },
     clear() {
       held.clear();
+      aliases.clear();
     },
     size() {
       let n = 0;

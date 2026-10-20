@@ -45,6 +45,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Phone sheets in Trips stay at the height you dragged them to when you tap inside them.
 - A cancelled H.264 transcode that is retried can be cancelled again; a failed HEIF decoder load no longer keeps its
   memory for the rest of the visit.
+- Faster sliders: a develop step no longer re-bakes a look held under 100 % or re-uploads it to the GPU, colour
+  grading wheels bake quicker, and downloads and video exports no longer redraw every progress bar hundreds of times a
+  second. A RAW exported on a phone is decoded at half size where the whole decode gave no more pixels.
 
 ## [1.0.0] - 2026-10-17 — Sepia
 

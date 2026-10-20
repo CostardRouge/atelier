@@ -258,6 +258,17 @@ pass `key` still reads `identityKey(lut)`, so the kept upstream redraws the
 cube when the head changed. **How to apply**: never mutate a `CubeLut.data`
 in place — identity of `data` is now what says the lattice is unchanged.
 
+## A lattice with no develop TAIL is baked once (2026-10-20)
+
+`composeLutStack` re-walked the whole lattice (33³ to 65³) on every develop
+step for any stack but «one look at 100 %» — a look at the default 40 %, two
+looks, an output transform — although with no tail the develop only rides as
+the head. It now keeps the last eight tail-less bakes keyed by the layers'
+cubes (identity) and strengths, the output and the interpolation, and hands
+back the SAME `data` with the new head, which the graders' texture hand-over
+then keeps on the GPU. A tail (mixer, mono, grading) still bakes, and its
+wheels' `hueGain` is cached per hue (a quarter of that bake, measured).
+
 ## Passes are SWAPPED, not rebuilt (2026-09-18)
 
 A look is baked into a cube, so a new look is rightly a new grader. A warp, a

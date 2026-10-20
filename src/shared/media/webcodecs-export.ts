@@ -47,6 +47,29 @@ import { framePlan } from './frame-plan';
 import { awaitQueue } from './codec-queue';
 import type { TrimRange } from './trim';
 
+/**
+ * `onProgress` with its `encoding` reports thinned to one per half percent —
+ * the first and the last always kept, every other phase passed as is. The
+ * pipelines report once per FRAME, and a caller that re-renders and notifies
+ * the task store on each one spends the thread that decodes and encodes.
+ */
+export function coalesceProgress(
+  onProgress: ((p: ExportProgress) => void) | undefined,
+  step = 0.005,
+): ((p: ExportProgress) => void) | undefined {
+  if (!onProgress) return undefined;
+  let reported = -Infinity;
+  return (p) => {
+    if (p.phase === 'encoding' && p.ratio !== null) {
+      if (p.ratio < 1 && p.ratio - reported < step) return;
+      reported = p.ratio;
+    } else {
+      reported = -Infinity;
+    }
+    onProgress(p);
+  };
+}
+
 export interface ExportProgress {
   phase: 'demuxing' | 'encoding' | 'finalizing';
   /** 0..1 during encoding; null when the phase has no measurable ratio. */
@@ -573,6 +596,7 @@ export async function exportProcessedVideo(
     if (signal?.aborted) throw new DOMException('Export cancelled', 'AbortError');
   };
 
+  onProgress = coalesceProgress(onProgress);
   onProgress?.({ phase: 'demuxing', ratio: null });
   // Accept already-read bytes so callers can read the file while its handle is
   // freshest (files opened via the folder picker can otherwise go unreadable),

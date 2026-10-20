@@ -33,6 +33,7 @@ import { framePlan } from './frame-plan';
 import { encodeAudioBuffer, type EncodedAudio } from './audio-encode';
 import {
   awaitQueue,
+  coalesceProgress,
   deriveBitrate,
   isEncodeSupported,
   pickAvcCodec,
@@ -113,6 +114,7 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
     );
   }
 
+  const onProgress = coalesceProgress(opts.onProgress);
   const { w, h } = paintedOutputSize(opts.width, opts.height);
   const fps = paintedFps(opts.fps);
   const plan = framePlan(opts.seconds, fps);
@@ -212,14 +214,14 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
         frame.close();
       }
       done += 1;
-      opts.onProgress?.({ phase: 'encoding', ratio: done / plan.length });
+      onProgress?.({ phase: 'encoding', ratio: done / plan.length });
       await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
     }
 
     await encoder.flush();
     if (pipelineError) throw pipelineError;
 
-    opts.onProgress?.({ phase: 'finalizing', ratio: null });
+    onProgress?.({ phase: 'finalizing', ratio: null });
     muxer.finalize();
     const { buffer } = muxer.target as ArrayBufferTarget;
     return new Blob([buffer], { type: 'video/mp4' });

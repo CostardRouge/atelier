@@ -153,8 +153,25 @@ export function zoneWeights(L: number, blending = 50, balance = 0): { shadows: n
   return { shadows, midtones: 1 - shadows - highlights, highlights };
 }
 
+/**
+ * Gains already worked out, per hue. A tail bake asks for a wheel's gain at
+ * every lattice point (35 937 to 274 625 of them) with the same hue each time,
+ * and each answer costs three sRGB decodes: a quarter of the bake, measured.
+ */
+const gainOf = new Map<number, readonly [number, number, number]>();
+
 /** The wheel's hue as a per-channel gain in LINEAR light whose luminance is exactly 1. */
 export function hueGain(hue: number): [number, number, number] {
+  let held = gainOf.get(hue);
+  if (!held) {
+    held = computeHueGain(hue);
+    if (gainOf.size > 4096) gainOf.clear();
+    gainOf.set(hue, held);
+  }
+  return [held[0], held[1], held[2]];
+}
+
+function computeHueGain(hue: number): [number, number, number] {
   const h = (((hue % 360) + 360) % 360) / 60;
   const x = 1 - Math.abs((h % 2) - 1);
   const seg = Math.floor(h) % 6;
@@ -177,18 +194,20 @@ export function gradeLinear(rgb: readonly [number, number, number], g: ColourGra
   if (Y0 <= 0) return [r, gg, b];
   const L = fromLinear(Y0 > 1 ? 1 : Y0, 'srgb');
   const w = zoneWeights(L, g.blending, g.balance);
-  const weights: Record<GradeZone, number> = { ...w, global: 1 };
   let stops = 0;
   let moved = false;
   for (const zone of GRADE_ZONES) {
     const wheel = g[zone];
-    const k = weights[zone];
+    const k = zone === 'global' ? 1 : w[zone];
     if (!k || wheelIsNeutral(wheel)) continue;
     moved = true;
     stops += (wheel.luminance / 100) * ZONE_STOPS * k;
     if (wheel.saturation) {
       const t = (wheel.saturation / 100) * TINT_REACH * k;
-      const [gr, ggn, gb] = hueGain(wheel.hue);
+      const held = gainOf.get(wheel.hue) ?? hueGain(wheel.hue);
+      const gr = held[0];
+      const ggn = held[1];
+      const gb = held[2];
       r *= 1 + t * (gr - 1);
       gg *= 1 + t * (ggn - 1);
       b *= 1 + t * (gb - 1);

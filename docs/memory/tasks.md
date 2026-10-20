@@ -202,3 +202,12 @@ its scope) pass it. **How to apply**: an echo is never a long or cancellable
 job — those stay ordinary tasks with their wait and their pill; a write that
 lands OFF the stage (a paste onto a selection) echoes on what it wrote
 instead (`RollBand`'s `written` tick), never on a stage that does not change.
+
+## Progress is THINNED at its source (2026-10-20)
+
+A byte stream reports per chunk and the video pipelines per frame; each report
+used to re-render every task surface. `trackedFetch` updates its task at most
+every ~80 ms (always the last byte), and `exportProcessedVideo` / `encodeFrames`
+pass their `onProgress` through `coalesceProgress` (one `encoding` report per
+half percent, the first and the last kept). **How to apply**: a new producer of
+progress thins at the source; a consumer need not throttle again.

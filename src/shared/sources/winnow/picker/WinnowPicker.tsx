@@ -376,24 +376,6 @@ export default function WinnowPicker({
   }, [counts, device, bodies]);
   const shownItems = useMemo(() => shown(surfacedItems, facets, sort), [surfacedItems, facets, sort]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
-  // What the lightbox draws for each drawn tile: the proxy over the thumbnail,
-  // Winnow's word and the body in the facts line.
-  const lookItems = useMemo<LightboxItem[]>(
-    () =>
-      drawnItems.map(({ row, culling, device }) => ({
-        id: String(row.id),
-        title: row.filename,
-        facts: [describeCulling(culling) || 'not culled', device, row.capture_date ? formatIsoDate(row.capture_date) : null]
-          .filter(Boolean)
-          .join(' · '),
-        kind: row.media_type === 'video' ? 'video' : 'photo',
-        src: client.proxyUrl(row.id),
-        still: client.thumbUrl(row.id),
-        natural: row.width && row.height ? { width: row.width, height: row.height } : null,
-        credentialed: true,
-      })),
-    [drawnItems, client],
-  );
 
   // --- flight tracks ---------------------------------------------------------
   // Read on request (each log is a download, however small), for the clips
@@ -509,6 +491,28 @@ export default function WinnowPicker({
   // A tile looked at large, an index into what is drawn — the lightbox pages
   // through exactly the grid's order.
   const [peek, setPeek] = useState<number | null>(null);
+  // What the lightbox draws for each drawn tile: the proxy over the thumbnail,
+  // Winnow's word and the body in the facts line. Built only while a picture
+  // is looked at: the drawn list changes on every facet click and span part.
+  const looking = peek !== null;
+  const lookItems = useMemo<LightboxItem[]>(
+    () =>
+      !looking
+        ? []
+        : drawnItems.map(({ row, culling, device }) => ({
+            id: String(row.id),
+            title: row.filename,
+            facts: [describeCulling(culling) || 'not culled', device, row.capture_date ? formatIsoDate(row.capture_date) : null]
+              .filter(Boolean)
+              .join(' · '),
+            kind: row.media_type === 'video' ? 'video' : 'photo',
+            src: client.proxyUrl(row.id),
+            still: client.thumbUrl(row.id),
+            natural: row.width && row.height ? { width: row.width, height: row.height } : null,
+            credentialed: true,
+          })),
+    [drawnItems, client, looking],
+  );
   const look = (id: number) => {
     const at = drawnItems.findIndex((it) => it.id === id);
     if (at >= 0) setPeek(at);

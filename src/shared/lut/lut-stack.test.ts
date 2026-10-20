@@ -437,3 +437,16 @@ describe('a RAW develop in the bake', () => {
     expect(worst).toBeLessThan(3);
   });
 });
+
+describe('composeLutStack keeps a tail-less lattice', () => {
+  it('hands back the SAME data when only the develop head moved', async () => {
+    const { composeLutStack } = await import('./lut-stack');
+    const lut = { size: 2, data: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1]), domainMin: [0, 0, 0] as [number, number, number], domainMax: [1, 1, 1] as [number, number, number] };
+    const layers = [{ id: 'a', source: 'custom', name: 'A', lut, intensity: 0.4, enabled: true }];
+    const a = composeLutStack(layers as never, 'none', 'trilinear', { exposure: 0.3 } as never);
+    const b = composeLutStack(layers as never, 'none', 'trilinear', { exposure: 0.6 } as never);
+    expect(a && b && a.data === b.data).toBe(true);
+    const c = composeLutStack([{ ...layers[0], intensity: 0.5 }] as never, 'none', 'trilinear', null);
+    expect(c && a && c.data !== a.data).toBe(true);
+  });
+});

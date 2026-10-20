@@ -24,6 +24,16 @@ describe('makeDecodedCache', () => {
     expect(cache.size()).toBe(0);
   });
 
+  it('answers an alias with the same value and counts its bytes once, dropped with its key', () => {
+    const cache = makeDecodedCache<string>(() => 100);
+    cache.remember('a', 'A', 60);
+    cache.alias('a2', 'a');
+    expect(cache.recall('a2')).toBe('A');
+    expect(cache.size()).toBe(60);
+    cache.remember('b', 'B', 60); // evicts 'a'
+    expect(cache.recall('a2')).toBeNull();
+  });
+
   it('keys a file by name, weight and instant', () => {
     expect(fileKey({ name: 'DJI_0101.DNG', size: 74_000_000, lastModified: 1700000000000 })).toBe('DJI_0101.DNG:74000000:1700000000000');
   });
