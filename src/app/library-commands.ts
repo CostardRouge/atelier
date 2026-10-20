@@ -77,22 +77,37 @@ export function libraryCommands(deps: LibraryCommandDeps): CommandSpec[] {
         const added: string[] = [];
         const already: string[] = [];
         const files: File[] = [];
+        const failed: Array<{ id: number; error: string }> = [];
         for (const row of rows) {
           const have = held.get(`${connection.id}/${row.id}`);
           if (have) {
             already.push(have);
             continue;
           }
-          const got = await materialize(client, connection.id, row, { fidelity: p.fidelity === 'original' ? 'original' : 'proxy' });
-          if (!got.length) continue;
-          files.push(...got);
-          added.push(fileBaseName(got[0].name).toLowerCase());
+          // One failed fetch must not drop the files already downloaded.
+          try {
+            const got = await materialize(client, connection.id, row, { fidelity: p.fidelity === 'original' ? 'original' : 'proxy' });
+            if (!got.length) continue;
+            files.push(...got);
+            added.push(fileBaseName(got[0].name).toLowerCase());
+          } catch (e) {
+            failed.push({ id: row.id, error: e instanceof Error ? e.message : String(e) });
+          }
         }
         const lib = deps.lib();
         if (files.length) lib.addFiles(files);
         const last = added[added.length - 1] ?? already[already.length - 1] ?? null;
         if (last) lib.setActive(last);
-        return { added, alreadyInLibrary: already, ...(missing.length ? { notFound: missing } : {}), active: last };
+        if (!added.length && !already.length && failed.length) {
+          throw new CommandError('failed', `no media could be fetched: ${failed[0].error}`);
+        }
+        return {
+          added,
+          alreadyInLibrary: already,
+          ...(missing.length ? { notFound: missing } : {}),
+          ...(failed.length ? { failed } : {}),
+          active: last,
+        };
       },
     },
     {

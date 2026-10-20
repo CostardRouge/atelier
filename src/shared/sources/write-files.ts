@@ -72,7 +72,11 @@ async function nameTaken(dir: FileSystemDirectoryHandle, name: string): Promise<
     await dir.getFileHandle(name);
     return true;
   } catch (e) {
-    return !(e instanceof DOMException && e.name === 'NotFoundError');
+    if (e instanceof DOMException && e.name === 'NotFoundError') return false;
+    if (e instanceof DOMException && e.name === 'TypeMismatchError') return true; // a directory
+    // Anything else (a lapsed permission, a name the system refuses) is the
+    // real failure: thrown, so the run says it once instead of probing 999 names.
+    throw e;
   }
 }
 

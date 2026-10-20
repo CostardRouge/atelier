@@ -111,10 +111,28 @@ export function getWinnowConnection(id: string): WinnowConnection | null {
   return load().find((c) => c.id === id) ?? null;
 }
 
-/** Add or replace (same id) — connecting twice refreshes, never duplicates. */
+/**
+ * Add or replace (same id) — connecting twice refreshes, never duplicates.
+ * A replacement keeps its PLACE: every media surface takes the first
+ * connection, so a refresh must never reorder the list.
+ */
 export function putWinnowConnection(conn: WinnowConnection): void {
   if (conn.id === LOCAL_SOURCE.id) throw new Error('"local" is not a remote source.');
-  save([...load().filter((c) => c.id !== conn.id), conn]);
+  const list = load();
+  const at = list.findIndex((c) => c.id === conn.id);
+  save(at < 0 ? [...list, conn] : list.map((c, i) => (i === at ? conn : c)));
+}
+
+/**
+ * Store a fresh capabilities sheet on a connection that is STILL here — a
+ * probe answering after Forget must not bring the connection back. Returns
+ * whether it was stored.
+ */
+export function storeWinnowCapabilities(id: string, capabilities: WinnowConnection['capabilities']): boolean {
+  const now = getWinnowConnection(id);
+  if (!now) return false;
+  putWinnowConnection({ ...now, capabilities, refreshedAt: Date.now() });
+  return true;
 }
 
 export function removeWinnowConnection(id: string): void {

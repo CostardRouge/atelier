@@ -6,7 +6,7 @@ import {
   type SourceHealth,
 } from '../source-ledger';
 import { WinnowClient } from './client';
-import { putWinnowConnection, type WinnowConnection } from './store';
+import { storeWinnowCapabilities, type WinnowConnection } from './store';
 
 /**
  * Asks each connected instance where it stands — and, in the same breath,
@@ -60,7 +60,7 @@ export function useSourceHealth(connections: readonly WinnowConnection[]): {
       .then((capabilities) => {
         // The answer replaces the stored sheet: what the instance says now is
         // what every surface should be reading.
-        putWinnowConnection({ ...conn, capabilities, refreshedAt: Date.now() });
+        storeWinnowCapabilities(conn.id, capabilities);
         if (alive.current) {
           setHealth((prev) => new Map(prev).set(id, healthFromAnswer(Date.now() - at)));
         }

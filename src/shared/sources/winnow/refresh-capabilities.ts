@@ -26,7 +26,7 @@
  */
 
 import { WinnowClient } from './client';
-import { putWinnowConnection, type WinnowConnection } from './store';
+import { storeWinnowCapabilities, type WinnowConnection } from './store';
 
 /** What came back — enough for a gallery to say something true. */
 export type CapabilityProbe =
@@ -50,7 +50,7 @@ export function refreshCapabilitiesOnce(conn: WinnowConnection): Promise<Capabil
     (capabilities): CapabilityProbe => {
       // The store notifies, which is what makes every gallery re-decide
       // whether this instance can hold what it is listing.
-      putWinnowConnection({ ...conn, capabilities, refreshedAt: Date.now() });
+      storeWinnowCapabilities(conn.id, capabilities);
       return { state: 'read' };
     },
     (err: unknown): CapabilityProbe => ({

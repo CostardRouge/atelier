@@ -29,6 +29,12 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - A `.cube` with a damaged row is refused instead of drawing black where that row lands, and a `.cube` written with
   explicit `+` signs is read. Sizes just under a unit read `1.0 MB` rather than `1000 KB`, and a playhead at 0.57 s
   reads `0:00.57`.
+- Sources: an instance whose capabilities lack a section no longer breaks the Sources screen, a connection forgotten
+  while it was being checked stays forgotten, and checking two instances no longer swaps which one the Library uses.
+- Winnow: a clip whose flight log is unreachable comes in without it instead of stopping the whole fetch; a RAW whose
+  first head read failed is read again rather than treated as carrying no render for the rest of the visit.
+- Develop: an export into a folder whose permission lapsed says so once, instead of reporting 999 files of the same
+  name for every picture.
 
 ## [1.0.0] - 2026-10-17 — Sepia
 

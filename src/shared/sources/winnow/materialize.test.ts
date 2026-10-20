@@ -213,6 +213,12 @@ describe('materialize', () => {
     expect(await fetchLog(clientServing({}), row({ sidecars: [] }))).toBeNull();
   });
 
+  it('brings the clip without its log when every .srt row is dead', async () => {
+    const c = clientServing({ '/api/assets/42/proxy': 10 });
+    const files = await materialize(c, 'winnow.example', row(), { fidelity: 'proxy' });
+    expect(files.map((f) => f.name)).toEqual(['DJI_0001.mp4']);
+  });
+
   it('surfaces a missing rendition as an error instead of a silent gap', async () => {
     const c = clientServing({});
     await expect(

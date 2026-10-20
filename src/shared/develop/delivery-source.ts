@@ -97,7 +97,8 @@ export async function rawRenderFrom(
       if (key) holdRawRender(key, render);
       return { render, head: new Uint8Array(buffer) };
     } catch {
-      if (key) holdRawRender(key, null);
+      // A failed READ is not a measurement: `null` would say «this RAW holds
+      // no render» for the whole session. Left unread, the next asker retries.
       return { render: null, head: null };
     }
   })();

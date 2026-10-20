@@ -298,10 +298,19 @@ export async function materialize(
   // it; the original's is the row's.
   const bring = async (opts: FetchOptions = {}) => {
     for (const [i, item] of plan.entries()) {
-      const { file } = await fetchPlanned(client, item, lastModified, {
-        signal: eitherSignal(opts.signal, options.signal),
-        onProgress: i === 0 ? opts.onProgress : undefined,
-      });
+      let fetched: { file: File };
+      try {
+        fetched = await fetchPlanned(client, item, lastModified, {
+          signal: eitherSignal(opts.signal, options.signal),
+          onProgress: i === 0 ? opts.onProgress : undefined,
+        });
+      } catch (err) {
+        // A sidecar whose every row is dead (a clip moved off its drive) must
+        // not cost the clip that already landed: it comes without its log.
+        if (i > 0 && err instanceof WinnowError && err.kind === 'notfound') continue;
+        throw err;
+      }
+      const { file } = fetched;
       // The clip and its log share one identity: they are one asset in Winnow
       // as in the library, and the hash is the clip's.
       registerMediaIdentity(file, i === 0 ? { ...identity, origin } : identity);

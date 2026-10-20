@@ -5,6 +5,7 @@ import {
   putWinnowConnection,
   removeWinnowConnection,
   resetWinnowConnectionsForTests,
+  storeWinnowCapabilities,
   subscribeWinnowConnections,
   type WinnowConnection,
 } from './store';
@@ -61,6 +62,20 @@ describe('the Winnow connection store', () => {
     putWinnowConnection({ ...conn(), connectedAt: 2000 });
     expect(listWinnowConnections()).toHaveLength(1);
     expect(listWinnowConnections()[0].connectedAt).toBe(2000);
+  });
+
+  it('a replacement keeps its place in the list', () => {
+    putWinnowConnection(conn('a.example'));
+    putWinnowConnection(conn('b.example'));
+    putWinnowConnection({ ...conn('a.example'), connectedAt: 2000 });
+    expect(listWinnowConnections().map((c) => c.id)).toEqual(['a.example', 'b.example']);
+  });
+
+  it('a capabilities answer after Forget does not bring the connection back', () => {
+    putWinnowConnection(conn());
+    removeWinnowConnection('winnow.example');
+    expect(storeWinnowCapabilities('winnow.example', null)).toBe(false);
+    expect(getWinnowConnection('winnow.example')).toBeNull();
   });
 
   it('removing a connection removes the source', () => {

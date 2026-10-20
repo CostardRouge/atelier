@@ -388,16 +388,22 @@ export default function SourcesScreen({ query }: { query: string }) {
               facts={
                 caps ? (
                   <>
-                    <Fact label="api" value={`v${caps.api.version}`} />
+                    {/* Every group read with `?.`: a sheet missing one must not
+                        crash the screen that can forget the connection. */}
+                    <Fact label="api" value={`v${caps.api?.version ?? '?'}`} />
                     <Fact
                       label="proxies"
-                      value={`${caps.media.proxies.video.height}p / ${caps.media.proxies.photo.size}px`}
+                      value={
+                        caps.media?.proxies
+                          ? `${caps.media.proxies.video?.height ?? '?'}p / ${caps.media.proxies.photo?.size ?? '?'}px`
+                          : '—'
+                      }
                     />
-                    <Fact label="sidecars" value={caps.media.sidecars ? 'srt' : '—'} />
+                    <Fact label="sidecars" value={caps.media?.sidecars ? 'srt' : '—'} />
                     <Fact
                       label="documents"
                       value={
-                        caps.documents.bucket ? (caps.documents.kinds ?? ['on']).join(' · ') : '—'
+                        caps.documents?.bucket ? (caps.documents.kinds ?? ['on']).join(' · ') : '—'
                       }
                     />
                     <Fact label="here" value={describeDocs(count)} />
