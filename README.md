@@ -781,7 +781,10 @@ on the picture itself still puts it on the slide that is open. On a phone the
 Library's sheet draws the piece small at its head, growing as you add. Looked
 at large (⤢ on a tile, or a click on a Winnow tile), a picture offers **Add as
 slide N** and **Add and next**, and `A` does the same: the day can be paged
-through with the arrows and kept with one key.
+through with the arrows and kept with one key. On a computer a picture can
+also be **dragged into the band under the stage**: as soon as a drag starts,
+the gap after every slide opens, and dropping in one inserts the picture
+there as a new slide (a Winnow tile is fetched as it lands).
 
 **Stages** are the legs of the trip, each with its own span. They are what lets
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a

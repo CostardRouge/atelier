@@ -81,6 +81,8 @@ import RunMark from '../../shared/ui/RunMark';
 import type { RunUnitState } from '../../shared/tasks/run-progress';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
+import { activeAssetDrag, hasAssetDrag, type AssetDragItem, type DropResult } from '../../shared/library/asset-drag';
+import { useAssetDrag } from '../../shared/library/use-asset-drag';
 
 /** The open slide's clip, when it is one. */
 export interface StripClip {
@@ -151,6 +153,12 @@ interface DeckStripProps {
    * hatched at the cell's end, where the length is set; 0 or absent for none.
    */
   overflowFor?: (i: number) => number;
+  /**
+   * A picture dragged out of the Library and dropped in the GAP after slide
+   * `after` (a deck index) — inserted there as a new slide. Absent, the band
+   * takes no drop.
+   */
+  onInsertAsset?: (after: number, item: AssetDragItem) => Promise<DropResult>;
 }
 
 /** A resize in progress: the end held, where the other end stays, the draft. */
@@ -254,8 +262,33 @@ export default function DeckStrip({
   runAt,
   orderLocked = false,
   overflowFor,
+  onInsertAsset,
 }: DeckStripProps) {
   const coarse = useCoarsePointer();
+  // A picture travelling out of the Library: the gaps after every picture
+  // slide open as places to drop it, the hovered one wide and named.
+  const dragged = useAssetDrag();
+  const [dropGap, setDropGap] = useState<number | null>(null);
+  const [landing, setLanding] = useState<{ gap: number; failed: boolean; text: string } | null>(null);
+  const gapsOpen = Boolean(onInsertAsset && !orderLocked && (dragged || landing));
+  useEffect(() => {
+    if (!dragged) setDropGap(null);
+  }, [dragged]);
+  const dropInGap = (gap: number) => {
+    const item = activeAssetDrag();
+    setDropGap(null);
+    if (!item || !onInsertAsset) return;
+    setLanding({ gap, failed: false, text: item.origin === 'instance' ? `Fetching ${item.label}…` : `Adding ${item.label}…` });
+    void onInsertAsset(gap, item).then(
+      (result) => setLanding(result.ok ? null : { gap, failed: true, text: result.reason }),
+      (err: unknown) => setLanding({ gap, failed: true, text: err instanceof Error ? err.message : String(err) }),
+    );
+  };
+  useEffect(() => {
+    if (!landing?.failed) return;
+    const t = window.setTimeout(() => setLanding(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [landing]);
   const pxPerSecond = compact ? 30 : 42;
   // While an end of the open cell is dragged, the band is drawn at the draft
   // length; the document hears about it once, on release.
@@ -1069,6 +1102,51 @@ export default function DeckStrip({
                 </div>
               );
             })}
+            {/* A Library picture's drop: the gap AFTER each picture slide takes
+                it as a new slide there — never after the closing card, which
+                stays the piece's end. */}
+            {gapsOpen &&
+              layout.cells.map((cell, i) => {
+                const s = slides[i];
+                if (!s || s.kind === 'cta') return null;
+                const over = dropGap === i;
+                const busy = landing?.gap === i;
+                const wide = over || busy;
+                const x = cell.left + cell.width + GAP_PX / 2;
+                const width = wide ? 64 : 22;
+                return (
+                  <span
+                    key={`gap-${s.slideId}`}
+                    data-insert-after={i}
+                    onDragEnter={(e) => {
+                      if (!hasAssetDrag(e.dataTransfer)) return;
+                      e.preventDefault();
+                      setDropGap(i);
+                    }}
+                    onDragOver={(e) => {
+                      if (!hasAssetDrag(e.dataTransfer)) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                      if (dropGap !== i) setDropGap(i);
+                    }}
+                    onDragLeave={() => setDropGap((g) => (g === i ? null : g))}
+                    onDrop={(e) => {
+                      if (!hasAssetDrag(e.dataTransfer)) return;
+                      e.preventDefault();
+                      dropInGap(i);
+                    }}
+                    title={busy ? landing?.text : `Insert as slide ${s.position + 1}`}
+                    className={`absolute -top-1.5 -bottom-1 z-10 grid place-items-center rounded-[6px] font-mono text-3xs leading-tight text-center transition-[width,background-color] ${
+                      wide
+                        ? 'bg-accent-wash border-2 border-accent text-accent-ink'
+                        : 'border border-dashed border-accent/70 bg-paper/70 text-accent-ink'
+                    }`}
+                    style={{ left: x - width / 2, width }}
+                  >
+                    {busy ? (landing?.failed ? '!' : '…') : over ? `slide ${s.position + 1}` : '+'}
+                  </span>
+                );
+              })}
             {/* Where a lifted slide will land: a bar in the gap of its slot. */}
             {lift && dropIndex(lift.from, lift.slot) !== lift.from && (
               <span

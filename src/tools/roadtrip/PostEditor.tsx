@@ -1745,7 +1745,7 @@ export default function PostEditor({
       setLandOn(null);
     }
   }, [landOn, slides]);
-  const intake = useSlideIntake({
+  const { intake, insertAfter } = useSlideIntake({
     post,
     onChangePost,
     slides,
@@ -1756,6 +1756,31 @@ export default function PostEditor({
     thumbFor: railThumb,
   });
   usePublishMediaIntake(intake);
+  /** A Library picture dropped in the band's gap after deck slide `after`. */
+  const insertAsset = useCallback(
+    async (after: number, item: AssetDragItem): Promise<DropResult> => {
+      const afterId = slides[after]?.slideId;
+      if (!afterId) return { ok: false, reason: 'That slide is gone' };
+      let got: DroppedAsset | null = null;
+      try {
+        got = await item.resolve();
+      } catch (err) {
+        return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+      }
+      if (!got) {
+        return {
+          ok: false,
+          reason:
+            item.origin === 'instance'
+              ? `${item.sourceLabel ?? 'The instance'} did not hand it over — see the Library`
+              : 'Nothing to compose over in that file',
+        };
+      }
+      await insertAfter([got.file], afterId);
+      return { ok: true };
+    },
+    [slides, insertAfter],
+  );
 
   // What the primary export will write, slide by slide — the tab lists it,
   // the pinned bar says it in one line and presses it. Whether H.264 can
@@ -2303,6 +2328,7 @@ export default function PostEditor({
         if (!exports.run) onChangePost(withCardSlide(post, on));
       }}
       orderLocked={exports.run !== null}
+      onInsertAsset={insertAsset}
       onEditClosingCard={() => setTripSheet('cta')}
       clip={
         isClipSlide

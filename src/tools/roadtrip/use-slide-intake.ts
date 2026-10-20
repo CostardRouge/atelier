@@ -55,7 +55,7 @@ export function useSlideIntake({
   locked,
   onLanded,
   thumbFor,
-}: SlideIntakeInput): MediaIntake {
+}: SlideIntakeInput): { intake: MediaIntake; insertAfter: (files: readonly File[], after: string) => Promise<void> } {
   const postRef = useRef(post);
   postRef.current = post;
   const writeRef = useRef(onChangePost);
@@ -83,21 +83,27 @@ export function useSlideIntake({
     );
   }, []);
 
-  const add = useCallback(
-    async (files: readonly File[], options: IntakeOptions = {}) => {
+  const write = useCallback(
+    async (files: readonly File[], after: string | null, together: boolean) => {
       if (!files.length) return;
       const refs = await hashedMediaRefs(files);
-      const { post: next, ids } = insertSlides(postRef.current, refs, {
-        after: options.afterOpen ? (open?.slideId ?? null) : null,
-        together: options.together,
-        aspect,
-      });
+      const { post: next, ids } = insertSlides(postRef.current, refs, { after, together, aspect });
       if (!ids.length) return;
       for (const id of ids) added.current.add(id);
       writeRef.current(next);
       landRef.current(ids[0]);
     },
-    [open?.slideId, aspect],
+    [aspect],
+  );
+  const add = useCallback(
+    (files: readonly File[], options: IntakeOptions = {}) =>
+      write(files, options.afterOpen ? (open?.slideId ?? null) : null, options.together === true),
+    [write, open?.slideId],
+  );
+  /** A picture dropped in the band's gap after a slide (its id) — inserted right there. */
+  const insertAfter = useCallback(
+    (files: readonly File[], after: string) => write(files, after, false),
+    [write],
   );
 
   const remove = useCallback(
@@ -122,7 +128,7 @@ export function useSlideIntake({
       })),
     [slides, thumbFor, open?.slideId],
   );
-  return useMemo<MediaIntake>(
+  const intake = useMemo<MediaIntake>(
     () => ({
       publisher: 'Trips',
       noun: 'slide',
@@ -140,4 +146,5 @@ export function useSlideIntake({
     }),
     [places, pictures, addedHolding, add, remove, locked, open, items],
   );
+  return { intake, insertAfter };
 }
