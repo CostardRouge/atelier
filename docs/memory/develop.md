@@ -503,7 +503,10 @@ chips), B (one segmented well — reads as an exclusive choice), C (glyph tiles,
 `all` gets a bar that only opens the menu. Driven in the pane at 1280 and 860
 (dark): toggles, Auto's take-back, Pick grey's arm and pick; and in BOTH
 hosts' sheet (Trips' Picture tab, the Studio's Grade tab): menu over the
-modal, Escape closing the menu only, Done writing the develop.
+modal, Escape closing the menu only, Done writing the develop. At 375 px
+(touch): the bar and ▾ are 44 px, the menu FLIPS above the bar (rows 44 px),
+Pick grey's arm closes it and a tap on the picture picks — in the tool's
+drawer and the Trips sheet alike.
 
 **The Crop tab's Auto level and Crop to subject are switches too** (his
 question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over
