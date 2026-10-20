@@ -48,12 +48,43 @@ export interface CubePassOptions {
  * the right key and a version counter would only be a second thing to get
  * wrong.
  */
-export function makeCubePass(options: CubePassOptions): RenderPass {
+/** A cube pass that can hand its uploaded lattice to the pass replacing it. */
+export interface CubePass extends RenderPass {
+  /**
+   * The pass for `next`. When `next` carries the SAME lattice (a develop step
+   * renews the `CubeLut` object around an unchanged `data` — only its head
+   * moved), the new pass inherits this one's 3D texture instead of uploading
+   * up to 65³ texels again; this pass then owns nothing, and releasing it
+   * frees nothing.
+   */
+  withLut(next: CubeLut | null): CubePass;
+}
+
+type Uploaded = { gl: WebGL2RenderingContext; tex: WebGLTexture; lut: CubeLut | null };
+
+export function makeCubePass(options: CubePassOptions): CubePass {
+  return cubePass(options, null, null);
+}
+
+function sameLattice(a: CubeLut | null, b: CubeLut | null): boolean {
+  return a === b || (!!a && !!b && a.data === b.data && a.size === b.size);
+}
+
+function cubePass(options: CubePassOptions, inherited: Uploaded | null, inheritedHead: HeadTexture | null): CubePass {
   const { lut, intensity = 1, interpolation = 'tetrahedral' } = options;
-  let uploaded: { gl: WebGL2RenderingContext; tex: WebGLTexture; lut: CubeLut | null } | null = null;
-  let head: HeadTexture | null = null;
+  let uploaded: Uploaded | null = inherited ? { ...inherited, lut } : null;
+  let head: HeadTexture | null = inheritedHead;
 
   return {
+    withLut(next) {
+      const opts = { lut: next, intensity, interpolation };
+      if (!uploaded || !sameLattice(uploaded.lut, next)) return cubePass(opts, null, null);
+      const handed = uploaded;
+      const handedHead = head;
+      uploaded = null;
+      head = null;
+      return cubePass(opts, handed, handedHead);
+    },
     id: 'cube',
     key: `cube:${identityKey(lut)}:${intensity}:${interpolation}`,
     fragment: FRAGMENT,

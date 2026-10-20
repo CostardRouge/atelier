@@ -190,6 +190,8 @@ export function createLutRenderer(
 
   let lutTex: WebGLTexture | null = null;
   let lutSize = 0;
+  /** The lattice on `lutTex` now, so the same one is never uploaded twice. */
+  let uploadedData: Float32Array | null = null;
   let hasLut = false;
   let headTex: HeadTexture | null = null;
 
@@ -209,7 +211,13 @@ export function createLutRenderer(
     // The texels themselves are ONE upload shared with the render core's cube
     // pass: float where the GPU can filter it, half-float elsewhere, never
     // 8-bit (`cube-pass.ts`).
-    uploadCube(gl!, lut);
+    // Not again for the lattice already on the texture: a wipe drag or a
+    // strength step re-runs `setLut` with the same cube, and a develop step
+    // hands a new object around the same `data` (only its head moved).
+    if (lut.data !== uploadedData || lut.size !== lutSize) {
+      uploadCube(gl!, lut);
+      uploadedData = lut.data;
+    }
 
     lutSize = lut.size;
     hasLut = true;

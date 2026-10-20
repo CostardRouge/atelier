@@ -168,8 +168,10 @@ export function makeGraphGrader(
       filmPass = next ? makeFilmPass(next, width, height) : null;
     },
     setLut(next) {
-      graph.releasePass(cube);
-      cube = makeCubePass({ lut: next, intensity, interpolation });
+      // The same lattice under a new head keeps its texture (`withLut`).
+      const replaced = cube;
+      cube = replaced.withLut(next);
+      graph.releasePass(replaced);
     },
     render(source, sourceSeconds) {
       // The SOURCE instant, not a repaint's: the field re-rolls per source
