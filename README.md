@@ -137,7 +137,9 @@ whole project, trims, developments and clip list included, pointing at the same
 footage folder, kept here or on a connected instance. The sheet proposes the
 first free name in the chosen place (`Vol du soir` → `Vol du soir (2)`, no
 suffix where the name is free), you can type another, and a status line then
-offers Open and Undo.
+offers Open and Undo. On a phone the gallery has no masthead: one header line
+holds the way back to every tool, Studio and its count of projects, and a ⋯
+with New project, Import and the rest of Atelier.
 
 **On a phone the clip has the screen.** With a clip open there is no
 `Atelier / Studio` masthead: one header line holds the way back, the project's

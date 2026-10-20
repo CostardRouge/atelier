@@ -45,6 +45,8 @@ import ClonedNotice from '../../shared/ui/ClonedNotice';
 import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import Button from '../../shared/ui/Button';
 import LoadingState from '../../shared/ui/LoadingState';
@@ -391,6 +393,10 @@ export default function ProjectGallery({
       [compact, startImport],
     ),
   );
+  // A phone's shell gives the gallery the masthead's room (2026-10-20, as
+  // Develop's gallery): ONE header line in its row, over a list that scrolls
+  // — nothing floats and no tap hides, every tap here opens a project.
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false } : null), [compact]));
 
 
 
@@ -505,12 +511,38 @@ export default function ProjectGallery({
   }
 
   return (
+    <>
+    {compact && (
+      <PhoneHeader
+        floating={false}
+        back={{
+          label: 'Atelier — every tool',
+          onClick: () => {
+            window.location.hash = '#/';
+          },
+        }}
+        title={
+          <span className="font-serif text-base leading-tight px-1 truncate" aria-hidden="true">
+            Studio
+          </span>
+        }
+        subtitle={
+          <span className="font-mono text-2xs text-muted px-1 truncate">
+            {projects === null ? 'projects…' : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
+          </span>
+        }
+        menu={[
+          { id: 'new', label: 'New project', onSelect: () => setCreating(true) },
+          { id: 'import', label: `Import a ${PROJECT_FILE_EXTENSION} file…`, onSelect: startImport },
+        ]}
+      />
+    )}
     <section
       // The shell leaves no gutter between the fixed masthead and this
       // scroller, on purpose (`App.tsx`): a gap there is paper the content
       // gets clipped against. Breathing room belongs HERE instead, where it
       // scrolls away with the first row rather than holding it off the edge.
-      className={`${pageScroll} ${compact ? 'pt-3' : ''}`}
+      className={`${pageScroll} ${compact ? 'pt-1.5' : ''}`}
       aria-label="Studio projects"
     >
       {/* The masthead already says "Atelier / Studio", and the gallery IS the
@@ -737,6 +769,7 @@ export default function ProjectGallery({
         />
       )}
     </section>
+    </>
   );
 }
 
