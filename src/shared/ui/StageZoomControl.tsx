@@ -1,4 +1,4 @@
-import OverflowMenu, { type OverflowItem } from './OverflowMenu';
+import SettingsMenu, { type SettingsSection } from './SettingsMenu';
 import type { ZoomControls } from './stage-zoom';
 
 /**
@@ -17,34 +17,35 @@ import type { ZoomControls } from './stage-zoom';
  * for something else zooms on a modifier only, the lightbox on a bare wheel
  * too.
  *
- * `items` turns that percentage into a MENU (2026-09-22, variant D1 of the
- * stage-bar study), for a surface with more to say about how it draws than
- * `+` and `−` can carry — the Develop stage's smooth ↔ pixels. Whatever it
- * holds, the pill keeps ONE width and `+` and `−` keep their place: the thing
- * this replaces was a second button INSERTED past 1:1, which slid the whole
- * bar sideways and put `pixels` under a finger that had pressed `+` twice.
- * The fitted size is then the menu's own first rung, so nothing is lost.
+ * `sections` turns that percentage into a PANEL (2026-09-22 a menu, variant
+ * D1 of the stage-bar study; 2026-10-20 a `SettingsMenu`, his pick A of the
+ * zoom-menu lab https://claude.ai/artifact/9b8tZLpQQd7xDkgwFdbQWa), for a
+ * surface with more to say about how it draws than `+` and `−` can carry —
+ * the Develop stage's smooth ↔ pixels. Whatever it holds, the pill keeps ONE
+ * width and `+` and `−` keep their place: the thing this replaces was a
+ * second button INSERTED past 1:1, which slid the whole bar sideways and put
+ * `pixels` under a finger that had pressed `+` twice.
  *
- * `folded` (a phone, 2026-10-06) draws the menu ALONE, with `−` and `+` as its
- * first two rows: a phone's stage bar could not hold the pill and the Develop
- * well side by side, and pushed the last verbs off the screen. The pinch is
- * the gesture there; the menu is the way in that always answers when the
- * browser takes the fingers — Zoom in, Zoom out, Fit and 100 % all in it.
+ * `folded` draws the panel ALONE, without the pill's `−` and `+`, and the
+ * caller puts the two steps in the panel. First a phone's (2026-10-06: its
+ * stage bar could not hold the pill and the Develop well side by side), then
+ * the Develop stage's at every width (2026-10-20, his ask: one design on a
+ * computer and a phone, the steps beside Fit and 1:1).
  */
 export default function StageZoomControl({
   zoom,
   hint = '⌘/ctrl + wheel, or pinch',
   className = '',
-  items,
+  sections,
   menuLabel = 'Zoom, and how the picture is drawn',
   folded = false,
 }: {
   zoom: ZoomControls;
   hint?: string;
   className?: string;
-  items?: readonly OverflowItem[];
+  sections?: readonly SettingsSection[];
   menuLabel?: string;
-  /** The ± as the menu's first rows, the pill one control wide — needs `items`. */
+  /** The pill one control wide, the ± left to the panel — needs `sections`. */
   folded?: boolean;
 }) {
   const button =
@@ -53,32 +54,34 @@ export default function StageZoomControl({
     'hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default ' +
     'disabled:hover:border-line-strong disabled:hover:text-ink';
 
-  if (folded && items && items.length > 0) {
-    const steps: OverflowItem[] = [
-      { id: 'zoom-in', label: <span className="font-mono text-xs">+ Zoom in</span>, disabled: !zoom.canZoomIn, onSelect: zoom.zoomIn },
-      { id: 'zoom-out', label: <span className="font-mono text-xs">− Zoom out</span>, disabled: !zoom.canZoomOut, onSelect: zoom.zoomOut },
-    ];
+  const hasPanel = Boolean(sections && sections.length > 0);
+  const panel = (box: string) =>
+    sections && (
+      <SettingsMenu
+        label={`${menuLabel} — ${zoom.label}`}
+        sections={sections}
+        align="start"
+        trigger={{
+          bare: true,
+          className:
+            `min-w-[3.9rem] ${box} inline-flex items-center justify-center gap-1 font-mono text-2xs ` +
+            'tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink',
+          text: (
+            <>
+              {zoom.label}
+              <span className="text-faint" aria-hidden="true">
+                ▾
+              </span>
+            </>
+          ),
+        }}
+      />
+    );
+
+  if (folded && hasPanel) {
     return (
       <div className={`flex items-center rounded-full border border-line bg-surface/86 backdrop-blur-[2px] px-1 py-1 ${className}`}>
-        <OverflowMenu
-          label={`${menuLabel} — ${zoom.label}`}
-          items={[...steps, ...items]}
-          align="start"
-          trigger={{
-            bare: true,
-            className:
-              'min-w-[3.9rem] h-6 px-1.5 inline-flex items-center justify-center gap-1 font-mono text-2xs ' +
-              'tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink',
-            text: (
-              <>
-                {zoom.label}
-                <span className="text-faint" aria-hidden="true">
-                  ▾
-                </span>
-              </>
-            ),
-          }}
-        />
+        {panel('h-6 px-1.5')}
       </div>
     );
   }
@@ -97,26 +100,8 @@ export default function StageZoomControl({
       >
         −
       </button>
-      {items && items.length > 0 ? (
-        <OverflowMenu
-          label={`${menuLabel} — ${zoom.label}`}
-          items={items}
-          align="start"
-          trigger={{
-            bare: true,
-            className:
-              'min-w-[3.9rem] px-1 inline-flex items-center justify-center gap-1 font-mono text-2xs ' +
-              'tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink',
-            text: (
-              <>
-                {zoom.label}
-                <span className="text-faint" aria-hidden="true">
-                  ▾
-                </span>
-              </>
-            ),
-          }}
-        />
+      {hasPanel ? (
+        panel('px-1')
       ) : (
         <button
           type="button"

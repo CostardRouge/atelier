@@ -728,9 +728,26 @@ state belongs inside something of FIXED width — a menu hanging off a label tha
 is already there — never in the flow between two buttons a hand is aiming at.
 `OverflowMenu` gained `trigger.bare` for it (`className` is then the whole
 recipe, so none of `Button`'s font, height, padding or `shrink-0` fights the
-caller's), and `StageZoomControl` takes optional `items` that turn its
-percentage into that menu. The same prop is what lets a file NAME carry a menu
-(`develop-roll.md`, B2).
+caller's), and `StageZoomControl` takes optional `sections` that turn its
+percentage into that panel (a `SettingsMenu` since 2026-10-20, below). The same
+`bare` trigger is what lets a file NAME carry a menu (`develop-roll.md`, B2).
+
+**The zoom's percentage opens a SETTINGS PANEL, not a list (2026-10-20, his
+pick A of three labs — A https://claude.ai/artifact/9b8tZLpQQd7xDkgwFdbQWa,
+B sections https://claude.ai/artifact/5f5o6agTz9oyMQxJU9xtEv, C a ruler of
+rungs and magnified swatches https://claude.ai/artifact/J5PFR48SqMu6Y2kBYURpeT;
+his «très laides … il faudrait un séparateur … comme le filtre … des
+icônes»).** Five mono rows each with a sentence under it read as one undivided
+block. Now: a *Zoom* row (Fit · 1:1 glyphs, the percentage in words under its
+name — `SettingsSection.note`), a *Past 100 %* row (smooth · pixels glyphs), a
+rule, *Crop to this view* with its key (greyed with its reason when the view is
+already the crop — actions take `disabled` now), and a `caption` foot naming the
+gestures, hidden under a finger. Every sentence moved into its glyph's tooltip.
+The pill draws no ± at ANY width (`folded`, his follow-up the same day: «le
+même design sur ordinateur et téléphone»): zoom out / in sit at the two ends of
+the Zoom row, the pill outside is the percentage alone; a phone adds Focus /
+Keys as actions below a rule. Crop mode keeps the plain `− % +` pill. `SettingsMenu`
+takes `trigger.bare` like `OverflowMenu`. Driven headless at 1440 and 390 only.
 
 ## 2026-09-28 — A section whose controls no longer reach what they set is LOCKED, and says so
 
