@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import AssetSidebar from './AssetSidebar';
 import LoadingState from '../shared/ui/LoadingState';
 import SourcesScreen from './SourcesScreen';
@@ -30,6 +30,8 @@ import { buttonClass } from '../shared/ui/Button';
 import { useRegisterCommands } from '../shared/commands/use-commands';
 import { appCommands } from './app-commands';
 import { useMediaActions } from '../shared/sources/media-scope';
+import { ShellExtrasProvider, useShellChrome } from '../shared/ui/shell-chrome';
+import { useShellExtrasValue } from './shell-extras';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -247,6 +249,27 @@ export default function App() {
   // one tool, two different ways to the same library depending on the screen.
   const sectionBar = useSectionBar();
   const showRail = compact && !!tool;
+  // An editor that asked for the screen (`shell-chrome.tsx`): no masthead,
+  // the bottom bar laid OVER it in glass — and gone while its chrome is
+  // hidden. Its height is published as `--shell-bar-h`, which is how the
+  // tool keeps what it floats above the bar.
+  const chrome = useShellChrome();
+  const immersive = compact && !!tool && !!chrome?.immersive;
+  const chromeHidden = immersive && !!chrome?.hidden;
+  const railFloats = immersive && !!chrome?.floating;
+  // A callback ref, not `useElementSize`: the bar's box comes and goes with
+  // the route while the shell stays mounted, so it is observed when it lands.
+  const [railEl, setRailEl] = useState<HTMLDivElement | null>(null);
+  const [railHeight, setRailHeight] = useState(0);
+  useEffect(() => {
+    if (!railEl) return;
+    const measure = () => setRailHeight(railEl.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(railEl);
+    return () => ro.disconnect();
+  }, [railEl]);
+  const extras = useShellExtrasValue(tool);
 
   // Every tool runs in a fixed-height, FULL-WIDTH frame — editing wants every
   // pixel (a landscape clip beside two panels eats width fast), so tools run
@@ -275,7 +298,7 @@ export default function App() {
   // the interface drift into the margin. Anything legitimately wider than the
   // screen scrolls inside its own container, untouched by this.
   const toolShell = compact
-    ? 'h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full pt-[env(safe-area-inset-top)]'
+    ? 'relative h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full pt-[env(safe-area-inset-top)]'
     : 'h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full px-4 pt-3 pb-3';
 
   return (
@@ -285,12 +308,14 @@ export default function App() {
         must never be less than a notch, whatever a launch decides to put
         there. Left and right are paid by `body` (`index.css`). */}
     <div
+      style={railFloats ? ({ '--shell-bar-h': `${chromeHidden ? 0 : railHeight}px` } as CSSProperties) : undefined}
       className={
         tool
           ? toolShell
           : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[max(clamp(1.25rem,4vw,3rem),env(safe-area-inset-top))] pb-20'
       }
     >
+      {!immersive && (
       <header
         className={`flex items-baseline justify-between gap-4 border-b border-line ${
           tool ? (compact ? 'flex-none h-12 px-3 items-center' : 'pb-2.5') : 'pb-4'
@@ -344,6 +369,7 @@ export default function App() {
           </a>
         </div>
       </header>
+      )}
 
       <main
         className={
@@ -383,7 +409,7 @@ export default function App() {
               </ErrorBoundary>
             )}
             <div className="flex-1 min-w-0 flex flex-col min-h-0">
-              {activeContent}
+              <ShellExtrasProvider value={extras}>{activeContent}</ShellExtrasProvider>
             </div>
           </>
         ) : (
@@ -423,9 +449,16 @@ export default function App() {
       )}
 
       {/* The library, then the tool's own cells, in the thumb zone. */}
-      {showRail && (
-        <SectionRail bar={sectionBar} onLibrary={() => setLibraryOpen(true)} />
-      )}
+      {showRail &&
+        (railFloats || chromeHidden ? (
+          // Over the tool, in glass; its own `hidden` takes it off with the
+          // tool's chrome (a tap on the picture), and nothing is measured then.
+          <div ref={setRailEl} className={`absolute inset-x-0 bottom-0 z-20 ${chromeHidden ? 'hidden' : ''}`}>
+            <SectionRail bar={sectionBar} onLibrary={() => setLibraryOpen(true)} floating />
+          </div>
+        ) : (
+          <SectionRail bar={sectionBar} onLibrary={() => setLibraryOpen(true)} />
+        ))}
 
       {/* Tools run in a fixed-height frame, so the global footer would push it
           past the viewport — show it only on the Home landing. */}

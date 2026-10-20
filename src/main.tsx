@@ -5,6 +5,7 @@ import ErrorBoundary from './app/ErrorBoundary';
 import { AssetLibraryProvider } from './shared/library/AssetLibraryContext';
 import { MediaScopeProvider } from './shared/sources/media-scope';
 import { SectionBarProvider } from './shared/ui/section-rail';
+import { ShellChromeProvider } from './shared/ui/shell-chrome';
 import { LayoutModeProvider } from './shared/ui/use-layout-mode';
 import { installPressFeedback } from './shared/ui/press-dom';
 import { installCommandConsole } from './shared/commands/console';
@@ -75,7 +76,9 @@ createRoot(document.getElementById('root')!).render(
         <AssetLibraryProvider>
           <MediaScopeProvider>
             <SectionBarProvider>
-              <App />
+              <ShellChromeProvider>
+                <App />
+              </ShellChromeProvider>
             </SectionBarProvider>
           </MediaScopeProvider>
         </AssetLibraryProvider>

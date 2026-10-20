@@ -28,6 +28,7 @@
  */
 
 import type { SectionBar } from './section-rail';
+import { GLASS } from './shell-chrome';
 
 const CELL =
   'min-h-[44px] py-1.5 rounded-paper border-0 cursor-pointer font-mono text-3xs tracking-[0.08em] uppercase truncate transition-colors duration-200 ease-paper';
@@ -37,16 +38,18 @@ export interface SectionRailProps {
   bar: SectionBar | null;
   /** Opens the shell's library. Omitted only if there is no library to open. */
   onLibrary?: () => void;
+  /** Laid over an immersive tool (`shell-chrome.tsx`): glass instead of the surface. */
+  floating?: boolean;
 }
 
-export default function SectionRail({ bar, onLibrary }: SectionRailProps) {
+export default function SectionRail({ bar, onLibrary, floating = false }: SectionRailProps) {
   const sections = bar?.sections ?? [];
   if (sections.length === 0 && !onLibrary) return null;
 
   return (
     <nav
       aria-label={bar?.label ?? 'Library'}
-      className="flex-none flex items-stretch gap-0.5 px-1.5 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-line bg-surface"
+      className={`flex-none flex items-stretch gap-0.5 px-1.5 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-line ${floating ? GLASS : 'bg-surface'}`}
     >
       {onLibrary && (
         <>
