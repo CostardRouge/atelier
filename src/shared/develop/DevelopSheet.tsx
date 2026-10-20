@@ -495,25 +495,32 @@ function DevelopSheetBody({
         </div>
 
         {/* Footer: Enter is Done, Escape is Cancel. */}
-        <div className="flex-none flex items-center gap-2 pt-3 border-t border-line">
-          {footerHint && <span className={developLegendClass}>{footerHint}</span>}
-          {told && (
-            <span className="font-mono text-2xs text-accent-ink" role="status">
-              · {told}
-            </span>
-          )}
-          <span className="flex-1" />
-          <button type="button" onClick={onCancel} className={developButtonClass}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={done}
-            className={`px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent transition-[background-color,border-color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-accent data-pressed:border-accent`}
-          >
-            Done
-            <span className="ml-1.5 font-mono text-3xs opacity-70">↵</span>
-          </button>
+        {/* The words take the row's free width, two lines at most; on a phone
+            they take a row of their own above the verbs — squeezed beside
+            Cancel and Done they stacked one word per line. */}
+        <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 pt-3 border-t border-line">
+          <p className="m-0 min-w-0 flex-1 max-[820px]:basis-full line-clamp-2 leading-snug" title={told ?? undefined}>
+            {footerHint && <span className={developLegendClass}>{footerHint}</span>}
+            {told && (
+              <span className="font-mono text-2xs text-accent-ink" role="status">
+                {footerHint ? ' · ' : ''}
+                {told}
+              </span>
+            )}
+          </p>
+          <span className="ml-auto flex-none flex items-center gap-2">
+            <button type="button" onClick={onCancel} className={developButtonClass}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={done}
+              className={`px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent transition-[background-color,border-color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-accent data-pressed:border-accent`}
+            >
+              Done
+              <span className="ml-1.5 font-mono text-3xs opacity-70">↵</span>
+            </button>
+          </span>
         </div>
       </div>
     </div>

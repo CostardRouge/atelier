@@ -50,6 +50,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Fixed
 
+- On a phone, the Develop sheet's footer gives its message a line of its own above Cancel and Done instead of
+  squeezing it into a column one word wide.
 - Escape in a menu opened inside a sheet (the Develop sheet's Auto verbs, its file list) closes the menu only; it
   no longer cancels the sheet and its changes with it.
 - Winnow thumbnails on a phone no longer go missing at random, in the picker and the Library alike: a tile asks for

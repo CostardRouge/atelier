@@ -506,7 +506,10 @@ hosts' sheet (Trips' Picture tab, the Studio's Grade tab): menu over the
 modal, Escape closing the menu only, Done writing the develop. At 375 px
 (touch): the bar and ▾ are 44 px, the menu FLIPS above the bar (rows 44 px),
 Pick grey's arm closes it and a tap on the picture picks — in the tool's
-drawer and the Trips sheet alike.
+drawer and the Trips sheet alike. The sheet's FOOTER wraps on a phone (2026-10-20): its
+words (`footerHint` · `told`) are one `line-clamp-2` paragraph that takes the
+row's free width and, under 820 px, a row of its own above Cancel / Done —
+beside them it was squeezed to one word per line.
 
 **The Crop tab's Auto level and Crop to subject are switches too** (his
 question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over
