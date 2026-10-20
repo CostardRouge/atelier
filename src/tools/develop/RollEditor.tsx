@@ -146,7 +146,8 @@ import SettingsMenu, { type SettingsSection } from '../../shared/ui/SettingsMenu
 import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
-import { GLASS, usePublishShellChrome, useShellExtras } from '../../shared/ui/shell-chrome';
+import { GLASS, usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
@@ -2448,7 +2449,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   usePublishShellChrome(
     useMemo(() => (immersive ? { immersive: true, floating, hidden: focus } : null), [immersive, floating, focus]),
   );
-  const shellExtras = useShellExtras();
   const [nameSlot, setNameSlot] = useState<HTMLElement | null>(null);
 
   const addLabel =
@@ -2643,8 +2643,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     />
   ) : null;
   const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
-  // The phone's ⋯: the ways in, Develop's settings, then what the masthead
-  // held (`shell-chrome.tsx`) — one menu where there used to be a bar, a gear
+  // The phone's ⋯: the ways in and Develop's settings; `PhoneHeader` adds
+  // what the masthead held — one menu where there used to be a bar, a gear
   // and a masthead.
   const moreItems: OverflowItem[] = [
     ...addItems.map((it) => ({
@@ -2660,7 +2660,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       onSelect: () => openDevelopSettings(),
       rule: true,
     },
-    ...(shellExtras?.menu ?? []),
   ];
 
   return (
@@ -2688,25 +2687,22 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           still names every way in). The Trips overview's bar, the same fix. */}
       {/* In focus the bar goes with the band and the inspector: the picture, its own row, nothing else. */}
       {!focus && immersive && (
-        <div
-          className={`z-20 flex items-center gap-1 h-[46px] px-1 border border-line rounded-paper-lg ${
-            floating ? `absolute inset-x-0 top-1 ${GLASS}` : 'flex-none mt-1 bg-surface'
-          }`}
-        >
-          <IconButton variant="ghost" onClick={onBack} label="Back to the rolls">
-            {Icons.back}
-          </IconButton>
-          {/* The roll over the picture's own name — the list of the
-              capture's files, drawn here by the workbench (`nameSlot`). */}
-          <span className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-            <RollTitle name={roll.name} size="sm" onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))} />
-            <span ref={setNameSlot} className="min-w-0 flex text-xs" />
-          </span>
-          {shellExtras?.pills}
-          {headerExtra}
-          {historyControl}
-          <OverflowMenu label="More — add pictures, settings, the rest of Atelier" size="md" items={moreItems} />
-        </div>
+        <PhoneHeader
+          floating={floating}
+          back={{ label: 'Back to the rolls', onClick: onBack }}
+          // The roll over the picture's own name — the list of the capture's
+          // files, drawn here by the workbench (`nameSlot`).
+          title={<RollTitle name={roll.name} size="sm" onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))} />}
+          subtitle={<span ref={setNameSlot} className="min-w-0 flex text-xs" />}
+          trailing={
+            <>
+              {headerExtra}
+              {historyControl}
+            </>
+          }
+          menu={moreItems}
+          menuLabel="More — add pictures, settings, the rest of Atelier"
+        />
       )}
       {!focus && !immersive && (
         <PageBar
