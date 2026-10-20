@@ -11,6 +11,7 @@ import {
 import {
   ROLL_DOC_KIND,
   deleteRemoteRoll,
+  fetchRemoteRoll,
   listRemoteRolls,
   mirrorRoll,
   moveRoll,
@@ -27,6 +28,7 @@ import {
   putRoll,
 } from '../../shared/develop/roll-store';
 import { addPictures, createRollDoc, rollProgress, type RollDoc } from '../../shared/develop/roll-types';
+import type { RollSummary } from '../../shared/develop/roll-summary';
 import { cloneRoll } from '../../shared/develop/clone-roll';
 import { rollFileOf } from './RollEditor';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
@@ -63,9 +65,12 @@ function formatWhen(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-/** The first four pictures' thumbnails as a mosaic — what a roll is recognised by. */
-function RollCover({ roll, remoteOnly }: { roll: RollDoc; remoteOnly: boolean }) {
-  const ids = roll.pictures.slice(0, 4).map((p) => p.id);
+/**
+ * The first four pictures' thumbnails as a mosaic — what a roll is recognised
+ * by. `coverIds` stands in for the pictures on a card listed by its summary.
+ */
+function RollCover({ roll, remoteOnly, coverIds }: { roll: RollDoc; remoteOnly: boolean; coverIds?: string[] }) {
+  const ids = coverIds ?? roll.pictures.slice(0, 4).map((p) => p.id);
   const idsKey = ids.join('|');
   const [blobs, setBlobs] = useState<Blob[]>([]);
   useEffect(() => {
@@ -113,6 +118,7 @@ function RollCard({
   isOpen,
   fresh = false,
   remoteOnly,
+  summary,
   moveTargets,
   busy,
   onOpen,
@@ -122,6 +128,8 @@ function RollCard({
   onMove,
 }: {
   roll: RollDoc;
+  /** A card listed by its summary: the counts and the cover come from it, `roll` holds no pictures. */
+  summary?: RollSummary;
   isOpen: boolean;
   /** Just cloned: drawn with the accent until the gallery lets it go. */
   fresh?: boolean;
@@ -136,8 +144,10 @@ function RollCard({
 }) {
   const compact = useIsCompact();
   const [confirming, setConfirming] = useState<{ kind: 'delete' } | { kind: 'move'; to: SourceInfo } | null>(null);
-  const { total, developed } = rollProgress(roll);
-  const withLook = roll.pictures.filter((p) => p.grade).length;
+  const progress = rollProgress(roll);
+  const total = summary?.pictures ?? progress.total;
+  const developed = summary?.developed ?? progress.developed;
+  const withLook = summary?.withLook ?? roll.pictures.filter((p) => p.grade).length;
 
   // The whole card opens the roll (the trip and project cards' rule); the rest
   // is behind the ⋯, the destructive verb apart.
@@ -193,7 +203,7 @@ function RollCard({
       } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >
       <div className="block w-full bg-frame leading-[0] rounded-t-paper-lg overflow-hidden">
-        <RollCover roll={roll} remoteOnly={remoteOnly} />
+        <RollCover roll={roll} remoteOnly={remoteOnly} coverIds={summary?.cover} />
       </div>
       <div className={`flex flex-col ${compact ? 'gap-1.5 p-2.5' : 'gap-[0.55rem] p-[0.9rem_1rem_1rem]'}`}>
         <div className="flex items-center gap-2 min-w-0">
@@ -304,6 +314,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     // with the roll: nothing else will ever prune them.
     deleteLocal: deleteRollAndSidecars,
     mirror: mirrorRoll,
+    fetchRemote: fetchRemoteRoll,
     move: moveRoll,
   });
   const {
@@ -589,9 +600,10 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
                         remoteOnly
                         moveTargets={[]}
                         busy={busy[row.doc.id] ?? null}
-                        onOpen={() => void gallery.mirrorRemote(row).then(onOpen)}
+                        summary={row.summary}
+                        onOpen={() => void gallery.mirrorRemote(row).then((doc) => doc && onOpen(doc))}
                         onExport={() => undefined}
-                        onClone={() => setCloning(row.doc)}
+                        onClone={() => (row.partial ? undefined : setCloning(row.doc))}
                         onDelete={() => void gallery.remove(row.doc, row.etag)}
                         onMove={() => undefined}
                       />

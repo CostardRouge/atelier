@@ -35,6 +35,12 @@ export interface DocumentGalleryDriver<D extends { id: string; sourceId: string 
   deleteLocal(doc: D): Promise<unknown>;
   /** Take a server copy as this device's mirror, with a clean record. */
   mirror(sourceId: string, doc: D, etag: string): Promise<unknown>;
+  /**
+   * The whole document and its revision — what a `partial` row (listed by its
+   * summary) is completed with before it is mirrored. Throws the client's
+   * error. Only a driver whose list can return partial rows needs it.
+   */
+  fetchRemote?(remote: RemoteSource, id: string): Promise<{ doc: D; etag: string }>;
   move(doc: D, targetSourceId: string): Promise<{ ok: true; doc: D } | { ok: false; error: string }>;
 }
 
@@ -74,8 +80,12 @@ export interface DocumentGallery<D, Row> {
   /** Delete here and there; refused while the instance cannot be reached (no tombstones). */
   remove: (doc: D, etagHint: string | null) => Promise<boolean>;
   moveTo: (doc: D, targetSourceId: string) => Promise<void>;
-  /** A document only there: mirror it, then hand it back to open. */
-  mirrorRemote: (row: Row) => Promise<D>;
+  /**
+   * A document only there: mirror it, then hand it back to open — fetched
+   * first when the row only carried its summary. Null when that fetch failed
+   * (the notice says why).
+   */
+  mirrorRemote: (row: Row) => Promise<D | null>;
 }
 
 /**
@@ -234,12 +244,33 @@ export function useDocumentGallery<D extends { id: string; sourceId: string }, R
   );
 
   const mirrorRemote = useCallback(
-    async (row: Row): Promise<D> => {
+    async (row: Row): Promise<D | null> => {
+      const d = drv.current;
+      const { id, sourceId } = row.doc;
       setNotice(null);
-      setBusyFor(row.doc.id, `fetching from ${sourceLabel(row.doc.sourceId)}…`);
-      await drv.current.mirror(row.doc.sourceId, row.doc, row.etag);
-      setBusyFor(row.doc.id, null);
-      return row.doc;
+      setBusyFor(id, `fetching from ${sourceLabel(sourceId)}…`);
+      let doc = row.doc;
+      let etag = row.etag;
+      if (row.partial) {
+        // The row is a card drawn from a summary: the document itself comes
+        // now, and only it is ever written.
+        const remote = remoteFor(sourceId, d.kind);
+        if (!remote || !d.fetchRemote) {
+          setBusyFor(id, null);
+          setNotice(`Connect ${sourceLabel(sourceId)} to open this ${d.noun} — it is kept there.`);
+          return null;
+        }
+        try {
+          ({ doc, etag } = await d.fetchRemote(remote, id));
+        } catch (err) {
+          setBusyFor(id, null);
+          setNotice(`Could not fetch this ${d.noun} from ${remote.label}: ${explainFailure(failureOf(err), remote).text}`);
+          return null;
+        }
+      }
+      await d.mirror(sourceId, doc, etag);
+      setBusyFor(id, null);
+      return doc;
     },
     [setBusyFor],
   );

@@ -14,7 +14,7 @@
  * stored roll. No DOM; storage calls degrade like the store they wrap.
  */
 
-import { DOCS_APP, WinnowError, type WinnowDocRow } from '../sources/winnow/client';
+import { DOCS_APP, WinnowError } from '../sources/winnow/client';
 import { newSyncRecord, reduceSync, type PullOutcome, type SyncRecord } from '../sources/doc-sync';
 import {
   failureOf,
@@ -27,6 +27,7 @@ import {
 } from '../sources/doc-remote';
 import { boundJournal } from './journal';
 import { readRollDoc, type RollDoc } from './roll-types';
+import { readRollSummary, rollSummary, summaryCard, type RollSummary } from './roll-summary';
 import { toRollFile, rollDocFromFile } from './roll-file';
 import { deleteSyncRecord, getSyncRecord, putRoll, putSyncRecord } from './roll-store';
 
@@ -98,9 +99,20 @@ export function fitWireDoc(doc: RollDoc, maxBytes: number | null): Omit<RollDoc,
 
 // --- push / pull -----------------------------------------------------------
 
-/** One PUT of the roll, guarded by the etag we hold. Never throws. */
+/**
+ * One PUT of the roll, guarded by the etag we hold, its summary beside it so
+ * the gallery lists it without the body. Never throws.
+ */
 export function pushOnce(remote: RemoteSource, doc: RollDoc, etag: string | null): Promise<PushOutcome> {
-  return putDocOnce(remote, ROLL_DOC_KIND, doc.id, doc.version, fitWireDoc(doc, remote.maxBytes), etag);
+  return putDocOnce(
+    remote,
+    ROLL_DOC_KIND,
+    doc.id,
+    doc.version,
+    fitWireDoc(doc, remote.maxBytes),
+    etag,
+    rollSummary(doc) as unknown as Record<string, unknown>,
+  );
 }
 
 /**
@@ -141,23 +153,52 @@ export async function pullRoll(
 }
 
 export interface RemoteRollRow {
+  /** The roll — or, on a `partial` row, the CARD drawn from its summary: no pictures, never written. */
   doc: RollDoc;
   etag: string;
   updatedAt: string;
+  /** Listed by its summary: the roll itself is fetched before it is mirrored (`fetchRemoteRoll`). */
+  partial?: true;
+  summary?: RollSummary;
 }
 
-/** Every roll this account keeps there. Throws a `WinnowError` — the gallery explains it. */
+/**
+ * Every roll this account keeps there — by its SUMMARY where the instance
+ * keeps them (a few hundred bytes a roll, where the roll may weigh tens of
+ * MB), else whole. Throws a `WinnowError` — the gallery explains it.
+ */
 export async function listRemoteRolls(remote: RemoteSource): Promise<RemoteRollRow[]> {
-  const rows = await remote.client.listDocs(DOCS_APP, ROLL_DOC_KIND);
+  const rows = remote.summaries
+    ? await remote.client.listDocSummaries(DOCS_APP, ROLL_DOC_KIND)
+    : await remote.client.listDocs(DOCS_APP, ROLL_DOC_KIND);
   const out: RemoteRollRow[] = [];
-  for (const row of rows as WinnowDocRow[]) {
+  for (const row of rows) {
     try {
-      out.push({ doc: fromWireDoc(row.doc, row.id, remote.sourceId), etag: row.etag, updatedAt: row.updated_at });
+      if (row.doc !== undefined) {
+        out.push({ doc: fromWireDoc(row.doc, row.id, remote.sourceId), etag: row.etag, updatedAt: row.updated_at });
+        continue;
+      }
+      const summary = readRollSummary((row as { summary?: unknown }).summary);
+      if (!summary) continue;
+      out.push({
+        doc: summaryCard(row.id, remote.sourceId, summary),
+        etag: row.etag,
+        updatedAt: row.updated_at,
+        partial: true,
+        summary,
+      });
     } catch {
       // A row that is not a roll is skipped rather than taking the list down.
     }
   }
   return out;
+}
+
+/** One roll in full, with the revision it is at — what a summary card opens. Throws the client's error. */
+export async function fetchRemoteRoll(remote: RemoteSource, id: string): Promise<{ doc: RollDoc; etag: string }> {
+  const r = await remote.client.getDoc(DOCS_APP, id);
+  if (r === 'not-modified') throw new WinnowError('protocol', `${remote.label} answered 304 to an unconditional GET.`);
+  return { doc: fromWireDoc(r.row.doc, id, remote.sourceId), etag: r.row.etag };
 }
 
 /** Take a server copy as this device's mirror, with a clean record beside it. */

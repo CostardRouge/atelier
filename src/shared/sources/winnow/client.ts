@@ -224,6 +224,12 @@ export interface WinnowCapabilities {
     kinds?: string[];
     /** The body cap per document, in bytes; the client checks it BEFORE a PUT. */
     maxBytes?: number | null;
+    /**
+     * A PUT may carry a small `summary`, and the list answers with it in place
+     * of the body on `?fields=summary` (Winnow's migration 0056). Absent on an
+     * older instance, which only lists bodies.
+     */
+    summaries?: boolean;
   };
   /**
    * The BINARY bucket beside the documents (Winnow's migration 0044): blobs
@@ -774,7 +780,21 @@ export interface DocBody<T = unknown> {
   kind: string;
   version: number;
   doc: T;
+  /**
+   * What a gallery card draws, stored beside the body and listed in its place
+   * (`listDocSummaries`). Sent on every PUT that has one: an instance writes
+   * it with each body, so it never describes an older one.
+   */
+  summary?: Record<string, unknown>;
 }
+
+/**
+ * A row of the summary list: the summary its last PUT sent in place of the
+ * body — or, for a row with none (written before summaries, or by an older
+ * client), the body as before.
+ */
+export type WinnowDocListRow<T = unknown> = Omit<WinnowDocRow<T>, 'doc'> &
+  ({ summary: unknown; doc?: undefined } | { summary?: undefined; doc: T });
 
 /** What a GET hands back: the row, or word that ours is still current. */
 export type GetDocResult<T = unknown> = { row: WinnowDocRow<T> } | 'not-modified';
@@ -1370,6 +1390,19 @@ export class WinnowClient {
   /** Every document of one kind this account holds there, body included. */
   async listDocs<T = unknown>(app: string, kind: string): Promise<WinnowDocRow<T>[]> {
     const raw = await this.json<{ docs?: WinnowDocRow<T>[] }>(this.docsUrl(app, undefined, { kind }));
+    return raw.docs ?? [];
+  }
+
+  /**
+   * Every document of one kind, each by its SUMMARY where it has one and by
+   * its body where it does not — only on an instance whose capabilities say
+   * `documents.summaries`; an older one would ignore the parameter and send
+   * every body, which reads the same way.
+   */
+  async listDocSummaries<T = unknown>(app: string, kind: string): Promise<WinnowDocListRow<T>[]> {
+    const raw = await this.json<{ docs?: WinnowDocListRow<T>[] }>(
+      this.docsUrl(app, undefined, { kind, fields: 'summary' }),
+    );
     return raw.docs ?? [];
   }
 

@@ -19,6 +19,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Visits are counted lightly with the author's own Umami, cookie-free: the home page and which tool was opened, never
   a document or a file; a browser that says no (Do Not Track, Global Privacy Control) is never counted.
 
+### Changed
+
+- Develop: the gallery lists the rolls kept on a Winnow by a small summary, so it opens without downloading every roll;
+  a roll is fetched when you open it.
+
 ### Fixed
 
 - Develop: a roll kept on a Winnow no longer stops saving once it passes the instance's 1 MB document cap. The saved

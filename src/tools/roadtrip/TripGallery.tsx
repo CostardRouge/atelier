@@ -827,7 +827,8 @@ export default function TripGallery({
 
   /** A trip kept there and not here yet: pull, mirror, then open. */
   async function handleOpenRemote(row: RemoteTripRow, settings?: TripSettingsSection) {
-    open(await gallery.mirrorRemote(row), settings);
+    const trip = await gallery.mirrorRemote(row);
+    if (trip) open(trip, settings);
   }
 
   return (
