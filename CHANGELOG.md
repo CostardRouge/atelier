@@ -47,6 +47,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Fixed
 
+- Escape in a menu opened inside a sheet (the Develop sheet's Auto verbs, its file list) closes the menu only; it
+  no longer cancels the sheet and its changes with it.
 - Winnow thumbnails on a phone no longer go missing at random, in the picker and the Library alike: a tile asks for
   its picture itself when it comes near the screen, treats a request the network dropped as a failure after
   twelve seconds, retries more patiently (a second, three, eight), and one that gave up tries again on a tap, when

@@ -114,14 +114,21 @@ export function AnchoredPopover({
       if (within?.current?.contains(target) || menuRef.current?.contains(target)) return;
       latest.current.onClose();
     };
+    // Escape closes the MENU and nothing under it: a menu opened inside a
+    // sheet (the Develop sheet's Auto verbs, its file list) heard the sheet
+    // cancel on the same press, throwing its draft away. The capture phase
+    // runs before the sheet's own window listener, and the sheet's key rule
+    // (`dialog-keys.ts`) stands down on `defaultPrevented`.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') latest.current.onClose();
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      latest.current.onClose();
     };
     window.addEventListener('pointerdown', close);
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [within]);
 
