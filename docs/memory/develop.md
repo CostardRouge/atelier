@@ -501,7 +501,9 @@ would cover the picture). Rejected faces: A (master Auto in the header + short
 chips), B (one segmented well — reads as an exclusive choice), C (glyph tiles,
 54 px tall). Cost accepted: a verb is two clicks away, not one. A host without
 `all` gets a bar that only opens the menu. Driven in the pane at 1280 and 860
-(dark): toggles, Auto's take-back, Pick grey's arm and pick.
+(dark): toggles, Auto's take-back, Pick grey's arm and pick; and in BOTH
+hosts' sheet (Trips' Picture tab, the Studio's Grade tab): menu over the
+modal, Escape closing the menu only, Done writing the develop.
 
 **The Crop tab's Auto level and Crop to subject are switches too** (his
 question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over
