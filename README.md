@@ -139,6 +139,15 @@ first free name in the chosen place (`Vol du soir` → `Vol du soir (2)`, no
 suffix where the name is free), you can type another, and a status line then
 offers Open and Undo.
 
+**On a phone the clip has the screen.** With a clip open there is no
+`Atelier / Studio` masthead: one header line holds the way back, the project's
+name over the clip (its switcher and its menu of the capture's files), undo,
+redo, the save dot and a ⋯ with the project's settings and the rest of
+Atelier. The header, the transport and the bottom bar float over the stage in
+frosted paper, and **a tap on the dark frame around the picture hides them
+all** (a tap on the picture is the overlay's, as ever). The inspector's five
+tabs still rise as sheets from the bottom bar.
+
 **Settings travel as a file.** Project settings (the ⚙ chip in the project
 bar) has an *Import / export* section: **Export settings** downloads
 `<project>.atelier.json` — that same portable half, custom `.cube` text

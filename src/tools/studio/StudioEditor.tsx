@@ -168,6 +168,8 @@ import { VERB_GROUND, VerbButton } from '../../shared/ui/VerbMarks';
 import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { GLASS, usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
@@ -337,6 +339,22 @@ export default function StudioEditor({
       [compact, active, tab, inspectorOpen],
     ),
   );
+  // A phone's IMMERSIVE layout (2026-10-20, pick C of the space lab
+  // https://claude.ai/artifact/GunaDcNsUtVM3nW1xiyQ2V, Develop's first): with a
+  // clip open, no masthead, ONE header line (the project over the clip), and
+  // the header, the transport and the shell's bar float over the stage in
+  // glass. The inspector is a sheet over all of it, so nothing has to come
+  // back into the flow. A tap on the stage's frame AROUND the picture hides
+  // them all — a tap on the picture is the overlay's, as ever.
+  const immersive = compact && !!active;
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const hidden = immersive && chromeHidden;
+  useEffect(() => {
+    if (inspectorOpen) setChromeHidden(false);
+  }, [inspectorOpen]);
+  usePublishShellChrome(useMemo(() => (immersive ? { immersive: true, floating: true, hidden } : null), [immersive, hidden]));
+  /** Over the stage, above the shell's bar; gone with the chrome. */
+  const floatingBox = hidden ? 'hidden' : `absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] ${GLASS}`;
   const [activeError, setActiveError] = useState(false);
   const [activeInfo, setActiveInfo] = useState<ContainerInfo>({});
   // Telemetry as parsed, with rates derived against the file's own seconds; the
@@ -2180,8 +2198,71 @@ export default function StudioEditor({
   const hasChanged = changedCount > 0;
   const mediaTrouble = hasMissing || hasChanged;
 
+  // The clip in hand: its switcher, its name, which of its files is on the
+  // stage and what it is — a row of its own above a phone, the second line
+  // of the one header on a phone.
+  const clipLine = active ? (
+      <div className={immersive ? 'flex items-center gap-1.5 m-0 min-w-0 overflow-hidden text-xs' : 'flex items-center gap-[0.7rem] m-0 min-w-0'}>
+        {clips.length > 1 && (
+          <div className="flex items-center gap-1 flex-none">
+            <button
+              type="button"
+              className="w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink-soft cursor-pointer leading-none hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
+              onClick={goPrev}
+              disabled={activeIndex <= 0}
+              aria-label="Previous clip"
+            >
+              ‹
+            </button>
+            <span className="font-mono text-2xs text-muted tabular-nums min-w-[3ch] text-center">
+              {activeIndex + 1}/{clips.length}
+            </span>
+            <button
+              type="button"
+              className="w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink-soft cursor-pointer leading-none hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
+              onClick={goNext}
+              disabled={activeIndex >= clips.length - 1}
+              aria-label="Next clip"
+            >
+              ›
+            </button>
+          </div>
+        )}
+        <span
+          className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+          title={active.baseName}
+        >
+          {active.baseName}
+        </span>
+        {/* Which of the capture's files is on the stage — the proxy, the
+            rush, the camera's JPEG — and the others one click away. Drawn
+            only where there is something to switch to. */}
+        <StageRenditionMenu
+          baseName={active.baseName}
+          rows={stageRendition.rows}
+          current={stageRendition.current}
+          fetching={stageRendition.fetching}
+          onChoose={stageRendition.choose}
+        />
+        {/* On a phone's one header line the name and its files are what fit. */}
+        {activeDetail && !immersive && (
+          <span className="font-mono text-xs tracking-[0.02em] text-muted flex-none">
+            {activeDetail}
+          </span>
+        )}
+        {/* Said only once the file has actually been read: a chip that
+            appears while the EXIF block is still being parsed reads as a
+            verdict on a photo nobody has looked at yet. */}
+        {!immersive && !hasTelemetry && (isPhoto ? photoExif !== null : activeSrt === null) && (
+          <span className="font-mono text-2xs tracking-[0.08em] uppercase text-faint flex-none border border-line rounded-full px-2 py-[2px]">
+            {isPhoto ? 'no exif' : 'no telemetry'}
+          </span>
+        )}
+      </div>
+  ) : null;
+
   return (
-    <section className="flex flex-col flex-1 min-h-0 gap-4" aria-label="Studio">
+    <section className={`relative flex flex-col flex-1 min-h-0 ${immersive ? 'gap-2' : 'gap-4'}`} aria-label="Studio">
       {/* Project bar: back to gallery, editable name, then — pinned right —
           the save state and the format/settings pill. Every pill shares one
           height so the row reads as a single band, not a drift of chips.
@@ -2190,55 +2271,97 @@ export default function StudioEditor({
           six characters wide and "Untitled" read as "Untitl". The documented
           shape for a row mixing fixed pills with something elastic — the pills
           keep their width, the whole group drops a line. */}
-      <PageBar
-        back={{ label: 'Projects', onClick: onShowProjects }}
-        trailing={
-          <>
-            {history.control}
-            {headerExtra}
-            <span
-              className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${
-                showSaveLabel ? 'gap-1.5' : 'justify-center w-[2.125rem] px-0'
-              } ${save.cls}`}
-              aria-label={save.label}
-            >
-              <span
-                className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`}
-                aria-hidden="true"
+      {immersive ? (
+        !hidden && (
+          <PhoneHeader
+            floating
+            back={{ label: 'Back to the projects', onClick: onShowProjects }}
+            title={
+              <input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                aria-label="Project name"
+                className="w-full min-w-0 font-serif text-base leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
               />
-              {showSaveLabel && save.label}
-            </span>
-            {/* The pill is a summary; a live region carries the whole state so
-                a screen reader hears it change whatever the width. */}
-            <span className="sr-only" role="status" aria-live="polite">
-              {save.label}
-            </span>
-            <Button
-              onClick={() => setShowSettings(true)}
-              className="font-mono text-2xs tracking-[0.06em]"
-              title="Project settings — name, format, import/export"
-              trailing={Icons.settings}
-            >
-              {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
-            </Button>
-          </>
-        }
-      >
-        {/* The one thing in the bar that is NOT a pill, and it is allowed
-            because it is one line high: a project is found again by what it is
-            called, and the field is where the name is read as well as typed.
-            A title that needs two lines goes under the bar instead — see
-            `PageBar` and the trip overview. */}
-        <input
-          value={projectName}
-          onChange={(e) => setProjectName(e.target.value)}
-          aria-label="Project name"
-          /* Exactly the pills' own height, or the row centres a 32px field
-             against a 30px pill and pushes the back button 1px down — the
-             whole point of the bar is that it does not move. */
-          className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[2.125rem] font-serif text-lg bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
-        />
-      </PageBar>
+            }
+            subtitle={clipLine}
+            trailing={
+              <>
+                {history.control}
+                {headerExtra}
+                <span
+                  className={`${barPill} bg-paper justify-center w-[2.125rem] px-0 ${save.cls}`}
+                  aria-label={save.label}
+                  title={save.label}
+                >
+                  <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`} aria-hidden="true" />
+                </span>
+                <span className="sr-only" role="status" aria-live="polite">
+                  {save.label}
+                </span>
+              </>
+            }
+            menu={[
+              {
+                id: 'project-settings',
+                label: `Project settings · ${ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}`,
+                title: 'Name, format, import/export',
+                onSelect: () => setShowSettings(true),
+              },
+            ]}
+          />
+        )
+      ) : (
+        <PageBar
+          back={{ label: 'Projects', onClick: onShowProjects }}
+          trailing={
+            <>
+              {history.control}
+              {headerExtra}
+              <span
+                className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${
+                  showSaveLabel ? 'gap-1.5' : 'justify-center w-[2.125rem] px-0'
+                } ${save.cls}`}
+                aria-label={save.label}
+              >
+                <span
+                  className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`}
+                  aria-hidden="true"
+                />
+                {showSaveLabel && save.label}
+              </span>
+              {/* The pill is a summary; a live region carries the whole state so
+                  a screen reader hears it change whatever the width. */}
+              <span className="sr-only" role="status" aria-live="polite">
+                {save.label}
+              </span>
+              <Button
+                onClick={() => setShowSettings(true)}
+                className="font-mono text-2xs tracking-[0.06em]"
+                title="Project settings — name, format, import/export"
+                trailing={Icons.settings}
+              >
+                {ASPECT_PRESETS.find((a) => a.id === aspectId)?.id ?? aspectId}
+              </Button>
+            </>
+          }
+        >
+          {/* The one thing in the bar that is NOT a pill, and it is allowed
+              because it is one line high: a project is found again by what it is
+              called, and the field is where the name is read as well as typed.
+              A title that needs two lines goes under the bar instead — see
+              `PageBar` and the trip overview. */}
+          <input
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            aria-label="Project name"
+            /* Exactly the pills' own height, or the row centres a 32px field
+               against a 30px pill and pushes the back button 1px down — the
+               whole point of the bar is that it does not move. */
+            className="grow shrink basis-[9rem] min-w-0 max-w-[24rem] h-[2.125rem] font-serif text-lg bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0"
+          />
+        </PageBar>
+      )}
 
       {developOpen && active && activeFile && (
         <DevelopSheet
@@ -2323,6 +2446,9 @@ export default function StudioEditor({
         />
       )}
 
+      {/* The floating header sits over the top of the screen: a notice there
+          starts under it. */}
+      {immersive && !hidden && (renamedCount > 0 || mediaTrouble) && <div className="h-[48px] flex-none" aria-hidden="true" />}
       {renamedCount > 0 && (
         <div className={`${noticeMuted} m-0`}>
           {renamedCount === 1
@@ -2364,65 +2490,8 @@ export default function StudioEditor({
         </div>
       )}
 
-      {/* Header: clip switcher + name + detail */}
-      {active && (
-        <div className="flex items-center gap-[0.7rem] m-0 min-w-0">
-          {clips.length > 1 && (
-            <div className="flex items-center gap-1 flex-none">
-              <button
-                type="button"
-                className="w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink-soft cursor-pointer leading-none hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
-                onClick={goPrev}
-                disabled={activeIndex <= 0}
-                aria-label="Previous clip"
-              >
-                ‹
-              </button>
-              <span className="font-mono text-2xs text-muted tabular-nums min-w-[3ch] text-center">
-                {activeIndex + 1}/{clips.length}
-              </span>
-              <button
-                type="button"
-                className="w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink-soft cursor-pointer leading-none hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default"
-                onClick={goNext}
-                disabled={activeIndex >= clips.length - 1}
-                aria-label="Next clip"
-              >
-                ›
-              </button>
-            </div>
-          )}
-          <span
-            className="font-semibold text-sm whitespace-nowrap overflow-hidden text-ellipsis"
-            title={active.baseName}
-          >
-            {active.baseName}
-          </span>
-          {/* Which of the capture's files is on the stage — the proxy, the
-              rush, the camera's JPEG — and the others one click away. Drawn
-              only where there is something to switch to. */}
-          <StageRenditionMenu
-            baseName={active.baseName}
-            rows={stageRendition.rows}
-            current={stageRendition.current}
-            fetching={stageRendition.fetching}
-            onChoose={stageRendition.choose}
-          />
-          {activeDetail && (
-            <span className="font-mono text-xs tracking-[0.02em] text-muted flex-none">
-              {activeDetail}
-            </span>
-          )}
-          {/* Said only once the file has actually been read: a chip that
-              appears while the EXIF block is still being parsed reads as a
-              verdict on a photo nobody has looked at yet. */}
-          {!hasTelemetry && (isPhoto ? photoExif !== null : activeSrt === null) && (
-            <span className="font-mono text-2xs tracking-[0.08em] uppercase text-faint flex-none border border-line rounded-full px-2 py-[2px]">
-              {isPhoto ? 'no exif' : 'no telemetry'}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Header: clip switcher + name + detail — on a phone, the header's second line. */}
+      {active && !immersive && clipLine}
 
       {/*
         Body: stage + inspector.
@@ -2459,6 +2528,10 @@ export default function StudioEditor({
             className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
               hasFrame ? 'bg-frame' : 'bg-transparent'
             }`}
+            // A phone's tap on the frame AROUND the picture shows or hides the chrome.
+            onClick={(e) => {
+              if (immersive && e.target === e.currentTarget) setChromeHidden((h) => !h);
+            }}
           >
             {hasFrame ? (
               <canvas
@@ -2497,7 +2570,7 @@ export default function StudioEditor({
           </div>
 
           {activeUrl && (
-            <div className="flex flex-col gap-[0.45rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
+            <div className={`flex flex-col gap-[0.45rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper ${immersive ? floatingBox : 'bg-surface flex-none'}`}>
              {/* Two groups, and the row wraps between them: the rail (play,
                  clock, trim, duration) keeps a usable width, and the tools drop
                  to a line of their own rather than pushing the last one past
@@ -2646,7 +2719,7 @@ export default function StudioEditor({
               control that is about the picture rather than about time: the A/B
               wipe, which is how a grade gets judged. */}
           {isPhoto && photo && (
-            <div className="flex flex-wrap items-center gap-2 px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">
+            <div className={`flex flex-wrap items-center gap-2 px-[0.85rem] py-[0.6rem] border border-line rounded-paper ${immersive ? floatingBox : 'bg-surface flex-none'}`}>
               <span className="font-mono text-2xs tracking-[0.1em] uppercase text-faint">
                 Still
               </span>

@@ -33,6 +33,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- The Studio on a phone gives a clip the screen, as Develop does: no masthead, one header line (back, the project over
+  the clip, undo/redo, the save dot, ⋯ with project settings and the rest of Atelier), and the header, the transport and
+  the bottom bar float over the stage. A tap on the frame around the picture hides them.
 - Trips on a phone gives a piece the screen, as Develop does: no masthead, one header line (back, the piece over its
   day, undo/redo, Export as its glyph, ⋯ with Trip settings and the rest of Atelier), and the header, the band and the
   bottom bar float over the frame's margins. A tap on the paper around the frame hides them; with the Picture or Look
