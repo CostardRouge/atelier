@@ -165,7 +165,7 @@ import Segmented from '../../shared/ui/Segmented';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
-import type { OverflowItem } from '../../shared/ui/OverflowMenu';
+import type { SettingsSection } from '../../shared/ui/SettingsMenu';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
@@ -2648,68 +2648,88 @@ export default function PictureWorkbench({
   pictureRef.current = picture;
 
   /**
-   * What hangs off the zoom's percentage: the two rungs a menu can name, then
-   * how a magnified pixel is DRAWN. Both readings are true at every scale, but
-   * the mode only changes the picture past 1:1 — so each says where it applies
-   * instead of the control vanishing below it, which is what used to move the
-   * bar under the pointer.
+   * What hangs off the zoom's percentage — his pick A of the zoom-menu lab
+   * (https://claude.ai/artifact/9b8tZLpQQd7xDkgwFdbQWa), the contact sheet's
+   * settings panel: the two rungs a menu can name, then how a magnified pixel
+   * is DRAWN, each a row of glyphs whose state is filled and said in a word
+   * under its name; a rule; the verb with its key. The sentences each row used
+   * to carry are the glyphs' tooltips. Both drawing modes are true at every
+   * scale but only change the picture past 1:1 — so the row says where it
+   * applies instead of vanishing below it, which is what used to move the bar
+   * under the pointer.
    */
-  const zoomRow = (marked: boolean, title: string, hint: string) => (
-    <span className="flex flex-col items-start gap-0.5 text-left">
-      <span className="font-mono text-xs">
-        {marked ? '· ' : '  '}
-        {title}
-      </span>
-      <span className="font-mono text-3xs text-faint leading-relaxed max-w-[18rem] whitespace-normal">{hint}</span>
-    </span>
-  );
-  // A phone folds the zoom's ± and the view's verbs into one menu (`StageZoomControl`'s `folded`).
+  // A phone folds the zoom's ± and the view's verbs into the panel (`StageZoomControl`'s `folded`).
   const foldView = compact && !cropping;
-  const atOnePixel = Math.abs(picture.view.zoom.scale - picture.view.onePixel) < 0.005;
-  const zoomItems: OverflowItem[] = [
+  const zoomNow = picture.view.zoom;
+  const atOnePixel = Math.abs(zoomNow.scale - picture.view.onePixel) < 0.005;
+  const zoomRung = !picture.view.zoomed ? 'fit' : atOnePixel ? 'one' : null;
+  const zoomSections: SettingsSection[] = [
     {
-      id: 'fit',
-      label: zoomRow(!picture.view.zoomed, 'Fit', 'the whole picture, in the room it has'),
-      disabled: !picture.view.zoomed,
-      onSelect: () => picture.view.zoom.reset(),
+      kind: 'choice',
+      id: 'zoom',
+      label: 'Zoom',
+      note: zoomNow.label,
+      value: zoomRung,
+      onPick: (id) => {
+        if (id === 'fit') zoomNow.reset();
+        else if (id === 'one') zoomNow.zoomTo?.(picture.view.onePixel);
+        else if (id === 'out') zoomNow.zoomOut();
+        else if (id === 'in') zoomNow.zoomIn();
+      },
+      options: [
+        ...(foldView
+          ? [{ id: 'out', icon: Icons.zoomOut, label: 'Zoom out', disabled: zoomNow.canZoomOut ? undefined : 'Already the widest view' }]
+          : []),
+        { id: 'fit', icon: Icons.zoomFit, label: 'Fit — the whole picture, in the room it has' },
+        {
+          id: 'one',
+          icon: Icons.zoomOne,
+          label: '100 % — one of the picture’s pixels per pixel of this screen',
+          disabled: zoomNow.zoomTo ? undefined : 'This view cannot go to an exact scale',
+        },
+        ...(foldView
+          ? [{ id: 'in', icon: Icons.zoomIn, label: 'Zoom in', disabled: zoomNow.canZoomIn ? undefined : 'Already the closest view' }]
+          : []),
+      ],
     },
     {
-      id: 'one-pixel',
-      label: zoomRow(atOnePixel, '100 %', 'one of the picture’s pixels per pixel of this screen'),
-      disabled: atOnePixel || !picture.view.zoom.zoomTo,
-      onSelect: () => picture.view.zoom.zoomTo?.(picture.view.onePixel),
+      kind: 'choice',
+      id: 'drawn',
+      label: 'Past 100 %',
+      note: pixelView === 'pixels' ? 'pixels' : 'smooth',
+      value: pixelView,
+      onPick: (id) => setPixelView(id === 'pixels' ? 'pixels' : 'smooth'),
+      options: [
+        { id: 'smooth', icon: Icons.drawSmooth, label: 'Smooth — the gradients between pixels are the browser’s, not the picture’s' },
+        { id: 'pixels', icon: Icons.drawPixels, label: 'Pixels as pixels — nothing is invented between them' },
+      ],
     },
+    { kind: 'rule', id: 'r-verbs' },
     {
-      id: 'smooth',
-      label: zoomRow(
-        pixelView === 'smooth',
-        'Smooth',
-        'past 100 %, the gradients between pixels are the browser’s, not the picture’s',
-      ),
-      onSelect: () => setPixelView('smooth'),
-    },
-    {
-      id: 'pixels',
-      label: zoomRow(pixelView === 'pixels', 'Pixels as pixels', 'past 100 %, nothing is invented between them'),
-      onSelect: () => setPixelView('pixels'),
-    },
-    {
+      kind: 'action',
       id: 'crop-view',
-      label: zoomRow(false, 'Crop to this view', 'what the screen shows becomes the crop · ⇧C'),
-      disabled: !cropToView,
+      icon: Icons.crop,
+      label: 'Crop to this view',
+      hint: '⇧C',
+      title: 'What the screen shows becomes the crop',
+      disabled: cropToView ? undefined : 'Zoom in first — the view already shows the whole crop',
       onSelect: () => cropToView?.(),
     },
     // On a phone the bar cannot hold the zoom pill and the whole well (a
     // 390 px screen lost Focus and Keys off its right edge): the view's own
-    // two verbs join the view's menu there, and leave the well.
+    // two verbs join the view's panel there, and leave the well.
     ...(foldView
-      ? [
+      ? ([
+          { kind: 'rule', id: 'r-view' },
           ...(onFocusMode
-            ? [{ id: 'focus', label: zoomRow(!!focused, 'Focus', 'the picture alone, nothing else on screen'), onSelect: onFocusMode }]
+            ? [{ kind: 'action', id: 'focus', icon: Icons.focus, label: focused ? 'Leave focus' : 'Focus', title: 'The picture alone, nothing else on screen', onSelect: onFocusMode }]
             : []),
-          { id: 'keys', label: zoomRow(false, 'Keys and gestures', 'what a finger and the keyboard can do here'), onSelect: () => setHelpOpen(true) },
-        ]
-      : []),
+          { kind: 'action', id: 'keys', icon: Icons.keyboard, label: 'Keys and gestures', title: 'What a finger and the keyboard can do here', onSelect: () => setHelpOpen(true) },
+        ] as SettingsSection[])
+      : ([
+          { kind: 'rule', id: 'r-hint' },
+          { kind: 'caption', id: 'hint', text: 'wheel · pinch · Z' },
+        ] as SettingsSection[])),
   ];
 
   return (
@@ -2820,7 +2840,7 @@ export default function PictureWorkbench({
                 zoom={picture.view.zoom}
                 hint="wheel, pinch, or Z"
                 className="flex-none"
-                items={zoomItems}
+                sections={zoomSections}
                 folded={foldView}
               />
             ))}

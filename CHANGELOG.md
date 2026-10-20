@@ -26,6 +26,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Develop: the zoom percentage opens a tidier panel — Fit and 1:1, then smooth or pixel-exact drawing past 100 %, as
+  icons with the current choice named, a separator, and *Crop to this view* with its shortcut.
 - Develop: the gallery lists the rolls kept on a Winnow by a small summary, so it opens without downloading every roll;
   a roll is fetched when you open it.
 

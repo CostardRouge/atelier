@@ -36,6 +36,8 @@ export type SettingsSection =
       kind: 'choice';
       id: string;
       label: string;
+      /** What is in force, said under the name (a percentage, a mode) — the glyphs alone do not say it in words. */
+      note?: string;
       options: readonly SettingsChoice[];
       /** The option in force; null when none is (an automatic height). */
       value: string | null;
@@ -48,8 +50,20 @@ export type SettingsSection =
       heading?: string;
       items: readonly { id: string; icon: ReactNode; label: string; on?: boolean; note?: string; title?: string; onSelect: () => void }[];
     }
-  | { kind: 'action'; id: string; icon: ReactNode; label: string; hint?: string; title?: string; onSelect: () => void }
-  | { kind: 'rule'; id: string };
+  | {
+      kind: 'action';
+      id: string;
+      icon: ReactNode;
+      label: string;
+      hint?: string;
+      title?: string;
+      /** Why it cannot be done now: greys it with that reason as its tooltip. */
+      disabled?: string | boolean;
+      onSelect: () => void;
+    }
+  | { kind: 'rule'; id: string }
+  /** A faint line at the foot — the gestures that do the same without the panel. Not drawn under a finger. */
+  | { kind: 'caption'; id: string; text: string };
 
 interface SettingsMenuProps {
   /** Names the trigger and the panel. */
@@ -58,8 +72,12 @@ interface SettingsMenuProps {
   size?: ButtonSize;
   side?: 'below' | 'above';
   align?: 'end' | 'start';
-  /** A worded trigger (the filter chip) instead of the ⋯. */
-  trigger?: { text: ReactNode; icon?: ReactNode; variant?: ButtonVariant; size?: ButtonSize; title?: string };
+  /**
+   * A worded trigger (the filter chip) instead of the ⋯. `bare` is the
+   * screen's OWN text as the trigger (the percentage inside a zoom pill),
+   * `className` then being its whole recipe — `OverflowMenu`'s rule.
+   */
+  trigger?: { text: ReactNode; icon?: ReactNode; variant?: ButtonVariant; size?: ButtonSize; title?: string; bare?: boolean; className?: string };
   className?: string;
 }
 
@@ -80,7 +98,10 @@ export function SettingsPanelBody({ sections, onDone }: { sections: readonly Set
           case 'choice':
             return (
               <div key={s.id} className="grid grid-cols-[6.5rem_auto] items-center gap-3 px-2 py-1.5">
-                <span className="text-xs text-ink-soft">{s.label}</span>
+                <span className="flex flex-col gap-px text-xs text-ink-soft">
+                  {s.label}
+                  {s.note && <span className="font-mono text-3xs text-muted tabular-nums">{s.note}</span>}
+                </span>
                 <div role="group" aria-label={s.label} className="inline-flex w-fit gap-0.5 p-0.5 rounded-[10px] border border-line-strong bg-paper">
                   {s.options.map((o) => (
                     <button
@@ -150,14 +171,24 @@ export function SettingsPanelBody({ sections, onDone }: { sections: readonly Set
                 ))}
               </div>
             );
+          case 'caption':
+            return (
+              <span key={s.id} className="block px-2 pt-1 pb-1.5 font-mono text-3xs text-muted [@media(pointer:coarse)]:hidden">
+                {s.text}
+              </span>
+            );
           case 'action':
             return (
               <button
                 key={s.id}
                 type="button"
-                title={s.title}
-                onClick={() => take(s.onSelect)}
-                className={`w-full flex items-center gap-2.5 px-2 py-2 [@media(pointer:coarse)]:py-2.5 border-0 rounded-[8px] bg-transparent text-left font-sans text-sm text-ink cursor-pointer hover:bg-paper-2 ${PRESS_LOOK}`}
+                title={typeof s.disabled === 'string' ? s.disabled : s.title}
+                aria-disabled={s.disabled ? true : undefined}
+                onClick={() => {
+                  if (s.disabled) return;
+                  take(s.onSelect);
+                }}
+                className={`w-full flex items-center gap-2.5 px-2 py-2 [@media(pointer:coarse)]:py-2.5 border-0 rounded-[8px] bg-transparent text-left font-sans text-sm text-ink cursor-pointer hover:bg-paper-2 aria-disabled:opacity-40 aria-disabled:cursor-default aria-disabled:hover:bg-transparent ${PRESS_LOOK}`}
               >
                 <span className="grid place-items-center text-base text-ink-soft">{s.icon}</span>
                 <span>{s.label}</span>
@@ -182,7 +213,19 @@ export default function SettingsMenu({ label, sections, size = 'sm', side = 'bel
 
   return (
     <div ref={rootRef} className={`relative inline-flex ${className}`}>
-      {trigger ? (
+      {trigger?.bare ? (
+        <button
+          type="button"
+          className={trigger.className}
+          title={trigger.title}
+          aria-label={label}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          onClick={toggle}
+        >
+          {trigger.text}
+        </button>
+      ) : trigger ? (
         <Button
           variant={trigger.variant ?? 'default'}
           size={trigger.size ?? size}

@@ -241,6 +241,16 @@ export const Icons = {
     </>,
   ),
   crop: icon(<path d="M7 3v14h14M3 7h14v14" />),
+  // The Develop zoom panel (variant A of its lab): the two rungs a menu can
+  // name, how a magnified pixel is drawn, and the steps a phone folds in.
+  zoomFit: icon(<><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4" /><rect x="8" y="8" width="8" height="8" rx="1" /></>),
+  zoomOne: icon(<><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="M8 10l1.5-1v6M14.5 10l1.5-1v6M12 11.2v.1M12 14.2v.1" /></>),
+  zoomIn: icon(<><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 20 20M8 10.5h5M10.5 8v5" /></>),
+  zoomOut: icon(<><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 20 20M8 10.5h5" /></>),
+  drawSmooth: icon(<path d="M3 17c4 0 5-10 9-10s5 10 9 10" />),
+  drawPixels: icon(<path d="M3 17h4v-5h4V7h2v5h4v5h4" />),
+  focus: icon(<><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5" /></>),
+  keyboard: icon(<><rect x="2.5" y="6" width="19" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" /></>),
   // A square of ground crossed by two roads and a lane: the streets under a map.
   streets: icon(
     <>
