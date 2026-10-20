@@ -211,14 +211,24 @@ export function isSingleDay(scope: MediaScope): boolean {
 
 interface MediaScopeState {
   scope: MediaScope | null;
-  publish: (scope: MediaScope | null) => void;
   actions: MediaActions | null;
-  publishActions: (actions: MediaActions | null) => void;
   intake: MediaIntake | null;
+}
+
+interface MediaScopePublish {
+  publish: (scope: MediaScope | null) => void;
+  publishActions: (actions: MediaActions | null) => void;
   publishIntake: (intake: MediaIntake | null) => void;
 }
 
 const MediaScopeContext = createContext<MediaScopeState | null>(null);
+/**
+ * The publishers' side, apart from what was published: its three setters
+ * never change, so a tool that only PUBLISHES is never re-rendered by its own
+ * publication — with one context, a tool publishing a record rebuilt per
+ * render re-rendered itself without end.
+ */
+const MediaScopePublishContext = createContext<MediaScopePublish | null>(null);
 
 export function MediaScopeProvider({ children }: { children: ReactNode }) {
   const [scope, setScope] = useState<MediaScope | null>(null);
@@ -230,11 +240,16 @@ export function MediaScopeProvider({ children }: { children: ReactNode }) {
   // without the field-by-field equality a function would defeat.
   const [actions, setActions] = useState<MediaActions | null>(null);
   const [intake, setIntake] = useState<MediaIntake | null>(null);
-  const value = useMemo(
-    () => ({ scope, publish, actions, publishActions: setActions, intake, publishIntake: setIntake }),
-    [scope, publish, actions, intake],
+  const value = useMemo(() => ({ scope, actions, intake }), [scope, actions, intake]);
+  const publishers = useMemo(
+    () => ({ publish, publishActions: setActions, publishIntake: setIntake }),
+    [publish],
   );
-  return <MediaScopeContext.Provider value={value}>{children}</MediaScopeContext.Provider>;
+  return (
+    <MediaScopePublishContext.Provider value={publishers}>
+      <MediaScopeContext.Provider value={value}>{children}</MediaScopeContext.Provider>
+    </MediaScopePublishContext.Provider>
+  );
 }
 
 /** The shell's side: what the active tool is on, or null. */
@@ -253,8 +268,7 @@ export function useMediaScope(): MediaScope | null {
  * that has not opted in, publishes into the void rather than throwing.
  */
 export function usePublishMediaScope(scope: MediaScope | null): void {
-  const ctx = useContext(MediaScopeContext);
-  const publish = ctx?.publish;
+  const publish = useContext(MediaScopePublishContext)?.publish;
   useEffect(() => {
     if (!publish) return;
     publish(scope);
@@ -274,8 +288,7 @@ export function useMediaActions(): MediaActions | null {
  * something on a screen nobody is on any more.
  */
 export function usePublishMediaActions(actions: MediaActions | null): void {
-  const ctx = useContext(MediaScopeContext);
-  const publish = ctx?.publishActions;
+  const publish = useContext(MediaScopePublishContext)?.publishActions;
   useEffect(() => {
     if (!publish) return;
     publish(actions);
@@ -295,8 +308,7 @@ export function useMediaIntake(): MediaIntake | null {
  * open any more.
  */
 export function usePublishMediaIntake(intake: MediaIntake | null): void {
-  const ctx = useContext(MediaScopeContext);
-  const publish = ctx?.publishIntake;
+  const publish = useContext(MediaScopePublishContext)?.publishIntake;
   useEffect(() => {
     if (!publish) return;
     publish(intake);

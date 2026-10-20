@@ -65,13 +65,26 @@ export function useSlideIntake({
   /** Slides this session added through the intake — the only ones a tile may take back. */
   const added = useRef(new Set<string>());
 
+  // What the shell is told, keyed on what it SAYS — the slides' ids, numbers,
+  // pictures and thumbnails — never on the deck's identity, which a badge
+  // slider rebuilds every frame: the record is published, and a new one per
+  // edit would re-render the Library on every step of every drag.
+  const thumbs = slides.map((s) => thumbFor(s));
+  const shape = slides
+    .map((s, i) => [s.slideId, s.kind, s.position, slideBases(s).join(','), thumbs[i] ?? ''].join('\u0001'))
+    .join('\u0002');
+  const slidesRef = useRef(slides);
+  slidesRef.current = slides;
+  const thumbsRef = useRef(thumbs);
+  thumbsRef.current = thumbs;
   const places = useMemo(() => {
     const map = new Map<string, number>();
-    for (const slide of slides) {
+    for (const slide of slidesRef.current) {
       for (const b of slideBases(slide)) if (!map.has(b)) map.set(b, slide.position);
     }
     return map;
-  }, [slides]);
+    // `shape` names everything read here.
+  }, [shape]);
 
   /** The slide this session added that holds this picture alone, or null. */
   const addedHolding = useCallback((name: string) => {
@@ -117,16 +130,19 @@ export function useSlideIntake({
   );
 
   const pictures = slides.filter((s) => s.kind !== 'cta').length;
+  const openId = open?.slideId ?? null;
+  const openAt = open && open.kind !== 'cta' ? open.position : null;
   const items = useMemo<IntakeItem[]>(
     () =>
-      slides.map((s) => ({
+      slidesRef.current.map((s, i) => ({
         key: s.slideId,
         number: s.kind === 'cta' ? null : s.position,
-        thumb: thumbFor(s),
-        open: s.slideId === open?.slideId,
+        thumb: thumbsRef.current[i] ?? null,
+        open: s.slideId === openId,
         fresh: added.current.has(s.slideId),
       })),
-    [slides, thumbFor, open?.slideId],
+    // `shape` names everything read here.
+    [shape, openId],
   );
   const intake = useMemo<MediaIntake>(
     () => ({
@@ -140,12 +156,12 @@ export function useSlideIntake({
       remove,
       locked,
       together: { word: 'collage', max: MAX_COLLAGE_PICTURES },
-      afterOpen: open && open.kind !== 'cta' ? `After slide ${open.position}` : null,
-      openAt: open && open.kind !== 'cta' ? open.position : null,
+      afterOpen: openAt !== null ? `After slide ${openAt}` : null,
+      openAt,
       title: 'This piece',
       items,
     }),
-    [places, pictures, addedHolding, add, remove, locked, open, items],
+    [places, pictures, addedHolding, add, remove, locked, openAt, items],
   );
   return { intake, insertAfter };
 }
