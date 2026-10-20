@@ -27,6 +27,7 @@ import type { HookPicture } from './hooks/hook-variant';
 import { slideRender, slideSettleSeconds } from './slide-render';
 import type { TripDoc, TripPost } from './trip-types';
 import type { ExifData } from '../exif/exif-parser';
+import { isAbortError } from '../sources/fetch-options';
 
 /**
  * The long edge every still of a deck is written at. One number, exported,
@@ -109,10 +110,10 @@ export async function renderDeck(
       if (slide.collage) {
         // Every cell's picture, the lead's first; each cell's cube is the
         // slide's grade baked with THAT cell's develop.
-        cells = await loadCollageSources(slide, slide.collage, opts.resolve, { maxEdge: exportEdge() });
+        cells = await loadCollageSources(slide, slide.collage, opts.resolve, { maxEdge: exportEdge() }, opts.signal);
       } else {
         const file = opts.resolve(slide.media);
-        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds, { maxEdge: exportEdge() });
+        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds, { maxEdge: exportEdge() }, opts.signal);
       }
 
       // What this slide is made of — its badge, its opener, its shades, its
@@ -140,6 +141,9 @@ export async function renderDeck(
         film: opts.filmFor?.(slide) ?? null,
         // The rest of a Develop picture's edit, over the slide's own picture.
         edit: slide.edit,
+        // The run's cancel reaches every wait inside the slide, not only the
+        // check between two.
+        signal: opts.signal,
       });
       if (blob) {
         out.push({
@@ -150,9 +154,11 @@ export async function renderDeck(
           blob,
         });
       }
-    } catch {
+    } catch (err) {
       // A slide that cannot be decoded is dropped; the caller reports the
-      // shortfall by comparing what came back with the deck's length.
+      // shortfall by comparing what came back with the deck's length. A
+      // cancel is not a slide's failure: what rendered is handed back.
+      if (isAbortError(err)) break;
     } finally {
       source?.release();
       cells?.release();
