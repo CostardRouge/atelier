@@ -48,8 +48,10 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Trips: the band's `+` no longer copies the open picture into a new slide; **Duplicate this slide** in ⋯ copies the
   whole slide instead.
 
-- The home page keeps its masthead on a phone, now with a third glyph beside the theme and GitHub at every width: the
-  sources (green once a Winnow is connected).
+- Every slider's orange value line is drawn whole again; it only opens where it would run through the setting's
+  name, its reset arrow or its value.
+- The home page on a phone opens on the same one-line header as every other screen: the wordmark and a ⋯ with the
+  editors, the sources, the theme and GitHub.
 - Trips' gallery on a phone drops the masthead too: one header line (the way back to every tool, Trips and its count
   of trips, a ⋯ with New trip, Import and the rest of Atelier).
 - The Studio's gallery on a phone drops the masthead too: one header line (the way back to every tool, Studio and its

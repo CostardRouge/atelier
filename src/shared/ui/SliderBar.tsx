@@ -22,9 +22,13 @@
  * Its focus ring is drawn INSIDE the bar, and only for the keyboard
  * (2026-10-14, his screenshot): an outer ring was cut off by the section's
  * edge, and the press's own focus lit it on every drag.
+ *
+ * The value's edge is whole, and opens only where it would cross a piece of
+ * the bar's text (`slider-edge.ts`), measured after every render and on every
+ * resize — written straight to the line's style, never through state.
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Icons } from './icons';
 import {
   HOLD_TO_TYPE_MS,
@@ -40,6 +44,7 @@ import {
   valueAtPoint,
   type SliderRange,
 } from './slider-gesture';
+import { edgeGap, edgeLeft, edgePaint, type PieceBox } from './slider-edge';
 
 export interface SliderBarProps {
   /** The name drawn inside the bar, at its left. */
@@ -120,6 +125,48 @@ export default function SliderBar({
   const [ring, setRing] = useState(false);
   const pressed = useRef(false);
   const scale = typedScale(words, range);
+
+  // The value's edge opens only across a piece of text it would cross: every
+  // child of the row but the spacer, measured against the bar's padding box,
+  // which is what the line is positioned in.
+  const edgeRef = useRef<HTMLSpanElement>(null);
+  const rowRef = useRef<HTMLSpanElement>(null);
+  const painted = useRef('');
+  const openEdge = useRef(() => {});
+  openEdge.current = () => {
+    const bar = barRef.current;
+    const line = edgeRef.current;
+    const row = rowRef.current;
+    if (!bar || !line || !row || !bar.clientWidth) return;
+    const box = bar.getBoundingClientRect();
+    const x0 = box.left + bar.clientLeft;
+    const y0 = box.top + bar.clientTop;
+    const pieces: PieceBox[] = [];
+    for (const child of row.children) {
+      if (child instanceof HTMLElement && child.dataset.spacer !== undefined) continue;
+      const r = child.getBoundingClientRect();
+      pieces.push({ left: r.left - x0, right: r.right - x0, top: r.top - y0, bottom: r.bottom - y0 });
+    }
+    const paint = edgePaint(edgeGap(edgeLeft(edge, bar.clientWidth), pieces, bar.clientHeight));
+    if (paint !== painted.current) {
+      painted.current = paint;
+      line.style.background = paint;
+    }
+  };
+  useLayoutEffect(() => openEdge.current());
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(() => openEdge.current());
+    observer.observe(bar);
+    // A web font that lands after the first measure changes every width.
+    let live = true;
+    void document.fonts?.ready.then(() => live && openEdge.current());
+    return () => {
+      live = false;
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -256,12 +303,12 @@ export default function SliderBar({
         className="absolute inset-y-0 bg-accent-wash"
         style={{ left: `${fill.left * 100}%`, width: `${fill.width * 100}%` }}
       />
-      {/* The value's edge, open across the band the words are written in:
-          drawn whole, it ran through the value at one end of the range and
-          through the name and its ↺ near the middle. */}
+      {/* The value's edge: whole, open only where it crosses the words
+          (`openEdge`). Its paint is written by the measure, never here. */}
       <span
+        ref={edgeRef}
         aria-hidden="true"
-        className="absolute inset-y-0 w-0.5 bg-[linear-gradient(to_bottom,var(--color-accent)_0_27%,transparent_27%_73%,var(--color-accent)_73%)]"
+        className="absolute inset-y-0 w-0.5 bg-accent"
         style={{ left: `clamp(0px, calc(${edge * 100}% - 1px), calc(100% - 2px))` }}
       />
       {/* The one raw range the lint allows: it is the bar's keyboard and its
@@ -287,7 +334,7 @@ export default function SliderBar({
         }}
         className="absolute inset-0 w-full h-full m-0 opacity-0 pointer-events-none"
       />
-      <span className="relative flex items-center h-full gap-1.5 pl-3 pr-2.5 pointer-events-none">
+      <span ref={rowRef} className="relative flex items-center h-full gap-1.5 pl-3 pr-2.5 pointer-events-none">
         {/* In the bar's own left padding, so every name starts at the same x
             whether or not its row can depart from a default. */}
         {departed && <span aria-hidden="true" className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
@@ -310,7 +357,7 @@ export default function SliderBar({
             )}
           </span>
         )}
-        <span className="flex-1" />
+        <span data-spacer className="flex-1" />
         {typing !== null ? (
           <input
             // Focused once, selected so the first keystroke replaces it, and
