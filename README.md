@@ -94,8 +94,10 @@ Today it ships ten tools, converging into a few editors:
 > (`insight.steevepommier.com`) — the home page's view and which tool was
 > opened, nothing else: never a document, a route inside a tool, a file name
 > or a position, and no cookie. A browser that says no (Do Not Track, Global
-> Privacy Control) is never counted, and `localStorage["umami.disabled"]`
-> switches it off in this browser; only the two deployed hosts are counted
+> Privacy Control) is never counted, and the switch on the legal notice
+> (`#/legal`, from the home page's footer — it says all of this in one place,
+> the requests above included) stops counting in this browser, by writing
+> Umami's own `localStorage["umami.disabled"]`; only the two deployed hosts are counted
 > (a fork or a local build never is), and a build with an empty
 > `VITE_UMAMI_WEBSITE_ID` makes no such request at all.
 

@@ -116,6 +116,41 @@ function send(fn: (umami: Umami) => void): void {
   if (queue.length < MAX_QUEUE) queue.push(fn);
 }
 
+/** What the legal notice says about this browser: the build does not count, the browser said no, the person did, or it counts. */
+export type AudienceState = 'off' | 'declined' | 'opted-out' | 'on';
+
+export function audienceState(): AudienceState {
+  if (!settings()) return 'off';
+  let optedOut = false;
+  try {
+    optedOut = Boolean(localStorage.getItem(OPT_OUT_KEY));
+  } catch {
+    // Storage refused: no choice could have been kept.
+  }
+  if (optedOut) return 'opted-out';
+  return browserDeclines() ? 'declined' : 'on';
+}
+
+/**
+ * The legal notice's switch. Writes Umami's own opt-out key, which the
+ * tracker reads before every send too, so stopping is immediate; counting
+ * again lets a tracker already here go on, and one never loaded start with
+ * the next view.
+ */
+export function setOptOut(off: boolean): void {
+  try {
+    if (off) localStorage.setItem(OPT_OUT_KEY, '1');
+    else localStorage.removeItem(OPT_OUT_KEY);
+  } catch {
+    // Storage refused: the choice cannot be kept, and nothing is counted anyway (`stop` below, or no key to read).
+  }
+  if (off) {
+    stop();
+    return;
+  }
+  if (status === 'off') status = window.umami ? 'ready' : 'idle';
+}
+
 /** Where the visitor came from, when it is another site: its origin and path, never its query or fragment. */
 function externalReferrer(): string {
   try {
