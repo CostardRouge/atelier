@@ -1602,7 +1602,9 @@ His «avec tes recommandations». Rules (`snapshots.ts`, pure; drawn by `History
   https://claude.ai/artifact/9DWWRJzStAeFCMJDn5jP3n): the list opens from a
   THIRD segment of the undo pair (`UndoRedo`'s `more`), a clock whose badge
   counts the steps ↶ has (accent in the roll's scope, ink plus a small square
-  in the photo's). It saved the inspector a tab and the phone's bottom bar a
+  in the photo's). The pair's border CLIPS (`overflow-hidden` rounds its
+  corners), so the badge sits INSIDE the segment's top-right corner and the
+  glyph is nudged left to clear it — a badge hung over the edge was cut. It saved the inspector a tab and the phone's bottom bar a
   cell (six at 390 px). A popover, the same at every width; a snapshot's
   Rename/Remove open INLINE, since a menu portalled out of the popover closes
   it on its own press. The stage is the preview: a restore reaches the

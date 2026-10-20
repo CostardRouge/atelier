@@ -62,7 +62,10 @@ export default function HistoryControl(props: HistoryControlProps) {
         more={
           <button
             type="button"
-            className={`${HALF} w-[2.375rem] ${open ? 'bg-paper-2' : ''}`}
+            // The pair's border CLIPS (it rounds its corners with
+            // `overflow-hidden`), so the badge and the scope's mark sit
+            // INSIDE this segment, at its top-right corner, never over the edge.
+            className={`${HALF} relative w-[2.875rem] [&>svg]:-translate-x-[5px] ${open ? 'bg-paper-2' : ''}`}
             aria-label={label}
             title={label}
             aria-expanded={open}
@@ -73,21 +76,19 @@ export default function HistoryControl(props: HistoryControlProps) {
               setOpen((o) => !o);
             }}
           >
-            <span className="relative inline-flex">
-              {Icons.clock}
-              {undo.count > 0 && (
-                <span
-                  aria-hidden="true"
-                  className={`absolute -top-1.5 -right-2.5 min-w-[0.95rem] h-[0.95rem] px-[3px] rounded-full font-mono text-3xs leading-[0.95rem] text-center tabular-nums ${
-                    photo ? 'bg-ink-soft text-paper' : 'bg-accent text-paper'
-                  }`}
-                >
-                  {undo.count > 99 ? '99+' : undo.count}
-                </span>
-              )}
-              {/* The photo's scope says itself on the glyph too, not by colour alone. */}
-              {photo && <span aria-hidden="true" className="absolute -bottom-1 -right-2 w-[7px] h-[7px] rounded-[2px] bg-ink-soft ring-[1.5px] ring-surface" />}
-            </span>
+            {Icons.clock}
+            {undo.count > 0 && (
+              <span
+                aria-hidden="true"
+                className={`absolute top-[3px] right-[3px] min-w-[0.875rem] h-[0.875rem] px-[3px] rounded-full font-mono text-3xs leading-[0.875rem] text-center tabular-nums ring-[1.5px] ring-surface ${
+                  photo ? 'bg-ink-soft text-paper' : 'bg-accent text-paper'
+                }`}
+              >
+                {undo.count > 99 ? '99+' : undo.count}
+              </span>
+            )}
+            {/* The photo's scope says itself on the glyph too, not by colour alone. */}
+            {photo && <span aria-hidden="true" className="absolute bottom-[5px] right-[6px] w-[6px] h-[6px] rounded-[1.5px] bg-ink-soft ring-[1.5px] ring-surface" />}
           </button>
         }
       />
