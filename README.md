@@ -2100,7 +2100,9 @@ off whatever picture it touched — a paste onto twelve pictures goes back on
 all twelve at once — while **This photo** puts the open photo alone back one
 step and leaves the others as they are. Both walk the same record of the
 session (200 steps), so switching loses nothing: a photo's own steps back
-are steps the roll's ↶ then undoes in order. **⌥⌘Z** / **⌥⇧⌘Z** step the
+are steps the roll's ↶ then undoes in order. The photo's ↶ also goes on
+back through the photo's own saved history, so it still steps back after a
+reload, when the session's record is empty. **⌥⌘Z** / **⌥⇧⌘Z** step the
 open photo whichever is chosen. Under it, the **snapshots**: *Photo* keeps
 every section of the open picture as it stands (the develop, the crop, the
 look, the layers, the repair…) under a name, *All N* keeps every picture of
