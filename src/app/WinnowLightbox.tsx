@@ -19,6 +19,8 @@ import { useCaptureView } from '../shared/develop/use-capture-view';
 import { renditionsOf, type Rendition } from '../shared/media/renditions';
 import { heldOriginal, heldVersion, subscribeHeld } from '../shared/sources/original-cache';
 import { captureMtime } from '../shared/sources/winnow/materialize';
+import type { CollectMark } from './CollectCorner';
+import IntakeVerb from './IntakeVerb';
 
 interface WinnowLightboxProps {
   connection: WinnowConnection;
@@ -46,6 +48,10 @@ interface WinnowLightboxProps {
    * on the last when going back.
    */
   onRoll: (side: Side, day: string) => void;
+  /** Where the active tool's intake has a row's picture, and what adds it — absent when none takes pictures in. */
+  collectFor?: (row: WinnowAssetRow) => CollectMark | null;
+  /** The number the next picture the intake takes gets. */
+  intakeNext?: number;
 }
 
 /**
@@ -90,6 +96,8 @@ export default function WinnowLightbox({
   filtered,
   neighbours,
   onRoll,
+  collectFor,
+  intakeNext = 0,
 }: WinnowLightboxProps) {
   // The day's own cards: its pictures, or the one card saying why there are
   // none to show — so the deck always has a middle for the edges to frame.
@@ -193,6 +201,8 @@ export default function WinnowLightbox({
   // thumbnail rule (`roadtrip.md`) says must not be composed over. The verb
   // is handed the file of the capture that was on screen.
   const offer = useMediaActions();
+  const mark = row && collectFor ? collectFor(row) : null;
+  const nextRow = row && bodyAt + 1 < rows.length ? () => onDeckIndex(deckIndex + 1) : null;
   const start = async (action: MediaAction) => {
     if (!row) return;
     const view = captureView.view;
@@ -220,9 +230,14 @@ export default function WinnowLightbox({
       // Enter does the one thing the sheet offers — and nothing at all once
       // the picture is already in the library.
       onConfirm={row && !have && !busy ? () => void picker.pick(row) : null}
+      onCollect={mark && mark.place === null ? mark.onAdd : null}
       footer={
         row && (
         <>
+          {/* Through the day, keeping pictures as new slides: the tool's
+              intake leads; bringing the picture into the Library alone, and
+              Winnow itself, follow. */}
+          {mark && <IntakeVerb mark={mark} next={intakeNext} onNext={nextRow} />}
           <div className="flex items-center gap-3 flex-wrap">
             {have ? (
               <span className="font-mono text-2xs tracking-[0.08em] uppercase text-muted">

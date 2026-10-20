@@ -14,6 +14,7 @@ import { useNeighbourDays } from '../shared/sources/winnow/use-neighbour-days';
 import { useMediaActions, useMediaIntake, useMediaScope, type IntakeOptions } from '../shared/sources/media-scope';
 import CollectCorner, { type CollectMark } from './CollectCorner';
 import IntakeStrip from './IntakeStrip';
+import IntakeVerb from './IntakeVerb';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
@@ -370,9 +371,14 @@ export default function AssetSidebar({
   const [intakeProblem, setIntakeProblem] = useState<string | null>(null);
   /** What the last add made, said over the piece in the sheet. */
   const [intakeNote, setIntakeNote] = useState<string | null>(null);
+  // The same keys, read synchronously: a second press (or `A` held) before
+  // the first add has rendered must not add the picture twice.
+  const addingNow = useRef(new Set<string>());
   const collect = useCallback(
     async (keys: readonly string[], files: () => Promise<File[]>, options?: IntakeOptions) => {
       if (!intakeRef.current || intakeRef.current.locked) return false;
+      if (keys.some((k) => addingNow.current.has(k))) return false;
+      for (const k of keys) addingNow.current.add(k);
       setAdding((prev) => new Set([...prev, ...keys]));
       setIntakeProblem(null);
       try {
@@ -393,6 +399,7 @@ export default function AssetSidebar({
         }
         return false;
       } finally {
+        for (const k of keys) addingNow.current.delete(k);
         setAdding((prev) => {
           const next = new Set(prev);
           for (const k of keys) next.delete(k);
@@ -951,10 +958,15 @@ export default function AssetSidebar({
             rolling.current = { edge: side === 'after' ? 'first' : 'last', left: scopeRows.rows };
             goToDay(day);
           }}
+          collectFor={intake ? rowMark : undefined}
+          intakeNext={intake?.next ?? 0}
         />
       )}
 
-      {viewing !== null && viewShown[viewing] && (
+      {viewing !== null && viewShown[viewing] && (() => {
+        const mark = localMark(viewable[viewing]);
+        const n = viewable.length;
+        return (
         <MediaLightbox
           items={viewShown}
           index={viewing}
@@ -965,8 +977,19 @@ export default function AssetSidebar({
           viewing={captureView.viewing}
           onViewing={captureView.setViewing}
           taskScope={viewedAsset?.id ?? null}
+          onCollect={mark && mark.place === null ? mark.onAdd : null}
           footer={
             <>
+              {/* Through a day, keeping pictures as new slides: the tool's
+                  intake leads the footer, «Use in» (put it on what is open)
+                  follows it. */}
+              {mark && intake && (
+                <IntakeVerb
+                  mark={mark}
+                  next={intake.next}
+                  onNext={n > 1 ? () => setViewing((viewing + 1) % n) : null}
+                />
+              )}
               {/* The picture is already here: making it active is all a verb
                   needs, and it is what carries it onto the new piece — with
                   the file of the capture that was on screen. Where the tool
@@ -1005,7 +1028,8 @@ export default function AssetSidebar({
             setViewing(null);
           }}
         />
-      )}
+        );
+      })()}
 
       {browsing && connection && client && (
         // Opens where the tab is looking: its day and its half.

@@ -14,6 +14,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Trips: a ＋ on every Library picture (local or from Winnow) adds it as a new slide of the open piece and keeps the
   Library open, so a day can be gone through picture by picture; the ＋ becomes the slide's number, which takes it
   back on a second press. On a phone the Library's sheet shows the piece growing at its head.
+- Trips: a picture looked at large offers **Add as slide N** and **Add and next**, and the `A` key adds it, so a day can
+  be paged through and kept one picture at a time.
 - Develop: press and hold the picture still to see it as shot, until you lift — on a phone, a tablet or with a mouse.
   A press that moves is still a swipe to the next picture, and a quick tap still hides the controls. On a touch
   screen the "hold for before" button is gone; a computer keeps it, and the \\ key.
