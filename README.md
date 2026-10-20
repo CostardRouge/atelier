@@ -181,7 +181,8 @@ with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
 Info / Export); tools run edge-to-edge so a landscape clip finally gets the
 width it needs. The whole suite has a **light and a dark theme**, chosen with
 the button in the masthead (a monitor follows the system, a sun and a moon
-are yours); the dark one is the same paper at night. **The editor sits in a
+are yours — on a phone, *Theme* in the header's ⋯, since there the masthead
+gives way to one header line on every screen, the home page included); the dark one is the same paper at night. **The editor sits in a
 darkroom**: while a project is open the
 paper gives way to hue-less grey around the picture, because a warm surround
 biases the eye's reading of a grade. The galleries and the rest of the suite

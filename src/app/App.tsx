@@ -32,6 +32,7 @@ import { appCommands } from './app-commands';
 import { useMediaActions } from '../shared/sources/media-scope';
 import { ShellExtrasProvider, useShellChrome } from '../shared/ui/shell-chrome';
 import { useShellExtrasValue } from './shell-extras';
+import PhoneHeader from '../shared/ui/PhoneHeader';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -269,7 +270,12 @@ export default function App() {
     ro.observe(railEl);
     return () => ro.disconnect();
   }, [railEl]);
-  const extras = useShellExtrasValue(tool);
+  // The suite's HOME on a phone wears the editors' one header line too
+  // (2026-10-20): the wordmark, then a ⋯ holding the editors, the sources,
+  // the theme and the repository — no chevron, every way back leads here.
+  // It scrolls away with the page, which is a reading page.
+  const homePhone = compact && !tool && !reading;
+  const extras = useShellExtrasValue(tool, homePhone);
 
   // Every tool runs in a fixed-height, FULL-WIDTH frame — editing wants every
   // pixel (a landscape clip beside two panels eats width fast), so tools run
@@ -312,10 +318,26 @@ export default function App() {
       className={
         tool
           ? toolShell
-          : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[max(clamp(1.25rem,4vw,3rem),env(safe-area-inset-top))] pb-20'
+          : homePhone
+            ? 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[max(0.5rem,env(safe-area-inset-top))] pb-20'
+            : 'max-w-[1080px] mx-auto px-[clamp(1.25rem,5vw,3.5rem)] pt-[max(clamp(1.25rem,4vw,3rem),env(safe-area-inset-top))] pb-20'
       }
     >
-      {!immersive && (
+      {homePhone && (
+        <ShellExtrasProvider value={extras}>
+          <PhoneHeader
+            floating={false}
+            title={
+              <a href={`#${HOME_PATH}`} className="font-serif italic text-xl leading-none text-ink no-underline">
+                Atelier
+              </a>
+            }
+            menu={[]}
+            menuLabel="The editors, the sources, the theme, the repository"
+          />
+        </ShellExtrasProvider>
+      )}
+      {!immersive && !homePhone && (
       <header
         className={`flex items-baseline justify-between gap-4 border-b border-line ${
           tool ? (compact ? 'flex-none h-12 px-3 items-center' : 'pb-2.5') : 'pb-4'
