@@ -97,6 +97,12 @@ export function useSlideLibrary(
    * failure re-runs the restore.
    */
   fetchedElsewhere?: ElsewhereFetch,
+  /**
+   * `activeFile` is the Library's fallback (nothing was active, the first
+   * selected asset stands in) rather than a tick someone moved — never
+   * written onto the slide (`library-sync.ts`, `tickImplicit`).
+   */
+  tickImplicit = false,
 ): SlideRecovery | null {
   const isCta = slide.kind === 'cta';
   const restoredFor = useRef<string | null>(null);
@@ -202,6 +208,7 @@ export function useSlideLibrary(
       // the two out of step is the document moving, and the restore above is
       // what answers it.
       tickMoved: seenActive.current !== activeFile,
+      tickImplicit,
       slideName: slide.media?.name ?? null,
       activeName: activeFile?.name ?? null,
     });
@@ -209,7 +216,11 @@ export function useSlideLibrary(
     // acted on the tick, so what it saw is not what the next pass compares
     // against: the pick made while a picture was being fetched back is still
     // a pick once that fetch lands.
-    if (move !== 'restore') seenActive.current = activeFile;
+    // A FALLBACK tick is no pick at all, so it is never kept pending either:
+    // seen at once, even while the restore stands down, or the pass after it
+    // — the same file, now written back as the Library's active — would read
+    // as the author moving the tick.
+    if (move !== 'restore' || tickImplicit) seenActive.current = activeFile;
     if (move !== 'record' || !activeFile) return;
     let cancelled = false;
     void hashedMediaRef(activeFile).then((ref) => {
@@ -218,7 +229,7 @@ export function useSlideLibrary(
     return () => {
       cancelled = true;
     };
-  }, [activeFile, claim, settled, slide.media, isCta, setSlideMedia]);
+  }, [activeFile, claim, settled, slide.media, isCta, setSlideMedia, tickImplicit]);
 
   return recovery;
 }

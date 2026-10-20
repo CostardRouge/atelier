@@ -610,6 +610,10 @@ export default function PostEditor({
     setSlideMedia,
     lib.addFiles,
     collageFetch.elsewhereFor(librarySlide.media),
+    // Nothing was active and the first selected asset stands in: the pool
+    // grew (a picture brought in as a NEW slide, a folder dropped), nobody
+    // picked — so it is never written onto the open slide.
+    active !== null && lib.activeId !== active.id,
   );
   const recovery = libraryRecovery ?? (collage ? collageFetch.recoveryOf(librarySlide.media) : null);
 
