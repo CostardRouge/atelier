@@ -175,6 +175,23 @@ export function reduceSync(record: SyncRecord, event: SyncEvent): SyncRecord {
   }
 }
 
+/**
+ * A record read back from the store on OPEN. `saving` is a state of this
+ * visit only — a push in flight — but every transition is persisted, so a tab
+ * closed mid-PUT left `saving` behind, which no trigger ever flushes again.
+ * Reopened, it is dirty: the push is retried (and, if it did land, the pull
+ * says so as a conflict the author settles, never a silent loss).
+ */
+export function reopenRecord(record: SyncRecord): SyncRecord {
+  if (record.status !== 'saving') return record;
+  return {
+    ...record,
+    status: 'dirty',
+    pushStartedAt: null,
+    dirtyAt: record.dirtyAt ?? record.pushStartedAt ?? record.syncedAt ?? 0,
+  };
+}
+
 /** The quiet before a push — long enough that typing does not push per word. */
 export const REMOTE_IDLE_MS = 5000;
 

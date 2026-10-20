@@ -4,6 +4,7 @@ import {
   afterPull,
   newSyncRecord,
   reduceSync,
+  reopenRecord,
   shouldFlush,
   type PullOutcome,
   type SyncRecord,
@@ -142,19 +143,35 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
   const remote = useMemo(() => (sourceId ? remoteFor(sourceId, kind) : null), [sourceId, kind]);
 
   const pushing = useRef(false);
+  /** `arm`, read by `flush`, which is declared before it. */
+  const armRef = useRef<() => void>(() => {});
   const flush = useCallback(
     async (force = false) => {
       const current = docRef.current;
       const rec = recordRef.current;
       if (!current || !rec || !remote || remote.sourceId !== current.sourceId) return;
-      if (pushing.current || opts.current.canPush?.() === false) return;
+      // A record only ever drives ITS document's push.
+      if (rec.id !== current.id) return;
+      if (opts.current.canPush?.() === false) return;
+      if (pushing.current) {
+        // One push at a time — but this ask must not be lost: an edit whose
+        // only timer fires during a long PUT would otherwise wait for an
+        // unrelated trigger.
+        armRef.current();
+        return;
+      }
       if (!shouldFlush(rec, Date.now(), force ? 0 : REMOTE_IDLE_MS)) return;
       pushing.current = true;
       try {
         setRecord(reduceSync(rec, { type: 'pushStarted', now: Date.now() }));
         const outcome = await opts.current.driver.push(remote, current, rec.etag);
         const live = recordRef.current;
-        if (live && live.id === current.id) setRecord(reduceSync(live, outcomeEvent(outcome, Date.now())));
+        if (live && live.id === current.id) {
+          const next = reduceSync(live, outcomeEvent(outcome, Date.now()));
+          setRecord(next);
+          // Landed, but an edit came during the push: it goes up after the idle.
+          if (outcome.ok && next.status === 'dirty') armRef.current();
+        }
       } finally {
         pushing.current = false;
       }
@@ -176,6 +193,7 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
       void flush(false);
     }, REMOTE_IDLE_MS + 50);
   }, [flush]);
+  armRef.current = arm;
 
   // Leaving (or the source changing under the open document) pushes what is
   // dirty — best effort, and the dirty record covers what does not land.
@@ -191,16 +209,37 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') void flushAll();
     };
+    // The network back: an offline record retries now instead of waiting for
+    // the next edit.
+    const onOnline = () => void flushAll();
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', onOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', onOnline);
+    };
   }, [flushAll]);
 
   const edited = useCallback(
     (next: D) => {
       if (!isRemoteSource(next.sourceId)) return;
       const now = Date.now();
-      const rec = recordRef.current?.id === next.id ? recordRef.current : null;
-      setRecord(reduceSync(rec ?? newSyncRecord(next.id, next.sourceId, now), { type: 'edited', now }));
+      const live = recordRef.current;
+      if (live?.id !== next.id) {
+        // A late save of a document already left (its debounce fired after
+        // another was opened): mark ITS stored record dirty, off-line, and
+        // leave the open document's record alone. It goes up when reopened.
+        const { driver } = opts.current;
+        void driver
+          .getRecord(next.id)
+          .then((stored) =>
+            driver.putRecord(
+              reduceSync(reopenRecord(stored ?? newSyncRecord(next.id, next.sourceId, now)), { type: 'edited', now }),
+            ),
+          );
+        return;
+      }
+      setRecord(reduceSync(live, { type: 'edited', now }));
       arm();
     },
     [setRecord, arm],
@@ -219,18 +258,41 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
       if (activeId.current !== opening.id) return null;
       // A mirror with no record (a push that never got to write one) is
       // simply dirty: it goes up on the next trigger.
-      const rec = stored ?? newSyncRecord(opening.id, opening.sourceId, Date.now());
+      const rec = stored ? reopenRecord(stored) : newSyncRecord(opening.id, opening.sourceId, Date.now());
       setRecord(rec);
       const r = remoteFor(opening.sourceId, opts.current.kind);
       // Not connected, or no bucket: the gallery's header says so.
       if (!r) return { doc: opening, replaced: false };
       const pulled = await driver.pull(r, opening.id, rec.etag, opening);
+      if (activeId.current !== opening.id) return null;
+      // An edit made while the pull was out may still sit in the tool's save
+      // debounce, invisible to the record: write it first, so a fetched copy
+      // meets a DIRTY record (a conflict to settle) instead of replacing it.
+      await opts.current.beforeFlush?.();
       const live = recordRef.current;
       if (activeId.current !== opening.id || !live || live.id !== opening.id) return null;
       const { take, event } = afterPull(live, pulled);
-      if (take) await driver.putDoc(take);
+      if (take && pulled.kind === 'fetched') {
+        await driver.putDoc(take);
+        const after = recordRef.current;
+        if (activeId.current !== opening.id || !after || after.id !== opening.id) return null;
+        if (after.dirtyAt !== null) {
+          // Edited during that write: the author decides, nothing is dropped.
+          setRecord(
+            reduceSync(after, {
+              type: 'pushFailed',
+              kind: 'conflict',
+              message: 'changed on another device',
+              theirs: { etag: pulled.etag, updatedAt: pulled.updatedAt },
+            }),
+          );
+          return { doc: opening, replaced: false };
+        }
+        if (event) setRecord(reduceSync(after, event));
+        return { doc: take, replaced: true };
+      }
       if (event) setRecord(reduceSync(live, event));
-      return take ? { doc: take, replaced: true } : { doc: opening, replaced: false };
+      return { doc: opening, replaced: false };
     },
     [setRecord],
   );
@@ -246,7 +308,7 @@ export function useDocumentSync<D extends SyncedDocument>(options: DocumentSyncO
       // The gallery pushed it already; its record is in the store.
       const stored = await opts.current.driver.getRecord(created.id);
       if (activeId.current !== created.id) return;
-      setRecord(stored ?? newSyncRecord(created.id, created.sourceId, Date.now()));
+      setRecord(stored ? reopenRecord(stored) : newSyncRecord(created.id, created.sourceId, Date.now()));
     },
     [setRecord],
   );

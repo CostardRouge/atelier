@@ -35,6 +35,10 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   first head read failed is read again rather than treated as carrying no render for the rest of the visit.
 - Develop: an export into a folder whose permission lapsed says so once, instead of reporting 999 files of the same
   name for every picture.
+- Trips, Studio and Develop documents kept on a Winnow: a tab closed while saving no longer leaves the document stuck
+  on "saving…" for good; an edit made while the instance's copy arrives on opening is kept and offered as a conflict
+  instead of vanishing; an edit made during a long save is sent after it; saving resumes when the network comes back;
+  and a late save of the previous document no longer marks the open one as changed.
 
 ## [1.0.0] - 2026-10-17 — Sepia
 

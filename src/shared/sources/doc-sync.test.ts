@@ -8,6 +8,7 @@ import {
   pillNeedsAction,
   pillText,
   reduceSync,
+  reopenRecord,
   shouldFlush,
   type SyncRecord,
   type SyncStatus,
@@ -314,3 +315,18 @@ describe('afterPull — the resume workflow', () => {
     ).toMatchObject({ type: 'pushFailed', kind: 'protocol' });
   });
 });
+
+describe('reopenRecord', () => {
+  it('turns a push left in flight by a closed tab into a dirty record that flushes', () => {
+    const saving = reduceSync(newSyncRecord('t', 'w', 100), { type: 'pushStarted', now: 200 });
+    const reopened = reopenRecord(saving);
+    expect(reopened).toMatchObject({ status: 'dirty', pushStartedAt: null, dirtyAt: 100 });
+    expect(shouldFlush(reopened, 100 + REMOTE_IDLE_MS)).toBe(true);
+  });
+
+  it('leaves every other state as it was', () => {
+    const dirty = newSyncRecord('t', 'w', 100);
+    expect(reopenRecord(dirty)).toBe(dirty);
+  });
+});
+
