@@ -2048,8 +2048,10 @@ whether it leaves are never carried. A cell of the band shows the
 picture as it was last seen in the editor — developed and cropped — and its
 pill says what is developed.
 
-**On a phone the photograph has the screen.** With a picture open there is no
-`Atelier / Develop` masthead: one header line holds the back chevron, the
+**On a phone the photograph has the screen.** The gallery of rolls already
+trades the masthead for one header line (back to every tool, Develop and its
+count, a ⋯ with New roll, Import and the rest of Atelier). With a picture open there is no
+`Atelier / Develop` masthead either: one header line holds the back chevron, the
 roll's name over the picture's file (its menu of the capture's files), undo,
 redo and the history, and a **⋯** with the ways to add pictures, Develop's
 settings and what the masthead held (the other editors, every tool, the

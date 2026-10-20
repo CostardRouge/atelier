@@ -33,6 +33,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Develop's gallery on a phone drops the masthead too: one header line (the way back to every tool, Develop and its
+  count of rolls, a ⋯ with New roll, Import and the rest of Atelier).
 - Trips' overview on a phone drops the masthead too: one header line holds the trip's name over its figures and the jump
   to its longest silence, undo/redo, and a ⋯ with the views, Trip settings and the rest of Atelier. The calendar starts
   a line higher.

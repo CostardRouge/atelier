@@ -52,6 +52,8 @@ import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
 import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import NewRollModal, { defaultRollName, type NewRollChoices } from './NewRollModal';
@@ -376,6 +378,12 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     ),
   );
 
+  // A phone's shell gives the gallery the masthead's room (2026-10-20, after
+  // the editors' pick C, https://claude.ai/artifact/GunaDcNsUtVM3nW1xiyQ2V):
+  // ONE header line in its row, over a list that scrolls — nothing floats and
+  // no tap hides, every tap here opens a roll.
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false } : null), [compact]));
+
   // --- the shell's verb: "Develop" under a picture being looked at (D10) ---
   // A new roll from that one picture, named as the New-roll sheet would name
   // it, kept in this browser, opened at once. The verb only asks; the effect
@@ -463,7 +471,33 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
   }
 
   return (
-    <section className={`${pageScroll} ${compact ? 'pt-3' : ''}`} aria-label="Develop rolls">
+    <>
+    {compact && (
+      <PhoneHeader
+        floating={false}
+        back={{
+          label: 'Atelier — every tool',
+          onClick: () => {
+            window.location.hash = '#/';
+          },
+        }}
+        title={
+          <span className="font-serif text-base leading-tight px-1 truncate" aria-hidden="true">
+            Develop
+          </span>
+        }
+        subtitle={
+          <span className="font-mono text-2xs text-muted px-1 truncate">
+            {rolls === null ? 'rolls…' : `${rolls.length} roll${rolls.length === 1 ? '' : 's'}`}
+          </span>
+        }
+        menu={[
+          { id: 'new', label: 'New roll', onSelect: () => setCreating(true) },
+          { id: 'import', label: `Import a ${ROLL_FILE_EXTENSION} file…`, onSelect: startImport },
+        ]}
+      />
+    )}
+    <section className={`${pageScroll} ${compact ? 'pt-1.5' : ''}`} aria-label="Develop rolls">
       <h1 className="sr-only">Rolls</h1>
       {!compact && (
         <div className="flex items-center gap-3 flex-wrap">
@@ -659,6 +693,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
         />
       )}
     </section>
+    </>
   );
 }
 
