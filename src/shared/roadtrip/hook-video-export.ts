@@ -271,6 +271,9 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
           leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE),
         })
       : null;
+    if (score.length && !audio) {
+      opts.onAudioSkipped?.('the browser did not render the opener’s sound in time, so the clip is silent');
+    }
 
     return await encodeFrames({
       width: size.w,
@@ -301,6 +304,7 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
           framing: opts.framing ?? null,
           motion: opts.motion ?? null,
           grader: null,
+          signal: opts.signal,
         });
         return canvas;
       },
@@ -386,6 +390,7 @@ async function exportCollageStillVideo(
           // Every tile this frame draws decoded first: a recorded frame never
           // holds a map tile still on its way (`basemap-strip.ts`).
           ground: true,
+          signal: opts.signal,
           theme: opts.theme,
           timeSeconds: tSeconds,
           shades: opts.shades,

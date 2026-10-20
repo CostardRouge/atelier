@@ -16,21 +16,48 @@
 /** The fallback poll — only reached where no `dequeue` event arrives. */
 export const QUEUE_POLL_MS = 250;
 
-/** Block until `getSize()` is at most `max`, woken by `codec`'s `dequeue` events. */
+/**
+ * How long a queue may stay FULL without moving before the codec is called
+ * stalled. A hardware encoder that died, or a Safari that stopped answering,
+ * leaves `encodeQueueSize` where it was and fires nothing: the loop below
+ * would otherwise poll it forever, with the run's Cancel never reached.
+ */
+export const QUEUE_STALL_MS = 30_000;
+
+/**
+ * Block until `getSize()` is at most `max`, woken by `codec`'s `dequeue`
+ * events. Throws an AbortError the moment `signal` aborts (a Cancel must
+ * reach a wait that may hold the run for seconds), and an Error once the
+ * queue has not moved for `QUEUE_STALL_MS`.
+ */
 export async function awaitQueue(
   getSize: () => number,
   max: number,
   codec?: EventTarget | null,
+  signal?: AbortSignal,
+  stallMs: number = QUEUE_STALL_MS,
 ): Promise<void> {
+  let lastSize = getSize();
+  let stillSince = Date.now();
   while (getSize() > max) {
+    if (signal?.aborted) throw new DOMException('Export cancelled', 'AbortError');
+    const size = getSize();
+    if (size !== lastSize) {
+      lastSize = size;
+      stillSince = Date.now();
+    } else if (Date.now() - stillSince > stallMs) {
+      throw new Error(`The video encoder stopped answering: its queue has not moved for ${Math.round(stallMs / 1000)} s.`);
+    }
     await new Promise<void>((resolve) => {
       const done = () => {
         clearTimeout(timer);
         codec?.removeEventListener('dequeue', done);
+        signal?.removeEventListener('abort', done);
         resolve();
       };
       const timer = setTimeout(done, QUEUE_POLL_MS);
       codec?.addEventListener('dequeue', done);
+      signal?.addEventListener('abort', done, { once: true });
     });
   }
 }

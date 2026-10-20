@@ -211,3 +211,41 @@ every ~80 ms (always the last byte), and `exportProcessedVideo` / `encodeFrames`
 pass their `onProgress` through `coalesceProgress` (one `encoding` report per
 half percent, the first and the last kept). **How to apply**: a new producer of
 progress thins at the source; a consumer need not throttle again.
+## A Cancel reaches every wait, and a slide that stalls is given up (2026-10-20)
+
+**Decision** (his report: a piece export wrote slide 1, then "looped" on the
+rest with a dead Cancel). Every renderer read the run's signal only BETWEEN
+two awaits, so one wait that never settled inside a slide — a `<video>` that
+never fires `seeked`, a map tile down a tunnel, an `OfflineAudioContext` iOS
+forgets, a codec whose queue stops moving, `document.fonts.ready` — held the
+run on that slide for good and left the bar at "Cancelling…". Two layers now,
+and a new tool must take both:
+- **`shared/lib/abortable.ts`** (pure, tested): `raceAbort(promise, signal)`
+  answers the moment the signal aborts whatever the promise does;
+  `withDeadline` / `deadline` carry on with a value or throw past a clock;
+  `childSignal` gives one slide its own cancel under the run's;
+  `stallWatch(ms, onStall)` fires when a renderer has said nothing for `ms`.
+- **Every wait inside a slide is bounded or cut**: `renderBadge`'s ground wait
+  takes the signal and a 30 s deadline (then draws the ground that IS in, as
+  the stage does); `loadBadgeSource`/`seek` give a clip 15 s for a frame
+  (`SEEK_DEADLINE_MS`); `TileStream.ready` is raced on the signal; a tile's
+  cache read 4 s, a bed render 20 s (`renderBed` → null, said through
+  `onAudioSkipped`), the fonts 8 s; `awaitQueue` takes the signal and calls a
+  queue that has not moved for 30 s stalled; both encoders' `flush()` are
+  raced and bounded at 60 s.
+- **The run loop** (`use-post-exports.ts`, `guarded`): each slide runs under a
+  `childSignal` of the run's and a `stallWatch` of `SLIDE_STALL_MS` (120 s,
+  touched by every progress word); the run's Cancel is answered at once
+  through `raceAbort`, even over a renderer that ignores its signal, and a
+  stalled slide is given up — `stalledNote` in the closing sentence — while
+  the next one starts. `awaitGround` waits 120 s at most, `pixelsForStills`
+  60 s per original; `alreadyRunning()` refuses a second run over the first.
+**Measured headless**: a decode held 8 s on slide 2, Cancel pressed at 1.3 s —
+before: the bar sat at "Cancelling…" until the decode returned and slide 2
+was still written; after: the run ended at 2 s with "cancelled after 1 of 3".
+**How to apply**: a renderer never awaits a browser promise bare inside a
+unit of a run — wrap it in `raceAbort` with the unit's signal and give it a
+deadline that says what it falls back to; a Cancel that only the loop reads
+is a Cancel that does nothing. The single real cause of his hang was not
+reproduced here (no H.264, not his phone); the class is closed.
+

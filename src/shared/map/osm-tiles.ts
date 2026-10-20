@@ -22,6 +22,7 @@
  * every export.
  */
 
+import { withDeadline } from '../lib/abortable';
 import { useSyncExternalStore } from 'react';
 import { isConstrainedDevice } from '../lib/device-class';
 import { columnSource, planTiles, rowSource, TILE_PX, type GeoBox } from './tile-math';
@@ -139,8 +140,11 @@ function fetchTile(z: number, x: number, y: number, signal?: AbortSignal): Promi
  * else from the server — kept for next time — and, when the server cannot
  * answer, the stale copy rather than nothing.
  */
+/** How long the device's tile cache may take to answer before the server is asked instead — IndexedDB on iOS has been known to never answer. */
+const CACHE_READ_MS = 4_000;
+
 async function keptOrFetched(key: string, url: string, signal?: AbortSignal): Promise<Blob> {
-  const kept = await readTile(key);
+  const kept = await withDeadline(readTile(key), CACHE_READ_MS, () => null);
   if (kept?.fresh) return kept.blob;
   try {
     const blob = await fromServer(url, signal);

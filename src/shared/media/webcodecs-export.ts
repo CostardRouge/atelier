@@ -45,6 +45,10 @@ import { safeChunkMetadata } from './colour-tag';
 import { type ExportTail } from './export-tail';
 import { framePlan } from './frame-plan';
 import { awaitQueue } from './codec-queue';
+import { deadline, raceAbort } from '../lib/abortable';
+
+/** How long a codec's final flush may take before the clip is given up. */
+const FLUSH_DEADLINE_MS = 60_000;
 import type { TrimRange } from './trim';
 
 /**
@@ -904,7 +908,7 @@ export async function exportProcessedVideo(
         throwIfAborted();
         if (pipelineError) throw pipelineError;
         if (!sample?.data) continue;
-        if (processor.ahead) await processor.ahead(toMicros(sample.cts, sample.timescale) - win.leadMicros);
+        if (processor.ahead) await raceAbort(processor.ahead(toMicros(sample.cts, sample.timescale) - win.leadMicros), signal, 'Export cancelled');
         decoder.decode(
           new EncodedVideoChunk({
             type: sample.is_sync ? 'key' : 'delta',
@@ -913,11 +917,13 @@ export async function exportProcessedVideo(
             data: sample.data,
           }),
         );
-        await awaitQueue(() => decoder.decodeQueueSize, 24, decoder);
-        await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
+        await awaitQueue(() => decoder.decodeQueueSize, 24, decoder, signal);
+        await awaitQueue(() => encoder.encodeQueueSize, 24, encoder, signal);
       }
 
-      await decoder.flush();
+      // Bounded and cut by a Cancel: a codec that died mid-clip never
+      // answers its flush, and the run would sit on this clip for good.
+      await raceAbort(deadline(decoder.flush(), FLUSH_DEADLINE_MS, () => new Error('The video decoder did not finish the clip.')), signal, 'Export cancelled');
 
       // The appended card. It runs after the decoder has drained, so every
       // timestamp of the picture is known and the card starts exactly where
@@ -936,11 +942,11 @@ export async function exportProcessedVideo(
           emitted++;
           processed++;
           onProgress?.({ phase: 'encoding', ratio: processed / total });
-          await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
+          await awaitQueue(() => encoder.encodeQueueSize, 24, encoder, signal);
         }
       }
 
-      await encoder.flush();
+      await raceAbort(deadline(encoder.flush(), FLUSH_DEADLINE_MS, () => new Error('The video encoder did not finish the clip.')), signal, 'Export cancelled');
       if (pipelineError) throw pipelineError;
 
       // The audio decided before the muxer was built: a made track (a bed, or

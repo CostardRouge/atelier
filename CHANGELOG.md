@@ -35,6 +35,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   its picture itself when it comes near the screen, treats a request the network dropped as a failure after
   twelve seconds, retries more patiently (a second, three, eight), and one that gave up tries again on a tap, when
   the device comes back online, or when it scrolls back into view.
+- Trips: Cancel stops an export at once, whatever the slide in hand was waiting on (a frame, a map tile, the encoder),
+  instead of hanging at "Cancelling…"; a slide that stops answering for two minutes is given up and named in the
+  closing note while the run moves on; and a second export cannot start over a running one.
 
 - Develop: a roll kept on a Winnow no longer stops saving once it passes the instance's 1 MB document cap. The saved
   copy sheds the finest steps of the making-of histories to fit; this device keeps them all.

@@ -28,6 +28,7 @@
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import { deadline, raceAbort } from '../lib/abortable';
 import { safeChunkMetadata } from './colour-tag';
 import { framePlan } from './frame-plan';
 import { encodeAudioBuffer, type EncodedAudio } from './audio-encode';
@@ -107,6 +108,9 @@ export function paintedFps(fps: number | undefined): number {
  * or when the clip would be empty — an empty MP4 that downloads and plays
  * nothing is worse than a refusal that says why.
  */
+/** How long an encoder's final flush may take before the clip is given up. */
+const FLUSH_DEADLINE_MS = 60_000;
+
 export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error(
@@ -215,10 +219,12 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
       }
       done += 1;
       onProgress?.({ phase: 'encoding', ratio: done / plan.length });
-      await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
+      await awaitQueue(() => encoder.encodeQueueSize, 24, encoder, opts.signal);
     }
 
-    await encoder.flush();
+    // A flush that never returns (an encoder that died mid-clip) would hold
+    // the run on this slide for good: bounded, and cut by a Cancel.
+    await raceAbort(deadline(encoder.flush(), FLUSH_DEADLINE_MS, () => new Error('The video encoder did not finish the clip.')), opts.signal, 'Export cancelled');
     if (pipelineError) throw pipelineError;
 
     onProgress?.({ phase: 'finalizing', ratio: null });

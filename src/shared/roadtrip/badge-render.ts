@@ -36,7 +36,9 @@ import { drawQr, type QrDraw } from '../overlay/draw-qr';
 import type { HookBlock, Shade } from '../shades/shades';
 import { paintShades } from '../shades/shade-paint';
 import type { ResolvedHook } from './hooks/hook-variant';
-import { seek as seekVideo } from './video-frames';
+import { SEEK_DEADLINE_MS, seek as seekVideo } from './video-frames';
+import { deadline, raceAbort, withDeadline } from '../lib/abortable';
+import { isAbortError } from '../sources/fetch-options';
 import {
   drawOverlays,
   measureOverlays,
@@ -117,9 +119,14 @@ export async function loadBadgeSource(
   file: File,
   videoTimeSeconds = 0,
   fit?: StillFit | null,
+  signal?: AbortSignal,
 ): Promise<BadgeSource> {
   if (isVideoSource(file)) {
-    return loadVideoFrame(file, videoTimeSeconds);
+    // Bounded, and cut by a Cancel: a `<video>` that never fires `seeked`
+    // or `error` — a clip the browser half decodes, a tab a phone put away —
+    // used to hold the slide for good.
+    const frame = deadline(loadVideoFrame(file, videoTimeSeconds), SEEK_DEADLINE_MS, () => new Error(`${file.name} did not deliver a frame in time.`));
+    return raceAbort(frame, signal, 'Export cancelled');
   }
   // A still, decoded AT the size its caller works on (`still-decode.ts`): a
   // stage's budget, a rail cell's width, an export's edge. The full-size
@@ -128,7 +135,7 @@ export async function loadBadgeSource(
   // decode on a phone — Safari demosaics a DNG natively and that is what a
   // phone's tab died of.
   try {
-    const still = await decodeStill(file, fit ?? {});
+    const still = await raceAbort(decodeStill(file, fit ?? {}), signal, 'Export cancelled');
     const { bitmap, natural } = still;
     return {
       image: bitmap,
@@ -137,7 +144,8 @@ export async function loadBadgeSource(
       ...(natural.width !== bitmap.width || natural.height !== bitmap.height ? { natural } : {}),
       release: () => bitmap.close(),
     };
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) throw err;
     throw new Error(undecodableMessage(file));
   }
 }
@@ -210,6 +218,12 @@ export interface RenderBadgeOptions {
    * is in and repaints as the rest lands.
    */
   ground?: boolean;
+  /**
+   * The run's cancel. The ground wait above and the fonts' are cut the moment
+   * it aborts — a wait that only the loop between two slides reads is a
+   * Cancel that does nothing on the slide in hand.
+   */
+  signal?: AbortSignal;
   /**
    * Asked after the fonts are waited for: a paint that a newer one overtook
    * while it waited returns without drawing, or its complete frame lands OVER
@@ -341,6 +355,7 @@ export async function loadCollageSources(
   collage: SlideCollage,
   resolve: (ref: SavedMediaRef | null) => File | null,
   fit?: StillFit | null,
+  signal?: AbortSignal,
 ): Promise<CollageSources> {
   const count = collageCellCount(collage);
   const items: CollageSources['items'] = [];
@@ -350,8 +365,9 @@ export async function loadCollageSources(
     const file = resolve(cell.media);
     if (file) {
       try {
-        source = await loadBadgeSource(file, i === 0 ? lead.videoTimeSeconds : 0, fit);
-      } catch {
+        source = await loadBadgeSource(file, i === 0 ? lead.videoTimeSeconds : 0, fit, signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
         source = null;
       }
     }
@@ -440,6 +456,9 @@ function elementsFor(opts: RenderBadgeOptions): OverlayElement[] {
  * canvas's own dimensions decide the resolution, which is what keeps the
  * preview and the export identical bar their scale.
  */
+/** How long one frame waits for its map ground before drawing what is in. */
+export const GROUND_DEADLINE_MS = 30_000;
+
 export async function renderBadge(
   canvas: HTMLCanvasElement,
   opts: RenderBadgeOptions,
@@ -449,7 +468,15 @@ export async function renderBadge(
 
   if (opts.ground && opts.hook) {
     const t = opts.timeSeconds ?? 0;
-    await opts.hook.ready(t, t + EXPORT_AHEAD);
+    // Bounded, and cut by a Cancel: a tile that never lands (a phone's
+    // connection down a tunnel) used to hold the slide for good. Past the
+    // deadline the frame is drawn with the ground that IS in, as the stage
+    // would draw it — a softer tile, never a run that cannot end.
+    await raceAbort(
+      withDeadline(opts.hook.ready(t, t + EXPORT_AHEAD, opts.signal), GROUND_DEADLINE_MS, () => undefined),
+      opts.signal,
+      'Export cancelled',
+    );
   }
 
   // The fonts are waited for FIRST, and everything after is synchronous.
