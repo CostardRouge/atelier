@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { LutStack } from '../lut/use-lut-stack';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../media/transport-keys';
 import StageZoomControl from '../ui/StageZoomControl';
@@ -329,7 +330,11 @@ function DevelopSheetBody({
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  return (
+  // PORTALLED to the end of <body>: a host's own sheet is `fixed z-50` too
+  // (the Studio's Grade tab on a phone is a `BottomSheet`), and at one z the
+  // later element paints on top — the sheet sat over the picture being
+  // developed. At the end of the document the modal is the later one.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.55)] backdrop-blur-[2px] max-[820px]:p-0"
       role="dialog"
@@ -523,6 +528,7 @@ function DevelopSheetBody({
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
