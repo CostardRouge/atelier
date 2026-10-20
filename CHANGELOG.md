@@ -9,6 +9,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-20 — Tyrian
+
 ### Added
 
 - Develop: press and hold the picture still to see it as shot, until you lift — on a phone, a tablet or with a mouse.

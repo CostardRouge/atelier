@@ -137,7 +137,7 @@ multiply before putting this workflow on every repository.
 ## Versions and releases ride the same deploy (2026-10-17)
 
 **Decision**: Atelier carries one SemVer version in the root `package.json`
-(1.0.0 « Sepia »), `CHANGELOG.md` as the source, and `.github/release.mjs` +
+(1.0.0 « Sepia », 1.1.0 « Tyrian » on 2026-10-20), `CHANGELOG.md` as the source, and `.github/release.mjs` +
 `.github/workflows/release.yml` (identical across the portfolio, C13 in
 `second-brain`) tag and publish each section on `main`. The deploy itself is
 unchanged. **Why**: the owner made SemVer mandatory on every repo that ships,
