@@ -91,6 +91,7 @@ export default function DevelopViewport({
   hasFile,
   emptyText = 'No picture to develop yet.',
   className = '',
+  bleed = false,
   offer = null,
   onPick,
   onCropToView,
@@ -210,6 +211,11 @@ export default function DevelopViewport({
   emptyText?: string;
   className?: string;
   /**
+   * The stage IS the screen's black, edge to edge (a phone's immersive
+   * Develop): no rounded card inside it.
+   */
+  bleed?: boolean;
+  /**
    * A question about the picture's OWN action, asked over it at the top —
    * a file just picked, offered to the whole roll. Over the picture so the
    * bar above never gains a control; its own press, never the stage's.
@@ -301,7 +307,7 @@ export default function DevelopViewport({
   return (
     <div
       ref={view.viewportRef}
-      className={`relative min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none [-webkit-touch-callout:none] ${
+      className={`relative min-h-0 bg-frame ${bleed ? '' : 'rounded-paper'} overflow-hidden touch-none select-none [-webkit-touch-callout:none] ${
         picking
           ? 'cursor-crosshair'
           : moving

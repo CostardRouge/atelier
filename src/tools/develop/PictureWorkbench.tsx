@@ -2975,6 +2975,10 @@ export default function PictureWorkbench({
   // On a phone's immersive layout the name lives in the header ONLY: with the
   // header hidden (Focus, a tap) it is hidden with it, never dropped back here.
   const nameInSlot = compact && immersive;
+  // …and the stage is the screen's black, edge to edge: the roll's column
+  // drops the shell's gutter, so the stage loses its card and the drawer
+  // does not undo the gutter a second time.
+  const bleed = compact && immersive;
   const verbsPlace: 'flow' | 'float' | 'drawer' | 'none' = !compact || !immersive
     ? 'flow'
     : focused
@@ -2994,15 +2998,18 @@ export default function PictureWorkbench({
             other width keeps the desktop row the one flex line it was — and
             every verb grows to a finger's height (`md` rather than `sm`). */}
         {(!nameInSlot || verbsPlace === 'flow') && (
-          <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
+          <div className={`flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0 ${bleed ? 'px-2' : ''}`}>
             {!nameInSlot && nameNode}
             {verbsPlace === 'flow' && verbsNode}
           </div>
         )}
         {nameInSlot && nameSlot && createPortal(nameNode, nameSlot)}
-        {/* Over the picture, above the shell's glass bar (`--shell-bar-h`). */}
+        {/* Over the picture, above the band that sits on the shell's glass
+            bar (`--shell-bar-h`, then the band's own `--band-h`, measured by
+            the roll): the band lies on the bar and the verbs on the band, so
+            nothing floating leaves a strip of picture between them. */}
         {verbsPlace === 'float' && (
-          <div className="absolute inset-x-0 z-20 bottom-[calc(var(--shell-bar-h,0px)+8px)] flex pointer-events-none [&>*]:pointer-events-auto">
+          <div className="absolute inset-x-2 z-20 bottom-[calc(var(--shell-bar-h,0px)+var(--band-h,0px)+16px)] flex pointer-events-none [&>*]:pointer-events-auto">
             {verbsNode}
           </div>
         )}
@@ -3056,6 +3063,7 @@ export default function PictureWorkbench({
           onSpot={ringsLive ? healSpot : undefined}
           onCropToView={cropToView ?? undefined}
           className={cropping ? 'hidden' : 'flex-1'}
+          bleed={bleed}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);
             auto.apply(
@@ -3100,6 +3108,7 @@ export default function PictureWorkbench({
         // it is being set (`frontend.md`).
         compactAs="drawer"
         head={verbsPlace === 'drawer' ? verbsNode : undefined}
+        flush={bleed}
         open={sheetOpen && !focused}
         onClose={() => onSheetOpen(false)}
         title={`${tabLabel} · ${pictureLabel(entry)}`}

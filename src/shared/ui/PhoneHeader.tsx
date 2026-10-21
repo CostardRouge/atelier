@@ -27,6 +27,10 @@ export interface PhoneHeaderProps {
  * ⋯. It replaces the shell's masthead AND the screen's page bar, so it also
  * carries what the masthead held — the task and agent pills, and the rest of
  * the suite at the end of the ⋯.
+ *
+ * Its corner is `rounded-paper` (14 px), not the larger card radius: it holds
+ * 11 px controls a few pixels in, and a box rounder than what it holds reads
+ * as a capsule around them (2026-10-21, his report on the floating bars).
  */
 export default function PhoneHeader({ back, title, subtitle, trailing, menu, menuLabel, floating }: PhoneHeaderProps) {
   const extras = useShellExtras();
@@ -37,7 +41,7 @@ export default function PhoneHeader({ back, title, subtitle, trailing, menu, men
   ];
   return (
     <div
-      className={`z-20 flex items-center gap-1 h-[46px] px-1 border border-line rounded-paper-lg ${
+      className={`z-20 flex items-center gap-1 h-[46px] px-1 border border-line rounded-paper ${
         floating ? `absolute inset-x-0 top-1 ${GLASS}` : 'flex-none mt-1 bg-surface'
       }`}
     >

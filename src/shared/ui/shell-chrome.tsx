@@ -40,6 +40,13 @@ export interface ShellChrome {
   floating: boolean;
   /** The tool's chrome is hidden: the bottom bar goes with it. */
   hidden: boolean;
+  /**
+   * What lies behind the tool, up to the screen's edges and under the
+   * Dynamic Island: `frame` is the stage's black, for an editor whose picture
+   * must be judged against it (Develop, 2026-10-21). The shell paints its
+   * frame and its `theme-color` with it while the tool is immersive.
+   */
+  backdrop?: 'frame';
 }
 
 interface ShellChromeState {

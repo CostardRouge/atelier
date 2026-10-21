@@ -42,6 +42,8 @@ export interface PanelHostProps {
   title: string;
   /** A drawer's head row in place of its title (`DockedDrawer`'s `head`). */
   head?: ReactNode;
+  /** A drawer in a column that already runs edge to edge (`DockedDrawer`'s `flush`). */
+  flush?: boolean;
   /** The docked box's own classes. Unused compact, where the host draws its frame. */
   className?: string;
   children: ReactNode;
@@ -54,13 +56,14 @@ export default function PanelHost({
   onClose,
   title,
   head,
+  flush,
   className,
   children,
 }: PanelHostProps) {
   if (!asSheet) return <div className={className}>{children}</div>;
   if (compactAs === 'drawer') {
     return (
-      <DockedDrawer open={open} onClose={onClose} title={title} head={head}>
+      <DockedDrawer open={open} onClose={onClose} title={title} head={head} flush={flush}>
         {children}
       </DockedDrawer>
     );

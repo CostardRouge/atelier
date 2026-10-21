@@ -1,5 +1,5 @@
 import type { LensProfileApplied } from '../../shared/lens/lens-profile';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
 import { CommandError, commands } from '../../shared/commands/registry';
@@ -2447,9 +2447,27 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const immersive = compact && !!open;
   const floating = immersive && !sheetOpen && tab !== 'crop';
   usePublishShellChrome(
-    useMemo(() => (immersive ? { immersive: true, floating, hidden: focus } : null), [immersive, floating, focus]),
+    // Behind the picture, the stage's black to every edge of the screen
+    // (2026-10-21, his ask: the most contrast to judge a picture by).
+    useMemo(
+      () => (immersive ? { immersive: true, floating, hidden: focus, backdrop: 'frame' as const } : null),
+      [immersive, floating, focus],
+    ),
   );
   const [nameSlot, setNameSlot] = useState<HTMLElement | null>(null);
+  // The floating band's own height, for the verbs that sit on it. Observed
+  // here rather than read from `bandBox`: that one is wired once, at the
+  // editor's mount, before a picture (and so the band) is on screen.
+  const [floatBandH, setFloatBandH] = useState(0);
+  useEffect(() => {
+    const el = bandRef.current;
+    if (!floating || !el) return;
+    const measure = () => setFloatBandH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [floating, bandRef, openId]);
 
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
@@ -2502,7 +2520,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const statusLines = (
     <div
       ref={statusRef}
-      className={`flex flex-col gap-1 empty:hidden ${side ? `${left ? 'col-start-2' : 'col-start-1'} row-start-2 mt-2` : ''}`}
+      // Over the immersive black the lines need their own paper to be read.
+      className={`flex flex-col gap-1 empty:hidden ${side ? `${left ? 'col-start-2' : 'col-start-1'} row-start-2 mt-2` : ''} ${
+        immersive ? 'rounded-control bg-surface px-2 py-1' : ''
+      }`}
     >
     {/* What STATE is in the band's header now (how far the roll has
         got, what it shows); this line keeps what asks for a click —
@@ -2782,9 +2803,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         <div className="@container flex-1 min-h-0 flex flex-col">
           <div
             ref={columnRef}
+            // The floating band's height, for the verbs that sit on it.
+            style={floating ? ({ '--band-h': `${floatBandH}px` } as CSSProperties) : undefined}
             className={
               compact
-                ? 'relative flex-1 min-h-0 flex flex-col gap-2'
+                ? // Immersive, the column is the screen's black edge to edge:
+                  // it takes back the shell's gutter (`App.tsx`, `px-2`).
+                  `relative flex-1 min-h-0 flex flex-col gap-2 ${immersive ? '-mx-2' : ''}`
                 : focus
                   ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-y-2'
                   : // The band standing beside the stage is a column of its own
@@ -2903,10 +2928,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 focus
                   ? 'hidden'
                   : floating
-                    ? // Over the picture, above the floating verbs (50 px + their 8 px and a gap).
-                      `absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+64px)] flex flex-col gap-1 min-w-0 px-1 pb-1 border border-line rounded-paper-lg ${GLASS}`
+                    ? // Over the picture, lying on the shell's bar; the verbs
+                      // sit on IT (`--band-h`), so no strip of picture is left
+                      // between the two (2026-10-21, his swap of B and C).
+                      `absolute inset-x-2 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] flex flex-col gap-1 min-w-0 px-1 pb-1 border border-line rounded-paper ${GLASS}`
                     : compact
-                    ? 'flex flex-col gap-1 min-w-0 flex-none'
+                    ? `flex flex-col gap-1 min-w-0 flex-none ${immersive ? 'px-2' : ''}`
                     : side
                       ? `flex min-w-0 min-h-0 ${left ? 'col-start-1' : 'col-start-2'} row-start-1 row-span-2`
                       : 'flex flex-col gap-1 min-w-0 col-start-1 row-start-2'
