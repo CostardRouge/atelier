@@ -59,6 +59,11 @@ export interface DockedDrawerProps {
   snaps?: SnapPoints;
   /** Which of those it opens at. Defaults to the middle one — the fifty-fifty. */
   initialSnap?: number;
+  /**
+   * Its column already runs edge to edge (Develop's black stage, 2026-10-21),
+   * so the drawer does not undo the shell's gutter a second time.
+   */
+  flush?: boolean;
   children: ReactNode;
 }
 
@@ -69,6 +74,7 @@ export default function DockedDrawer({
   head,
   snaps = DRAWER_SNAPS,
   initialSnap,
+  flush = false,
   children,
 }: DockedDrawerProps) {
   const titleId = useId();
@@ -188,7 +194,7 @@ export default function DockedDrawer({
       // rounded top and its side borders stopped 8px short of the screen and
       // read as cut — the maintainer's report, the one Trips' day strip had.
       style={{ height: `${fraction * 100}%` }}
-      className={`order-last flex-none min-h-0 -mx-2 flex flex-col overflow-hidden border border-b-0 border-line-strong rounded-t-paper-lg bg-surface shadow-[0_-10px_22px_-20px_rgba(43,33,18,0.55)] ${
+      className={`order-last flex-none min-h-0 ${flush ? '' : '-mx-2'} flex flex-col overflow-hidden border border-b-0 border-line-strong rounded-t-paper-lg bg-surface shadow-[0_-10px_22px_-20px_rgba(43,33,18,0.55)] ${
         dragging ? '' : 'transition-[height] duration-200 ease-paper motion-reduce:transition-none'
       }`}
     >

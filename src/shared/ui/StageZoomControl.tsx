@@ -80,8 +80,11 @@ export default function StageZoomControl({
 
   if (folded && hasPanel) {
     return (
-      <div className={`flex items-center rounded-full border border-line bg-surface/86 backdrop-blur-[2px] px-1 py-1 ${className}`}>
-        {panel('h-6 px-1.5')}
+      // The well's own box beside it (`DevelopSections`: 2px inside a 34px
+      // verb, the control radius), so the pill and the well read as one row
+      // of the same blocks rather than a capsule beside a card.
+      <div className={`flex items-center rounded-control border border-line bg-surface/86 backdrop-blur-[2px] p-0.5 ${className}`}>
+        {panel('h-[2.125rem] px-2')}
       </div>
     );
   }

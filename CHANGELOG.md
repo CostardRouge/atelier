@@ -9,6 +9,14 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Changed
+
+- Develop on a phone: the picture sits on black from edge to edge, under the Dynamic Island too, with no margin or
+  rounded card around it, so a photograph is judged against the most contrast the screen has.
+- Develop on a phone: the band of pictures now lies on the bottom bar and the editing buttons sit on the band, so no
+  strip of picture is lost between them; the header, the band and the zoom button have squarer corners that match the
+  buttons they hold.
+
 ## [1.1.0] - 2026-10-21 — Tyrian
 
 ### Added

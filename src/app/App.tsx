@@ -31,6 +31,7 @@ import { useRegisterCommands } from '../shared/commands/use-commands';
 import { appCommands } from './app-commands';
 import { useMediaActions } from '../shared/sources/media-scope';
 import { ShellExtrasProvider, useShellChrome } from '../shared/ui/shell-chrome';
+import { THEME_COLORS } from '../shared/ui/theme';
 import { useShellExtrasValue } from './shell-extras';
 
 /**
@@ -257,6 +258,19 @@ export default function App() {
   const immersive = compact && !!tool && !!chrome?.immersive;
   const chromeHidden = immersive && !!chrome?.hidden;
   const railFloats = immersive && !!chrome?.floating;
+  // The stage's black behind the whole tool, the island's band included —
+  // and the browser's own chrome (`theme-color`) with it, given back on leave.
+  const framed = immersive && chrome?.backdrop === 'frame';
+  useEffect(() => {
+    if (!framed) return;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) return;
+    const frame = getComputedStyle(document.documentElement).getPropertyValue('--color-frame').trim();
+    if (frame) meta.setAttribute('content', frame);
+    // The theme's own colour on the way out, read then: the theme may have
+    // changed while the picture was open.
+    return () => meta.setAttribute('content', THEME_COLORS[document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light']);
+  }, [framed]);
   // A callback ref, not `useElementSize`: the bar's box comes and goes with
   // the route while the shell stays mounted, so it is observed when it lands.
   const [railEl, setRailEl] = useState<HTMLDivElement | null>(null);
@@ -298,7 +312,7 @@ export default function App() {
   // the interface drift into the margin. Anything legitimately wider than the
   // screen scrolls inside its own container, untouched by this.
   const toolShell = compact
-    ? 'relative h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full pt-[env(safe-area-inset-top)]'
+    ? `relative h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full pt-[env(safe-area-inset-top)] ${framed ? 'bg-frame' : ''}`
     : 'h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full px-4 pt-3 pb-3';
 
   return (
