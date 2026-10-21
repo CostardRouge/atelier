@@ -2332,7 +2332,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // what the band shows and the way into the selection — or, the selection
   // on, its bar of verbs.
   const bandHeader = useCallback(
-    ({ at, shown, width }: { at: number; shown: number; width: number }) => {
+    ({ at, shown, width, inView }: { at: number; shown: number; width: number; inView: readonly [number, number] | null }) => {
       if (selecting) return <SelectionBar compact={compact} dense={width < 800} narrow={side} verbs={selectionVerbs} />;
       const size = finger;
       if (side && strip.folded) {
@@ -2368,6 +2368,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               count={shown}
               at={at}
               filterLabel={filtering ? stripFilterLabel(stripFilter) : null}
+              inView={inView}
               onPick={(index) => {
                 const id = shownIds[index];
                 if (id) onOpenPicture(id);

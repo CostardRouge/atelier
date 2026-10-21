@@ -23,6 +23,36 @@ export function rulerFraction(index: number, count: number): number {
   return (Math.min(index, count - 1) + 0.5) / count;
 }
 
+/** A cell's box along the band's scrolling axis — enough of `StripCell` to say whether it is on screen. */
+export interface RulerCell {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The pictures the band has ON SCREEN, as the first and last index of
+ * `cells` (the band's order): a cell counts once at least half of it shows
+ * along the axis the band scrolls. Null when the box has no size yet or
+ * nothing is half in view.
+ */
+export function rulerWindow(cells: readonly RulerCell[], scroll: number, extent: number, axis: 'x' | 'y'): [number, number] | null {
+  if (!(extent > 0)) return null;
+  let first = -1;
+  let last = -1;
+  cells.forEach((c, i) => {
+    const a = axis === 'x' ? c.x : c.y;
+    const size = axis === 'x' ? c.w : c.h;
+    const seen = Math.min(a + size, scroll + extent) - Math.max(a, scroll);
+    if (size > 0 && seen >= size / 2) {
+      if (first < 0) first = i;
+      last = i;
+    }
+  });
+  return first < 0 ? null : [first, last];
+}
+
 /** Whether `count` pictures are drawn as ticks (else a track with one mark). */
 export function rulerTicks(count: number): boolean {
   return count > 0 && count <= RULER_MAX_TICKS;

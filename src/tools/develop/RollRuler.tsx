@@ -8,6 +8,8 @@ export interface RollRulerProps {
   at: number;
   /** What the band shows when a filter is on («Edited»), said beside the count in the accent; null for every picture. */
   filterLabel: string | null;
+  /** The pictures the band has on screen (first, last), framed on the ruler; null draws no frame. */
+  inView: readonly [number, number] | null;
   /** Open the picture at this index of what the band shows. */
   onPick: (index: number) => void;
 }
@@ -19,8 +21,10 @@ export interface RollRulerProps {
  * and the mark follow) and opens that picture when it lifts — opening on
  * every move would decode a picture per tick. The whole 34 px block is the
  * target, so the ticks can stay a hairline. Arrows, Home and End step it.
+ * A hairline FRAME over the ticks says which pictures the band has on screen
+ * (his C+, 2026-10-21) — drawn only, never grabbed, and no words for it.
  */
-export default function RollRuler({ count, at, filterLabel, onPick }: RollRulerProps) {
+export default function RollRuler({ count, at, filterLabel, inView, onPick }: RollRulerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [over, setOver] = useState<number | null>(null);
   const shown = over ?? at;
@@ -55,6 +59,7 @@ export default function RollRuler({ count, at, filterLabel, onPick }: RollRulerP
   };
 
   const ticks = rulerTicks(count);
+  const framed = (i: number) => inView !== null && i >= inView[0] && i <= inView[1];
   return (
     <div
       ref={ref}
@@ -84,7 +89,9 @@ export default function RollRuler({ count, at, filterLabel, onPick }: RollRulerP
           Array.from({ length: count }, (_, i) => (
             <span
               key={i}
-              className={`flex-1 rounded-[1px] ${i === shown ? 'h-2 bg-accent' : i % 6 === 0 ? 'h-1.5 bg-faint' : 'h-1 bg-faint'}`}
+              className={`flex-1 rounded-[1px] ${
+                i === shown ? 'h-2 bg-accent' : `${i % 6 === 0 ? 'h-1.5' : 'h-1'} ${framed(i) ? 'bg-muted' : 'bg-faint'}`
+              }`}
             />
           ))
         ) : (
@@ -97,6 +104,15 @@ export default function RollRuler({ count, at, filterLabel, onPick }: RollRulerP
               />
             )}
           </>
+        )}
+        {inView && count > 0 && (
+          <span
+            className="absolute -top-[3px] -bottom-[3px] rounded-[3px] border-[1.5px] border-ink-soft pointer-events-none"
+            style={{
+              left: `calc(${(inView[0] / count) * 100}% - 1px)`,
+              width: `calc(${((inView[1] - inView[0] + 1) / count) * 100}% + 2px)`,
+            }}
+          />
         )}
       </span>
     </div>
