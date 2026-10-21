@@ -9,6 +9,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-21 — Ultramarine
+
 ### Changed
 
 - Develop on a phone: the picture sits on black from edge to edge, under the Dynamic Island too, with no margin or
