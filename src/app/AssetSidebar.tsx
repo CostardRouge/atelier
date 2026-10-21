@@ -11,7 +11,14 @@ import type { LibraryHalf } from '../shared/sources/winnow/client';
 import { useScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import { usePickFromInstance } from '../shared/sources/winnow/use-pick';
 import { useNeighbourDays } from '../shared/sources/winnow/use-neighbour-days';
-import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
+import { useMediaActions, useMediaIntake, useMediaScope, type IntakeOptions } from '../shared/sources/media-scope';
+import CollectCorner, { type CollectMark } from './CollectCorner';
+import IntakeStrip from '../shared/library/IntakeStrip';
+import IntakeVerb from './IntakeVerb';
+import IntakeBar from './IntakeBar';
+import PickBadge, { PICKED_RING, type PickMark } from './PickBadge';
+import { instantOf, orderPicks, type Pick } from '../shared/library/pick-order';
+import { suggestPicks } from '../shared/sources/winnow/suggest-picks';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
@@ -42,7 +49,8 @@ import { captureInput } from '../shared/develop/capture-files';
 import { useCaptureView } from '../shared/develop/use-capture-view';
 import { useSiblingFacts } from '../shared/develop/use-sibling-facts';
 import { renditionsOf, type Rendition } from '../shared/media/renditions';
-import { fileIdentity } from '../shared/library/assets';
+import { fileBaseName, fileIdentity } from '../shared/library/assets';
+import type { WinnowAssetRow } from '../shared/sources/winnow/client';
 import { knownIdentity, mediaOrigin } from '../shared/projects/media-identity';
 import { heldOriginal, heldVersion, subscribeHeld } from '../shared/sources/original-cache';
 import {
@@ -337,6 +345,198 @@ export default function AssetSidebar({
     activate,
   );
 
+  /**
+   * An instance's row brought into the pool WITHOUT activating it, and the
+   * file it became — for a drop and for an intake, whose target places the
+   * picture itself (activating would also put it on what the tool has open).
+   */
+  const bringFile = useCallback(
+    async (row: WinnowAssetRow): Promise<{ assetId: string; file: File } | null> => {
+      const assetId = await picker.bring(row);
+      if (!assetId) return null;
+      const media = picked.current.get(assetId)?.find((f) => !/\.srt$/i.test(f.name));
+      picked.current.delete(assetId);
+      if (media) return { assetId, file: media };
+      const asset = assetsRef.current.find((a) => a.id === assetId);
+      const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;
+      return file ? { assetId, file } : null;
+    },
+    [picker],
+  );
+
+  // --- What the active tool TAKES IN (`MediaIntake`) --------------------------
+  // Trips' open piece: a tile's ＋ adds its picture as a new slide. The files
+  // are handed over in order; nothing is activated.
+  const intake = useMediaIntake();
+  const intakeRef = useRef(intake);
+  intakeRef.current = intake;
+  /** The tiles whose pictures are on their way into the intake. */
+  const [adding, setAdding] = useState<ReadonlySet<string>>(() => new Set());
+  const [intakeProblem, setIntakeProblem] = useState<string | null>(null);
+  /** What the last add made, said over the piece in the sheet. */
+  const [intakeNote, setIntakeNote] = useState<string | null>(null);
+  // The same keys, read synchronously: a second press (or `A` held) before
+  // the first add has rendered must not add the picture twice.
+  const addingNow = useRef(new Set<string>());
+  const collect = useCallback(
+    async (keys: readonly string[], files: () => Promise<File[]>, options?: IntakeOptions) => {
+      if (!intakeRef.current || intakeRef.current.locked) return false;
+      if (keys.some((k) => addingNow.current.has(k))) return false;
+      for (const k of keys) addingNow.current.add(k);
+      setAdding((prev) => new Set([...prev, ...keys]));
+      setIntakeProblem(null);
+      try {
+        const got = await files();
+        // The tool may have closed the piece while the bytes travelled.
+        const into = intakeRef.current;
+        if (!got.length || !into) return false;
+        const first = into.next;
+        await into.add(got, options);
+        const made = options?.together ? 1 : got.length;
+        const noun = capitalise(into.noun);
+        // "After the open one" moves the numbers behind it, so only an add at the end names its number.
+        setIntakeNote(made > 1 ? `${made} ${into.noun}s added` : options?.afterOpen ? `${noun} added` : `${noun} ${first} added`);
+        return true;
+      } catch (err) {
+        if (!isAbortError(err)) {
+          setIntakeProblem(`Nothing was added: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return false;
+      } finally {
+        for (const k of keys) addingNow.current.delete(k);
+        setAdding((prev) => {
+          const next = new Set(prev);
+          for (const k of keys) next.delete(k);
+          return next;
+        });
+      }
+    },
+    [],
+  );
+  /** What a tile says about the intake, and what its ＋ does — or null when there is none. */
+  const collectMark = (key: string, baseName: string, file: () => Promise<File | null>): CollectMark | null => {
+    if (!intake) return null;
+    const place = intake.placeOf(baseName);
+    return {
+      name: baseName,
+      place,
+      removable: place !== null && intake.removable(baseName),
+      noun: intake.noun,
+      locked: intake.locked,
+      busy: adding.has(key),
+      onAdd: () =>
+        void collect([key], async () => {
+          const f = await file();
+          return f ? [f] : [];
+        }),
+      onRemove: () => intake.remove(baseName),
+    };
+  };
+  const localMark = (a: Asset) =>
+    a.parts.image || a.parts.video
+      ? collectMark(`local:${a.id}`, a.baseName, async () => a.parts.image ?? a.parts.video ?? null)
+      : null;
+  const rowMark = (row: WinnowAssetRow) =>
+    collectMark(`remote:${row.id}`, fileBaseName(row.filename), async () => (await bringFile(row))?.file ?? null);
+
+  // --- Select mode: tick several, in order, and add them in one write -------
+  // The Library's own `selection` is a set and says nothing of order; the
+  // intake's ticks are a LIST, across both tabs, each remembering how its
+  // file is had (an instance's row is only brought on the verb).
+  const [selecting, setSelecting] = useState(false);
+  const [ticks, setTicks] = useState<readonly Pick[]>([]);
+  const tickFiles = useRef(new Map<string, () => Promise<File | null>>());
+  const [byTime, setByTime] = useState(false);
+  const [afterOpen, setAfterOpen] = useState(false);
+  const [together, setTogether] = useState(false);
+  const [batchBusy, setBatchBusy] = useState<string | null>(null);
+  /** Suggest's proposal, while it stands: how many it asked for, and why each one. */
+  const [suggested, setSuggested] = useState<{ count: number; reasons: ReadonlyMap<string, string> } | null>(null);
+  const stopSelecting = useCallback(() => {
+    setSelecting(false);
+    setTicks([]);
+    tickFiles.current.clear();
+    setTogether(false);
+    setSuggested(null);
+  }, []);
+  const hasIntake = intake !== null;
+  useEffect(() => {
+    if (!hasIntake) stopSelecting();
+  }, [hasIntake, stopSelecting]);
+  const order = useMemo(() => orderPicks(ticks, byTime), [ticks, byTime]);
+  const landsAfterOpen = afterOpen && intake?.openAt != null;
+  const asOne = together && intake?.together != null && order.length >= 2 && order.length <= intake.together.max;
+  const toggleTick = (key: string, at: number | null, file: () => Promise<File | null>) => {
+    tickFiles.current.set(key, file);
+    setTicks((prev) => (prev.some((p) => p.key === key) ? prev.filter((p) => p.key !== key) : [...prev, { key, at }]));
+  };
+  /**
+   * Suggest (`suggest-picks.ts`): the instance's day read by Winnow's own
+   * culling and bursts, `count` frames spread over it, TICKED — a proposal
+   * the person keeps, drops or adds to before the verb writes anything. It
+   * replaces the instance's ticks, never the local ones.
+   */
+  const suggest = (count: number) => {
+    if (!intake) return;
+    const byId = new Map(remoteShown.map((r) => [r.id, r]));
+    const got = suggestPicks(remoteShown, count, (r) => intake.placeOf(fileBaseName(byId.get(r.id)?.filename ?? '')) !== null);
+    const picks: Pick[] = [];
+    for (const g of got) {
+      const row = byId.get(g.id);
+      if (!row) continue;
+      const key = `remote:${row.id}`;
+      tickFiles.current.set(key, async () => (await bringFile(row))?.file ?? null);
+      picks.push({ key, at: instantOf(row.captured_at) });
+    }
+    setTicks((prev) => [...prev.filter((p) => !p.key.startsWith('remote:')), ...picks]);
+    setSuggested({ count, reasons: new Map(got.map((g) => [`remote:${g.id}`, g.reason])) });
+  };
+  const pickMark = (
+    key: string,
+    baseName: string,
+    at: number | null,
+    file: () => Promise<File | null>,
+  ): PickMark | null => {
+    if (!selecting || !intake) return null;
+    const held = intake.placeOf(baseName);
+    const k = order.indexOf(key);
+    const first = landsAfterOpen ? (intake.openAt ?? 0) + 1 : intake.next;
+    return {
+      held,
+      reason: k < 0 ? null : (suggested?.reasons.get(key) ?? null),
+      order: k < 0 ? null : asOne ? `${first}·${k + 1}` : String(first + k),
+      onTick: () => {
+        if (held === null) toggleTick(key, at, file);
+      },
+    };
+  };
+  const localPick = (a: Asset) => {
+    const file = a.parts.image ?? a.parts.video;
+    return file ? pickMark(`local:${a.id}`, a.baseName, file.lastModified || null, async () => file) : null;
+  };
+  const rowPick = (row: WinnowAssetRow) =>
+    pickMark(`remote:${row.id}`, fileBaseName(row.filename), instantOf(row.captured_at), async () => (await bringFile(row))?.file ?? null);
+  const commitBatch = async () => {
+    const keys = order;
+    if (!keys.length) return;
+    setBatchBusy('Adding…');
+    const ok = await collect(
+      keys,
+      async () => {
+        const files: File[] = [];
+        for (const [i, key] of keys.entries()) {
+          if (keys.length > 1) setBatchBusy(`Getting ${i + 1} of ${keys.length}…`);
+          const file = await tickFiles.current.get(key)?.();
+          if (file) files.push(file);
+        }
+        return files;
+      },
+      { together: asOne, afterOpen: landsAfterOpen },
+    );
+    setBatchBusy(null);
+    if (ok) stopSelecting();
+  };
+
   const usableSelectedCount = selectedUsableAssets(
     accepts,
     lib.assets,
@@ -515,11 +715,11 @@ export default function AssetSidebar({
     lib.setActive(id);
   }
 
-  /** A picture fetched from the tiles: into the pool, then active. */
-  function pickFromSource(files: File[], assetId: string) {
+  /** A picture fetched from the tiles: into the pool, then active — unless it was only BROUGHT. */
+  function pickFromSource(files: File[], assetId: string, activate: boolean) {
     picked.current.set(assetId, files);
     lib.addFiles(files);
-    lib.setActive(assetId);
+    if (activate) lib.setActive(assetId);
   }
 
   async function handleDrop(e: React.DragEvent) {
@@ -860,10 +1060,15 @@ export default function AssetSidebar({
             rolling.current = { edge: side === 'after' ? 'first' : 'last', left: scopeRows.rows };
             goToDay(day);
           }}
+          collectFor={intake ? rowMark : undefined}
+          intakeNext={intake?.next ?? 0}
         />
       )}
 
-      {viewing !== null && viewShown[viewing] && (
+      {viewing !== null && viewShown[viewing] && (() => {
+        const mark = localMark(viewable[viewing]);
+        const n = viewable.length;
+        return (
         <MediaLightbox
           items={viewShown}
           index={viewing}
@@ -874,8 +1079,19 @@ export default function AssetSidebar({
           viewing={captureView.viewing}
           onViewing={captureView.setViewing}
           taskScope={viewedAsset?.id ?? null}
+          onCollect={mark && mark.place === null ? mark.onAdd : null}
           footer={
             <>
+              {/* Through a day, keeping pictures as new slides: the tool's
+                  intake leads the footer, «Use in» (put it on what is open)
+                  follows it. */}
+              {mark && intake && (
+                <IntakeVerb
+                  mark={mark}
+                  next={intake.next}
+                  onNext={n > 1 ? () => setViewing((viewing + 1) % n) : null}
+                />
+              )}
               {/* The picture is already here: making it active is all a verb
                   needs, and it is what carries it onto the new piece — with
                   the file of the capture that was on screen. Where the tool
@@ -914,7 +1130,8 @@ export default function AssetSidebar({
             setViewing(null);
           }}
         />
-      )}
+        );
+      })()}
 
       {browsing && connection && client && (
         // Opens where the tab is looking: its day and its half.
@@ -943,7 +1160,17 @@ export default function AssetSidebar({
             }
             className="flex-1 min-w-0 font-sans text-xs px-3 py-1.5 border border-line rounded-full bg-surface text-ink placeholder:text-faint focus:outline-none focus:border-line-strong"
           />
-          {tabPool.length > 0 && (
+          {intake && !selecting && (
+            <button
+              type="button"
+              onClick={() => setSelecting(true)}
+              className="font-mono text-3xs tracking-[0.1em] uppercase text-ink border border-line-strong rounded-full px-2.5 py-1 hover:text-accent-ink hover:border-accent whitespace-nowrap touch-row"
+              title={`Tick several pictures and add them as ${intake.noun}s in one go`}
+            >
+              Select
+            </button>
+          )}
+          {!intake && tabPool.length > 0 && (
             <button
               type="button"
               onClick={() =>
@@ -965,6 +1192,14 @@ export default function AssetSidebar({
         </div>
       )}
 
+      {asSheet && intake && <IntakeStrip intake={intake} note={intakeNote} />}
+
+      {intakeProblem && (
+        <p role="alert" className="m-0 mx-3.5 mb-2 text-xs text-danger">
+          {intakeProblem}
+        </p>
+      )}
+
       <div className="flex-1 overflow-auto px-2 pb-2 min-h-0">
         {remoteTab && connection && client && (
           <div className="px-1.5 pb-2">
@@ -980,6 +1215,8 @@ export default function AssetSidebar({
               activeId={lib.activeId}
               picker={picker}
               onPreview={previewFirst ? setPreview : null}
+              collectFor={intake && !selecting ? rowMark : undefined}
+              pickFor={selecting ? rowPick : undefined}
               dragItemFor={(row) => {
                 const key = `${connection.id}/${row.id}`;
                 const host = shortHost(connection.id);
@@ -990,18 +1227,9 @@ export default function AssetSidebar({
                   // fetched on drop, and the cell says so meanwhile.
                   origin: inLibrary.has(key) ? 'library' : 'instance',
                   sourceLabel: host,
-                  resolve: async () => {
-                    const assetId = await picker.pick(row);
-                    if (!assetId) return null;
-                    const media = picked.current
-                      .get(assetId)
-                      ?.find((f) => !/\.srt$/i.test(f.name));
-                    picked.current.delete(assetId);
-                    if (media) return { assetId, file: media };
-                    const asset = assetsRef.current.find((a) => a.id === assetId);
-                    const file = asset ? (asset.parts.image ?? asset.parts.video ?? null) : null;
-                    return file ? { assetId, file } : null;
-                  },
+                  // Brought, never activated: the target places the picture
+                  // itself (activating would also put it on the open slide).
+                  resolve: () => bringFile(row),
                 };
               }}
             />
@@ -1036,6 +1264,8 @@ export default function AssetSidebar({
                   onEnsure={() => lib.ensureMeta(a.id)}
                   onActivate={() => activate(a.id)}
                   onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
+                  collect={selecting ? null : localMark(a)}
+                  pick={localPick(a)}
                   className="h-[66px]"
                 />
               ) : (
@@ -1050,6 +1280,8 @@ export default function AssetSidebar({
                   onActivate={() => activate(a.id)}
                   onPreview={a.parts.image || a.parts.video ? () => view(a.id) : null}
                   onRemove={() => lib.remove(a.id)}
+                  collect={selecting ? null : localMark(a)}
+                  pick={localPick(a)}
                 />
               ),
             )}
@@ -1060,7 +1292,59 @@ export default function AssetSidebar({
       {/* The tick count belongs to a LIST, not to a picker: a tool that reads
           the ACTIVE asset is not told anything by six boxes being ticked, and
           on a phone that line was two rows of screen saying nothing. */}
-      {!asTiles && (
+      {selecting && intake && (
+        <IntakeBar
+          intake={intake}
+          count={order.length}
+          byTime={byTime}
+          onByTime={setByTime}
+          afterOpen={afterOpen}
+          onAfterOpen={setAfterOpen}
+          together={together}
+          onTogether={setTogether}
+          busy={batchBusy}
+          onCommit={() => void commitBatch()}
+          onCancel={stopSelecting}
+          extra={
+            remoteTab && (scopeRows.rows?.length ?? 0) > 1 ? (
+              suggested ? (
+                <span className="inline-flex items-center h-8 rounded-full border border-line-strong bg-paper overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => suggest(Math.max(1, suggested.count - 1))}
+                    aria-label="Suggest one fewer"
+                    className="w-8 h-full border-0 bg-transparent text-ink cursor-pointer"
+                  >
+                    −
+                  </button>
+                  <span className="px-1 font-mono text-xs" title="Suggested from Winnow's picks and stars, one frame per burst, spread over the day — rejects left out">
+                    {suggested.count} suggested
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => suggest(Math.min(24, suggested.count + 1))}
+                    aria-label="Suggest one more"
+                    className="w-8 h-full border-0 bg-transparent text-ink cursor-pointer"
+                  >
+                    +
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => suggest(Math.min(6, scopeRows.rows?.length ?? 6))}
+                  title="Tick a few of this day for you — Winnow's picks and stars first, one frame per burst, spread over the day, rejects left out. Nothing is added until you press the verb."
+                  className="h-8 px-3 rounded-full border border-accent bg-accent-wash text-accent-ink text-xs cursor-pointer"
+                >
+                  Suggest
+                </button>
+              )
+            ) : undefined
+          }
+        />
+      )}
+
+      {!asTiles && !selecting && (
       <div className="border-t border-line px-4 py-2.5 bg-paper/40 text-xs text-ink-soft flex flex-col gap-0.5">
         <span>
           <b className="text-ink">{lib.selection.size} selected</b>
@@ -1279,6 +1563,10 @@ interface AssetRowProps {
   /** Look at it, large. Null for an asset there is nothing to look at. */
   onPreview: (() => void) | null;
   onRemove: () => void;
+  /** Where the active tool's intake has it, and its ＋ — null when no tool takes pictures in. */
+  collect?: CollectMark | null;
+  /** In Select mode: what a press does and the number it will be added as. */
+  pick?: PickMark | null;
 }
 
 function AssetRow({
@@ -1291,6 +1579,8 @@ function AssetRow({
   onActivate,
   onPreview,
   onRemove,
+  collect = null,
+  pick = null,
 }: AssetRowProps) {
   // The row reads its own cover, so the one whose cover lands is the one
   // that re-renders — not the list, and not the tool beside it.
@@ -1334,7 +1624,13 @@ function AssetRow({
         drag.lifted ? LIFTED : ''
       }`}
     >
-      {/* The box draws no `::after`; its label grows the zone to 44 under a finger. */}
+      {/* The box draws no `::after`; its label grows the zone to 44 under a finger.
+          In Select mode the box is the pick's number instead — the row is the button. */}
+      {pick ? (
+        <span className="relative flex-none w-[22px] h-[22px]">
+          <PickBadge mark={pick} />
+        </span>
+      ) : (
       <label className="touch-halo flex-none inline-grid place-items-center">
         <input
           type="checkbox"
@@ -1344,6 +1640,7 @@ function AssetRow({
           aria-label={`Select ${asset.baseName}`}
         />
       </label>
+      )}
       {/* The cover is its own click target — looking at a picture and putting
           it to work are two different verbs, and a button inside a button is
           not markup. Same 80×56 for every row, always: this is the frame the
@@ -1362,10 +1659,10 @@ function AssetRow({
           this tool can't use (the row is already dimmed). */}
       <button
         type="button"
-        onClick={onActivate}
-        disabled={!usable}
-        aria-pressed={active}
-        title={[
+        onClick={pick ? pick.onTick : onActivate}
+        disabled={!usable || (pick !== null && pick.held !== null)}
+        aria-pressed={pick ? pick.order !== null : active}
+        title={pick ? (pick.held !== null ? `Already ${pick.held}` : pick.order ? `Untick ${asset.baseName}` : `Tick ${asset.baseName}`) : [
           usable
             ? `Use ${asset.baseName} in this tool`
             : `${asset.baseName} — not usable by this tool`,
@@ -1391,6 +1688,21 @@ function AssetRow({
           </span>
         </div>
       </button>
+      {/* The intake's corner, beside the remove: a ＋ that adds the picture
+          as a new item of the tool's work, shown on hover like the ✕ (always
+          under a finger), or where it already sits. Its own fixed slot, so
+          nothing slides under the pointer when it appears. */}
+      {collect && usable && (
+        <span
+          className={`relative flex-none w-[26px] h-[26px] ${
+            collect.place === null && !collect.busy
+              ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 transition-opacity'
+              : ''
+          }`}
+        >
+          <CollectCorner mark={collect} className="inset-0 m-auto" />
+        </span>
+      )}
       <button
         type="button"
         onClick={onRemove}
@@ -1428,6 +1740,8 @@ function AssetTile({
   onEnsure,
   onActivate,
   onPreview,
+  collect = null,
+  pick = null,
   className,
 }: {
   asset: Asset;
@@ -1436,6 +1750,10 @@ function AssetTile({
   onEnsure: () => void;
   onActivate: () => void;
   onPreview: (() => void) | null;
+  /** Where the active tool's intake has it, and its ＋ — null when no tool takes pictures in. */
+  collect?: CollectMark | null;
+  /** In Select mode: what a press does and the number it will be added as. */
+  pick?: PickMark | null;
   className: string;
 }) {
   const meta = useAssetMeta(asset.id);
@@ -1459,13 +1777,17 @@ function AssetTile({
     >
       <button
         type="button"
-        onClick={onActivate}
-        disabled={!usable}
-        aria-pressed={active}
+        onClick={pick ? pick.onTick : onActivate}
+        disabled={!usable || (pick !== null && pick.held !== null)}
+        aria-pressed={pick ? pick.order !== null : active}
         title={
-          usable
-            ? `Use ${asset.baseName} here`
-            : `${asset.baseName} — not usable by this tool`
+          pick
+            ? pick.held !== null
+              ? `${asset.baseName} — already ${pick.held}`
+              : `${pick.order ? 'Untick' : 'Tick'} ${asset.baseName}`
+            : usable
+              ? `Use ${asset.baseName} here`
+              : `${asset.baseName} — not usable by this tool`
         }
         className="absolute inset-0 w-full h-full p-0 border-0 bg-transparent cursor-pointer disabled:cursor-default flex items-center justify-center"
       >
@@ -1487,7 +1809,7 @@ function AssetTile({
       <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-on-media truncate pointer-events-none">
         {asset.baseName}
       </span>
-      {pair && (
+      {pair && !pick && (
         <span className={`${scrim('top-[3px]')} pointer-events-none`} aria-hidden="true">
           {pair}
         </span>
@@ -1508,6 +1830,15 @@ function AssetTile({
         >
           ⤢
         </button>
+      )}
+      {collect && usable && <CollectCorner mark={collect} className="bottom-[3px] right-[3px]" />}
+      {pick && (
+        <>
+          {pick.order !== null && (
+            <span className={`absolute inset-0 rounded-[10px] pointer-events-none ${PICKED_RING}`} aria-hidden="true" />
+          )}
+          <PickBadge mark={pick} />
+        </>
       )}
     </div>
   );
@@ -1588,4 +1919,8 @@ function Cover({
       </span>
     </button>
   );
+}
+
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }

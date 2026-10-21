@@ -181,8 +181,7 @@ with the shared transport. The inspector is tabbed (Overlay / Style / Grade /
 Info / Export); tools run edge-to-edge so a landscape clip finally gets the
 width it needs. The whole suite has a **light and a dark theme**, chosen with
 the button in the masthead (a monitor follows the system, a sun and a moon
-are yours — on a phone, *Theme* in the header's ⋯, since there the masthead
-gives way to one header line on every screen, the home page included); the dark one is the same paper at night. **The editor sits in a
+are yours); the dark one is the same paper at night. **The editor sits in a
 darkroom**: while a project is open the
 paper gives way to hue-less grey around the picture, because a warm surround
 biases the eye's reading of a grade. The galleries and the rest of the suite
@@ -771,6 +770,45 @@ typed — and one click brings a picture across. Videos work as well as photos: 
 on is chosen by **dragging along a filmstrip of the clip itself**, the way a
 phone gallery picks a cover — the thumbnails fill in as they decode, the
 preview follows the drag, and the arrows nudge frame by frame.
+
+**Pictures become new slides from the Library.** While a piece is open, every
+picture in the Library — a local file or a tile of the Winnow tab — carries a
+small **＋**: it adds that picture as a **new slide** (before the closing card)
+and leaves the Library open, so a day can be gone through and kept picture by
+picture. The ＋ then shows the slide's number, and pressing it again takes
+that slide back; a picture already in the piece shows its number in ink. A tap
+on the picture itself still puts it on the slide that is open. On a phone the
+Library's sheet draws the piece small at its head, growing as you add. Looked
+at large (⤢ on a tile, or a click on a Winnow tile), a picture offers **Add as
+slide N** and **Add and next**, and `A` does the same: the day can be paged
+through with the arrows and kept with one key. On a computer a picture can
+also be **dragged into the band under the stage**: as soon as a drag starts,
+the gap after every slide opens, and dropping in one inserts the picture
+there as a new slide (a Winnow tile is fetched as it lands).
+
+To add **several at once**, press **Select** above the Library's pictures:
+each picture tapped then shows the number of the slide it will become, so the
+order is read before anything is written. The bar at the foot adds them in one
+step — **Add 5 slides** — in the order they were ticked or the order they were
+taken, at the end or right after the open slide, and from 2 to 9 pictures as
+**one collage** slide instead. A picture already in the piece is not offered
+again. One undo takes the whole batch back. On the Winnow tab the bar also
+offers **Suggest**: it ticks a few of the day for you — Winnow's picks and
+stars first, one frame per burst, rejects left out, spread over the day so a
+busy morning does not crowd out the evening — and writes under each tile why
+it was chosen («Pick · ★5», «best of 3», «covers 14:20»). − and + ask for one
+fewer or one more; you keep, drop or add before anything is written.
+
+The band's **`+` opens the Audition**: the day's pictures — the piece's day on
+your Winnow and the Library's own files taken that day — one at a time, each
+drawn **as a slide of this piece would show it**, cropped to the piece's frame
+and through its look (a chip shows it as shot instead). **Add as slide N**
+keeps it and moves on, **Skip** moves on; on a computer `A` (or ↑) keeps, the
+arrows move, `⌫` takes back the last one kept, `Esc` closes; on a phone a swipe
+up keeps and a swipe sideways moves. A picture already in the piece is shown
+with its number, the day's strip under the picture jumps anywhere, and the
+piece grows at the foot. Nothing else is on screen, so a day is gone through
+with one thumb.
 
 **Stages** are the legs of the trip, each with its own span. They are what lets
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
@@ -1689,14 +1727,15 @@ the needle is the one open; ▶ or `Space` plays **the whole piece**, slide afte
 slide, on the stage. The open slide's cell carries a **grip at each end**: drag
 one to make a picture hold the screen longer or shorter, or to move a clip's in
 or out point — the other end stays put, and the change is written once, when you
-let go (the Content tab's *On screen* slider is the same number). `+` adds the
-active picture.
+let go (the Content tab's *On screen* slider is the same number). `+` opens the
+**Audition** (below).
 
 **Every slide moves.** Hold a slide on the band for a moment — a quick drag
 still moves through the piece — and carry it where it should go: the band slides
 under it at either edge and a bar shows where it will land. `⋯` moves the open
-slide to the start, earlier, later or to the end, removes a picture (a piece
-keeps at least one), and adds or removes the trip's card; `⌥←` / `⌥→` on the
+slide to the start, earlier, later or to the end, **duplicates** it (a copy right
+after it, with everything on it), removes a picture (a piece keeps at least one),
+and adds or removes the trip's card; `⌥←` / `⌥→` on the
 band move the open slide. A slide takes everything it holds with it — its
 picture, opener, shades, words and badge — so the first slide is simply the one
 that opens: it is the piece's cover, and the picture an agent calls slide 1. The

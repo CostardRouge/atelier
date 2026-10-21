@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { describeKeyTarget, targetOwnsTyping } from '../media/transport-keys';
 import useDialogKeys from './use-dialog-keys';
 import StageZoomControl from './StageZoomControl';
 import TaskEdge from './TaskEdge';
@@ -122,6 +123,12 @@ interface MediaLightboxProps {
   /** What Enter does, when the caller has one obvious action. */
   onConfirm?: (() => void) | null;
   /**
+   * What `A` does — "add this one" — when the active tool takes pictures in
+   * (`MediaIntake`): the key a day is gone through with, one hand on the
+   * arrows, the other on A.
+   */
+  onCollect?: (() => void) | null;
+  /**
    * Ask the browser for one of these URLs again, past its cache, after it
    * would not load — and say whether the entry now holds something worth
    * drawing. Only a caller whose URLs are fetched over the network passes
@@ -174,6 +181,7 @@ export default function MediaLightbox({
   from,
   footer,
   onConfirm,
+  onCollect = null,
   heal,
   files,
   viewing = null,
@@ -236,8 +244,8 @@ export default function MediaLightbox({
   // The keys the grammar gives every Looking surface (`zoom-keys.ts`): `Z`
   // toggles the view, the arrows pan it once zoomed — and at the fit, where a
   // pan means nothing, the arrows keep paging the deck.
-  const keys = useRef({ viewer });
-  keys.current = { viewer };
+  const keys = useRef({ viewer, onCollect });
+  keys.current = { viewer, onCollect };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const v = keys.current.viewer;
@@ -249,6 +257,15 @@ export default function MediaLightbox({
         v.pan(action.dx, action.dy);
       } else if (!v.zoomed && e.key === 'ArrowLeft') v.pageBy(-1);
       else if (!v.zoomed && e.key === 'ArrowRight') v.pageBy(1);
+      else if (
+        (e.key === 'a' || e.key === 'A') &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        keys.current.onCollect &&
+        !targetOwnsTyping(describeKeyTarget(e.target))
+      )
+        keys.current.onCollect();
       else return;
       e.preventDefault();
     };

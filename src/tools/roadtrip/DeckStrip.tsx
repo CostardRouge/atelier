@@ -81,6 +81,8 @@ import RunMark from '../../shared/ui/RunMark';
 import type { RunUnitState } from '../../shared/tasks/run-progress';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
+import { activeAssetDrag, hasAssetDrag, type AssetDragItem, type DropResult } from '../../shared/library/asset-drag';
+import { useAssetDrag } from '../../shared/library/use-asset-drag';
 
 /** The open slide's clip, when it is one. */
 export interface StripClip {
@@ -109,8 +111,11 @@ interface DeckStripProps {
   /** Go to a moment of the piece; the band calls it at most once a frame. */
   onScrub: (t: number) => void;
   onSelect: (index: number) => void;
+  /** Add pictures — the band's ＋, which opens the day's pictures on the piece's frame. */
   onAdd: () => void;
   onRemove: () => void;
+  /** A copy of the open slide, right after it — ⋯. */
+  onDuplicate?: () => void;
   /** Two deck positions, 0-based: the slide at `from` lands at `to`. */
   onMove: (from: number, to: number) => void;
   includeCta: boolean;
@@ -151,6 +156,12 @@ interface DeckStripProps {
    * hatched at the cell's end, where the length is set; 0 or absent for none.
    */
   overflowFor?: (i: number) => number;
+  /**
+   * A picture dragged out of the Library and dropped in the GAP after slide
+   * `after` (a deck index) — inserted there as a new slide. Absent, the band
+   * takes no drop.
+   */
+  onInsertAsset?: (after: number, item: AssetDragItem) => Promise<DropResult>;
 }
 
 /** A resize in progress: the end held, where the other end stays, the draft. */
@@ -238,6 +249,7 @@ export default function DeckStrip({
   onSelect,
   onAdd,
   onRemove,
+  onDuplicate,
   onMove,
   includeCta,
   onIncludeCta,
@@ -254,8 +266,33 @@ export default function DeckStrip({
   runAt,
   orderLocked = false,
   overflowFor,
+  onInsertAsset,
 }: DeckStripProps) {
   const coarse = useCoarsePointer();
+  // A picture travelling out of the Library: the gaps after every picture
+  // slide open as places to drop it, the hovered one wide and named.
+  const dragged = useAssetDrag();
+  const [dropGap, setDropGap] = useState<number | null>(null);
+  const [landing, setLanding] = useState<{ gap: number; failed: boolean; text: string } | null>(null);
+  const gapsOpen = Boolean(onInsertAsset && !orderLocked && (dragged || landing));
+  useEffect(() => {
+    if (!dragged) setDropGap(null);
+  }, [dragged]);
+  const dropInGap = (gap: number) => {
+    const item = activeAssetDrag();
+    setDropGap(null);
+    if (!item || !onInsertAsset) return;
+    setLanding({ gap, failed: false, text: item.origin === 'instance' ? `Fetching ${item.label}…` : `Adding ${item.label}…` });
+    void onInsertAsset(gap, item).then(
+      (result) => setLanding(result.ok ? null : { gap, failed: true, text: result.reason }),
+      (err: unknown) => setLanding({ gap, failed: true, text: err instanceof Error ? err.message : String(err) }),
+    );
+  };
+  useEffect(() => {
+    if (!landing?.failed) return;
+    const t = window.setTimeout(() => setLanding(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [landing]);
   const pxPerSecond = compact ? 30 : 42;
   // While an end of the open cell is dragged, the band is drawn at the draft
   // length; the document hears about it once, on release.
@@ -723,6 +760,11 @@ export default function DeckStrip({
     menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the trip’s card…' : 'Write the trip’s card…', onSelect: onEditClosingCard });
     menu.push({ id: 'cta-off', label: 'Remove the trip’s card', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
   }
+  // The ＋ used to copy the open picture into a new slide; that copy, now of
+  // the whole slide, is here.
+  if (slide && slide.kind !== 'cta' && onDuplicate) {
+    menu.push({ id: 'duplicate', label: 'Duplicate this slide', disabled: orderLocked, title: lockedWhy ?? 'A copy right after it — the picture, its framing and everything on it', onSelect: onDuplicate });
+  }
   if (slide && slide.kind !== 'cta' && pictures > 1) {
     menu.push({ id: 'remove', label: 'Remove this picture', danger: true, disabled: orderLocked, title: lockedWhy, onSelect: onRemove });
   }
@@ -839,7 +881,7 @@ export default function DeckStrip({
           </button>
         )}
         <OverflowMenu label={`More for ${slide ? slideName(slide) : 'this slide'}`} items={menu} side="above" size={iconSize} />
-        <IconButton size={iconSize} variant="ghost" label="Add the active picture to this piece" title={lockedWhy ?? 'Add the active picture to this piece'} disabled={orderLocked} onClick={onAdd}>
+        <IconButton size={iconSize} variant="ghost" label="Add pictures from the day" title={lockedWhy ?? 'Add pictures from the day — each shown on this piece’s frame, kept or skipped in one gesture'} disabled={orderLocked} onClick={onAdd}>
           {Icons.plus}
         </IconButton>
       </div>
@@ -1069,6 +1111,51 @@ export default function DeckStrip({
                 </div>
               );
             })}
+            {/* A Library picture's drop: the gap AFTER each picture slide takes
+                it as a new slide there — never after the closing card, which
+                stays the piece's end. */}
+            {gapsOpen &&
+              layout.cells.map((cell, i) => {
+                const s = slides[i];
+                if (!s || s.kind === 'cta') return null;
+                const over = dropGap === i;
+                const busy = landing?.gap === i;
+                const wide = over || busy;
+                const x = cell.left + cell.width + GAP_PX / 2;
+                const width = wide ? 64 : 22;
+                return (
+                  <span
+                    key={`gap-${s.slideId}`}
+                    data-insert-after={i}
+                    onDragEnter={(e) => {
+                      if (!hasAssetDrag(e.dataTransfer)) return;
+                      e.preventDefault();
+                      setDropGap(i);
+                    }}
+                    onDragOver={(e) => {
+                      if (!hasAssetDrag(e.dataTransfer)) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                      if (dropGap !== i) setDropGap(i);
+                    }}
+                    onDragLeave={() => setDropGap((g) => (g === i ? null : g))}
+                    onDrop={(e) => {
+                      if (!hasAssetDrag(e.dataTransfer)) return;
+                      e.preventDefault();
+                      dropInGap(i);
+                    }}
+                    title={busy ? landing?.text : `Insert as slide ${s.position + 1}`}
+                    className={`absolute -top-1.5 -bottom-1 z-10 grid place-items-center rounded-[6px] font-mono text-3xs leading-tight text-center transition-[width,background-color] ${
+                      wide
+                        ? 'bg-accent-wash border-2 border-accent text-accent-ink'
+                        : 'border border-dashed border-accent/70 bg-paper/70 text-accent-ink'
+                    }`}
+                    style={{ left: x - width / 2, width }}
+                  >
+                    {busy ? (landing?.failed ? '!' : '…') : over ? `slide ${s.position + 1}` : '+'}
+                  </span>
+                );
+              })}
             {/* Where a lifted slide will land: a bar in the gap of its slot. */}
             {lift && dropIndex(lift.from, lift.slot) !== lift.from && (
               <span

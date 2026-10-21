@@ -7,6 +7,8 @@ import type { ScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
 import type { AssetDragItem } from '../shared/library/asset-drag';
 import { useAssetDragSource } from '../shared/library/use-asset-drag';
+import CollectCorner, { type CollectMark } from './CollectCorner';
+import PickBadge, { PICKED_RING, type PickMark } from './PickBadge';
 
 interface WinnowScopeGridProps {
   connection: WinnowConnection;
@@ -52,6 +54,13 @@ interface WinnowScopeGridProps {
    * does not hold it yet. Absent, the tiles are not draggable.
    */
   dragItemFor?: (row: WinnowAssetRow) => AssetDragItem | null;
+  /**
+   * Where the active tool's intake has a row's picture, and the ＋ that adds
+   * it (`CollectCorner`). Absent when no tool takes pictures in.
+   */
+  collectFor?: (row: WinnowAssetRow) => CollectMark | null;
+  /** In the Library's Select mode: a press ticks the row, and its number is drawn. */
+  pickFor?: (row: WinnowAssetRow) => PickMark | null;
 }
 
 /**
@@ -88,9 +97,11 @@ export default function WinnowScopeGrid({
   onPreview,
   announce,
   dragItemFor,
+  collectFor,
+  pickFor,
 }: WinnowScopeGridProps) {
   const { rows, problem, reload } = scope;
-  const { pick, fetching } = picker;
+  const { pick: pickRow, fetching } = picker;
   const shownProblem = picker.problem ?? problem;
 
   return (
@@ -128,17 +139,23 @@ export default function WinnowScopeGrid({
           {shown.map((r, i) => {
             const have = inLibrary.get(`${connection.id}/${r.id}`);
             const active = have !== undefined && have === activeId;
+            const media = r.media_type === 'photo' || r.media_type === 'video';
+            const collect = media ? (collectFor?.(r) ?? null) : null;
+            const pick = media ? (pickFor?.(r) ?? null) : null;
             return (
               <WinnowTile
                 key={r.id}
                 dragItem={dragItemFor?.(r) ?? null}
-                onClick={() => (onPreview ? onPreview(i) : void pick(r))}
-                disabled={fetching !== null}
-                active={active}
+                collect={collect}
+                onClick={() => (pick ? pick.onTick() : onPreview ? onPreview(i) : void pickRow(r))}
+                disabled={pick ? pick.held !== null : fetching !== null}
+                active={pick ? pick.order !== null : active}
                 title={`${onPreview ? 'Look at' : 'Use'} ${r.filename}${
                   r.has_telemetry ? ' · flight log' : ''
                 }${have ? ' · in the library' : ''}${dragItemFor ? ' — or drag it onto the picture' : ''}`}
                 className={`relative block rounded-md overflow-hidden border bg-frame cursor-pointer p-0 disabled:cursor-wait transition-[border-color,opacity] ${
+                  pick?.order != null ? `border-accent ${PICKED_RING}` : ''
+                } ${pick?.held != null ? 'opacity-60' : ''} ${
                   active
                     ? 'border-accent shadow-[inset_0_0_0_2px_var(--color-accent)]'
                     : have
@@ -153,7 +170,14 @@ export default function WinnowScopeGrid({
                   label={r.media_type === 'video' ? 'video' : 'photo'}
                   box="w-full h-[74px]"
                 />
-                {r.media_type === 'video' && (
+                {pick && <PickBadge mark={pick} />}
+                {/* Why Suggest proposed it, in Winnow's own words. */}
+                {pick?.reason && (
+                  <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.72)] font-mono text-3xs text-on-media truncate text-left pointer-events-none">
+                    {pick.reason}
+                  </span>
+                )}
+                {r.media_type === 'video' && !pick && (
                   <span
                     className="absolute top-1 left-1 font-mono text-3xs text-on-media bg-[rgba(20,18,15,0.62)] px-1 rounded-[3px] leading-[1.4]"
                     aria-hidden="true"
@@ -171,7 +195,7 @@ export default function WinnowScopeGrid({
                     one the tool is on. Hiding the ✓ under the ring made a
                     click look like it had ticked the PREVIOUS tile — the
                     badge only ever appeared where the ring had just left. */}
-                {have && (
+                {have && !collect && (
                   <span
                     className={`absolute bottom-1 right-1 w-[14px] h-[14px] grid place-items-center rounded-full text-3xs leading-none border ${
                       active
@@ -231,6 +255,7 @@ export default function WinnowScopeGrid({
  */
 function WinnowTile({
   dragItem,
+  collect,
   onClick,
   disabled,
   active,
@@ -239,6 +264,8 @@ function WinnowTile({
   children,
 }: {
   dragItem: AssetDragItem | null;
+  /** The intake's corner — drawn beside the button, never inside it. */
+  collect: CollectMark | null;
   onClick: () => void;
   disabled: boolean;
   active: boolean;
@@ -250,7 +277,7 @@ function WinnowTile({
   // being fetched, which is exactly when its drag ends. A disabled button
   // cannot start a drag in the first place.
   const drag = useAssetDragSource(dragItem);
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
@@ -258,7 +285,7 @@ function WinnowTile({
       aria-pressed={active}
       title={title}
       {...drag.props}
-      className={`${className} ${
+      className={`${className} ${collect ? 'w-full' : ''} ${
         drag.lifted
           ? 'opacity-40 outline-dashed outline-[1.5px] outline-offset-[-1.5px] outline-accent'
           : ''
@@ -266,5 +293,14 @@ function WinnowTile({
     >
       {children}
     </button>
+  );
+  if (!collect) return button;
+  // A button inside a button is not markup: the corner sits beside the tile's
+  // button, over its bottom-right corner.
+  return (
+    <div className="relative">
+      {button}
+      <CollectCorner mark={collect} className="bottom-[3px] right-[3px]" />
+    </div>
   );
 }

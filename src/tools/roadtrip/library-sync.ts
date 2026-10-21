@@ -37,6 +37,13 @@ export interface SyncState {
   settled: boolean;
   /** Has the Library's own tick moved since the last pass that acted on it? */
   tickMoved: boolean;
+  /**
+   * The tick is the Library's FALLBACK, not anyone's choice: nothing was
+   * active, so the first selected asset stands in (`useActiveAsset`). The
+   * pool growing under an empty tick — a picture brought in to become a NEW
+   * slide — must not be read as a pick for the open one.
+   */
+  tickImplicit?: boolean;
   /** The file the slide names, or null for a slide with no picture. */
   slideName: string | null;
   /** The file the Library has active, or null when nothing is ticked. */
@@ -55,7 +62,7 @@ export function syncMove(state: SyncState): SyncMove {
   if (!state.settled) return 'restore';
   if (state.activeName === null) return 'idle';
   if (sameFileName(state.slideName, state.activeName)) return 'idle';
-  return state.tickMoved ? 'record' : 'idle';
+  return state.tickMoved && !state.tickImplicit ? 'record' : 'idle';
 }
 
 /**

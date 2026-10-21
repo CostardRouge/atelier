@@ -73,3 +73,14 @@ describe('sameFileName', () => {
     expect(sameFileName(null, 'a.jpg')).toBe(false);
   });
 });
+
+describe('a fallback tick is not a pick', () => {
+  it('never records the Library standing in its first asset when nothing was active', () => {
+    expect(
+      syncMove({ settled: true, tickMoved: true, tickImplicit: true, slideName: 'a.jpg', activeName: 'b.jpg' }),
+    ).toBe('idle');
+    expect(syncMove({ settled: true, tickMoved: true, tickImplicit: false, slideName: 'a.jpg', activeName: 'b.jpg' })).toBe(
+      'record',
+    );
+  });
+});

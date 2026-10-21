@@ -13,6 +13,18 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Added
 
+- Trips: a ＋ on every Library picture (local or from Winnow) adds it as a new slide of the open piece and keeps the
+  Library open, so a day can be gone through picture by picture; the ＋ becomes the slide's number, which takes it
+  back on a second press. On a phone the Library's sheet shows the piece growing at its head.
+- Trips: a picture looked at large offers **Add as slide N** and **Add and next**, and the `A` key adds it, so a day can
+  be paged through and kept one picture at a time.
+- Trips: drag a Library picture into a gap of the band under the stage to insert it there as a new slide.
+- Trips: **Select** in the Library ticks several pictures, each showing the slide number it will become, and adds them
+  in one step — in tick or capture order, at the end or after the open slide, or as one collage of 2 to 9.
+- Trips: **Suggest** ticks a few pictures of the day from Winnow's picks, stars and bursts, spread over the day, each
+  with the reason it was chosen; nothing is added until you press the verb.
+- Trips: the band's `+` opens the **Audition** — the day's pictures one at a time, each drawn cropped to the piece's
+  frame and through its look, kept with Add (A, or a swipe up) or passed with Skip, the piece growing at the foot.
 - Develop: press and hold the picture still to see it as shot, until you lift — on a phone, a tablet or with a mouse.
   A press that moves is still a swipe to the next picture, and a quick tap still hides the controls. On a touch
   screen the "hold for before" button is gone; a computer keeps it, and the \\ key.
@@ -34,6 +46,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   the licence.
 
 ### Changed
+
+- Trips: the band's `+` no longer copies the open picture into a new slide; **Duplicate this slide** in ⋯ copies the
+  whole slide instead.
 
 - Every slider's orange value line is drawn whole again; it only opens where it would run through the setting's
   name, its reset arrow or its value.
