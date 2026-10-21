@@ -1,17 +1,46 @@
+# Dependabot, the portfolio's shape (COMMON-PROJECT-SPEC.md, C20).
+# Why each group and each ignore is here: docs/memory/deployment.md,
+# « Dependabot (C20) ».
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
+      interval: monthly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    open-pull-requests-limit: 3
+    groups:
+      # Families that only work in step: a major moves the whole family.
+      # Listed first, since a dependency goes to the first group it matches.
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
+        update-types: [major]
+      # Vitest pins its own Vite, and @vitejs/plugin-react names Vite's major
+      # as a peer: bumped one at a time, each fails `npm ci` (ERESOLVE).
+      vite:
+        patterns: ['vite', '@vitejs/*', 'vitest', '@vitest/*']
+        update-types: [major]
+      eslint:
+        patterns: ['eslint', '@eslint/*', 'typescript-eslint', '@typescript-eslint/*', 'eslint-plugin-*', 'eslint-config-*']
+        update-types: [major]
+      tailwind:
+        patterns: ['tailwindcss', '@tailwindcss/*']
+        update-types: [major]
+      # Every minor and patch, production and development together:
+      # one pull request a month.
+      minor-and-patch:
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ['*']
     ignore:
-      # Keep Node type definitions in step with the Node.js version in .nvmrc.
+      # Node's type definitions follow .nvmrc's major (C14).
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
-      # React 19 is a migration, not a bump: react, react-dom and their types
-      # must move together, and the code with them.
+      # React 19 is a code migration nobody has decided: react, react-dom and
+      # their types move together, by hand, with the code.
       - dependency-name: 'react'
         update-types: ['version-update:semver-major']
       - dependency-name: 'react-dom'
@@ -20,23 +49,54 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@types/react-dom'
         update-types: ['version-update:semver-major']
-      # maplibre-gl 6 changes its types and is the maintainer's call (SEC-09,
-      # docs/audit-2026-10-02.md).
+      # maplibre-gl 6 changes its types (tsc fails in TripMapView.tsx) and is
+      # the maintainer's call (SEC-09, docs/audit-2026-10-02.md).
       - dependency-name: 'maplibre-gl'
         update-types: ['version-update:semver-major']
+      # Vite 8 is a migration, measured 2026-10-21 with vite 8, plugin-react 6
+      # and vitest 5 together: it no longer ships esbuild (vite.config.ts
+      # imports it to bundle the agent bridge) and no longer leaks Node's
+      # types into tsconfig.app.json (the specs' node:fs imports stop
+      # compiling). Lift with the PR that does both.
+      - dependency-name: 'vite'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitejs/*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'vitest'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitest/*'
+        update-types: ['version-update:semver-major']
+      # typescript-eslint 8 declares typescript >=4.8.4 <6.1.0 as its peer:
+      # TypeScript 7 fails `npm ci`. Lift when typescript-eslint accepts it.
+      - dependency-name: 'typescript'
+        versions: ['>=6.1.0']
+      # @eslint/js 10's recommended set adds rules (no-useless-assignment…)
+      # that 37 lines of this repo break. Lift with the PR that fixes them.
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+
+  # training/ (the local Python workspace, uv.lock).
+  - package-ecosystem: uv
+    directory: /training
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    open-pull-requests-limit: 3
     groups:
-      # One PR for the four, so a peer range is never split across two.
-      react:
-        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
-      dev-dependencies:
-        dependency-type: development
+      minor-and-patch:
         update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ['*']
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
