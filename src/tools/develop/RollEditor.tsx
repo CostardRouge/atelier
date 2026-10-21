@@ -135,7 +135,7 @@ import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/sources/file-sources';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
-import Button from '../../shared/ui/Button';
+import Button, { buttonClass } from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { useFingerSize } from '../../shared/ui/use-coarse-pointer';
 import { VERB_DONE_MS, type VerbOutcome } from '../../shared/ui/verb';
@@ -152,6 +152,7 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
 import RollBand from './RollBand';
+import RollRuler from './RollRuler';
 import SelectionBar, { type SelectionVerbs } from './SelectionBar';
 import { useThumbAspects } from './use-thumb-aspects';
 import type { CropApplyVerb } from './CropPanel';
@@ -2352,6 +2353,47 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           </>
         );
       }
+      if (compact && !side) {
+        // A phone's head is face C of the band-head lab (2026-10-21, his
+        // pick, https://claude.ai/artifact/Cq3WXuQp3tkvfgxFihV4hP): the
+        // fold, then a RULER of what the band shows that a finger travels,
+        // its count saying the filter in the accent while one is on — so the
+        // filter itself can be a glyph — then Select, the sheet and the ⋯.
+        return (
+          <>
+            <IconButton size={size} variant="ghost" label={strip.folded ? 'Show the band (B)' : 'Fold the band (B)'} onClick={toggleFolded}>
+              {strip.folded ? Icons.up : Icons.down}
+            </IconButton>
+            <RollRuler
+              count={shown}
+              at={at}
+              filterLabel={filtering ? stripFilterLabel(stripFilter) : null}
+              onPick={(index) => {
+                const id = shownIds[index];
+                if (id) onOpenPicture(id);
+              }}
+            />
+            <SettingsMenu
+              label="What the band shows, and in what order"
+              sections={filterSections}
+              side="above"
+              trigger={{
+                bare: true,
+                text: Icons.filter,
+                title: filtering ? `Showing: ${stripFilterLabel(stripFilter)}` : 'Filter and order',
+                className: buttonClass(filtering ? 'primary' : 'ghost', size, 'aspect-square', { square: true }),
+              }}
+            />
+            <IconButton size={size} variant="ghost" label="Select — pick several pictures, then act on them all (S)" onClick={() => startSelecting()}>
+              {Icons.circleCheck}
+            </IconButton>
+            <IconButton size={size} variant="ghost" label="Contact sheet (G)" onClick={toggleSheet}>
+              {Icons.grid}
+            </IconButton>
+            <SettingsMenu label="The band: where, how many, how big" sections={bandSections} size={size} side="above" />
+          </>
+        );
+      }
       const progress = rollProgress(roll);
       const leaving = roll.pictures.filter(delivers).length;
       const changed = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
@@ -2404,7 +2446,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       );
     },
     // The menus are rebuilt per render on purpose: they read the band's state.
-    [selecting, compact, finger, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
+    [selecting, compact, finger, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place, shownIds, onOpenPicture],
   );
 
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
