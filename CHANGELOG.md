@@ -16,6 +16,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Develop on a phone: the band of pictures now lies on the bottom bar and the editing buttons sit on the band, so no
   strip of picture is lost between them; the header, the band and the zoom button have squarer corners that match the
   buttons they hold.
+- Develop on a phone: the band's header is a ruler of the roll, one mark per picture with the open one in red; drag a
+  finger along it to travel the roll and lift to open the picture under it. The filter, Select and the contact sheet
+  are icons beside it, and the filter in use is named next to the count.
 
 ## [1.1.0] - 2026-10-21 — Tyrian
 
