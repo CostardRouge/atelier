@@ -55,6 +55,7 @@ import type { AnchorRect } from '../../shared/ui/menu-anchor';
 import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
+import { rulerWindow } from './roll-ruler';
 
 /**
  * What the band and the contact sheet both take about the roll's pictures,
@@ -172,7 +173,7 @@ export default function RollBand({
    * where every row is the photograph's. One row under the picture; wrapped
    * beside it, where the column is narrow; a stack once folded to a rail.
    */
-  header?: ((info: { at: number; shown: number; width: number }) => ReactNode) | null;
+  header?: ((info: { at: number; shown: number; width: number; inView: readonly [number, number] | null }) => ReactNode) | null;
   /** Folded to its rail: the header alone, no cell laid out or drawn. */
   folded?: boolean;
   /** The thumbnail height a grid aims at (`StripPrefs.thumb`); the metrics' own by default. */
@@ -196,6 +197,7 @@ export default function RollBand({
   );
   useScrollToOpen(bodyRef, openId, layout, metrics.pad);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
+  const inView = useCellsInView(bodyRef, layout, shown, folded);
   return (
     <div
       className={`flex flex-col min-w-0 min-h-0 ${side ? 'h-full' : ''}`}
@@ -214,7 +216,7 @@ export default function RollBand({
           }`}
           style={side ? undefined : { height: metrics.head }}
         >
-          {header({ at, shown: shown.length, width: side ? size : width })}
+          {header({ at, shown: shown.length, width: side ? size : width, inView })}
         </div>
       )}
       <div
@@ -239,6 +241,49 @@ export default function RollBand({
 }
 
 const ALWAYS = () => true;
+
+/**
+ * The pictures the band has ON SCREEN, as indices into what it shows — for
+ * the ruler's frame on a phone (`roll-ruler.ts`). Read on scroll once per
+ * frame, exactly (`useScrollView` publishes only every quarter box, which is
+ * the cells' business), and handed up only when the first or last changes.
+ */
+function useCellsInView(
+  bodyRef: RefObject<HTMLDivElement>,
+  layout: StripLayout,
+  shown: readonly { id: string }[],
+  folded: boolean,
+): readonly [number, number] | null {
+  const [inView, setInView] = useState<readonly [number, number] | null>(null);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || folded) {
+      setInView(null);
+      return;
+    }
+    const index = new Map(shown.map((p, i) => [p.id, i]));
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const x = layout.axis === 'x';
+      const w = rulerWindow(layout.cells, x ? el.scrollLeft : el.scrollTop, x ? el.clientWidth : el.clientHeight, layout.axis);
+      const next: readonly [number, number] | null = w
+        ? [index.get(layout.cells[w[0]].id) ?? w[0], index.get(layout.cells[w[1]].id) ?? w[1]]
+        : null;
+      setInView((cur) => (cur?.[0] === next?.[0] && cur?.[1] === next?.[1] ? cur : next));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    read();
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [bodyRef, layout, shown, folded]);
+  return inView;
+}
 
 /**
  * What a scroller SHOWS of its content — its scroll position and its box,
