@@ -9,7 +9,7 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-10-20 — Tyrian
+## [1.1.0] - 2026-10-21 — Tyrian
 
 ### Added
 
