@@ -56,6 +56,7 @@ import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
 import { rulerWindow } from './roll-ruler';
+import { revealScroll } from './band-reveal';
 
 /**
  * What the band and the contact sheet both take about the roll's pictures,
@@ -337,8 +338,10 @@ export function useScrollView<T extends HTMLElement>(): [RefObject<T>, ViewBox] 
 
 /**
  * The open picture's cell kept in view as ←/→ step along the roll: scrolled
- * to by the RECTANGLE the layout answers, to the nearest edge with `margin`
- * of breathing room (a cell already in view moves nothing), once per open
+ * to by the RECTANGLE the layout answers — a cell already in view (with
+ * `margin` around it) moves nothing, one that left is brought to the MIDDLE
+ * (`band-reveal.ts`, his pick of 2026-10-21; it used to stop at the nearest
+ * edge, so a jump landed with nothing after it) —, once per open
  * picture on each axis — the cell is not asked of the DOM, since the first
  * layout is laid at no width and a later one must not pull the band back
  * under a hand that scrolled away. The band's body and nothing else is
@@ -356,14 +359,17 @@ export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: stri
     const key = `${openId}:${axis}`;
     if (done.current === key) return;
     const [x, y, w, h] = box.split(',').map(Number);
-    if (axis === 'x') {
-      if (!(el.clientWidth > 0)) return;
-      if (x - margin < el.scrollLeft) el.scrollLeft = Math.max(0, x - margin);
-      else if (x + w + margin > el.scrollLeft + el.clientWidth) el.scrollLeft = x + w + margin - el.clientWidth;
-    } else {
-      if (!(el.clientHeight > 0)) return;
-      if (y - margin < el.scrollTop) el.scrollTop = Math.max(0, y - margin);
-      else if (y + h + margin > el.scrollTop + el.clientHeight) el.scrollTop = y + h + margin - el.clientHeight;
+    const extent = axis === 'x' ? el.clientWidth : el.clientHeight;
+    if (!(extent > 0)) return;
+    const next =
+      axis === 'x'
+        ? revealScroll(x, w, el.scrollLeft, extent, el.scrollWidth - el.clientWidth, margin)
+        : revealScroll(y, h, el.scrollTop, extent, el.scrollHeight - el.clientHeight, margin);
+    if (next !== null) {
+      // The first reveal of a band lands at once; a step afterwards glides
+      // there, unless the person asked the system for less motion.
+      const glide = done.current !== null && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollTo({ [axis === 'x' ? 'left' : 'top']: next, behavior: glide ? 'smooth' : 'auto' });
     }
     done.current = key;
   }, [ref, openId, box, axis, margin]);

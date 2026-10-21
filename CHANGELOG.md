@@ -20,6 +20,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   finger along it to travel the roll and lift to open the picture under it. The filter, Select and the contact sheet
   are icons beside it, and the filter in use is named next to the count. A thin frame on the ruler shows which
   pictures the band has on screen.
+- Develop: when the open picture leaves the band's view, the band brings it back to the middle instead of the edge,
+  so a jump lands with the pictures on both sides of it; stepping between pictures in view leaves the band still.
 
 ## [1.1.0] - 2026-10-21 — Tyrian
 
