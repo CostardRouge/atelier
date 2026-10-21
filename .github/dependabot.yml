@@ -10,7 +10,24 @@ updates:
       # Keep Node type definitions in step with the Node.js version in .nvmrc.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
+      # React 19 is a migration, not a bump: react, react-dom and their types
+      # must move together, and the code with them.
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+      # maplibre-gl 6 changes its types and is the maintainer's call (SEC-09,
+      # docs/audit-2026-10-02.md).
+      - dependency-name: 'maplibre-gl'
+        update-types: ['version-update:semver-major']
     groups:
+      # One PR for the four, so a peer range is never split across two.
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
       dev-dependencies:
         dependency-type: development
         update-types: [minor, patch]
