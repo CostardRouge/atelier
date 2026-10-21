@@ -9,6 +9,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-21 — Tyrian
+
 ### Added
 
 - Trips: a ＋ on every Library picture (local or from Winnow) adds it as a new slide of the open piece and keeps the
