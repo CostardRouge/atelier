@@ -9,6 +9,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Changed
+
+- Develop on a computer: the zoom level above the picture is plain text with its ▾, like the file it is developed
+  from, instead of a box taller than the buttons beside it; a click opens the same zoom menu.
+
 ### Fixed
 
 - Develop: a picture just added from Winnow, still showing the instance's thumbnail, can be dragged to another place

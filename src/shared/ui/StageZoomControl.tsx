@@ -31,6 +31,12 @@ import type { ZoomControls } from './stage-zoom';
  * stage bar could not hold the pill and the Develop well side by side), then
  * the Develop stage's at every width (2026-10-20, his ask: one design on a
  * computer and a phone, the steps beside Fit and 1:1).
+ *
+ * `bare` drops the folded pill's box too (2026-10-22, his ask): the
+ * percentage is then the row's own TEXT, the way the camera render's menu
+ * is above the picture — no ground, no border, so it can no longer stand
+ * taller than the well of verbs beside it. Only on paper: a row floating
+ * over the photograph keeps the box, or the figure is lost on a bright sky.
  */
 export default function StageZoomControl({
   zoom,
@@ -39,6 +45,7 @@ export default function StageZoomControl({
   sections,
   menuLabel = 'Zoom, and how the picture is drawn',
   folded = false,
+  bare = false,
 }: {
   zoom: ZoomControls;
   hint?: string;
@@ -47,6 +54,8 @@ export default function StageZoomControl({
   menuLabel?: string;
   /** The pill one control wide, the ± left to the panel — needs `sections`. */
   folded?: boolean;
+  /** Folded, and drawn as plain text with no box — for a row on paper, never over a picture. */
+  bare?: boolean;
 }) {
   const button =
     'w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink ' +
@@ -77,6 +86,35 @@ export default function StageZoomControl({
         }}
       />
     );
+
+  if (folded && hasPanel && bare && sections) {
+    // The camera render menu's recipe (`DevelopBase.tsx`): the words in
+    // `ink-soft`, a faint ▾, both turning accent under the pointer. The box
+    // is the well's height but draws nothing — a target, not a pill — and
+    // the minimum width keeps `100%` → `400%` from sliding the well.
+    return (
+      <SettingsMenu
+        label={`${menuLabel} — ${zoom.label}`}
+        sections={sections}
+        align="start"
+        className={className}
+        trigger={{
+          bare: true,
+          className:
+            'group min-w-[3.9rem] h-[2.125rem] px-1.5 inline-flex items-center justify-center gap-1.5 ' +
+            'bg-transparent border-0 rounded-control cursor-pointer',
+          text: (
+            <>
+              <span className="font-mono text-xs tabular-nums text-ink-soft group-hover:text-accent-ink">{zoom.label}</span>
+              <span className="font-mono text-3xs text-faint group-hover:text-accent-ink" aria-hidden="true">
+                ▾
+              </span>
+            </>
+          ),
+        }}
+      />
+    );
+  }
 
   if (folded && hasPanel) {
     return (

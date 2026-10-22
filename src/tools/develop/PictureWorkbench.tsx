@@ -2824,6 +2824,17 @@ export default function PictureWorkbench({
         )}
       </div>
   );
+  // Where the verbs stand: in the column's flow, floating over the picture
+  // (a phone browsing), in the drawer's head, or nowhere (Focus).
+  const verbsPlace: 'flow' | 'float' | 'drawer' | 'none' = !compact || !immersive
+    ? 'flow'
+    : focused
+      ? 'none'
+      : sheetOpen
+        ? 'drawer'
+        : cropping
+          ? 'flow'
+          : 'float';
   const verbsNode = (
       <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
       {compact && <span className="flex-1" />}
@@ -2849,6 +2860,9 @@ export default function PictureWorkbench({
             className="flex-none"
             sections={zoomSections}
             folded
+            // Plain text on paper, like the camera render's menu; the box
+            // stays only where the verbs float over the photograph.
+            bare={verbsPlace !== 'float'}
           />
         ))}
       {/* ONE well of verbs ends the row (variant E2): the three clipboard
@@ -2979,15 +2993,6 @@ export default function PictureWorkbench({
   // drops the shell's gutter, so the stage loses its card and the drawer
   // does not undo the gutter a second time.
   const bleed = compact && immersive;
-  const verbsPlace: 'flow' | 'float' | 'drawer' | 'none' = !compact || !immersive
-    ? 'flow'
-    : focused
-      ? 'none'
-      : sheetOpen
-        ? 'drawer'
-        : cropping
-          ? 'flow'
-          : 'float';
 
   return (
     <>
