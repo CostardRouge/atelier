@@ -17,6 +17,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Develop: moving to another picture leaves the inspector where it was — the same section in view, and the colour
+  mixer and the curve on the channel last used — so the same setting is under your hand on the next picture.
 - Develop: presets are a list of rows — click one to apply it, read what it does under its name, and see which one the
   open picture wears. Its ⋯ updates it with the open picture, renames, clones or removes it, and a removal can be undone
   for a few seconds. The same list in the Develop sheets of Trips and the Studio.

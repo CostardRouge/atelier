@@ -30,6 +30,9 @@ const MONO_HINT =
 const HINT =
   'Eight bands of colour, each moved on its own — darken a blue sky, calm a green lawn, warm a skin — while everything else stays. A grey is never touched, a hue shift keeps its light, and a band fades into its neighbours so no colour falls between two.';
 
+/** The mixer's channel last looked at — this tab's memory, never stored. */
+let lastMixerChannel: MixerChannel = 'hue';
+
 /**
  * The colour mixer (`mixer.ts`), Lightroom's HSL panel: one channel at a
  * time — Hue, Saturation or Luminance — over the eight bands, the way
@@ -49,7 +52,13 @@ export default function DevelopMixer({
   mono: MonoMix | null | undefined;
   onMono: (mono: MonoMix | null) => void;
 }) {
-  const [channel, setChannel] = useState<MixerChannel>('hue');
+  // The channel last looked at, kept across pictures for the session: the
+  // inspector is built anew per picture and used to reopen on Hue.
+  const [channel, setChannelState] = useState<MixerChannel>(() => lastMixerChannel);
+  const setChannel = (c: MixerChannel) => {
+    lastMixerChannel = c;
+    setChannelState(c);
+  };
   const used = (c: MixerChannel) => Boolean(value?.[c].some((v) => v !== 0));
   // Lightroom's Treatment, at the head of the one section it changes: in
   // black and white the same eight bands become eight LIGHTS in grey.

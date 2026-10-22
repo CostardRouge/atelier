@@ -29,6 +29,9 @@ const LABELS: Readonly<Record<CurveChannel, string>> = {
   blue: 'B',
 };
 
+/** Each curve's channel last drawn on, by its fold prefix — this tab's memory, never stored. */
+const lastCurveChannel = new Map<string, CurveChannel>();
+
 /** The ink a channel's curve is drawn in — the channel's own, so the tab needs no legend. */
 const STROKE: Readonly<Record<CurveChannel, string>> = {
   luma: 'rgba(251,248,241,0.92)',
@@ -66,7 +69,13 @@ export default function DevelopCurve({
   /** Keeps a LAYER's fold apart from the picture's (`layer.`). */
   foldPrefix?: string;
 }) {
-  const [channel, setChannel] = useState<CurveChannel>('luma');
+  // The channel last drawn on, per curve (the picture's, a layer's), kept
+  // across pictures for the session: it used to reopen on Luma each time.
+  const [channel, setChannelState] = useState<CurveChannel>(() => lastCurveChannel.get(foldPrefix) ?? 'luma');
+  const setChannel = (c: CurveChannel) => {
+    lastCurveChannel.set(foldPrefix, c);
+    setChannelState(c);
+  };
   const [dragging, setDragging] = useState(-1);
   const boxRef = useRef<SVGSVGElement | null>(null);
   /**
