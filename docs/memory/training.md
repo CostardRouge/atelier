@@ -146,11 +146,24 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   same day: his pairs were all CAPTURED 2024–2026 and the error does not
   fall with the year (model/doing-nothing 0.53 · 0.53 · 0.59, 2026 the
   worst), so capture year is not the split — and a capture date is not an
-  EDIT date: no Winnow row Atelier reads carries an export date. Next
-  suspect, measured by `eval` since: several edits of ONE original (his
-  groups are one original + N edits) are different answers to one input,
-  and their spread around their own mean bounds what any input-only model
-  scores on them («N group(s) hold several edits…»).
+  EDIT date: no Winnow row Atelier reads carries an export date. Several
+  edits of one original were the last suspect; `eval` counts them («N
+  group(s) hold several edits…») and found 0 of 1 822, so that is ruled out
+  too.
+- **VERDICT (2026-10-22): the adaptive `.cube` is a starting point, not his
+  style, and the effort is PAUSED there** (`training/FINDINGS.md` holds every
+  number). The ~4 ΔE00 left above the 7.05 ceiling is made of per-picture
+  choices that the thumbnail cannot predict, and the ceiling itself is local
+  work. How to apply:
+  - Do not spend a session on a bigger LUT model, a longer schedule, more
+    FiveK or a `since` filter.
+  - The next step is DevelopNet (*My own*) trained on the records Develop
+    keeps beside each picture as shot (B1/B2). It waits on a few hundred
+    developed pictures.
+  - After that, recovered Capture One `.cos` / `.cocatalog` settings, if he
+    finds any.
+  - Still his to report: what the worst groups' grids show (black-and-white
+    or strong looks would justify a cheap filter).
 - **The weighing CNN sees the WHOLE picture during training** (`train.
   whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
   training CROP (a quarter of a 512 px picture, at full detail) while eval
@@ -396,4 +409,4 @@ The index outgrew its ~200-line budget, so its long entries were moved here verb
 
 ### Open items (were the index's "Open items")
 
-- 2026-10-12 (rev. 2026-10-13) — **Learning his editing style: M1 to M6 of `training/PLAN.md` are BUILT, with the browser side of the develop predictor** (workspace, doctor, FiveK and pairs readers, synthetic set, `.cube` I/O, a parallel ingest cache; the adaptive 3D LUT model, `train` / `eval` / `export` / `bench`, ΔE2000 + PSNR, the e2e test recovering a synthetic look on CPU; the localhost dashboard — actions as subprocesses, curves, grids; the read-only Winnow import of original → final pairs, a dry run against his real instance counting 1 890 of them; the fine-tune config with frozen LUTs, per-group ΔE, a cropped/turned/straightened edit ALIGNED into its original at ingest; the `DevelopSettings` predictor over Atelier's own training file, exported to ONNX and run back). The Atelier side of M6 is BUILT too (2026-10-13): the exported model loads into a per-device vault and answers as *My own* in Develop's Auto row (`develop-roll.md`, «A model of his OWN»); the M2 `.cube` still goes through "Upload .cube". **What is left is his to run**: a few hundred pairs, then `make train-develop` and the two files loaded. Nothing was run on his Mac (MPS unmeasured, Safari unseen), on FiveK, and his pairs were listed but not fetched — `training.md`.
+- 2026-10-12 (rev. 2026-10-13) — **Learning his editing style: M1 to M6 of `training/PLAN.md` are BUILT, with the browser side of the develop predictor** (workspace, doctor, FiveK and pairs readers, synthetic set, `.cube` I/O, a parallel ingest cache; the adaptive 3D LUT model, `train` / `eval` / `export` / `bench`, ΔE2000 + PSNR, the e2e test recovering a synthetic look on CPU; the localhost dashboard — actions as subprocesses, curves, grids; the read-only Winnow import of original → final pairs, a dry run against his real instance counting 1 890 of them; the fine-tune config with frozen LUTs, per-group ΔE, a cropped/turned/straightened edit ALIGNED into its original at ingest; the `DevelopSettings` predictor over Atelier's own training file, exported to ONNX and run back). The Atelier side of M6 is BUILT too (2026-10-13): the exported model loads into a per-device vault and answers as *My own* in Develop's Auto row (`develop-roll.md`, «A model of his OWN»); the M2 `.cube` still goes through "Upload .cube". **Run on his Mac and PAUSED (2026-10-22, `training/FINDINGS.md`)**: the adaptive `.cube` halves the error of doing nothing (21 → 11.3 ΔE00, FiveK-pretrained), then plateaus 4 above the 7.05 per-picture ceiling. Capacity, over-fitting, data quantity, style age and multiple edits are all ruled out, so the gap is per-picture choice. **Next, when he resumes**: DevelopNet (*My own*) on the records Develop keeps beside each picture as shot, which needs a few hundred developed pictures; then recovered Capture One `.cos` files, if any survive — `training.md`.

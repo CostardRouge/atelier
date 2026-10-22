@@ -113,7 +113,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-21 — Adding pictures as slides built, driven headless only — `roadtrip.md`.
 - 2026-10-13 — The openers' inspector redesign built; see the pins and the drawer on his phone — `roadtrip.md`.
 - 2026-10-08 — The Vitrine opener built, rendered headless only — `showcase.md`.
-- 2026-10-12 (rev. 2026-10-13) — Learning his style: M1–M6 built, his pairs and a training run left — `training.md`.
+- 2026-10-12 (rev. 2026-10-22) — Learning his style: the adaptive `.cube` run on his Mac and PAUSED (`training/FINDINGS.md`); DevelopNet next, on a few hundred developed pictures — `training.md`.
 - 2026-10-13 — Flights from Winnow: stub-driven; the dead `.srt` rows are his calls in Winnow — `winnow-picker.md`.
 - 2026-10-12 — Flight Atlas is an experiment; whether it stays is his call — `flight-atlas.md`.
 - 2026-10-13 — The road's drive styles: defaults set on synthetic roads, check on his real trip — `trip-road-drive.md`.
