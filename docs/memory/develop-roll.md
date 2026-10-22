@@ -1565,6 +1565,18 @@ was missing was choosing the order. Rules:
   click a mouse release ends on is swallowed for ONE task (`setTimeout 0`) —
   a 400 ms window ate the next real click; a hold's `swallow` is reset on
   the next `pointerdown`, since a finger that carried never taps.
+- **Three traps of the carry, fixed 2026-10-22 (his «capricieux en grille, à
+  gauche ou en latéral», and «une photo ajoutée pas encore chargée ne se
+  déplace pas»)**: (1) a band of ROWS or a column is `snap-y
+  snap-mandatory`, and a snapping scroller answers each `scrollTop += 14`
+  of the edge slide by snapping back to its row (measured in Chromium: 20
+  steps → 0, 280 without the snap) — the carry could cross a single row
+  only; `useCarry` sets `scroll-snap-type: none` inline on lift and clears
+  it on landing. (2) A cell with no thumbnail of its own draws
+  `WinnowThumb`, an `<img>` the browser drags natively; the native drag
+  cancels the pointer — the cell `preventDefault`s `dragstart` for anything
+  inside it. (3) The carried cells are drawn whatever `cellsInView` says: a
+  touch whose node unmounts no longer reaches the `ol`'s `touchmove`.
 - **⌥← / ⌥→** carry the open picture past its neighbour ON THE BAND (a
   picture the band hides is stepped over, or the key would look dead); the
   cell menu adds *Move to the start / end of the roll*. Agent commands

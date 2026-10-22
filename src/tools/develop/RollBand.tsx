@@ -439,12 +439,22 @@ export function StripCells({
     [carry.arm],
   );
   const pictureById = useMemo(() => new Map(shown.map((p) => [p.id, p])), [shown]);
-  const drawn = useMemo(() => cellsInView(layout.cells, view, layout.axis, openId), [layout, view, openId]);
   const menuPicture = menu ? shown.find((p) => p.id === menu.id) ?? null : null;
   const menuRect = useCallback(() => menu?.rect ?? null, [menu]);
   const closeMenu = useCallback(() => setMenu(null), []);
   const lift = carry.lift;
-  const lifted = useMemo(() => new Set(lift?.ids ?? []), [lift]);
+  const liftIds = lift?.ids;
+  const lifted = useMemo(() => new Set(liftIds ?? []), [liftIds]);
+  // A carried cell stays DRAWN however far the edge slides the strip: it is
+  // the node a finger's touch started on, and a touch whose node leaves the
+  // page no longer reaches the strip's `touchmove`, so the scroller took the
+  // gesture back and the carry was cancelled mid-way.
+  const drawn = useMemo(() => {
+    const near = cellsInView(layout.cells, view, layout.axis, openId);
+    if (lifted.size === 0) return near;
+    const ids = new Set(near.map((c) => c.id));
+    return near.concat(layout.cells.filter((c) => lifted.has(c.id) && !ids.has(c.id)));
+  }, [layout, view, openId, lifted]);
   const ends = { first: pictures[0]?.id ?? null, last: pictures[pictures.length - 1]?.id ?? null };
   return (
     <>
@@ -567,6 +577,20 @@ function useCarry(
     return { ids, x, y, drop, still };
   };
 
+  // A band of ROWS rests on a row (`snap-y snap-mandatory`), and a scroller
+  // that snaps answers every step of the edge's slide by snapping back to the
+  // row it left: the carry could never cross a grid or a column, only a single
+  // row (which does not snap). The snap is lifted with the pictures and put
+  // back when they land.
+  const unsnap = () => {
+    const box = olRef.current?.parentElement;
+    if (box) box.style.scrollSnapType = 'none';
+  };
+  const resnap = () => {
+    const box = olRef.current?.parentElement;
+    if (box) box.style.scrollSnapType = '';
+  };
+
   const end = (land: boolean) => {
     cancelAnimationFrame(raf.current);
     raf.current = 0;
@@ -575,6 +599,7 @@ function useCarry(
     const was = liftRef.current;
     armed.current = null;
     if (!was) return;
+    resnap();
     setLift(null);
     // The click a mouse's release ends on is the carry's, not an open: it is
     // dispatched in the same task as the release, so the quiet ends after it.
@@ -623,6 +648,7 @@ function useCarry(
         // order, when the grabbed one is among them — else that one alone.
         const { shown, selectedIds } = strip.current!;
         const ids = selectedIds.has(a.id) ? shown.filter((p) => selectedIds.has(p.id)).map((p) => p.id) : [a.id];
+        unsnap();
         setLift(place(ids, e.clientX, e.clientY));
       } else {
         setLift(place(liftRef.current.ids, e.clientX, e.clientY));
@@ -655,6 +681,7 @@ function useCarry(
   useEffect(() => {
     const ol = olRef.current;
     if (!ol) return;
+    const box = ol.parentElement;
     // A finger that held a cell owns the gesture from then on: the scroller
     // would otherwise start panning on its first move and cancel the pointer.
     const onTouchMove = (e: TouchEvent) => {
@@ -674,6 +701,7 @@ function useCarry(
       ol.removeEventListener('click', onClick, true);
       off.current?.();
       cancelAnimationFrame(raf.current);
+      if (box) box.style.scrollSnapType = '';
     };
   }, []);
 
@@ -915,6 +943,11 @@ const Cell = memo(function Cell({
       }`}
       style={{ left: x, top: y, width: w, height: h + cap }}
       data-picture={picture.id}
+      // No NATIVE drag from anything inside: the instance's thumbnail, drawn
+      // while a picture just added has no preview of its own, is an `<img>`
+      // the browser drags by itself — and the pointer it takes is cancelled,
+      // so the carry ended on its first move and the picture never moved.
+      onDragStart={(e) => e.preventDefault()}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
