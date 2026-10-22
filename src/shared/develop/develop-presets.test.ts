@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
-import { clonePresetIn, removePresetFrom, savePresetIn } from './develop-presets';
+import { clonePresetIn, removePresetFrom, renamePresetIn, restorePresetIn, savePresetIn, updatePresetIn } from './develop-presets';
+import type { SavedGrade } from '../lut/saved-grade';
 
 const lifted = { ...DEFAULT_DEVELOP, exposure: 0.5, shadows: 20 };
 
@@ -83,5 +84,75 @@ describe('clonePresetIn', () => {
     const list = base();
     expect(clonePresetIn(list, 'nope', 'X', 'p3')).toBe(list);
     expect(clonePresetIn(list, 'p1', '   ', 'p3')).toBe(list);
+  });
+});
+
+describe('renamePresetIn', () => {
+  const two = () => savePresetIn(savePresetIn([], 'Dusk', lifted, 'p1'), 'Noon', lifted, 'p2');
+
+  it('renames in place, keeping the id, the position and the numbers', () => {
+    const list = renamePresetIn(two(), 'p1', '  Blue hour ');
+    expect(list.map((p) => [p.id, p.name])).toEqual([
+      ['p1', 'Blue hour'],
+      ['p2', 'Noon'],
+    ]);
+    expect(list[0].settings).toEqual(lifted);
+  });
+
+  it('numbers a name another preset holds, never replacing that preset', () => {
+    const list = renamePresetIn(two(), 'p1', 'Noon');
+    expect(list.map((p) => p.name)).toEqual(['Noon (2)', 'Noon']);
+  });
+
+  it('hands back the same list for a blank name, an unknown id or the same name', () => {
+    const list = two();
+    expect(renamePresetIn(list, 'p1', '  ')).toBe(list);
+    expect(renamePresetIn(list, 'nope', 'X')).toBe(list);
+    expect(renamePresetIn(list, 'p1', 'Dusk')).toBe(list);
+  });
+});
+
+describe('updatePresetIn', () => {
+  const look = { layers: [], output: 'rec709-to-srgb', film: null } as unknown as SavedGrade;
+
+  it('replaces the numbers in place, under the same name and id', () => {
+    const list = savePresetIn(savePresetIn([], 'Dusk', lifted, 'p1'), 'Noon', lifted, 'p2');
+    const next = updatePresetIn(list, 'p1', { ...DEFAULT_DEVELOP, blacks: -8 });
+    expect(next.map((p) => [p.id, p.name])).toEqual([
+      ['p1', 'Dusk'],
+      ['p2', 'Noon'],
+    ]);
+    expect(next[0].settings.blacks).toBe(-8);
+    expect(next[0].settings.exposure).toBe(0);
+  });
+
+  it('carries the look given, and drops one not given', () => {
+    const list = savePresetIn([], 'Portra', lifted, 'p1', look);
+    expect(updatePresetIn(list, 'p1', lifted, look)[0].look).toEqual(look);
+    expect(updatePresetIn(list, 'p1', lifted)[0].look).toBeUndefined();
+  });
+
+  it('refuses a preset left with nothing to apply, and an unknown id', () => {
+    const list = savePresetIn([], 'Dusk', lifted, 'p1');
+    expect(updatePresetIn(list, 'p1', { ...DEFAULT_DEVELOP })).toBe(list);
+    expect(updatePresetIn(list, 'nope', lifted)).toBe(list);
+  });
+});
+
+describe('restorePresetIn', () => {
+  it('puts a removed preset back where it stood', () => {
+    let list = savePresetIn([], 'A', lifted, 'p1');
+    list = savePresetIn(list, 'B', lifted, 'p2');
+    list = savePresetIn(list, 'C', lifted, 'p3');
+    const removed = list[1];
+    const back = restorePresetIn(removePresetFrom(list, 'p2'), removed, 1);
+    expect(back.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('clamps the place to the list, and changes nothing when the id is there', () => {
+    const list = savePresetIn([], 'A', lifted, 'p1');
+    const other = savePresetIn([], 'B', lifted, 'p2')[0];
+    expect(restorePresetIn(list, other, 9).map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(restorePresetIn(list, list[0], 0)).toBe(list);
   });
 });

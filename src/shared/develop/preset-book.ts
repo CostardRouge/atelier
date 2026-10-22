@@ -17,7 +17,7 @@
  */
 
 import { normaliseDevelopPresets, type DevelopPreset, type DevelopSettings } from './develop';
-import { clonePresetIn, removePresetFrom, savePresetIn } from './develop-presets';
+import { clonePresetIn, removePresetFrom, renamePresetIn, restorePresetIn, savePresetIn, updatePresetIn } from './develop-presets';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { readIdentity, type DeliveryIdentity } from '../exif/delivery-meta';
 import type { SavedGrade } from '../lut/saved-grade';
@@ -104,6 +104,30 @@ export function clonePresetInBook(book: PresetBook, id: string, name: string, ne
 
 export function removePresetFromBook(book: PresetBook, id: string, now: number = Date.now()): PresetBook {
   const presets = removePresetFrom(book.presets, id);
+  return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
+}
+
+/** Preset `id` under a new name (numbered when another holds it); the same book back when nothing changed. */
+export function renamePresetInBook(book: PresetBook, id: string, name: string, now: number = Date.now()): PresetBook {
+  const presets = renamePresetIn(book.presets, id, name);
+  return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
+}
+
+/** Preset `id` holding these numbers (and this look, or none); the same book back when nothing changed. */
+export function updatePresetInBook(
+  book: PresetBook,
+  id: string,
+  settings: DevelopSettings | null,
+  look: SavedGrade | null = null,
+  now: number = Date.now(),
+): PresetBook {
+  const presets = updatePresetIn(book.presets, id, settings, look);
+  return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
+}
+
+/** A removed preset back at `at` — a removal's Undo; the same book back when it is already there. */
+export function restorePresetToBook(book: PresetBook, preset: DevelopPreset, at: number, now: number = Date.now()): PresetBook {
+  const presets = restorePresetIn(book.presets, preset, at);
   return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
 }
 

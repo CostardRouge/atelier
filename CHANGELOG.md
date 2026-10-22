@@ -17,6 +17,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Changed
 
+- Develop: presets are a list of rows — click one to apply it, read what it does under its name, and see which one the
+  open picture wears. Its ⋯ updates it with the open picture, renames, clones or removes it, and a removal can be undone
+  for a few seconds. The same list in the Develop sheets of Trips and the Studio.
 - Develop on a computer: the settings button is now the rightmost one of the header, after Add.
 
 - Develop on a computer: the zoom level above the picture is plain text with its ▾, like the file it is developed
