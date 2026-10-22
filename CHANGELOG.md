@@ -9,7 +9,14 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- Develop: Delete or Backspace takes the open picture, or every selected one, off the roll — on a computer, and on an
+  iPad or phone with a keyboard. A card (a sheet from the bottom on a touch screen) shows what leaves and asks;
+  Delete or Enter again removes, Escape keeps, and Ctrl/⌘+Z brings them back.
+
 ### Changed
+
 
 - Develop on a computer: the zoom level above the picture is plain text with its ▾, like the file it is developed
   from, instead of a box taller than the buttons beside it; a click opens the same zoom menu.

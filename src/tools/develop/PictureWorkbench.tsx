@@ -381,6 +381,7 @@ export default function PictureWorkbench({
   selecting = false,
   onSelectMode,
   onSelectAll,
+  onRemoveKey,
   onEscape,
   onBand,
   onMovePicture,
@@ -505,6 +506,8 @@ export default function PictureWorkbench({
   onSelectMode?: () => void;
   /** ⌘A while the selection is on. */
   onSelectAll?: () => void;
+  /** Delete or Backspace with nothing of the picture's selected: the host asks to take its pictures off the roll. */
+  onRemoveKey?: () => void;
   /** Escape with nothing of the stage's to let go: the host's turn (the selection, the sheet, the focus). True when it took it. */
   onEscape?: () => boolean;
   /** `B` — the band folded to its rail ↔ back to its size. */
@@ -1539,8 +1542,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onRemoveKey, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onRemoveKey, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
   // What the next writes are BY, when not the hand: the `Auto` switch run as
   // the picture opened sets it before applying and lets it go once the
@@ -2028,11 +2031,20 @@ export default function PictureWorkbench({
           cropToViewRef.current();
           return;
         case 'remove':
-          // What is selected on the picture — a repair patch. Nothing
-          // selected, the key is somebody else's.
-          if (!keyState.current.selectedPatchId) return;
+          // What is selected on the picture first — a repair patch.
+          if (keyState.current.selectedPatchId) {
+            e.preventDefault();
+            keyState.current.removeSelectedPatch();
+            return;
+          }
+          // Then the host's pictures (the selection, else this one) — but
+          // never while a hand is on the picture's own parts: a mask layer
+          // chosen, the Repair tool armed. A Delete meant for those must not
+          // ask to take the photograph off the roll.
+          if (keyState.current.repairing || (keyState.current.tab === 'layers' && keyState.current.selectedLayer)) return;
+          if (!callbacks.current.onRemoveKey) return;
           e.preventDefault();
-          keyState.current.removeSelectedPatch();
+          callbacks.current.onRemoveKey();
           return;
         case 'escape':
           // Let go of the selected patch first; then put the Repair tool
