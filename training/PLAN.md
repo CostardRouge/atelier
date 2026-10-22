@@ -4,6 +4,10 @@ The plan for later sessions. One milestone ≈ one PR; inside it, one commit per
 task (CLAUDE.md rule 1). Decisions and rejected options live in
 `docs/memory/training.md`; the user guide (French) is `README.md`.
 
+**Status (2026-10-22): every milestone is built and was run on his Mac; the
+effort is paused.** The measurements, the verdict and the next step (learning
+from his Develop edits) are in `FINDINGS.md`.
+
 **Goal.** On his Mac (Apple Silicon Max, 32 GB), train a small model that
 imitates his editing, so Atelier can (a) apply an automatic per-photo LUT and
 (b) predict `DevelopSettings` in his style. Nothing is uploaded, ever.
