@@ -94,3 +94,11 @@ and KEPT locally, never the whole database in `dist/`.
   near the top; the Sony-tagged synthetic DNG on its sensor got the profile by
   itself (`onRender: false`) with no second request. Not driven: a real ARW or
   a real lens the maintainer owns, and a phone.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- Lens PROFILES are the THIRD network exception (2026-09-23, his YES): Lensfun's file for a maker is fetched when a lens is first met, only the answer is kept on the device, and the terms resolved for a picture live ON the picture — the database never ships; applied by itself on the sensor, only offered on a camera render — `lens-profiles.md`, `local-first.md`.

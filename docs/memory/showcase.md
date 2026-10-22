@@ -29,3 +29,15 @@ An opener of Trips (`shared/roadtrip/hooks/showcase*.ts(x)`, id `showcase`, on s
 - **The scenery is tiled every `tile` m (48 by default).** A `unique` thing is drawn once. A `far` thing is pulled into the horizon band, scaled down, and follows the camera at 0.95 parallax. A `camp` thing pops when the car arrives.
 - **A mid prop on a road place must fit inside one tile** (`|x| ≤ P/2`), or two copies overlap.
 - **Culling is what keeps the ferry deck fast.** The painter culls at |X| > 11.7 m, or 24 m for far things. Without it the deck took 120–220 ms a frame; with it about 50–70 ms headless. Every other place takes 5–40 ms.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- The sixth opener, **Vitrine** (`showcase`, 2026-10-08), shows the vehicle with no map: place × entrance × ending × look over Virée's renderer, one face sort for the scene and the car. On a road the vehicle NEVER stops in its lane (it drives on, pulls over or leaves the road), the beach is driven round obstacles, and the ferry deck is packed like his Tanger Med photograph. Every path is tested against every prop — `showcase.md`.
+
+### Open items (were the index's "Open items")
+
+- 2026-10-08 — **The Vitrine opener is BUILT** (`showcase.md`): the eleven places, six entrances, the endings and the three looks, as in the configurator lab. It was rendered headless only, never seen on his Mac or phone, and the clip export was not encoded here.

@@ -167,3 +167,11 @@ noise does — the two sliders are used together for a reason); the roll
 stored the record. ML denoise stays out (§4.3's
 size class); a WebGPU compute path for denoise is the recorded next step if
 a measurement asks.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- DETAIL — denoise, defringe, sharpen — is four classic fragment passes with pure twins the gate holds them to (2026-09-20): chroma blurred alone, a luma bilateral, purple pulled to neutral only at a steep edge, an unsharp mask on luma applied as one ratio; kernels in SOURCE pixels (the stage scales them, the loupe judges them); noise runs BEFORE the cube on the source, sharpen LAST after every warp — `render-detail.md`.

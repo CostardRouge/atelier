@@ -124,3 +124,10 @@ two canvases gave 1.24 stops read back within 0.06. Not seen on an HDR
 screen: whether Chrome's `<img>` lights a gain map written by us is the one
 thing this container cannot measure.
 
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- HDR on a STILL is an **Ultra HDR JPEG** (2026-09-20): the SDR file with a gain map inside it, MEASURED from a second render of the RAW developed the asked stops darker (never invented: where the SDR had room the map is flat, the midtones never move, and a render — nothing above white — is refused the map and told so), wrapped in a hand-written XMP + MPF container, and called Ultra HDR only after the file is read back and its map, numbers and peak match what was written. The stage stays the SDR base: no browser grants an HDR canvas without a flag, and the panel SAYS what the display and the canvas can do rather than drawing a preview that pretends — but since 2026-10-05 the FILE can be LOOKED AT before it is written, as an `<img>` the browser lights on an HDR screen, rendered off the stage's own grader (`deliveredWith`) and wrapped by the export's own encoder, with a Base · HDR switch and the measured headroom — `hdr.md`.

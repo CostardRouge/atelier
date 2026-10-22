@@ -306,3 +306,16 @@ and the month's marks — for what the host's `accepts` would throw away anyway,
 so a long span is not cut by `SPAN_CAP` before the host's rows. The rail's
 counts then describe the narrowed scope (an atlas picker says `0 photos`
 nowhere: a status line drops the photo count when there are clips and none).
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- ONE Winnow PICKER takes media from an instance everywhere (2026-10-01): `shared/sources/winnow/picker/`, a host passing only what differs (`PickerHost`: what it holds, what is ticked on open, its verbs — *Add to library* with fidelity, *Add to the roll* as refs); the rail filters over the scope's rows except the half (sent to the server), the verbs act on what is drawn, a burst shows its cover plus the frames Winnow said yes to. Since 2026-10-13 it lists a SPAN of days as well as a day or a folder (asked WHOLE, in parts planned from Winnow's calendar — one capped walk showed a year as its October), filters clips by FLIGHT LOG, shows a Logbook whose rows draw each flight's track, and the Library brings *Logs only* — a DJI clip's `.srt` without its video, which Flight Atlas's own door (`AtlasWinnow.tsx`) uses — `winnow-picker.md`, `flight-atlas.md`.
+
+### Open items (were the index's "Open items")
+
+- 2026-10-01 — **The ONE Winnow picker is BUILT** — the Library's *browse all* and Develop's *Add a day* are the same modal (`docs/winnow-day-sheet-verdicts.md` §7, `winnow-picker.md`, labs https://claude.ai/artifact/9hZnWW5Kog8nzwmNk1WXdw and https://claude.ai/artifact/R99xvWQAi3bHWt3hehv2i1), his §7.4 answered by its recommendations. Open: driving it against his REAL instance (stub only here), merging and deploying Winnow #277 so a burst's picked frame is listed without an unfold, and re-reading the capabilities sheet (`#/sources`) once it is.
+- 2026-10-13 — **Flights come from Winnow too**: the picker's Span, Flight log facet, Logbook with tracks and *Logs only*, and the atlas's *From <instance>* door — driven headless against a stub only, never against his real instance (does it send `has_telemetry` and the `srt` sidecar on every row of a span as the client assumes?). Against his instance a span of 156 flights added 23: MEASURED there, 263 `.srt` rows for 156 clips, the 107 extra pointing at the folders his clips were moved out of (Winnow's relink keeps the dead row) and listed first — Atelier now takes the newest row and falls back on a 404 (`winnow-picker.md`), and skips and names a log no row can hand over; Winnow's relink dropping the dead rows, and whether it should KEEP sidecars in its own store, are his calls there — `winnow-picker.md`, `flight-atlas.md`.

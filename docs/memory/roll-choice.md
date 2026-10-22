@@ -66,3 +66,11 @@ Rules a later change must keep:
   is the document's. Not built, by the brief's own recommendation: prefetching
   the two neighbours' originals (the stage still prefetches their proxies),
   and «Open from ▾» in the selection bar (D in the lab) for a subset.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A ROLL can choose the file every picture opens on (`RollDoc.opensOn`, 2026-10-02, his pick «C + B»): a ROLE — camera file or sensor — resolved per picture against its own renditions by the stage and the export alike, never copied as a file id; a picture's own choice wins (`≠` on its cell), a clip never follows, the proxy is a floor (a DJI DNG's 960 × 540 render is refused, said), and numbers bind their material (the roll never moves render numbers onto a sensor; a sensor follower's first numbers write its base) — `roll-choice.md`.
