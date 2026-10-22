@@ -146,11 +146,24 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   same day: his pairs were all CAPTURED 2024–2026 and the error does not
   fall with the year (model/doing-nothing 0.53 · 0.53 · 0.59, 2026 the
   worst), so capture year is not the split — and a capture date is not an
-  EDIT date: no Winnow row Atelier reads carries an export date. Next
-  suspect, measured by `eval` since: several edits of ONE original (his
-  groups are one original + N edits) are different answers to one input,
-  and their spread around their own mean bounds what any input-only model
-  scores on them («N group(s) hold several edits…»).
+  EDIT date: no Winnow row Atelier reads carries an export date. Several
+  edits of one original were the last suspect; `eval` counts them («N
+  group(s) hold several edits…») and found 0 of 1 822, so that is ruled out
+  too.
+- **VERDICT (2026-10-22): the adaptive `.cube` is a starting point, not his
+  style, and the effort is PAUSED there** (`training/FINDINGS.md` holds every
+  number). The ~4 ΔE00 left above the 7.05 ceiling is made of per-picture
+  choices that the thumbnail cannot predict, and the ceiling itself is local
+  work. How to apply:
+  - Do not spend a session on a bigger LUT model, a longer schedule, more
+    FiveK or a `since` filter.
+  - The next step is DevelopNet (*My own*) trained on the records Develop
+    keeps beside each picture as shot (B1/B2). It waits on a few hundred
+    developed pictures.
+  - After that, recovered Capture One `.cos` / `.cocatalog` settings, if he
+    finds any.
+  - Still his to report: what the worst groups' grids show (black-and-white
+    or strong looks would justify a cheap filter).
 - **The weighing CNN sees the WHOLE picture during training** (`train.
   whole_thumbnail`, default on, 2026-10-14): it used to see the 256 px
   training CROP (a quarter of a 512 px picture, at full detail) while eval
