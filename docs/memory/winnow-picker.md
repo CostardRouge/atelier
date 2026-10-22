@@ -157,6 +157,10 @@ keeps folding until `#/sources` (or a gallery's probe) re-asks the instance,
 and the fallback covers it meanwhile. Driven against the stub both ways: with
 `pairs` the day lists 44 media and `P` ticks 7 (the burst's pick included);
 without, 43 and 6, and the unfold asked `burst_id=9001` and drew 5 frames.
+The unfolded row is ONE grid row, pinned in pixels like the rest, so its
+frames are `h-full aspect-[4/3]` inside `px-2 py-1.5` (the focus ring's 4 px
+and air) — a fixed `h-24` overflowed the row less its padding and every frame
+lost its top and bottom, the ring with them (2026-10-22, his screenshot).
 
 ## Space looks, a click ticks (2026-10-01, P8)
 

@@ -1565,6 +1565,34 @@ was missing was choosing the order. Rules:
   click a mouse release ends on is swallowed for ONE task (`setTimeout 0`) —
   a 400 ms window ate the next real click; a hold's `swallow` is reset on
   the next `pointerdown`, since a finger that carried never taps.
+- **Three traps of the carry, fixed 2026-10-22 (his «capricieux en grille, à
+  gauche ou en latéral», and «une photo ajoutée pas encore chargée ne se
+  déplace pas»)**: (1) a band of ROWS or a column is `snap-y
+  snap-mandatory`, and a snapping scroller answers each `scrollTop += 14`
+  of the edge slide by snapping back to its row (measured in Chromium: 20
+  steps → 0, 280 without the snap) — the carry could cross a single row
+  only; `useCarry` sets `scroll-snap-type: none` inline on lift and clears
+  it on landing. (2) A cell with no thumbnail of its own draws
+  `WinnowThumb`, an `<img>` the browser drags natively; the native drag
+  cancels the pointer — the cell `preventDefault`s `dragstart` for anything
+  inside it. (3) The carried cells are drawn whatever `cellsInView` says: a
+  touch whose node unmounts no longer reaches the `ol`'s `touchmove`.
+- **Delete / Backspace take pictures off the roll, ALWAYS asked (2026-10-22,
+  his picks B on a computer and E on a phone or iPad of the lab
+  https://claude.ai/artifact/Bc1DDfFrNVFMC2U7oQoicf; C no-dialog+Undo and D
+  press-twice drawn and not chosen).** Target (`remove-ask.ts`, pure): the
+  marked pictures while the selection holds any, else the open one; a Repair
+  patch selected, the Repair tool armed or a chosen mask layer keep the key.
+  `RemovePicturesDialog`: shows what leaves (6 thumbnails then a count, ●
+  where work goes), says what goes with them, ⌘Z/Ctrl+Z as the way back;
+  Remove holds the focus and a second Delete or Enter takes, Escape keeps —
+  allowed because a removal is undoable, where `ConfirmDialog` refuses Enter to
+  a final loss. Keys are bound on `window` in CAPTURE and stopped, so the
+  editor's own keys never act behind it; a held key never answers. The menu's
+  and bar's *Take off the roll* still ask only when a picture carries work.
+  Under a finger (`useFingerSize() === 'md'`: a phone, an iPad) it is a bottom
+  sheet with 48 px answers, and ⌫ / Esc are written on the buttons only when a
+  KEY opened it; on a computer they always are. Driven headless at 1280.
 - **⌥← / ⌥→** carry the open picture past its neighbour ON THE BAND (a
   picture the band hides is stepped over, or the key would look dead); the
   cell menu adds *Move to the start / end of the roll*. Agent commands

@@ -750,6 +750,16 @@ même design sur ordinateur et téléphone»): zoom out / in sit at the two ends
 the Zoom row, the pill outside is the percentage alone; a phone adds Focus /
 Keys as actions below a rule. Crop mode keeps the plain `− % +` pill. `SettingsMenu`
 takes `trigger.bare` like `OverflowMenu`. Driven headless at 1440 and 390 only.
+**On paper the percentage has NO box (2026-10-22, his «on peut retirer tout
+l'encadré»)**: the folded pill (34 px trigger + `p-0.5` + border) stood taller
+than the well of verbs beside it. `StageZoomControl bare` draws it as the camera
+render menu's words (`DevelopBase.tsx`: mono `text-xs text-ink-soft`, a faint ▾,
+both accent on hover) on an invisible 34 px target with a minimum width, so
+`100%` → `400%` slides nothing. The box stays only where the verbs FLOAT over
+the photograph (`verbsPlace === 'float'`, a phone browsing): bare text is lost
+on a bright sky. **Trap**: `verbsPlace` was declared after `verbsNode`, which is
+JSX built at its declaration — reading it there is a TDZ throw at render; it now
+stands above.
 
 ## 2026-09-28 — A section whose controls no longer reach what they set is LOCKED, and says so
 

@@ -139,7 +139,6 @@ import Button, { buttonClass } from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { useFingerSize } from '../../shared/ui/use-coarse-pointer';
 import { VERB_DONE_MS, type VerbOutcome } from '../../shared/ui/verb';
-import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import SettingsMenu, { type SettingsSection } from '../../shared/ui/SettingsMenu';
@@ -194,6 +193,8 @@ import { useStripPrefs } from './use-strip-prefs';
 import { useRollPreviews } from './use-roll-previews';
 import { useRollShots } from './use-roll-shots';
 import RollPicker from './RollPicker';
+import RemovePicturesDialog from './RemovePicturesDialog';
+import { removeTargets } from './remove-ask';
 
 /** One empty answer, so a memo keyed on it holds. */
 const NO_SIBLINGS: readonly File[] = [];
@@ -269,7 +270,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [adding, setAdding] = useState(false);
   // The pictures a removal is asking about — one from a cell's menu, several
   // from the selection — when any of them carries work that would go with it.
-  const [confirmRemove, setConfirmRemove] = useState<readonly string[] | null>(null);
+  // The pictures a removal asks about, and whether a KEY asked (the sheet then wears the keys).
+  const [confirmRemove, setConfirmRemove] = useState<{ ids: readonly string[]; byKey: boolean } | null>(null);
   // The band's SELECTION (`docs/develop-roll-browser.md` §5): a mode in
   // which a plain click on a cell marks it and the band's header is the bar
   // of verbs acting on every marked picture. Shift / ⌘-click, S, the header's
@@ -762,8 +764,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   /** Asked first where any of them carries work; a plain picture goes at once. */
   function removeAsked(ids: readonly string[]) {
     const pictures = latest.current.pictures.filter((p) => ids.includes(p.id));
-    if (pictures.some(isEdited)) setConfirmRemove(ids);
+    if (pictures.some(isEdited)) setConfirmRemove({ ids, byKey: false });
     else removeMany(ids);
+  }
+
+  /**
+   * Delete or Backspace (`remove-ask.ts`, his picks B and E): the marked
+   * pictures while the selection holds any, else the open one — and ALWAYS
+   * asked, worked or not, since a key is easily hit; the question is one
+   * the keyboard answers.
+   */
+  function removeKeyed() {
+    const ids = removeTargets({ selecting, selectedIds: [...visibleSelected], openId });
+    if (ids.length > 0) setConfirmRemove({ ids, byKey: true });
   }
 
   const step = useCallback(
@@ -2556,7 +2569,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const days = roll.pictures.flatMap((p) => (p.ref.lastModified > 0 ? [pictureDay(p.ref.lastModified)] : [])).sort();
     return days.length ? { from: days[0], to: days[days.length - 1] } : null;
   }, [roll.pictures]);
-  const removing = confirmRemove ? roll.pictures.filter((p) => confirmRemove.includes(p.id)) : [];
+  const removing = confirmRemove ? roll.pictures.filter((p) => confirmRemove.ids.includes(p.id)) : [];
   // The status lines: in the band's cell under the picture; a grid item of
   // their own under the stage once the band stands beside it (the band's
   // cell spans both rows then). Drawn once, in whichever place.
@@ -2775,11 +2788,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             <>
               {historyControl}
               {headerExtra}
-              {/* Develop's settings open from inside the roll (his pick): the
-                  device's choices, not the roll's — encoder, rendering, device, network. */}
-              <IconButton label="Develop settings" onClick={() => openDevelopSettings()}>
-                {Icons.settings}
-              </IconButton>
               {/* The Library's item only when it holds something the roll does
                   not: a ticked picture already on the roll is nothing to add. */}
               {adding ? (
@@ -2802,6 +2810,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   {compact ? null : addButtonLabel[addItems[0].id]}
                 </Button>
               ) : null}
+              {/* Develop's settings open from inside the roll (his pick): the device's
+                  choices, not the roll's — encoder, rendering, device, network. Last,
+                  so the gear is the rightmost control (his ask, 2026-10-22). */}
+              <IconButton label="Develop settings" onClick={() => openDevelopSettings()}>
+                {Icons.settings}
+              </IconButton>
             </>
           }
         >
@@ -2916,6 +2930,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               selecting={selecting}
               onSelectMode={() => (selecting ? stopSelecting() : startSelecting())}
               onSelectAll={selectAll}
+              onRemoveKey={removeKeyed}
               onBand={toggleFolded}
               onMovePicture={moveOpen}
               onThumbs={stepThumbs}
@@ -3102,22 +3117,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       )}
       {deviceSettingsOpen && <DevelopSettingsSheet onClose={closeDevelopSettings} />}
       {confirmRemove && removing.length > 0 && (
-        <ConfirmDialog
-          title={removing.length === 1 ? `Take ${pictureLabel(removing[0])} off the roll?` : `Take ${removing.length} pictures off the roll?`}
-          confirmLabel="Remove"
-          danger
+        <RemovePicturesDialog
+          pictures={removing}
+          thumbs={thumbs}
+          // Under a finger — a phone, an iPad — the sheet (E); else the card (B).
+          sheet={finger === 'md'}
+          keys={finger !== 'md' || confirmRemove.byKey}
           onCancel={() => setConfirmRemove(null)}
           onConfirm={() => {
-            removeMany(confirmRemove);
+            removeMany(confirmRemove.ids);
             setConfirmRemove(null);
           }}
-        >
-          <p>
-            {removing.length === 1
-              ? `What was done to it goes with it — ${pictureEdits(removing[0]).join(', ')}. The file stays where it is.`
-              : `What was done to them goes with them — ${removing.filter(isEdited).length} of them carry work. The files stay where they are.`}
-          </p>
-        </ConfirmDialog>
+        />
       )}
     </div>
   );

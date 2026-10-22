@@ -9,6 +9,28 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- Develop: Delete or Backspace takes the open picture, or every selected one, off the roll — on a computer, and on an
+  iPad or phone with a keyboard. A card (a sheet from the bottom on a touch screen) shows what leaves and asks;
+  Delete or Enter again removes, Escape keeps, and Ctrl/⌘+Z brings them back.
+
+### Changed
+
+- Develop on a computer: the settings button is now the rightmost one of the header, after Add.
+
+- Develop on a computer: the zoom level above the picture is plain text with its ▾, like the file it is developed
+  from, instead of a box taller than the buttons beside it; a click opens the same zoom menu.
+
+### Fixed
+
+- Develop: a picture just added from Winnow, still showing the instance's thumbnail, can be dragged to another place
+  on the roll like any other.
+- Develop: dragging pictures in the band pulled up into a grid, or standing beside the picture, now slides the band at
+  its edges, so a picture can be carried past the rows on screen, as it already could in the single row.
+- The Winnow picker: an unfolded burst shows its frames whole, focus ring included, instead of cut at the top and
+  bottom.
+
 ## [1.3.0] - 2026-10-22 — Viridian
 
 ### Added
