@@ -700,7 +700,11 @@ export default function WinnowPicker({
       onLook={() => look(it.id)}
       track={tracksOn ? tracks.get(it.id) : undefined}
       logMissing={tracksOn && missing.has(it.id)}
-      className={inRow ? 'w-32 h-24 shrink-0' : ''}
+      // A frame of an unfolded burst is as tall as its row leaves it (the row
+      // is one of the grid's, pinned in pixels): a fixed `h-24` was taller
+      // than that row less its padding, and every frame lost its top and
+      // bottom, the focus ring with them.
+      className={inRow ? 'h-full aspect-[4/3] shrink-0' : ''}
     />
   );
 
@@ -982,7 +986,8 @@ export default function WinnowPicker({
                           {tile(it)}
                           {row && (
                             <li className="col-span-full row-span-1 min-w-0 rounded-paper border border-dashed border-line-strong bg-paper-2">
-                              <ul className="m-0 p-2 list-none flex gap-2 overflow-x-auto h-full items-center">
+                              {/* The padding is the focused frame's ring (2 px out, 2 px wide) and a little air. */}
+                              <ul className="m-0 px-2 py-1.5 list-none flex gap-2 overflow-x-auto overflow-y-hidden h-full items-center">
                                 {row.length ? (
                                   row.map((f) => tile(f, true))
                                 ) : (

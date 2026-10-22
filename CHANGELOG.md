@@ -15,6 +15,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   on the roll like any other.
 - Develop: dragging pictures in the band pulled up into a grid, or standing beside the picture, now slides the band at
   its edges, so a picture can be carried past the rows on screen, as it already could in the single row.
+- The Winnow picker: an unfolded burst shows its frames whole, focus ring included, instead of cut at the top and
+  bottom.
 
 ## [1.3.0] - 2026-10-22 — Viridian
 
