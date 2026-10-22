@@ -9,6 +9,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- An `llms.txt` at the site's root describes the suite and links every tool, the agent guide and the legal
+  notice, so an AI assistant asked about Atelier finds what it is and where each tool lives.
+
 ## [1.2.0] - 2026-10-21 — Ultramarine
 
 ### Changed
