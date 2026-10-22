@@ -169,3 +169,11 @@ requests at once on 24 MP JPEGs, never more than one running. **How to
 apply**: a new background bake of a roll picture goes through
 `pictureThumbnail` or the same queue, never a decode of its own; the
 stage's graded snapshot is not a decode and stays outside it.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A Develop roll **finds its own pictures** (2026-09-16, the maintainer's Q1–Q3): an instance's are fetched by the roll, near the open one, never into the Library; a local folder's handle is remembered per roll and re-read (one click when asked); a drop re-links; and a roll that asks keeps a 2048 px **working preview** of each LOCAL picture — the one exception to "media bytes are never persisted", opt-in, weighed, deleted when turned off — `develop-media.md`, `local-first.md`.

@@ -164,3 +164,15 @@ stage (an out-and-back road takes the right pass), computed in a `useMemo`
 on the stages and the road and never per frame — the search scans the whole
 line; the dial sits halfway along the path as drawn (`pathMidpoint`), on the
 road, and the stage focus flies there.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A trip's ROAD is DRIVEN by a style the trip chooses (`TripRoad.drive`, 2026-10-13, his «flotte et tremblote» about the driver he had picked): point to point, the driver, or the RIBBON by default — the smoothest line within 100 m of every fix (or of their own scatter), no corner, a lone spike only a burst of speed reached left out; what is counted never depends on it. The Road pane tunes a draft previewed in a worker and writes on release; the painter reads the vehicle's DIRECTION over a Gaussian bell of the road (σ 0.7 vehicle lengths on screen, 2026-10-17), never a chord, whose two ends jolted it in tight turns — `trip-road-drive.md`, `trip-road.md`.
+
+### Open items (were the index's "Open items")
+
+- 2026-10-13 — **The road's drive styles and the reworked Road pane are BUILT** (`trip-road-drive.md`, `trip-road.md`): the ribbon's defaults (100 m / 3 km) and its spike rule were set on the road-tremor lab's synthetic road and a synthetic 12 000 km loop, never on his Australia track; the pane was driven headless only. Open: open his real trip's Road pane, compare the three styles in Virée's follow camera on his Mac, and move the defaults if the track says so.

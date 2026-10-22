@@ -398,3 +398,15 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
   path `make export-develop` asked him to take. How to apply: a new extra a
   command needs goes into the Makefile's `EXTRAS`, never into an error
   message telling him to sync it alone.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- **His editing style is LEARNED locally, in `training/`** (2026-10-12, M1–M6 built 2026-10-13): a Python workspace (uv, PyTorch with MPS, MLX optional) pretrained on MIT-Adobe FiveK then fine-tuned on his groups of one original + N edits, whose deliverables are a `.cube` (an image-adaptive 3D LUT, Zeng 2020) and a predicted `DevelopSettings` (`develop-net.onnx` + its sidecar) — never pixels, never a hosted service, never FiveK or his photos in git; the plan in `training/PLAN.md` — `training.md`. **That model comes back into Develop as the verb *My own*** (2026-10-13, B4): the two files loaded into a per-device vault (never shipped, never on a roll), ONNX Runtime's wasm served from our origin and fetched on first press, the eleven sliders written as one value switch and an `own` step of Auto's plan — `develop-roll.md`, «A model of his OWN».
+
+### Open items (were the index's "Open items")
+
+- 2026-10-12 (rev. 2026-10-13) — **Learning his editing style: M1 to M6 of `training/PLAN.md` are BUILT, with the browser side of the develop predictor** (workspace, doctor, FiveK and pairs readers, synthetic set, `.cube` I/O, a parallel ingest cache; the adaptive 3D LUT model, `train` / `eval` / `export` / `bench`, ΔE2000 + PSNR, the e2e test recovering a synthetic look on CPU; the localhost dashboard — actions as subprocesses, curves, grids; the read-only Winnow import of original → final pairs, a dry run against his real instance counting 1 890 of them; the fine-tune config with frozen LUTs, per-group ΔE, a cropped/turned/straightened edit ALIGNED into its original at ingest; the `DevelopSettings` predictor over Atelier's own training file, exported to ONNX and run back). The Atelier side of M6 is BUILT too (2026-10-13): the exported model loads into a per-device vault and answers as *My own* in Develop's Auto row (`develop-roll.md`, «A model of his OWN»); the M2 `.cube` still goes through "Upload .cube". **Run on his Mac and PAUSED (2026-10-22, `training/FINDINGS.md`)**: the adaptive `.cube` halves the error of doing nothing (21 → 11.3 ΔE00, FiveK-pretrained), then plateaus 4 above the 7.05 per-picture ceiling. Capacity, over-fitting, data quantity, style age and multiple edits are all ruled out, so the gap is per-picture choice. **Next, when he resumes**: DevelopNet (*My own*) on the records Develop keeps beside each picture as shot, which needs a few hundred developed pictures; then recovered Capture One `.cos` files, if any survive — `training.md`.

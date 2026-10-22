@@ -128,3 +128,11 @@ the model for every point on every landing (2 calls → 0 measured). Bounded:
 64 masks (~50 MB), 16 on a constrained device.
 
 What the model's answer is turned into — Remove, Refine — is `subject-model.md`.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A Develop layer's mask, segmentation and overlay are computed from the WHOLE list, only its pixels from the layers that draw — a fresh Subject used to segment nothing until a slider moved. A subject is SUBTRACTED from another layer (`except`, the maintainer's «sauf le sujet»), the mask shows as its outline by itself while picking, a tap's region blinks twice, and the export segments subjects itself: it had been dropping every Subject layer from the file (2026-09-23). The stage's masks are cached for the SESSION and keyed on the model's VIEW (2026-10-02): a landing costs no inference, a lens or keystone change re-asks the model, a vignette does not — `subject-picking.md`. A subject also TAKES BACK (`minus`, region arithmetic on the model's answers) and is REFINED on the model's confidence map — Tolerance, islands, Grow / Shrink, an edge soft or snapped to the picture's, the defaults being its own cut bit for bit — through ONE composer the stage and the export share — `subject-model.md`.

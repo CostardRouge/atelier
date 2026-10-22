@@ -159,3 +159,11 @@ on a phone worth a worker if it is felt), and none of it has been driven on
 the maintainer's own photographs — the numbers (`DUST_PROMINENCE`, the
 1.5 % background, the ring test) were set on synthetic skies and will want a
 taste pass on real dust.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- REPAIR (2026-09-20, rev. 2026-09-23) is ONE patch list (`RollPicture.repair`, destination disc + source offset + heal/clone) drawn as ONE pass FIRST on the source, so a copied pixel takes every later stage with its neighbours; a heal matches the destination's SURROUNDINGS (a ring, never the spot's own mean — that mean IS the dust); a tap heals from beside, a drag AIMS the source at any distance (the angle read inside the disc too, the discs never overlapping), and every ring is a HANDLE afterwards — a patch is moved by its solid ring and taken off by a CLICK on it (a native minus cursor says so), its source moved by the dashed ring and the patch edited by a click on that one; a ring's press is CLAIMED against the zoom machine, whose native capture listener no React `stopPropagation` reaches; dust is measured once into a FIELD on the stage's decode, shown as a MAP over the picture and PROPOSED as dotted rings at a sensitivity (gated on prominence over the ground's deviation, a flat ring and a round shape — a texture, a wire and a roof's corner refused), never dumped as patches; `patch` is a reserved GLSL word that refuses a pass silently, so the render gate now relays the page's console errors — `render-repair.md`.

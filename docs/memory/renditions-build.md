@@ -280,3 +280,11 @@ stays unscheduled by decision (`docs/run-sheet.md`). R7's decode half (HEIF,
 and JPEG XL with it) was built on 2026-09-26 at the maintainer's ask, as a
 fallback inside `decodeStill` rather than a phase of its own
 (`media-pipeline.md`, «HEIF and JPEG XL»).
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- Which pixels a STILL is delivered from is one question with one answer everywhere (2026-09-20, O2) — **and since 2026-09-21 that answer lives on the PICTURE, not at the export door**, because a rendition names the bits and the frame at once (`renditions.md`, `docs/capture-renditions.md` §13.2, his pick: *"garde la case à cocher"*). **In Develop (R4, built)**: a roll's picture leaves from its own rendition — its RAW on the sensor, the file set above the photograph, else where it opens with `Auto`'s arithmetic unnamed —, `RollExport.originals` is off the document (roll v4), the panel says the whole run before a byte moves (`run-plan.ts`), and the door keeps ONE switch, *Proxies only, for this run*, which is the editor's and never the roll's. **In Trips and the Studio (R5, built the same day)**: NO control at all — `Auto`'s arithmetic unnamed over ONE seam (`fixedFrameDelivery` for a host whose frame is a frame, `deliveryFor` to fetch and hold, `useDeliveryRow` to say it) and a *Delivers* row that names the original by its FILE, the pill's own word; the three words are gone from every host, `'proxies'` survives only for Develop's switch, and forcing the original from a host without a pill is the one capability given up. Trips wraps `renderDeck`'s injected resolver rather than teaching it about sources, and the Studio's stills take the path its clips always did — `roadtrip.md`, `studio.md`, `develop-roll.md`, `renditions-build.md`.

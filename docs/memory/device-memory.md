@@ -262,3 +262,13 @@ sensor rung away on a constrained device and say so (the render and the
 proxy stay; the RAW is developed on a computer); or the tiled `cropbox`
 decode above, which still pays LibRaw's full raw buffer. `INITIAL_MEMORY` is
 compiled into `libraw-wasm` and cannot be lowered without our own build.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A RAW is read from the camera's RENDER inside it FIRST, in every browser (`rawRenderFirst`, 2026-09-24): Safari decodes a DNG natively and whole, which is what killed his iPhone's tab on a zoom; the browser's own decode is a last resort on a roomy device only, and the loupe is capped on a phone for every picture — `device-memory.md`.
+- A RAW is the ONE source decoded in the tab's own memory, so it is where a phone's tab dies — and it did, on every DNG (2026-09-23). The decode's plane is now converted in BANDS with nothing full-size in between (bit-identical to the old two-step path, pinned by spec; the stage's post-processing fell from +170 MB to +22 MB), the main thread is given back between bands, a CONSTRAINED device (`lib/device-class.ts`: iOS, Android, ≤ 4 GiB — coarse on purpose, overridable in `localStorage['atelier.device']`) decodes to a long edge per purpose (stage 2560, export 4096, the loupe never whole and SAYING so), lets the decoder's 300 MB heap go after 8 s and on a hidden tab, and holds decodes and fetched originals under small ceilings. Measured in node and driven headless with the class forced; NOT yet on his phone — `device-memory.md`.
+- A big RAW decode is cut into TILES (2026-09-25): LibRaw decodes one full-width band of the sensor per `open()` (`cropbox`, `raw-tiles.ts`) and pays its own buffers for that band alone — a whole-density decode of 24 MP fell from +599 MB to +311 MB of renderer memory, while a half-size one gained nothing (the file's copy and the unpacked plane are the floor) — so tiles buy a sensor-density export or loupe window on a phone, never a cheaper stage; a REGION can be decoded alone; every tile is the whole decode's bytes to the bit, which needed `adjustMaximumThr: 0` (LibRaw's default scaled each tile by its own brightest pixel, and every whole decode too — a `rawGain` stored before that day may open a touch dark, and *Meter the exposure again* in the rung menu cures it); the settings PERSIST on the instance, so every open names its crop — `device-memory.md`, «Tiles», `raw.md`.

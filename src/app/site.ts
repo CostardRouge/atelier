@@ -11,8 +11,8 @@ export const REPO_URL = 'https://github.com/CostardRouge/atelier';
 
 /**
  * The canonical address of the deployed site: the custom domain, at the
- * root. `index.html`'s head (the canonical link, OpenGraph), `public/robots.txt`
- * and `public/sitemap.xml` write the same host by hand, since nothing builds
- * them — `site.test.ts` holds the four together.
+ * root. `index.html`'s head (the canonical link, OpenGraph), `public/robots.txt`,
+ * `public/sitemap.xml` and `public/llms.txt` write the same host by hand, since
+ * nothing builds them — `site.test.ts` and `llms.test.ts` hold them together.
  */
 export const SITE_URL = `${DEPLOYED_ORIGINS[0]}/`;

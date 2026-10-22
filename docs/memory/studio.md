@@ -487,3 +487,37 @@ With a clip ACTIVE on a compact shell, `StudioEditor` publishes the immersive la
 ## 2026-10-20 — The gallery takes the masthead's room too, nothing floats
 
 `ProjectGallery` on a phone does what Develop's gallery does (`develop-roll.md`, the same day): `{ immersive: true, floating: false, hidden: false }` and a `PhoneHeader` outside its scroller — back to `#/`, «Studio» over the count of projects, a ⋯ with New project, Import and the shell's items. No glass, no hide-tap: a list that scrolls and taps that open.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- Overlay elements are added from a foldable preview palette, never a dropdown; a preview shows the real value or nothing, never a fabricated one — `studio.md`.
+- Canvas trap: a shadow is dropped when drawing under a `destination-*` composite mode — build masks in their own buffer first — `studio.md`.
+- The heading is course over ground (no compass in the log) and vanishes while hovering or yawing; smoothing is a pure `(cues, time)` function, never a per-frame accumulator — `studio.md`.
+- The clip's opening window carries the same motion measured **forward** (`Cue.lead`, read through `motionAt`), so the instruments are alive on frame one; it never covers a real reading, never reaches past that window, and invents nothing — `studio.md`.
+- Tool layouts split on **container** queries, not viewport ones: the Library sidebar eats 288px the viewport query cannot see — `studio.md`.
+- Time elements: presentation per badge, capture-time **shift** per project; no timezone picker — the log has no zone to convert from — `studio.md`.
+- In/out trimming is **per clip** (bound half of the project, keyed by media name and guarded by duration) and the export cuts inside the one WebCodecs pipeline — `studio.md`, `media-pipeline.md`.
+- A project's settings export to / import from `.atelier.json` — the portable half exactly, media and trims never; export + overwrite-this-project live in the settings modal, import-as-new-project in the gallery — `studio.md`.
+- A Studio project is kept on a Winnow by the same machinery as a trip (`shared/sources/doc-sync.ts` + `SyncPill` + `doc-remote.ts` + ONE shell hook, `use-document-sync.tsx`, since 2026-09-15; `projects/project-remote.ts` the twin of `trip-remote.ts`); its folder handle and thumbnail never travel, the media refs do, and the shell remounts the editor whenever it replaces the document under it — `studio.md`.
+- Conformed footage (slow motion, time-lapse) is corrected by ONE measured number — capture seconds per media second — applied in `attachMotion`; physics runs on capture seconds, aesthetics on timeline seconds — `studio.md`.
+- The intro is a **scene** (a shared window + optional scrim + solo) over ordinary elements that gained a `window` and an `animation`, not a second class of element; it plays over the running footage and the export stays 1:1 with the source — `studio.md`.
+- The DJI video `.srt` carries no battery level (Mini 4 Pro included): the gauge takes an authored value or a named telemetry key, and draws empty rather than inventing one — `studio.md`.
+- The Studio edits **stills on the same stage as clips** — a photo is a media a project holds beside its rushes, never a second kind of project — `studio.md`.
+- A photograph is read as the **one telemetry cue it is worth** (`shared/exif/exif-cue.ts`), so the exposure, position and time elements work over it; what a still cannot answer (speed, heading) stays `—`, and a DRONE still does know its height above take-off — `studio.md`.
+- A source **vouches for the EXIF its proxy dropped** (`MediaOrigin.exif`, merged UNDER the file's own by the one read path, `shared/exif/read-exif.ts`): a re-encoded rendition carries no metadata, so the values Winnow parsed at ingest are what make a drone photo's exposure, position and altitude readable at all, and a panel says which instance vouched — `studio.md`.
+- A still has **no clock**: the deck is settled (`settleForStill`) before it reaches the renderer, or an entrance draws mid-slide and a later window draws nothing — `studio.md`.
+- A project is **intro · footage · closing card**: `ProjectDoc.outro` is a flat card of overlay elements (+ optional QR) the export keeps encoding after the footage — appended, never over it; audio ends with the footage; clean variants ship without it — `studio.md`.
+- Anything added to a project's portable half must land in FOUR places: `ProjectPortable`, `toProjectFile`, `parseProjectFile` and `applyProjectFile` — the last was forgotten once and the gallery import silently dropped intros — `studio.md`.
+- Media identity resolves **id → hash → name**, and the hash is Winnow's `content_hash` recomputed locally (`shared/lib/partial-hash.ts`, fixtures pinned to Winnow) — so a project survives a rename and resolves the same file from a folder or from an instance — `studio.md`, `docs/winnow-bridge.md`.
+- Winnow media previews on the **proxies** (H.264/AAC/faststart, so no ffmpeg.wasm; WebP for a RAW) and the Studio export **fetches the capture before the first variant**, with a checkbox to render from the proxy instead; a variant never upscales, so the panel states what it will really deliver — `studio.md`, `docs/winnow-bridge.md`.
+- The Studio's STAGE switches a media between its capture's files like Develop's pill (2026-09-29, his ask): a chip beside the name (`Proxy ▾`, then the file's type) over `stageRenditions` — the rush behind a clip's proxy, the camera's JPEG, a RAW companion's render, never the sensor — stored per media in `ProjectMedia.renditions` (optional, keyed like the trims), fetched ONCE through `fetchHeld` and shared with the export, which delivers the rush on the stage without fetching it again; a trim keeps the Library file's clock and is carried onto the rush's (`carryRange`) — `studio.md`.
+
+### Open items (were the index's "Open items")
+
+- 2026-08-22 — Element timing is edited with number fields ("appears at / disappears at", plus From-playhead buttons). The natural follow-up the maintainer will want is a **lane under the TrimBar**, one draggable bar per timed element — the first thing that would make the studio feel like a timeline. Not started; the constraint to respect is that the bar splits into bands, never z-index (`studio.md`).
+- 2026-08-22 — A **pre-roll / freeze-frame intro** (output longer than the source) was explicitly deferred, not rejected: the maintainer chose "over the images" for now. Half the mechanism exists since 2026-08-25 — the outro's appended tail (`export-tail.ts`) proves the encoder seam; what remains for a PRE-roll is the timestamp shift every existing frame would need.
+- 2026-08-25 — The outro edits its lines as text inputs; **free element placement on a card stage of its own** (full intro parity: drag, style, animate on the card) is the agreed next step, deferred. The stage cannot scrub past the clip, so it needs a stage mode, not a longer timeline.

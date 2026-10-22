@@ -118,3 +118,11 @@ Driven headless, counting the stage's dash and wash pixels: 0 / 0 on Adjust
 (glyph disabled), 3 199 dash pixels while picking at Hidden, 0 once Pick is
 off, 3 199 at Outline with Pick off, 102 698 washed at Fill, 0 on Adjust with
 Fill chosen, back on returning to Layers.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Open items (were the index's "Open items")
+
+- 2026-10-02 — **Develop's mask UI and a subject that can be taken back: §5 of `docs/mask-ui-redesign.md` is BUILT, all seven steps, on his «vas-y avec tes recommandations»** (lab https://claude.ai/artifact/5jy9NnEg1SoRdUNjDcAMas; his §6 answered by its recommendations — the lab's face, ⌥ beside the switch, SAM later, Refine shown at once): Remove, Refine on the confidence map and the edge (`subject-model.md`); the one palette of kinds, a list that reads, Mask | Adjust over a recipe, and the mask view as one glyph in the picture's bar (`mask-ui.md`). Driven headless with the real model on synthetic scenes only — not on his photographs, his Mac or his phone; Snap's worth on hair is unmeasured. Still open: a SAM-family model (14.2–28.3 MB of ONNX runtime before its weights), to be weighed only if Tolerance plus Remove does not hold on his pictures.

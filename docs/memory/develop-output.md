@@ -186,3 +186,11 @@ chain read back whole (8 B/px) — on SwiftShader 2.9 → 6.9 s for 3.8 MP, much
 less on a real GPU; the reason a phone keeps the old path. **How to apply**:
 a cut that changes size goes through float before its rounding; a new
 consumer of `deliverOne` passes the half or accepts the second rounding.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A target may be a **16-bit PNG** (2026-10-05): the graded picture read back off the render chain's own float buffers (`RenderGraph.readHalf`, never the 8-bit canvas), cut in float to the crop (`deliver-half.ts`), written by `png-write.ts` with the same EXIF, XMP and sRGB profile as chunks; no quality, no screen sharpening, no gain map, never on a phone (the JPEG leaves and the run says so) — `develop-output.md`.

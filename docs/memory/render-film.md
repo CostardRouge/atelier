@@ -229,3 +229,15 @@ feature looked dead. The same trap `render-geometry.md` records for the
 keystone's callback: **a value a stable callback reads is still a dependency of
 the effect that calls it.** Both the stage's effect and the loupe's now list
 it. Lint cannot see this; a browser can.
+
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Decisions (were "Decisions at a glance")
+
+- A stock's GRAIN and HALATION are ONE node of the render graph (`FilmNode`, 2026-09-20), never a second engine in `lut-gl.ts`: it sits LAST, in a position no caller chooses, so a clip takes `SOURCE → CUBE → [FILM] → OUTPUT`; the texture lives on the GRADE beside the layers and cascades with the rung; a grain cell is a fraction of the frame's HEIGHT read bilinearly from a tile, so the export's grain IS the preview's resampled (measured, 0 codes at two sizes); the field re-rolls per SOURCE frame quantised to `grainFps`, never per rAF; `gradeKey` and `holdGrades` fold it in or the slider is dead on a still; and a grained clip is encoded at ~0.18 bpp, since a new noise field every frame is nothing a P-frame can predict — `render-film.md`.
+
+### Open items (were the index's "Open items")
+
+- 2026-09-20 — **Film simulation: BOTH halves are built.** Colour (F1–F4′) and now the texture (F5, the `FilmNode`) — `docs/film-simulation.md` §7, `render-film.md`. What stays open is the maintainer's alone: a **taste pass on the six stocks' numbers** against real photographs, now with the grain and halation to judge beside the colour. Two places the node deliberately does not reach, both recorded rather than left to be found: the **Studio's stage** previews no grain (it drives `createLutRenderer` frame by frame for its split and strength, and putting the node there means the multi-pass machinery built twice — what §4.5 declined), though its exports carry it; and a **painted clip** (a hook over a photograph) has FROZEN grain, since the picture is graded once into a bitmap the painter draws every frame.

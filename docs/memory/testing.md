@@ -238,3 +238,10 @@ which is the point.
 
 **Recipe**, on the stub recipe's browser and dev server: answer `https://tile.openstreetmap.org/**` with `page.route` and a PNG made in node (zlib + a hand-written IHDR/IDAT — `createImageBitmap` refuses an SVG) whose colour CODES the zoom (`R = 15 z`, `G = 255 − 15 z`) and `access-control-allow-origin: *`; mount `useHookPictures` from a throwaway `src/zz-harness.tsx` (React root, a STABLE asset array — a fresh `[]` per render re-runs the pass forever), `await state.ready()`, then — as an export does — `await hook.ready(t, t + 1)` before each `paint` on an `OffscreenCanvas` and decode the zoom from `getImageData` at points away from the car, with `vignette: false` (it dims the codes). Page `console` events did not reach Playwright through Vite here — return values from `evaluate` instead. Restart the dev server after editing a module the harness imports: an HMR-updated module is served with `?t=`, and a second `import()` of the bare path gets ANOTHER instance — a module registry (`tile-stream.ts`) then reads empty. The pure half (density per frame) is a vitest over `driveTrack` + `driveBasemap`; neither file is committed — `roadtrip.md`, «Finer tiles along a following camera».
 
+## Moved from the MEMORY.md index (2026-10-22)
+
+The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.
+
+### Open items (were the index's "Open items")
+
+- 2026-08-20 — `tests/` holds only `fixtures/sample.srt`; all specs live beside their source in `src/**`. Fine as is, but a future agent should not read the empty-looking `tests/` directory as "there are no tests".
