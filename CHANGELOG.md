@@ -9,6 +9,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-22 — Viridian
+
 ### Added
 
 - An `llms.txt` at the site's root describes the suite and links every tool, the agent guide and the legal
