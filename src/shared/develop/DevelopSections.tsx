@@ -6,7 +6,7 @@
  */
 
 import type { SavedGrade } from '../lut/saved-grade';
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import GradePanel from '../lut/GradePanel';
 import type { LutPreviewSource } from '../lut/LutGalleryModal';
 import type { LutStack } from '../lut/use-lut-stack';
@@ -18,9 +18,10 @@ import { useVerb, type Verb } from '../ui/use-verb';
 import type { VerbOutcome, VerbReturn } from '../ui/verb';
 import VerbWord, { useVerbWord } from '../ui/VerbWord';
 import { useIsCompact } from '../ui/use-layout-mode';
+import { useFingerSize } from '../ui/use-coarse-pointer';
 import { VERB_GROUND, VERB_INK, VerbButton } from '../ui/VerbMarks';
 import DevelopFold from './DevelopFold';
-import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, carriesDevelop, describeDevelop, sameDevelop, withoutBase, type DevelopPreset, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
 import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './develop-host';
@@ -294,10 +295,21 @@ export function DevelopClipboardActions({
   );
 }
 
+/** How long a removed preset's row offers Undo. */
+const PRESET_UNDO_MS = 8000;
+
 /**
- * The host's presets: a chip writes a COPY of its numbers into the draft,
- * `Save current as…` names the draft. `onNaming` tells the host while the name
- * field is open, so Enter belongs to that field and not to Done.
+ * The host's presets as ROWS (2026-10-22, his pick B on a computer and E on a
+ * phone, lab https://claude.ai/artifact/6JZ93yBx3ad7tc98amR6it): each row is
+ * ONE target — it applies a COPY of the preset's numbers — and says what the
+ * preset does under its name (`describeDevelop`), `+ look` where it carries
+ * one. A dot marks the preset whose numbers ARE the picture's (`sameDevelop`
+ * on the draft, nothing stored: it goes out as soon as a slider moves). The
+ * rest is the row's ⋯ — update it with this picture, rename, clone, remove —
+ * so the chip's three 22 px targets, its × beside the name and its silent
+ * delete are gone: a removal leaves an Undo in the row's place. Saving is the
+ * quiet last row. `onNaming` tells the host while a name field is open, so
+ * Enter belongs to that field and not to Done.
  */
 export function DevelopPresetsSection({
   presets,
@@ -324,101 +336,159 @@ export function DevelopPresetsSection({
   /** Wear a preset's look — the same host only; elsewhere the numbers apply alone, and say so. */
   onApplyLook?: (look: SavedGrade) => void;
 }) {
+  const finger = useFingerSize();
   const [naming, setNamingState] = useState(false);
   const [presetName, setPresetName] = useState('');
   const [withLook, setWithLook] = useState(false);
   const canSaveLook = Boolean(look);
-  // Cloning a preset: the one being copied and the name typed so far (null
-  // until the person types, so the field follows the suggestion).
-  const [cloning, setCloningState] = useState<{ id: string; name: string; typed: string | null } | null>(null);
+  // A name being given: a copy of a preset, or a preset's new name. `typed`
+  // stays null until the person types, so the field follows the suggestion.
+  const [renaming, setRenamingState] = useState<{ id: string; name: string; mode: 'clone' | 'rename'; typed: string | null } | null>(null);
+  // The preset just removed, and where it stood: its row offers Undo for a while.
+  const [removed, setRemoved] = useState<{ preset: DevelopPreset; at: number } | null>(null);
+  useEffect(() => {
+    if (!removed) return;
+    const t = window.setTimeout(() => setRemoved(null), PRESET_UNDO_MS);
+    return () => window.clearTimeout(t);
+  }, [removed]);
   const setNaming = (on: boolean) => {
     setNamingState(on);
-    onNaming?.(on);
+    onNaming?.(on || renaming !== null);
   };
-  const setCloning = (next: typeof cloning) => {
-    setCloningState(next);
-    onNaming?.(next !== null);
+  const setRenaming = (next: typeof renaming) => {
+    setRenamingState(next);
+    onNaming?.(next !== null || naming);
   };
-  const taken = presets.list.map((p) => p.name);
+  // The draft as a preset would hold it: the base belongs to one picture.
+  const portable = useMemo(() => withoutBase(draft), [draft]);
+  const apply = (p: DevelopPreset) => {
+    onApply({ ...DEFAULT_DEVELOP, ...p.settings });
+    if (p.look && onApplyLook) onApplyLook(p.look);
+    onTold(p.look && !onApplyLook ? `applied ${p.name} — its look stays in Develop` : `applied ${p.name}`);
+  };
+  const menu = (p: DevelopPreset, at: number): OverflowItem[] => [
+    {
+      id: 'update',
+      label: (
+        <span className="flex flex-col gap-0.5">
+          <span>Update with this picture</span>
+          <span className="font-mono text-3xs text-muted">{p.look && look ? 'its light and look replace the preset’s' : 'its light replaces the preset’s'}</span>
+        </span>
+      ),
+      disabled: asShot && !(p.look && look),
+      title: asShot && !(p.look && look) ? 'Move a slider first' : undefined,
+      onSelect: () => {
+        presets.onUpdate(p.id, { ...draft }, p.look ? (look ?? p.look) : null);
+        onTold(`${p.name} now holds this picture’s light`);
+      },
+    },
+    { id: 'rename', label: 'Rename…', onSelect: () => (setNaming(false), setRenaming({ id: p.id, name: p.name, mode: 'rename', typed: null })) },
+    { id: 'clone', label: 'Clone…', onSelect: () => (setNaming(false), setRenaming({ id: p.id, name: p.name, mode: 'clone', typed: null })) },
+    {
+      id: 'remove',
+      label: 'Remove',
+      danger: true,
+      title: 'The pictures it was applied to keep their numbers',
+      onSelect: () => {
+        presets.onRemove(p.id);
+        setRemoved({ preset: p, at });
+      },
+    },
+  ];
+  const nameRow = (r: NonNullable<typeof renaming>) => (
+    <PresetNameRow
+      key={`${r.mode}:${r.id}`}
+      mode={r.mode}
+      original={r.name}
+      typed={r.typed}
+      taken={presets.list.filter((p) => r.mode === 'clone' || p.id !== r.id).map((p) => p.name)}
+      onType={(typed) => setRenaming({ ...r, typed })}
+      onCancel={() => setRenaming(null)}
+      onDone={(name) => {
+        if (r.mode === 'clone') {
+          presets.onClone(r.id, name);
+          onTold(`cloned ${r.name} as ${name}`);
+        } else {
+          presets.onRename(r.id, name);
+          onTold(`renamed ${r.name} ${name}`);
+        }
+        setRenaming(null);
+      }}
+    />
+  );
+  const undoRow = removed && (
+    <li key={`removed:${removed.preset.id}`} className="flex items-center gap-2 min-h-11 pointer-coarse:min-h-[3.25rem] pl-6 pr-2 rounded-[10px] bg-paper-2">
+      <span className="flex-1 min-w-0 truncate text-xs text-ink-soft">{removed.preset.name} removed</span>
+      <button
+        type="button"
+        onClick={() => {
+          presets.onRestore(removed.preset, removed.at);
+          onTold(`${removed.preset.name} is back`);
+          setRemoved(null);
+        }}
+        className={developLinkClass}
+      >
+        Undo
+      </button>
+    </li>
+  );
+  const rows: ReactNode[] = [];
+  presets.list.forEach((p, i) => {
+    if (removed && removed.at === i) rows.push(undoRow);
+    if (renaming?.mode === 'rename' && renaming.id === p.id) {
+      rows.push(<li key={p.id}>{nameRow(renaming)}</li>);
+      return;
+    }
+    const on = carriesDevelop(p.settings) && sameDevelop(portable, p.settings);
+    const lookNote = p.look ? (onApplyLook ? ' · and its look' : ' · its look applies in the Develop tool only; here the numbers alone') : '';
+    rows.push(
+      <li key={p.id} className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => apply(p)}
+          aria-current={on ? 'true' : undefined}
+          title={`Apply ${p.name} — ${describeDevelop(p.settings)}${lookNote}`}
+          className={`group flex-1 min-w-0 flex items-center gap-2 min-h-11 pointer-coarse:min-h-[3.25rem] pl-2.5 pr-2 py-1.5 rounded-[10px] border-0 text-left cursor-pointer ${
+            on ? 'bg-accent-wash' : 'bg-transparent hover:bg-paper-2'
+          }`}
+        >
+          <span aria-hidden="true" className={`flex-none w-1.5 h-1.5 rounded-full ${on ? 'bg-accent' : 'bg-transparent'}`} />
+          <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+            <span className="flex items-baseline gap-1.5 min-w-0">
+              <span className={`min-w-0 truncate text-sm text-ink ${on ? 'font-semibold' : 'font-medium'}`}>{p.name}</span>
+              {p.look && (
+                <span className={`flex-none font-mono text-3xs ${onApplyLook ? 'text-accent-ink' : 'text-faint line-through'}`}>+ look</span>
+              )}
+            </span>
+            <span className="min-w-0 truncate font-mono text-3xs text-ink-soft">
+              {carriesDevelop(p.settings) ? describeDevelop(p.settings) : 'the look alone'}
+            </span>
+          </span>
+        </button>
+        <OverflowMenu label={`Actions for ${p.name}`} items={menu(p, i)} size={finger} />
+      </li>,
+    );
+    if (renaming?.mode === 'clone' && renaming.id === p.id) rows.push(<li key={`clone:${p.id}`}>{nameRow(renaming)}</li>);
+  });
+  if (removed && removed.at >= presets.list.length) rows.push(undoRow);
   return (
     <DevelopFold
       id="presets"
       title="Presets"
       info={
         <p>
-          Your own names for a light{presets.keptOn ? `, kept ${presets.keptOn}` : ''}. A chip writes a
+          Your own names for a light{presets.keptOn ? `, kept ${presets.keptOn}` : ''}. A row writes a
           COPY of its numbers here — applied, never followed, so editing a preset later changes no
-          picture. There is no factory set. A preset saved in the Develop tool may carry the
-          picture’s LOOK too (<em>+ look</em>); it is worn where a picture owns its look, and
-          elsewhere the numbers apply alone.
+          picture; the dot marks the preset whose numbers are this picture’s. There is no factory set.
+          A preset saved in the Develop tool may carry the picture’s LOOK too (<em>+ look</em>); it is
+          worn where a picture owns its look, and elsewhere the numbers apply alone.
         </p>
       }
     >
-      {presets.place && <PresetsPlaceRow place={presets.place} />}
-      {presets.list.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {presets.list.map((p) => (
-            <span key={p.id} className="inline-flex items-center rounded-full border border-line-strong bg-paper overflow-hidden">
-              <button
-                type="button"
-                onClick={() => {
-                  onApply({ ...DEFAULT_DEVELOP, ...p.settings });
-                  if (p.look && onApplyLook) onApplyLook(p.look);
-                  onTold(p.look && !onApplyLook ? `applied ${p.name} — its look stays in Develop` : `applied ${p.name}`);
-                }}
-                className="px-2.5 py-[0.3rem] border-0 bg-transparent text-xs text-ink-soft cursor-pointer hover:text-accent-ink"
-                title={
-                  describeDevelop(p.settings) +
-                  (p.look ? (onApplyLook ? ' · and its look' : ' · its look applies in the Develop tool only; here the numbers alone') : '')
-                }
-              >
-                {p.name}
-                {p.look && (
-                  <span className={`ml-1 font-mono text-3xs ${onApplyLook ? 'text-accent-ink' : 'text-faint line-through'}`}>+ look</span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setNaming(false);
-                  setCloning({ id: p.id, name: p.name, typed: null });
-                }}
-                className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent text-3xs text-muted cursor-pointer hover:text-accent-ink"
-                aria-label={`Clone preset ${p.name}`}
-                title="Clone this preset under a name of your own"
-              >
-                {Icons.copy}
-              </button>
-              <button
-                type="button"
-                onClick={() => presets.onRemove(p.id)}
-                className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent font-mono text-3xs text-muted cursor-pointer hover:text-accent"
-                aria-label={`Remove preset ${p.name}`}
-                title="Remove this preset — the pictures it was applied to keep their numbers"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      {cloning && (
-        <PresetCloneRow
-          original={cloning.name}
-          typed={cloning.typed}
-          taken={taken}
-          onType={(typed) => setCloning({ ...cloning, typed })}
-          onCancel={() => setCloning(null)}
-          onClone={(name) => {
-            presets.onClone(cloning.id, name);
-            onTold(`cloned ${cloning.name} as ${name}`);
-            setCloning(null);
-          }}
-        />
-      )}
+      {rows.length > 0 && <ul className="m-0 -mx-2 p-0 list-none flex flex-col gap-0.5">{rows}</ul>}
       {naming ? (
         <form
-          className="flex items-center gap-1.5"
+          className="flex flex-col gap-2 -mx-2 p-2 rounded-[10px] bg-paper-2"
           onSubmit={(e) => {
             e.preventDefault();
             const name = presetName.trim();
@@ -426,6 +496,7 @@ export function DevelopPresetsSection({
             presets.onSave(name, { ...draft }, withLook && look ? look : null);
             onTold(withLook && look ? `saved ${name} with its look` : `saved ${name}`);
             setPresetName('');
+            setWithLook(false);
             setNaming(false);
           }}
         >
@@ -444,66 +515,76 @@ export function DevelopPresetsSection({
             placeholder="Name this light"
             aria-label="Preset name"
             ref={focusOnMount}
-            className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
+            className="min-w-0 px-2.5 py-[0.3rem] rounded-control border border-line-strong bg-surface text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
           />
-          {canSaveLook && (
-            <label className="flex-none inline-flex items-center gap-1 font-mono text-3xs text-muted cursor-pointer select-none" title="Save this picture’s look with the light">
-              <input type="checkbox" checked={withLook} onChange={(e) => setWithLook(e.target.checked)} className="accent-[var(--color-accent)]" />
-              + look
-            </label>
-          )}
-          <button type="submit" className={developButtonClass} disabled={!presetName.trim()}>
-            Save
-          </button>
-          <button type="button" onClick={() => setNaming(false)} className={developLinkClass}>
-            Cancel
-          </button>
+          <div className="flex items-center gap-2">
+            {canSaveLook && (
+              <label className="inline-flex items-center gap-1.5 text-xs text-ink-soft cursor-pointer select-none" title="Save this picture’s look with the light">
+                <input type="checkbox" checked={withLook} onChange={(e) => setWithLook(e.target.checked)} className="accent-[var(--color-accent)]" />
+                with this picture’s look
+              </label>
+            )}
+            <span className="flex-1" />
+            <button type="button" onClick={() => setNaming(false)} className={developLinkClass}>
+              Cancel
+            </button>
+            <button type="submit" className={developButtonClass} disabled={!presetName.trim()}>
+              Save
+            </button>
+          </div>
         </form>
       ) : (
         <button
           type="button"
-          onClick={() => setNaming(true)}
+          onClick={() => (setRenaming(null), setNaming(true))}
           disabled={asShot && !canSaveLook}
-          className={`${developButtonClass} self-start`}
+          className="-mx-2 flex items-center gap-2 min-h-9 pointer-coarse:min-h-12 px-2 rounded-[10px] border-0 bg-transparent text-left text-sm font-medium text-accent-ink cursor-pointer hover:bg-accent-wash disabled:opacity-45 disabled:cursor-default disabled:hover:bg-transparent"
           title={asShot && !canSaveLook ? 'Move a slider first' : 'Keep these numbers under a name of your own'}
         >
-          Save current as…
+          <span aria-hidden="true" className="inline-flex">{Icons.plus}</span>
+          Save this picture’s light…
         </button>
       )}
+      {presets.place && <PresetsPlaceRow place={presets.place} />}
     </DevelopFold>
   );
 }
 
 /**
- * Naming the copy of a preset: the first free name is in the field, editable,
- * and the line under it says what will be saved — the same rule as cloning a
- * trip, a project or a roll (`doc-name.ts`), minus the destination, since the
- * book is one list kept in one place.
+ * Naming a preset — a COPY of one (the first free name prefilled: the same
+ * rule as cloning a trip, a project or a roll, `doc-name.ts`, minus the
+ * destination, since the book is one list kept in one place) or the preset
+ * itself, renamed. The line under it says what will be kept: a name another
+ * preset holds is numbered, never replaced.
  */
-function PresetCloneRow({
+function PresetNameRow({
+  mode,
   original,
   typed,
   taken,
   onType,
   onCancel,
-  onClone,
+  onDone,
 }: {
+  mode: 'clone' | 'rename';
   original: string;
   typed: string | null;
+  /** The names the new one must not take — every preset's for a copy, the others' for a rename. */
   taken: readonly string[];
   onType: (typed: string) => void;
   onCancel: () => void;
-  onClone: (name: string) => void;
+  onDone: (name: string) => void;
 }) {
-  const suggestion = uniqueDocName(original, taken);
+  const suggestion = mode === 'clone' ? uniqueDocName(original, taken) : original;
   const name = typed ?? suggestion;
   const effective = uniqueDocName(name, taken);
+  const verb = mode === 'clone' ? 'Clone' : 'Rename';
   return (
     <form
-      className="flex flex-col gap-1"
+      className="flex flex-col gap-1 px-2 py-1.5 rounded-[10px] bg-paper-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (effective) onClone(effective);
+        if (effective) onDone(effective);
       }}
     >
       <div className="flex items-center gap-1.5">
@@ -519,12 +600,12 @@ function PresetCloneRow({
               onCancel();
             }
           }}
-          aria-label={`Name of the copy of ${original}`}
+          aria-label={mode === 'clone' ? `Name of the copy of ${original}` : `New name for ${original}`}
           ref={focusOnMount}
-          className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
+          className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-control border border-line-strong bg-surface text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
         />
         <button type="submit" className={developButtonClass} aria-disabled={!effective}>
-          Clone
+          {verb}
         </button>
         <button type="button" onClick={onCancel} className={developLinkClass}>
           Cancel
@@ -534,8 +615,10 @@ function PresetCloneRow({
         {!effective
           ? 'A preset needs a name.'
           : effective !== name.trim()
-            ? `“${name.trim()}” is taken → saved as “${effective}”`
-            : `Copy of “${original}” — saved as “${effective}”`}
+            ? `“${name.trim()}” is taken → kept as “${effective}”`
+            : mode === 'clone'
+              ? `Copy of “${original}” — saved as “${effective}”`
+              : `“${original}” becomes “${effective}”`}
       </p>
     </form>
   );

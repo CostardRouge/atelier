@@ -9,8 +9,8 @@ import type { SavedGrade } from '../lut/saved-grade';
 import type { DevelopPreset, DevelopSettings } from './develop';
 
 /**
- * The host's presets. A chip applies a COPY into the draft (applied, never
- * followed); `Save current as…` hands the draft back under a name.
+ * The host's presets. A row applies a COPY into the draft (applied, never
+ * followed); *Save this picture's light…* hands the draft back under a name.
  */
 export interface DevelopPresets {
   list: readonly DevelopPreset[];
@@ -19,6 +19,12 @@ export interface DevelopPresets {
   /** A copy of preset `id` under `name`, numbered by the host when the name is taken. */
   onClone: (id: string, name: string) => void;
   onRemove: (id: string) => void;
+  /** Preset `id` under a new name, numbered by the host when another preset holds it. */
+  onRename: (id: string, name: string) => void;
+  /** Preset `id` holding these numbers (and this look, or none) — "Update with this picture". */
+  onUpdate: (id: string, settings: DevelopSettings, look?: SavedGrade | null) => void;
+  /** A removed preset back where it stood: the removal's Undo. */
+  onRestore: (preset: DevelopPreset, at: number) => void;
   /** Where they are kept, said in the section's ⓘ: "on the trip". */
   keptOn?: string;
   /** Where the list lives and how to move it, for a host whose presets are a document of their own. */

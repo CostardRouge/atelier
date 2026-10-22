@@ -168,6 +168,7 @@ import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import type { SettingsSection } from '../../shared/ui/SettingsMenu';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { useRememberedScroll } from '../../shared/ui/use-remembered-scroll';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import DevelopShortcuts from '../../shared/develop/DevelopShortcuts';
@@ -2838,6 +2839,12 @@ export default function PictureWorkbench({
   );
   // Where the verbs stand: in the column's flow, floating over the picture
   // (a phone browsing), in the drawer's head, or nowhere (Focus).
+  // The workbench is built anew for each picture (`RollEditor` keys it on the
+  // picture), and the inspector with it: its column comes back to the same
+  // section, per tab, so the same setting is under the hand on the next
+  // picture (his ask, 2026-10-22). The folds are already remembered.
+  const inspectorRef = useRef<HTMLDivElement>(null);
+  useRememberedScroll(`develop.inspector.${tab}`, inspectorRef);
   const verbsPlace: 'flow' | 'float' | 'drawer' | 'none' = !compact || !immersive
     ? 'flow'
     : focused
@@ -3145,6 +3152,7 @@ export default function PictureWorkbench({
             that says a state stays in the open. */}
         <FoldHints>
         <div
+          ref={inspectorRef}
           className={`${
             compact ? 'flex flex-col' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col -mr-3 pr-3'
           } ${tab === 'export' || tab === 'layers' ? 'gap-4' : 'gap-0'}`}

@@ -21,7 +21,10 @@ import {
   mergeTripPresets,
   clonePresetInBook,
   removePresetFromBook,
+  renamePresetInBook,
+  restorePresetToBook,
   savePresetInBook,
+  updatePresetInBook,
   withIdentity,
   type PresetBook,
 } from './preset-book';
@@ -283,6 +286,30 @@ export async function removeFromPresetBook(id: string) {
   if (next !== base) await commit(next);
 }
 
+export async function renameInPresetBook(id: string, name: string) {
+  await ensurePresetBook();
+  const base = await latest();
+  if (!base) return;
+  const next = renamePresetInBook(base, id, name);
+  if (next !== base) await commit(next);
+}
+
+export async function updateInPresetBook(id: string, settings: DevelopSettings, look: SavedGrade | null = null) {
+  await ensurePresetBook();
+  const base = await latest();
+  if (!base) return;
+  const next = updatePresetInBook(base, id, settings, look);
+  if (next !== base) await commit(next);
+}
+
+export async function restoreToPresetBook(preset: DevelopPreset, at: number) {
+  await ensurePresetBook();
+  const base = await latest();
+  if (!base) return;
+  const next = restorePresetToBook(base, preset, at);
+  if (next !== base) await commit(next);
+}
+
 /** Who signs a delivered picture, read once the book has loaded — the agent's door to `useDeliveryIdentity`. */
 export async function identityNow(): Promise<DeliveryIdentity> {
   await ensurePresetBook();
@@ -392,6 +419,9 @@ export function usePresetBookHost(): DevelopPresets {
       onSave: (name: string, settings: DevelopSettings, look?: SavedGrade | null) => void saveToPresetBook(name, settings, look ?? null),
       onClone: (id: string, name: string) => void cloneInPresetBook(id, name),
       onRemove: (id: string) => void removeFromPresetBook(id),
+      onRename: (id: string, name: string) => void renameInPresetBook(id, name),
+      onUpdate: (id: string, settings: DevelopSettings, look?: SavedGrade | null) => void updateInPresetBook(id, settings, look ?? null),
+      onRestore: (preset: DevelopPreset, at: number) => void restoreToPresetBook(preset, at),
       keptOn: 'in your own book, shared by every Develop sheet and tool',
       place: {
         label: sourceLabel(sourceId),

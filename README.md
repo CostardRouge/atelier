@@ -1891,12 +1891,15 @@ look; it says so when the picture also carries an edit it does not draw.
 **Paste** — one set of numbers kept for the session, never stored, and the
 same clipboard the Studio's sheet reads, so a correction crosses the two tools
 in two clicks. **Presets** are your own book, the same list in every Develop
-sheet (Trips and the Studio): `Save current as…` keeps the numbers under a name
-of your choosing (there is no factory set), a chip writes a copy of them onto
-the open picture, and × removes the preset without touching any picture it was
-applied to — a preset is applied, never followed. The copy glyph on a chip
-clones it: the first free name (`Dusk (2)`) is prefilled and editable, and a
-name already in the book is never replaced. The book is kept in this
+sheet (Trips and the Studio): *Save this picture’s light…* keeps the numbers
+under a name of your choosing (there is no factory set). Each preset is one row
+that says what it does under its name; a click writes a copy of its numbers
+onto the open picture, and a dot marks the preset whose numbers are the
+picture's. The row's ⋯ updates the preset with the open picture, renames it,
+clones it (the first free name, `Dusk (2)`, prefilled and editable) or removes
+it — with an Undo in its place for a few seconds, and without touching any
+picture it was applied to: a preset is applied, never followed. A name already
+in the book is never replaced by a rename or a clone. The book is kept in this
 browser, or on a connected Winnow if you pick it there, and then follows you to
 another device; a change made on two devices is merged by name, never asked
 about. The presets a trip kept before the book existed are brought in once.
