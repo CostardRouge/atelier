@@ -2788,11 +2788,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             <>
               {historyControl}
               {headerExtra}
-              {/* Develop's settings open from inside the roll (his pick): the device's
-                  choices, not the roll's — encoder, rendering, device, network. */}
-              <IconButton label="Develop settings" onClick={() => openDevelopSettings()}>
-                {Icons.settings}
-              </IconButton>
               {/* The Library's item only when it holds something the roll does
                   not: a ticked picture already on the roll is nothing to add. */}
               {adding ? (
@@ -2815,6 +2810,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   {compact ? null : addButtonLabel[addItems[0].id]}
                 </Button>
               ) : null}
+              {/* Develop's settings open from inside the roll (his pick): the device's
+                  choices, not the roll's — encoder, rendering, device, network. Last,
+                  so the gear is the rightmost control (his ask, 2026-10-22). */}
+              <IconButton label="Develop settings" onClick={() => openDevelopSettings()}>
+                {Icons.settings}
+              </IconButton>
             </>
           }
         >
