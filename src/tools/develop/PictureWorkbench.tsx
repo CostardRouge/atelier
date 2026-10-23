@@ -1883,7 +1883,10 @@ export default function PictureWorkbench({
       // sheet over it (the keys sheet, the settings, the making-of): with one
       // open, ←/→, P/M/U, V and Delete used to act on the picture behind it,
       // out of sight and into the export.
-      if (document.querySelector('[role="alertdialog"], [aria-modal="true"]')) return;
+      // Save one: the contact sheet, a whole-screen modal on a phone, is the
+      // roll seen large and says so (`data-editor-keys`) — ← → ↑ ↓ and the
+      // rest walk it there as they do on a computer, where it is no modal.
+      if (document.querySelector('[role="alertdialog"], [aria-modal="true"]:not([data-editor-keys])')) return;
       const action = editorKeyAction({
         key: e.key,
         repeat: e.repeat,

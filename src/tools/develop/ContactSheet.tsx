@@ -133,6 +133,9 @@ export default function ContactSheet({
     <div
       role="dialog"
       aria-modal={compact ? 'true' : undefined}
+      // The editor's keys go on under it (`PictureWorkbench`): the roll's
+      // ← → ↑ ↓ walk the sheet, on a phone with a keyboard as on a computer.
+      data-editor-keys
       aria-label="Contact sheet"
       className={
         compact
