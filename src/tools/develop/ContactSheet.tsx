@@ -1,10 +1,10 @@
-import { useMemo, type ReactNode } from 'react';
-import { STRIP_METRICS, sheetLayout, sheetSizeIndex } from '../../shared/develop/roll-strip';
+import { useMemo, type MutableRefObject, type ReactNode } from 'react';
+import { STRIP_METRICS, sheetLayout, sheetSizeIndex, type StripLayout } from '../../shared/develop/roll-strip';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import SettingsMenu from '../../shared/ui/SettingsMenu';
 import { Icons } from '../../shared/ui/icons';
-import { StripCells, shownPictures, stripItems, useScrollToOpen, useScrollView, type StripCellsProps } from './RollBand';
+import { StripCells, shownPictures, stripItems, usePublishedLayout, useScrollToOpen, useScrollView, type StripCellsProps } from './RollBand';
 import { fingerSize } from '../../shared/ui/press';
 import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 
@@ -33,8 +33,11 @@ export default function ContactSheet({
   bar,
   onSelecting,
   onClose,
+  layoutRef,
   ...cells
 }: StripCellsProps & {
+  /** Where the sheet hands its laid-out cells to the host, for ↑ / ↓ (`rowStep`). */
+  layoutRef?: MutableRefObject<StripLayout | null>;
   compact: boolean;
   /** How many of the host's grid columns it covers — the stage's, and the band's when that stands beside it. */
   span?: 1 | 2;
@@ -57,6 +60,7 @@ export default function ContactSheet({
   const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
   const layout = useMemo(() => sheetLayout({ items, width, thumb, metrics }), [items, width, thumb, metrics]);
   useScrollToOpen(bodyRef, openId, layout, metrics.pad);
+  usePublishedLayout(layoutRef, layout);
   const size = fingerSize(compact, useCoarsePointer());
   const title = (
     <>

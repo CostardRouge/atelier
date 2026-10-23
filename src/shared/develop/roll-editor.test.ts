@@ -94,6 +94,14 @@ describe('openAfterRemovals', () => {
 });
 
 describe('editorKeyAction', () => {
+  it('reads ↑ / ↓ as a step across the rows, held too, and leaves them to a field', () => {
+    expect(editorKeyAction(press({ key: 'ArrowUp' }))).toBe('row-up');
+    expect(editorKeyAction(press({ key: 'ArrowDown', repeat: true }))).toBe('row-down');
+    expect(editorKeyAction(press({ key: 'ArrowDown', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'ArrowUp', shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'ArrowUp', altKey: true }))).toBeNull();
+  });
+
   it('carries the open picture along the band on ⌥← / ⌥→, and leaves every other ⌥ chord alone', () => {
     expect(editorKeyAction(press({ key: 'ArrowLeft', altKey: true }))).toBe('move-earlier');
     expect(editorKeyAction(press({ key: 'ArrowRight', altKey: true, repeat: true }))).toBe('move-later');

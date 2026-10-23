@@ -27,6 +27,7 @@ const GROUPS: readonly Group[] = [
     title: 'Moving about',
     rows: [
       { keys: '← / →', what: 'the picture before or after this one' },
+      { keys: '↑ / ↓', what: 'on a grid — the band pulled up, a column, the contact sheet — the nearest picture in the row above or below, keeping its column while you go on; rows with nothing to work on are stepped over' },
       { keys: 'Z', what: 'closer, or back to the fit' },
       { keys: 'wheel · pinch', what: 'zoom about the pointer, to 4000 %' },
       { keys: 'drag', what: 'pan, once the picture is zoomed' },

@@ -239,10 +239,17 @@ export interface StripDrop {
 /** How thick the drop bar is drawn. */
 export const DROP_BAR = 3;
 
-export function stripDrop(cells: readonly StripCell[], point: { x: number; y: number }): StripDrop | null {
-  if (cells.length === 0) return null;
-  // Rows: runs of cells laid at one height, in layout order.
-  const rows: { from: number; to: number; top: number; bottom: number }[] = [];
+/** A row of a layout: the run of cells `from`..`to` laid at one height, and its extent down the page. */
+export interface StripRow {
+  from: number;
+  to: number;
+  top: number;
+  bottom: number;
+}
+
+/** The layout's rows: runs of cells laid at one height, in layout order (a column of one cell is a row of it). */
+export function stripRows(cells: readonly StripCell[]): StripRow[] {
+  const rows: StripRow[] = [];
   cells.forEach((c, i) => {
     const row = rows[rows.length - 1];
     if (row && Math.abs(cells[row.from].y - c.y) < 0.5) {
@@ -250,6 +257,12 @@ export function stripDrop(cells: readonly StripCell[], point: { x: number; y: nu
       row.bottom = Math.max(row.bottom, c.y + c.h + c.cap);
     } else rows.push({ from: i, to: i, top: c.y, bottom: c.y + c.h + c.cap });
   });
+  return rows;
+}
+
+export function stripDrop(cells: readonly StripCell[], point: { x: number; y: number }): StripDrop | null {
+  if (cells.length === 0) return null;
+  const rows = stripRows(cells);
   const row = rows.reduce((best, r) => (rowDistance(r, point.y) < rowDistance(best, point.y) ? r : best), rows[0]);
   const height = row.bottom - row.top;
   if (row.from === row.to) {
@@ -690,4 +703,51 @@ export function stripFilterCounts(
     for (const k of keys) if (passesStripFilter(p, k, culling)) counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   return counts;
+}
+
+/**
+ * ↑ / ↓ on a grid of rows (2026-10-22, his ask: the contact sheet and a band
+ * pulled up could only be walked with ← / →). From the open cell, the move
+ * goes to the nearest row in that direction holding a picture it may land on
+ * (`eligible` — the roll's WORK: not ignored, passing the filter, as ← / →),
+ * stepping over rows that hold none; in that row, the cell nearest the GOAL
+ * column — 0 when the column falls inside a cell, else the gap to its nearer
+ * edge, the nearer centre on a tie. The goal is the open cell's centre on the
+ * first press and is handed back so the caller keeps it while the presses
+ * follow one another: a row of one picture on the left does not drag a walk
+ * down the right-hand side over to the left (a text editor's goal column).
+ * Null where there is no row that way — a one-row band, the first or last
+ * row — and the key is then left to the page.
+ */
+export function rowStep(
+  cells: readonly StripCell[],
+  fromId: string,
+  by: 1 | -1,
+  eligible: (id: string) => boolean,
+  goalX: number | null = null,
+): { id: string; goalX: number } | null {
+  const at = cells.findIndex((c) => c.id === fromId);
+  if (at < 0) return null;
+  const rows = stripRows(cells);
+  const r = rows.findIndex((row) => at >= row.from && at <= row.to);
+  const from = cells[at];
+  const x = goalX ?? from.x + from.w / 2;
+  for (let i = r + by; i >= 0 && i < rows.length; i += by) {
+    let best: StripCell | null = null;
+    let bestGap = Infinity;
+    let bestCentre = Infinity;
+    for (let k = rows[i].from; k <= rows[i].to; k++) {
+      const c = cells[k];
+      if (!eligible(c.id)) continue;
+      const gap = x < c.x ? c.x - x : x > c.x + c.w ? x - (c.x + c.w) : 0;
+      const centre = Math.abs(c.x + c.w / 2 - x);
+      if (gap < bestGap || (gap === bestGap && centre < bestCentre)) {
+        best = c;
+        bestGap = gap;
+        bestCentre = centre;
+      }
+    }
+    if (best) return { id: best.id, goalX: x };
+  }
+  return null;
 }

@@ -60,6 +60,7 @@ import {
   maxBandWidth,
   medianAspect,
   passesStripFilter,
+  rowStep,
   rowsForHeight,
   stepThumb,
   cullFilterOf,
@@ -68,6 +69,7 @@ import {
   widthForColumns,
   type StripFilterKey,
   type StripKind,
+  type StripLayout,
   type StripPlace,
 } from '../../shared/develop/roll-strip';
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
@@ -785,6 +787,42 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       // and so is one Winnow's filter has taken off the strip.
       const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !passesFilter(p));
       if (next && next !== openIdRef.current) onOpenPicture(next);
+    },
+    [onOpenPicture, passesFilter],
+  );
+
+  // ↑ / ↓ walk the GRID the person is looking at — the contact sheet when it
+  // is up, else the band (rows or a column) — by `rowStep`, landing only on
+  // the roll's work, as ← / → do. The goal column is kept while the presses
+  // follow one another: it is valid only while the open picture is the one
+  // the last vertical step opened, on the same strip.
+  const bandLayoutRef = useRef<StripLayout | null>(null);
+  const sheetLayoutRef = useRef<StripLayout | null>(null);
+  const goalColumn = useRef<{ id: string; strip: 'band' | 'sheet'; x: number } | null>(null);
+  const contactOpenRef = useRef(contactOpen);
+  contactOpenRef.current = contactOpen;
+  const stepRow = useCallback(
+    (by: 1 | -1): boolean => {
+      const strip = contactOpenRef.current ? 'sheet' : 'band';
+      const layout = strip === 'sheet' ? sheetLayoutRef.current : bandLayoutRef.current;
+      const from = openIdRef.current;
+      if (!layout || layout.axis !== 'y' || !from) return false;
+      const byId = new Map(latest.current.pictures.map((p) => [p.id, p]));
+      const goal = goalColumn.current;
+      const next = rowStep(
+        layout.cells,
+        from,
+        by,
+        (id) => {
+          const p = byId.get(id);
+          return Boolean(p) && !isIgnored(p!) && passesFilter(p!);
+        },
+        goal && goal.id === from && goal.strip === strip ? goal.x : null,
+      );
+      if (!next) return false;
+      goalColumn.current = { id: next.id, strip, x: next.goalX };
+      onOpenPicture(next.id);
+      return true;
     },
     [onOpenPicture, passesFilter],
   );
@@ -2924,6 +2962,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob, aspect) => handleSnapshot(open.id, blob, aspect)}
               onStep={step}
+              onStepRow={stepRow}
               neighbours={deckNeighbours}
               still={deckStill}
               onDeliver={(action) => (selecting && selectedIds.length > 0 ? deliverSelection(action) : handleDeliver(open.id, action))}
@@ -3042,6 +3081,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     shows={filtering ? passesFilter : undefined}
                     heldId={copied?.from.id ?? null}
                     written={written}
+                    layoutRef={bandLayoutRef}
                   />
                 </div>
               </div>
@@ -3066,6 +3106,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 bar={selecting ? <SelectionBar compact={compact} dense={bandBox.width < 800} verbs={selectionVerbs} /> : null}
                 onSelecting={() => startSelecting()}
                 onClose={() => setContactOpen(false)}
+                layoutRef={sheetLayoutRef}
                 onOpen={(id) => {
                   onOpenPicture(id);
                   setContactOpen(false);

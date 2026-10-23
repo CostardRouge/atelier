@@ -2057,7 +2057,9 @@ Auto's. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
-the roll as you go. **←/→** move along the strip, **\\** held — or the
+the roll as you go. **←/→** move along the strip, **↑/↓** go to the nearest picture in the row
+above or below when the band is a grid or the contact sheet is up (rows with nothing to
+work on are stepped over, and the column is kept while you go on), **\\** held — or the
 picture itself pressed and held still — shows it as shot, **Z** goes closer and back, **⌘C** copies everything done to the
 picture on screen — no dialog — and **⌘V** pastes it onto the picture on
 screen, or onto every picture marked in the band when some are. What a paste
