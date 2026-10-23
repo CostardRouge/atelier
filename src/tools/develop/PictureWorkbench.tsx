@@ -383,6 +383,7 @@ export default function PictureWorkbench({
   onSelectMode,
   onSelectAll,
   onRemoveKey,
+  onStepRow,
   onEscape,
   onBand,
   onMovePicture,
@@ -507,6 +508,8 @@ export default function PictureWorkbench({
   onSelectMode?: () => void;
   /** ⌘A while the selection is on. */
   onSelectAll?: () => void;
+  /** ↑ / ↓: the picture in the row above or below on the band's grid or the contact sheet — true when one opened. */
+  onStepRow?: (by: 1 | -1) => boolean;
   /** Delete or Backspace with nothing of the picture's selected: the host asks to take its pictures off the roll. */
   onRemoveKey?: () => void;
   /** Escape with nothing of the stage's to let go: the host's turn (the selection, the sheet, the focus). True when it took it. */
@@ -1543,8 +1546,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onRemoveKey, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onRemoveKey, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onRemoveKey, onStepRow, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onRemoveKey, onStepRow, onEscape, onBand, onMovePicture, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
   // What the next writes are BY, when not the hand: the `Auto` switch run as
   // the picture opened sets it before applying and lets it go once the
@@ -1880,7 +1883,10 @@ export default function PictureWorkbench({
       // sheet over it (the keys sheet, the settings, the making-of): with one
       // open, ←/→, P/M/U, V and Delete used to act on the picture behind it,
       // out of sight and into the export.
-      if (document.querySelector('[role="alertdialog"], [aria-modal="true"]')) return;
+      // Save one: the contact sheet, a whole-screen modal on a phone, is the
+      // roll seen large and says so (`data-editor-keys`) — ← → ↑ ↓ and the
+      // rest walk it there as they do on a computer, where it is no modal.
+      if (document.querySelector('[role="alertdialog"], [aria-modal="true"]:not([data-editor-keys])')) return;
       const action = editorKeyAction({
         key: e.key,
         repeat: e.repeat,
@@ -1908,6 +1914,12 @@ export default function PictureWorkbench({
         case 'next':
           e.preventDefault();
           callbacks.current.onStep(action === 'next' ? 1 : -1);
+          return;
+        case 'row-up':
+        case 'row-down':
+          // Claimed only when the host moved: on a band of one row the key
+          // stays the page's (a scroller under the focus scrolls as before).
+          if (callbacks.current.onStepRow?.(action === 'row-down' ? 1 : -1)) e.preventDefault();
           return;
         case 'hold':
           e.preventDefault();

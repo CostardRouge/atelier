@@ -11,6 +11,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ### Added
 
+- Develop: ↑ and ↓ move to the nearest picture in the row above or below when the band is pulled up into rows,
+  stands beside the picture, or the contact sheet is open — rows with nothing to work on are stepped over, and the
+  column is kept while you go on.
+- Develop on a phone or an iPad with a keyboard: the arrow keys and the editor's other keys work in the contact sheet too,
+  as they do on a computer.
 - Develop: Delete or Backspace takes the open picture, or every selected one, off the roll — on a computer, and on an
   iPad or phone with a keyboard. A card (a sheet from the bottom on a touch screen) shows what leaves and asks;
   Delete or Enter again removes, Escape keeps, and Ctrl/⌘+Z brings them back.

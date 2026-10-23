@@ -171,6 +171,8 @@ export interface EditorKeyPress {
 export type EditorKeyAction =
   | 'previous'
   | 'next'
+  | 'row-up'
+  | 'row-down'
   | 'move-earlier'
   | 'move-later'
   | 'hold'
@@ -272,6 +274,11 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.shiftKey) return null;
   if (press.key === 'ArrowLeft') return 'previous';
   if (press.key === 'ArrowRight') return 'next';
+  // ↑ / ↓ walk a GRID of the roll — the band pulled up, a column, the
+  // contact sheet (`rowStep`); held, they sweep like ← / →. The host leaves
+  // the key to the page where the band is one row.
+  if (press.key === 'ArrowUp') return 'row-up';
+  if (press.key === 'ArrowDown') return 'row-down';
   if (press.repeat) return null;
   if (press.key === 'Delete' || press.key === 'Backspace') return 'remove';
   if (press.key === 'Escape') return 'escape';

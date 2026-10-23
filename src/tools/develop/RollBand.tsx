@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
@@ -162,8 +163,11 @@ export default function RollBand({
   header,
   folded = false,
   thumb,
+  layoutRef,
   ...cells
 }: StripCellsProps & {
+  /** Where the band hands its laid-out cells to the host, for ↑ / ↓ (`rowStep`). */
+  layoutRef?: MutableRefObject<StripLayout | null>;
   /** Under the picture (a band of rows), or standing beside it (a column) — `StripPrefs.place`. */
   place?: StripPlace;
   /** The band's whole extent on its axis: its height under the picture, its width beside it. */
@@ -197,6 +201,7 @@ export default function RollBand({
     [side, items, folded, width, bodyHeight, metrics, target],
   );
   useScrollToOpen(bodyRef, openId, layout, metrics.pad);
+  usePublishedLayout(layoutRef, layout);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
   const inView = useCellsInView(bodyRef, layout, shown, folded);
   return (
@@ -242,6 +247,17 @@ export default function RollBand({
 }
 
 const ALWAYS = () => true;
+
+/** A strip's layout handed to its host as it is laid — read on a key press, so held in a ref, never rendered from. */
+export function usePublishedLayout(ref: MutableRefObject<StripLayout | null> | undefined, layout: StripLayout) {
+  useEffect(() => {
+    if (!ref) return;
+    ref.current = layout;
+    return () => {
+      if (ref.current === layout) ref.current = null;
+    };
+  }, [ref, layout]);
+}
 
 /**
  * The pictures the band has ON SCREEN, as indices into what it shows — for

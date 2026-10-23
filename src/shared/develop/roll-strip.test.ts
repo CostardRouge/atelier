@@ -16,7 +16,9 @@ import {
   columnsForWidth,
   defaultStripPrefs,
   dropAnchor,
+  rowStep,
   stripDrop,
+  stripRows,
   DROP_BAR,
   foldBelow,
   heightForRows,
@@ -320,5 +322,53 @@ describe('where a carried picture lands', () => {
     expect(dropAnchor(shown, new Set(['b']), 4)).toEqual({ after: 'd' });
     expect(dropAnchor(shown, new Set(['c', 'd']), 3)).toEqual({ after: 'b' });
     expect(dropAnchor(['a'], new Set(['a']), 0)).toBeNull();
+  });
+});
+
+describe('↑ / ↓ across the rows (rowStep)', () => {
+  const cell = (id: string, x: number, y: number, w: number) => ({ id, x, y, w, h: 80, cap: 0 });
+  // Three rows of a justified grid, the middle one a lone picture on the left.
+  //   a  b  c  d  e
+  //   f
+  //   g  h  i  j  k
+  const cells = [
+    cell('a', 0, 0, 100), cell('b', 104, 0, 100), cell('c', 208, 0, 100), cell('d', 312, 0, 100), cell('e', 416, 0, 100),
+    cell('f', 0, 84, 210),
+    cell('g', 0, 168, 100), cell('h', 104, 168, 100), cell('i', 208, 168, 100), cell('j', 312, 168, 100), cell('k', 416, 168, 100),
+  ];
+  const all = () => true;
+
+  it('groups the cells in rows by their height on the page', () => {
+    expect(stripRows(cells).map((r) => [r.from, r.to])).toEqual([[0, 4], [5, 5], [6, 10]]);
+  });
+
+  it('goes to the cell under the open one in the row above or below', () => {
+    expect(rowStep(cells, 'i', -1, all)?.id).toBe('f');
+    expect(rowStep(cells, 'h', -1, all)?.id).toBe('f');
+    expect(rowStep(cells, 'f', -1, all)?.id).toBe('b');
+    expect(rowStep(cells, 'c', 1, all)?.id).toBe('f');
+  });
+
+  it('keeps the goal column, so a lone picture does not drag the walk to the left', () => {
+    const up = rowStep(cells, 'j', -1, all)!;
+    expect(up).toEqual({ id: 'f', goalX: 362 });
+    expect(rowStep(cells, up.id, -1, all, up.goalX)?.id).toBe('d');
+    // Without the goal, f's own centre would land on b.
+    expect(rowStep(cells, 'f', -1, all)?.id).toBe('b');
+  });
+
+  it('lands only on a picture it may — stepping over a row that holds none', () => {
+    const active = new Set(['a', 'd', 'h', 'k']);
+    const may = (id: string) => active.has(id);
+    expect(rowStep(cells, 'k', -1, may)?.id).toBe('d');
+    expect(rowStep(cells, 'h', -1, may)?.id).toBe('a');
+    expect(rowStep(cells, 'a', 1, may)?.id).toBe('h');
+  });
+
+  it('answers null with no row that way, or on a band of one row', () => {
+    expect(rowStep(cells, 'b', -1, all)).toBeNull();
+    expect(rowStep(cells, 'i', 1, all)).toBeNull();
+    expect(rowStep(cells.slice(0, 5), 'c', 1, all)).toBeNull();
+    expect(rowStep(cells, 'nope', 1, all)).toBeNull();
   });
 });
