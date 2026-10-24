@@ -98,6 +98,7 @@ export default function DevelopViewport({
   pixelView = 'smooth',
   facts = null,
   shot = null,
+  parked = null,
   marks = null,
   onUnmark,
   tapTone = 'add',
@@ -199,6 +200,11 @@ export default function DevelopViewport({
    * key (`I`), same chip, one mark saying which hand wrote it.
    */
   shot?: string | null;
+  /**
+   * What is switched off (`ParkedPill`), at the foot of the same corner — the
+   * one piece of it that is pressed, so it takes the pointer back.
+   */
+  parked?: ReactNode;
   /**
    * How a MAGNIFIED picture is drawn. Only past 1:1 does it change anything,
    * and there it decides whether a magnified pixel looks like a pixel or like
@@ -711,7 +717,7 @@ export default function DevelopViewport({
         </svg>
       )}
       </div>
-      {(shot || (facts && facts.length > 0)) && source && (
+      {(shot || (facts && facts.length > 0) || parked) && source && (
         <div
           // Pointer-transparent: the facts sit ON the picture, and the picture
           // under them still answers a drag, a wipe and a paint stroke.
@@ -737,6 +743,7 @@ export default function DevelopViewport({
               {line}
             </span>
           ))}
+          {parked}
         </div>
       )}
       {source && cube && !picking && (

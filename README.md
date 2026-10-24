@@ -2076,7 +2076,30 @@ for the deliberate gestures: *Apply to N selected / N other pictures* writes
 them across the roll, its **Copy** also carries a section left as shot (so the
 paste resets it), and **Reset** puts the ticked sections of
 the picture on screen back to as shot — its look and its layers included —
-one ⌘Z away. **Every glyph answers the hand that presses it, a finger
+one ⌘Z away. **A setting can be switched off without losing it**: the dot
+beside a set slider's name is a switch — a click takes that setting off the
+picture and greys its bar, which keeps its number, struck through, until a
+second click puts it back; moving the bar brings it back at the new value. The
+eye in a section's header (Light, Tone, Colour, White balance, Levels, Curve,
+the mixer, Colour grading) does the same for everything set in it. Switching
+off is an edit like any other: saved on the roll, taken back by ⌘Z, carried by
+⌘C/⌘V, and the export, Trips and the Studio show the picture as you see it;
+the correction's summary ends with what is off (`vibrance, curve off`), and a
+preset keeps only what is on. A **right-click** on a set slider or on a
+section's header — its **⋯**, the menu key or Shift+F10, or under a finger
+the dot or the eye **held** — opens its menu: **Reset**, **Hide** / **Show**,
+**Show only** (everything else set goes off; while nothing has been switched
+since, the same line reads **Show the others again** and puts back exactly
+what was there, one Show only at a time), and **Invert hidden** once
+something is off. While anything is off, a **pill** over the picture's
+bottom-left corner (above the floating verbs on a phone) names it — one chip
+per setting, or the section when all of it is off, a tap putting it back —
+with **↩** (back to before the last Show only or Invert, while it stands),
+**⇄ Invert** and **Show all**. Trips' and the Studio's Develop sheet have the
+same switches, menu and pill. A **layer**'s sliders and curve switch the same
+way, with their own menu, and act on that layer alone; what a layer has off
+reads on its row in the list (`exposure off`) rather than in the pill, which
+speaks for the picture's own correction. **Every glyph answers the hand that presses it, a finger
 included**: it goes down a pixel at the touch and stays there a beat after
 the lift; a verb that takes time — a paste re-rendering a RAW, an Auto, an
 Apply to — keeps it down while it runs, with a hairline along the picture's

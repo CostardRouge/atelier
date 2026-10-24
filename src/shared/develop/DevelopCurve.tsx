@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { FoldSwitch } from './parked';
 import DevelopFold from './DevelopFold';
 import Segmented from '../ui/Segmented';
 import { developLinkClass } from './develop-classes';
@@ -62,12 +63,15 @@ export default function DevelopCurve({
   histogram,
   onChange,
   foldPrefix = '',
+  switched,
 }: {
   value: ToneCurves | null | undefined;
   histogram: Histogram | null;
   onChange: (curves: ToneCurves | null) => void;
   /** Keeps a LAYER's fold apart from the picture's (`layer.`). */
   foldPrefix?: string;
+  /** The fold's on/off switch (`parked.ts`); while off, the value given is the one that waits. */
+  switched?: FoldSwitch;
 }) {
   // The channel last drawn on, per curve (the picture's, a layer's), kept
   // across pictures for the session: it used to reopen on Luma each time.
@@ -169,6 +173,8 @@ export default function DevelopCurve({
       title="Curve"
       info={<p>{HINT}</p>}
       marked={touched.length > 0}
+      switched={switched}
+      dimOff
       defaultOpen={false}
     >
 

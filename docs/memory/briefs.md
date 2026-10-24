@@ -225,6 +225,14 @@ anything about media sources or document storage:
   the three faces, his pick B and what is built (§6), with what is small
   elsewhere. Read it before touching `SliderBar`, `SliderRow`, `RangeSlider`
   or adding any `type="range"`.
+- **`docs/slider-peek.md`** — seeing the picture WITHOUT one setting or one
+  group (2026-10-24, picked, not built): lab 1's six faces, then his pick
+  (§6) — the dot becomes a switch, a menu (reset · hide · show only ·
+  invert), a reversible Show only, a pill on the stage; the HELD press
+  refused as tiring. §7: hiding is an EDIT (the export follows the
+  screen), built by PARKING the value in `DevelopSettings.parked` so the
+  ~50 readers of a develop need no change. P1–P5 built (§6–§7). Read it before giving `SliderBar` or
+  `DevelopFold` a new gesture, or adding an on/off to a Develop group.
 - **`docs/touch-targets.md`** — the small targets under a finger (2026-10-14):
   what stayed at 28 px or less, three faces measured in a lab with a finger
   disc and an overlap check, the five rules (T1–T5), his pick C and what is

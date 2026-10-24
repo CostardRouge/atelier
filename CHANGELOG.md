@@ -9,6 +9,21 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
+  header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
+  number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back
+  by Ctrl/⌘+Z, and left out of the export exactly as on screen. The same switches are in Trips' and the Studio's
+  Develop sheet.
+- Develop: a menu on each set slider and section — right-click, the section's ⋯, or hold its dot or eye on a touch
+  screen — with Reset, Hide or Show, Show only and Invert hidden. After a Show only, the same line reads "Show the
+  others again" and puts back exactly what was on before.
+- Develop: while a setting is off, a pill over the picture names what is off — tap a name to bring it back — with a
+  way back from the last Show only or Invert, Invert, and Show all.
+- Develop: a mask layer's sliders and curve can be switched off and have the same menu, acting on that layer alone;
+  its row in the layer list says what is off.
+
 ### Fixed
 
 - Flight Atlas: the intro and the outro no longer jump. Their lines used to shift each time the next one faded in (the

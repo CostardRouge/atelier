@@ -205,13 +205,32 @@ export interface DevelopSettings {
    * reads as Linear — every develop stored before it is unchanged.
    */
   baseCurve?: BaseCurve | null;
+  /**
+   * The values switched OFF, kept to come back (`parked.ts`,
+   * `docs/slider-peek.md` §7). Hiding a setting MOVES its value here and
+   * leaves its field at the default, so every reader of a develop — the
+   * stage, the export, the carried edit — draws what is seen with no change
+   * of its own. Optional, so nothing stored before it migrates.
+   */
+  parked?: ParkedDevelop | null;
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
 export type DevelopKey = Exclude<
   keyof DevelopSettings,
-  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'rawProfile' | 'baseCurve'
+  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'rawProfile' | 'baseCurve' | 'parked'
 >;
+
+/**
+ * The fields a person can switch off and back on: every slider, and the
+ * blocks that are one value — the curve, levels, the mixer, black and white,
+ * the wheels, a RAW's white balance. The material (base, gain, profile, base
+ * curve) is not a setting one hides: it is which bytes the picture is.
+ */
+export type ParkableKey = DevelopKey | 'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'rawWb';
+
+/** What waits switched off: a value per parked field, never a default one. */
+export type ParkedDevelop = Partial<Pick<DevelopSettings, ParkableKey>>;
 
 /**
  * The rungs of the material ladder, lowest first. `proxy` is never stored —
@@ -278,7 +297,16 @@ export function rawGainOf(d: DevelopSettings | null | undefined): number {
 export function withoutBase(d: DevelopSettings): DevelopSettings {
   // The base CURVE is a choice about the numbers and travels — but an Auto's
   // measurement was taken on one file's render, like the gain on its sensor.
-  return { ...d, base: null, rawGain: null, rawWb: null, rawProfile: null, baseCurve: portableBaseCurve(d.baseCurve) };
+  const out: DevelopSettings = { ...d, base: null, rawGain: null, rawWb: null, rawProfile: null, baseCurve: portableBaseCurve(d.baseCurve) };
+  // A parked white balance is a RAW's too.
+  if (d.parked?.rawWb) {
+    const rest: ParkedDevelop = { ...d.parked };
+    delete rest.rawWb;
+    const parked = cloneParked(rest);
+    if (parked) out.parked = parked;
+    else delete out.parked;
+  }
+  return out;
 }
 
 /**
@@ -441,6 +469,9 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   out.rawProfile =
     src.rawProfile && src.rawProfile !== PROFILE_PENDING ? { ...src.rawProfile, matrix: [...src.rawProfile.matrix] } : (src.rawProfile ?? null);
   out.baseCurve = cloneBaseCurve(src.baseCurve);
+  const parked = cloneParked(src.parked);
+  if (parked) out.parked = parked;
+  else delete out.parked;
   return out;
 }
 
@@ -465,7 +496,10 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     rawGainOf(x) === rawGainOf(y) &&
     JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null) &&
     JSON.stringify(x.rawProfile ?? null) === JSON.stringify(y.rawProfile ?? null) &&
-    sameBaseCurve(x.baseCurve, y.baseCurve)
+    sameBaseCurve(x.baseCurve, y.baseCurve) &&
+    // Switching a setting off is a change the roll must be written: the live
+    // field moves, and so does what waits to come back.
+    sameParked(x.parked, y.parked)
   );
 }
 
@@ -502,6 +536,8 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
     out.rawWb = rawWhiteBalanceOrNull(src.rawWb);
     out.rawProfile = rawProfileOrNull(src.rawProfile);
   }
+  const parked = normaliseParked(src.parked, Boolean(base));
+  if (parked) out.parked = parked;
   return out;
 }
 
@@ -514,7 +550,143 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
 export function developOrNull(raw: unknown): DevelopSettings | null {
   if (raw === null || raw === undefined) return null;
   const d = normaliseDevelop(raw);
-  return isDefaultDevelop(d) ? null : d;
+  return isBlankDevelop(d) ? null : d;
+}
+
+/**
+ * Nothing drawn AND nothing switched off — what a document stores as null.
+ * Everything switched off draws as shot (`isDefaultDevelop`) but is still
+ * work kept to come back: every place that STORES a develop asks this one,
+ * every place that only DRAWS one asks `isDefaultDevelop`.
+ */
+export function isBlankDevelop(d: DevelopSettings | null | undefined): boolean {
+  return isDefaultDevelop(d) && !d?.parked;
+}
+
+// --- parked values (`parked.ts`) --------------------------------------------
+
+/** Every field that can be switched off, in the order the panels draw them. */
+export const PARKABLE_KEYS: readonly ParkableKey[] = [...DEVELOP_KEYS, 'rawWb', 'curves', 'levels', 'mixer', 'mono', 'grading'];
+
+/** A switched-off field's name in the row's own words — "vibrance, curve off". */
+export function parkableLabel(key: ParkableKey): string {
+  switch (key) {
+    case 'exposure':
+      return 'exposure';
+    case 'curves':
+      return 'curve';
+    case 'levels':
+      return 'levels';
+    case 'mixer':
+      return 'colour mixer';
+    case 'mono':
+      return 'B&W mix';
+    case 'grading':
+      return 'colour grading';
+    case 'rawWb':
+      return 'white balance';
+    default:
+      return LABELS[key];
+  }
+}
+
+/** A parkable field at its default — nothing to switch off. */
+export function isDefaultParkable(key: ParkableKey, value: unknown): boolean {
+  switch (key) {
+    case 'curves':
+      return isDefaultCurves(value as ToneCurves | null | undefined);
+    case 'levels':
+      return isDefaultLevels(value as Levels | null | undefined);
+    case 'mixer':
+      return isDefaultMixer(value as ColourMixer | null | undefined);
+    case 'grading':
+      return isDefaultGrading(value as ColourGrading | null | undefined);
+    case 'mono':
+    case 'rawWb':
+      return !value;
+    default:
+      return value === 0 || value === null || value === undefined;
+  }
+}
+
+/** A parkable field's value, deep-copied. */
+export function cloneParkable<K extends ParkableKey>(key: K, value: DevelopSettings[K]): DevelopSettings[K] {
+  switch (key) {
+    case 'curves':
+      return cloneCurves(value as ToneCurves | null) as DevelopSettings[K];
+    case 'levels':
+      return cloneLevels(value as Levels | null) as DevelopSettings[K];
+    case 'mixer':
+      return cloneMixer(value as ColourMixer | null) as DevelopSettings[K];
+    case 'mono':
+      return cloneMono(value as MonoMix | null) as DevelopSettings[K];
+    case 'grading':
+      return cloneGrading(value as ColourGrading | null) as DevelopSettings[K];
+    case 'rawWb': {
+      const wb = value as RawWhiteBalance | null;
+      return (wb ? { ...wb, matrix: [...wb.matrix] } : null) as DevelopSettings[K];
+    }
+    default:
+      return value;
+  }
+}
+
+/** A deep copy of what waits switched off; null when nothing does. */
+export function cloneParked(p: ParkedDevelop | null | undefined): ParkedDevelop | null {
+  if (!p) return null;
+  const out: Record<string, unknown> = {};
+  for (const k of PARKABLE_KEYS) {
+    const v = p[k];
+    if (!isDefaultParkable(k, v)) out[k] = cloneParkable(k, v as DevelopSettings[typeof k]);
+  }
+  return Object.keys(out).length > 0 ? (out as ParkedDevelop) : null;
+}
+
+/** Two parked sets hold the same values — a missing field and a default one alike. */
+export function sameParked(a: ParkedDevelop | null | undefined, b: ParkedDevelop | null | undefined): boolean {
+  const x = a ?? {};
+  const y = b ?? {};
+  return (
+    DEVELOP_KEYS.every((k) => (x[k] ?? 0) === (y[k] ?? 0)) &&
+    sameCurves(x.curves, y.curves) &&
+    sameLevels(x.levels, y.levels) &&
+    sameMixer(x.mixer, y.mixer) &&
+    sameMono(x.mono, y.mono) &&
+    sameGrading(x.grading, y.grading) &&
+    JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null)
+  );
+}
+
+/**
+ * What waits switched off, read back safely by the same readers as the live
+ * fields; a default value is dropped (there is nothing to bring back), and a
+ * white balance only on a RAW base, as the live one.
+ */
+export function normaliseParked(raw: unknown, onRaw: boolean): ParkedDevelop | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const out: ParkedDevelop = {};
+  for (const k of DEVELOP_KEYS) {
+    const v = src[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || v === 0) continue;
+    const { min, max } = DEVELOP_RANGES[k];
+    out[k] = v < min ? min : v > max ? max : v;
+  }
+  const curves = curvesOrNull(normaliseCurves(src.curves));
+  if (curves) out.curves = curves;
+  const levels = levelsOrNull(normaliseLevels(src.levels));
+  if (levels) out.levels = levels;
+  const mixer = mixerOrNull(src.mixer);
+  if (mixer) out.mixer = mixer;
+  const mono = monoOrNull(src.mono);
+  if (mono) out.mono = mono;
+  const grading = gradingOrNull(src.grading);
+  if (grading) out.grading = grading;
+  if (onRaw) {
+    const wb = rawWhiteBalanceOrNull(src.rawWb);
+    if (wb) out.rawWb = wb;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /** A named develop kept on a document, applied by a click — never followed. */
@@ -1034,7 +1206,7 @@ export function signed(n: number, digits = 0): string {
  * down a corner.
  */
 export function developLines(d: DevelopSettings | null | undefined): string[] {
-  if (!d || isDefaultDevelop(d)) return ['As shot'];
+  if (!d || isBlankDevelop(d)) return ['As shot'];
   const parts: string[] = [];
   if (isRawDevelop(d)) {
     // The material first, with the exposure it was measured at — a fact about
@@ -1068,6 +1240,10 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (mixer) parts.push(mixer);
   const grading = describeGrading(d.grading);
   if (grading) parts.push(grading);
+  // What waits switched off is said too: the row must not read "as shot" over
+  // work the picture keeps (`parked.ts`).
+  const off = PARKABLE_KEYS.filter((k) => !isDefaultParkable(k, d.parked?.[k]));
+  if (off.length > 0) parts.push(`${off.map(parkableLabel).join(', ')} off`);
   return parts;
 }
 

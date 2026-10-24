@@ -10,7 +10,7 @@
  * Pure and DOM-free.
  */
 
-import { DEFAULT_DEVELOP, developOrNull, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
+import { DEFAULT_DEVELOP, developOrNull, isBlankDevelop, type DevelopSettings } from '../develop/develop';
 import { readCarriedEdit, type CarriedEdit } from '../develop/carried-record';
 
 export interface SavedDevelop {
@@ -46,7 +46,7 @@ export function saveDevelop(
   hash: string | null | undefined,
   edit: CarriedEdit | null = null,
 ): SavedDevelop | null {
-  const plain = !settings || isDefaultDevelop(settings);
+  const plain = !settings || isBlankDevelop(settings);
   if (plain && !edit) return null;
   return {
     settings: plain ? { ...DEFAULT_DEVELOP } : settings,

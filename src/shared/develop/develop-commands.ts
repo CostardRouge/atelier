@@ -13,7 +13,7 @@
  */
 
 import { CommandError } from '../commands/registry';
-import { DEVELOP_KEYS, DEVELOP_RANGES, cloneDevelop, isDefaultDevelop, type DevelopSettings } from './develop';
+import { DEVELOP_KEYS, DEVELOP_RANGES, cloneDevelop, isBlankDevelop, type DevelopSettings } from './develop';
 import type { DevelopKey } from './develop';
 import { PICTURE_SECTIONS, type PictureSection } from './picture-sections';
 import {
@@ -71,7 +71,7 @@ export function withDevelopValues(current: DevelopSettings | null | undefined, v
     }
     next[key] = v;
   }
-  return isDefaultDevelop(next) ? null : next;
+  return isBlankDevelop(next) ? null : next;
 }
 
 /** The sections a reset may clear, as their ids. */

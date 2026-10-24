@@ -1,7 +1,7 @@
 import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
-import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, baseRung, isBlankDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
 import { CommandError, commands } from '../../shared/commands/registry';
 import type { HistogramReading } from '../../shared/develop/histogram';
 import { loadPacks } from '../../shared/lut/pack-vault';
@@ -1659,7 +1659,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       // are facts about the one picture they were measured on. A target's
       // own base is kept, so a batch onto a RAW keeps it on the RAW.
       const numbers = develop ? withoutBase(develop) : null;
-      const value = numbers && !isDefaultDevelop(numbers) ? numbers : null;
+      const value = numbers && !isBlankDevelop(numbers) ? numbers : null;
       update(
         (r) => ({
           ...r,
