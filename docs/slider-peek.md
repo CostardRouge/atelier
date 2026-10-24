@@ -100,7 +100,7 @@ file byte-identical before and after a look.
 **Chosen: B (the dot becomes a switch) + D (the menu) + a floating pill on
 the stage. Refused: the held press (A)** — *«la pression tenue … va prendre
 du temps et me saouler»*, even with a shorter delay. Hiding is TEMPORARY
-(*«ce qui a été modifié temporairement»*): a view, never written. The
+(*«ce qui a été modifié temporairement»*): a view, never written — REVERSED by §7, where hiding became an edit. The
 split "without | with" (F) gets its own lab later, at his request.
 
 What lab 2 proposes on that basis:
@@ -140,3 +140,44 @@ lifetime (per picture for the session, recommended, or cleared on leaving
 the picture); at export with something hidden, the file keeps the whole
 edit and the Export panel says so in one line (recommended) or follows the
 screen — which would make hiding an edit again.
+
+## 7. His answers (2026-10-24): hiding is an EDIT
+
+He took every recommendation of lab 2 — **a dot on the bars and an eye on a
+group's band, greyed when off (the value struck), the detailed pill, the
+reversible Show only** — except one: **hiding is an edit, and the export
+follows the screen**. *«ça me permet de vraiment exporter ce que je vois …
+cocher ou pas et voir comment ça fonctionne visuellement, mais aussi à
+l'export»*: a picture that needs a setting or not, a variant made by
+switching one off. So the hidden state lives on the picture, survives a
+reload, enters the journal and ⌘Z like any write, and the lifetime question
+of §6 is gone.
+
+**How, without touching fifty read sites: PARK the value, never flag it.**
+A picture's develop is read in ~50 places (stage, export, previews,
+thumbnails, the carried edit in Trips and the Studio, the making-of video,
+`isDefaultDevelop`, `describeDevelop`…). An `off` flag beside a live value
+would have to be honoured in every one, and one missed site is a preview
+that is not the export. Instead, hiding MOVES the value aside: the live
+field becomes its default (0, or `null` for a curve, mixer, wheels) and the
+value waits in `DevelopSettings.parked` (optional, no migration); showing
+moves it back. Every reader then renders what is seen with no change, and
+only the inspector knows: a parked bar is drawn greyed AT its parked value,
+with its dot hollow. Moving a parked bar's slider brings it back at the new
+value. A group is off when every set key of it is parked; lighting one bar
+of an off group unparks that bar only.
+
+**Defaults taken (say if wrong)**: ⌘C / ⌘V carries `parked` with the develop
+(the clipboard copies a whole picture, `develop-roll.md`), so a pasted
+picture looks the same AND keeps the same switches; a preset saves what is
+SEEN, never what is parked; Auto writing a parked key unparks it; Show only
+and Invert are single journaled writes, and the pill's ↩ restores the
+parked set before them by a write too (⌘Z works as well).
+
+**Scope by commit.** P1 `parked.ts` (pure, tested): park / unpark a key or
+a group, show only, invert, the in-memory ↩ stack. P2 the switch on every
+Develop slider whose value lives in `DevelopSettings` — Light, Tone,
+Colour, white balance, curve, levels, mixer, grading — and on their folds,
+with the greyed look. P3 the menu. P4 the pill. P5 the sections that are
+their OWN fields on the picture (Presence and detail, vignette, lens, look,
+layers' sliders): the same parking, one field each.

@@ -229,8 +229,9 @@ anything about media sources or document storage:
   group (2026-10-24, picked, not built): lab 1's six faces, then his pick
   (§6) — the dot becomes a switch, a menu (reset · hide · show only ·
   invert), a reversible Show only, a pill on the stage; the HELD press
-  refused as tiring; hiding is a view, never written. Lab 2 and four
-  choices still his are in §6. Read it before giving `SliderBar` or
+  refused as tiring. §7: hiding is an EDIT (the export follows the
+  screen), built by PARKING the value in `DevelopSettings.parked` so the
+  ~50 readers of a develop need no change. Read it before giving `SliderBar` or
   `DevelopFold` a new gesture, or adding an on/off to a Develop group.
 - **`docs/touch-targets.md`** — the small targets under a finger (2026-10-14):
   what stayed at 28 px or less, three faces measured in a lab with a finger
