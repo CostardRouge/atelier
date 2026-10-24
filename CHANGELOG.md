@@ -4,10 +4,39 @@ What each release of Atelier brings to the person using it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); `.github/workflows/release.yml` turns each section into a
 tag and a GitHub Release once it reaches `main` (COMMON-PROJECT-SPEC C13 in `second-brain`). Written in English, like
-the code. Codenames are pigments, in alphabetical order. Versions 0.1.0 to 0.12.0 were given after the fact to the
-history's turning points. The agent bridge keeps its own number (v1, v2…), apart from this one.
+the code. Codenames are pigments, in alphabetical order, starting again at A after Z with a pigment not used yet.
+Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning points. The agent bridge keeps its own number (v1, v2…), apart from this one.
 
 ## [Unreleased]
+
+### Fixed
+
+- Flight Atlas: the intro and the outro no longer jump. Their lines used to shift each time the next one faded in (the
+  title moved up when its second line, then the drone, appeared; the summary moved as its totals and the drone came in),
+  and the totals' row could re-flow as it counted. An atlas now starts playing once its fonts, coastline and place names
+  are in — a few seconds at most — so the place name no longer pops in as the title, and nothing pauses the intro
+  halfway through its fade. The same holds in an exported video.
+
+## [1.6.0] - 2026-10-24 — Zaffre
+
+### Added
+
+- Develop: the A/B divider catches the middle and the two edges as you drag it, with marks along the bottom of the picture
+  while you drag; hold ⌥ (Alt) to pass them. Double-click the picture to put the divider back in the middle.
+
+## [1.5.0] - 2026-10-24 — Xanthophyll
+
+### Added
+
+- Develop: press / to turn the A/B divider on and off, in the Develop tool and in the Develop sheet of Trips and the
+  Studio — on a computer, and on an iPad or phone with a keyboard.
+
+### Fixed
+
+- Develop: the A/B divider stays where you left it when you move to another picture, so you can page through a roll and
+  see each one before and after without placing it again. Opening a picture in the editor still starts on the corrected
+  picture.
+- Develop: dragging the A/B divider is smooth again — it no longer redraws the picture on every move.
 
 ## [1.4.0] - 2026-10-23 — Woad
 

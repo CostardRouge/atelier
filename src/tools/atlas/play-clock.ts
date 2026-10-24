@@ -11,6 +11,13 @@ export class PlayClock {
   loop = true;
   speed = 1;
   total = 1;
+  /**
+   * True from Play until the first tick: that frame is painted where the
+   * playhead stands and pays whatever a cold start costs (a raster built, a
+   * text measured), and the film moves from the next — timed from the end of
+   * that frame, never from before it (`AtlasStage`).
+   */
+  starting = false;
   private listeners = new Set<() => void>();
   private version = 0;
 
@@ -39,6 +46,8 @@ export class PlayClock {
 
   setPlaying(on: boolean): void {
     if (on && this.t >= this.total - 1e-3) this.t = 0;
+    if (on && !this.playing) this.starting = true;
+    if (!on) this.starting = false;
     this.playing = on;
     this.changed();
   }
@@ -57,9 +66,14 @@ export class PlayClock {
     this.changed();
   }
 
-  /** Advance by `dt` wall seconds; true while it moved. */
+  /** Advance by `dt` wall seconds; true while it moved. The first tick after Play holds the playhead. */
   tick(dt: number): boolean {
     if (!this.playing) return false;
+    if (this.starting) {
+      this.starting = false;
+      this.changed();
+      return true;
+    }
     let t = this.t + dt * this.speed;
     if (t >= this.total) {
       if (this.loop) t = t % this.total;

@@ -72,7 +72,7 @@ import { canStageDraw } from '../../shared/projects/media-rendition';
 import { fetchHeld } from '../../shared/sources/held-fetch';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
-import { useDevelopPicture, type DevelopFrame, type DevelopPicture } from '../../shared/develop/use-develop-picture';
+import { useDevelopPicture, type DevelopFrame, type DevelopPicture, type SplitHold } from '../../shared/develop/use-develop-picture';
 import { useStageDeck } from '../../shared/develop/use-stage-deck';
 import type { DeckNeighbour } from '../../shared/develop/stage-deck';
 import { DECK_GAP } from '../../shared/ui/use-media-viewer';
@@ -367,6 +367,7 @@ export default function PictureWorkbench({
   exportVerbs,
   onSnapshot,
   onStep,
+  split = null,
   onDeliver,
   deliveryTable = null,
   onWords,
@@ -475,6 +476,11 @@ export default function PictureWorkbench({
   neighbours?: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
   /** This picture's own cell, drawn under the stage until it has decoded (`DevelopViewport`'s `still`). */
   still?: string | null;
+  /**
+   * The A/B divider, held by the roll editor ABOVE the workbench it keys per
+   * picture, so stepping through the roll keeps the split where it was left.
+   */
+  split?: SplitHold | null;
   /**
    * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
    * un-ignore): the editor answers from the roll as it stands, since the
@@ -1309,6 +1315,7 @@ export default function PictureWorkbench({
     segmenting: !clip && subjectLayersToSegment(layersDraft).length > 0,
     paint: clip ? null : paint,
     compare: compareOn,
+    split,
     clipping,
     sharpenMask: !clip && sharpenMaskView && tab === 'detail',
     vignette: clip ? null : vignetteDraft,
@@ -1874,8 +1881,8 @@ export default function PictureWorkbench({
   clipVerbs.current = { copy: copyVerb, paste: pasteVerb, pasteNow, pasteEcho, canPaste: clipboard.canPaste };
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
-  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
+  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, compareOn, setCompareOn, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
+  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, compareOn, setCompareOn, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1924,6 +1931,13 @@ export default function PictureWorkbench({
         case 'hold':
           e.preventDefault();
           pic.setHolding(true);
+          return;
+        case 'compare':
+          // The A/B pill's own press: where the pill is drawn — a picture,
+          // off the Crop tab — and nowhere it is not.
+          if (!pic.source || open === 'crop') return;
+          e.preventDefault();
+          keyState.current.setCompareOn(!keyState.current.compareOn);
           return;
         case 'zoom':
           e.preventDefault();
@@ -2942,10 +2956,10 @@ export default function PictureWorkbench({
             aria-pressed={compareOn}
             title={
               abHeld
-                ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
+                ? 'Before / after (/) — suspended while a mask tool has the pointer; the divider comes back where it was'
                 : compareOn
-                  ? 'Before / after — the divider is on, and a drag across the picture places it'
-                  : 'Before / after — off: the whole picture is shown corrected'
+                  ? 'Before / after (/) — the divider is on, and a drag across the picture places it'
+                  : 'Before / after (/) — off: the whole picture is shown corrected'
             }
           >
             A/B

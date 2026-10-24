@@ -4,7 +4,7 @@ Agents read this file at the start of every session. These rules override the ag
 
 ## Context
 
-- **Atelier** — a local-first suite of browser tools for photo/video captures (DJI telemetry, LUT grading, culling, scopes, compositing). React 18 + TypeScript 5.7 + Vite 6 + Tailwind v4, no backend: everything runs client-side and no file ever leaves the machine. Deployed to GitHub Pages by `.github/workflows/deploy.yml` on every push to `main`. Package manager: **npm** — the lockfile is `package-lock.json` (it is the only one; keep it that way). Node: **`.nvmrc` says 24** (what CI and a local `nvm use` run), `engines` keeps the floor at 22.
+- **Atelier** — a local-first suite of browser tools for photo/video captures (DJI telemetry, LUT grading, culling, scopes, compositing). React 18 + TypeScript 5.7 + Vite 6 + Tailwind v4, no backend: everything runs client-side and no file ever leaves the machine. Deployed to GitHub Pages by `.github/workflows/deploy.yml` on every push to `main`. Package manager: **npm** — the lockfile is `package-lock.json` (it is the only one; keep it that way). Node: **`.nvmrc` says 26** (what CI and a local `nvm use` run), `engines` keeps the floor at 22.
 - Commands: `npm run dev` (Vite dev server), `npm run build` (`tsc -b && vite build` → `dist/`), `npm test` (Vitest, `src/**/*.test.ts`), `npm run typecheck`, `npm run lint` (ESLint), `npm run preview`, `node .github/release.mjs check` (`CHANGELOG.md` against `package.json`, rule 4). CI (`.github/workflows/ci.yml`) runs typecheck + lint + test + build on every push and pull request, on the Node of `.nvmrc` — run the same four before you call a task done. `.github/dependabot.yml` raises npm packages and the workflows' actions weekly.
 - **This repository is PUBLIC** (measured 2026-10-19). So rule 3's public-repo restriction applies: a Registry block carries only `Project:`, ticked boxes and one `Log:` line — never a `Last point:` nor an open box. `registry.yml` reads the visibility itself, so nothing here needs changing if the repo goes private.
 - **The suite is written in English only**, every string in its TSX — this project's exception to the portfolio's default of English and French (COMMON-PROJECT-SPEC C17, decision N4 of 2026-10-19 in `second-brain`): no dictionary, no parity test, until the owner asks for French. The legal notice (`#/legal`, `src/app/LegalNotice.tsx`) says what the browser keeps, which requests may leave it and what is measured; a new request, store or counted screen changes it in the same commit (`docs/memory/public-page.md`).
@@ -137,8 +137,8 @@ The project carries **one version**, `version` in the root `package.json`, in
 project, newest first, in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 shape. **It is written in English, like the code, even when the project
 speaks French.** Each release has a **codename**: here a pigment, in alphabetical order
-(0.1.0 Alizarin … 0.12.0 Prussian, 1.0.0 Sepia, …). The newest is the top released section of
-`CHANGELOG.md`; the next starts after its letter. The
+(0.1.0 Alizarin … 0.12.0 Prussian, 1.0.0 Sepia … 1.5.0 Xanthophyll, 1.6.0 Zaffre). After Z the alphabet starts
+again at A, with pigments not used yet (the next is an A that is not Alizarin). The
 agent bridge keeps its own number, v1, v2… (`bridge-version.ts`), apart from this one.
 
 - **Every pull request that changes what users get** adds its lines under
