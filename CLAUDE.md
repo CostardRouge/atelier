@@ -137,7 +137,8 @@ The project carries **one version**, `version` in the root `package.json`, in
 project, newest first, in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 shape. **It is written in English, like the code, even when the project
 speaks French.** Each release has a **codename**: here a pigment, in alphabetical order
-(0.1.0 Alizarin … 0.12.0 Prussian, 1.0.0 Sepia, 1.1.0 Tyrian, 1.2.0 Ultramarine; the next starts after U). The
+(0.1.0 Alizarin … 0.12.0 Prussian, 1.0.0 Sepia, …). The newest is the top released section of
+`CHANGELOG.md`; the next starts after its letter. The
 agent bridge keeps its own number, v1, v2… (`bridge-version.ts`), apart from this one.
 
 - **Every pull request that changes what users get** adds its lines under
