@@ -226,10 +226,11 @@ anything about media sources or document storage:
   elsewhere. Read it before touching `SliderBar`, `SliderRow`, `RangeSlider`
   or adding any `type="range"`.
 - **`docs/slider-peek.md`** — seeing the picture WITHOUT one setting or one
-  group (2026-10-24, designed, not built): six faces in a lab, the rule
-  «a held press is a look, an eye that stays off is an edit», the
-  recommendation (hold the ↺ / the fold's dot, ⌥ + hover, an eye on the fold
-  only) and his five questions. Read it before giving `SliderBar` or
+  group (2026-10-24, picked, not built): lab 1's six faces, then his pick
+  (§6) — the dot becomes a switch, a menu (reset · hide · show only ·
+  invert), a reversible Show only, a pill on the stage; the HELD press
+  refused as tiring; hiding is a view, never written. Lab 2 and four
+  choices still his are in §6. Read it before giving `SliderBar` or
   `DevelopFold` a new gesture, or adding an on/off to a Develop group.
 - **`docs/touch-targets.md`** — the small targets under a finger (2026-10-14):
   what stayed at 28 px or less, three faces measured in a lab with a finger

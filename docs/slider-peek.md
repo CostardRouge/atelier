@@ -1,10 +1,13 @@
 # Seeing the picture without one setting
 
-**Status: designed, not built (2026-10-24).** Six faces, playable on a
-retouched test picture with a Develop column drawn like `SliderBar` and
-`DevelopFold`: <https://claude.ai/artifact/QAuPdLzncbaqjV5MFQgY67> (the lab
-is in French, his language; the labels are the suite's English). §1 is fact,
-read in `main` 20f863b; §2–§4 are the proposal; §5 his questions.
+**Status: his pick is made, not built (2026-10-24) — §6 says what he chose
+and what is still his.** Lab 1, the six faces, playable on a retouched test
+picture with a Develop column drawn like `SliderBar` and `DevelopFold`:
+<https://claude.ai/artifact/QAuPdLzncbaqjV5MFQgY67>. Lab 2, his pick put
+together: <https://claude.ai/artifact/X2kx8KnNDWqw8WmfkynF3S> (both labs in
+French, his language; the labels are the suite's English). §1 is fact, read
+in `main` 20f863b; §2–§4 are the first proposal, §4's recommendation was
+NOT followed; §5 its questions.
 
 Written from his ask: *«temporairement désactiver l'effet d'un slider … aussi
 sur le groupe … le petit œil des masques … j'ai peur que ce petit œil prenne
@@ -91,3 +94,49 @@ file byte-identical before and after a look.
 4. Does the histogram follow what is looked at during a hold (recommended:
    yes, it describes the picture on screen)?
 5. The "without | with" split: later, or never?
+
+## 6. His pick (2026-10-24) and lab 2
+
+**Chosen: B (the dot becomes a switch) + D (the menu) + a floating pill on
+the stage. Refused: the held press (A)** — *«la pression tenue … va prendre
+du temps et me saouler»*, even with a shorter delay. Hiding is TEMPORARY
+(*«ce qui a été modifié temporairement»*): a view, never written. The
+split "without | with" (F) gets its own lab later, at his request.
+
+What lab 2 proposes on that basis:
+
+- **The switch has its own slot**: every bar reserves 26 px at its left
+  (the label moves 16 px right, every name still at one x), the switch
+  shown only on a bar that departs or is off — lab 1's eye sat on the name.
+  Under a finger the slot is the bar's full height; a tap there switches
+  instead of placing the minimum. Three glyph options (dot / eye / dot on
+  bars + eye on the fold's band) and two off looks (faded / greyed, the
+  value struck) — his to pick; he fears an eye per bar gets repetitive.
+- **The menu** (right-click a bar or a band, the band's ⋯, or HOLD the
+  switch under a finger — the bar's own hold already types the value):
+  Reset X (greyed at 0) · Hide / Show X · Show only X · Invert hidden. No
+  *Reset all*: the header's *Reset to as shot* exists, and his own call.
+- **Show only is reversible**: it pushes the hidden set it replaced; while
+  nothing moved since, the same line reads *Show the others again*; the
+  pill's ↩ pops one level per press (a whole stack costs what the last one
+  does). Invert swaps shown and hidden among the SET settings, naming a
+  whole group when all its set bars go off.
+- **The pill** (only while something is hidden): one chip per hidden thing
+  (a tap shows it again), ↩, ⇄ Invert, Show all; or compact, "3 hidden ·
+  List".
+- **Not the snapshots**: going back to one is a journaled write ⌘Z undoes
+  (`snapshots.ts`); hiding must never enter the history, the clipboard or
+  ⌘Z. The state is `hidden: Set` + `back: [{ label, prior, made }]`, pure
+  (`hidden-view.ts` in P1), held per picture in memory for the session.
+
+**Commits once the four choices are made**: P1 `hidden-view.ts` (pure,
+tested) and `viewDevelop` read by the stage and the histogram; P2 the
+`SliderBar` switch (an optional `toggle`, given only by Develop bars that
+change pixels) and `DevelopFold`'s; P3 the menu (portalled, the band's
+existing `actions` slot); P4 the pill; P5 a layer's sliders.
+
+**Still his**: the glyph; faded or greyed; full or compact pill; the
+lifetime (per picture for the session, recommended, or cleared on leaving
+the picture); at export with something hidden, the file keeps the whole
+edit and the Export panel says so in one line (recommended) or follows the
+screen — which would make hiding an edit again.

@@ -119,7 +119,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-13 — The road's drive styles: defaults set on synthetic roads, check on his real trip — `trip-road-drive.md`.
 - 2026-10-13 — Sliders as one bar and 44 px targets built; not seen on his devices — `frontend.md`.
 - 2026-10-13 — A slide's length (face B) built; left: see it on his Mac and phone — `roadtrip.md`.
-- 2026-10-24 — Seeing the picture without one slider or group: six faces designed (`docs/slider-peek.md`, lab https://claude.ai/artifact/QAuPdLzncbaqjV5MFQgY67), five questions his, nothing built — `briefs.md`.
+- 2026-10-24 — Hiding a slider or group for a moment: his pick is the dot as a switch + a menu + a pill, the held press refused (`docs/slider-peek.md` §6, lab 2 https://claude.ai/artifact/X2kx8KnNDWqw8WmfkynF3S); four looks his, nothing built — `briefs.md`.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
