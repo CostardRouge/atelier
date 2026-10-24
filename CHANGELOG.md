@@ -9,6 +9,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-23 — Woad
+
 ### Added
 
 - Develop: ↑ and ↓ move to the nearest picture in the row above or below when the band is pulled up into rows,
@@ -28,7 +30,6 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   open picture wears. Its ⋯ updates it with the open picture, renames, clones or removes it, and a removal can be undone
   for a few seconds. The same list in the Develop sheets of Trips and the Studio.
 - Develop on a computer: the settings button is now the rightmost one of the header, after Add.
-
 - Develop on a computer: the zoom level above the picture is plain text with its ▾, like the file it is developed
   from, instead of a box taller than the buttons beside it; a click opens the same zoom menu.
 
