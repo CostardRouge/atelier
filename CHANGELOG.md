@@ -4,8 +4,8 @@ What each release of Atelier brings to the person using it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); `.github/workflows/release.yml` turns each section into a
 tag and a GitHub Release once it reaches `main` (COMMON-PROJECT-SPEC C13 in `second-brain`). Written in English, like
-the code. Codenames are pigments, in alphabetical order. Versions 0.1.0 to 0.12.0 were given after the fact to the
-history's turning points. The agent bridge keeps its own number (v1, v2…), apart from this one.
+the code. Codenames are pigments, in alphabetical order, starting again at A after Z with a pigment not used yet.
+Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning points. The agent bridge keeps its own number (v1, v2…), apart from this one.
 
 ## [Unreleased]
 
