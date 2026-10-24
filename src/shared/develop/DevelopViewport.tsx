@@ -465,18 +465,40 @@ export default function DevelopViewport({
           )}
         </div>
       )}
+      {/* The detents (`wipe-detents.ts`): where the middle and the edges are,
+          drawn only while the hand drags the divider, the one holding it in
+          the accent. Under the handle, and pressed through. */}
+      {picture.comparing && divider.ticks && (
+        <div className="absolute inset-x-0 pointer-events-none" style={{ top: Math.max(0, divider.bottom - 14), height: 14 }} aria-hidden="true">
+          {divider.ticks.map((t, i) => (
+            <span
+              key={i}
+              className={`absolute bottom-0 w-[2px] -ml-px rounded-full ${t.caught ? 'h-3.5 bg-accent' : 'h-2.5 bg-on-media/70'}`}
+              style={{ left: t.x }}
+            />
+          ))}
+        </div>
+      )}
       {picture.comparing && (
         <div
           data-wipe-handle
           className="absolute w-7 -ml-3.5 cursor-col-resize group"
           style={{ left: divider.x, top: divider.top, height: Math.max(0, divider.bottom - divider.top) }}
-          title="Drag to compare with the picture as shot"
+          title="Drag to compare with the picture as shot — the middle and the edges hold the line (⌥ drags past them); double-click for the middle"
           aria-hidden="true"
         >
           {wipe > 0 && (
-            <span className="absolute inset-y-0 left-1/2 w-[1.5px] -ml-[0.75px] bg-on-media/90 pointer-events-none" />
+            <span
+              className={`absolute inset-y-0 left-1/2 pointer-events-none ${
+                divider.caught ? 'w-[2px] -ml-px bg-accent' : 'w-[1.5px] -ml-[0.75px] bg-on-media/90'
+              }`}
+            />
           )}
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-surface/92 border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
+          <span
+            className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-surface/92 border shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none ${
+              divider.caught ? 'border-accent text-accent-ink' : 'border-line-strong text-ink-soft'
+            }`}
+          >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
             </svg>

@@ -22,6 +22,7 @@ import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 import { HAND_SETTLE_MS, HAND_WARM_MS, handSize, inputsMoved, isHandStep } from './stage-hand';
 import { beforeClip } from './wipe-clip';
+import { WIPE_DETENTS, detentOf } from './wipe-detents';
 
 /** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
 const COLOUR_SAMPLE_EDGE = 512;
@@ -554,8 +555,12 @@ export interface DevelopPicture {
    * on every pan. `inside` is false for a point the crop cut away.
    */
   stagePoint: (sx: number, sy: number) => { x: number; y: number; inside: boolean } | null;
-  /** Where the divider and its handle are drawn, in viewport pixels. */
-  divider: { x: number; top: number; bottom: number };
+  /**
+   * Where the divider and its handle are drawn, in viewport pixels. `caught`:
+   * a detent holds the line (`wipe-detents.ts`); `ticks`: where the detents
+   * are, drawn only while the hand drags the divider (null otherwise).
+   */
+  divider: { x: number; top: number; bottom: number; caught: boolean; ticks: { x: number; caught: boolean }[] | null };
   /**
    * A small JPEG of the picture AS DELIVERED — graded, whole, never the split
    * or "before" — for a filmstrip cell or a gallery card. Null while nothing is
@@ -605,6 +610,8 @@ export interface DevelopPicture {
     onPointerLeave: (e: ReactPointerEvent<HTMLElement>) => void;
     /** A finger held still is the HOLD's: Android's long-press menu must not open over it. */
     onContextMenu: (e: ReactMouseEvent<HTMLElement>) => void;
+    /** A double-click puts the divider back in the middle. */
+    onDoubleClick: (e: ReactMouseEvent<HTMLElement>) => void;
   };
 }
 
@@ -2311,9 +2318,26 @@ export function useDevelopPicture({
   );
 
   const painting = useRef(false);
-  const wipeFrom = (e: ReactPointerEvent<HTMLElement>) => {
-    const f = view.fractionAt(e.clientX, e.clientY).x;
-    setWipe(Math.min(1, Math.max(0, f)));
+  // The divider's detents (`wipe-detents.ts`, his D2): the middle and the
+  // edges hold the line while the hand is within reach, measured across the
+  // picture as drawn; ⌥ drags past them. The ticks show only while a drag
+  // is under way, and the one holding is said in the accent.
+  const [wipeCaught, setWipeCaught] = useState<number | null>(null);
+  const [wipeDragging, setWipeDragging] = useState(false);
+  const wipeCaughtRef = useRef<number | null>(null);
+  const wipeFrom = (e: ReactPointerEvent<HTMLElement>, live: boolean) => {
+    const { wipe: next, caught } = detentOf(view.fractionAt(e.clientX, e.clientY).x, view.rect.width, e.altKey);
+    // A tick under the finger where the device has one (Android), once per catch.
+    if (live && caught !== null && caught !== wipeCaughtRef.current) navigator.vibrate?.(8);
+    wipeCaughtRef.current = live ? caught : null;
+    setWipeCaught(live ? caught : null);
+    setWipeDragging(live);
+    setWipe(next);
+  };
+  const endWipe = () => {
+    wipeCaughtRef.current = null;
+    setWipeCaught(null);
+    setWipeDragging(false);
   };
   const handlers: DevelopPicture['handlers'] = {
     onPointerDown: (e) => {
@@ -2369,7 +2393,7 @@ export function useDevelopPicture({
       } catch {
         /* not a live pointer */
       }
-      if (!touch) wipeFrom(e);
+      if (!touch) wipeFrom(e, true);
     },
     onPointerMove: (e) => {
       trackReadout(e);
@@ -2390,7 +2414,7 @@ export function useDevelopPicture({
       const d = dragging.current;
       if (!d) return;
       if (!d.live && Math.abs(e.clientX - d.startX) > TOUCH_SLOP) d.live = true;
-      if (d.live) wipeFrom(e);
+      if (d.live) wipeFrom(e, true);
     },
     onPointerUp: (e) => {
       if (e.pointerType === 'touch') fingers.current = Math.max(0, fingers.current - 1);
@@ -2402,7 +2426,8 @@ export function useDevelopPicture({
       }
       // A finger that never travelled was a tap: it places the divider —
       // unless it was holding the before.
-      if (dragging.current && !dragging.current.live && !held) wipeFrom(e);
+      if (dragging.current && !dragging.current.live && !held) wipeFrom(e, false);
+      if (dragging.current) endWipe();
       dragging.current = null;
     },
     onPointerCancel: (e) => {
@@ -2414,6 +2439,7 @@ export function useDevelopPicture({
         // press continue a stroke the author thought was finished.
         paint?.onEnd();
       }
+      if (dragging.current) endWipe();
       dragging.current = null;
     },
     onPointerLeave: (e) => {
@@ -2424,6 +2450,16 @@ export function useDevelopPicture({
     },
     onContextMenu: (e) => {
       if (hold.current) e.preventDefault();
+    },
+    onDoubleClick: (e) => {
+      // Where a press places the divider — the split on, no tool holding the
+      // pointer, the picture fitted or the press on the handle — a double
+      // one puts it back in the middle, its first detent.
+      if (!compare || suspended || paint) return;
+      const target = e.target as Element | null;
+      if (target?.closest?.('button, [data-ring]')) return;
+      if (view.zoomed && !target?.closest?.('[data-wipe-handle]')) return;
+      setWipe(0.5);
     },
   };
 
@@ -2456,6 +2492,13 @@ export function useDevelopPicture({
     ),
     top: Math.max(0, rect.y),
     bottom: Math.min(viewport.height, rect.y + rect.height),
+    caught: wipeCaught !== null,
+    ticks: wipeDragging
+      ? WIPE_DETENTS.map((d) => ({
+          x: Math.min(Math.max(rect.x + d * rect.width, HANDLE_INSET), Math.max(HANDLE_INSET, viewport.width - HANDLE_INSET)),
+          caught: d === wipeCaught,
+        }))
+      : null,
   };
 
   return {

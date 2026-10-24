@@ -9,6 +9,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- Develop: the A/B divider catches the middle and the two edges as you drag it, with marks along the bottom of the picture
+  while you drag; hold ⌥ (Alt) to pass them. Double-click the picture to put the divider back in the middle.
+
 ## [1.5.0] - 2026-10-24 — Xanthophyll
 
 ### Added
