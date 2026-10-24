@@ -550,15 +550,45 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
 export function developOrNull(raw: unknown): DevelopSettings | null {
   if (raw === null || raw === undefined) return null;
   const d = normaliseDevelop(raw);
-  // Everything switched off draws as shot, but is still work kept to come
-  // back: storing null would throw it away.
-  return isDefaultDevelop(d) && !d.parked ? null : d;
+  return isBlankDevelop(d) ? null : d;
+}
+
+/**
+ * Nothing drawn AND nothing switched off — what a document stores as null.
+ * Everything switched off draws as shot (`isDefaultDevelop`) but is still
+ * work kept to come back: every place that STORES a develop asks this one,
+ * every place that only DRAWS one asks `isDefaultDevelop`.
+ */
+export function isBlankDevelop(d: DevelopSettings | null | undefined): boolean {
+  return isDefaultDevelop(d) && !d?.parked;
 }
 
 // --- parked values (`parked.ts`) --------------------------------------------
 
 /** Every field that can be switched off, in the order the panels draw them. */
 export const PARKABLE_KEYS: readonly ParkableKey[] = [...DEVELOP_KEYS, 'rawWb', 'curves', 'levels', 'mixer', 'mono', 'grading'];
+
+/** A switched-off field's name in the row's own words — "vibrance, curve off". */
+export function parkableLabel(key: ParkableKey): string {
+  switch (key) {
+    case 'exposure':
+      return 'exposure';
+    case 'curves':
+      return 'curve';
+    case 'levels':
+      return 'levels';
+    case 'mixer':
+      return 'colour mixer';
+    case 'mono':
+      return 'B&W mix';
+    case 'grading':
+      return 'colour grading';
+    case 'rawWb':
+      return 'white balance';
+    default:
+      return LABELS[key];
+  }
+}
 
 /** A parkable field at its default — nothing to switch off. */
 export function isDefaultParkable(key: ParkableKey, value: unknown): boolean {
@@ -1176,7 +1206,7 @@ export function signed(n: number, digits = 0): string {
  * down a corner.
  */
 export function developLines(d: DevelopSettings | null | undefined): string[] {
-  if (!d || isDefaultDevelop(d)) return ['As shot'];
+  if (!d || isBlankDevelop(d)) return ['As shot'];
   const parts: string[] = [];
   if (isRawDevelop(d)) {
     // The material first, with the exposure it was measured at — a fact about
@@ -1210,6 +1240,10 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (mixer) parts.push(mixer);
   const grading = describeGrading(d.grading);
   if (grading) parts.push(grading);
+  // What waits switched off is said too: the row must not read "as shot" over
+  // work the picture keeps (`parked.ts`).
+  const off = PARKABLE_KEYS.filter((k) => !isDefaultParkable(k, d.parked?.[k]));
+  if (off.length > 0) parts.push(`${off.map(parkableLabel).join(', ')} off`);
   return parts;
 }
 

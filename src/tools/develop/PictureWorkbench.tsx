@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { foldSwitch, shownOf } from '../../shared/develop/parked';
 import { createPortal } from 'react-dom';
 import {
   DevelopActionsGroup,
@@ -27,7 +28,7 @@ import {
   baseRung,
   developBase,
   developLines,
-  isDefaultDevelop,
+  isBlankDevelop,
   profilePending,
   signed,
   type DevelopSettings,
@@ -1558,7 +1559,7 @@ export default function PictureWorkbench({
     // Keyed on the numbers themselves: `draft` is a new object every render.
     // A white balance set in kelvin is a number too, on the roll's sensor.
     // So is a base curve picked there: it binds the material like a number.
-    draft: isDefaultDevelop(draft.draft) && !(rollBase && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
+    draft: isBlankDevelop(draft.draft) && !(rollBase && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
     same: sameDevelop,
     // A picture on the roll's sensor writes the base WITH its first numbers:
     // they were set on the sensor's data and mean nothing on the render.
@@ -3207,27 +3208,38 @@ export default function PictureWorkbench({
                 <WhiteBalancePanel
                   white={activeDcp ? whiteThroughDcp(rawWhite, activeDcp) : rawWhite}
                   profiled={Boolean(appliedProfile(developNow))}
-                  value={draft.draft.rawWb ?? null}
+                  value={shownOf(draft.draft, 'rawWb') ?? null}
                   onChange={(rawWb) => draft.patch({ rawWb })}
+                  switched={foldSwitch(draft.draft, 'whiteBalance', draft.replace)}
                 />
               )}
-              <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <DevelopSliders value={draft.draft} onChange={draft.set} onSwitch={draft.replace} />
               {/* Presence and the post-crop vignette are PASSES over one
                   frame (`detail.ts`, `post-vignette.ts`): a photograph's. */}
               {!clip && <PresencePanel value={detailDraft} onChange={setDetailDraft} />}
-              <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
+              <DevelopLevelsSection
+                value={shownOf(draft.draft, 'levels')}
+                onChange={(levels) => draft.patch({ levels })}
+                switched={foldSwitch(draft.draft, 'levels', draft.replace)}
+              />
               <DevelopCurve
-                value={draft.draft.curves}
+                value={shownOf(draft.draft, 'curves')}
                 histogram={picture.histogram}
                 onChange={(curves) => draft.patch({ curves })}
+                switched={foldSwitch(draft.draft, 'curve', draft.replace)}
               />
               <DevelopMixer
-                value={draft.draft.mixer}
+                value={shownOf(draft.draft, 'mixer')}
                 onChange={(mixer) => draft.patch({ mixer })}
-                mono={draft.draft.mono}
+                mono={shownOf(draft.draft, 'mono')}
                 onMono={(mono) => draft.patch({ mono })}
+                switched={foldSwitch(draft.draft, shownOf(draft.draft, 'mono') ? 'mono' : 'mixer', draft.replace)}
               />
-              <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
+              <DevelopGrading
+                value={shownOf(draft.draft, 'grading')}
+                onChange={(grading) => draft.patch({ grading })}
+                switched={foldSwitch(draft.draft, 'grading', draft.replace)}
+              />
               {!clip && <VignettePanel value={vignetteDraft} onChange={setVignetteDraft} />}
               <DevelopPresetsSection
                 presets={presets}

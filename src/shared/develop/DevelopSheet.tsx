@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { foldSwitch, shownOf } from './parked';
 import { createPortal } from 'react-dom';
 import type { LutStack } from '../lut/use-lut-stack';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../media/transport-keys';
@@ -467,20 +468,30 @@ function DevelopSheetBody({
               onPicking={picture.setPicking}
               echo={scope}
             />
-            <DevelopSliders value={draft.draft} onChange={draft.set} />
-            <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
+            <DevelopSliders value={draft.draft} onChange={draft.set} onSwitch={draft.replace} />
+            <DevelopLevelsSection
+              value={shownOf(draft.draft, 'levels')}
+              onChange={(levels) => draft.patch({ levels })}
+              switched={foldSwitch(draft.draft, 'levels', draft.replace)}
+            />
             <DevelopCurve
-              value={draft.draft.curves}
+              value={shownOf(draft.draft, 'curves')}
               histogram={picture.histogram}
               onChange={(curves) => draft.patch({ curves })}
+              switched={foldSwitch(draft.draft, 'curve', draft.replace)}
             />
             <DevelopMixer
-              value={draft.draft.mixer}
+              value={shownOf(draft.draft, 'mixer')}
               onChange={(mixer) => draft.patch({ mixer })}
-              mono={draft.draft.mono}
+              mono={shownOf(draft.draft, 'mono')}
               onMono={(mono) => draft.patch({ mono })}
+              switched={foldSwitch(draft.draft, shownOf(draft.draft, 'mono') ? 'mono' : 'mixer', draft.replace)}
             />
-            <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
+            <DevelopGrading
+              value={shownOf(draft.draft, 'grading')}
+              onChange={(grading) => draft.patch({ grading })}
+              switched={foldSwitch(draft.draft, 'grading', draft.replace)}
+            />
             <DevelopPresetsSection
               presets={presets}
               draft={draft.draft}

@@ -193,3 +193,19 @@ whose every setting is off still STORES (`developOrNull`) and still counts
 as an edit (`pictureEdits`), since it draws as shot but holds work; the
 clipboard carries `parked` through `cloneDevelop`, and `withoutBase` drops a
 parked RAW white balance as it drops the live one. Nothing on screen yet.
+
+**P2 built (2026-10-24)**: the switches on screen. `SliderBar` takes a
+`toggle` (`{ off, onToggle }`): the bar keeps a 28 px left pad so every name
+of a switchable column starts at one x, the departed dot becomes a button
+in a full-height 26 px slot, and off draws the fill `bg-line`, the edge and
+↺ grey, the value struck, `aria-valuetext` "…, switched off". `DevelopFold`
+takes `switched` (`foldSwitch`): an eye in `InspectorSection`'s new `mark`
+slot (in place of the dot, never folding the band); `dimOff` fades a
+one-block fold's body (`dimmed`). Wired in the Develop tool and the Trips /
+Studio sheet for Light, Tone, Colour, White balance, Levels, Curve, the
+mixer (its switch is `mono` while B&W is on) and Colour grading; each
+control is given `shownOf` (the waiting value while off). NOT yet: a layer's
+sliders (P5), the menu (P3), the pill (P4). Driven headless on a dropped
+JPEG: a switch changes the stage and keeps the number, survives a reload,
+moving the bar brings it back, the Colour eye goes `mixed` → off, Levels
+off returns the stage to the original pixels and fades its body.

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import { landBaseCurve } from './base-curve';
-import { DEFAULT_DEVELOP, isDefaultDevelop, withoutBase, type DevelopKey, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, isBlankDevelop, withoutBase, type DevelopKey, type DevelopSettings } from './develop';
+import { forgetParked } from './parked';
 
 export interface DevelopDraft {
   draft: DevelopSettings;
@@ -14,7 +15,7 @@ export interface DevelopDraft {
   setDraft: (next: DevelopSettings) => void;
   /** Replace the WHOLE record, material included — what the document hands back on an undo. */
   replace: (next: DevelopSettings) => void;
-  /** One slider. */
+  /** One slider. A slider moved while switched off comes back on at its new value. */
   set: (key: DevelopKey, value: number) => void;
   /**
    * Any other field at once — a curve, the levels. The record stopped being
@@ -63,15 +64,18 @@ export function useDevelopDraft(value: DevelopSettings | null, stack: LutStack):
     [],
   );
   const replace = useCallback((next: DevelopSettings) => setDraftState({ ...DEFAULT_DEVELOP, ...next }), []);
-  const set = useCallback((key: DevelopKey, v: number) => setDraftState((d) => ({ ...d, [key]: v })), []);
+  // A field WRITTEN forgets the value that waited for it (`parked.ts`): two
+  // values for one field would leave its switch lying.
+  const set = useCallback((key: DevelopKey, v: number) => setDraftState((d) => forgetParked({ ...d, [key]: v }, [key])), []);
   const patch = useCallback(
-    (partial: Partial<DevelopSettings>) => setDraftState((d) => ({ ...d, ...partial })),
+    (partial: Partial<DevelopSettings>) => setDraftState((d) => forgetParked({ ...d, ...partial }, Object.keys(partial))),
     [],
   );
   // "As shot" is about the NUMBERS: a RAW base with every slider at 0 is as
   // shot on its material, and the verb that zeroes the sliders has nothing to do.
-  const asShot = isDefaultDevelop(withoutBase(draft));
-  const result = useCallback(() => (isDefaultDevelop(draft) ? null : draft), [draft]);
+  // A setting switched off is still a number kept: there is something to throw away.
+  const asShot = isBlankDevelop(withoutBase(draft));
+  const result = useCallback(() => (isBlankDevelop(draft) ? null : draft), [draft]);
   return { draft, setDraft, replace, set, patch, asShot, result };
 }
 

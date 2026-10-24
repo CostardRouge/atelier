@@ -9,6 +9,14 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
+  header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
+  number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back
+  by Ctrl/⌘+Z, and left out of the export exactly as on screen. The same switches are in Trips' and the Studio's
+  Develop sheet.
+
 ## [1.4.0] - 2026-10-23 — Woad
 
 ### Added

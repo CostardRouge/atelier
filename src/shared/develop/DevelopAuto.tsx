@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import type { FoldSwitch } from './parked';
 import DevelopFold from './DevelopFold';
 import { autoBands, autoColour, autoTone, describeAutoBands, describeAutoTone, type SourceStats } from './auto-develop';
 import { developLinkClass } from './develop-classes';
@@ -343,9 +344,12 @@ const LEVEL_LABELS: Readonly<Record<LevelKey, string>> = {
 export function DevelopLevelsSection({
   value,
   onChange,
+  switched,
 }: {
   value: Levels | null | undefined;
   onChange: (levels: Levels | null) => void;
+  /** The fold's on/off switch (`parked.ts`); while off, the value given is the one that waits. */
+  switched?: FoldSwitch;
 }) {
   const level: LevelChannel = value?.rgb ?? { ...NEUTRAL_LEVEL };
 
@@ -362,7 +366,7 @@ export function DevelopLevelsSection({
 
   const set = Boolean(value?.rgb || value?.red || value?.green || value?.blue);
   return (
-    <DevelopFold id="levels" title="Levels" info={<p>{LEVELS_HINT}</p>} marked={set} defaultOpen={false}>
+    <DevelopFold id="levels" title="Levels" info={<p>{LEVELS_HINT}</p>} marked={set} switched={switched} dimOff defaultOpen={false}>
       {LEVEL_KEYS.map((key) =>
         key === 'gamma' ? (
           <RangeSlider

@@ -12,12 +12,12 @@
  * Pure and DOM-free.
  */
 
-import { isDefaultDevelop, type DevelopSettings } from '../develop/develop';
+import { isBlankDevelop, type DevelopSettings } from '../develop/develop';
 import type { TripDoc, TripPost } from './trip-types';
 
 /** A develop as stored: a copy, or null for as shot. */
 function stored(settings: DevelopSettings | null): DevelopSettings | null {
-  return settings && !isDefaultDevelop(settings) ? { ...settings } : null;
+  return settings && !isBlankDevelop(settings) ? { ...settings } : null;
 }
 
 /**

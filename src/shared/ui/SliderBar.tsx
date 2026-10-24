@@ -26,6 +26,12 @@
  * The value's edge is whole, and opens only where it would cross a piece of
  * the bar's text (`slider-edge.ts`), measured after every render and on every
  * resize — written straight to the line's style, never through state.
+ *
+ * Given a `toggle` (Develop's settings, `docs/slider-peek.md` §7), the dot of
+ * a departed value IS a switch, in a slot of its own at the bar's left so it
+ * never sits on the name: every name of such a column starts 16 px further
+ * in. Switched off, the bar keeps its number, greyed and struck — the
+ * picture does not wear it — and moving it brings it back.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
@@ -72,6 +78,11 @@ export interface SliderBarProps {
   lead?: ReactNode;
   /** Drawn after the name, and pressable — an ⓘ. */
   after?: ReactNode;
+  /**
+   * The value's on/off switch, drawn in place of the departed dot. `off`:
+   * the value waits switched off — the bar draws it greyed and struck.
+   */
+  toggle?: { off: boolean; onToggle: () => void };
 }
 
 type Gesture =
@@ -97,7 +108,9 @@ export default function SliderBar({
   origin,
   lead,
   after,
+  toggle,
 }: SliderBarProps) {
+  const off = Boolean(toggle?.off);
   const range: SliderRange = { min, max, step };
   const shown = Math.min(max, Math.max(min, value));
   const words = printed ?? (format ? format(value) : String(value));
@@ -147,7 +160,9 @@ export default function SliderBar({
       const r = child.getBoundingClientRect();
       pieces.push({ left: r.left - x0, right: r.right - x0, top: r.top - y0, bottom: r.bottom - y0 });
     }
-    const paint = edgePaint(edgeGap(edgeLeft(edge, bar.clientWidth), pieces, bar.clientHeight));
+    // Switched off, the edge greys with the fill: the paint written here is
+    // the line's whole background, so it carries the colour too.
+    const paint = edgePaint(edgeGap(edgeLeft(edge, bar.clientWidth), pieces, bar.clientHeight), off ? 'var(--color-faint)' : undefined);
     if (paint !== painted.current) {
       painted.current = paint;
       line.style.background = paint;
@@ -300,7 +315,7 @@ export default function SliderBar({
     >
       <span
         aria-hidden="true"
-        className="absolute inset-y-0 bg-accent-wash"
+        className={`absolute inset-y-0 ${off ? 'bg-line' : 'bg-accent-wash'}`}
         style={{ left: `${fill.left * 100}%`, width: `${fill.width * 100}%` }}
       />
       {/* The value's edge: whole, open only where it crosses the words
@@ -308,7 +323,7 @@ export default function SliderBar({
       <span
         ref={edgeRef}
         aria-hidden="true"
-        className="absolute inset-y-0 w-0.5 bg-accent"
+        className={`absolute inset-y-0 w-0.5 ${off ? 'bg-faint' : 'bg-accent'}`}
         style={{ left: `clamp(0px, calc(${edge * 100}% - 1px), calc(100% - 2px))` }}
       />
       {/* The one raw range the lint allows: it is the bar's keyboard and its
@@ -324,7 +339,7 @@ export default function SliderBar({
         disabled={disabled}
         tabIndex={typing !== null ? -1 : undefined}
         aria-label={name ?? (typeof label === 'string' ? label : undefined)}
-        aria-valuetext={words}
+        aria-valuetext={off ? `${words}, switched off` : words}
         onChange={(e) => write(Number(e.target.value))}
         onKeyDown={onKeyDown}
         onFocus={() => setRing(!pressed.current)}
@@ -334,12 +349,36 @@ export default function SliderBar({
         }}
         className="absolute inset-0 w-full h-full m-0 opacity-0 pointer-events-none"
       />
-      <span ref={rowRef} className="relative flex items-center h-full gap-1.5 pl-3 pr-2.5 pointer-events-none">
+      <span ref={rowRef} className={`relative flex items-center h-full gap-1.5 pr-2.5 pointer-events-none ${toggle ? 'pl-7' : 'pl-3'}`}>
         {/* In the bar's own left padding, so every name starts at the same x
             whether or not its row can depart from a default. */}
-        {departed && <span aria-hidden="true" className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
+        {departed && !toggle && <span aria-hidden="true" className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
+        {/* The switch: its slot is the bar's whole height, so a finger finds
+            it, and a press on it never reaches the bar. */}
+        {departed && toggle && (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-pressed={!off}
+            aria-label={`${off ? 'Show' : 'Hide'} ${name ?? (typeof label === 'string' ? label : 'this setting')}`}
+            title={off ? 'Show — the picture and the export wear it again' : 'Hide — the picture and the export leave it out'}
+            onPointerDown={stop}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onClick={toggle.onToggle}
+            className="absolute left-0 inset-y-0 w-[26px] grid place-items-center pointer-events-auto cursor-pointer group/switch"
+          >
+            <span
+              aria-hidden="true"
+              className={`w-2 h-2 rounded-full transition-[background-color,box-shadow] ${
+                off
+                  ? 'bg-transparent shadow-[inset_0_0_0_1.5px_var(--color-faint)] group-hover/switch:shadow-[inset_0_0_0_1.5px_var(--color-muted),0_0_0_3px_var(--color-accent-wash)]'
+                  : 'bg-accent group-hover/switch:shadow-[0_0_0_3px_var(--color-accent-wash)]'
+              }`}
+            />
+          </button>
+        )}
         {lead}
-        <span className={`min-w-0 truncate text-sm leading-none ${departed ? 'text-ink font-medium' : 'text-ink-soft'}`}>{label}</span>
+        <span className={`min-w-0 truncate text-sm leading-none ${off ? 'text-muted' : departed ? 'text-ink font-medium' : 'text-ink-soft'}`}>{label}</span>
         {(after || (departed && reset !== undefined)) && (
           <span className="flex-none inline-flex items-center gap-1 pointer-events-auto" onPointerDown={stop} onDoubleClick={(e) => e.stopPropagation()}>
             {after}
@@ -350,7 +389,7 @@ export default function SliderBar({
                 onClick={() => write(reset)}
                 aria-label={`Reset ${name ?? (typeof label === 'string' ? label : 'this setting')}`}
                 title="Reset"
-                className="relative inline-grid place-items-center w-5 h-5 rounded-[6px] text-accent-ink cursor-pointer after:absolute after:-inset-1.5 after:content-[''] hover:bg-accent-wash [&>svg]:w-3.5 [&>svg]:h-3.5"
+                className={`relative inline-grid place-items-center w-5 h-5 rounded-[6px] ${off ? 'text-muted' : 'text-accent-ink'} cursor-pointer after:absolute after:-inset-1.5 after:content-[''] hover:bg-accent-wash [&>svg]:w-3.5 [&>svg]:h-3.5`}
               >
                 {Icons.reset}
               </button>
@@ -386,7 +425,11 @@ export default function SliderBar({
             className="pointer-events-auto w-[5.5rem] h-7 px-2 text-right font-mono text-xs tabular-nums bg-paper text-ink border border-accent rounded-[8px] focus:outline-none"
           />
         ) : (
-          <span className={`flex-none whitespace-nowrap font-mono text-xs tabular-nums ${departed || reset === undefined ? 'text-ink' : 'text-muted'}`}>
+          <span
+            className={`flex-none whitespace-nowrap font-mono text-xs tabular-nums ${
+              off ? 'text-muted line-through decoration-faint' : departed || reset === undefined ? 'text-ink' : 'text-muted'
+            }`}
+          >
             {words}
           </span>
         )}

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP, cloneDevelop, developOrNull, isDefaultDevelop, normaliseDevelop, sameDevelop, withoutBase, type DevelopSettings } from './develop';
 import type { Curve, ToneCurves } from './curves';
+import { describeDevelop } from './develop';
 import {
+  foldSwitch,
+  forgetParked,
   groupState,
+  shownOf,
   invertParked,
   isLive,
   isParked,
@@ -181,5 +185,39 @@ describe('a preset saved from a picture with a setting off', () => {
     expect(preset.settings.vibrance).toBe(0);
     expect(preset.settings.saturation).toBe(-8);
     expect('parked' in preset.settings).toBe(false);
+  });
+});
+
+describe('what the inspector reads', () => {
+  it('shows the value that waits on a switched-off control', () => {
+    const d = park(edited(), ['vibrance', 'curves']);
+    expect(shownOf(d, 'vibrance')).toBe(40);
+    expect(shownOf(d, 'curves')).toEqual(curves);
+    expect(shownOf(d, 'saturation')).toBe(-8);
+    expect(shownOf(null, 'vibrance')).toBe(0);
+  });
+
+  it('forgets what waited for a field written, and nothing else', () => {
+    const d = park(edited(), ['vibrance', 'saturation']);
+    const next = forgetParked({ ...d, vibrance: 12 }, ['vibrance']);
+    expect(next.vibrance).toBe(12);
+    expect(next.parked).toEqual({ saturation: -8 });
+    const untouched = edited();
+    expect(forgetParked(untouched, ['vibrance'])).toBe(untouched);
+  });
+
+  it('gives a fold a switch only while it holds work, writing the toggled develop', () => {
+    let written: DevelopSettings | null = null;
+    expect(foldSwitch(edited(), 'tone', (n) => (written = n))).toBeUndefined();
+    expect(foldSwitch(edited(), 'colour', undefined)).toBeUndefined();
+    const sw = foldSwitch(edited(), 'colour', (n) => (written = n));
+    expect(sw?.state).toBe('on');
+    sw?.onSwitch();
+    expect(groupState(written, 'colour')).toBe('off');
+  });
+
+  it('says what is switched off in the row, and is no longer "As shot"', () => {
+    expect(describeDevelop(park(edited(), ['vibrance', 'curves']))).toMatch(/ · vibrance, curve off$/);
+    expect(describeDevelop(showOnly(edited(), []))).toBe('exposure, contrast, saturation, vibrance, curve off');
   });
 });

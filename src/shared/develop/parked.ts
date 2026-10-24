@@ -185,3 +185,43 @@ export function withoutParked(d: DevelopSettings): DevelopSettings {
   delete out.parked;
   return out;
 }
+
+/**
+ * The value a field's control SHOWS: what waits when it is switched off — a
+ * greyed bar keeps its number, a dimmed curve its points — else the live one.
+ */
+export function shownOf<K extends ParkableKey>(d: DevelopSettings | null | undefined, key: K): DevelopSettings[K] {
+  if (!d) return DEFAULT_DEVELOP[key];
+  return isParked(d, key) ? (d.parked![key] as DevelopSettings[K]) : d[key];
+}
+
+/**
+ * The fields WRITTEN by an edit forget what waited for them — the cheap form
+ * of `writeLive` for a draft's every drag step: the same object back when
+ * nothing of them was parked, never a deep copy.
+ */
+export function forgetParked(d: DevelopSettings, keys: readonly string[]): DevelopSettings {
+  const parked = d.parked;
+  if (!parked || !keys.some((k) => k in parked)) return d;
+  const rest: Record<string, unknown> = { ...parked };
+  for (const k of keys) delete rest[k];
+  const out = { ...d };
+  return withParked(out, rest);
+}
+
+/** A fold's switch, as the inspector draws it: absent while nothing in the fold is set. */
+export interface FoldSwitch {
+  state: 'on' | 'off' | 'mixed';
+  onSwitch: () => void;
+}
+
+/** The switch of fold `id` over `d`, writing through `write`; undefined when it has nothing to switch. */
+export function foldSwitch(
+  d: DevelopSettings | null | undefined,
+  id: DevelopGroupId,
+  write: ((next: DevelopSettings) => void) | undefined,
+): FoldSwitch | undefined {
+  if (!write) return undefined;
+  const state = groupState(d, id);
+  return state === 'none' ? undefined : { state, onSwitch: () => write(toggleGroup(d, id)) };
+}

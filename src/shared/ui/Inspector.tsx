@@ -74,6 +74,14 @@ interface InspectorSectionProps {
    */
   marked?: boolean;
   /**
+   * Drawn IN PLACE of the `marked` dot: a control about the whole section —
+   * Develop's eye that switches a fold off (`parked.ts`). Never the band's: a
+   * click on it does not fold.
+   */
+  mark?: ReactNode;
+  /** The body drawn faded: what it holds is kept but not applied — a fold switched off. */
+  dimmed?: boolean;
+  /**
    * `false` draws the same header with no chevron and no fold — a section too
    * small to be worth folding (one row of verbs) still reads like its
    * neighbours.
@@ -97,6 +105,8 @@ export function InspectorSection({
   defaultOpen = true,
   remember = 'local',
   marked = false,
+  mark,
+  dimmed = false,
   foldable = true,
   open: controlled,
   onOpenChange,
@@ -163,7 +173,7 @@ export function InspectorSection({
         ) : (
           <span className="min-w-0 font-sans text-sm font-semibold text-ink truncate">{title}</span>
         )}
-        {marked && (
+        {mark ?? (marked && (
           <span
             data-fold
             role="img"
@@ -171,7 +181,7 @@ export function InspectorSection({
             title="Something here is set"
             className="flex-none w-1.5 h-1.5 rounded-full bg-accent"
           />
-        )}
+        ))}
         {badge && (
           <span
             data-fold
@@ -204,7 +214,7 @@ export function InspectorSection({
           ref={bodyRef}
           id={bodyId}
           aria-disabled={locked || undefined}
-          className={`flex flex-col gap-2.5 pt-2.5 ${locked ? 'opacity-45 select-none' : ''}`}
+          className={`flex flex-col gap-2.5 pt-2.5 ${locked ? 'opacity-45 select-none' : dimmed ? 'opacity-55' : ''}`}
         >
           {children}
         </div>
