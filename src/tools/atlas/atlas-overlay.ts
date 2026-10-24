@@ -51,7 +51,8 @@ export interface TextLine {
 /** Statistics side by side, each its value over its label. */
 export interface StatRow {
   kind: 'row';
-  items: { value: string; label: string; odometer?: number }[];
+  /** `room`: the text its cell is sized for when the value counts up to it, so the row never re-flows as it counts. */
+  items: { value: string; label: string; odometer?: number; room?: string }[];
   size: number;
   /**
    * Kept within `maxW` of the area's width: in a grid of `columns` (every
@@ -233,7 +234,8 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
    * lays them out like any other lines and nothing passes the width.
    */
   /** How wide one statistic of a row is drawn: its value or its label, the wider. */
-  const cellW = (it: { value: string; label: string }, size: number) => Math.max(widthOf(it.value, size, false), widthOf(it.label, size * 0.42, true));
+  const cellW = (it: { value: string; label: string; room?: string }, size: number) =>
+    Math.max(widthOf(it.value, size, false), it.room ? widthOf(it.room, size, false) : 0, widthOf(it.label, size * 0.42, true));
   const rowGap = (size: number) => size * unit * 0.9;
 
   const expand = (b: Block): Block[] => {
@@ -326,8 +328,11 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     stacks.push({ blocks: f.blocks, align: f.place.align, ax, top: (total) => Math.max(bounds.y, Math.min(area.y + f.place.y * area.h, bounds.y + bounds.h - total)) });
   }
   for (const stack of stacks) {
-    const blocks = stack.blocks.filter((b) => (b.alpha ?? 1) > 0.001).flatMap(expand);
-    if (!blocks.length) continue;
+    // A block keeps its place while it is faded out: a stack laid out from
+    // only what is visible now changes height as each line fades in, and
+    // every line above it jumps (the intro's title, when its line came in).
+    const blocks = stack.blocks.flatMap(expand);
+    if (!blocks.some((b) => (b.alpha ?? 1) > 0.001)) continue;
     const total = blocks.reduce((h, b) => h + blockHeight(b), 0);
     const { align, ax } = stack;
     const anchor = ANCHOR_OF[align];
@@ -345,6 +350,10 @@ export function paintOverlay(ctx: Ctx2D, layout: OverlayLayout, area: Rect, alph
     for (const b of blocks) {
       const h = blockHeight(b);
       blockAlpha = alpha * (b.alpha ?? 1);
+      if ((b.alpha ?? 1) <= 0.001) {
+        y += h;
+        continue;
+      }
       if (b.kind === 'text') {
         elements.push(lineElement(b, anchor, ax, y));
         if (b.text.trim()) hit(b, widthOf(b.text, b.size, !!b.label, b.weight), heightOf(b));

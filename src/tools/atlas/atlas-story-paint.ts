@@ -77,12 +77,14 @@ export function paintStory(
     ctx.restore();
   }
 
-  // The intro's lines, stacked in the middle.
+  // The intro's lines, stacked in the middle. Every line that will show is
+  // in the stack from the first frame, faded out until its turn — never added
+  // as it arrives, which moved the lines above it (`paintOverlay`).
   if (intro.title + intro.line + intro.sticker > 0.001) {
     const blocks: Block[] = [];
     if (title) blocks.push({ kind: 'text', text: title, size: 96 * s.intro.titleSize, gapAfter: 0.12, alpha: intro.title, owner: 'intro', fit });
     blocks.push({ kind: 'text', text: introLine(s.intro, scene.flights.length, scene.dateRange), size: 30 * s.intro.lineSize, weight: 500, gapAfter: 0.7, alpha: intro.line, owner: 'intro', fit: wrap });
-    if (hasSticker && intro.sticker > 0.001) blocks.push({ ...sticker, alpha: intro.sticker, owner: 'intro' });
+    if (hasSticker && s.intro.sticker) blocks.push({ ...sticker, alpha: intro.sticker, owner: 'intro' });
     draw({ ...base, scale: base.scale * intro.scale, spots: { mc: blocks }, middleAt: intro.y, shiftY: intro.rise });
   }
 
@@ -91,18 +93,20 @@ export function paintStory(
   if (outro.title + outro.totals + outro.sticker > 0.001 || (outro.line > 0.001 && outro.black < 0.001)) {
     const head: Block[] = [];
     if (title) head.push({ kind: 'text', text: title, size: (outro.titleAt === 'top' ? 58 : 64) * s.intro.titleSize, gapAfter: 0.4, alpha: outro.title, owner: 'outro', fit });
-    if (outro.totals > 0.001 && s.outro.stats.length) {
+    // Only a summary counts totals.
+    if (s.outro.style === 'summary' && s.outro.stats.length) {
       const counted = countedStats(scene.totals, outro.count);
       const items = s.outro.stats.map((key) => {
         const r = readStat(key, counted, s.hud.units);
         // Only a counting numeral rolls: a total held still would freeze mid-roll.
-        return { value: r.text, label: r.label, odometer: outro.count < 1 ? r.odometer : undefined };
+        // Each cell is sized for the total it counts up to, so the row never re-flows as the digits grow.
+        return { value: r.text, label: r.label, odometer: outro.count < 1 ? r.odometer : undefined, room: readStat(key, scene.totals, s.hud.units).text };
       });
       const columns = s.outro.statsLayout === 'grid' ? s.outro.columns : undefined;
       head.push({ kind: 'row', items, size: 56 * s.outro.statsSize, alpha: outro.totals, owner: 'outro', fit: { maxW: STORY_TEXT_WIDTH, columns } });
       head.push({ kind: 'text', text: ' ', size: 20 });
     }
-    if (hasSticker && outro.sticker > 0.001) head.push({ ...sticker, gapAfter: 0.5, alpha: outro.sticker, owner: 'outro' });
+    if (hasSticker && s.outro.sticker) head.push({ ...sticker, gapAfter: 0.5, alpha: outro.sticker, owner: 'outro' });
     const line: Block[] = lastLine ? [{ kind: 'text', text: lastLine, size: 28 * s.outro.lineSize, weight: 500, alpha: outro.line, owner: 'outro', fit: wrap }] : [];
     if (outro.titleAt === 'top') draw({ ...base, spots: { tc: head, bc: line } });
     else draw({ ...base, spots: { mc: [...head, ...line] } });

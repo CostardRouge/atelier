@@ -18,6 +18,9 @@ import { useAtlasExport, type ExportKind } from './use-atlas-export';
 import { useAtlasDocFlights } from './use-atlas-doc-flights';
 import { useAtlasLogos } from './atlas-logos';
 import { useAtlasScene } from './use-atlas-scene';
+import { useFilmReady } from './use-film-ready';
+import { frameFontFaces } from './atlas-paint';
+import { phaseAt } from './atlas-story';
 import { DEFAULT_SETTINGS, sanitizeSettings, type AtlasSettings } from './atlas-settings';
 import { cleanAtlasName, withFlights, withoutFlights, type AtlasDoc } from './atlas-doc';
 import { ingestLogs, type IngestItem } from './atlas-ingest';
@@ -198,14 +201,16 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
     }
   }, [clock]);
   useEffect(() => clock.setTotal(scene.core.story.total), [clock, scene.core.story.total]);
-  // Start playing the first time there is something to play.
+  // Start playing the first time there is something to play — once what the
+  // intro draws has landed (`use-film-ready.ts`), so nothing arrives mid-fade.
   const started = useRef(false);
+  const filmReady = useFilmReady(scene.core.flights.length > 0 && !reading, scene.settled, frameFontFaces(settings.hud.theme.style));
   useEffect(() => {
-    if (!started.current && scene.core.flights.length > 0 && !reading) {
+    if (!started.current && filmReady) {
       started.current = true;
       clock.setPlaying(true);
     }
-  }, [clock, scene.core.flights.length, reading]);
+  }, [clock, filmReady]);
 
   const tiles = useMemo(() => (tilesOn ? new AtlasTiles(() => setPaintSeq((n) => n + 1)) : null), [tilesOn]);
   useEffect(() => () => tiles?.dispose(), [tiles]);
@@ -266,7 +271,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
   const look = useMemo(() => ({ bearing: settings.camera.bearing, tilt: settings.camera.tilt }), [settings.camera.bearing, settings.camera.tilt]);
 
   const empties = flights.length === 0 && !reading;
-  useAtlasCover(doc, scene.core, scene.viewAt, !reading && missing.length === 0);
+  useAtlasCover(doc, scene.core, scene.viewAt, !reading && missing.length === 0, () => clock.playing && phaseAt(storyRef.current, clock.t) !== 'flights');
   const [name, setName] = useState(doc.name);
   useEffect(() => setName(doc.name), [doc.name]);
   const commitName = () => {
