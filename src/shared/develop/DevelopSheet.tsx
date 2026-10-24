@@ -9,6 +9,7 @@ import { fileIdentity } from '../library/assets';
 import { useLocalFlag } from '../ui/use-local-flag';
 import { usePixelView } from '../ui/use-pixel-view';
 import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
+import { isCompareKey } from './roll-editor';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import { PRESS_LOOK } from '../ui/press';
@@ -313,6 +314,22 @@ function DevelopSheetBody({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // `/` — the A/B pill's press from the keyboard, as in the Develop tool
+  // (`isCompareKey`): a picture there, a field keeps its key.
+  const compareKeys = useRef({ on: compareOn, set: setCompareOn, shown: Boolean(picture.source) });
+  compareKeys.current = { on: compareOn, set: setCompareOn, shown: Boolean(picture.source) };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !compareKeys.current.shown) return;
+      const press = { key: e.key, repeat: e.repeat, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey };
+      if (!isCompareKey({ ...press, targetTypes: targetOwnsTyping(describeKeyTarget(e.target)) })) return;
+      e.preventDefault();
+      compareKeys.current.set(!compareKeys.current.on);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Space is the SHEET's while it is open: it plays and pauses a clip, and on
   // a photograph it does nothing — above all it must not reach the tool
   // behind the modal, whose own transport (the Studio's clip, the Trips deck)
@@ -382,10 +399,10 @@ function DevelopSheetBody({
                 aria-pressed={compareOn}
                 title={
                   compareHeld
-                    ? 'Before / after — held while the dropper is armed; the divider comes back where it was'
+                    ? 'Before / after (/) — held while the dropper is armed; the divider comes back where it was'
                     : compareOn
-                      ? 'Before / after — the divider is on, and a drag across the picture places it'
-                      : 'Before / after — off: the whole picture is shown corrected'
+                      ? 'Before / after (/) — the divider is on, and a drag across the picture places it'
+                      : 'Before / after (/) — off: the whole picture is shown corrected'
                 }
               >
                 A/B

@@ -1881,8 +1881,8 @@ export default function PictureWorkbench({
   clipVerbs.current = { copy: copyVerb, paste: pasteVerb, pasteNow, pasteEcho, canPaste: clipboard.canPaste };
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
-  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
+  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, compareOn, setCompareOn, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
+  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, compareOn, setCompareOn, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1931,6 +1931,13 @@ export default function PictureWorkbench({
         case 'hold':
           e.preventDefault();
           pic.setHolding(true);
+          return;
+        case 'compare':
+          // The A/B pill's own press: where the pill is drawn — a picture,
+          // off the Crop tab — and nowhere it is not.
+          if (!pic.source || open === 'crop') return;
+          e.preventDefault();
+          keyState.current.setCompareOn(!keyState.current.compareOn);
           return;
         case 'zoom':
           e.preventDefault();
@@ -2949,10 +2956,10 @@ export default function PictureWorkbench({
             aria-pressed={compareOn}
             title={
               abHeld
-                ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
+                ? 'Before / after (/) — suspended while a mask tool has the pointer; the divider comes back where it was'
                 : compareOn
-                  ? 'Before / after — the divider is on, and a drag across the picture places it'
-                  : 'Before / after — off: the whole picture is shown corrected'
+                  ? 'Before / after (/) — the divider is on, and a drag across the picture places it'
+                  : 'Before / after (/) — off: the whole picture is shown corrected'
             }
           >
             A/B

@@ -176,6 +176,7 @@ export type EditorKeyAction =
   | 'move-earlier'
   | 'move-later'
   | 'hold'
+  | 'compare'
   | 'zoom'
   | 'copy'
   | 'paste'
@@ -219,7 +220,7 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
 /**
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, ⌥←/⌥→ move the open picture IN it, `\` holds "before" (its release is the
- * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
+ * caller's), `/` turns the A/B divider on and off (`isCompareKey`), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
  * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
@@ -268,6 +269,7 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   // `?` is the one key reached WITH shift on most layouts, so it is read
   // before the blanket refusal below: a help key nobody can press is not one.
   if (press.key === '?') return press.repeat ? null : 'help';
+  if (isCompareKey(press)) return 'compare';
   // ⇧C crops to what a zoomed view shows: the crop's own letter, shifted,
   // because it MAKES a crop without opening the tab. The only other shift chord.
   if (press.shiftKey && (press.key === 'C' || press.key === 'c')) return press.repeat ? null : 'crop-view';
@@ -321,6 +323,17 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'm' || press.key === 'M') return press.layersTab ? 'mask' : 'ignore';
   if (press.key === 'u' || press.key === 'U') return 'deliver-auto';
   return null;
+}
+
+/**
+ * `/` — the A/B divider on and off, from the keyboard (2026-10-24, his ask:
+ * the pill is a reach for the mouse, and a keyboard on an iPad has no pill
+ * under the hand). Read by `e.key`, never the key's place: `/` is unshifted
+ * on QWERTY and the numpad, and ⇧: on a Mac's AZERTY — so shift is allowed,
+ * and only shift. The Develop sheet answers the same key (`DevelopSheet`).
+ */
+export function isCompareKey(press: Pick<EditorKeyPress, 'key' | 'repeat' | 'metaKey' | 'ctrlKey' | 'altKey' | 'targetTypes'>): boolean {
+  return press.key === '/' && !press.repeat && !press.metaKey && !press.ctrlKey && !press.altKey && !press.targetTypes;
 }
 
 /**

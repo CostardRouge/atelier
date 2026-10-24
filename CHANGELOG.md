@@ -9,6 +9,11 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- Develop: press / to turn the A/B divider on and off, in the Develop tool and in the Develop sheet of Trips and the
+  Studio — on a computer, and on an iPad or phone with a keyboard.
+
 ### Fixed
 
 - Develop: the A/B divider stays where you left it when you move to another picture, so you can page through a roll and

@@ -43,7 +43,7 @@ const GROUPS: readonly Group[] = [
       { keys: 'Space', what: 'on a clip, play and pause — the develop and the look follow every frame' },
       { keys: 'drag', what: 'at the fit, wipe between before and after' },
       { keys: 'the divider’s handle', what: 'wipe at any zoom' },
-      { keys: 'the A/B pill', what: 'the divider on or off — a mask tool suspends it on its own' },
+      { keys: '/ · the A/B pill', what: 'the divider on or off — it stays where you left it from picture to picture, and a mask tool suspends it on its own' },
       { keys: 'I', what: 'the facts — the exposure as shot, then this develop — over the picture' },
       { keys: 'V', what: 'black and white ↔ colour — the colour mixer is kept either way' },
       { keys: 'J · blacks / whites', what: 'paint what is clipped — red gone to white, blue gone to black; the pixel under the pointer is read under the histogram' },
