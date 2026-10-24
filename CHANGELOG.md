@@ -19,6 +19,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 - Develop: a menu on each set slider and section — right-click, the section's ⋯, or hold its dot or eye on a touch
   screen — with Reset, Hide or Show, Show only and Invert hidden. After a Show only, the same line reads "Show the
   others again" and puts back exactly what was on before.
+- Develop: while a setting is off, a pill over the picture names what is off — tap a name to bring it back — with a
+  way back from the last Show only or Invert, Invert, and Show all.
 
 ## [1.4.0] - 2026-10-23 — Woad
 

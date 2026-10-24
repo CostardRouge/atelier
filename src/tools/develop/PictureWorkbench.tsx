@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldSwitch, shownOf } from '../../shared/develop/parked';
-import { ParkedProvider } from '../../shared/develop/ParkedMenu';
+import { ParkedPill, ParkedProvider } from '../../shared/develop/ParkedMenu';
 import { createPortal } from 'react-dom';
 import {
   DevelopActionsGroup,
@@ -3047,14 +3047,18 @@ export default function PictureWorkbench({
             the roll): the band lies on the bar and the verbs on the band, so
             nothing floating leaves a strip of picture between them. */}
         {verbsPlace === 'float' && (
-          <div className="absolute inset-x-2 z-20 bottom-[calc(var(--shell-bar-h,0px)+var(--band-h,0px)+16px)] flex pointer-events-none [&>*]:pointer-events-auto">
-            {verbsNode}
+          // What is switched off rides ABOVE the verbs here: the picture's own
+          // bottom corner lies under the band and the shell's bar.
+          <div className="absolute inset-x-2 z-20 bottom-[calc(var(--shell-bar-h,0px)+var(--band-h,0px)+16px)] flex flex-col items-start gap-2 pointer-events-none">
+            <ParkedPill />
+            <div className="flex w-full pointer-events-none [&>*]:pointer-events-auto">{verbsNode}</div>
           </div>
         )}
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
+          parked={verbsPlace === 'float' ? null : <ParkedPill />}
           scope={taskScope}
           pixelView={pixelView}
           // The roll under the stage: where the deck is, and who sits either

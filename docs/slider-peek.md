@@ -227,3 +227,16 @@ slider at its default has no menu. Driven headless: right-click → Show only
 Vibrance turned Exposure and Saturation off, the line then read "Show the
 others again" and put them back; the Colour ⋯, Shift+F10 and a held switch
 (nothing switched) all open it.
+
+**P4 built (2026-10-24)**: the pill, `ParkedPill` (`ParkedMenu.tsx`), drawn
+only while something is off: a head ("Only Vibrance" while that step
+stands, else "N hidden"), one chip per thing off (`hiddenChips`: a fold of
+several sliders whose every set one is off is ONE chip named as the fold;
+a one-block fold is named by its title), each a tap that unparks it; ↩
+while the last Show only / Invert stands (`stepStands`); ⇄ Invert (a step
+too); Show all (clears the steps). **Where**: the viewport's bottom-left
+corner, under the facts (`DevelopViewport`'s `parked` slot) — except on a
+phone's immersive Develop, where that corner lies under the band and the
+shell's bar: there it rides in the floating verbs' container, above them
+(`verbsPlace === 'float'`). The pill stops its own `pointerdown` so it never
+starts the stage's drag, swipe or hold. Driven headless at 1440 and 390 px.

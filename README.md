@@ -2091,8 +2091,12 @@ the dot or the eye **held** — opens its menu: **Reset**, **Hide** / **Show**,
 **Show only** (everything else set goes off; while nothing has been switched
 since, the same line reads **Show the others again** and puts back exactly
 what was there, one Show only at a time), and **Invert hidden** once
-something is off. Trips' and the Studio's Develop sheet have the same
-switches and menu. **Every glyph answers the hand that presses it, a finger
+something is off. While anything is off, a **pill** over the picture's
+bottom-left corner (above the floating verbs on a phone) names it — one chip
+per setting, or the section when all of it is off, a tap putting it back —
+with **↩** (back to before the last Show only or Invert, while it stands),
+**⇄ Invert** and **Show all**. Trips' and the Studio's Develop sheet have the
+same switches, menu and pill. **Every glyph answers the hand that presses it, a finger
 included**: it goes down a pixel at the touch and stays there a beat after
 the lift; a verb that takes time — a paste re-rendering a RAW, an Auto, an
 Apply to — keeps it down while it runs, with a hairline along the picture's

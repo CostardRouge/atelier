@@ -3,6 +3,7 @@ import { DEFAULT_DEVELOP, cloneDevelop, developOrNull, isDefaultDevelop, normali
 import type { Curve, ToneCurves } from './curves';
 import { describeDevelop } from './develop';
 import {
+  hiddenChips,
   applyParkedVerb,
   parkedMenu,
   type ParkTarget,
@@ -278,5 +279,29 @@ describe('the menu', () => {
     const inv = applyParkedVerb(park(edited(), ['vibrance']), vib, 'invert', undefined);
     expect(inv.push?.label).toBe('Invert');
     expect(inv.next.vibrance).toBe(40);
+  });
+});
+
+describe('the pill', () => {
+  const chips = (d: DevelopSettings) => hiddenChips(d).map((c) => c.label);
+
+  it('names nothing while nothing is off', () => {
+    expect(hiddenChips(edited())).toEqual([]);
+  });
+
+  it('names a slider by its label, a one-block fold by its title', () => {
+    expect(chips(park(edited(), ['vibrance', 'curves']))).toEqual(['Vibrance', 'Curve']);
+  });
+
+  it('names a fold whose every set slider is off as the fold', () => {
+    const d = park(edited(), ['saturation', 'vibrance', 'exposure']);
+    expect(chips(d)).toEqual(['Exposure', 'Colour']);
+    expect(hiddenChips(d)[1].keys).toEqual(['saturation', 'vibrance']);
+  });
+
+  it('a chip\'s keys are what a tap brings back', () => {
+    const d = park(edited(), ['saturation', 'vibrance']);
+    const back = unpark(d, hiddenChips(d)[0].keys);
+    expect(sameDevelop(back, edited())).toBe(true);
   });
 });

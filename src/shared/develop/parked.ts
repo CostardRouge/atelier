@@ -21,6 +21,7 @@ import {
   cloneDevelop,
   cloneParkable,
   isDefaultParkable,
+  parkableLabel,
   type DevelopSettings,
   type ParkableKey,
   type ParkedDevelop,
@@ -337,4 +338,52 @@ export function applyParkedVerb(
       return { next, push: { label: 'Invert', target: null, prior, made: parkedKeys(next) } };
     }
   }
+}
+
+// --- the pill (P4): what is off, named, each a way back ---------------------
+
+/** A fold's name on screen — the inspector's own titles. */
+export const GROUP_TITLES: Readonly<Record<DevelopGroupId, string>> = {
+  light: 'Light',
+  tone: 'Tone',
+  colour: 'Colour',
+  whiteBalance: 'White balance',
+  curve: 'Curve',
+  levels: 'Levels',
+  mixer: 'Colour mixer',
+  mono: 'B&W mix',
+  grading: 'Colour grading',
+};
+
+/** A field's name on screen, capitalised as a slider's label is. */
+export function parkableTitle(key: ParkableKey): string {
+  const words = parkableLabel(key);
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** One chip of the pill: a name, and the fields a tap on it brings back. */
+export interface HiddenChip {
+  id: string;
+  label: string;
+  group: boolean;
+  keys: ParkableKey[];
+}
+
+/**
+ * What is switched off, as the pill names it: a fold of several sliders whose
+ * every set one is off reads as the FOLD ("Colour"), the rest one chip per
+ * field, in the column's order.
+ */
+export function hiddenChips(d: DevelopSettings | null | undefined): HiddenChip[] {
+  const out: HiddenChip[] = [];
+  for (const g of DEVELOP_GROUPS) {
+    const off = g.keys.filter((k) => isParked(d, k));
+    if (off.length === 0) continue;
+    if (g.keys.length > 1 && groupState(d, g.id) === 'off' && off.length > 1) {
+      out.push({ id: `g:${g.id}`, label: GROUP_TITLES[g.id], group: true, keys: off });
+      continue;
+    }
+    for (const k of off) out.push({ id: `k:${k}`, label: g.keys.length > 1 ? parkableTitle(k) : GROUP_TITLES[g.id], group: false, keys: [k] });
+  }
+  return out;
 }

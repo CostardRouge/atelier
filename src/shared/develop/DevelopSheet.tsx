@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldSwitch, shownOf } from './parked';
-import { ParkedProvider } from './ParkedMenu';
+import { ParkedPill, ParkedProvider } from './ParkedMenu';
 import { createPortal } from 'react-dom';
 import type { LutStack } from '../lut/use-lut-stack';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../media/transport-keys';
@@ -428,6 +428,7 @@ function DevelopSheetBody({
           <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 max-[820px]:flex-none">
             <DevelopViewport
               picture={picture}
+              parked={<ParkedPill />}
               deck={deckView}
               still={still}
               scope={scope}
