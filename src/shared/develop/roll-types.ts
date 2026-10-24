@@ -1120,7 +1120,8 @@ export type PictureEdit =
  */
 export function pictureEdits(p: RollPicture): PictureEdit[] {
   const out: PictureEdit[] = [];
-  if (!isDefaultDevelop(p.develop)) out.push('develop');
+  // Settings switched off draw nothing but are work kept to come back.
+  if (!isDefaultDevelop(p.develop) || p.develop?.parked) out.push('develop');
   if (p.grade) out.push('look');
   if ((p.framing && !isDefaultFraming(p.framing)) || p.aspect !== 'original') out.push('crop');
   if (p.border) out.push('border');

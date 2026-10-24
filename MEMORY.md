@@ -120,7 +120,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-13 — Sliders as one bar and 44 px targets built; not seen on his devices — `frontend.md`.
 - 2026-10-13 — A slide's length (face B) built; left: see it on his Mac and phone — `roadtrip.md`.
 - 2026-10-24 — One render RECIPE from a record to its passes (the stage still builds its chain by hand beside `picturePasses`): agreed direction, R1–R5 not started — `render-core.md`.
-- 2026-10-24 — Hiding a slider or group for a moment: his pick is the dot as a switch + a menu + a pill, the held press refused, and hiding is an EDIT the export follows, built by parking the value (`docs/slider-peek.md` §6–§7, lab 2 https://claude.ai/artifact/X2kx8KnNDWqw8WmfkynF3S); decided, nothing built — `briefs.md`.
+- 2026-10-24 — Hiding a slider or group for a moment: his pick is the dot as a switch + a menu + a pill, the held press refused, and hiding is an EDIT the export follows, built by parking the value (`docs/slider-peek.md` §6–§7, lab 2 https://claude.ai/artifact/X2kx8KnNDWqw8WmfkynF3S); P1 (the model, `parked.ts`) built, P2–P5 next — `briefs.md`.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area

@@ -181,3 +181,15 @@ Colour, white balance, curve, levels, mixer, grading — and on their folds,
 with the greyed look. P3 the menu. P4 the pill. P5 the sections that are
 their OWN fields on the picture (Presence and detail, vignette, lens, look,
 layers' sliders): the same parking, one field each.
+
+**P1 built (2026-10-24)**: `DevelopSettings.parked` (cloned, compared,
+normalised and stored by `develop.ts` like every other field) and
+`parked.ts` (pure, tested): park / unpark, a slider's and a group's switch
+(`DEVELOP_GROUPS`, one per fold; a group reads `none · on · mixed · off`),
+`writeLive` (a value written to a parked field brings it back), show only,
+invert, `restoreParked` for the pill's ↩, and `withoutParked`. Wired in the
+same commit: a preset saves what is seen (`develop-presets.ts`); a develop
+whose every setting is off still STORES (`developOrNull`) and still counts
+as an edit (`pictureEdits`), since it draws as shot but holds work; the
+clipboard carries `parked` through `cloneDevelop`, and `withoutBase` drops a
+parked RAW white balance as it drops the live one. Nothing on screen yet.
