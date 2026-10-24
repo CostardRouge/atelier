@@ -250,8 +250,12 @@ encloses them. A layer whose every setting is off draws nothing
 (`normaliseLayer` reads through `developOrNull`), and MaskPanel no longer
 tells it to "move a slider" (`isBlankDevelop`). What a layer has off reads
 on its row (`rowChips` → `developLines`: "exposure off"); the stage's pill
-speaks for the picture's own develop only — whether it should also list
-the layers' is his call. Driven headless: Layers → + Layer → Whole picture
+speaks for the picture's own develop only. **Listing a layer's in the pill
+was REFUSED (2026-10-24, lab 3 https://claude.ai/artifact/Xw65kehYrdjRhf16ysEuZt):**
+switching a setting off inside a layer is rare, the row, the greyed bar and
+the summary already say it, and more words on the picture is what he
+avoids — *«too much … je vais jamais m'en servir»*. Re-propose only if a
+forgotten layer setting actually catches him out. Driven headless: Layers → + Layer → Whole picture
 → **Adjust · what** (the layer's sliders live behind that segment, not on
 the Adjust tab) → a switch, the row, the menu; the picture's own Exposure
 stayed at 0 and no pill appeared.
