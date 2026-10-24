@@ -378,6 +378,21 @@ export default function DevelopViewport({
           }}
           aria-label="The picture, corrected"
         />
+        {/* The A/B's before: the picture as shot, the same box, fit and
+            transform as the stage, cut at the divider by a clip — a drag of
+            the divider moves the clip and draws nothing (`wipe-clip.ts`). */}
+        <canvas
+          ref={picture.beforeCanvasRef}
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+          style={{
+            transform: view.transform,
+            transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
+            imageRendering: view.magnifying ? imageRenderingFor(pixelView) : undefined,
+            clipPath: picture.beforeClip ?? undefined,
+            visibility: picture.beforeClip ? undefined : 'hidden',
+          }}
+          aria-hidden="true"
+        />
         {/* The loupe: the file's own pixels, drawn in VIEWPORT space over the
             stage while the view is past the stage's 1:1. Sized 0 and drawing
             nothing when it is not (`use-develop-picture.ts`, «the loupe»). */}

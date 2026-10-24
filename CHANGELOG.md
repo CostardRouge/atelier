@@ -9,6 +9,18 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+### Added
+
+- Develop: press / to turn the A/B divider on and off, in the Develop tool and in the Develop sheet of Trips and the
+  Studio — on a computer, and on an iPad or phone with a keyboard.
+
+### Fixed
+
+- Develop: the A/B divider stays where you left it when you move to another picture, so you can page through a roll and
+  see each one before and after without placing it again. Opening a picture in the editor still starts on the corrected
+  picture.
+- Develop: dragging the A/B divider is smooth again — it no longer redraws the picture on every move.
+
 ## [1.4.0] - 2026-10-23 — Woad
 
 ### Added

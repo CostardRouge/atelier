@@ -894,7 +894,9 @@ alone until 2026-09-30, when the Develop TOOL took clips too — the same
   like the pixel view. **Turning it ON with the divider never placed (0) opens
   it on the middle** — the Studio's A/B does, and a press that changes nothing
   on screen reads as dead. That rule lives in `useDevelopPicture`, so the tool
-  has it too; a divider already placed is still remembered where it was.
+  has it too; a divider already placed is still remembered where it was — and since
+  2026-10-24 across pictures too: the sheet holds it above its keyed body
+  (`develop-roll.md`, «The A/B divider survives a page»).
 
 Verified headless (recipe in `testing.md`): a WebM with a bar crossing it
 played (bar 38 → 172 → 286 px, clock and ▶/❚❚ following), Space paused it with

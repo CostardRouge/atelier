@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from 'react';
 import type { ProfileRequest, RawProfile } from '../raw/dng-color';
 import { toLinear } from '../lut/transfer';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
@@ -21,6 +21,7 @@ import { openStageStill } from './stage-sources';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 import { HAND_SETTLE_MS, HAND_WARM_MS, handSize, inputsMoved, isHandStep } from './stage-hand';
+import { beforeClip } from './wipe-clip';
 
 /** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
 const COLOUR_SAMPLE_EDGE = 512;
@@ -452,6 +453,14 @@ export interface DevelopPicture {
    * 0 = no split, the whole picture corrected.
    */
   wipe: number;
+  /**
+   * The as-shot picture on a canvas of its own, laid over the stage's in the
+   * same box and transform, and cut at the divider by `beforeClip` — the
+   * wipe moves a clip and redraws nothing.
+   */
+  beforeCanvasRef: RefObject<HTMLCanvasElement>;
+  /** The before layer's `clip-path`; null while there is no split to show. */
+  beforeClip: string | null;
   holding: boolean;
   setHolding: (on: boolean) => void;
   /** Something to compare: a picture, and a cube that changes it. */
@@ -599,6 +608,9 @@ export interface DevelopPicture {
   };
 }
 
+/** Where the A/B divider is, held above a keyed picture: `useState(0)`'s pair. */
+export type SplitHold = readonly [number, Dispatch<SetStateAction<number>>];
+
 /**
  * ONE picture being developed: decoded to the stage budget, graded through the
  * host's cube, painted with the before/after split, zoomed and panned.
@@ -649,7 +661,16 @@ export function useDevelopPicture({
   sharpenMask = false,
   vignette = null,
   swipe = null,
+  split = null,
 }: {
+  /**
+   * Where the divider is, held by the HOST — `useState(0)` above the
+   * component a host keys per picture — so a page to the next picture keeps
+   * the split where the author left it, to see before → after down a whole
+   * roll without placing the line again on each one. Omitted, the hook holds
+   * its own and every picture opens on its whole corrected self.
+   */
+  split?: SplitHold | null;
   /**
    * The roll's DECK under the stage (`stage-deck.ts`, `use-stage-deck.ts`):
    * where a FREE pointer goes — fitted, the split off, no tool holding it.
@@ -832,12 +853,15 @@ export function useDevelopPicture({
   compare?: boolean;
 }): DevelopPicture {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const beforeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<BadgeSource | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   // Where the divider sits, 0..1 from the left; the picture is AS SHOT on its
   // left and corrected on its right, so it reads before → after. 0 is no split
   // at all — the divider at the far left leaves the whole picture corrected.
-  const [wipe, setWipe] = useState(0);
+  // The host's when it holds it (`split`), so a new picture keeps the line.
+  const ownWipe = useState(0);
+  const [wipe, setWipe] = split ?? ownWipe;
   const [holding, setHolding] = useState(false);
   const [picking, setPickingState] = useState(false);
   /**
@@ -855,6 +879,10 @@ export function useDevelopPicture({
    */
   const suspended = Boolean(paint) || picking;
   const shownWipe = compare && !suspended ? wipe : 0;
+  // Whether there is a before side at all: what the stage's PAINT follows.
+  // Where the divider is goes only to the before layer's clip, so a drag of
+  // the divider repaints nothing (`wipe-clip.ts`).
+  const splitShown = shownWipe > 0;
 
   // Read at decode time, not listed as a dep: the gain is measured by the
   // first decode and STORED by the host right after, and a re-decode for the
@@ -1234,23 +1262,45 @@ export function useDevelopPicture({
       ctx.drawImage(graded, 0, 0, gw, gh, 0, 0, w, h);
     }
     // The wipe: the untouched picture to the LEFT of the divider, the way the
-    // shader's own split works — before on the left, after on the right. The
-    // divider itself is drawn over the canvas, in the page, so it stays a
-    // hairline at any zoom.
-    if (grader && shownWipe > 0) {
-      const x = Math.round(shownWipe * w);
-      if (layout && framing) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, x, h);
-        ctx.clip();
-        drawPictureIn(ctx, source.image, source.width, source.height, framing, layout);
-        ctx.restore();
-      } else {
-        const sx = Math.round(shownWipe * source.width);
-        ctx.drawImage(source.image, 0, 0, sx, source.height, 0, 0, x, h);
+    // shader's own split works — before on the left, after on the right. It
+    // is a canvas of its OWN over this one, drawn whole and cut at the
+    // divider by a CSS clip (`beforeClip`): a drag of the divider moves the
+    // clip and draws nothing. Drawing the before half into the stage per
+    // pointer move was a stage-size `drawImage` and a readback each time —
+    // ≈ 45 of the ≈ 60 ms a move cost, measured headless (2026-10-24, his
+    // «ça saccade un petit peu»). The divider itself is drawn over the
+    // canvas, in the page, so it stays a hairline at any zoom.
+    paintBefore(Boolean(grader) && splitShown, w, h, layout);
+  };
+  // The before layer, drawn again only when what it SHOWS changed — the
+  // picture, its size, its frame, a clip's frame: a slider step regrades the
+  // stage and leaves the as-shot picture where it is.
+  const beforeDrawn = useRef<unknown[] | null>(null);
+  const paintBefore = (shown: boolean, w: number, h: number, layout: ReturnType<typeof scaleLayout> | null) => {
+    const canvas = beforeCanvasRef.current;
+    if (!canvas || !source) return;
+    if (!shown) {
+      // Released, not kept: a stage-size canvas nobody sees is memory a phone
+      // needs (`device-memory.md`).
+      if (canvas.width || canvas.height) {
+        canvas.width = 0;
+        canvas.height = 0;
       }
+      beforeDrawn.current = null;
+      return;
     }
+    const inputs: unknown[] = [source, w, h, framing, delivered1, video ? video.currentTime : null];
+    if (beforeDrawn.current && !inputsMoved(beforeDrawn.current, inputs) && canvas.width === w && canvas.height === h) return;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, w, h);
+    if (layout && framing) drawPictureIn(ctx, source.image, source.width, source.height, framing, layout);
+    else ctx.drawImage(source.image, 0, 0, source.width, source.height, 0, 0, w, h);
+    beforeDrawn.current = inputs;
   };
   const paintRef = useRef(paintStage);
   paintRef.current = paintStage;
@@ -1289,8 +1339,8 @@ export function useDevelopPicture({
       regraded && isHandStep({ held: handPointers.size > 0, wheelAt: handWheelAt, paintedAt: h.at }, performance.now());
     h.inputs = inputs;
     h.source = source;
-    // A step, or anything else drawn while the hand is still on (the wipe
-    // moved mid-drag): half, and whole again once it rests. A new picture,
+    // A step, or anything else drawn while the hand is still on (the split
+    // turned on mid-drag): half, and whole again once it rests. A new picture,
     // a lone change, a playing clip: whole at once.
     if ((step || (h.timer !== 0 && samePicture)) && !(video && !video.paused)) {
       if (step) window.clearTimeout(h.timer);
@@ -1336,7 +1386,7 @@ export function useDevelopPicture({
     framing,
     border,
     cube,
-    shownWipe,
+    splitShown,
     holding,
     geometry,
     stack,
@@ -2219,23 +2269,31 @@ export function useDevelopPicture({
       return;
     }
     const [x, y] = pixel;
+    const before = split > 0 && x < split * w;
+    const read = (c: HTMLCanvasElement | null) =>
+      c && c.width === w && c.height === h ? c.getContext('2d')?.getImageData(x, y, 1, 1).data : undefined;
     try {
-      const [r, g, b, a] = canvas.getContext('2d')?.getImageData(x, y, 1, 1).data ?? [];
+      // The before side is its own layer, which holds the picture alone: the
+      // border under it is the stage's.
+      let px = before ? read(beforeCanvasRef.current) : undefined;
+      if (!px || px[3] === 0) px = read(canvas);
+      const [r, g, b, a] = px ?? [];
       // A transparent pixel is outside the delivered frame (a crop's margin
       // before the border is drawn): nothing there to read.
       if (a === undefined || a === 0) {
         readout.set(null);
         return;
       }
-      const before = split > 0 && x < split * w;
       readout.set({ readout: readoutOf(r, g, b, clip && !before), before });
     } catch {
       readout.set(null);
     }
   }, [readout]);
   const trackReadout = (e: ReactPointerEvent<HTMLElement>) => {
-    // A finger is panning or placing the divider, not pointing at a pixel.
-    if (e.pointerType === 'touch') return;
+    // A finger is panning or placing the divider, not pointing at a pixel —
+    // and neither is a mouse dragging the divider: a read is a GPU readback,
+    // and the pixel under the line is not what the hand is looking at.
+    if (e.pointerType === 'touch' || dragging.current?.live) return;
     readoutAt.current = { x: e.clientX, y: e.clientY };
     if (!readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
   };
@@ -2390,6 +2448,7 @@ export function useDevelopPicture({
     },
     [source, canvasSize, frameRatio, framing, rect.x, rect.y, rect.width, rect.height],
   );
+  const comparingNow = Boolean(source && cube && !holding && compare && !suspended);
   const divider = {
     x: Math.min(
       Math.max(rect.x + shownWipe * rect.width, HANDLE_INSET),
@@ -2409,9 +2468,11 @@ export function useDevelopPicture({
     cube,
     view,
     wipe: shownWipe,
+    beforeCanvasRef,
+    beforeClip: comparingNow ? beforeClip(shownWipe, canvasSize, viewport) : null,
     holding,
     setHolding,
-    comparing: Boolean(source && cube && !holding && compare && !suspended),
+    comparing: comparingNow,
     histogram,
     stats,
     painting: Boolean(paint),

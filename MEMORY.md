@@ -119,6 +119,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-13 — The road's drive styles: defaults set on synthetic roads, check on his real trip — `trip-road-drive.md`.
 - 2026-10-13 — Sliders as one bar and 44 px targets built; not seen on his devices — `frontend.md`.
 - 2026-10-13 — A slide's length (face B) built; left: see it on his Mac and phone — `roadtrip.md`.
+- 2026-10-24 — The A/B divider kept across pictures (B of the lab) and moved as a clipped layer; per-picture (C) or detents (D) are his call — `develop-roll.md`.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
