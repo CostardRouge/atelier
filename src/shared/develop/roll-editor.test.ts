@@ -246,6 +246,17 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'h', shiftKey: true }))).toBeNull();
   });
 
+  it('turns the A/B divider on and off on `/`, shifted or not (⇧: on a Mac AZERTY)', () => {
+    expect(editorKeyAction(press({ key: '/' }))).toBe('compare');
+    expect(editorKeyAction(press({ key: '/', shiftKey: true }))).toBe('compare');
+    expect(editorKeyAction(press({ key: '/', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '/', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '/', metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '/', altKey: true }))).toBeNull();
+    // `?` is ⇧/ on QWERTY: the key's MEANING decides, so it stays the help.
+    expect(editorKeyAction(press({ key: '?', shiftKey: true }))).toBe('help');
+  });
+
   it('crops to the view on ⇧C, and a bare C still opens the crop', () => {
     expect(editorKeyAction(press({ key: 'C', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'c', shiftKey: true }))).toBe('crop-view');

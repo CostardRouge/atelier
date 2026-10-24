@@ -34,6 +34,8 @@ export interface AtlasScene {
   aircraftFound: { name: string; count: number }[];
   /** Flights no file named. */
   unnamed: number;
+  /** What a frame draws from has landed: the coastline (when drawn) and the places' names — or failed for good. */
+  settled: boolean;
 }
 
 /**
@@ -52,7 +54,10 @@ export function useAtlasScene(
 ): AtlasScene {
   const lod = useRef(new LodCache()).current;
   const [land, setLand] = useState<LandCollection | null>(null);
+  const [landFailed, setLandFailed] = useState(false);
   const [names, setNames] = useState<Map<string, string>>(() => new Map());
+  /** The places the names were last looked up for. */
+  const [namedFor, setNamedFor] = useState<readonly AtlasPlace[] | null>(null);
 
   // The shipped coastline, from our own origin, read the first time it is drawn.
   const wantsLand = settings.map.land !== 'off';
@@ -61,7 +66,7 @@ export function useAtlasScene(
     let cancelled = false;
     loadLand()
       .then((l) => !cancelled && setLand(l))
-      .catch(() => undefined);
+      .catch(() => !cancelled && setLandFailed(true));
     return () => {
       cancelled = true;
     };
@@ -75,13 +80,16 @@ export function useAtlasScene(
     if (!places.length) return;
     let cancelled = false;
     void gazetteerOrEmpty().then((cities) => {
-      if (cancelled || !cities.length) return;
-      const next = new Map<string, string>();
-      for (const p of places) {
-        const city = nearestCity(cities, { lat: p.lat, lon: p.lon }, 30);
-        if (city) next.set(`${p.lat.toFixed(4)},${p.lon.toFixed(4)}`, city.name);
+      if (cancelled) return;
+      if (cities.length) {
+        const next = new Map<string, string>();
+        for (const p of places) {
+          const city = nearestCity(cities, { lat: p.lat, lon: p.lon }, 30);
+          if (city) next.set(`${p.lat.toFixed(4)},${p.lon.toFixed(4)}`, city.name);
+        }
+        setNames(next);
       }
-      setNames(next);
+      setNamedFor(places);
     });
     return () => {
       cancelled = true;
@@ -271,5 +279,7 @@ export function useAtlasScene(
     [flights, schedule, settings, visiblePlaces, placeNames, placeOf, land, activity, stats, lod, episodes, aircraft, totals, dateRange, logos, story, diveTo],
   );
 
-  return { core, schedule, places, placeNames, viewAt, fitAll, mapFrame, aircraftFound, unnamed };
+  const settled = (!wantsLand || land !== null || landFailed) && (!places.length || namedFor === places);
+
+  return { core, schedule, places, placeNames, viewAt, fitAll, mapFrame, aircraftFound, unnamed, settled };
 }

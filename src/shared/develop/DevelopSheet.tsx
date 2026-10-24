@@ -11,6 +11,7 @@ import { fileIdentity } from '../library/assets';
 import { useLocalFlag } from '../ui/use-local-flag';
 import { usePixelView } from '../ui/use-pixel-view';
 import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
+import { isCompareKey } from './roll-editor';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import { PRESS_LOOK } from '../ui/press';
@@ -36,7 +37,7 @@ import DevelopSliders from './DevelopSliders';
 import DevelopTransport from './DevelopTransport';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
-import { useDevelopPicture } from './use-develop-picture';
+import { useDevelopPicture, type SplitHold } from './use-develop-picture';
 import { usePicturePixels } from './use-picture-pixels';
 import { pictureFidelity } from './picture-fidelity';
 import { renderPrecisionHere } from '../render/graph-grader';
@@ -147,10 +148,13 @@ export default function DevelopSheet(props: DevelopSheetProps) {
   const slot = (p: SheetDeckPicture | null): DeckNeighbour | null =>
     p ? { id: p.id, name: p.name, src: urls.get(p.id) ?? null } : null;
   const neighbours = deck && (deck.previous || deck.next) ? { previous: slot(deck.previous), next: slot(deck.next) } : null;
+  // The A/B divider, above the body keyed per picture: a page keeps it.
+  const split = useState(0);
   return (
     <DevelopSheetBody
       key={deck ? (deck.current.key ?? deck.current.id) : 'one'}
       {...props}
+      split={split}
       neighbours={neighbours}
       still={deck ? (urls.get(deck.current.id) ?? null) : null}
     />
@@ -192,9 +196,11 @@ function DevelopSheetBody({
   deck = null,
   neighbours,
   still,
+  split,
 }: DevelopSheetProps & {
   neighbours: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
   still: string | null;
+  split: SplitHold;
 }) {
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
@@ -248,6 +254,7 @@ function DevelopSheetBody({
     pixelView,
     clipping,
     compare: compareOn,
+    split,
     swipe: neighbours ? sheetDeck.hands : null,
   });
   pictureRef.current = { width: () => picture.view.viewportRef.current?.clientWidth ?? 0 };
@@ -304,6 +311,22 @@ function DevelopSheetBody({
       if (action.kind === 'pan') v.pan(action.dx, action.dy);
       else if (v.zoomed) v.zoom.reset();
       else v.zoom.zoomIn();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // `/` — the A/B pill's press from the keyboard, as in the Develop tool
+  // (`isCompareKey`): a picture there, a field keeps its key.
+  const compareKeys = useRef({ on: compareOn, set: setCompareOn, shown: Boolean(picture.source) });
+  compareKeys.current = { on: compareOn, set: setCompareOn, shown: Boolean(picture.source) };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !compareKeys.current.shown) return;
+      const press = { key: e.key, repeat: e.repeat, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey };
+      if (!isCompareKey({ ...press, targetTypes: targetOwnsTyping(describeKeyTarget(e.target)) })) return;
+      e.preventDefault();
+      compareKeys.current.set(!compareKeys.current.on);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -379,10 +402,10 @@ function DevelopSheetBody({
                 aria-pressed={compareOn}
                 title={
                   compareHeld
-                    ? 'Before / after — held while the dropper is armed; the divider comes back where it was'
+                    ? 'Before / after (/) — held while the dropper is armed; the divider comes back where it was'
                     : compareOn
-                      ? 'Before / after — the divider is on, and a drag across the picture places it'
-                      : 'Before / after — off: the whole picture is shown corrected'
+                      ? 'Before / after (/) — the divider is on, and a drag across the picture places it'
+                      : 'Before / after (/) — off: the whole picture is shown corrected'
                 }
               >
                 A/B

@@ -4,7 +4,7 @@ import { DRAG_SLOP, type DragHandler, type ZoomTarget } from '../../shared/ui/zo
 import { ensureFontFaces } from '../../shared/overlay/fonts';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import type { WorldBox } from './atlas-flight';
-import { HUD_FONT_FACES, paintAtlas, type PaintedFrame, type PaintScene } from './atlas-paint';
+import { frameFontFaces, paintAtlas, type PaintedFrame, type PaintScene } from './atlas-paint';
 import { hitAt, nearFlight, unionOf, type AtlasLayer } from './atlas-layers';
 import { dropPlacement, PIECE_LAYER, pieceAt, pieceBox, withPlacement, type PieceId, type Placement } from './atlas-place';
 import type { AtlasTiles } from './atlas-tiles';
@@ -79,14 +79,14 @@ export default function AtlasStage(props: AtlasStageProps) {
   const heldTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(heldTimer.current), []);
 
-  const face = `${theme.style.italic ? 'italic ' : ''}${theme.style.weight} 32px '${theme.style.fontFamily}'`;
+  const facesKey = frameFontFaces(theme.style).join('|');
   useEffect(() => {
     let cancelled = false;
-    void ensureFontFaces([...HUD_FONT_FACES, face]).then(() => !cancelled && setFontsReady((n) => n + 1));
+    void ensureFontFaces(facesKey.split('|')).then(() => !cancelled && setFontsReady((n) => n + 1));
     return () => {
       cancelled = true;
     };
-  }, [face]);
+  }, [facesKey]);
 
   // The room the column gives, measured — never the canvas's own size.
   useEffect(() => {
@@ -122,6 +122,7 @@ export default function AtlasStage(props: AtlasStageProps) {
     const frame = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      const starting = clock.starting;
       clock.tick(dt);
       const canvas = canvasRef.current;
       const { core: c, viewAt: v, tiles: tl, focus: fo, size: sz, selected: sel } = live.current;
@@ -142,6 +143,8 @@ export default function AtlasStage(props: AtlasStageProps) {
           placeOutline(canvas, outlineRef.current, painted.current, sel);
         }
       }
+      // The film moves from the end of its first frame: what that frame cost is not a jump on the next.
+      if (starting) last = performance.now();
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

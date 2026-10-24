@@ -814,6 +814,11 @@ export const HUD_FONT_FACES = [
   "600 32px 'Montserrat'",
 ];
 
+/** Every face a frame may draw: the HUD's, and the title theme's own. */
+export function frameFontFaces(style: { italic: boolean; weight: number; fontFamily: string }): string[] {
+  return [...HUD_FONT_FACES, `${style.italic ? 'italic ' : ''}${style.weight} 32px '${style.fontFamily}'`];
+}
+
 /** The tiles' tones, roughly as bright as they land — what an automatic sticker ink reads under Streets. */
 const TONE_LUMINANCE: Record<string, number> = { night: 0.02, grey: 0.05, sepia: 0.04, natural: 0.72 };
 
