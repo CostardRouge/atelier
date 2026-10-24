@@ -9,6 +9,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-24 — Xanthophyll
+
 ### Added
 
 - Develop: press / to turn the A/B divider on and off, in the Develop tool and in the Develop sheet of Trips and the
