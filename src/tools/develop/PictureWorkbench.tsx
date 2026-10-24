@@ -72,7 +72,7 @@ import { canStageDraw } from '../../shared/projects/media-rendition';
 import { fetchHeld } from '../../shared/sources/held-fetch';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
-import { useDevelopPicture, type DevelopFrame, type DevelopPicture } from '../../shared/develop/use-develop-picture';
+import { useDevelopPicture, type DevelopFrame, type DevelopPicture, type SplitHold } from '../../shared/develop/use-develop-picture';
 import { useStageDeck } from '../../shared/develop/use-stage-deck';
 import type { DeckNeighbour } from '../../shared/develop/stage-deck';
 import { DECK_GAP } from '../../shared/ui/use-media-viewer';
@@ -367,6 +367,7 @@ export default function PictureWorkbench({
   exportVerbs,
   onSnapshot,
   onStep,
+  split = null,
   onDeliver,
   deliveryTable = null,
   onWords,
@@ -475,6 +476,11 @@ export default function PictureWorkbench({
   neighbours?: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
   /** This picture's own cell, drawn under the stage until it has decoded (`DevelopViewport`'s `still`). */
   still?: string | null;
+  /**
+   * The A/B divider, held by the roll editor ABOVE the workbench it keys per
+   * picture, so stepping through the roll keeps the split where it was left.
+   */
+  split?: SplitHold | null;
   /**
    * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
    * un-ignore): the editor answers from the roll as it stands, since the
@@ -1309,6 +1315,7 @@ export default function PictureWorkbench({
     segmenting: !clip && subjectLayersToSegment(layersDraft).length > 0,
     paint: clip ? null : paint,
     compare: compareOn,
+    split,
     clipping,
     sharpenMask: !clip && sharpenMaskView && tab === 'detail',
     vignette: clip ? null : vignetteDraft,

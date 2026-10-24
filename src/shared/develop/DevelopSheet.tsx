@@ -34,7 +34,7 @@ import DevelopSliders from './DevelopSliders';
 import DevelopTransport from './DevelopTransport';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
-import { useDevelopPicture } from './use-develop-picture';
+import { useDevelopPicture, type SplitHold } from './use-develop-picture';
 import { usePicturePixels } from './use-picture-pixels';
 import { pictureFidelity } from './picture-fidelity';
 import { renderPrecisionHere } from '../render/graph-grader';
@@ -145,10 +145,13 @@ export default function DevelopSheet(props: DevelopSheetProps) {
   const slot = (p: SheetDeckPicture | null): DeckNeighbour | null =>
     p ? { id: p.id, name: p.name, src: urls.get(p.id) ?? null } : null;
   const neighbours = deck && (deck.previous || deck.next) ? { previous: slot(deck.previous), next: slot(deck.next) } : null;
+  // The A/B divider, above the body keyed per picture: a page keeps it.
+  const split = useState(0);
   return (
     <DevelopSheetBody
       key={deck ? (deck.current.key ?? deck.current.id) : 'one'}
       {...props}
+      split={split}
       neighbours={neighbours}
       still={deck ? (urls.get(deck.current.id) ?? null) : null}
     />
@@ -190,9 +193,11 @@ function DevelopSheetBody({
   deck = null,
   neighbours,
   still,
+  split,
 }: DevelopSheetProps & {
   neighbours: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
   still: string | null;
+  split: SplitHold;
 }) {
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
@@ -246,6 +251,7 @@ function DevelopSheetBody({
     pixelView,
     clipping,
     compare: compareOn,
+    split,
     swipe: neighbours ? sheetDeck.hands : null,
   });
   pictureRef.current = { width: () => picture.view.viewportRef.current?.clientWidth ?? 0 };

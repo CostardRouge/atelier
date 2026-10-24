@@ -289,6 +289,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [focus, setFocus] = useState(false);
   const toggleFocus = useCallback(() => setFocus((f) => !f), []);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The A/B divider, held here above the workbench keyed per picture: a step
+  // to the next picture keeps the split where it was left, so before → after
+  // reads down the whole roll (his ask, 2026-10-24). Opening the editor
+  // starts on the picture corrected whole.
+  const split = useState(0);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
   const winnowRef = useRef({ connection, client });
@@ -2965,6 +2970,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onStepRow={stepRow}
               neighbours={deckNeighbours}
               still={deckStill}
+              split={split}
               onDeliver={(action) => (selecting && selectedIds.length > 0 ? deliverSelection(action) : handleDeliver(open.id, action))}
               selecting={selecting}
               onSelectMode={() => (selecting ? stopSelecting() : startSelecting())}
