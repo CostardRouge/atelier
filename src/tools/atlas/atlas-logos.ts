@@ -200,6 +200,11 @@ function load(): Promise<void> {
   return loading;
 }
 
+/** Resolves once the logos this device keeps are decoded and published (never rejects). */
+export function logosLoaded(): Promise<void> {
+  return load().catch(() => undefined);
+}
+
 export type AddLogoResult = { ok: true } | { ok: false; reason: string };
 
 /** Keep `file` as `maker`'s logo, in place of any other. */
