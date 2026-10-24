@@ -2096,7 +2096,10 @@ bottom-left corner (above the floating verbs on a phone) names it — one chip
 per setting, or the section when all of it is off, a tap putting it back —
 with **↩** (back to before the last Show only or Invert, while it stands),
 **⇄ Invert** and **Show all**. Trips' and the Studio's Develop sheet have the
-same switches, menu and pill. **Every glyph answers the hand that presses it, a finger
+same switches, menu and pill. A **layer**'s sliders and curve switch the same
+way, with their own menu, and act on that layer alone; what a layer has off
+reads on its row in the list (`exposure off`) rather than in the pill, which
+speaks for the picture's own correction. **Every glyph answers the hand that presses it, a finger
 included**: it goes down a pixel at the touch and stays there a beat after
 the lift; a verb that takes time — a paste re-rendering a RAW, an Auto, an
 Apply to — keeps it down while it runs, with a hairline along the picture's

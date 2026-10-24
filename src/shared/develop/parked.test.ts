@@ -305,3 +305,16 @@ describe('the pill', () => {
     expect(sameDevelop(back, edited())).toBe(true);
   });
 });
+
+describe('a layer with a setting switched off', () => {
+  it('keeps it through a reload, draws nothing while all is off, and is no longer "found — move a slider"', async () => {
+    const { createLayer, normaliseLayer, layerDraws } = await import('./layer');
+    const { isBlankDevelop } = await import('./develop');
+    const layer = { ...createLayer('linear', 'l1'), develop: park(dev({ exposure: 0.5 }), ['exposure']) };
+    const read = normaliseLayer(JSON.parse(JSON.stringify(layer)), 'l1');
+    expect(read?.develop.parked).toEqual({ exposure: 0.5 });
+    expect(layerDraws(read!)).toBe(false);
+    expect(isBlankDevelop(read!.develop)).toBe(false);
+    expect(layerDraws({ ...read!, develop: unparkAll(read!.develop) })).toBe(true);
+  });
+});

@@ -240,3 +240,21 @@ phone's immersive Develop, where that corner lies under the band and the
 shell's bar: there it rides in the floating verbs' container, above them
 (`verbsPlace === 'float'`). The pill stops its own `pointerdown` so it never
 starts the stage's drag, swipe or hold. Driven headless at 1440 and 390 px.
+
+**P5 built (2026-10-24) — the plan is complete.** A layer's `DevelopSliders`
+and `DevelopCurve` take the switches too, inside a `ParkedProvider` of their
+OWN (keyed on the layer, writing through `writeLayerDevelop`), so the menu
+and its steps act on that layer and never on the picture whose provider
+encloses them. A layer whose every setting is off draws nothing
+(`layerDraws`, as at zero) but keeps its work through a reload
+(`normaliseLayer` reads through `developOrNull`), and MaskPanel no longer
+tells it to "move a slider" (`isBlankDevelop`). What a layer has off reads
+on its row (`rowChips` → `developLines`: "exposure off"); the stage's pill
+speaks for the picture's own develop only — whether it should also list
+the layers' is his call. Driven headless: Layers → + Layer → Whole picture
+→ **Adjust · what** (the layer's sliders live behind that segment, not on
+the Adjust tab) → a switch, the row, the menu; the picture's own Exposure
+stayed at 0 and no pill appeared.
+
+**Not yet**: seen on his Mac, iPad or phone; the render-recipe seam
+(`render-core.md`) and the "without | with" split (a third lab) are apart.

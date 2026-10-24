@@ -21,6 +21,8 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   others again" and puts back exactly what was on before.
 - Develop: while a setting is off, a pill over the picture names what is off — tap a name to bring it back — with a
   way back from the last Show only or Invert, Invert, and Show all.
+- Develop: a mask layer's sliders and curve can be switched off and have the same menu, acting on that layer alone;
+  its row in the layer list says what is off.
 
 ## [1.4.0] - 2026-10-23 — Woad
 

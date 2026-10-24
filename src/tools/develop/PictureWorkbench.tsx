@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { foldSwitch, shownOf } from '../../shared/develop/parked';
+import { foldSwitch, forgetParked, shownOf } from '../../shared/develop/parked';
 import { ParkedPill, ParkedProvider } from '../../shared/develop/ParkedMenu';
 import { createPortal } from 'react-dom';
 import {
@@ -637,6 +637,14 @@ export default function PictureWorkbench({
   useEffect(() => setSubjectTone('add'), [selectedLayerId]);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
+  // The selected layer's whole develop, written at once — its sliders, its
+  // switches and its menu (`parked.ts`) all go through here.
+  const writeLayerDevelop = useCallback(
+    (develop: DevelopSettings) => {
+      if (selectedLayerId) setLayersDraft((list) => patchLayer(list, selectedLayerId, { develop }));
+    },
+    [selectedLayerId],
+  );
 
   // --- painting ------------------------------------------------------------
   // The live stroke rides a REF and the draft alike: the ref is what the next
@@ -3398,29 +3406,24 @@ export default function PictureWorkbench({
                       {/* The SAME sliders the global develop uses, because a
                           layer's adjustment IS a DevelopSettings — one maths, one
                           panel, and a local exposure behaves like a global one. */}
-                      <DevelopSliders
-                        foldPrefix="layer."
-                        value={selectedLayer.develop}
-                        onChange={(key, v) =>
-                          setLayersDraft((list) =>
-                            patchLayer(list, selectedLayer.id, {
-                              develop: { ...selectedLayer.develop, [key]: v },
-                            }),
-                          )
-                        }
-                      />
-                      <DevelopCurve
-                        foldPrefix="layer."
-                        value={selectedLayer.develop.curves}
-                        histogram={picture.histogram}
-                        onChange={(curves) =>
-                          setLayersDraft((list) =>
-                            patchLayer(list, selectedLayer.id, {
-                              develop: { ...selectedLayer.develop, curves },
-                            }),
-                          )
-                        }
-                      />
+                      {/* Its own provider, keyed on the layer: the switches,
+                          the menu and its steps back act on THIS layer's
+                          develop, never the picture's. */}
+                      <ParkedProvider key={selectedLayer.id} develop={selectedLayer.develop} write={writeLayerDevelop}>
+                        <DevelopSliders
+                          foldPrefix="layer."
+                          value={selectedLayer.develop}
+                          onChange={(key, v) => writeLayerDevelop(forgetParked({ ...selectedLayer.develop, [key]: v }, [key]))}
+                          onSwitch={writeLayerDevelop}
+                        />
+                        <DevelopCurve
+                          foldPrefix="layer."
+                          value={shownOf(selectedLayer.develop, 'curves')}
+                          histogram={picture.histogram}
+                          onChange={(curves) => writeLayerDevelop(forgetParked({ ...selectedLayer.develop, curves }, ['curves']))}
+                          switched={foldSwitch(selectedLayer.develop, 'curve', writeLayerDevelop)}
+                        />
+                      </ParkedProvider>
                     </>
                   )}
                 </LayerDetail>

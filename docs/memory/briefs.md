@@ -231,7 +231,7 @@ anything about media sources or document storage:
   invert), a reversible Show only, a pill on the stage; the HELD press
   refused as tiring. §7: hiding is an EDIT (the export follows the
   screen), built by PARKING the value in `DevelopSettings.parked` so the
-  ~50 readers of a develop need no change. Read it before giving `SliderBar` or
+  ~50 readers of a develop need no change. P1–P5 built (§6–§7). Read it before giving `SliderBar` or
   `DevelopFold` a new gesture, or adding an on/off to a Develop group.
 - **`docs/touch-targets.md`** — the small targets under a finger (2026-10-14):
   what stayed at 28 px or less, three faces measured in a lab with a finger
