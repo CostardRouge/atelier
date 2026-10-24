@@ -3,6 +3,10 @@ import { DEFAULT_DEVELOP, cloneDevelop, developOrNull, isDefaultDevelop, normali
 import type { Curve, ToneCurves } from './curves';
 import { describeDevelop } from './develop';
 import {
+  applyParkedVerb,
+  parkedMenu,
+  type ParkTarget,
+  type ParkedStep,
   foldSwitch,
   forgetParked,
   groupState,
@@ -219,5 +223,60 @@ describe('what the inspector reads', () => {
   it('says what is switched off in the row, and is no longer "As shot"', () => {
     expect(describeDevelop(park(edited(), ['vibrance', 'curves']))).toMatch(/ · vibrance, curve off$/);
     expect(describeDevelop(showOnly(edited(), []))).toBe('exposure, contrast, saturation, vibrance, curve off');
+  });
+});
+
+describe('the menu', () => {
+  const vib: ParkTarget = { kind: 'key', key: 'vibrance', name: 'Vibrance' };
+  const colour: ParkTarget = { kind: 'group', id: 'colour', name: 'Colour' };
+  const tint: ParkTarget = { kind: 'key', key: 'tint', name: 'Tint' };
+  const labels = (d: DevelopSettings, t: ParkTarget, top?: ParkedStep) => parkedMenu(d, t, top).map((i) => (i.disabled ? `(${i.label})` : i.label));
+
+  it('reads Reset, Hide, Show only — and Invert only once something is off', () => {
+    expect(labels(edited(), vib)).toEqual(['Reset Vibrance', 'Hide Vibrance', 'Show only Vibrance']);
+    expect(labels(park(edited(), ['vibrance']), vib)).toEqual(['Reset Vibrance', 'Show Vibrance', 'Show only Vibrance', 'Invert hidden']);
+  });
+
+  it('greys what a field at its default cannot do', () => {
+    expect(labels(edited(), tint)).toEqual(['(Reset Tint)', '(Hide Tint)', '(Show only Tint)']);
+  });
+
+  it('a Show only reads "Show the others again" while it stands, and goes back exactly', () => {
+    const before = park(edited(), ['curves']);
+    const only = applyParkedVerb(before, vib, 'only', undefined);
+    expect(only.push?.label).toBe('Only Vibrance');
+    expect(labels(only.next, vib, only.push)).toContain('Show the others again');
+    expect(labels(only.next, colour, only.push)).toContain('Show only Colour');
+    const back = applyParkedVerb(only.next, vib, 'back', only.push);
+    expect(back.pop).toBe(true);
+    expect(sameDevelop(back.next, before)).toBe(true);
+  });
+
+  it('no longer offers the way back once something was switched since', () => {
+    const only = applyParkedVerb(edited(), vib, 'only', undefined);
+    const touched = toggleKey(only.next, 'saturation');
+    expect(labels(touched, vib, only.push)).toContain('Show only Vibrance');
+  });
+
+  it('stacks: two Show only go back one at a time', () => {
+    const a = applyParkedVerb(edited(), vib, 'only', undefined);
+    const b = applyParkedVerb(a.next, colour, 'only', a.push);
+    const backB = applyParkedVerb(b.next, colour, 'back', b.push);
+    expect(sameDevelop(backB.next, a.next)).toBe(true);
+    const backA = applyParkedVerb(backB.next, vib, 'back', a.push);
+    expect(sameDevelop(backA.next, edited())).toBe(true);
+  });
+
+  it('reset throws the value away, switched off or not; a group resets all of it', () => {
+    expect(isSet(applyParkedVerb(park(edited(), ['vibrance']), vib, 'reset', undefined).next, 'vibrance')).toBe(false);
+    const g = applyParkedVerb(edited(), colour, 'reset', undefined).next;
+    expect([g.saturation, g.vibrance]).toEqual([0, 0]);
+    expect(g.exposure).toBe(0.45);
+  });
+
+  it('invert is a step too', () => {
+    const inv = applyParkedVerb(park(edited(), ['vibrance']), vib, 'invert', undefined);
+    expect(inv.push?.label).toBe('Invert');
+    expect(inv.next.vibrance).toBe(40);
   });
 });

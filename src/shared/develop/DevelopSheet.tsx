@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldSwitch, shownOf } from './parked';
+import { ParkedProvider } from './ParkedMenu';
 import { createPortal } from 'react-dom';
 import type { LutStack } from '../lut/use-lut-stack';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../media/transport-keys';
@@ -336,6 +337,7 @@ function DevelopSheetBody({
   // later element paints on top — the sheet sat over the picture being
   // developed. At the end of the document the modal is the later one.
   return createPortal(
+    <ParkedProvider develop={draft.draft} write={draft.replace}>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.55)] backdrop-blur-[2px] max-[820px]:p-0"
       role="dialog"
@@ -539,7 +541,8 @@ function DevelopSheetBody({
           </span>
         </div>
       </div>
-    </div>,
+    </div>
+    </ParkedProvider>,
     document.body,
   );
 }

@@ -2085,8 +2085,14 @@ the mixer, Colour grading) does the same for everything set in it. Switching
 off is an edit like any other: saved on the roll, taken back by ⌘Z, carried by
 ⌘C/⌘V, and the export, Trips and the Studio show the picture as you see it;
 the correction's summary ends with what is off (`vibrance, curve off`), and a
-preset keeps only what is on. Trips' and the Studio's Develop sheet have the
-same switches. **Every glyph answers the hand that presses it, a finger
+preset keeps only what is on. A **right-click** on a set slider or on a
+section's header — its **⋯**, the menu key or Shift+F10, or under a finger
+the dot or the eye **held** — opens its menu: **Reset**, **Hide** / **Show**,
+**Show only** (everything else set goes off; while nothing has been switched
+since, the same line reads **Show the others again** and puts back exactly
+what was there, one Show only at a time), and **Invert hidden** once
+something is off. Trips' and the Studio's Develop sheet have the same
+switches and menu. **Every glyph answers the hand that presses it, a finger
 included**: it goes down a pixel at the touch and stays there a beat after
 the lift; a verb that takes time — a paste re-rendering a RAW, an Auto, an
 Apply to — keeps it down while it runs, with a hairline along the picture's

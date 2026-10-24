@@ -2,6 +2,7 @@ import DevelopFold from './DevelopFold';
 import SliderBar, { type SliderBarProps } from '../ui/SliderBar';
 import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
 import { foldSwitch, isParked, isSet, shownOf, toggleKey, type DevelopGroupId } from './parked';
+import { useParkedOpener } from './ParkedMenu';
 
 const LABELS: Readonly<Record<DevelopKey, string>> = {
   exposure: 'Exposure',
@@ -57,6 +58,10 @@ export default function DevelopSliders({
   /** Keeps a LAYER's folds apart from the picture's (`layer.`). */
   foldPrefix?: string;
 }) {
+  // Only where the column switches: a layer's sliders sit inside the
+  // picture's provider, and its menu would write the picture's develop.
+  const openMenu = useParkedOpener();
+  const menu = onSwitch ? openMenu : undefined;
   return (
     <>
       {GROUPS.map((group) => (
@@ -75,6 +80,7 @@ export default function DevelopSliders({
               value={shownOf(value, key)}
               onChange={(v) => onChange(key, v)}
               toggle={onSwitch ? { off: isParked(value, key), onToggle: () => onSwitch(toggleKey(value, key)) } : undefined}
+              onMenu={menu && isSet(value, key) ? (rect) => menu({ kind: 'key', key, name: LABELS[key] }, rect) : undefined}
             />
           ))}
         </DevelopFold>
@@ -102,6 +108,7 @@ export function RangeSlider({
   swatch,
   onChange,
   toggle,
+  onMenu,
 }: {
   label: string;
   /** A colour the row is ABOUT — a mixer band's hue — drawn as a chip before the name. */
@@ -115,6 +122,8 @@ export function RangeSlider({
   onChange: (v: number) => void;
   /** Its on/off switch, where the column can switch settings off (`SliderBar`). */
   toggle?: SliderBarProps['toggle'];
+  /** Its menu — Reset · Hide · Show only (`ParkedMenu.tsx`). */
+  onMenu?: SliderBarProps['onMenu'];
 }) {
   return (
     <SliderBar
@@ -134,6 +143,7 @@ export function RangeSlider({
       printed={printed ?? signed(value)}
       onChange={onChange}
       toggle={toggle}
+      onMenu={onMenu}
     />
   );
 }
@@ -148,11 +158,13 @@ export function DevelopSlider({
   value,
   onChange,
   toggle,
+  onMenu,
 }: {
   k: DevelopKey;
   value: number;
   onChange: (v: number) => void;
   toggle?: SliderBarProps['toggle'];
+  onMenu?: SliderBarProps['onMenu'];
 }) {
   const range = DEVELOP_RANGES[k];
   return (
@@ -163,6 +175,7 @@ export function DevelopSlider({
       printed={k === 'exposure' ? `${signed(value, 2)} ${range.unit}` : signed(value)}
       onChange={onChange}
       toggle={toggle}
+      onMenu={onMenu}
     />
   );
 }

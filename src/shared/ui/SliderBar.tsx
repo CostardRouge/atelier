@@ -32,10 +32,17 @@
  * never sits on the name: every name of such a column starts 16 px further
  * in. Switched off, the bar keeps its number, greyed and struck — the
  * picture does not wear it — and moving it brings it back.
+ *
+ * Given an `onMenu`, the bar has a MENU (Develop's Reset · Hide · Show only,
+ * `ParkedMenu.tsx`): a right-click on it, the keyboard's menu key or
+ * Shift+F10 while it has the focus, or the switch HELD under a finger — the
+ * bar's own hold already types the value.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Icons } from './icons';
+import type { AnchorRect } from './menu-anchor';
+import { LONG_PRESS_MS } from './press-intent';
 import {
   HOLD_TO_TYPE_MS,
   fillSpan,
@@ -83,6 +90,8 @@ export interface SliderBarProps {
    * the value waits switched off — the bar draws it greyed and struck.
    */
   toggle?: { off: boolean; onToggle: () => void };
+  /** Opens the bar's menu, hung from the rect given. */
+  onMenu?: (rect: AnchorRect) => void;
 }
 
 type Gesture =
@@ -109,8 +118,14 @@ export default function SliderBar({
   lead,
   after,
   toggle,
+  onMenu,
 }: SliderBarProps) {
   const off = Boolean(toggle?.off);
+  // The switch held still opens the menu, and its click then switches nothing.
+  const switchHold = useRef<{ timer: number; held: boolean } | null>(null);
+  const endSwitchHold = () => {
+    if (switchHold.current) window.clearTimeout(switchHold.current.timer);
+  };
   const range: SliderRange = { min, max, step };
   const shown = Math.min(max, Math.max(min, value));
   const words = printed ?? (format ? format(value) : String(value));
@@ -303,7 +318,16 @@ export default function SliderBar({
       onPointerUp={onPointerUp}
       onPointerCancel={endGesture}
       onDoubleClick={() => reset !== undefined && !disabled && write(reset)}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        // A finger's long press is the typed value's, never the menu's; a key
+        // (the menu key, Shift+F10) hangs it from the bar.
+        if (!onMenu || disabled || typing !== null || gesture.current) return;
+        if ((e.nativeEvent as { pointerType?: string }).pointerType === 'touch') return;
+        const box = barRef.current?.getBoundingClientRect();
+        const keyed = e.clientX === 0 && e.clientY === 0;
+        onMenu(keyed && box ? { left: box.left, right: box.right, top: box.top, bottom: box.bottom } : { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY });
+      }}
       data-dragging={dragging || undefined}
       aria-disabled={disabled || undefined}
       data-ring={ring || undefined}
@@ -362,9 +386,32 @@ export default function SliderBar({
             aria-pressed={!off}
             aria-label={`${off ? 'Show' : 'Hide'} ${name ?? (typeof label === 'string' ? label : 'this setting')}`}
             title={off ? 'Show — the picture and the export wear it again' : 'Hide — the picture and the export leave it out'}
-            onPointerDown={stop}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              if (!onMenu) return;
+              const button = e.currentTarget;
+              const timer = window.setTimeout(() => {
+                if (switchHold.current) switchHold.current.held = true;
+                const r = button.getBoundingClientRect();
+                onMenu({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+              }, LONG_PRESS_MS);
+              switchHold.current = { timer, held: false };
+            }}
+            onPointerUp={endSwitchHold}
+            onPointerCancel={endSwitchHold}
+            onPointerLeave={endSwitchHold}
+            onContextMenu={(e) => {
+              // The press held already opened the menu; the browser's own must not.
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             onDoubleClick={(e) => e.stopPropagation()}
-            onClick={toggle.onToggle}
+            onClick={() => {
+              const hold = switchHold.current;
+              switchHold.current = null;
+              if (hold?.held) return;
+              toggle.onToggle();
+            }}
             className="absolute left-0 inset-y-0 w-[26px] grid place-items-center pointer-events-auto cursor-pointer group/switch"
           >
             <span

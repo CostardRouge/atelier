@@ -211,6 +211,8 @@ export function forgetParked(d: DevelopSettings, keys: readonly string[]): Devel
 
 /** A fold's switch, as the inspector draws it: absent while nothing in the fold is set. */
 export interface FoldSwitch {
+  /** The group it switches — what its menu acts on. */
+  id: DevelopGroupId;
   state: 'on' | 'off' | 'mixed';
   onSwitch: () => void;
 }
@@ -223,5 +225,116 @@ export function foldSwitch(
 ): FoldSwitch | undefined {
   if (!write) return undefined;
   const state = groupState(d, id);
-  return state === 'none' ? undefined : { state, onSwitch: () => write(toggleGroup(d, id)) };
+  return state === 'none' ? undefined : { id, state, onSwitch: () => write(toggleGroup(d, id)) };
+}
+
+// --- the menu (P3): reset · hide · show only · invert ------------------------
+
+/** What a menu acts on: one field (a slider) or one fold, with the name the screen gives it. */
+export type ParkTarget = { kind: 'key'; key: ParkableKey; name: string } | { kind: 'group'; id: DevelopGroupId; name: string };
+
+/** The fields a target holds. */
+export function targetKeys(t: ParkTarget): readonly ParkableKey[] {
+  return t.kind === 'key' ? [t.key] : groupKeys(t.id);
+}
+
+/** A target as one string — what a step remembers it by. */
+export function targetId(t: ParkTarget): string {
+  return t.kind === 'key' ? `k:${t.key}` : `g:${t.id}`;
+}
+
+/**
+ * One way BACK, kept in memory while the picture is open: a Show only or an
+ * Invert remembers the set it replaced (`prior`) and the one it made
+ * (`made`), so "Show the others again" restores exactly what was there —
+ * one step per press, a stack costing what the last one alone would.
+ */
+export interface ParkedStep {
+  label: string;
+  /** The target a Show only was asked for; null for an Invert. */
+  target: string | null;
+  prior: ParkableKey[];
+  made: ParkableKey[];
+}
+
+export type ParkedVerb = 'reset' | 'toggle' | 'only' | 'back' | 'invert';
+
+export interface ParkedMenuItem {
+  verb: ParkedVerb;
+  label: string;
+  disabled: boolean;
+}
+
+const sameKeys = (a: readonly ParkableKey[], b: readonly ParkableKey[]) => a.length === b.length && a.every((k) => b.includes(k));
+
+/** The last step still stands: nothing was switched since it was made. */
+export function stepStands(d: DevelopSettings | null | undefined, step: ParkedStep | undefined): boolean {
+  return Boolean(step) && sameKeys(parkedKeys(d), step!.made);
+}
+
+/** The target is shown ALONE by the last step, untouched since. */
+export function isShownOnly(d: DevelopSettings | null | undefined, t: ParkTarget, top: ParkedStep | undefined): boolean {
+  return stepStands(d, top) && top!.target === targetId(t);
+}
+
+/**
+ * The menu of a slider or a fold, in his order (lab 2): Reset, Hide or Show,
+ * Show only — which reads "Show the others again" while it stands —, then
+ * Invert once something is off. No Reset all: the header's Reset to as shot
+ * is that verb, and it belongs nowhere near a Hide.
+ */
+export function parkedMenu(d: DevelopSettings | null | undefined, t: ParkTarget, top: ParkedStep | undefined): ParkedMenuItem[] {
+  const keys = targetKeys(t);
+  const set = keys.some((k) => isSet(d, k));
+  const off = t.kind === 'key' ? isParked(d, t.key) : groupState(d, t.id) === 'off';
+  const items: ParkedMenuItem[] = [
+    { verb: 'reset', label: `Reset ${t.name}`, disabled: !set },
+    { verb: 'toggle', label: `${off ? 'Show' : 'Hide'} ${t.name}`, disabled: !set },
+    isShownOnly(d, t, top)
+      ? { verb: 'back', label: 'Show the others again', disabled: false }
+      : { verb: 'only', label: `Show only ${t.name}`, disabled: !set },
+  ];
+  if (parkedKeys(d).length > 0) items.push({ verb: 'invert', label: 'Invert hidden', disabled: false });
+  return items;
+}
+
+/** What a verb does: the develop to write, and the step to remember or to drop. */
+export interface ParkedOutcome {
+  next: DevelopSettings;
+  push?: ParkedStep;
+  pop?: true;
+}
+
+/** The develop with these fields back at their default — switched-off values thrown away too. */
+export function resetKeys(d: DevelopSettings | null | undefined, keys: readonly ParkableKey[]): DevelopSettings {
+  let out = cloneDevelop(d);
+  for (const k of keys) out = writeLive(out, k, DEFAULT_DEVELOP[k] ?? null);
+  return out;
+}
+
+/** Carry out one verb of the menu. `back` needs the step it undoes. */
+export function applyParkedVerb(
+  d: DevelopSettings | null | undefined,
+  t: ParkTarget,
+  verb: ParkedVerb,
+  top: ParkedStep | undefined,
+): ParkedOutcome {
+  const keys = targetKeys(t);
+  const prior = parkedKeys(d);
+  switch (verb) {
+    case 'reset':
+      return { next: resetKeys(d, keys) };
+    case 'toggle':
+      return { next: t.kind === 'key' ? toggleKey(d, t.key) : toggleGroup(d, t.id) };
+    case 'only': {
+      const next = showOnly(d, keys);
+      return { next, push: { label: `Only ${t.name}`, target: targetId(t), prior, made: parkedKeys(next) } };
+    }
+    case 'back':
+      return top ? { next: restoreParked(d, top.prior), pop: true } : { next: cloneDevelop(d) };
+    case 'invert': {
+      const next = invertParked(d);
+      return { next, push: { label: 'Invert', target: null, prior, made: parkedKeys(next) } };
+    }
+  }
 }

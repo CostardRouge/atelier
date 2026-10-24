@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldSwitch, shownOf } from '../../shared/develop/parked';
+import { ParkedProvider } from '../../shared/develop/ParkedMenu';
 import { createPortal } from 'react-dom';
 import {
   DevelopActionsGroup,
@@ -3027,7 +3028,7 @@ export default function PictureWorkbench({
   const bleed = compact && immersive;
 
   return (
-    <>
+    <ParkedProvider develop={draft.draft} write={draft.replace}>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : `${COLUMN_CLASS[columns.stage]} row-start-1 min-w-0 min-h-0 flex flex-col gap-2`}>
         {/* One row above a phone: the name gives way first, the verbs never
             wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
@@ -3521,7 +3522,7 @@ export default function PictureWorkbench({
           onClose={() => onTimelapseOpen(false)}
         />
       )}
-    </>
+    </ParkedProvider>
   );
 }
 

@@ -82,6 +82,11 @@ interface InspectorSectionProps {
   /** The body drawn faded: what it holds is kept but not applied — a fold switched off. */
   dimmed?: boolean;
   /**
+   * A right-click on the header band (or its menu key) opens the section's
+   * menu at that point — Develop's Reset · Hide · Show only for a fold.
+   */
+  onBandMenu?: (point: { x: number; y: number } | null) => void;
+  /**
    * `false` draws the same header with no chevron and no fold — a section too
    * small to be worth folding (one row of verbs) still reads like its
    * neighbours.
@@ -107,6 +112,7 @@ export function InspectorSection({
   marked = false,
   mark,
   dimmed = false,
+  onBandMenu,
   foldable = true,
   open: controlled,
   onOpenChange,
@@ -158,6 +164,14 @@ export function InspectorSection({
     <section data-section={id} className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
       <div
         onClick={onBandClick}
+        onContextMenu={
+          onBandMenu &&
+          ((e) => {
+            if ((e.nativeEvent as { pointerType?: string }).pointerType === 'touch') return;
+            e.preventDefault();
+            onBandMenu(e.clientX === 0 && e.clientY === 0 ? null : { x: e.clientX, y: e.clientY });
+          })
+        }
         className={`group/band flex flex-wrap items-center gap-x-2 pointer-coarse:gap-x-3.5 gap-y-0 min-h-7 pointer-coarse:min-h-11 ${foldable ? 'cursor-pointer' : ''}`}
       >
         {foldable ? (

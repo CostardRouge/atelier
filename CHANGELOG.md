@@ -16,6 +16,9 @@ history's turning points. The agent bridge keeps its own number (v1, v2…), apa
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back
   by Ctrl/⌘+Z, and left out of the export exactly as on screen. The same switches are in Trips' and the Studio's
   Develop sheet.
+- Develop: a menu on each set slider and section — right-click, the section's ⋯, or hold its dot or eye on a touch
+  screen — with Reset, Hide or Show, Show only and Invert hidden. After a Show only, the same line reads "Show the
+  others again" and puts back exactly what was on before.
 
 ## [1.4.0] - 2026-10-23 — Woad
 

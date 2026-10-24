@@ -209,3 +209,21 @@ sliders (P5), the menu (P3), the pill (P4). Driven headless on a dropped
 JPEG: a switch changes the stage and keeps the number, survives a reload,
 moving the bar brings it back, the Colour eye goes `mixed` → off, Levels
 off returns the stage to the original pixels and fades its body.
+
+**P3 built (2026-10-24)**: the menu. `parkedMenu` / `applyParkedVerb`
+(`parked.ts`, pure, tested) say what it holds and what each verb writes;
+`ParkedMenu.tsx` is ONE `ParkedProvider` per open develop (the workbench's
+render root, the Trips / Studio sheet's portal) holding the steps back for
+the visit and drawing the one `AnchoredMenu`. Openers: `SliderBar`'s
+`onMenu` (right-click; the menu key or Shift+F10, whose `contextmenu` comes
+at 0,0 and hangs it from the bar; the switch held `LONG_PRESS_MS` — a
+finger's long press on the bar itself stays the typed value's, so a touch
+`contextmenu` is ignored there), `InspectorSection`'s `onBandMenu`, and
+`DevelopFold`'s ⋯ (in `actions`, so only while open) and held eye. **Rule**:
+only a column that switches gets a menu (`DevelopSliders` checks
+`onSwitch`; an object fold needs `switched`) — a layer's sliders sit inside
+the picture's provider and their menu would write the picture's develop. A
+slider at its default has no menu. Driven headless: right-click → Show only
+Vibrance turned Exposure and Saturation off, the line then read "Show the
+others again" and put them back; the Colour ⋯, Shift+F10 and a held switch
+(nothing switched) all open it.
