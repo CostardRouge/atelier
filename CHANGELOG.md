@@ -23,6 +23,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   way back from the last Show only or Invert, Invert, and Show all.
 - Develop: a mask layer's sliders and curve can be switched off and have the same menu, acting on that layer alone;
   its row in the layer list says what is off.
+- Develop: the A/B's before side can show your correction without one section or one slider — pick it on the
+  "before ▾" label — to compare side by side what that setting brings. The choice stays as you move through the roll.
 
 ### Fixed
 

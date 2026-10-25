@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useSplitBefore } from '../../shared/develop/use-split-before';
+import type { BeforeHold } from '../../shared/develop/split-before';
 import { foldSwitch, forgetParked, shownOf } from '../../shared/develop/parked';
 import { ParkedPill, ParkedProvider } from '../../shared/develop/ParkedMenu';
 import { createPortal } from 'react-dom';
@@ -370,6 +372,7 @@ export default function PictureWorkbench({
   onSnapshot,
   onStep,
   split = null,
+  before = null,
   onDeliver,
   deliveryTable = null,
   onWords,
@@ -483,6 +486,8 @@ export default function PictureWorkbench({
    * picture, so stepping through the roll keeps the split where it was left.
    */
   split?: SplitHold | null;
+  /** What the split's left side shows, held by the roll editor beside the divider (`split-before.ts`). */
+  before?: BeforeHold | null;
   /**
    * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
    * un-ignore): the editor answers from the roll as it stands, since the
@@ -1303,10 +1308,12 @@ export default function PictureWorkbench({
     // tap is the work's.
     onTap: compact && immersive && (focused || (!sheetOpen && tab !== 'crop')) ? onFocusMode : undefined,
   });
+  const beforeView = useSplitBefore(draft.draft, before, stack.composeWith);
   const picture = useDevelopPicture({
     file: shownFile,
     videoTimeSeconds: clipStart,
     cube: stack.composed,
+    beforeCube: beforeView.cube,
     frame,
     // A free press at the fit — A/B off, no tool armed — is the deck's.
     swipe: neighbours ? deck.hands : null,
@@ -3081,6 +3088,7 @@ export default function PictureWorkbench({
           hasFile={Boolean(file)}
           emptyText={emptyText}
           parked={verbsPlace === 'float' ? null : <ParkedPill />}
+          beforeMenu={beforeView.menu}
           scope={taskScope}
           pixelView={pixelView}
           // The roll under the stage: where the deck is, and who sits either

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useSplitBefore } from './use-split-before';
+import type { BeforeHold, SplitBefore } from './split-before';
 import { foldSwitch, shownOf } from './parked';
 import { ParkedPill, ParkedProvider } from './ParkedMenu';
 import { createPortal } from 'react-dom';
@@ -150,11 +152,14 @@ export default function DevelopSheet(props: DevelopSheetProps) {
   const neighbours = deck && (deck.previous || deck.next) ? { previous: slot(deck.previous), next: slot(deck.next) } : null;
   // The A/B divider, above the body keyed per picture: a page keeps it.
   const split = useState(0);
+  // What the split's left side shows, kept across the deck like the line.
+  const before = useState<SplitBefore>('shot');
   return (
     <DevelopSheetBody
       key={deck ? (deck.current.key ?? deck.current.id) : 'one'}
       {...props}
       split={split}
+      before={before}
       neighbours={neighbours}
       still={deck ? (urls.get(deck.current.id) ?? null) : null}
     />
@@ -197,10 +202,12 @@ function DevelopSheetBody({
   neighbours,
   still,
   split,
+  before,
 }: DevelopSheetProps & {
   neighbours: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
   still: string | null;
   split: SplitHold;
+  before: BeforeHold;
 }) {
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
@@ -243,10 +250,12 @@ function DevelopSheetBody({
     travel: () => (pictureRef.current?.width() ?? 0) + DECK_GAP,
     onStep: (dir) => deckOnStep?.(dir, draftRef.current.result()),
   });
+  const beforeView = useSplitBefore(draft.draft, before, stack.composeWith);
   const picture = useDevelopPicture({
     file,
     videoTimeSeconds,
     cube: stack.composed,
+    beforeCube: beforeView.cube,
     // The grade's texture reaches the sheet too: the modal hosts RENDERING,
     // never panels (§4.2), and grain is rendering.
     film: stack.film,
@@ -452,6 +461,7 @@ function DevelopSheetBody({
             <DevelopViewport
               picture={picture}
               parked={<ParkedPill />}
+              beforeMenu={beforeView.menu}
               deck={deckView}
               still={still}
               scope={scope}

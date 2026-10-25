@@ -1985,7 +1985,15 @@ mouse drag or a sideways trackpad sweep slides the picture before or after
 in under the hand, a flick or a quarter of the stage turns to it, a shorter
 drag settles back, and the roll's two ends resist; it opens on its cell's
 still and sharpens as it decodes. Zoomed, the same drag pans, and with A/B
-on it places the divider, as ever. The histogram draws the
+on it places the divider, as ever. The divider's **before** label is a menu
+while the split is open: **As shot** (the default), or **Without** one
+section or one slider set on the picture (`Without Colour`,
+`Without Vibrance`) — the left side then shows your correction without it,
+side by side with the whole of it, and the label turns to the accent so it
+is never taken for the original. The choice stays as you page through the
+roll, like the line; on a picture where nothing of it is set the left side
+is as shot until one is. The Trips and Studio sheets have the same label.
+The histogram draws the
 three channels apart, so a sky whose red alone has gone is seen; **J** — or
 a click on its *blacks* / *whites* — paints on the picture what has gone to
 white (red) and to black (blue), and the pixel under the pointer is read

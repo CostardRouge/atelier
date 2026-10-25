@@ -262,3 +262,33 @@ stayed at 0 and no pill appeared.
 
 **Not yet**: seen on his Mac, iPad or phone; the render-recipe seam
 (`render-core.md`) and the "without | with" split (a third lab) are apart.
+
+## 8. The split without a setting (2026-10-25)
+
+**His pick: B of lab https://claude.ai/artifact/FGvZdymzfXqYvjb2QnEtD7** —
+the A/B's before label is a menu (As shot · Without a section · Without a
+slider), and the choice STAYS across pictures like the divider. Refused: A
+(the left following the last slider touched — it changes under the eye)
+and C (from the slider's menu — one menu more). The switches compare by
+alternating, this compares side by side, for differences alternating misses.
+
+**Built**: `split-before.ts` (pure, tested) — the choices a picture offers
+(sections with something live, then live sliders; never a parked one, never
+the RAW's white balance or material), the label, and the develop the left
+renders (`park` of the chosen keys: a view, the record untouched). On a
+picture where nothing of the choice is live, the left is as shot and the
+choice waits (`effectiveBefore`). `use-split-before.ts` bakes the left's
+cube from the DEFERRED draft through the host's `composeWith` (the head
+rides in it), the choice held beside `split` in `RollEditor` and in
+`DevelopSheet`'s outer component. `useDevelopPicture` takes `beforeCube`:
+null keeps the as-shot canvas drawn for free; given, `paintBefore` grades
+the left through a slot of its own (`beforeSlot`, the stage's passes minus
+the views, released when As shot comes back), at rest only — under the hand
+it keeps its last frame. `DevelopViewport`'s `beforeMenu` makes the label a
+button + `AnchoredMenu`, in the accent while not as shot. **Trap**: a
+picture with no develop and no look has no cube, so the before/after pill is
+not drawn at all there — the label appears with the first setting.
+**Driven headless**: two dropped JPEGs, Without Colour drew the left at
+Exposure only (201,154,128 as shot → 234,180,150, the after 243,177,139),
+the choice survived a page and came back by itself once Saturation was set
+on the second picture.

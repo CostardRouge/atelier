@@ -669,6 +669,7 @@ export function useDevelopPicture({
   vignette = null,
   swipe = null,
   split = null,
+  beforeCube = null,
 }: {
   /**
    * Where the divider is, held by the HOST — `useState(0)` above the
@@ -678,6 +679,16 @@ export function useDevelopPicture({
    * its own and every picture opens on its whole corrected self.
    */
   split?: SplitHold | null;
+  /**
+   * What the split's LEFT side shows, when it is not the picture as shot:
+   * the cube of this picture's develop WITHOUT a section or a slider
+   * (`split-before.ts`, the host's `composeWith`). Null — the default — is
+   * the as-shot picture, drawn for free. Given, the left side is graded
+   * through a grader of its own with the stage's every pass but the views
+   * (mask wash, flash, clipping), once per change at rest — never per
+   * divider move, never per step under the hand.
+   */
+  beforeCube?: CubeLut | null;
   /**
    * The roll's DECK under the stage (`stage-deck.ts`, `use-stage-deck.ts`):
    * where a FREE pointer goes — fitted, the split off, no tool holding it.
@@ -1117,6 +1128,9 @@ export function useDevelopPicture({
   // a grader of its own, built on the first drag and borrowing the stage
   // cache's cubes like the histogram's slot.
   const handSlot = useRef<GraderSlot | null>(null);
+  // The split's left side WITHOUT a setting (`beforeCube`): a grader of its
+  // own, built when first asked and let go when the left is as shot again.
+  const beforeSlot = useRef<GraderSlot | null>(null);
   // The deferred bake of the layers' cubes (see `stack` above).
   useMemo(() => stageSlot.current.cache.prime(stack), [stack]);
   // The post-crop vignette the picture HAS, for every grader call below —
@@ -1277,15 +1291,58 @@ export function useDevelopPicture({
     // ≈ 45 of the ≈ 60 ms a move cost, measured headless (2026-10-24, his
     // «ça saccade un petit peu»). The divider itself is drawn over the
     // canvas, in the page, so it stays a hairline at any zoom.
-    paintBefore(Boolean(grader) && splitShown, w, h, layout);
+    paintBefore(Boolean(grader) && splitShown, w, h, layout, Boolean(half));
   };
   // The before layer, drawn again only when what it SHOWS changed — the
   // picture, its size, its frame, a clip's frame: a slider step regrades the
   // stage and leaves the as-shot picture where it is.
   const beforeDrawn = useRef<unknown[] | null>(null);
-  const paintBefore = (shown: boolean, w: number, h: number, layout: ReturnType<typeof scaleLayout> | null) => {
+  const releaseBefore = () => {
+    beforeSlot.current?.current?.grader.dispose();
+    beforeSlot.current = null;
+  };
+  const paintBefore = (shown: boolean, w: number, h: number, layout: ReturnType<typeof scaleLayout> | null, underHand = false) => {
     const canvas = beforeCanvasRef.current;
     if (!canvas || !source) return;
+    if (!shown || !beforeCube) releaseBefore();
+    if (shown && beforeCube) {
+      // Under the hand the left side waits for the rest, as the stage's whole
+      // grade does: a second full render per step would halve the drag.
+      if (underHand && canvas.width === w && canvas.height === h) return;
+      if (!beforeSlot.current) beforeSlot.current = { cache: makeLayerPassCache(stageSlot.current.cache), current: null };
+      const grader = graderFrom(
+        beforeSlot.current,
+        beforeCube,
+        source,
+        geometry,
+        stack,
+        null,
+        subjectMasks,
+        detail,
+        pixelScale,
+        repair,
+        film,
+        gainField,
+        null,
+        false,
+        false,
+        postVignetteRef.current,
+      );
+      if (!grader) return;
+      const graded = grader.render(source.gpu ?? source.image, video ? video.currentTime : undefined);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, w, h);
+      if (layout && framing) drawPictureIn(ctx, graded, source.width, source.height, framing, layout);
+      else ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+      // Drawn from another grade: the as-shot path must draw itself again.
+      beforeDrawn.current = null;
+      return;
+    }
     if (!shown) {
       // Released, not kept: a stage-size canvas nobody sees is memory a phone
       // needs (`device-memory.md`).
@@ -1334,6 +1391,8 @@ export function useDevelopPicture({
       window.clearTimeout(hand.current.warm);
       handSlot.current?.current?.grader.dispose();
       handSlot.current = null;
+      beforeSlot.current?.current?.grader.dispose();
+      beforeSlot.current = null;
     },
     [],
   );
@@ -1393,6 +1452,7 @@ export function useDevelopPicture({
     framing,
     border,
     cube,
+    beforeCube,
     splitShown,
     holding,
     geometry,
