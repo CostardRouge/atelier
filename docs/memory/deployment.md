@@ -151,11 +151,12 @@ from `main`'s, so `release.yml` skips them with a warning and `second-brain`'s
 tag or release made with `GITHUB_TOKEN` triggers no other workflow, so a deploy
 that should follow a release must run inside `release.yml`'s publish job.
 
-2026-10-24 — **The shared workflows** (`.github/workflows/registry.yml`,
+2026-10-24 (rev. 2026-10-25) — **The shared workflows** (`.github/workflows/registry.yml`,
 `release.yml`, `.github/release.mjs`) are copied byte for byte from
 `second-brain/system/meta/common-project-spec/shared/`, never from another repo;
-their `check` jobs run on `vars.CI_RUNNER || 'ubuntu-24.04'` (never set here: the
-repo is public), the writing jobs stay on hosted runners.
+their `check` jobs, and since 2026-10-25 (option C) the writing `send` and
+`publish` jobs too, run on `vars.CI_RUNNER || 'ubuntu-24.04'`, which only the
+private repos set; this repo is public, so every job stays hosted.
 
 ## The portfolio standard applied (2026-10-19)
 
