@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { FoldSwitch } from './parked';
 import DevelopFold from './DevelopFold';
 import Segmented from '../ui/Segmented';
 import { developLinkClass } from './develop-classes';
@@ -45,12 +46,15 @@ export default function DevelopMixer({
   onChange,
   mono,
   onMono,
+  switched,
 }: {
   value: ColourMixer | null | undefined;
   onChange: (mixer: ColourMixer | null) => void;
   /** The black-and-white treatment (`MonoMix`), null for colour. */
   mono: MonoMix | null | undefined;
   onMono: (mono: MonoMix | null) => void;
+  /** The fold's on/off switch (`parked.ts`); while off, the value given is the one that waits. */
+  switched?: FoldSwitch;
 }) {
   // The channel last looked at, kept across pictures for the session: the
   // inspector is built anew per picture and used to reopen on Hue.
@@ -78,7 +82,7 @@ export default function DevelopMixer({
   if (mono) {
     const mixed = mono.mix.some((v) => v !== 0);
     return (
-      <DevelopFold id="mixer" title="B&W mix" info={<p>{MONO_HINT}</p>} marked defaultOpen={false}>
+      <DevelopFold id="mixer" title="B&W mix" info={<p>{MONO_HINT}</p>} marked switched={switched} dimOff defaultOpen={false}>
         {treatment}
         {MIXER_BANDS.map((band, i) => (
           <RangeSlider
@@ -99,7 +103,7 @@ export default function DevelopMixer({
     );
   }
   return (
-    <DevelopFold id="mixer" title="Colour mixer" info={<p>{HINT}</p>} marked={!isDefaultMixer(value)} defaultOpen={false}>
+    <DevelopFold id="mixer" title="Colour mixer" info={<p>{HINT}</p>} marked={!isDefaultMixer(value)} switched={switched} dimOff defaultOpen={false}>
       {treatment}
       <Segmented
         fill

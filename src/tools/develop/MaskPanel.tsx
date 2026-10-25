@@ -27,7 +27,7 @@ import {
   withComponentMask,
   type AdjustLayer,
 } from '../../shared/develop/layer';
-import { isDefaultDevelop } from '../../shared/develop/develop';
+import { isBlankDevelop } from '../../shared/develop/develop';
 import { developLinkClass } from '../../shared/develop/develop-classes';
 import {
   MAX_CORE,
@@ -613,7 +613,7 @@ function ShapeControls({
                     ? `${pointCount(mask)} · ⌥-tap takes a part out · tap a point to drop it${
                         // Found, and still doing nothing: said, or a subject
                         // that the model answered reads as a pick that failed.
-                        isDefaultDevelop(layer.develop) ? ' · found — move a slider below to act on it' : ''
+                        isBlankDevelop(layer.develop) ? ' · found — move a slider below to act on it' : ''
                       }`
                     : 'the model is loading — 17 MB, once per visit'}
           </span>

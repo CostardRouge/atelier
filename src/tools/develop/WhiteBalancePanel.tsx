@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { FoldSwitch } from '../../shared/develop/parked';
 import DevelopFold from '../../shared/develop/DevelopFold';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
 import { developLinkClass } from '../../shared/develop/develop-classes';
@@ -33,6 +34,7 @@ export default function WhiteBalancePanel({
   profiled = false,
   value,
   onChange,
+  switched,
 }: {
   white: RawWhite;
   /**
@@ -43,6 +45,8 @@ export default function WhiteBalancePanel({
   profiled?: boolean;
   value: RawWhiteBalance | null;
   onChange: (next: RawWhiteBalance | null) => void;
+  /** The fold's on/off switch (`parked.ts`); while off, the value given is the one that waits. */
+  switched?: FoldSwitch;
 }) {
   const shot = useMemo(() => (profiled ? profiledAsShot(white) : asShotTempTint(white)), [white, profiled]);
   if (!shot) return null;
@@ -56,7 +60,7 @@ export default function WhiteBalancePanel({
     ? (WB_PRESETS.find((p) => p.kelvin === Math.round(value.kelvin) && p.tint === Math.round(value.tint))?.id ?? 'custom')
     : 'shot';
   return (
-    <DevelopFold id="white-balance" title="White balance" info={<p>{HINT}</p>} marked={Boolean(value)}>
+    <DevelopFold id="white-balance" title="White balance" info={<p>{HINT}</p>} marked={Boolean(value)} switched={switched} dimOff>
       <label className="flex items-center justify-between gap-2 text-xs text-ink">
         <span>Preset</span>
         <select

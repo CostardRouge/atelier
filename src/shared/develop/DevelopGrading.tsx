@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import type { FoldSwitch } from './parked';
 import DevelopFold from './DevelopFold';
 import { developLinkClass } from './develop-classes';
 import { RangeSlider } from './DevelopSliders';
@@ -138,9 +139,12 @@ function Wheel({
 export default function DevelopGrading({
   value,
   onChange,
+  switched,
 }: {
   value: ColourGrading | null | undefined;
   onChange: (grading: ColourGrading | null) => void;
+  /** The fold's on/off switch (`parked.ts`); while off, the value given is the one that waits. */
+  switched?: FoldSwitch;
 }) {
   const g = value ?? neutralGrading();
   const wheel = (zone: GradeZone) => (
@@ -148,7 +152,7 @@ export default function DevelopGrading({
   );
   const touched = !isDefaultGrading(value) || g.blending !== 50 || g.balance !== 0;
   return (
-    <DevelopFold id="grading" title="Colour grading" info={<p>{HINT}</p>} marked={!isDefaultGrading(value)} defaultOpen={false}>
+    <DevelopFold id="grading" title="Colour grading" info={<p>{HINT}</p>} marked={!isDefaultGrading(value)} switched={switched} dimOff defaultOpen={false}>
       <div className="grid grid-cols-3 gap-3">{GRADE_ZONES.filter((z) => z !== 'global').map(wheel)}</div>
       <div className="grid grid-cols-3 gap-3 items-start">
         {wheel('global')}

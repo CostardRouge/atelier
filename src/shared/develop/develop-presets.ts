@@ -10,6 +10,7 @@
 import { DEFAULT_DEVELOP, carriesDevelop, cloneDevelop, withoutBase, type DevelopPreset, type DevelopSettings } from './develop';
 import type { SavedGrade } from '../lut/saved-grade';
 import { uniqueDocName } from '../sources/doc-name';
+import { withoutParked } from './parked';
 
 /**
  * The list with a preset holding a copy of `settings` under `name`. A name
@@ -28,8 +29,9 @@ export function savePresetIn(
 ): readonly DevelopPreset[] {
   const label = name.trim();
   // A preset is numbers, never a material: the base and its metered gain
-  // belong to the one picture they were measured on.
-  const numbers = settings ? withoutBase(settings) : null;
+  // belong to the one picture they were measured on. And it is what is SEEN:
+  // a setting switched off on this picture is no part of the look it names.
+  const numbers = settings ? withoutParked(withoutBase(settings)) : null;
   // A look alone is a preset too — "just Portra" is a name worth keeping.
   if (!label || (!carriesDevelop(numbers) && !look)) return list;
   // A name is a name however it is cased: "dusk" replaces "Dusk", in the new spelling.
@@ -103,7 +105,7 @@ export function updatePresetIn(
 ): readonly DevelopPreset[] {
   const at = list.findIndex((p) => p.id === id);
   if (at < 0) return list;
-  const numbers = settings ? withoutBase(settings) : null;
+  const numbers = settings ? withoutParked(withoutBase(settings)) : null;
   if (!carriesDevelop(numbers) && !look) return list;
   const preset: DevelopPreset = {
     id: list[at].id,

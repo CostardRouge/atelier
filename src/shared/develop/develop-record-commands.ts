@@ -30,7 +30,7 @@ import {
   type LevelChannel,
   type LevelsChannel,
 } from './curves';
-import { cloneDevelop, isDefaultDevelop, type DevelopSettings } from './develop';
+import { cloneDevelop, isBlankDevelop, type DevelopSettings } from './develop';
 import { GRADE_ZONES, cloneGrading, gradingOrNull, neutralGrading, type ColourGrading } from './grading';
 import { DEFAULT_DETAIL, DETAIL_RANGES, detailOrNull, type DetailSettings } from '../render/detail';
 import { DEFAULT_KEYSTONE, keystoneOrNull, type Keystone } from '../render/geometry';
@@ -68,7 +68,7 @@ function onlyKeys(path: string, obj: Record<string, unknown>, keys: readonly str
 }
 
 function settled(next: DevelopSettings): DevelopSettings | null {
-  return isDefaultDevelop(next) ? null : next;
+  return isBlankDevelop(next) ? null : next;
 }
 
 // --- curves -------------------------------------------------------------------

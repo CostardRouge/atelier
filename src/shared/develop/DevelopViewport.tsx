@@ -1,4 +1,5 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AnchoredMenu } from '../ui/OverflowMenu';
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
@@ -98,6 +99,8 @@ export default function DevelopViewport({
   pixelView = 'smooth',
   facts = null,
   shot = null,
+  parked = null,
+  beforeMenu = null,
   marks = null,
   onUnmark,
   tapTone = 'add',
@@ -199,6 +202,17 @@ export default function DevelopViewport({
    * key (`I`), same chip, one mark saying which hand wrote it.
    */
   shot?: string | null;
+  /**
+   * What is switched off (`ParkedPill`), at the foot of the same corner — the
+   * one piece of it that is pressed, so it takes the pointer back.
+   */
+  parked?: ReactNode;
+  /**
+   * What the split's left side shows (`split-before.ts`), chosen on the
+   * before label: given, the label is a button while the split is on, and
+   * its menu offers As shot and every section or slider set on the picture.
+   */
+  beforeMenu?: BeforeMenu | null;
   /**
    * How a MAGNIFIED picture is drawn. Only past 1:1 does it change anything,
    * and there it decides whether a magnified pixel looks like a pixel or like
@@ -711,7 +725,7 @@ export default function DevelopViewport({
         </svg>
       )}
       </div>
-      {(shot || (facts && facts.length > 0)) && source && (
+      {(shot || (facts && facts.length > 0) || parked) && source && (
         <div
           // Pointer-transparent: the facts sit ON the picture, and the picture
           // under them still answers a drag, a wipe and a paint stroke.
@@ -737,13 +751,18 @@ export default function DevelopViewport({
               {line}
             </span>
           ))}
+          {parked}
         </div>
       )}
       {source && cube && !picking && (
         <>
-          <span className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/86 text-ink-soft`}>
-            {holding ? 'before' : wipe > 0 ? 'before · after' : 'after'}
-          </span>
+          {beforeMenu && wipe > 0 && !holding ? (
+            <BeforeLabel menu={beforeMenu} />
+          ) : (
+            <span className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/86 text-ink-soft`}>
+              {holding ? 'before' : wipe > 0 ? 'before · after' : 'after'}
+            </span>
+          )}
           {!coarse && (
             <button
               type="button"
@@ -855,5 +874,62 @@ export function DevelopCaption({
       {note ? ` — ${note}` : ''}
       {source && (touched || painting) ? gesture : source ? ' · nothing changes the picture yet' : ''}
     </p>
+  );
+}
+
+/** The split's before label, as a menu (`split-before.ts`). */
+export interface BeforeMenu {
+  /** What the left side shows now — `before`, `without Colour`. */
+  label: string;
+  /** Not "as shot": drawn in the accent, so a left side that is not the original is never mistaken for it. */
+  active: boolean;
+  choices: readonly { id: string; label: string }[];
+  current: string;
+  onPick: (id: string) => void;
+}
+
+/**
+ * The before label, pressable: `before ▾ · after`, or `without Colour ▾ ·
+ * after` in the accent. Its own press, never the stage's: the divider and
+ * the deck must not take it.
+ */
+function BeforeLabel({ menu }: { menu: BeforeMenu }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  const anchor = useCallback(() => ref.current?.getBoundingClientRect() ?? null, []);
+  return (
+    <span className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/86 text-ink-soft inline-flex items-center gap-1`}>
+      <button
+        ref={ref}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="What the left side shows"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className={`touch-row relative cursor-pointer rounded-[4px] px-0.5 -mx-0.5 [text-transform:inherit] [letter-spacing:inherit] hover:text-accent-ink ${menu.active ? 'text-accent-ink font-semibold' : ''}`}
+      >
+        {menu.label} ▾
+      </button>
+      <span aria-hidden="true">· after</span>
+      {open && (
+        <AnchoredMenu
+          anchorRect={anchor}
+          within={ref}
+          align="start"
+          label="What the left side shows"
+          onClose={() => setOpen(false)}
+          items={menu.choices.map((c, i) => ({
+            id: c.id,
+            label: c.id === menu.current ? `✓ ${c.label}` : c.label,
+            rule: i === 1,
+            onSelect: () => menu.onPick(c.id),
+          }))}
+        />
+      )}
+    </span>
   );
 }

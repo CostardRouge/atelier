@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useSplitBefore } from '../../shared/develop/use-split-before';
+import type { BeforeHold } from '../../shared/develop/split-before';
+import { foldSwitch, forgetParked, shownOf } from '../../shared/develop/parked';
+import { ParkedPill, ParkedProvider } from '../../shared/develop/ParkedMenu';
 import { createPortal } from 'react-dom';
 import {
   DevelopActionsGroup,
@@ -27,7 +31,7 @@ import {
   baseRung,
   developBase,
   developLines,
-  isDefaultDevelop,
+  isBlankDevelop,
   profilePending,
   signed,
   type DevelopSettings,
@@ -368,6 +372,7 @@ export default function PictureWorkbench({
   onSnapshot,
   onStep,
   split = null,
+  before = null,
   onDeliver,
   deliveryTable = null,
   onWords,
@@ -481,6 +486,8 @@ export default function PictureWorkbench({
    * picture, so stepping through the roll keeps the split where it was left.
    */
   split?: SplitHold | null;
+  /** What the split's left side shows, held by the roll editor beside the divider (`split-before.ts`). */
+  before?: BeforeHold | null;
   /**
    * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
    * un-ignore): the editor answers from the roll as it stands, since the
@@ -641,6 +648,14 @@ export default function PictureWorkbench({
   useEffect(() => setSubjectTone('add'), [selectedLayerId]);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
+  // The selected layer's whole develop, written at once — its sliders, its
+  // switches and its menu (`parked.ts`) all go through here.
+  const writeLayerDevelop = useCallback(
+    (develop: DevelopSettings) => {
+      if (selectedLayerId) setLayersDraft((list) => patchLayer(list, selectedLayerId, { develop }));
+    },
+    [selectedLayerId],
+  );
 
   // --- painting ------------------------------------------------------------
   // The live stroke rides a REF and the draft alike: the ref is what the next
@@ -1293,10 +1308,12 @@ export default function PictureWorkbench({
     // tap is the work's.
     onTap: compact && immersive && (focused || (!sheetOpen && tab !== 'crop')) ? onFocusMode : undefined,
   });
+  const beforeView = useSplitBefore(draft.draft, before, stack.composeWith);
   const picture = useDevelopPicture({
     file: shownFile,
     videoTimeSeconds: clipStart,
     cube: stack.composed,
+    beforeCube: beforeView.cube,
     frame,
     // A free press at the fit — A/B off, no tool armed — is the deck's.
     swipe: neighbours ? deck.hands : null,
@@ -1565,7 +1582,7 @@ export default function PictureWorkbench({
     // Keyed on the numbers themselves: `draft` is a new object every render.
     // A white balance set in kelvin is a number too, on the roll's sensor.
     // So is a base curve picked there: it binds the material like a number.
-    draft: isDefaultDevelop(draft.draft) && !(rollBase && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
+    draft: isBlankDevelop(draft.draft) && !(rollBase && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
     same: sameDevelop,
     // A picture on the roll's sensor writes the base WITH its first numbers:
     // they were set on the sensor's data and mean nothing on the render.
@@ -3040,7 +3057,7 @@ export default function PictureWorkbench({
   const bleed = compact && immersive;
 
   return (
-    <>
+    <ParkedProvider develop={draft.draft} write={draft.replace}>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : `${COLUMN_CLASS[columns.stage]} row-start-1 min-w-0 min-h-0 flex flex-col gap-2`}>
         {/* One row above a phone: the name gives way first, the verbs never
             wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
@@ -3059,14 +3076,19 @@ export default function PictureWorkbench({
             the roll): the band lies on the bar and the verbs on the band, so
             nothing floating leaves a strip of picture between them. */}
         {verbsPlace === 'float' && (
-          <div className="absolute inset-x-2 z-20 bottom-[calc(var(--shell-bar-h,0px)+var(--band-h,0px)+16px)] flex pointer-events-none [&>*]:pointer-events-auto">
-            {verbsNode}
+          // What is switched off rides ABOVE the verbs here: the picture's own
+          // bottom corner lies under the band and the shell's bar.
+          <div className="absolute inset-x-2 z-20 bottom-[calc(var(--shell-bar-h,0px)+var(--band-h,0px)+16px)] flex flex-col items-start gap-2 pointer-events-none">
+            <ParkedPill />
+            <div className="flex w-full pointer-events-none [&>*]:pointer-events-auto">{verbsNode}</div>
           </div>
         )}
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
+          parked={verbsPlace === 'float' ? null : <ParkedPill />}
+          beforeMenu={beforeView.menu}
           scope={taskScope}
           pixelView={pixelView}
           // The roll under the stage: where the deck is, and who sits either
@@ -3221,27 +3243,38 @@ export default function PictureWorkbench({
                 <WhiteBalancePanel
                   white={activeDcp ? whiteThroughDcp(rawWhite, activeDcp) : rawWhite}
                   profiled={Boolean(appliedProfile(developNow))}
-                  value={draft.draft.rawWb ?? null}
+                  value={shownOf(draft.draft, 'rawWb') ?? null}
                   onChange={(rawWb) => draft.patch({ rawWb })}
+                  switched={foldSwitch(draft.draft, 'whiteBalance', draft.replace)}
                 />
               )}
-              <DevelopSliders value={draft.draft} onChange={draft.set} />
+              <DevelopSliders value={draft.draft} onChange={draft.set} onSwitch={draft.replace} />
               {/* Presence and the post-crop vignette are PASSES over one
                   frame (`detail.ts`, `post-vignette.ts`): a photograph's. */}
               {!clip && <PresencePanel value={detailDraft} onChange={setDetailDraft} />}
-              <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
+              <DevelopLevelsSection
+                value={shownOf(draft.draft, 'levels')}
+                onChange={(levels) => draft.patch({ levels })}
+                switched={foldSwitch(draft.draft, 'levels', draft.replace)}
+              />
               <DevelopCurve
-                value={draft.draft.curves}
+                value={shownOf(draft.draft, 'curves')}
                 histogram={picture.histogram}
                 onChange={(curves) => draft.patch({ curves })}
+                switched={foldSwitch(draft.draft, 'curve', draft.replace)}
               />
               <DevelopMixer
-                value={draft.draft.mixer}
+                value={shownOf(draft.draft, 'mixer')}
                 onChange={(mixer) => draft.patch({ mixer })}
-                mono={draft.draft.mono}
+                mono={shownOf(draft.draft, 'mono')}
                 onMono={(mono) => draft.patch({ mono })}
+                switched={foldSwitch(draft.draft, shownOf(draft.draft, 'mono') ? 'mono' : 'mixer', draft.replace)}
               />
-              <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
+              <DevelopGrading
+                value={shownOf(draft.draft, 'grading')}
+                onChange={(grading) => draft.patch({ grading })}
+                switched={foldSwitch(draft.draft, 'grading', draft.replace)}
+              />
               {!clip && <VignettePanel value={vignetteDraft} onChange={setVignetteDraft} />}
               <DevelopPresetsSection
                 presets={presets}
@@ -3395,29 +3428,24 @@ export default function PictureWorkbench({
                       {/* The SAME sliders the global develop uses, because a
                           layer's adjustment IS a DevelopSettings — one maths, one
                           panel, and a local exposure behaves like a global one. */}
-                      <DevelopSliders
-                        foldPrefix="layer."
-                        value={selectedLayer.develop}
-                        onChange={(key, v) =>
-                          setLayersDraft((list) =>
-                            patchLayer(list, selectedLayer.id, {
-                              develop: { ...selectedLayer.develop, [key]: v },
-                            }),
-                          )
-                        }
-                      />
-                      <DevelopCurve
-                        foldPrefix="layer."
-                        value={selectedLayer.develop.curves}
-                        histogram={picture.histogram}
-                        onChange={(curves) =>
-                          setLayersDraft((list) =>
-                            patchLayer(list, selectedLayer.id, {
-                              develop: { ...selectedLayer.develop, curves },
-                            }),
-                          )
-                        }
-                      />
+                      {/* Its own provider, keyed on the layer: the switches,
+                          the menu and its steps back act on THIS layer's
+                          develop, never the picture's. */}
+                      <ParkedProvider key={selectedLayer.id} develop={selectedLayer.develop} write={writeLayerDevelop}>
+                        <DevelopSliders
+                          foldPrefix="layer."
+                          value={selectedLayer.develop}
+                          onChange={(key, v) => writeLayerDevelop(forgetParked({ ...selectedLayer.develop, [key]: v }, [key]))}
+                          onSwitch={writeLayerDevelop}
+                        />
+                        <DevelopCurve
+                          foldPrefix="layer."
+                          value={shownOf(selectedLayer.develop, 'curves')}
+                          histogram={picture.histogram}
+                          onChange={(curves) => writeLayerDevelop(forgetParked({ ...selectedLayer.develop, curves }, ['curves']))}
+                          switched={foldSwitch(selectedLayer.develop, 'curve', writeLayerDevelop)}
+                        />
+                      </ParkedProvider>
                     </>
                   )}
                 </LayerDetail>
@@ -3523,7 +3551,7 @@ export default function PictureWorkbench({
           onClose={() => onTimelapseOpen(false)}
         />
       )}
-    </>
+    </ParkedProvider>
   );
 }
 

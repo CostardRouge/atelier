@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useSplitBefore } from './use-split-before';
+import type { BeforeHold, SplitBefore } from './split-before';
+import { foldSwitch, shownOf } from './parked';
+import { ParkedPill, ParkedProvider } from './ParkedMenu';
 import { createPortal } from 'react-dom';
 import type { LutStack } from '../lut/use-lut-stack';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../media/transport-keys';
@@ -148,11 +152,14 @@ export default function DevelopSheet(props: DevelopSheetProps) {
   const neighbours = deck && (deck.previous || deck.next) ? { previous: slot(deck.previous), next: slot(deck.next) } : null;
   // The A/B divider, above the body keyed per picture: a page keeps it.
   const split = useState(0);
+  // What the split's left side shows, kept across the deck like the line.
+  const before = useState<SplitBefore>('shot');
   return (
     <DevelopSheetBody
       key={deck ? (deck.current.key ?? deck.current.id) : 'one'}
       {...props}
       split={split}
+      before={before}
       neighbours={neighbours}
       still={deck ? (urls.get(deck.current.id) ?? null) : null}
     />
@@ -195,10 +202,12 @@ function DevelopSheetBody({
   neighbours,
   still,
   split,
+  before,
 }: DevelopSheetProps & {
   neighbours: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
   still: string | null;
   split: SplitHold;
+  before: BeforeHold;
 }) {
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
@@ -241,10 +250,12 @@ function DevelopSheetBody({
     travel: () => (pictureRef.current?.width() ?? 0) + DECK_GAP,
     onStep: (dir) => deckOnStep?.(dir, draftRef.current.result()),
   });
+  const beforeView = useSplitBefore(draft.draft, before, stack.composeWith);
   const picture = useDevelopPicture({
     file,
     videoTimeSeconds,
     cube: stack.composed,
+    beforeCube: beforeView.cube,
     // The grade's texture reaches the sheet too: the modal hosts RENDERING,
     // never panels (§4.2), and grain is rendering.
     film: stack.film,
@@ -358,6 +369,7 @@ function DevelopSheetBody({
   // later element paints on top — the sheet sat over the picture being
   // developed. At the end of the document the modal is the later one.
   return createPortal(
+    <ParkedProvider develop={draft.draft} write={draft.replace}>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.55)] backdrop-blur-[2px] max-[820px]:p-0"
       role="dialog"
@@ -448,6 +460,8 @@ function DevelopSheetBody({
           <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 max-[820px]:flex-none">
             <DevelopViewport
               picture={picture}
+              parked={<ParkedPill />}
+              beforeMenu={beforeView.menu}
               deck={deckView}
               still={still}
               scope={scope}
@@ -490,20 +504,30 @@ function DevelopSheetBody({
               onPicking={picture.setPicking}
               echo={scope}
             />
-            <DevelopSliders value={draft.draft} onChange={draft.set} />
-            <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
+            <DevelopSliders value={draft.draft} onChange={draft.set} onSwitch={draft.replace} />
+            <DevelopLevelsSection
+              value={shownOf(draft.draft, 'levels')}
+              onChange={(levels) => draft.patch({ levels })}
+              switched={foldSwitch(draft.draft, 'levels', draft.replace)}
+            />
             <DevelopCurve
-              value={draft.draft.curves}
+              value={shownOf(draft.draft, 'curves')}
               histogram={picture.histogram}
               onChange={(curves) => draft.patch({ curves })}
+              switched={foldSwitch(draft.draft, 'curve', draft.replace)}
             />
             <DevelopMixer
-              value={draft.draft.mixer}
+              value={shownOf(draft.draft, 'mixer')}
               onChange={(mixer) => draft.patch({ mixer })}
-              mono={draft.draft.mono}
+              mono={shownOf(draft.draft, 'mono')}
               onMono={(mono) => draft.patch({ mono })}
+              switched={foldSwitch(draft.draft, shownOf(draft.draft, 'mono') ? 'mono' : 'mixer', draft.replace)}
             />
-            <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
+            <DevelopGrading
+              value={shownOf(draft.draft, 'grading')}
+              onChange={(grading) => draft.patch({ grading })}
+              switched={foldSwitch(draft.draft, 'grading', draft.replace)}
+            />
             <DevelopPresetsSection
               presets={presets}
               draft={draft.draft}
@@ -551,7 +575,8 @@ function DevelopSheetBody({
           </span>
         </div>
       </div>
-    </div>,
+    </div>
+    </ParkedProvider>,
     document.body,
   );
 }

@@ -1,6 +1,8 @@
 import DevelopFold from './DevelopFold';
-import SliderBar from '../ui/SliderBar';
+import SliderBar, { type SliderBarProps } from '../ui/SliderBar';
 import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
+import { foldSwitch, isParked, isSet, shownOf, toggleKey, type DevelopGroupId } from './parked';
+import { useParkedOpener } from './ParkedMenu';
 
 const LABELS: Readonly<Record<DevelopKey, string>> = {
   exposure: 'Exposure',
@@ -17,18 +19,21 @@ const LABELS: Readonly<Record<DevelopKey, string>> = {
 };
 
 /** The column, top to bottom — the pipeline's own order. */
-const GROUPS: ReadonlyArray<{ legend: string; keys: readonly DevelopKey[]; hint: string }> = [
+const GROUPS: ReadonlyArray<{ id: DevelopGroupId; legend: string; keys: readonly DevelopKey[]; hint: string }> = [
   {
+    id: 'light',
     legend: 'Light',
     keys: ['exposure', 'brightness', 'contrast'],
     hint: 'Exposure is a gain in stops, in scene light. Brightness lifts the midtones and leaves black and white where they are. Contrast stretches around 18 % grey.',
   },
   {
+    id: 'tone',
     legend: 'Tone',
     keys: ['highlights', 'shadows', 'whites', 'blacks'],
     hint: 'Highlights and shadows work the upper and lower halves without reaching the ends; whites and blacks move the ends themselves. On an 8-bit picture nothing above white can come back — only a RAW keeps it.',
   },
   {
+    id: 'colour',
     legend: 'Colour',
     keys: ['temperature', 'tint', 'saturation', 'vibrance'],
     hint: 'Temperature and tint are channel gains in linear light. Vibrance is saturation weighted by how pale a colour already is, so a strong colour barely moves — that is what protects skin.',
@@ -39,13 +44,24 @@ const GROUPS: ReadonlyArray<{ legend: string; keys: readonly DevelopKey[]; hint:
 export default function DevelopSliders({
   value,
   onChange,
+  onSwitch,
   foldPrefix = '',
 }: {
   value: DevelopSettings;
   onChange: (key: DevelopKey, v: number) => void;
+  /**
+   * Where a switch writes the whole develop (`parked.ts`). Given, a set bar's
+   * dot and a set fold's eye switch it off and back on; absent, the column
+   * draws as before — a layer's, until its sliders take switches too.
+   */
+  onSwitch?: (next: DevelopSettings) => void;
   /** Keeps a LAYER's folds apart from the picture's (`layer.`). */
   foldPrefix?: string;
 }) {
+  // Only where the column switches: a layer's sliders sit inside the
+  // picture's provider, and its menu would write the picture's develop.
+  const openMenu = useParkedOpener();
+  const menu = onSwitch ? openMenu : undefined;
   return (
     <>
       {GROUPS.map((group) => (
@@ -54,10 +70,18 @@ export default function DevelopSliders({
           id={`${foldPrefix}${group.legend.toLowerCase()}`}
           title={group.legend}
           info={<p>{group.hint}</p>}
-          marked={group.keys.some((key) => value[key] !== 0)}
+          marked={group.keys.some((key) => isSet(value, key))}
+          switched={foldSwitch(value, group.id, onSwitch)}
         >
           {group.keys.map((key) => (
-            <DevelopSlider key={key} k={key} value={value[key]} onChange={(v) => onChange(key, v)} />
+            <DevelopSlider
+              key={key}
+              k={key}
+              value={shownOf(value, key)}
+              onChange={(v) => onChange(key, v)}
+              toggle={onSwitch ? { off: isParked(value, key), onToggle: () => onSwitch(toggleKey(value, key)) } : undefined}
+              onMenu={menu && isSet(value, key) ? (rect) => menu({ kind: 'key', key, name: LABELS[key] }, rect) : undefined}
+            />
           ))}
         </DevelopFold>
       ))}
@@ -83,6 +107,8 @@ export function RangeSlider({
   printed,
   swatch,
   onChange,
+  toggle,
+  onMenu,
 }: {
   label: string;
   /** A colour the row is ABOUT — a mixer band's hue — drawn as a chip before the name. */
@@ -94,6 +120,10 @@ export function RangeSlider({
   /** The value as words; the signed form when a caller says nothing. */
   printed?: string;
   onChange: (v: number) => void;
+  /** Its on/off switch, where the column can switch settings off (`SliderBar`). */
+  toggle?: SliderBarProps['toggle'];
+  /** Its menu — Reset · Hide · Show only (`ParkedMenu.tsx`). */
+  onMenu?: SliderBarProps['onMenu'];
 }) {
   return (
     <SliderBar
@@ -112,6 +142,8 @@ export function RangeSlider({
       reset={reset}
       printed={printed ?? signed(value)}
       onChange={onChange}
+      toggle={toggle}
+      onMenu={onMenu}
     />
   );
 }
@@ -125,10 +157,14 @@ export function DevelopSlider({
   k,
   value,
   onChange,
+  toggle,
+  onMenu,
 }: {
   k: DevelopKey;
   value: number;
   onChange: (v: number) => void;
+  toggle?: SliderBarProps['toggle'];
+  onMenu?: SliderBarProps['onMenu'];
 }) {
   const range = DEVELOP_RANGES[k];
   return (
@@ -138,6 +174,8 @@ export function DevelopSlider({
       range={range}
       printed={k === 'exposure' ? `${signed(value, 2)} ${range.unit}` : signed(value)}
       onChange={onChange}
+      toggle={toggle}
+      onMenu={onMenu}
     />
   );
 }

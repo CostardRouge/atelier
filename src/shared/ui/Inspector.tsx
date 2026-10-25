@@ -74,6 +74,19 @@ interface InspectorSectionProps {
    */
   marked?: boolean;
   /**
+   * Drawn IN PLACE of the `marked` dot: a control about the whole section —
+   * Develop's eye that switches a fold off (`parked.ts`). Never the band's: a
+   * click on it does not fold.
+   */
+  mark?: ReactNode;
+  /** The body drawn faded: what it holds is kept but not applied — a fold switched off. */
+  dimmed?: boolean;
+  /**
+   * A right-click on the header band (or its menu key) opens the section's
+   * menu at that point — Develop's Reset · Hide · Show only for a fold.
+   */
+  onBandMenu?: (point: { x: number; y: number } | null) => void;
+  /**
    * `false` draws the same header with no chevron and no fold — a section too
    * small to be worth folding (one row of verbs) still reads like its
    * neighbours.
@@ -97,6 +110,9 @@ export function InspectorSection({
   defaultOpen = true,
   remember = 'local',
   marked = false,
+  mark,
+  dimmed = false,
+  onBandMenu,
   foldable = true,
   open: controlled,
   onOpenChange,
@@ -148,6 +164,14 @@ export function InspectorSection({
     <section data-section={id} className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
       <div
         onClick={onBandClick}
+        onContextMenu={
+          onBandMenu &&
+          ((e) => {
+            if ((e.nativeEvent as { pointerType?: string }).pointerType === 'touch') return;
+            e.preventDefault();
+            onBandMenu(e.clientX === 0 && e.clientY === 0 ? null : { x: e.clientX, y: e.clientY });
+          })
+        }
         className={`group/band flex flex-wrap items-center gap-x-2 pointer-coarse:gap-x-3.5 gap-y-0 min-h-7 pointer-coarse:min-h-11 ${foldable ? 'cursor-pointer' : ''}`}
       >
         {foldable ? (
@@ -163,7 +187,7 @@ export function InspectorSection({
         ) : (
           <span className="min-w-0 font-sans text-sm font-semibold text-ink truncate">{title}</span>
         )}
-        {marked && (
+        {mark ?? (marked && (
           <span
             data-fold
             role="img"
@@ -171,7 +195,7 @@ export function InspectorSection({
             title="Something here is set"
             className="flex-none w-1.5 h-1.5 rounded-full bg-accent"
           />
-        )}
+        ))}
         {badge && (
           <span
             data-fold
@@ -204,7 +228,7 @@ export function InspectorSection({
           ref={bodyRef}
           id={bodyId}
           aria-disabled={locked || undefined}
-          className={`flex flex-col gap-2.5 pt-2.5 ${locked ? 'opacity-45 select-none' : ''}`}
+          className={`flex flex-col gap-2.5 pt-2.5 ${locked ? 'opacity-45 select-none' : dimmed ? 'opacity-55' : ''}`}
         >
           {children}
         </div>

@@ -18,7 +18,7 @@
  * Pure and DOM-free.
  */
 
-import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, isBlankDevelop, isRawDevelop, withoutBase, type DevelopSettings } from './develop';
 import { landBaseCurve } from './base-curve';
 import { ontoRollSensor } from './roll-choice';
 import { isClipPicture, pictureEdits, type PictureEdit, type RollDoc, type RollPicture } from './roll-types';
@@ -94,7 +94,7 @@ export function pastedSections(copied: readonly PictureSection[], carried: reado
 function developOnto(target: RollPicture, numbers: DevelopSettings | null): DevelopSettings | null {
   const own = target.develop && isRawDevelop(target.develop) ? { base: target.develop.base, rawGain: target.develop.rawGain, rawProfile: target.develop.rawProfile ?? null } : null;
   const value = numbers ? withoutBase(numbers) : null;
-  const kept = value && !isDefaultDevelop(value) ? value : null;
+  const kept = value && !isBlankDevelop(value) ? value : null;
   // The base curve: the source's where it chose one, else the target's own.
   return kept || own
     ? { ...(kept ?? DEFAULT_DEVELOP), ...(own ?? {}), baseCurve: landBaseCurve(value?.baseCurve, target.develop?.baseCurve) }
