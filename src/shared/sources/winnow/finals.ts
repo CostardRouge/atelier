@@ -55,6 +55,12 @@ export interface FinalsInput {
   chapterId?: string | null;
   /** `capabilities.limits.maxUploadBytes`; null when the instance sets none. */
   maxUploadBytes: number | null;
+  /**
+   * An ARCHIVE of something made in Atelier from no capture of the instance
+   * (a narrated post): filed under `folder`, and no sentence about matching
+   * it to a capture, since there is none to match.
+   */
+  archive?: { folder: string } | null;
 }
 
 export interface FinalsItem {
@@ -78,10 +84,15 @@ export interface FinalsPlan {
   notes: string[];
 }
 
-/** Where a final lands: under its chapter when one is known, else at the root. */
-export function finalsPath(chapterId: string | null | undefined, name: string): string {
+/**
+ * Where a final lands: under its chapter when one is known, else under the
+ * caller's folder (a piece made from nothing on the instance — a Storytelling
+ * post — files itself by its series), else at the root.
+ */
+export function finalsPath(chapterId: string | null | undefined, name: string, folder?: string | null): string {
   const safe = name.replace(/[\\/]+/g, '_');
-  return chapterId ? `${chapterId}/${safe}` : safe;
+  const dir = chapterId || folder?.split(/[\\/]+/).map((s) => s.trim()).filter((s) => s && s !== '.' && s !== '..').join('/');
+  return dir ? `${dir}/${safe}` : safe;
 }
 
 export function finalsPlan(input: FinalsInput): FinalsPlan {
@@ -103,12 +114,12 @@ export function finalsPlan(input: FinalsInput): FinalsPlan {
     } else {
       originalAssetId = split.id;
     }
-    items.push({ name: f.name, path: finalsPath(chapterId, f.name), bytes: f.size, originalAssetId });
+    items.push({ name: f.name, path: finalsPath(chapterId, f.name, input.archive?.folder), bytes: f.size, originalAssetId });
   }
   const totalBytes = items.reduce((n, i) => n + i.bytes, 0);
 
   if (!items.length) problems.push('There is nothing to send — export first.');
-  if (unlinked > 0) {
+  if (unlinked > 0 && !input.archive) {
     notes.push(
       unlinked === items.length
         ? 'This media carries no Winnow id, so the instance will match the final to its capture by name and capture time.'

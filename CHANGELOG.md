@@ -18,6 +18,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   captions, its map and its counters, from a script file of your own that stays in this browser. Add a voice-over, a
   music bed and sound effects from your own files (or the built-in sounds), and export the post as an MP4 with its sound, or its cover as a PNG. The ending of each
   post names the next one and shows its cover.
+- Storytelling opens on a map of subjects: every subject of the series by pillar, against every channel, each crossing a
+  state (idea, in progress, ready, published, not for that channel) changed with a click and saved back into your
+  script.
+- Storytelling can send an exported post and its cover to a connected Winnow, to archive them there.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back

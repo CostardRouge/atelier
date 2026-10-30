@@ -17,6 +17,12 @@ interface SendFinalsPanelProps {
    * several (a roll's pictures). Absent, `assetId` stands for every file.
    */
   assetIds?: readonly (string | null)[];
+  /**
+   * Send as an ARCHIVE under this folder — a piece made from no capture of
+   * the instance (a Storytelling post): it is imported like any upload, with
+   * no lineage to link.
+   */
+  archiveFolder?: string;
 }
 
 type Sending =
@@ -44,7 +50,7 @@ type Sending =
  * instance the user connected on `#/connect`, only what they just rendered.
  * Engine-level since the Develop tool became its second consumer.
  */
-export default function SendFinalsPanel({ files, sourceId, assetId, assetIds }: SendFinalsPanelProps) {
+export default function SendFinalsPanel({ files, sourceId, assetId, assetIds, archiveFolder }: SendFinalsPanelProps) {
   const connection = getWinnowConnection(sourceId);
   const [sending, setSending] = useState<Sending>({ state: 'idle' });
 
@@ -63,8 +69,9 @@ export default function SendFinalsPanel({ files, sourceId, assetId, assetIds }: 
         // own reconcile places them by lineage.
         chapterId: null,
         maxUploadBytes: connection?.capabilities?.limits?.maxUploadBytes ?? null,
+        archive: archiveFolder ? { folder: archiveFolder } : null,
       }),
-    [files, assetId, assetIds, sourceId, connection],
+    [files, assetId, assetIds, sourceId, connection, archiveFolder],
   );
 
   if (!connection) {
@@ -109,7 +116,7 @@ export default function SendFinalsPanel({ files, sourceId, assetId, assetIds }: 
   return (
     <div className="flex flex-col gap-2 px-2.5 py-2 rounded-paper bg-surface border border-line" role="group" aria-label={`Send to ${sourceId}`}>
       <span className="font-mono text-2xs tracking-[0.1em] uppercase text-muted">
-        back to {sourceId}
+        {archiveFolder ? `archive on ${sourceId}` : `back to ${sourceId}`}
       </span>
       {!writable ? (
         <p className="m-0 text-xs text-muted">
@@ -136,8 +143,9 @@ export default function SendFinalsPanel({ files, sourceId, assetId, assetIds }: 
           ))}
           {sending.state === 'done' ? (
             <p className="m-0 text-xs text-ok" role="status">
-              ✓ {sending.sent} file{sending.sent === 1 ? '' : 's'} sent and linked
-              {plan.originalAssetId !== null ? ` to capture #${plan.originalAssetId}` : ''} on {sourceId}.
+              ✓ {sending.sent} file{sending.sent === 1 ? '' : 's'} sent{archiveFolder ? '' : ' and linked'}
+              {plan.originalAssetId !== null ? ` to capture #${plan.originalAssetId}` : ''} on {sourceId}
+              {archiveFolder ? ', imported into its Incoming' : ''}.
             </p>
           ) : (
             <div className="flex items-center gap-3 flex-wrap">

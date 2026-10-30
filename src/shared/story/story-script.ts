@@ -42,6 +42,48 @@ export interface ScriptPost {
 
 export const SCRIPT_KIND = 'atelier.story-script';
 
+/** Where a subject stands on one channel. */
+export type CellState = 'idee' | 'encours' | 'pret' | 'publie' | 'non';
+export const CELL_STATES: readonly CellState[] = ['idee', 'encours', 'pret', 'publie', 'non'];
+
+export interface Cell {
+  s: CellState;
+  /** The day it went out, `YYYY-MM-DD`. */
+  date?: string;
+  /** The published post, or a draft. */
+  url?: string;
+}
+
+/** A column of the map: where a subject can be told. */
+export interface ScriptChannel {
+  id: string;
+  name: string;
+  /** What goes there (« Reels, carrousels »). */
+  format?: string;
+  /** For whom, in what tone. */
+  voice?: string;
+}
+
+/**
+ * A line of the map of subjects — a pillar (no parent), a subject, or a
+ * version of one. A line that names a `post` IS that post of the series; the
+ * others are subjects not made yet.
+ */
+export interface ScriptTopic {
+  id: string;
+  title: string;
+  parent?: string;
+  order?: number;
+  hook?: string;
+  arc?: string;
+  notes?: string;
+  /** Proposed by Claude, not yet kept by the author. */
+  proposed?: boolean;
+  /** The id of the post in the series this line is. */
+  post?: string;
+  cells?: Record<string, Cell>;
+}
+
 export interface StoryScript {
   kind: typeof SCRIPT_KIND;
   version: 1;
@@ -54,6 +96,9 @@ export interface StoryScript {
   /** The trip the maps draw. */
   stops?: Stop[];
   posts: Record<string, ScriptPost>;
+  /** The map of subjects: its channels and its lines (`story-map.ts`). */
+  channels?: ScriptChannel[];
+  topics?: ScriptTopic[];
 }
 
 export type ScriptParse = { ok: true; script: StoryScript } | { ok: false; reason: string };
@@ -96,6 +141,40 @@ export function parseScript(raw: unknown): ScriptParse {
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const channels = Array.isArray(raw.channels)
+    ? raw.channels.flatMap((c): ScriptChannel[] =>
+        isObject(c) && typeof c.id === 'string' && typeof c.name === 'string'
+          ? [{ id: c.id, name: c.name, format: text(c.format), voice: text(c.voice) }]
+          : [],
+      )
+    : undefined;
+  const topics = Array.isArray(raw.topics)
+    ? raw.topics.flatMap((t): ScriptTopic[] => {
+        if (!isObject(t) || typeof t.id !== 'string' || typeof t.title !== 'string') return [];
+        const cells: Record<string, Cell> = {};
+        if (isObject(t.cells)) {
+          for (const [ch, c] of Object.entries(t.cells)) {
+            if (isObject(c) && CELL_STATES.includes(c.s as CellState)) {
+              cells[ch] = { s: c.s as CellState, date: text(c.date), url: text(c.url) };
+            }
+          }
+        }
+        return [
+          {
+            id: t.id,
+            title: t.title,
+            parent: text(t.parent) || undefined,
+            order: Number.isFinite(t.order) ? (t.order as number) : undefined,
+            hook: text(t.hook),
+            arc: text(t.arc),
+            notes: text(t.notes),
+            proposed: t.proposed === true ? true : undefined,
+            post: text(t.post),
+            cells,
+          },
+        ];
+      })
+    : undefined;
   return {
     ok: true,
     script: {
@@ -106,6 +185,8 @@ export function parseScript(raw: unknown): ScriptParse {
       ask: text(raw.ask),
       stops: Array.isArray(raw.stops) ? raw.stops.filter(isStop) : undefined,
       posts,
+      channels,
+      topics,
     },
   };
 }

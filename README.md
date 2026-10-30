@@ -2972,10 +2972,22 @@ it and may grow blocks of its own.
   one at the playhead): each is a file of your own — a click, a whoosh you
   like — or one of the suite's built-in synthesised sounds, with its time and
   level.
+- **The map of subjects.** `#/storytelling` opens on the series as a map: every
+  subject you mean to tell, filed by pillar (from your script's `topics`),
+  against every channel (`channels`) — Instagram, TikTok, LinkedIn… Each
+  crossing is a state (idea, in progress, ready, published, not for that
+  channel), one click from the next; the posts wear their cover and open on
+  their stage; *Still to do* keeps only what has work left. The states live in
+  your script: *Save script* downloads it back with them, to keep with your
+  notes.
 - **Continuity.** Each post knows the one before and after it: the ending names
   the next post and shows its cover, and the panel opens either in one click.
 - **Export.** *Export video* writes an H.264 MP4 at 30 frames a second in this
   browser; *Export cover* a PNG of the post's cover.
+- **Archive.** After an export, the video and its cover can be sent to a Winnow
+  you connected — the one running on this computer, or your server's with an app
+  token (see "Sources — connecting a Winnow") — where they are imported into its
+  Incoming under `Storytelling/<series>/<post>`.
 
 Work on a post's blocks happens in the code, with `npm run dev`: the stage
 reloads on every save.

@@ -65,3 +65,23 @@ describe('assemble', () => {
     expect(ep.next).toEqual({ number: 'EP.01', title: 'EP.01' });
   });
 });
+
+describe('the map in a script', () => {
+  it('reads channels and topics, keeping only well-formed states', () => {
+    const parsed = parseScript({
+      ...script,
+      channels: [{ id: 'ig', name: 'Instagram', format: 'Reels' }, { name: 'no id' }],
+      topics: [
+        { id: 'p', title: 'Pilier', order: 1 },
+        { id: 'v0', title: 'EP.00', parent: 'p', post: 'a', proposed: true, cells: { ig: { s: 'publie', date: '2026-11-01' }, li: { s: 'nope' } } },
+        { title: 'no id' },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.script.channels).toEqual([{ id: 'ig', name: 'Instagram', format: 'Reels', voice: undefined }]);
+    expect(parsed.script.topics).toHaveLength(2);
+    expect(parsed.script.topics![1]).toMatchObject({ parent: 'p', post: 'a', proposed: true, cells: { ig: { s: 'publie', date: '2026-11-01' } } });
+    expect(parsed.script.topics![1].cells!.li).toBeUndefined();
+  });
+});
