@@ -11,6 +11,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling, a new editor for a series of short narrated videos: each post plays on a vertical stage with its
+  captions, its map and its counters, from a script file of your own that stays in this browser. Add a voice-over, a
+  music bed and sound effects from your own files (or the built-in sounds), and export the post as an MP4 with its sound, or its cover as a PNG. The ending of each
+  post names the next one and shows its cover.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back

@@ -53,6 +53,7 @@ Since 2026-10-22 the long entries that stood here live verbatim under « Moved f
 - **Trips, the pieces**: a deck of FREE slides; a slide's length is parts with an owner; four tabs over one stage; the badge from overlay text, its look the trip's, camera plate, temporal line, odometer; three grade rungs; shades engine-level; framing and motion as cards; collages; `MediaIntake`; everything in the hash; Trips briefs the Studio — `roadtrip.md`.
 - **Openers and the road**: hook variants from a registry; the Itinerary; Virée's software 3D, fleet and ferries; Vitrine; stops found on a big map; OSM tiles inside openers, streamed and cached; the road's drive styles — `roadtrip.md`, `showcase.md`, `trip-road.md`, `trip-road-drive.md`.
 - **Trips overview**: a calendar of months; Calendar · Map · List; the stage ruler and its one gesture surface — `roadtrip.md`.
+- **Storytelling**: a narrated series as an Atelier tool, not a repository; a post is code over a shared charte and starts as a copy of the one before; its words are a private script loaded and kept on the device, never in this public code; the ending shows the next post's cover — `storytelling.md`.
 - **Elsewhere**: one Winnow picker — `winnow-picker.md`; a wait inside a run is never bare — `tasks.md`; agents drive the suite through commands — `agent-commands.md`.
 - **Build, release, portfolio**: the base path from `GITHUB_REPOSITORY`; built-in LUTs discovered; Dependabot (C20); versions (C13); the portfolio standard (C14–C19) and the public page; the Registry block (CLAUDE.md rule 3) — `deployment.md`, `public-page.md`.
 
@@ -122,6 +123,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-24 — One render RECIPE from a record to its passes (the stage still builds its chain by hand beside `picturePasses`): agreed direction, R1–R5 not started — `render-core.md`.
 - 2026-10-24 — Hiding a slider or group for a moment: his pick is the dot as a switch + a menu + a pill, the held press refused, and hiding is an EDIT the export follows, built by parking the value (`docs/slider-peek.md` §6–§7, lab 2 https://claude.ai/artifact/X2kx8KnNDWqw8WmfkynF3S); P1–P5 built (model, switches, menu, pill, layers), driven headless only; see it on his devices (a layer's settings in the pill: refused, §P5); the A/B's before as "without" a section or slider built (§8, his pick B) — `briefs.md`.
 - 2026-10-24 — The A/B divider kept across pictures (B of the lab) and moved as a clipped layer; per-picture (C) or detents (D) are his call — `develop-roll.md`.
+- 2026-10-30 — Storytelling's first version: the nine posts of season 1 play from the script; the MP4 and its sound unexported here (no H.264/AAC in the container) — export one on his Mac; agent commands, Winnow and real photographs next — `storytelling.md`.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -169,4 +171,5 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 | `docs/memory/flight-atlas.md` | the experimental Flight Atlas instrument (`src/tools/atlas/`) — every flight on one map, its choreography, painter, camera and tiles |
 | `docs/memory/tasks.md` | `src/shared/tasks/`, `TaskEdge`, `TaskPill` — progress, a cancel, a spinner, a "please wait" anywhere |
 | `docs/memory/public-page.md` | the head of `index.html` (canonical, OpenGraph), `public/robots.txt`, `public/sitemap.xml`, the social card and its generator, the legal notice (`#/legal`) and what it must say when measurement, a network exception or what the browser keeps changes |
+| `docs/memory/storytelling.md` | `src/tools/storytelling/`, `src/shared/story/` — the narrated series, its charte and blocks, the private script, a post's continuity |
 | `docs/memory/briefs.md` | starting new work: the long-form briefs, audits and plans under `docs/`, their status and when to read each |

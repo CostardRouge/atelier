@@ -115,7 +115,7 @@ export default function LegalNotice() {
         <P>
           Your photos, clips and logs are read in this browser and never uploaded. What Atelier keeps, it keeps in this
           browser’s storage, on this device only: your projects, trips, rolls and atlases with their settings and
-          small previews of them; the looks and presets you loaded; the map tiles, lens profiles, camera profiles and
+          small previews of them; the story script you loaded in Storytelling; the looks and presets you loaded; the map tiles, lens profiles, camera profiles and
           logos you asked for or brought in; and your preferences (theme, layout, the choices each tool remembers). A
           Develop roll may also keep, when you let it, a working preview of each of its local pictures and a small
           vignette of each picture as shot beside its settings, so a style of your own can be learned on this machine;

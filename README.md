@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships ten tools, converging into a few editors:
+Today it ships twelve tools, converging into a few editors:
 
 - **Studio** — the unified editor the suite is converging on. Opens on your
   **projects** (saved compositions with a baked preview); each project keeps
@@ -18,6 +18,11 @@ Today it ships ten tools, converging into a few editors:
   **roll**, kept in this browser or on your Winnow; give each its own light,
   colour, look and (a photograph) crop, and export them — from the proxy or the
   original, a clip as an MP4 graded frame by frame.
+- **Storytelling** — tell a project in a series of short narrated videos. Each
+  **post** plays from its own code over a shared charte; its words come from
+  your **script**, a file of your own kept in this browser, never in the app;
+  add your voice, a music bed and sound effects of your own, and export a
+  vertical MP4 whose ending shows the next post's cover.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -2944,6 +2949,36 @@ It is off until you ask for it on that roll (*Keep them*, with the weight said
 first), the strip and the chip say when a picture is shown from its preview,
 an export made from one says so, and *Stop keeping them* deletes them.
 Pictures from your Winnow never get one: the instance is where they live.
+
+## Storytelling tool
+
+A series of narrated vertical videos (1080 × 1920), the first being *Le tri
+d'Australie*. A post is **code**: `src/tools/storytelling/posts.ts` lists, for
+each post, the blocks it plays, how long each lasts and when its caption
+speaks; the blocks, the captions, the HUD, the grain and the cover are drawn on
+a canvas by `src/shared/story/` — the series' **charte** (palette, Geist,
+motion), the same for every post. A new post starts as a copy of the one before
+it and may grow blocks of its own.
+
+- **The script is yours, not the app's.** The words said, the numbers, the
+  places and the trip the maps draw are in a `.story.json` file you keep (its
+  `kind` is `atelier.story-script`, version 1). *Load script…* reads it and
+  keeps it in this browser until *Forget*; without one, every post still plays,
+  its captions as placeholders.
+- **Sound.** Add a voice-over and a music bed from files on this device; they
+  play with the stage, each at its start time and level, and are mixed into the
+  export's AAC track (the music fades in and out).
+- **Effects.** Place sound effects at moments of the post (*Add an effect* puts
+  one at the playhead): each is a file of your own — a click, a whoosh you
+  like — or one of the suite's built-in synthesised sounds, with its time and
+  level.
+- **Continuity.** Each post knows the one before and after it: the ending names
+  the next post and shows its cover, and the panel opens either in one click.
+- **Export.** *Export video* writes an H.264 MP4 at 30 frames a second in this
+  browser; *Export cover* a PNG of the post's cover.
+
+Work on a post's blocks happens in the code, with `npm run dev`: the stage
+reloads on every save.
 
 ## Telemetry tool
 
