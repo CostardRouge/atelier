@@ -11,6 +11,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
+  its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the
+  source.
 - Storytelling, a new editor for a series of short narrated videos: each post plays on a vertical stage with its
   captions, its map and its counters, from a script file of your own that stays in this browser. Add a voice-over, a
   music bed and sound effects from your own files (or the built-in sounds), and export the post as an MP4 with its sound, or its cover as a PNG. The ending of each

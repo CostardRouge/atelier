@@ -4,7 +4,9 @@ import {
   WinnowClient,
   WinnowError,
   normalizeBaseUrl,
+  sameSite,
   sourceIdFor,
+  type WinnowAuth,
 } from '../shared/sources/winnow/client';
 import {
   getWinnowConnection,
@@ -231,6 +233,8 @@ export default function SourcesScreen({ query }: { query: string }) {
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [token, setToken] = useState('');
+  const [useToken, setUseToken] = useState(false);
   const [counts, setCounts] = useState<Map<string, DocCount>>(new Map());
 
   useEffect(() => setRaw(proposed), [proposed]);
@@ -254,31 +258,41 @@ export default function SourcesScreen({ query }: { query: string }) {
     problem = err instanceof Error ? err.message : 'That is not an address.';
   }
   const already = baseUrl ? getWinnowConnection(sourceIdFor(baseUrl)) : null;
+  // Across sites the cookie never travels (Atelier on this computer, the
+  // instance on its server): the connection needs an app token instead.
+  const crossSite = baseUrl ? !sameSite(location.hostname, new URL(baseUrl).hostname) : false;
+  const tokenMode = useToken || crossSite;
+  const auth: WinnowAuth = tokenMode ? { mode: 'token', token: token.trim() } : { mode: 'cookie' };
+  const ready = !!baseUrl && (!tokenMode || token.trim().length > 0);
 
   async function allow() {
-    if (!baseUrl) return;
+    if (!baseUrl || !ready) return;
     setBusy(true);
     setError(null);
     setNeedsLogin(null);
-    const client = new WinnowClient({ baseUrl, auth: { mode: 'cookie' } });
+    const client = new WinnowClient({ baseUrl, auth });
     try {
       const capabilities = await client.capabilities();
+      if (auth.mode === 'token') await client.me();
       const now = Date.now();
       putWinnowConnection({
         id: sourceIdFor(baseUrl),
         baseUrl,
-        auth: { mode: 'cookie' },
+        auth,
         capabilities,
         connectedAt: already?.connectedAt ?? now,
         refreshedAt: now,
       });
       setRaw('');
+      setToken('');
       // A link that asked for a specific instance wanted to go somewhere
       // afterwards; a person adding one from this page stays on it and sees
       // the new row appear.
       if (sentByLink) navigate(after);
     } catch (err) {
-      if (err instanceof WinnowError && err.kind === 'unauthenticated') {
+      if (err instanceof WinnowError && err.kind === 'unauthenticated' && auth.mode === 'token') {
+        setError('That instance refused the token: it is mistyped, expired or revoked. Mint a new one on its Users › App tokens.');
+      } else if (err instanceof WinnowError && err.kind === 'unauthenticated') {
         setNeedsLogin(client.loginUrl());
       } else {
         setError(err instanceof Error ? err.message : String(err));
@@ -463,7 +477,7 @@ export default function SourcesScreen({ query }: { query: string }) {
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && baseUrl && !busy) void allow();
+              if (e.key === 'Enter' && ready && !busy) void allow();
             }}
             placeholder="https://winnow.example"
             spellCheck={false}
@@ -486,8 +500,40 @@ export default function SourcesScreen({ query }: { query: string }) {
           )}
         </label>
 
+        {baseUrl && (
+          <div className="flex flex-col gap-1.5">
+            {crossSite ? (
+              <span className="text-xs text-muted leading-relaxed">
+                This page and that instance are on different sites, so its sign-in cannot reach here. Paste an
+                app token minted on its <strong className="font-semibold text-ink-soft">Users › App tokens</strong>;
+                it is kept in this browser until you forget the source.
+              </span>
+            ) : (
+              <label className="inline-flex items-center gap-2 text-xs text-muted cursor-pointer">
+                <input type="checkbox" checked={useToken} onChange={(e) => setUseToken(e.target.checked)} />
+                Use an app token instead of the instance&apos;s sign-in
+              </label>
+            )}
+            {tokenMode && (
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && ready && !busy) void allow();
+                }}
+                placeholder="wnw_…"
+                aria-label="App token"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono text-sm px-3.5 py-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+              />
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-3 flex-wrap">
-          <button type="button" onClick={() => void allow()} disabled={!baseUrl || busy} className={solid}>
+          <button type="button" onClick={() => void allow()} disabled={!ready || busy} className={solid}>
             {busy ? 'Asking…' : already ? 'Allow again' : 'Allow'}
           </button>
           <span className="text-xs text-muted">

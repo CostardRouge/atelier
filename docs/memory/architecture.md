@@ -48,6 +48,10 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **And it settles a question open since 2026-09-13** (`photo-develop.md` §7.7, `photo-editor.md` §11): a picture's develop **crosses** the Trips → Studio bridge with the piece. It is the same answer as the look crossing whole (`studio.md`, the bridge): what the author did to the photograph is part of the photograph, not part of the tool they did it in.
 
+## An instance on another SITE is reached with an app token (2026-10-30)
+
+**Decision, his** («winnow doit aussi marcher en local … tout le workflow vidéo en local, exporter et ensuite push pour archive»). Winnow's cookie is `SameSite=Lax`, so it travels only between sibling subdomains; Atelier on `localhost` beside the instance on its server never gets it. The connect form (`SourcesScreen.tsx`) asks for an app token when `sameSite` (client.ts, pure — last two labels, no public-suffix list) says the sites differ, and offers it as a tick otherwise. The token is kept on the connection in `localStorage` (store.ts; legal notice), sent as `Authorization: Bearer` by `init()` and as `access_token` only on the byte routes Winnow reads it on (`takesQueryToken`, mirroring its `QUERY_TOKEN_ROUTES`: thumb, proxy, download, sidecar download — a face thumbnail is NOT one, so faces stay blank in token mode until Winnow adds it). A bad token is caught at connect by `GET /api/auth/me`, because `/api/capabilities` answers anyone. **How to apply**: a new URL an element loads goes through `mediaUrl`, and only when Winnow lists it; the instance must also name the page's origin in `CORS_ALLOWED_ORIGINS`, which Winnow's development stack does for `http://localhost:5173`.
+
 ## Hash routing (2026-08-20)
 
 **Decision.** Navigation is hash-based (`#/telemetry`, `#/lut`) through a minimal `useSyncExternalStore` router. **Why**: the site is served as static files from GitHub Pages, where a history-API path would 404 on deep-link/refresh. **How to apply**: do not introduce a history-API router without solving the static-hosting fallback first.

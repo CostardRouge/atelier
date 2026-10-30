@@ -3187,6 +3187,25 @@ carries an old, dead log beside the live one, and the live one is taken). A Canc
 and keeps what landed. A DJI clip brings its flight log along either way, and a
 clip whose log came alone can still be added later and joins it.
 
+**Signing in.** On the same site as the instance (`atelier.example.org` beside
+`winnow.example.org`) Atelier uses Winnow's own sign-in: its cookie travels and
+nothing is stored here. On **another site** — Atelier running on your computer
+(`npm run dev`, `http://localhost:5173`) beside your Winnow on its server — that
+cookie cannot reach this page, so the connect form asks for an **app token**,
+minted on the instance's *Users › App tokens*. It is kept in this browser with
+the connection until you forget the source, sent as `Authorization: Bearer` on
+every call and as `access_token` on the four byte routes a picture or a video
+loads by URL. The instance must also list this page's origin in its
+`CORS_ALLOWED_ORIGINS` (add `http://localhost:5173` for a local Atelier).
+
+**Everything on one machine.** Winnow runs locally too: its development stack
+(`docker compose -f docker-compose.yml -f docker-compose.dev.yml up`, in the
+Winnow repository) serves `http://localhost:3000` and already allows a local
+Atelier's origin. Connect `http://localhost:3000` here — same site, its sign-in
+works — and the whole video workflow runs on your computer: pick from the
+local Winnow, edit, export, then send the export to a Winnow (the local one,
+or your server's with a token) to archive it.
+
 When the Winnow serves its **timeline** (media grouped into legs by place and
 date), a trip can be seeded from it: the legs become the trip's stages — span, places, order — and nothing
 else; no post is created, so the grid of days still to tell stays yours. Re-run

@@ -3,8 +3,12 @@
  *
  * A connection is a base URL and an auth mode, nothing more: in cookie mode
  * there is no secret to keep, and the session itself lives in Winnow's own
- * cookie. What IS kept is the capabilities sheet read at connect time, so the
- * UI can say what an instance can do without a request.
+ * cookie. In token mode — an instance on another site than this page, the
+ * cookie cannot travel — the app token the person pasted IS kept here: a key
+ * to one account, capped by Winnow, revoked there on Users › App tokens, and
+ * dropped from this browser by Forget. What is also kept is the capabilities
+ * sheet read at connect time, so the UI can say what an instance can do
+ * without a request.
  *
  * `localStorage`, not IndexedDB: a handful of small records, read
  * synchronously at boot to populate the source list. Storage failure degrades
@@ -56,7 +60,8 @@ function isConnection(v: unknown): v is WinnowConnection {
     typeof c.baseUrl === 'string' &&
     typeof c.auth === 'object' &&
     c.auth !== null &&
-    typeof (c.auth as { mode?: unknown }).mode === 'string'
+    typeof (c.auth as { mode?: unknown }).mode === 'string' &&
+    ((c.auth as { mode: string }).mode !== 'token' || typeof (c.auth as { token?: unknown }).token === 'string')
   );
 }
 

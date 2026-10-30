@@ -8,7 +8,9 @@ import {
   bucketHolds,
   hasTimeline,
   normalizeBaseUrl,
+  sameSite,
   sourceIdFor,
+  takesQueryToken,
   type WinnowCapabilities,
   type WinnowChapter,
 } from './client';
@@ -867,5 +869,36 @@ describe('a list read can be aborted', () => {
     await c.sessions({}, controller.signal);
     await c.timeline({}, controller.signal);
     for (const call of fetchImpl.mock.calls) expect(call[1]?.signal).toBe(controller.signal);
+  });
+});
+
+describe('app token mode', () => {
+  const tokenClient = new WinnowClient({ baseUrl: 'https://winnow.example', auth: { mode: 'token', token: 'wnw_abc' } });
+  const cookieClient = new WinnowClient({ baseUrl: 'https://winnow.example', auth: { mode: 'cookie' } });
+
+  it('puts the token on the byte routes an element loads, and nowhere else', () => {
+    expect(tokenClient.thumbUrl(7)).toBe('https://winnow.example/api/assets/7/thumb?access_token=wnw_abc');
+    expect(tokenClient.proxyUrl(7)).toContain('access_token=wnw_abc');
+    expect(tokenClient.originalUrl(7)).toContain('access_token=wnw_abc');
+    expect(tokenClient.sidecarUrl(3)).toContain('access_token=wnw_abc');
+    expect(tokenClient.thumbRetryUrl(7, 2)).toContain('access_token=wnw_abc');
+    expect(tokenClient.faceThumbUrl(4)).not.toContain('access_token');
+    expect(tokenClient.url('/api/assets', { q: 'x' })).not.toContain('access_token');
+    expect(cookieClient.thumbUrl(7)).toBe('https://winnow.example/api/assets/7/thumb');
+  });
+
+  it('knows which paths Winnow reads a query token on', () => {
+    expect(takesQueryToken('/api/assets/12/proxy')).toBe(true);
+    expect(takesQueryToken('/api/sidecars/12/download')).toBe(true);
+    expect(takesQueryToken('/api/assets/12')).toBe(false);
+    expect(takesQueryToken('/api/faces/12/thumb')).toBe(false);
+  });
+
+  it('tells a sibling subdomain from another site', () => {
+    expect(sameSite('atelier.steeve.website', 'winnow.steeve.website')).toBe(true);
+    expect(sameSite('localhost', 'localhost')).toBe(true);
+    expect(sameSite('localhost', 'winnow.steeve.website')).toBe(false);
+    expect(sameSite('127.0.0.1', 'winnow.steeve.website')).toBe(false);
+    expect(sameSite('atelier.example.org', 'winnow.other.org')).toBe(false);
   });
 });
