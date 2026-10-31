@@ -313,9 +313,6 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
       <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-2 min-h-0 min-w-0 flex-[1.4] @min-[860px]:flex-none">
           <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
-            <span className="font-mono text-3xs uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-warn-line bg-warn-wash text-warn">
-              Experimental
-            </span>
             <span className="font-mono text-2xs text-muted tabular-nums">
               {reading
                 ? `reading ${reading.done}/${reading.total}…`

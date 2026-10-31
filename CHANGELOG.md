@@ -37,6 +37,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Develop: the A/B's before side can show your correction without one section or one slider — pick it on the
   "before ▾" label — to compare side by side what that setting brings. The choice stays as you move through the roll.
 
+### Changed
+
+- Flight Atlas is now one of the main tools: it has its own card on the home page and among the editors in the tool
+  menu, and it is no longer marked experimental.
+- Storytelling carries a « Work in progress » badge on the home page and in the tool menu; hover it to see what is still
+  coming.
+
 ### Fixed
 
 - Sending exports to a Winnow with an app token no longer ends in « not allowed to do that » after the files arrived:

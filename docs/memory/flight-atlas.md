@@ -1,10 +1,10 @@
-# Flight Atlas (experimental)
+# Flight Atlas
 
 Read before touching `src/tools/atlas/` — the instrument that draws every selected drone flight on one map and animates them together.
 
 ## Why it exists and what it is not (2026-10-12)
 
-**Decision.** The maintainer asked for a NEW, EXPERIMENTAL usage («peut-être pas quelque chose qu'on va garder»): load all his drone trajectories — telemetry only, never the videos — and draw them on a map as elegantly as the Perth bus animation he showed (dark ground, violet network of every route, cyan comets with white heads, a big clock and «413 buses running» in a corner, the activity curve under it), with many original sliders for colours, places, map visibility, speed, per-flight colours, pulses, and STAGGERING (all at once, one by one, slightly offset). He left it to the agent overnight («carte libre, sois autonome»). **How to apply**: it is an `instrument` in the registry (`/atlas`); since 2026-10-17 it keeps ATLASES (below), and what leaves is an MP4/PNG. Keep it deletable: nothing outside `src/tools/atlas/` depends on it, it touches `shared/` only by importing.
+**Decision.** The maintainer asked for a NEW, EXPERIMENTAL usage («peut-être pas quelque chose qu'on va garder»): load all his drone trajectories — telemetry only, never the videos — and draw them on a map as elegantly as the Perth bus animation he showed (dark ground, violet network of every route, cyan comets with white heads, a big clock and «413 buses running» in a corner, the activity curve under it), with many original sliders for colours, places, map visibility, speed, per-flight colours, pulses, and STAGGERING (all at once, one by one, slightly offset). He left it to the agent overnight («carte libre, sois autonome»). **2026-10-31 — it is kept, no longer an experiment** (his words: «un outil à part entière qui est robuste et qui est mature»): an `editor` in the registry with its door on the home page, the «Experimental» pills gone from its gallery and editor. **How to apply**: since 2026-10-17 it keeps ATLASES (below), and what leaves is an MP4/PNG. Keep it deletable: nothing outside `src/tools/atlas/` depends on it, it touches `shared/` only by importing.
 
 ## The shape (2026-10-12)
 

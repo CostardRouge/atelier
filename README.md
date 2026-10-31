@@ -18,7 +18,7 @@ Today it ships twelve tools, converging into a few editors:
   **roll**, kept in this browser or on your Winnow; give each its own light,
   colour, look and (a photograph) crop, and export them — from the proxy or the
   original, a clip as an MP4 graded frame by frame.
-- **Storytelling** — tell a project in a series of short narrated videos. Each
+- **Storytelling** *(work in progress)* — tell a project in a series of short narrated videos. Each
   **post** plays from its own code over a shared charte; its words come from
   your **script**, a file of your own kept in this browser, never in the app;
   add your voice, a music bed and sound effects of your own, and export a
@@ -29,7 +29,7 @@ Today it ships twelve tools, converging into a few editors:
   a DJI clip and export an MP4 with the telemetry burned in.
 - **Flight Map** — trace a DJI clip's GPS path on a map and scrub the video to
   walk the aircraft along it (the base map is opt-in — see below).
-- **Flight Atlas** *(experimental)* — draw a set of drone flights on one map
+- **Flight Atlas** — draw a set of drone flights on one map
   and animate them together, the way the Perth bus map draws a city's day: a
   faint network of every route, comets for what is in the air, a clock and a
   count in the corner; export it as an MP4 or a PNG. Each **atlas** is kept on
@@ -2952,6 +2952,10 @@ Pictures from your Winnow never get one: the instance is where they live.
 
 ## Storytelling tool
 
+*Work in progress* — the home page and the tool menu say so with a badge. It
+works end to end; your photographs in the blocks and agent commands come next,
+and the script's format may still change.
+
 A series of narrated vertical videos (1080 × 1920), the first being *Le tri
 d'Australie*. A post is **code**: `src/tools/storytelling/posts.ts` lists, for
 each post, the blocks it plays, how long each lasts and when its caption
@@ -3630,7 +3634,7 @@ CSS): it stays out of the main bundle and downloads only when you open this
 tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
 coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
 
-## Flight Atlas tool (experimental)
+## Flight Atlas tool
 
 A set of DJI flights — clips with their `.srt`, or loose `.srt` logs — drawn
 together on one map and animated. Only the **GPS track** of each log is read

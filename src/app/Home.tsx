@@ -1,8 +1,9 @@
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { useObjectUrl } from '../shared/media/use-object-url';
 import { Icons } from '../shared/ui/icons';
 import type { DevelopDoorFacts, StudioDoorFacts, TripsDoorFacts } from './documents-read';
 import { TOOLS, type Tool } from './tools';
+import WipBadge from './WipBadge';
 
 /**
  * The stores are read through `documents-read.ts`, imported HERE and only
@@ -16,7 +17,8 @@ const readDocuments = () => import('./documents-read');
  * behind them.
  *
  * Nine equal cards told a story of nine equal tools, while the suite is
- * converging on its editors (`studio.md`) — the Studio, Trips and Develop.
+ * converging on its editors (`studio.md`) — the Studio, Trips, Develop, and
+ * the tools in their own right beside them (Flight Atlas, Storytelling).
  * Each editor is a door: it SHOWS the document this browser worked on last —
  * its preview, its name, how far it got — and OPENS that editor's gallery,
  * where the choice is made. It used to open the document itself, and the
@@ -77,6 +79,7 @@ export default function Home() {
                     {t.subtitle}
                   </span>
                 )}
+                <WipBadge tool={t} compact />
                 <span className="ml-auto inline-flex text-faint group-hover:text-accent-ink transition-transform duration-[250ms] ease-paper group-hover:translate-x-[3px]">
                   {Icons.forward}
                 </span>
@@ -105,6 +108,9 @@ function DoorHead({ tool, last }: { tool: Tool; last: string | null }) {
           {tool.label}
         </h2>
         {last && <span className="min-w-0 truncate text-xs text-muted">{last}</span>}
+        <span className="ml-auto self-center">
+          <WipBadge tool={tool} />
+        </span>
       </div>
       {tool.blurb && <p className="m-0 text-ink-soft text-sm leading-[1.55]">{tool.blurb}</p>}
       <span
@@ -232,14 +238,25 @@ function DoorThumb({ blob }: { blob: Blob }) {
   );
 }
 
-/** An editor with no door of its own yet: its name and pitch. */
+/**
+ * An editor with no door of its own yet: its name and pitch, under the same
+ * empty tile as the others' first visit, so a row of doors stays a row.
+ */
 function PlainDoor({ tool }: { tool: Tool }) {
   return (
     <a href={`#${tool.path}`} className={door}>
+      <div className="h-24 rounded-[10px] bg-paper-2 grid place-items-center text-faint text-2xl">
+        {PLAIN_ICONS[tool.id] ?? Icons.grid}
+      </div>
       <DoorHead tool={tool} last={null} />
     </a>
   );
 }
+
+const PLAIN_ICONS: Record<string, ReactNode> = {
+  atlas: Icons.map,
+  storytelling: Icons.play,
+};
 
 const DOORS: Record<string, ComponentType<{ tool: Tool }>> = {
   studio: StudioDoor,

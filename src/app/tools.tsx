@@ -61,12 +61,20 @@ export interface Tool {
   /** The card's eyebrow on the home page. */
   subtitle?: string;
   /**
-   * Where the switcher files it. The `editor`s are where the suite is
-   * converging (`studio.md`); an `instrument` is one of the standalone pages
-   * kept until the Studio absorbs it. The list will grow — that is why the
-   * switcher is a menu and not a row of segments.
+   * Where the switcher files it, and whether the home page gives it a door.
+   * An `editor` is a tool in its own right — documents of its own and a
+   * gallery to open them from (the Studio, Trips, Develop, Flight Atlas,
+   * Storytelling); an `instrument` is one of the standalone pages kept until
+   * the Studio absorbs it. The list will grow — that is why the switcher is a
+   * menu and not a row of segments.
    */
   group: 'editor' | 'instrument';
+  /**
+   * A tool still being built says so wherever it is offered (the home page's
+   * door, the switcher): `note` is the one sentence of what is missing,
+   * shown on hover. Absent = finished enough to be offered plainly.
+   */
+  wip?: { note: string };
   /** One-line pitch shown on the home page card. */
   blurb?: string;
   /** The tool's root component. */
@@ -123,6 +131,18 @@ export const TOOLS: Tool[] = [
     accepts: ['photo', 'video+telemetry', 'video'],
   },
   {
+    id: 'atlas',
+    group: 'editor',
+    path: '/atlas',
+    label: 'Flight Atlas',
+    subtitle: 'Every flight · one map',
+    blurb:
+      'Draw a set of drone flights on one map and animate them together — staggered, in relay, on the hour flown or day by day — with trails, glows and a clock. Each atlas is kept on this device, logs included. Only the GPS track of each log is read.',
+    Component: AtlasTool,
+    preload: LOAD.atlas,
+    accepts: ['video+telemetry', 'telemetry'],
+  },
+  {
     id: 'storytelling',
     group: 'editor',
     path: '/storytelling',
@@ -132,6 +152,9 @@ export const TOOLS: Tool[] = [
       'Tell a project in short narrated videos: each post plays from its own code with your script, voice and music, then exports as a vertical MP4 that knows the post before and after it.',
     Component: StorytellingTool,
     preload: LOAD.storytelling,
+    wip: {
+      note: 'It works end to end, and it is still being built: your photographs in the blocks and agent commands come next, and its script format may still change.',
+    },
     accepts: [],
   },
   {
@@ -168,18 +191,6 @@ export const TOOLS: Tool[] = [
       'Trace a DJI clip’s GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.',
     Component: MapTool,
     preload: LOAD.map,
-    accepts: ['video+telemetry', 'telemetry'],
-  },
-  {
-    id: 'atlas',
-    group: 'instrument',
-    path: '/atlas',
-    label: 'Flight Atlas',
-    subtitle: 'Every flight · experimental',
-    blurb:
-      'Draw a set of drone flights on one map and animate them together — staggered, in relay, on the hour flown or day by day — with trails, glows and a clock. Each atlas is kept on this device, logs included. Only the GPS track of each log is read.',
-    Component: AtlasTool,
-    preload: LOAD.atlas,
     accepts: ['video+telemetry', 'telemetry'],
   },
   {
