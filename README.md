@@ -3004,12 +3004,16 @@ it and may grow blocks of its own.
   `gaps` draws them where the road was driven on those days. A season recap the
   script does not spell out lists the season's posts, their titles and cover
   lines.
-- **Hook.** A post whose script gives it `hooks` opens on them instead of its
-  title: one or two lines over the first block's picture, typed letter by letter
+- **Hook.** *Add a hook* (in the Hook section) and the post opens on it instead
+  of its title: one or two lines over the first block's picture, typed letter by letter
   (each key a click) or rising, word by word or fading in, a line landing as a
-  sticker with one impact, then fading, erasing, flying off or cut. Several
-  variants can be kept for one post; `hookActive` says which plays and exports,
-  so two can be tested. The wall under a hook shows its picture only.
+  sticker with one impact, then fading, erasing, flying off or cut. Its timing,
+  place and ink are under *Timing, place and ink*; each of its three sounds
+  (the keys, the impact, the exit) is a built-in sound or a file of your own,
+  held for the visit like the voice. Variants A, B, C… keep several hooks for
+  one post; the one selected plays and exports, so each can be exported and
+  tested. *Promise* says what the post pays off, beside the hook. The wall
+  under a hook shows its picture only. The words are kept in your script.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the

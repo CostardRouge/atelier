@@ -8,7 +8,8 @@ import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
 import { H, W } from '../../shared/story/charte';
 import { drawEpisode } from '../../shared/story/compose';
-import { hookScore } from '../../shared/story/hook';
+import { hookScore, hookSoundFor, hookSounds } from '../../shared/story/hook';
+import HookPanel, { type HookFiles } from './HookPanel';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
 import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
@@ -49,6 +50,8 @@ export interface PostSound {
   voice: Sound | null;
   music: Sound | null;
   effects: Effect[];
+  /** The hook's sounds that are files of the author's own (`HookPanel`). */
+  hookFiles?: HookFiles;
 }
 const NO_SOUND: PostSound = { voice: null, music: null, effects: [] };
 
@@ -71,6 +74,16 @@ function splitEffects(effects: readonly Effect[]): { score: SoundEvent[]; clips:
 
 /** The hook's built-in sounds — its keys, its impact, its whoosh — on the post's clock. */
 const hookScoreOf = (ep: Episode): SoundEvent[] => (ep.hook ? hookScore(ep.hook) : []);
+
+/** The hook's sounds that are the author's own files, each where its event falls. */
+function hookClipsOf(ep: Episode, files: HookFiles | undefined): SoundClip[] {
+  const hook = ep.hook;
+  if (!hook || !files) return [];
+  return hookSounds(hook).flatMap((s): SoundClip[] => {
+    const file = files[s.kind];
+    return hookSoundFor(hook, s.kind) === 'file' && file ? [{ buffer: file.buffer, at: s.at, gain: s.gain }] : [];
+  });
+}
 
 const slug = (s: string) =>
   s
@@ -214,7 +227,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       for (const e of [...score, ...hookScoreOf(episode)]) {
         if (e.at >= from) scheduleVoice(ctx, ctx.destination, ctx.currentTime + (e.at - from), e.voice, { gain: e.gain, rate: e.rate });
       }
-      const files = clips.map((c, i) => ({ name: `effect ${i}`, buffer: c.buffer, at: c.at, gain: c.gain ?? 1 }));
+      const files = [...clips, ...hookClipsOf(episode, mine.hookFiles)].map((c, i) => ({ name: `effect ${i}`, buffer: c.buffer, at: c.at, gain: c.gain ?? 1 }));
       for (const s of [voice, music, ...files]) {
         if (!s || s.at + s.buffer.duration <= from) continue;
         const node = ctx.createBufferSource();
@@ -243,7 +256,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       cancelAnimationFrame(raf);
       stopSound();
     };
-  }, [playing, total, voice, music, effects, episode, stopSound]);
+  }, [playing, total, voice, music, effects, episode, mine.hookFiles, stopSound]);
 
   const choose = (id: string) => {
     setPlaying(false);
@@ -302,7 +315,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       if (music) clips.push({ buffer: music.buffer, at: music.at, gain: music.gain, fadeIn: 0.6, fadeOut: 1.2 });
       const fx = splitEffects(effects);
       fx.score.push(...hookScoreOf(episode));
-      clips.push(...fx.clips);
+      clips.push(...fx.clips, ...hookClipsOf(episode, mine.hookFiles));
       const heard = clips.length + fx.score.length;
       const audio = heard
         ? await renderBed(fx.score, total, { leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE), clips })
@@ -438,6 +451,22 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere."
           >
             <ScriptControls script={script} onScript={onScript} />
+          </InspectorSection>
+
+          <InspectorSection
+            id="story-hook"
+            title="Hook"
+            info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports."
+          >
+            <HookPanel
+              postId={postId}
+              script={script}
+              onScript={onScript}
+              title={episode.title}
+              files={mine.hookFiles ?? {}}
+              onFile={(kind, file) => patchSound(skeleton.id, (was) => ({ hookFiles: { ...was.hookFiles, [kind]: file ?? undefined } }))}
+              onUnreadable={(name) => setSoundError(`This browser cannot read “${name}”. A WAV, MP3 or M4A file usually works.`)}
+            />
           </InspectorSection>
 
           <InspectorSection

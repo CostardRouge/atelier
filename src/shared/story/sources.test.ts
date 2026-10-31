@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources, withWall } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withWall } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -157,5 +157,21 @@ describe('withWall', () => {
   it('reads the choice from a script file, dropping what is not an id or a day', () => {
     const parsed = parseScript({ ...base, sources: { wall: { skip: [3, -1, 'x'], pick: { '2025-09-04': 42, soon: 7, '2025-09-05': 0 } } } });
     expect(parsed.ok && parsed.script.sources).toEqual({ wall: { skip: [3], pick: { '2025-09-04': 42 } } });
+  });
+});
+
+describe('withPostHooks', () => {
+  const s: StoryScript = { ...base, posts: { a: { title: 'Un' } } };
+  const hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
+
+  it('sets a post’s hooks, which one plays, and its promise', () => {
+    const next = withPostHooks(s, 'a', { hooks: [hook, { lines: ['100 000 → ?'] }], hookActive: 1, promise: 'La méthode.' });
+    expect(next.posts.a).toEqual({ title: 'Un', hooks: [hook, { lines: ['100 000 → ?'] }], hookActive: 1, promise: 'La méthode.' });
+    expect(withPostHooks(next, 'a', { hookActive: 9 }).posts.a.hookActive).toBe(1);
+  });
+
+  it('takes the hook away with an empty list, and the promise with an empty line', () => {
+    const next = withPostHooks(withPostHooks(s, 'a', { hooks: [hook], promise: 'x' }), 'a', { hooks: [], promise: ' ' });
+    expect(next.posts.a).toEqual({ title: 'Un' });
   });
 });

@@ -5,7 +5,7 @@
  * same rule, a post's own over the series'.
  */
 import type { TripDoc } from '../roadtrip/trip-types';
-import type { ScriptFacts, ScriptSources, StoryScript } from './story-script';
+import type { ScriptFacts, ScriptPost, ScriptSources, StoryScript } from './story-script';
 import { chosenStages, type MapChoice } from './trip-map';
 
 /** The sources a post reads: its own fields over the series'. */
@@ -105,4 +105,30 @@ export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null
   const facts = script.facts ? { ...script.facts, ...(tiles.length ? { tiles } : {}) } : undefined;
   if (facts && !tiles.length) delete facts.tiles;
   return { ...script, sources, ...(facts ? { facts } : {}) };
+}
+
+/**
+ * The script with one post's hooks changed (`hook.ts`): its variants, which
+ * one plays, and its promise. An empty list takes the hook away — the post
+ * opens on its title again.
+ */
+export function withPostHooks(
+  script: StoryScript,
+  postId: string,
+  change: { hooks?: ScriptPost['hooks']; hookActive?: number; promise?: string },
+): StoryScript {
+  const post: ScriptPost = { ...(script.posts[postId] ?? {}) };
+  if (change.hooks !== undefined) {
+    if (change.hooks.length) post.hooks = change.hooks;
+    else {
+      delete post.hooks;
+      delete post.hookActive;
+    }
+  }
+  if (change.hookActive !== undefined && post.hooks?.length) post.hookActive = Math.min(post.hooks.length - 1, Math.max(0, change.hookActive));
+  if (change.promise !== undefined) {
+    if (change.promise.trim()) post.promise = change.promise;
+    else delete post.promise;
+  }
+  return { ...script, posts: { ...script.posts, [postId]: post } };
 }
