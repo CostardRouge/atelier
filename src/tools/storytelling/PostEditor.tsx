@@ -8,6 +8,7 @@ import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
 import { H, W } from '../../shared/story/charte';
 import { drawEpisode } from '../../shared/story/compose';
+import { hookScore } from '../../shared/story/hook';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
 import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
@@ -67,6 +68,9 @@ function splitEffects(effects: readonly Effect[]): { score: SoundEvent[]; clips:
   }
   return { score, clips };
 }
+
+/** The hook's built-in sounds — its keys, its impact, its whoosh — on the post's clock. */
+const hookScoreOf = (ep: Episode): SoundEvent[] => (ep.hook ? hookScore(ep.hook) : []);
 
 const slug = (s: string) =>
   s
@@ -202,13 +206,13 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       return;
     }
     const from = tRef.current >= total - 0.01 ? 0 : tRef.current;
-    if (typeof AudioContext !== 'undefined' && (voice || music || effects.length)) {
+    if (typeof AudioContext !== 'undefined' && (voice || music || effects.length || episode.hook)) {
       const ctx = audioRef.current?.ctx ?? new AudioContext();
       audioRef.current = { ctx, nodes: [] };
       void ctx.resume();
       const { score, clips } = splitEffects(effects);
-      for (const e of score) {
-        if (e.at >= from) scheduleVoice(ctx, ctx.destination, ctx.currentTime + (e.at - from), e.voice, { gain: e.gain });
+      for (const e of [...score, ...hookScoreOf(episode)]) {
+        if (e.at >= from) scheduleVoice(ctx, ctx.destination, ctx.currentTime + (e.at - from), e.voice, { gain: e.gain, rate: e.rate });
       }
       const files = clips.map((c, i) => ({ name: `effect ${i}`, buffer: c.buffer, at: c.at, gain: c.gain ?? 1 }));
       for (const s of [voice, music, ...files]) {
@@ -239,7 +243,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       cancelAnimationFrame(raf);
       stopSound();
     };
-  }, [playing, total, voice, music, effects, stopSound]);
+  }, [playing, total, voice, music, effects, episode, stopSound]);
 
   const choose = (id: string) => {
     setPlaying(false);
@@ -297,6 +301,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       if (voice) clips.push({ buffer: voice.buffer, at: voice.at, gain: voice.gain });
       if (music) clips.push({ buffer: music.buffer, at: music.at, gain: music.gain, fadeIn: 0.6, fadeOut: 1.2 });
       const fx = splitEffects(effects);
+      fx.score.push(...hookScoreOf(episode));
       clips.push(...fx.clips);
       const heard = clips.length + fx.score.length;
       const audio = heard

@@ -6,6 +6,7 @@
  * script (the words, numbers and places) in `assemble`.
  */
 import { OV, type Cap } from './charte';
+import type { Hook } from './hook';
 
 export interface BlockSpec {
   block: string;
@@ -28,6 +29,8 @@ export interface Episode {
   closing: { series: string; handle: string; ask: string };
   blocks: BlockSpec[];
   cover?: { line: string };
+  /** The first seconds' words, over the first block, in place of the title opening (`hook.ts`). */
+  hook?: Hook | null;
 }
 
 export type Slot = BlockSpec & { a: number; b: number; start: number; key: string };
@@ -38,7 +41,8 @@ export const OUTRO_LEN = 4.4;
 /** Opening + blocks + ending, each with its `[a, b)` slot and its overlapped start. (pure) */
 export function slotsOf(ep: Episode): Slot[] {
   const all: BlockSpec[] = [
-    { block: 'intro', len: INTRO_LEN, params: { title: ep.title, number: ep.number, season: ep.season } },
+    // A post with a hook opens on its first block, the hook over it: the title would cost the first seconds.
+    ...(ep.hook ? [] : [{ block: 'intro', len: INTRO_LEN, params: { title: ep.title, number: ep.number, season: ep.season } }]),
     ...ep.blocks,
     ep.next
       ? { block: 'recap', len: OUTRO_LEN, params: { next: ep.next } }

@@ -12,6 +12,7 @@
 import type { Stop } from './geo';
 import type { Episode } from './episode';
 import { fillParams, fillText } from './story-facts';
+import type { Hook } from './hook';
 
 export interface SkeletonBlock {
   block: string;
@@ -43,6 +44,15 @@ export interface ScriptPost {
   sources?: ScriptSources;
   /** Numbers counted for this post alone, over the series'. */
   facts?: ScriptFacts;
+  /**
+   * The post's hook and its variants (`hook.ts`), in place of the title
+   * opening; `hookActive` says which one plays and exports. Its words are
+   * private, like the captions.
+   */
+  hooks?: Hook[];
+  hookActive?: number;
+  /** What the post pays off — kept beside the hook so it never promises more. */
+  promise?: string;
 }
 
 /**
@@ -204,6 +214,7 @@ export function parseScript(raw: unknown): ScriptParse {
       blocks,
       sources: readSources(value.sources),
       facts: readFacts(value.facts),
+      ...readHooks(value),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -257,6 +268,56 @@ export function parseScript(raw: unknown): ScriptParse {
       topics,
     },
   };
+}
+
+const HOOK_ENTRIES = ['type', 'rise', 'word', 'fade'];
+const HOOK_EXITS = ['fade', 'erase', 'fly', 'cut'];
+const HOOK_PLACES = ['top', 'center', 'bottom'];
+const HOOK_INKS = ['paper', 'ink', 'accent'];
+
+/** A post's hooks, kept field by field when well formed (`hook.ts`). */
+function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'hookActive' | 'promise'> {
+  const num = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined);
+  const oneOf = <T extends string>(v: unknown, list: string[]) => (typeof v === 'string' && list.includes(v) ? (v as T) : undefined);
+  const hooks = Array.isArray(raw.hooks)
+    ? raw.hooks.flatMap((h): Hook[] => {
+        if (!isObject(h) || !Array.isArray(h.lines)) return [];
+        const lines = h.lines.filter((l): l is string => typeof l === 'string').slice(0, 3);
+        if (!lines.length) return [];
+        const sounds = isObject(h.sounds) ? h.sounds : {};
+        const sound = (v: unknown) => (typeof v === 'string' && v.length < 40 ? v : undefined);
+        const hook: Hook = {
+          lines,
+          sticker: h.sticker === null ? null : num(h.sticker, 0, lines.length - 1),
+          spoken: typeof h.spoken === 'string' ? h.spoken : undefined,
+          entry: oneOf(h.entry, HOOK_ENTRIES),
+          exit: oneOf(h.exit, HOOK_EXITS),
+          at: num(h.at, 0, 10),
+          cps: num(h.cps, 2, 60),
+          gap: num(h.gap, 0, 10),
+          hold: num(h.hold, 0, 10),
+          place: oneOf(h.place, HOOK_PLACES),
+          ink: oneOf(h.ink, HOOK_INKS),
+          scrim: num(h.scrim, 0, 1),
+          sounds: { keys: sound(sounds.keys), impact: sound(sounds.impact), whoosh: sound(sounds.whoosh) },
+        };
+        // Absent fields stay absent: the defaults live in one place (`HOOK_DEFAULTS`).
+        for (const k of Object.keys(hook) as (keyof Hook)[]) if (hook[k] === undefined) delete hook[k];
+        return [hook];
+      })
+    : [];
+  const active = num(raw.hookActive, 0, Math.max(0, hooks.length - 1));
+  return {
+    ...(hooks.length ? { hooks } : {}),
+    ...(hooks.length && active !== undefined ? { hookActive: Math.round(active) } : {}),
+    ...(typeof raw.promise === 'string' && raw.promise ? { promise: raw.promise } : {}),
+  };
+}
+
+/** The hook a post plays: its active variant, else its first; null without one. */
+export function activeHook(post: ScriptPost | undefined): Hook | null {
+  if (!post?.hooks?.length) return null;
+  return post.hooks[Math.min(post.hooks.length - 1, Math.max(0, post.hookActive ?? 0))] ?? null;
 }
 
 /** A fact's name: dotted lowercase words, the way a caption cites it. */
@@ -336,6 +397,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
   const mine = script?.posts[skeleton.id];
   // The numbers this post cites (`story-facts.ts`): its own counting, else the series'.
   const values = (mine?.facts ?? script?.facts)?.values ?? null;
+  const hook = activeHook(mine);
   const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values);
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
@@ -348,9 +410,12 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     next: next ? { number: next.number, title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
     cover: { line: fillText(mine?.cover ?? '', values) },
+    hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values)) } : null,
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
+      // Under a hook the first block is its picture: a wall says nothing of its own there.
+      if (hook && i === 0 && b.block === 'wall') given.quiet = true;
       // A season's recap the script does not spell out lists the season's own posts, from the series.
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry

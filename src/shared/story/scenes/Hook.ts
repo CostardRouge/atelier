@@ -71,7 +71,11 @@ export function drawWall(c: Ctx, p: number, centre: number) {
 
 export function drawHook(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   const p = E(clamp((lt - 0.6 * K) / (2.4 * K)));
-  drawWall(c, p, enter(lt, 0, 0.8));
+  // Under a post's hook (`hook.ts`) the wall is the picture only: its one photo there from the first frame,
+  // no veil and no number — the hook's words are on it.
+  const quiet = _p.quiet === true;
+  drawWall(c, p, quiet ? 1 : enter(lt, 0, 0.8));
+  if (quiet) return;
   // the number, after the image has settled
   const sp = enter(lt, 2.0, 1.2);
   c.save();

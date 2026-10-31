@@ -17,6 +17,7 @@ import { setMap, type RoadPoints, type Stop } from './geo';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture } from './overlays';
 import { setWall } from './scenes/Hook';
+import { drawHook, hookTimeline } from './hook';
 
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
@@ -86,7 +87,9 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
     c.drawImage(l.canvas, 0, 0);
     c.globalAlpha = 1;
   });
-  drawHud(c, t, ep.number, slots[1]?.a ?? 0, total);
+  if (ep.hook) drawHook(c, ep.hook, t);
+  // The HUD waits for the opening: the title's slot, or the hook's last word.
+  drawHud(c, t, ep.number, ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0), total);
   if (!opts.bare) drawTexture(c, t);
   c.restore();
 }
