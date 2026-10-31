@@ -1,7 +1,9 @@
 # Mosaic — a picture made of all the others
 
-**Status: decided, not built (2026-10-31).** §2 is what he chose; §3–§7 are
-the design that follows from it; §8 the questions still his. Lab (French,
+**Status: decided (2026-10-31); M1 built the same day** (`src/shared/mosaic/`:
+`measure.ts`, `match.ts`, `chain.ts`, `mosaic-doc.ts`, each with its spec),
+M2–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
+§8 the questions still his. Lab (French,
 synthetic pictures, six modes playable):
 <https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi>. §1 is fact, read in
 this repository on branch `claude/awesome-babbage-q2mvg3` off `main`.

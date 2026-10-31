@@ -293,8 +293,9 @@ anything about media sources or document storage:
   phone sheet over the stage), six faces and the recommended one in seven
   commits, his four questions. Read it before adding a control to an opener's
   panel or touching `panel-ui.tsx`, `HookPicker.tsx` or the Look tab's host.
-- **`docs/mosaic.md`** — the Mosaic instrument (2026-10-31, decided, not
-  built): macOS's « Mosaic » screen saver over his Winnow — a picture whose
+- **`docs/mosaic.md`** — the Mosaic instrument (2026-10-31, decided; M1 the
+  pure core built the same day, M2–M9 next; the rules it fixed in
+  `mosaic.md`): macOS's « Mosaic » screen saver over his Winnow — a picture whose
   every cell is another picture. §1 is fact (`thumb-metrics.ts` measures one
   mean colour on the main thread, the picker's span, the atlas's document
   and remote shape, the wall's kept squares); §2 his four picks (a 6 × 6 grid
