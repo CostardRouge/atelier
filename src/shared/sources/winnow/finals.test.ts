@@ -124,4 +124,11 @@ describe('an archive', () => {
     expect(plan.notes).toEqual([]);
     expect(plan.problems).toEqual([]);
   });
+  it('reconciles after a send of finals, never after an archive', () => {
+    const files = [{ name: 'a.mp4', size: 10 }];
+    expect(finalsPlan({ files, assetId: null, targetSourceId: HOST, maxUploadBytes: null }).reconcile).toBe(true);
+    expect(
+      finalsPlan({ files, assetId: null, targetSourceId: HOST, maxUploadBytes: null, archive: { folder: 'Storytelling/EP.00' } }).reconcile,
+    ).toBe(false);
+  });
 });

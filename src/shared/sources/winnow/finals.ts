@@ -82,6 +82,12 @@ export interface FinalsPlan {
   problems: string[];
   /** Worth saying, not blocking. */
   notes: string[];
+  /**
+   * Whether `/api/reconcile` follows the upload. Never for an archive: a piece
+   * made from no capture has nothing to link, and the route is an admin's, so
+   * an editor's app token would be refused after a send that worked.
+   */
+  reconcile: boolean;
 }
 
 /**
@@ -143,5 +149,5 @@ export function finalsPlan(input: FinalsInput): FinalsPlan {
     }
   }
 
-  return { items, originalAssetId, chapterId, totalBytes, problems, notes };
+  return { items, originalAssetId, chapterId, totalBytes, problems, notes, reconcile: !input.archive };
 }
