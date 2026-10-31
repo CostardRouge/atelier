@@ -1,3 +1,4 @@
+import { clearWall } from './wall-cache';
 import { useState, type ChangeEvent } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { parseScript, type StoryScript } from '../../shared/story/story-script';
@@ -69,7 +70,10 @@ export default function ScriptControls({
             <Button size="sm" onClick={save} title="Download the script with what changed here, to keep with your notes">
               Save script
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => onScript(null)}>
+            <Button size="sm" variant="ghost" onClick={() => {
+                void clearWall();
+                onScript(null);
+              }}>
               Forget
             </Button>
           </>

@@ -1,7 +1,7 @@
 // Carte « camera »: zoomed ×2.3 following the route head (sine in-out), then the camera
 // pulls back to the whole map over the last 1.4 s. Coast dim, route accent, stops as reached.
 import { clamp, E, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
-import { coastPaths, ROUTE, ROUTECUM, ROUTELEN, routeAt, STOPS } from "../geo";
+import { coastPaths, ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
 
 /** the coastline at dim, for every map-based block (alpha and width in map units) */
 export function drawCoast(c: Ctx, alpha: number, width: number) {
@@ -32,12 +32,12 @@ export function drawRoute(c: Ctx, frac: number, width: number) {
 /** tail: extra alpha once the route is complete, so the LAST stop (reach = 1) gets its label too */
 export function mapLabels(c: Ctx, frac: number, size: number, tail = 0, spread = false, skip: string[] = []) {
   STOPS.forEach((st, i) => {
-    const reach = ROUTECUM[i] / ROUTELEN;
+    const reach = STOP_REACH[i] ?? 1;
     const a = clamp((frac - reach) * 8 + (i === 0 ? 1 : 0) + tail);
     if (a <= 0) return;
-    const [x, y] = ROUTE[i];
+    const [x, y] = STOP_XY[i];
     // at ×1 two stops 20 px apart (Cairns, Daintree) would share a label line: the later one goes above
-    const dy = spread && i > 0 && Math.hypot(x - ROUTE[i - 1][0], y - ROUTE[i - 1][1]) < 60 ? -22 : 8;
+    const dy = spread && i > 0 && Math.hypot(x - STOP_XY[i - 1][0], y - STOP_XY[i - 1][1]) < 60 ? -22 : 8;
     c.save();
     c.globalAlpha *= a;
     c.fillStyle = PAL.bg;

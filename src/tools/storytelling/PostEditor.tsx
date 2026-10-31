@@ -11,6 +11,11 @@ import { drawEpisode } from '../../shared/story/compose';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
 import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
+import SourcesPanel from './SourcesPanel';
+import { useTripMap } from './use-trip-map';
+import { factsOf, sourcesOf } from '../../shared/story/sources';
+import { useWall } from './use-wall';
+import type { ComposeOptions } from '../../shared/story/compose';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
@@ -105,6 +110,28 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
 
   const episodeOf = useCallback((skeleton: PostSkeleton) => assemble(skeleton, script, POSTS), [script]);
 
+  // The map follows the series' trip when it names one and this browser has
+  // it (`trip-map.ts`): its road, and the towns where a stage starts or ends.
+  // Otherwise the script's typed stops, as before.
+  const sources = sourcesOf(script, postId);
+  const tripMap = useTripMap(sources.trip?.id);
+  // The wall's pictures: the ones the last counting chose, kept on this device (`wall-cache.ts`).
+  const wallSource = sources.winnow?.source;
+  const wall = useWall(
+    wallSource,
+    factsOf(script, postId)?.tiles,
+    connections.find((c) => c.id === wallSource) ?? null,
+  );
+  const mapOpts = useMemo<ComposeOptions>(
+    () => ({
+      ...(tripMap.state === 'ready' && tripMap.map
+        ? { stops: tripMap.map.stops, road: tripMap.map.road }
+        : { stops: script?.stops }),
+      wall: wall.images,
+    }),
+    [tripMap, script, wall.images],
+  );
+
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
   const mine = sounds[skeleton.id] ?? NO_SOUND;
   const { voice, music, effects } = mine;
@@ -145,8 +172,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   useEffect(() => {
     const ctx = stageRef.current?.getContext('2d');
     if (!ctx || !fontsReady) return;
-    drawEpisode(ctx, episode, Math.min(t, total - 0.001), { stops: script?.stops });
-  }, [episode, t, total, fontsReady, script]);
+    drawEpisode(ctx, episode, Math.min(t, total - 0.001), mapOpts);
+  }, [episode, t, total, fontsReady, mapOpts]);
 
   // Playback: the clock, and the sound alongside it.
   const audioRef = useRef<{ ctx: AudioContext; nodes: AudioBufferSourceNode[] } | null>(null);
@@ -283,7 +310,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           skipped = reason;
         },
         draw: (sec) => {
-          drawEpisode(ctx, episode, Math.min(sec, total - 0.001), { stops: script?.stops });
+          drawEpisode(ctx, episode, Math.min(sec, total - 0.001), mapOpts);
           return canvas;
         },
         onProgress: (p) => setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`),
@@ -399,6 +426,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere."
           >
             <ScriptControls script={script} onScript={onScript} />
+          </InspectorSection>
+
+          <InspectorSection
+            id="story-sources"
+            title="Sources"
+            info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device."
+          >
+            <SourcesPanel postId={postId} script={script} onScript={onScript} wall={wall.progress} />
           </InspectorSection>
 
           <InspectorSection

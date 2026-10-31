@@ -115,7 +115,7 @@ export default function LegalNotice() {
         <P>
           Your photos, clips and logs are read in this browser and never uploaded. What Atelier keeps, it keeps in this
           browser’s storage, on this device only: your projects, trips, rolls and atlases with their settings and
-          small previews of them; the story script you loaded in Storytelling; the Winnow instances you connected, with the app token you
+          small previews of them; the story script you loaded in Storytelling, with a small square of each picture its wall shows, taken from your Winnow; the Winnow instances you connected, with the app token you
           pasted for one on another site; the looks and presets you loaded; the map tiles, lens profiles, camera profiles and
           logos you asked for or brought in; and your preferences (theme, layout, the choices each tool remembers). A
           Develop roll may also keep, when you let it, a working preview of each of its local pictures and a small

@@ -11,6 +11,7 @@
  */
 import type { Stop } from './geo';
 import type { Episode } from './episode';
+import { fillParams, fillText } from './story-facts';
 
 export interface SkeletonBlock {
   block: string;
@@ -38,6 +39,42 @@ export interface ScriptPost {
   title?: string;
   cover?: string;
   blocks?: ScriptBlock[];
+  /** This post's own sources, over the series' (`sources.ts`). */
+  sources?: ScriptSources;
+  /** Numbers counted for this post alone, over the series'. */
+  facts?: ScriptFacts;
+}
+
+/**
+ * Where an episode's data comes from, the way Flight Atlas takes its flights:
+ * a trip of Trips on this device (its road and places draw the map) and a
+ * connected Winnow (counted over the trip's days). Names only — the trip
+ * stays in this browser, the Winnow behind its connection.
+ */
+export interface ScriptSources {
+  /** The trip's id, and the name it had, so a trip gone from this device is still named. */
+  trip?: { id: string; name: string };
+  /** A connected Winnow, by its source id (its host). */
+  winnow?: { source: string };
+}
+
+/**
+ * Numbers FROZEN from the sources at a moment, so a post exports the same
+ * tomorrow; counting again replaces them. Keys are dotted names a caption can
+ * cite (`media.total`).
+ */
+export interface ScriptFacts {
+  /** When they were counted, an ISO date-time. */
+  at: string;
+  /** What they were counted from, as said (« Australie · winnow.example »). */
+  from?: string;
+  values: Record<string, number>;
+  /**
+   * The pictures the wall shows, Winnow asset ids in day order — one per day
+   * of the trip, chosen when it was counted (`story-facts.ts`, `wallPicks`).
+   * Ids only: the thumbnails are kept on this device (`wall-cache.ts`).
+   */
+  tiles?: number[];
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -96,6 +133,9 @@ export interface StoryScript {
   /** The trip the maps draw. */
   stops?: Stop[];
   posts: Record<string, ScriptPost>;
+  /** The series' sources and the numbers counted from them; a post may override both. */
+  sources?: ScriptSources;
+  facts?: ScriptFacts;
   /** The map of subjects: its channels and its lines (`story-map.ts`). */
   channels?: ScriptChannel[];
   topics?: ScriptTopic[];
@@ -138,6 +178,8 @@ export function parseScript(raw: unknown): ScriptParse {
       title: typeof value.title === 'string' ? value.title : undefined,
       cover: typeof value.cover === 'string' ? value.cover : undefined,
       blocks,
+      sources: readSources(value.sources),
+      facts: readFacts(value.facts),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -185,11 +227,43 @@ export function parseScript(raw: unknown): ScriptParse {
       ask: text(raw.ask),
       stops: Array.isArray(raw.stops) ? raw.stops.filter(isStop) : undefined,
       posts,
+      sources: readSources(raw.sources),
+      facts: readFacts(raw.facts),
       channels,
       topics,
     },
   };
 }
+
+/** A fact's name: dotted lowercase words, the way a caption cites it. */
+const FACT_KEY = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$/;
+
+function readSources(raw: unknown): ScriptSources | undefined {
+  if (!isObject(raw)) return undefined;
+  const out: ScriptSources = {};
+  const trip = raw.trip;
+  if (isObject(trip) && typeof trip.id === 'string' && trip.id) {
+    out.trip = { id: trip.id, name: typeof trip.name === 'string' ? trip.name : '' };
+  }
+  const winnow = raw.winnow;
+  if (isObject(winnow) && typeof winnow.source === 'string' && winnow.source) out.winnow = { source: winnow.source };
+  return out.trip || out.winnow ? out : undefined;
+}
+
+function readFacts(raw: unknown): ScriptFacts | undefined {
+  if (!isObject(raw) || typeof raw.at !== 'string' || !isObject(raw.values)) return undefined;
+  const values: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw.values)) {
+    if (FACT_KEY.test(k) && typeof v === 'number' && Number.isFinite(v)) values[k] = v;
+  }
+  const tiles = Array.isArray(raw.tiles)
+    ? raw.tiles.filter((n): n is number => Number.isInteger(n) && (n as number) > 0).slice(0, MAX_TILES)
+    : undefined;
+  return { at: raw.at, from: typeof raw.from === 'string' ? raw.from : undefined, values, ...(tiles?.length ? { tiles } : {}) };
+}
+
+/** No wall shows more pictures than this; a script asking for more is cut. */
+const MAX_TILES = 400;
 
 /** What a caption reads when no script is loaded. */
 export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} ⟩`;
@@ -201,7 +275,9 @@ export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} �
  */
 export function assemble(skeleton: PostSkeleton, script: StoryScript | null, registry: readonly PostSkeleton[]): Episode {
   const mine = script?.posts[skeleton.id];
-  const title = (id: PostSkeleton) => script?.posts[id.id]?.title ?? id.number;
+  // The numbers this post cites (`story-facts.ts`): its own counting, else the series'.
+  const values = (mine?.facts ?? script?.facts)?.values ?? null;
+  const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values);
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
   const next = after && after.season === skeleton.season ? after : undefined;
@@ -212,14 +288,14 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     season: skeleton.season,
     next: next ? { number: next.number, title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
-    cover: { line: mine?.cover ?? '' },
+    cover: { line: fillText(mine?.cover ?? '', values) },
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       return {
         block: b.block,
         len: b.len,
-        params: { ...(b.params ?? {}), ...(words?.params ?? {}) },
-        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: words?.caption ?? placeholderCaption(i) } : null,
+        params: fillParams({ ...(b.params ?? {}), ...(words?.params ?? {}) }, values) as Record<string, unknown>,
+        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values) } : null,
       };
     }),
   };

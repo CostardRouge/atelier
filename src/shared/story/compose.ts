@@ -13,13 +13,18 @@ import './blocks/all';
 import { drawCaption } from './caption';
 import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
-import { setStops, type Stop } from './geo';
+import { setMap, type RoadPoints, type Stop } from './geo';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture } from './overlays';
+import { setWall } from './scenes/Hook';
 
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
   stops?: readonly Stop[] | null;
+  /** The road the route follows, from a trip (`trip-map.ts`); without it the stops are joined in a line. */
+  road?: RoadPoints | null;
+  /** The wall's pictures, square, in day order (`wall-cache.ts`); without them its tiles are colours. */
+  wall?: readonly (CanvasImageSource | null)[] | null;
   /** Leave the grain and vignette out — a still for a list, say. */
   bare?: boolean;
 }
@@ -62,7 +67,8 @@ function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
 }
 
 export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions = {}): void {
-  setStops(opts.stops ?? null);
+  setMap(opts.stops ?? null, opts.road ?? null);
+  setWall(opts.wall ?? null);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
   c.save();

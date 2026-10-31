@@ -2969,6 +2969,24 @@ it and may grow blocks of its own.
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and
   keeps it in this browser until *Forget*; without one, every post still plays,
   its captions as placeholders.
+- **Sources.** Name where the series' data comes from: a trip of Trips in this
+  browser, whose road and towns will draw the map, and a connected Winnow,
+  whose counts and pictures will fill the numbers and the wall. They are saved
+  in your script; the trip and the pictures stay on this device. With a trip
+  chosen, the maps follow its road — the GPS track imported in Trips, read in
+  the trip's own mode — and name the towns where a stage starts or ends; without
+  one, they join the stops written in the script. *Count* asks the Winnow how
+  many media the trip's days hold — a RAW + JPEG pair counting once, as Winnow
+  counts it — and keeps the numbers in your script with the date they were
+  counted, so a post exports the same tomorrow; *Count again* replaces them and
+  says what changed. Write one in braces anywhere in the script — `{media.total}`,
+  `{media.photo}`, `{media.video}`, `{days}` (days with media), `{trip.days}` —
+  and the post reads « 98 412 »; a block setting that is only `{media.total}`
+  gets the number itself, so a counter can run up to it. Counting also picks the
+  wall's pictures: each day's cover on the Winnow, one a day in order (thinned
+  evenly past the wall's 180 tiles). Small squares of them are kept in this
+  browser, so the wall draws — and exports — without asking the Winnow again;
+  *Forget* on the script clears them.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the
