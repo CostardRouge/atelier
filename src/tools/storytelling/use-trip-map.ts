@@ -5,7 +5,7 @@ export type TripMapState =
   | { state: 'none' }
   | { state: 'reading' }
   | { state: 'missing' }
-  | { state: 'ready'; map: TripMap | null };
+  | { state: 'ready'; map: TripMap | null; span: { from: string; to: string } };
 
 /**
  * The story map of the trip the series names (`sources.trip`), read from this
@@ -26,7 +26,7 @@ export function useTripMap(tripId: string | null | undefined): TripMapState {
       .then(async ([store, maps]) => {
         const trip = (await store.listTrips()).find((t) => t.id === tripId) ?? null;
         if (!alive) return;
-        setState(trip ? { state: 'ready', map: maps.tripMap(trip) } : { state: 'missing' });
+        setState(trip ? { state: 'ready', map: maps.tripMap(trip), span: { from: trip.startDate, to: trip.endDate } } : { state: 'missing' });
       })
       .catch(() => {
         if (alive) setState({ state: 'missing' });

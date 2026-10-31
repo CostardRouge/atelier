@@ -3,7 +3,8 @@ import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
 import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
-import { factChanges, factsFromCalendars, factText, wallPicks } from '../../shared/story/story-facts';
+import { factChanges, factsFromCalendars, factText, gearFacts, geoFacts, wallPicks } from '../../shared/story/story-facts';
+import { tripFacts } from '../../shared/story/trip-map';
 import { TILES } from '../../shared/story/scenes/Hook';
 import type { WallProgress } from './wall-cache';
 import type { StoryScript } from '../../shared/story/story-script';
@@ -16,6 +17,8 @@ const whenCounted = (at: string) =>
   new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const NONE = '';
+/** Cameras counted one by one at most: a calendar each, the library's busiest first. */
+const MAX_DEVICES = 12;
 
 /**
  * Where the series' data comes from: a trip of Trips on this device and a
@@ -95,7 +98,21 @@ export default function SourcesPanel({
         client.calendar(trip.startDate, trip.endDate, { mediaType: 'photo' }),
       ]);
       const span = { from: trip.startDate, to: trip.endDate };
-      const values = factsFromCalendars(all, photos, span);
+      const sumOf = (cal: typeof all) => cal.days.filter((d) => d.date >= span.from && d.date <= span.to).reduce((n, d) => n + d.count, 0);
+      // The cameras (the library's busiest twelve, each counted over the trip's days) and the
+      // positions by day. Either may be missing on an older instance: the totals stand without them.
+      const [gear, geo] = await Promise.all([
+        client
+          .facets()
+          .then((f) => Promise.all(f.devices.slice(0, MAX_DEVICES).map(async (d) => [String(d.value), sumOf(await client.calendar(span.from, span.to, { device: String(d.value) }))] as const)))
+          .then(gearFacts)
+          .catch(() => ({})),
+        client
+          .geoDays(span)
+          .then((days) => geoFacts(days, span))
+          .catch(() => null),
+      ]);
+      const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip), ...gear, ...(geo?.values ?? {}) };
       const tiles = wallPicks(all, span, TILES.length);
       const before = script.facts?.values ?? null;
       onScript(
@@ -104,6 +121,7 @@ export default function SourcesPanel({
           from: `${trip.name} · ${connection.id}`,
           values,
           ...(tiles.length ? { tiles } : {}),
+          ...(geo?.holes.length ? { holes: geo.holes } : {}),
         }),
       );
       setCounting({ state: 'done', changes: before ? factChanges(before, values) : [] });

@@ -75,6 +75,8 @@ export interface ScriptFacts {
    * Ids only: the thumbnails are kept on this device (`wall-cache.ts`).
    */
   tiles?: number[];
+  /** Runs of days with media but no position, `[first, last]` ISO dates — the map's holes (`geoFacts`). */
+  holes?: [string, string][];
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -259,7 +261,17 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
   const tiles = Array.isArray(raw.tiles)
     ? raw.tiles.filter((n): n is number => Number.isInteger(n) && (n as number) > 0).slice(0, MAX_TILES)
     : undefined;
-  return { at: raw.at, from: typeof raw.from === 'string' ? raw.from : undefined, values, ...(tiles?.length ? { tiles } : {}) };
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const holes = Array.isArray(raw.holes)
+    ? raw.holes.filter((h): h is [string, string] => Array.isArray(h) && h.length === 2 && isDay(h[0]) && isDay(h[1]) && h[0] <= h[1])
+    : undefined;
+  return {
+    at: raw.at,
+    from: typeof raw.from === 'string' ? raw.from : undefined,
+    values,
+    ...(tiles?.length ? { tiles } : {}),
+    ...(holes?.length ? { holes: holes.map((h): [string, string] => [h[0], h[1]]) } : {}),
+  };
 }
 
 /** No wall shows more pictures than this; a script asking for more is cut. */
@@ -291,10 +303,17 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     cover: { line: fillText(mine?.cover ?? '', values) },
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
+      const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
+      // A season's recap the script does not spell out lists the season's own posts, from the series.
+      if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
+        given.episodes = registry
+          .filter((p) => p.season === skeleton.season)
+          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values) }));
+      }
       return {
         block: b.block,
         len: b.len,
-        params: fillParams({ ...(b.params ?? {}), ...(words?.params ?? {}) }, values) as Record<string, unknown>,
+        params: fillParams(given, values) as Record<string, unknown>,
         cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values) } : null,
       };
     }),

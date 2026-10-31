@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeTripRoad, type RoadFix } from '../roadtrip/road-track';
 import { createTripDoc, type TripDoc, type TripPlace } from '../roadtrip/trip-types';
 import { proj, setMap, STOP_REACH, STOP_XY, ROUTE, STOPS } from './geo';
-import { stageEndStops, tripMap, tripRoadPoints } from './trip-map';
+import { gapsOf, stageEndStops, tripFacts, tripMap, tripRoadPoints, withGaps } from './trip-map';
 
 const place = (name: string, lat: number, lon: number): TripPlace => ({ id: name, name, state: '', coords: { lat, lon } });
 const SYD = place('Sydney', -33.87, 151.21);
@@ -100,5 +100,45 @@ describe('setMap', () => {
     expect(ROUTE).toEqual(STOP_XY);
     expect(STOP_REACH[0]).toBe(0);
     expect(STOP_REACH[2]).toBe(1);
+  });
+});
+
+describe('tripFacts', () => {
+  it('counts the road’s kilometres, the stages and the named places', () => {
+    const t = trip();
+    expect(tripFacts(t)).toEqual({ 'trip.stages': 2, 'trip.places': 4 });
+    t.road = makeTripRoad(drive(), t, null, 0);
+    const km = tripFacts(t)['trip.km'];
+    // Sydney → Melbourne → Adelaide by these fixes is about 1 400 km.
+    expect(km).toBeGreaterThan(1200);
+    expect(km).toBeLessThan(1700);
+  });
+});
+
+describe('gapsOf', () => {
+  it('places a run of unplaced days where the road was driven on them', () => {
+    const t = trip();
+    t.road = makeTripRoad(drive(), t, null, 0);
+    const map = tripMap(t)!;
+    // drive() starts 2025-09-04 00:00 UTC, a fix every hour: 09-04 and 09-05 are the first 48 h of 81.
+    const [[a, b]] = gapsOf([['2025-09-04', '2025-09-04']], map, { from: '2025-09-03', to: '2025-09-30' });
+    expect(a).toBe(0);
+    expect(b).toBeGreaterThan(0.2);
+    expect(b).toBeLessThan(0.45);
+  });
+
+  it('falls back to the date’s place in the trip without a timed road, and drops empty holes', () => {
+    const map = tripMap(trip())!;
+    expect(gapsOf([['2025-09-11', '2025-09-12']], map, { from: '2025-09-01', to: '2025-09-30' })).toEqual([[10 / 30, 12 / 30]]);
+    expect(gapsOf([['2025-12-01', '2025-12-02']], map, { from: '2025-09-01', to: '2025-09-30' })).toEqual([]);
+  });
+
+  it('fills only the map-holes blocks that leave their gaps unset', () => {
+    const ep = { blocks: [{ block: 'map-holes', params: {} }, { block: 'map-holes', params: { gaps: [[0, 0.1]] } }, { block: 'wall' }] };
+    const out = withGaps(ep, [[0.2, 0.3]]);
+    expect(out.blocks[0].params).toEqual({ gaps: [[0.2, 0.3]] });
+    expect(out.blocks[1].params).toEqual({ gaps: [[0, 0.1]] });
+    expect(out.blocks[2]).toBe(ep.blocks[2]);
+    expect(withGaps(ep, null)).toBe(ep);
   });
 });

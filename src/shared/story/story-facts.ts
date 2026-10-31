@@ -6,7 +6,7 @@
  * left as written, braces and all, so it shows on the stage rather than
  * silently reading 0.
  */
-import type { WinnowCalendar } from '../sources/winnow/client';
+import type { WinnowCalendar, WinnowGeoDay } from '../sources/winnow/client';
 
 export type FactValues = Readonly<Record<string, number>>;
 
@@ -81,4 +81,36 @@ export function factChanges(before: FactValues | null, after: FactValues): [stri
   return Object.entries(after)
     .filter(([k, v]) => before?.[k] !== v)
     .map(([k, v]) => [k, before?.[k] ?? null, v]);
+}
+
+/** A camera's fact key: `gear.` and its name squeezed to lowercase letters and digits (« ILCE-7CM2 » → `gear.ilce7cm2`). */
+export const deviceKey = (name: string): string => `gear.${name.toLowerCase().replace(/[^a-z0-9]+/g, '') || 'unknown'}`;
+
+/** How many media each camera made over the trip's days, by `deviceKey`; two names that squeeze alike are added up. */
+export function gearFacts(counts: readonly (readonly [string, number])[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [name, n] of counts) if (n > 0) out[deviceKey(name)] = (out[deviceKey(name)] ?? 0) + n;
+  return out;
+}
+
+/**
+ * Where the trip's days were placed, from Winnow's positions by day: how
+ * many days with media had a position and how many had none, and the HOLES —
+ * runs of days with media but no position, as `[first, last]` dates. Days
+ * with no media between two unplaced days do not close a hole: nothing says
+ * where those were either.
+ */
+export function geoFacts(days: readonly WinnowGeoDay[], span: { from: string; to: string }): { values: Record<string, number>; holes: [string, string][] } {
+  const shot = days.filter((d) => d.date >= span.from && d.date <= span.to && d.count > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const placed = (d: WinnowGeoDay) => d.lat !== null && d.lon !== null;
+  const holes: [string, string][] = [];
+  shot.forEach((d, i) => {
+    if (placed(d)) return;
+    const prev = shot[i - 1];
+    const last = holes[holes.length - 1];
+    if (prev && !placed(prev) && last) last[1] = d.date;
+    else holes.push([d.date, d.date]);
+  });
+  const located = shot.filter(placed).length;
+  return { values: { 'geo.days.located': located, 'geo.days.unlocated': shot.length - located }, holes };
 }
