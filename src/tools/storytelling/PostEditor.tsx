@@ -11,6 +11,7 @@ import { drawEpisode } from '../../shared/story/compose';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
 import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
+import SourcesPanel from './SourcesPanel';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
@@ -399,6 +400,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere."
           >
             <ScriptControls script={script} onScript={onScript} />
+          </InspectorSection>
+
+          <InspectorSection
+            id="story-sources"
+            title="Sources"
+            info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device."
+          >
+            <SourcesPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
 
           <InspectorSection

@@ -22,6 +22,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   state (idea, in progress, ready, published, not for that channel) changed with a click and saved back into your
   script.
 - Storytelling can send an exported post and its cover to a connected Winnow, to archive them there.
+- Storytelling: choose the trip and the Winnow a series takes its data from, under Sources. They are saved in your
+  script and shared by every post of the series.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back

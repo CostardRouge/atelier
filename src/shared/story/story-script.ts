@@ -38,6 +38,36 @@ export interface ScriptPost {
   title?: string;
   cover?: string;
   blocks?: ScriptBlock[];
+  /** This post's own sources, over the series' (`sources.ts`). */
+  sources?: ScriptSources;
+  /** Numbers counted for this post alone, over the series'. */
+  facts?: ScriptFacts;
+}
+
+/**
+ * Where an episode's data comes from, the way Flight Atlas takes its flights:
+ * a trip of Trips on this device (its road and places draw the map) and a
+ * connected Winnow (counted over the trip's days). Names only — the trip
+ * stays in this browser, the Winnow behind its connection.
+ */
+export interface ScriptSources {
+  /** The trip's id, and the name it had, so a trip gone from this device is still named. */
+  trip?: { id: string; name: string };
+  /** A connected Winnow, by its source id (its host). */
+  winnow?: { source: string };
+}
+
+/**
+ * Numbers FROZEN from the sources at a moment, so a post exports the same
+ * tomorrow; counting again replaces them. Keys are dotted names a caption can
+ * cite (`media.total`).
+ */
+export interface ScriptFacts {
+  /** When they were counted, an ISO date-time. */
+  at: string;
+  /** What they were counted from, as said (« Australie · winnow.example »). */
+  from?: string;
+  values: Record<string, number>;
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -96,6 +126,9 @@ export interface StoryScript {
   /** The trip the maps draw. */
   stops?: Stop[];
   posts: Record<string, ScriptPost>;
+  /** The series' sources and the numbers counted from them; a post may override both. */
+  sources?: ScriptSources;
+  facts?: ScriptFacts;
   /** The map of subjects: its channels and its lines (`story-map.ts`). */
   channels?: ScriptChannel[];
   topics?: ScriptTopic[];
@@ -138,6 +171,8 @@ export function parseScript(raw: unknown): ScriptParse {
       title: typeof value.title === 'string' ? value.title : undefined,
       cover: typeof value.cover === 'string' ? value.cover : undefined,
       blocks,
+      sources: readSources(value.sources),
+      facts: readFacts(value.facts),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -185,10 +220,36 @@ export function parseScript(raw: unknown): ScriptParse {
       ask: text(raw.ask),
       stops: Array.isArray(raw.stops) ? raw.stops.filter(isStop) : undefined,
       posts,
+      sources: readSources(raw.sources),
+      facts: readFacts(raw.facts),
       channels,
       topics,
     },
   };
+}
+
+/** A fact's name: dotted lowercase words, the way a caption cites it. */
+const FACT_KEY = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$/;
+
+function readSources(raw: unknown): ScriptSources | undefined {
+  if (!isObject(raw)) return undefined;
+  const out: ScriptSources = {};
+  const trip = raw.trip;
+  if (isObject(trip) && typeof trip.id === 'string' && trip.id) {
+    out.trip = { id: trip.id, name: typeof trip.name === 'string' ? trip.name : '' };
+  }
+  const winnow = raw.winnow;
+  if (isObject(winnow) && typeof winnow.source === 'string' && winnow.source) out.winnow = { source: winnow.source };
+  return out.trip || out.winnow ? out : undefined;
+}
+
+function readFacts(raw: unknown): ScriptFacts | undefined {
+  if (!isObject(raw) || typeof raw.at !== 'string' || !isObject(raw.values)) return undefined;
+  const values: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw.values)) {
+    if (FACT_KEY.test(k) && typeof v === 'number' && Number.isFinite(v)) values[k] = v;
+  }
+  return { at: raw.at, from: typeof raw.from === 'string' ? raw.from : undefined, values };
 }
 
 /** What a caption reads when no script is loaded. */

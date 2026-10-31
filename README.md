@@ -2969,6 +2969,11 @@ it and may grow blocks of its own.
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and
   keeps it in this browser until *Forget*; without one, every post still plays,
   its captions as placeholders.
+- **Sources.** Name where the series' data comes from: a trip of Trips in this
+  browser, whose road and towns will draw the map, and a connected Winnow,
+  whose counts and pictures will fill the numbers and the wall. They are saved
+  in your script; the trip and the pictures stay on this device. Choosing them
+  is the first step; the map, the counts and the wall read them next.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the
