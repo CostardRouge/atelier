@@ -1,9 +1,17 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
-import { factsOf, sourcesOf, tripLine, withSeriesSources } from '../../shared/story/sources';
+import { WinnowClient } from '../../shared/sources/winnow/client';
+import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
+import { factChanges, factsFromCalendars, factText } from '../../shared/story/story-facts';
 import type { StoryScript } from '../../shared/story/story-script';
+import Button from '../../shared/ui/Button';
 import { Readout, SelectField } from '../../shared/ui/Inspector';
+
+type Counting = { state: 'idle' } | { state: 'busy' } | { state: 'done'; changes: [string, number | null, number][] } | { state: 'failed'; message: string };
+
+const whenCounted = (at: string) =>
+  new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const NONE = '';
 
@@ -24,6 +32,7 @@ export default function SourcesPanel({
   onScript: (script: StoryScript) => void;
 }) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
+  const [counting, setCounting] = useState<Counting>({ state: 'idle' });
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   useEffect(() => {
     let alive = true;
@@ -58,6 +67,36 @@ export default function SourcesPanel({
       ? [{ id: sources.winnow.source, label: `${sources.winnow.source} (not connected)` }]
       : []),
   ];
+
+  const connection = sources.winnow ? (connections.find((c) => c.id === sources.winnow?.source) ?? null) : null;
+  // Why Count cannot run yet, in one line; null when it can.
+  const blocked = !sources.trip
+    ? 'Choose a trip: its days are what is counted.'
+    : !trip
+      ? null
+      : !sources.winnow
+        ? 'Choose a Winnow to count on.'
+        : !connection
+          ? `${sources.winnow.source} is not connected here.`
+          : null;
+
+  async function count() {
+    if (!script || !trip || !connection) return;
+    setCounting({ state: 'busy' });
+    try {
+      const client = new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth });
+      const [all, photos] = await Promise.all([
+        client.calendar(trip.startDate, trip.endDate),
+        client.calendar(trip.startDate, trip.endDate, { mediaType: 'photo' }),
+      ]);
+      const values = factsFromCalendars(all, photos, { from: trip.startDate, to: trip.endDate });
+      const before = script.facts?.values ?? null;
+      onScript(withSeriesFacts(script, { at: new Date().toISOString(), from: `${trip.name} · ${connection.id}`, values }));
+      setCounting({ state: 'done', changes: before ? factChanges(before, values) : [] });
+    } catch (err) {
+      setCounting({ state: 'failed', message: err instanceof Error ? err.message : String(err) });
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -101,15 +140,37 @@ export default function SourcesPanel({
           </p>
         ) : null}
       </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" onClick={() => void count()} disabled={blocked !== null || !trip || counting.state === 'busy'}>
+          {counting.state === 'busy' ? 'Counting…' : facts ? 'Count again' : 'Count'}
+        </Button>
+        {facts ? (
+          <span className="min-w-0 truncate font-mono text-2xs text-muted" title={facts.from}>
+            counted {whenCounted(facts.at)}
+          </span>
+        ) : null}
+      </div>
+      {blocked ? <p className="m-0 text-2xs text-muted leading-relaxed">{blocked}</p> : null}
+      {counting.state === 'failed' ? <p className="m-0 text-2xs text-danger leading-relaxed">{counting.message}</p> : null}
+      {counting.state === 'done' && facts ? (
+        <p className="m-0 text-2xs text-muted leading-relaxed" role="status">
+          {counting.changes.length === 0
+            ? 'Counted: nothing changed since the last time.'
+            : counting.changes.map(([k, a, b]) => `${k} ${a === null ? '' : `${factText(a)} → `}${factText(b)}`).join(' · ')}
+        </p>
+      ) : null}
       {facts && Object.keys(facts.values).length > 0 ? (
         <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 font-mono text-2xs">
           {Object.entries(facts.values).map(([k, v]) => (
             <div key={k} className="contents">
-              <dt className="text-muted">{k}</dt>
-              <dd className="m-0 text-ink tabular-nums text-right">{v.toLocaleString('fr-FR')}</dd>
+              <dt className="text-muted">{`{${k}}`}</dt>
+              <dd className="m-0 text-ink tabular-nums text-right">{factText(v)}</dd>
             </div>
           ))}
         </dl>
+      ) : null}
+      {facts ? (
+        <p className="m-0 text-2xs text-faint leading-relaxed">Write a fact in braces in your script — a caption, a title, a block&apos;s setting — and the post reads its number.</p>
       ) : null}
       <p className="m-0 text-2xs text-faint leading-relaxed">Shared by every post of the series, and saved in your script.</p>
     </div>

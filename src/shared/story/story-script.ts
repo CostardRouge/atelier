@@ -11,6 +11,7 @@
  */
 import type { Stop } from './geo';
 import type { Episode } from './episode';
+import { fillParams, fillText } from './story-facts';
 
 export interface SkeletonBlock {
   block: string;
@@ -262,7 +263,9 @@ export const placeholderCaption = (i: number): string => `âŸ¨ caption ${i + 1} â
  */
 export function assemble(skeleton: PostSkeleton, script: StoryScript | null, registry: readonly PostSkeleton[]): Episode {
   const mine = script?.posts[skeleton.id];
-  const title = (id: PostSkeleton) => script?.posts[id.id]?.title ?? id.number;
+  // The numbers this post cites (`story-facts.ts`): its own counting, else the series'.
+  const values = (mine?.facts ?? script?.facts)?.values ?? null;
+  const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values);
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
   const next = after && after.season === skeleton.season ? after : undefined;
@@ -273,14 +276,14 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     season: skeleton.season,
     next: next ? { number: next.number, title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
-    cover: { line: mine?.cover ?? '' },
+    cover: { line: fillText(mine?.cover ?? '', values) },
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       return {
         block: b.block,
         len: b.len,
-        params: { ...(b.params ?? {}), ...(words?.params ?? {}) },
-        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: words?.caption ?? placeholderCaption(i) } : null,
+        params: fillParams({ ...(b.params ?? {}), ...(words?.params ?? {}) }, values) as Record<string, unknown>,
+        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values) } : null,
       };
     }),
   };

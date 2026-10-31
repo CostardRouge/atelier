@@ -51,3 +51,8 @@ export function tripLine(trip: TripDoc): string {
   ];
   return parts.join(' · ');
 }
+
+/** The script with the series' numbers replaced by a new counting. */
+export function withSeriesFacts(script: StoryScript, facts: ScriptFacts): StoryScript {
+  return { ...script, facts };
+}

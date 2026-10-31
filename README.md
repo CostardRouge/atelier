@@ -2975,8 +2975,15 @@ it and may grow blocks of its own.
   in your script; the trip and the pictures stay on this device. With a trip
   chosen, the maps follow its road — the GPS track imported in Trips, read in
   the trip's own mode — and name the towns where a stage starts or ends; without
-  one, they join the stops written in the script. The counts and the wall read
-  the Winnow next.
+  one, they join the stops written in the script. *Count* asks the Winnow how
+  many media the trip's days hold — a RAW + JPEG pair counting once, as Winnow
+  counts it — and keeps the numbers in your script with the date they were
+  counted, so a post exports the same tomorrow; *Count again* replaces them and
+  says what changed. Write one in braces anywhere in the script — `{media.total}`,
+  `{media.photo}`, `{media.video}`, `{days}` (days with media), `{trip.days}` —
+  and the post reads « 98 412 »; a block setting that is only `{media.total}`
+  gets the number itself, so a counter can run up to it. The wall's pictures
+  come from the Winnow next.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the

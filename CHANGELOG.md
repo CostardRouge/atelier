@@ -26,6 +26,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   script and shared by every post of the series.
 - Storytelling: with a trip chosen under Sources, the maps follow its real road from Trips and name the towns where
   each stage starts or ends.
+- Storytelling: *Count* takes the exact number of photos and videos of the trip's days from your Winnow; write
+  `{media.total}` (or `{media.photo}`, `{media.video}`, `{days}`) in a caption, a title or a block's setting and the post
+  shows the number.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back

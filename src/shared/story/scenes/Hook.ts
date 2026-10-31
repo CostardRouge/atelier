@@ -61,7 +61,8 @@ export function drawHook(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   c.fillRect(0, 0, 1080, 1920);
   c.restore();
   appear(c, enter(lt, 2.3, 1.3), () => {
-    const count = String(_p.count ?? "100 000");
+    // A counted fact arrives as a number (`story-facts.ts`): written the way the series writes numbers.
+    const count = typeof _p.count === "number" ? Math.round(_p.count).toLocaleString("fr-FR") : String(_p.count ?? "100 000");
     const z = fit(c, count, 860, 250, TYPO.hw, TYPO.fam);
     text(c, count, 540, 1000, z, PAL.ink, { align: "center" });
   }, 20);

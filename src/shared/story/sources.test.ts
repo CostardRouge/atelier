@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { factsOf, sourcesOf, tripLine, withSeriesSources } from './sources';
+import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -80,5 +80,14 @@ describe('tripLine', () => {
   it('says the days, stages, places and whether a road was imported', () => {
     const trip = createTripDoc('Australie', '2025-09-03', '2026-02-28');
     expect(tripLine(trip)).toBe('2025-09-03 → 2026-02-28 · 0 stages · 0 places · no road yet');
+  });
+});
+
+describe('withSeriesFacts', () => {
+  it('replaces the series’ numbers and keeps its sources', () => {
+    const script: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'Australie' } }, facts: { at: 'x', values: { days: 1 } } };
+    const next = withSeriesFacts(script, { at: 'y', from: 'Australie · w', values: { days: 2 } });
+    expect(next.facts).toEqual({ at: 'y', from: 'Australie · w', values: { days: 2 } });
+    expect(next.sources).toEqual(script.sources);
   });
 });
