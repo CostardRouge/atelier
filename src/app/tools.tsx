@@ -27,6 +27,7 @@ const LOAD = {
   exif: () => import('../tools/exif/ExifTool'),
   lut: () => import('../tools/lut/LutStudio'),
   map: () => import('../tools/map/MapTool'),
+  mosaic: () => import('../tools/mosaic/MosaicTool'),
   overlay: () => import('../tools/overlay/OverlayStudio'),
   roadtrip: () => import('../tools/roadtrip/RoadTripTool'),
   storytelling: () => import('../tools/storytelling/StorytellingTool'),
@@ -40,6 +41,7 @@ const DevelopTool = lazy(LOAD.develop);
 const ExifTool = lazy(LOAD.exif);
 const LutStudio = lazy(LOAD.lut);
 const MapTool = lazy(LOAD.map);
+const MosaicTool = lazy(LOAD.mosaic);
 const OverlayStudio = lazy(LOAD.overlay);
 const RoadTripTool = lazy(LOAD.roadtrip);
 const StorytellingTool = lazy(LOAD.storytelling);
@@ -154,6 +156,21 @@ export const TOOLS: Tool[] = [
     preload: LOAD.storytelling,
     wip: {
       note: 'It works end to end, and it is still being built: your photographs in the blocks and agent commands come next, and its script format may still change.',
+    },
+    accepts: [],
+  },
+  {
+    id: 'mosaic',
+    group: 'editor',
+    path: '/mosaic',
+    label: 'Mosaic',
+    subtitle: 'A picture · all the others',
+    blurb:
+      'Rebuild one picture out of hundreds of others from your Winnow — each cell a photo whose colours match — and play them as the screen saver that zoomed from picture to picture. Each mosaic is kept on this device with its pictures’ colours.',
+    Component: MosaicTool,
+    preload: LOAD.mosaic,
+    wip: {
+      note: 'Its mosaics, their file and their gallery exist; the door to a Winnow’s pictures, the stage and the animated modes come next.',
     },
     accepts: [],
   },

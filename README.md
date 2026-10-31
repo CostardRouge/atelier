@@ -23,6 +23,11 @@ Today it ships twelve tools, converging into a few editors:
   your **script**, a file of your own kept in this browser, never in the app;
   add your voice, a music bed and sound effects of your own, and export a
   vertical MP4 whose ending shows the next post's cover.
+- **Mosaic** *(work in progress)* — rebuild one picture out of hundreds of
+  others from your Winnow, each cell a photo whose colours match, and play
+  them as the screen saver that zoomed from picture to picture. Each
+  **mosaic** is kept on this device with its pictures' colours, in a gallery
+  like the others'.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -3102,6 +3107,32 @@ it and may grow blocks of its own.
 
 Work on a post's blocks happens in the code, with `npm run dev`: the stage
 reloads on every save.
+
+## Mosaic tool
+
+*Work in progress* — the home page and the tool menu say so with a badge. What
+exists: mosaics, their gallery and their file. The door to a Winnow's
+pictures, the stage and the animated modes come next (`docs/mosaic.md`).
+
+The photo-mosaic screen saver macOS once had, over your own pictures: one
+picture rebuilt out of hundreds of others, each cell a photo whose colours
+match that spot, then played — the camera dives into a cell until that photo
+fills the screen and becomes the next picture, or pulls back until the photo
+on screen turns out to be one cell of a larger one.
+
+**Mosaics.** `/mosaic` opens a gallery of mosaics, as cards whose cover is the
+mosaic's own poster; the whole card opens it, and its **⋯** renames it, exports
+it as a `.mosaic.json` file and deletes it. A mosaic keeps its title, its list
+of pictures (by reference to one connected Winnow), the **colours measured of
+each** — a 6 × 6 grid of mean colours, 108 bytes a picture, measured once —
+its target picture and every setting; every change is saved as you go, on this
+device. The file carries all of that, so a mosaic imported on another device
+remeasures nothing; importing a file always makes new mosaics. Beside the
+documents, the device keeps a small 160 × 90 tile of each picture a mosaic
+draws, taken from the instance's thumbnail, so a mosaic plays without asking
+the instance again; the tiles and colours of pictures no mosaic uses any more
+are forgotten when the last one is deleted. The gallery says what is kept,
+whether the browser promised to keep it, and offers **Back up everything**.
 
 ## Telemetry tool
 
