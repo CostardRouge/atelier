@@ -18,7 +18,7 @@ Read before touching video decode/encode, any export, the transcode fallback, LU
 
 **`framePlan` (`shared/media/frame-plan.ts`) is now shared** by this and by the outro tail — it was `tailFrames` in `export-tail.ts`, which kept only the `ExportTail` interface. Same arithmetic, two callers; a second copy is how two exports come to disagree about a duration.
 
-**How to verify it, since no CI runner and no container Chromium has an H.264 encoder**: stub `VideoEncoder` / `VideoFrame` / `EncodedVideoChunk` and let the REAL mp4-muxer run (`render-video.test.ts`) — that proves the plan, contiguous timestamps, the keyframe cadence, every frame being closed and a real MP4 coming out. The stub chunks must be instances of the stubbed `EncodedVideoChunk`: mp4-muxer checks with `instanceof` and rejects a plain object. What no test can prove is that a real encoder accepts the config.
+**How to verify it, since no CI runner has an H.264 encoder** (the cloud container's Chromium does, from a `localhost` page only — `testing.md`, «WebCodecs needs a SECURE page»): stub `VideoEncoder` / `VideoFrame` / `EncodedVideoChunk` and let the REAL mp4-muxer run (`render-video.test.ts`) — that proves the plan, contiguous timestamps, the keyframe cadence, every frame being closed and a real MP4 coming out. The stub chunks must be instances of the stubbed `EncodedVideoChunk`: mp4-muxer checks with `instanceof` and rejects a plain object. What no test can prove is that a real encoder accepts the config.
 
 ## Having a `VideoEncoder` is not being able to encode (2026-09-09)
 

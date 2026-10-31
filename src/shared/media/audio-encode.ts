@@ -89,7 +89,7 @@ export async function encodeAudioBuffer(buffer: PlanarAudio): Promise<AudioEncod
   if (!(await canEncodeAac(sampleRate, numberOfChannels))) {
     return {
       ok: false,
-      reason: 'This browser cannot encode AAC audio, so the clip went out without its ticks.',
+      reason: 'This browser cannot encode AAC audio, so the clip went out without its sound.',
     };
   }
 

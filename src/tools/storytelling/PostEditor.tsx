@@ -297,7 +297,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         new File([blob], name, { type: 'video/mp4' }),
         ...(cover ? [new File([cover], name.replace(/\.mp4$/, '-cover.png'), { type: 'image/png' })] : []),
       ]);
-      setExportNote(skipped ? `Exported without sound: ${skipped}.` : heard ? 'Exported, with its sound.' : 'Exported, silent: no voice or music was added.');
+      setExportNote(skipped ? `Exported without sound: ${skipped.replace(/\.$/, '')}.` : heard ? 'Exported, with its sound.' : 'Exported, silent: no voice or music was added.');
     } catch (err) {
       setExportNote(controller.signal.aborted ? 'Export cancelled.' : err instanceof Error ? err.message : 'The export failed.');
     } finally {

@@ -39,6 +39,7 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- An export whose sound this browser cannot encode now says it went out without its sound, rather than without its ticks.
 - Flight Atlas: the intro and the outro no longer jump. Their lines used to shift each time the next one faded in (the
   title moved up when its second line, then the drone, appeared; the summary moved as its totals and the drone came in),
   and the totals' row could re-flow as it counted. An atlas now starts playing once its fonts, coastline and place names

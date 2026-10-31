@@ -245,3 +245,7 @@ The index outgrew its ~200-line budget, so its long entries were moved here verb
 ### Open items (were the index's "Open items")
 
 - 2026-08-20 — `tests/` holds only `fixtures/sample.srt`; all specs live beside their source in `src/**`. Fine as is, but a future agent should not read the empty-looking `tests/` directory as "there are no tests".
+
+## WebCodecs needs a SECURE page: H.264 IS encodable here from localhost (2026-10-31)
+
+**Fact, measured.** Probing `VideoEncoder` on a `data:` URL reports it undefined — WebCodecs exists only in a secure context — which is how earlier sessions concluded «no container Chromium has an H.264 encoder». From `http://localhost:*` the container's Chromium 153 (both the headless shell and the full binary) answers `isConfigSupported` true for `avc1.640028` and `avc1.4d0028` at 1080×1920 (false for baseline `42001f`), and refuses `mp4a.40.2` (no AAC). **How to apply**: probe and export from a page served on localhost (the dev server); a real MP4 can be produced and checked with `ffprobe` here, its AAC track cannot. A whole Winnow also runs here without Docker — Postgres 16 and Redis are installed (`/usr/lib/postgresql/16/bin`, `redis-server`): a data directory under `/var/lib/postgresql` (the scratchpad is not traversable by the `postgres` user), `npm run migrate` with the `.env` exported (its scripts do not read `.env`; `next dev` does), then `npm run dev` and `npm run worker` (`storytelling.md` has the run).

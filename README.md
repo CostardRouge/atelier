@@ -2987,7 +2987,7 @@ it and may grow blocks of its own.
 - **Archive.** After an export, the video and its cover can be sent to a Winnow
   you connected — the one running on this computer, or your server's with an app
   token (see "Sources — connecting a Winnow") — where they are imported into its
-  Incoming under `Storytelling/<series>/<post>`.
+  Incoming like any upload, filed by the instance's own rule (camera, date).
 
 Work on a post's blocks happens in the code, with `npm run dev`: the stage
 reloads on every save.
