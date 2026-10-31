@@ -293,6 +293,20 @@ anything about media sources or document storage:
   phone sheet over the stage), six faces and the recommended one in seven
   commits, his four questions. Read it before adding a control to an opener's
   panel or touching `panel-ui.tsx`, `HookPicker.tsx` or the Look tab's host.
+- **`docs/mosaic.md`** — the Mosaic instrument (2026-10-31, decided, not
+  built): macOS's « Mosaic » screen saver over his Winnow — a picture whose
+  every cell is another picture. §1 is fact (`thumb-metrics.ts` measures one
+  mean colour on the main thread, the picker's span, the atlas's document
+  and remote shape, the wall's kept squares); §2 his four picks (a 6 × 6 grid
+  of mean colours per picture, the cell in screen pixels, Winnow the only
+  source, a `.mosaic.json`); §3–§7 the model, the pipeline (thumbnails
+  fetched on main, decoded and read in a worker pool, grids and 160 px tiles
+  kept in `atelier-mosaic`, matching pure and in the worker past 20 M
+  operations, the mosaic painted once and animated by transform), five
+  modes, nine commits; §8 his seven questions. Lab:
+  https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi. Read it before
+  creating `src/tools/mosaic/` or `src/shared/mosaic/`, and before measuring
+  colour on anything else — it is where the grid measure should live.
 - **`docs/camera-profiles.md`** — camera colour profiles (2026-10-07): what
   LibRaw does with a RAW's colour, MEASURED (the D65 matrix alone, no
   interpolation, no forward matrix), the gap to the DNG spec in ΔE, what a
