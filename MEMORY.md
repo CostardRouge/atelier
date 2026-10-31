@@ -53,7 +53,7 @@ Since 2026-10-22 the long entries that stood here live verbatim under « Moved f
 - **Trips, the pieces**: a deck of FREE slides; a slide's length is parts with an owner; four tabs over one stage; the badge from overlay text, its look the trip's, camera plate, temporal line, odometer; three grade rungs; shades engine-level; framing and motion as cards; collages; `MediaIntake`; everything in the hash; Trips briefs the Studio — `roadtrip.md`.
 - **Openers and the road**: hook variants from a registry; the Itinerary; Virée's software 3D, fleet and ferries; Vitrine; stops found on a big map; OSM tiles inside openers, streamed and cached; the road's drive styles — `roadtrip.md`, `showcase.md`, `trip-road.md`, `trip-road-drive.md`.
 - **Trips overview**: a calendar of months; Calendar · Map · List; the stage ruler and its one gesture surface — `roadtrip.md`.
-- **Storytelling**: a narrated series as an Atelier tool, not a repository; a post is code over a shared charte and starts as a copy of the one before; its words are a private script loaded and kept on the device, never in this public code; the ending shows the next post's cover; the gallery is the map of subjects (states per channel, kept in the script) and an export is archived on a connected Winnow, local or by app token — `storytelling.md`.
+- **Storytelling**: a narrated series as an Atelier tool, not a repository, offered under a « Work in progress » badge; a post is code over a shared charte and starts as a copy of the one before; its words are a private script loaded and kept on the device, never in this public code; the ending shows the next post's cover; the gallery is the map of subjects (states per channel, kept in the script) and an export is archived on a connected Winnow, local or by app token — `storytelling.md`.
 - **Elsewhere**: one Winnow picker — `winnow-picker.md`; a wait inside a run is never bare — `tasks.md`; agents drive the suite through commands — `agent-commands.md`.
 - **Build, release, portfolio**: the base path from `GITHUB_REPOSITORY`; built-in LUTs discovered; Dependabot (C20); versions (C13); the portfolio standard (C14–C19) and the public page; the Registry block (CLAUDE.md rule 3) — `deployment.md`, `public-page.md`.
 
@@ -116,7 +116,6 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-08 — The Vitrine opener built, rendered headless only — `showcase.md`.
 - 2026-10-12 (rev. 2026-10-22) — Learning his style: the adaptive `.cube` run on his Mac and PAUSED (`training/FINDINGS.md`); DevelopNet next, on a few hundred developed pictures — `training.md`.
 - 2026-10-13 — Flights from Winnow: stub-driven; the dead `.srt` rows are his calls in Winnow — `winnow-picker.md`.
-- 2026-10-12 — Flight Atlas is an experiment; whether it stays is his call — `flight-atlas.md`.
 - 2026-10-13 — The road's drive styles: defaults set on synthetic roads, check on his real trip — `trip-road-drive.md`.
 - 2026-10-13 — Sliders as one bar and 44 px targets built; not seen on his devices — `frontend.md`.
 - 2026-10-13 — A slide's length (face B) built; left: see it on his Mac and phone — `roadtrip.md`.

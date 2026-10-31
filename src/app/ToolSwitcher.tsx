@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icons } from '../shared/ui/icons';
 import { menuAnchor, type MenuAnchor } from '../shared/ui/menu-anchor';
 import { HOME_PATH, TOOLS, type Tool } from './tools';
+import WipBadge from './WipBadge';
 
 /**
  * The active tool's name in the masthead, and the way to every other one.
@@ -206,8 +207,11 @@ function ToolRow({ tool, active, onPick }: { tool: Tool; active: boolean; onPick
       }`}
     >
       <span className="min-w-0 flex flex-col gap-0.5">
-        <span className={`text-sm font-semibold leading-tight ${active ? 'text-accent-ink' : 'text-ink'}`}>
-          {tool.label}
+        <span className="flex items-center gap-2">
+          <span className={`text-sm font-semibold leading-tight ${active ? 'text-accent-ink' : 'text-ink'}`}>
+            {tool.label}
+          </span>
+          <WipBadge tool={tool} compact />
         </span>
         {tool.blurb && (
           <span className="text-xs text-muted leading-tight truncate">{firstClause(tool.blurb)}</span>

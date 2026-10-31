@@ -2,21 +2,21 @@
 
 > A local-first suite of browser tools for your captures — photo and video, across devices (DJI, Apple, Sony, …): everything runs in your browser and files never leave your machine — no upload, no account, no server.
 
-Atelier is a thin shell plus self-contained tools that share one asset library: import a folder once and switch tools freely, each tool seeing the subset of files it can use. The editors (Studio, Trips, Develop, Storytelling) are where the suite is converging; the instruments are standalone pages. Navigation is hash-based, so every tool has its own address. A few optional features can make a request (an OpenStreetMap base map, Nominatim place search, Lensfun lens profiles, a Winnow instance of your own), all off by default; the legal notice lists every one. Visits are counted lightly and cookie-free with the author's own Umami.
+Atelier is a thin shell plus self-contained tools that share one asset library: import a folder once and switch tools freely, each tool seeing the subset of files it can use. The editors (Studio, Trips, Develop, Flight Atlas, Storytelling) are the tools in their own right, each with a gallery of its documents; the instruments are standalone pages. Navigation is hash-based, so every tool has its own address. A few optional features can make a request (an OpenStreetMap base map, Nominatim place search, Lensfun lens profiles, a Winnow instance of your own), all off by default; the legal notice lists every one. Visits are counted lightly and cookie-free with the author's own Umami.
 
 ## Editors
 
 - [Studio](https://atelier.steeve.website/#/studio): One place to edit a clip or a photo: overlay telemetry and text, grade through a LUT, and export the result — the editor the whole suite is converging on.
 - [Trips](https://atelier.steeve.website/#/roadtrip): Give a trip its dates and every photo knows which day it belongs to — a grid of the whole journey shows what you have told and what you never have.
 - [Develop](https://atelier.steeve.website/#/develop): Gather the photographs and clips you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.
-- [Storytelling](https://atelier.steeve.website/#/storytelling): Tell a project in short narrated videos: each post plays from its own code with your script, voice and music, then exports as a vertical MP4 that knows the post before and after it.
+- [Flight Atlas](https://atelier.steeve.website/#/atlas): Draw a set of drone flights on one map and animate them together, with trails, glows and a clock; export it as an MP4 or a PNG.
+- [Storytelling](https://atelier.steeve.website/#/storytelling): Work in progress. Tell a project in short narrated videos: each post plays from its own code with your script, voice and music, then exports as a vertical MP4 that knows the post before and after it.
 
 ## Instruments
 
 - [DJI Telemetry](https://atelier.steeve.website/#/telemetry): Play any DJI clip with its flight log in sync — altitude, GPS, ISO and shutter move with the frame.
 - [Telemetry Overlay](https://atelier.steeve.website/#/overlay): Place altitude, GPS and exposure readouts anywhere on your DJI clip, then export an MP4 with the telemetry burned in.
 - [Flight Map](https://atelier.steeve.website/#/map): Trace a DJI clip's GPS path on a map and scrub the video to walk the aircraft along it. Draws offline; the map background is opt-in.
-- [Flight Atlas](https://atelier.steeve.website/#/atlas): Experimental. Draw a set of drone flights on one map and animate them together, with trails, glows and a clock; export it as an MP4 or a PNG.
 - [Composer](https://atelier.steeve.website/#/composer): Compose a DJI clip with its flight map and a draggable telemetry readout into one frame — pick the aspect, layout and a LUT, and preview the assembly.
 - [Photo EXIF](https://atelier.steeve.website/#/exif): Inspect any photo's metadata — camera, lens, the full exposure triplet and GPS location — read straight from the file, even RAW.
 - [Compare A/B](https://atelier.steeve.website/#/compare): Lay any two photos or clips side by side under a draggable divider — two grades, two takes, before and after — with synced playback for clips.

@@ -531,9 +531,6 @@ export default function AtlasGallery({ openAtlasId, onOpen }: AtlasGalleryProps)
             Atlases
           </span>
           {atlases !== null && <span className="font-mono text-xs text-muted tabular-nums">{atlases.length}</span>}
-          <span className="font-mono text-3xs uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-warn-line bg-warn-wash text-warn">
-            Experimental
-          </span>
           <span className="flex-1" />
           <Button onClick={startImport} icon={Icons.import} title={`Import atlases from a ${ATLAS_FILE_EXTENSION} file`}>
             Import

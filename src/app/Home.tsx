@@ -3,6 +3,8 @@ import { useObjectUrl } from '../shared/media/use-object-url';
 import { Icons } from '../shared/ui/icons';
 import type { DevelopDoorFacts, StudioDoorFacts, TripsDoorFacts } from './documents-read';
 import { TOOLS, type Tool } from './tools';
+import DoorArt from './DoorArt';
+import WipBadge from './WipBadge';
 
 /**
  * The stores are read through `documents-read.ts`, imported HERE and only
@@ -16,7 +18,8 @@ const readDocuments = () => import('./documents-read');
  * behind them.
  *
  * Nine equal cards told a story of nine equal tools, while the suite is
- * converging on its editors (`studio.md`) — the Studio, Trips and Develop.
+ * converging on its editors (`studio.md`) — the Studio, Trips, Develop, and
+ * the tools in their own right beside them (Flight Atlas, Storytelling).
  * Each editor is a door: it SHOWS the document this browser worked on last —
  * its preview, its name, how far it got — and OPENS that editor's gallery,
  * where the choice is made. It used to open the document itself, and the
@@ -77,6 +80,7 @@ export default function Home() {
                     {t.subtitle}
                   </span>
                 )}
+                <WipBadge tool={t} compact />
                 <span className="ml-auto inline-flex text-faint group-hover:text-accent-ink transition-transform duration-[250ms] ease-paper group-hover:translate-x-[3px]">
                   {Icons.forward}
                 </span>
@@ -105,6 +109,9 @@ function DoorHead({ tool, last }: { tool: Tool; last: string | null }) {
           {tool.label}
         </h2>
         {last && <span className="min-w-0 truncate text-xs text-muted">{last}</span>}
+        <span className="ml-auto self-center">
+          <WipBadge tool={tool} />
+        </span>
       </div>
       {tool.blurb && <p className="m-0 text-ink-soft text-sm leading-[1.55]">{tool.blurb}</p>}
       <span
@@ -142,7 +149,7 @@ function StudioDoor({ tool }: { tool: Tool }) {
         {thumb ? (
           <img src={thumb} alt="" className="block w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.video}</div>
+          <DoorArt toolId={tool.id} />
         )}
       </div>
       <DoorHead tool={tool} last={last ? `${last.name} · ${when(last.updatedAt)}` : null} />
@@ -167,16 +174,18 @@ function TripsDoor({ tool }: { tool: Tool }) {
   }, []);
   return (
     <a href={`#${tool.path}`} className={door}>
-      <div className="h-24 rounded-[10px] bg-paper-2 p-3 flex items-end gap-px">
+      <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2">
         {last ? (
-          last.cells.map((on, i) => (
-            <span
-              key={i}
-              className={`flex-1 min-w-0 rounded-[1px] ${on ? 'bg-accent h-full' : 'bg-line-strong h-1/4'}`}
-            />
-          ))
+          <div className="h-full p-3 flex items-end gap-px">
+            {last.cells.map((on, i) => (
+              <span
+                key={i}
+                className={`flex-1 min-w-0 rounded-[1px] ${on ? 'bg-accent h-full' : 'bg-line-strong h-1/4'}`}
+              />
+            ))}
+          </div>
         ) : (
-          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.calendar}</div>
+          <DoorArt toolId={tool.id} />
         )}
       </div>
       <DoorHead
@@ -208,7 +217,7 @@ function DevelopDoor({ tool }: { tool: Tool }) {
         {last && last.thumbs.length > 0 ? (
           last.thumbs.map((blob, i) => <DoorThumb key={i} blob={blob} />)
         ) : (
-          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.image}</div>
+          <DoorArt toolId={tool.id} />
         )}
       </div>
       <DoorHead
@@ -232,10 +241,17 @@ function DoorThumb({ blob }: { blob: Blob }) {
   );
 }
 
-/** An editor with no door of its own yet: its name and pitch. */
+/**
+ * An editor with no door of its own yet: its name and pitch, under its
+ * drawing (`DoorArt`), the same tile as the others' first visit, so a row of
+ * doors stays a row.
+ */
 function PlainDoor({ tool }: { tool: Tool }) {
   return (
     <a href={`#${tool.path}`} className={door}>
+      <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2">
+        <DoorArt toolId={tool.id} />
+      </div>
       <DoorHead tool={tool} last={null} />
     </a>
   );
