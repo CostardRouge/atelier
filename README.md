@@ -2975,7 +2975,11 @@ it and may grow blocks of its own.
   in your script; the trip and the pictures stay on this device. With a trip
   chosen, the maps follow its road — the GPS track imported in Trips, read in
   the trip's own mode — and name the towns where a stage starts or ends; without
-  one, they join the stops written in the script. *Count* asks the Winnow how
+  one, they join the stops written in the script. Untick a stage to leave it
+  out of the route, its towns and the counted days (a trip that begins in Bali,
+  told from Australia). *Names* chooses which points are named (where stages
+  start and end, where they start, every place) and *Says* what each says (the
+  place, the stage, the place and its day, or nothing). *Count* asks the Winnow how
   many media the trip's days hold — a RAW + JPEG pair counting once, as Winnow
   counts it — and keeps the numbers in your script with the date they were
   counted, so a post exports the same tomorrow; *Count again* replaces them and

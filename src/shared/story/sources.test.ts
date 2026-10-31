@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -94,5 +94,29 @@ describe('withSeriesFacts', () => {
     const next = withSeriesFacts(script, { at: 'y', from: 'Australie · w', values: { days: 2 } });
     expect(next.facts).toEqual({ at: 'y', from: 'Australie · w', values: { days: 2 } });
     expect(next.sources).toEqual(script.sources);
+  });
+});
+
+describe('the stages and the map a series keeps', () => {
+  it('reads kept stages and the map’s names from a script file', () => {
+    const parsed = parseScript({ ...base, sources: { trip: { id: 't', name: 'A', stages: ['s1', 3, ''] }, map: { points: 'places', label: 'shout' } } });
+    expect(parsed.ok && parsed.script.sources).toEqual({ trip: { id: 't', name: 'A', stages: ['s1'] }, map: { points: 'places' } });
+  });
+
+  it('keeps the numbers when only the map’s names change, drops them when the stages do', () => {
+    const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 1 } } };
+    expect(withSeriesSources(counted, { map: { label: 'stage' } }).facts).toEqual(counted.facts);
+    expect(withSeriesSources(counted, { trip: { id: 't1', name: 'A', stages: ['s1'] } }).facts).toBeUndefined();
+  });
+
+  it('counts the kept stages’ days', () => {
+    const t = createTripDoc('Bali puis Australie', '2025-08-20', '2026-02-28');
+    t.stages = [
+      { id: 'bali', name: 'Bali', region: '', startDate: '2025-08-20', endDate: '2025-09-02', places: [] },
+      { id: 'au', name: 'Australie', region: '', startDate: '2025-09-03', endDate: '2026-02-28', places: [] },
+    ];
+    expect(countedSpan(t, { trip: { id: t.id, name: 'x', stages: ['au'] } })).toEqual({ from: '2025-09-03', to: '2026-02-28' });
+    expect(countedSpan(t, { trip: { id: t.id, name: 'x' } })).toEqual({ from: '2025-08-20', to: '2026-02-28' });
+    expect(mapChoiceOf({ trip: { id: t.id, name: 'x', stages: ['au'] }, map: { label: 'none' } })).toEqual({ stages: ['au'], label: 'none' });
   });
 });

@@ -115,7 +115,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   // it (`trip-map.ts`): its road, and the towns where a stage starts or ends.
   // Otherwise the script's typed stops, as before.
   const sources = sourcesOf(script, postId);
-  const tripMap = useTripMap(sources.trip?.id);
+  const tripMap = useTripMap(sources);
   // The wall's pictures: the ones the last counting chose, kept on this device (`wall-cache.ts`).
   const wallSource = sources.winnow?.source;
   const wall = useWall(

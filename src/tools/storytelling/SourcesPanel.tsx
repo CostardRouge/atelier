@@ -2,9 +2,9 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
 import { factChanges, factsFromCalendars, factText, gearFacts, geoFacts, wallPicks } from '../../shared/story/story-facts';
-import { tripFacts } from '../../shared/story/trip-map';
+import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
 import { TILES } from '../../shared/story/scenes/Hook';
 import type { WallProgress } from './wall-cache';
 import type { StoryScript } from '../../shared/story/story-script';
@@ -93,11 +93,12 @@ export default function SourcesPanel({
     setCounting({ state: 'busy' });
     try {
       const client = new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth });
+      // The days the kept stages cover; every stage = the trip's own span.
+      const span = countedSpan(trip, sources);
       const [all, photos] = await Promise.all([
-        client.calendar(trip.startDate, trip.endDate),
-        client.calendar(trip.startDate, trip.endDate, { mediaType: 'photo' }),
+        client.calendar(span.from, span.to),
+        client.calendar(span.from, span.to, { mediaType: 'photo' }),
       ]);
-      const span = { from: trip.startDate, to: trip.endDate };
       const sumOf = (cal: typeof all) => cal.days.filter((d) => d.date >= span.from && d.date <= span.to).reduce((n, d) => n + d.count, 0);
       // The cameras (the library's busiest twelve, each counted over the trip's days) and the
       // positions by day. Either may be missing on an older instance: the totals stand without them.
@@ -112,7 +113,7 @@ export default function SourcesPanel({
           .then((days) => geoFacts(days, span))
           .catch(() => null),
       ]);
-      const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip), ...gear, ...(geo?.values ?? {}) };
+      const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
       const tiles = wallPicks(all, span, TILES.length);
       const before = script.facts?.values ?? null;
       onScript(
@@ -146,7 +147,44 @@ export default function SourcesPanel({
           />
         </div>
         {trip ? (
-          <p className="m-0 text-2xs text-muted leading-relaxed">{tripLine(trip)}</p>
+          <>
+            <p className="m-0 text-2xs text-muted leading-relaxed">{tripLine(trip)}</p>
+            {trip.stages.length > 1 ? (
+              <fieldset className="m-0 p-0 border-0 flex flex-col gap-1">
+                <legend className="mb-1 text-2xs text-muted">Stages told — the route, its towns and the counted days</legend>
+                {trip.stages
+                  .slice()
+                  .sort((a, b) => a.startDate.localeCompare(b.startDate))
+                  .map((stage) => {
+                    const kept = !sources.trip?.stages || sources.trip.stages.includes(stage.id);
+                    return (
+                      <label key={stage.id} className="flex items-center gap-2 min-w-0 text-xs text-ink-soft cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={kept}
+                          onChange={() => {
+                            const all = trip.stages.map((s) => s.id);
+                            const now = sources.trip?.stages ?? all;
+                            const next = kept ? now.filter((id) => id !== stage.id) : [...now, stage.id];
+                            if (!next.length || !sources.trip) return;
+                            const rest = { id: sources.trip.id, name: sources.trip.name };
+                            onScript(
+                              withSeriesSources(script, {
+                                trip: next.length === all.length ? rest : { ...rest, stages: all.filter((id) => next.includes(id)) },
+                              }),
+                            );
+                          }}
+                        />
+                        <span className="min-w-0 truncate">{stageLabel(stage) || 'Unnamed stage'}</span>
+                        <span className="ml-auto shrink-0 font-mono text-2xs text-muted tabular-nums">
+                          {stage.startDate.slice(5)} → {stage.endDate.slice(5)}
+                        </span>
+                      </label>
+                    );
+                  })}
+              </fieldset>
+            ) : null}
+          </>
         ) : sources.trip && trips ? (
           <p className="m-0 text-2xs text-danger leading-relaxed">
             « {sources.trip.name} » is not in this browser. Open Trips here and import it, or choose another.
@@ -172,6 +210,37 @@ export default function SourcesPanel({
           </p>
         ) : null}
       </div>
+      {sources.trip ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-ink-soft w-16">Names</span>
+            <SelectField<MapPoints>
+              label="Which points the map names"
+              value={sources.map?.points ?? 'ends'}
+              options={[
+                { id: 'ends', label: 'Where stages start and end' },
+                { id: 'starts', label: 'Where stages start' },
+                { id: 'places', label: 'Every place' },
+              ]}
+              onChange={(points) => onScript(withSeriesSources(script, { map: { ...sources.map, points } }))}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-ink-soft w-16">Says</span>
+            <SelectField<MapLabel>
+              label="What each named point says"
+              value={sources.map?.label ?? 'place'}
+              options={[
+                { id: 'place', label: 'The place' },
+                { id: 'stage', label: 'The stage' },
+                { id: 'place-date', label: 'The place and its day' },
+                { id: 'none', label: 'Nothing — a dot' },
+              ]}
+              onChange={(label) => onScript(withSeriesSources(script, { map: { ...sources.map, label } }))}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" onClick={() => void count()} disabled={blocked !== null || !trip || counting.state === 'busy'}>
           {counting.state === 'busy' ? 'Counting…' : facts ? 'Count again' : 'Count'}

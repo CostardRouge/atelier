@@ -34,6 +34,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: counting also gives each camera's media, the days with and without a position and the trip's
   kilometres, stages and places to cite in the script; the map with holes draws the days without a position on the
   road, and a season recap lists the season's posts when the script does not.
+- Storytelling: leave stages of a trip out of the map and the counts, and choose which places the map names and what it
+  says for each — the place, the stage, the place and its day, or nothing.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back
