@@ -1,8 +1,9 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import { useObjectUrl } from '../shared/media/use-object-url';
 import { Icons } from '../shared/ui/icons';
 import type { DevelopDoorFacts, StudioDoorFacts, TripsDoorFacts } from './documents-read';
 import { TOOLS, type Tool } from './tools';
+import DoorArt from './DoorArt';
 import WipBadge from './WipBadge';
 
 /**
@@ -148,7 +149,7 @@ function StudioDoor({ tool }: { tool: Tool }) {
         {thumb ? (
           <img src={thumb} alt="" className="block w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.video}</div>
+          <DoorArt toolId={tool.id} />
         )}
       </div>
       <DoorHead tool={tool} last={last ? `${last.name} · ${when(last.updatedAt)}` : null} />
@@ -173,16 +174,18 @@ function TripsDoor({ tool }: { tool: Tool }) {
   }, []);
   return (
     <a href={`#${tool.path}`} className={door}>
-      <div className="h-24 rounded-[10px] bg-paper-2 p-3 flex items-end gap-px">
+      <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2">
         {last ? (
-          last.cells.map((on, i) => (
-            <span
-              key={i}
-              className={`flex-1 min-w-0 rounded-[1px] ${on ? 'bg-accent h-full' : 'bg-line-strong h-1/4'}`}
-            />
-          ))
+          <div className="h-full p-3 flex items-end gap-px">
+            {last.cells.map((on, i) => (
+              <span
+                key={i}
+                className={`flex-1 min-w-0 rounded-[1px] ${on ? 'bg-accent h-full' : 'bg-line-strong h-1/4'}`}
+              />
+            ))}
+          </div>
         ) : (
-          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.calendar}</div>
+          <DoorArt toolId={tool.id} />
         )}
       </div>
       <DoorHead
@@ -214,7 +217,7 @@ function DevelopDoor({ tool }: { tool: Tool }) {
         {last && last.thumbs.length > 0 ? (
           last.thumbs.map((blob, i) => <DoorThumb key={i} blob={blob} />)
         ) : (
-          <div className="w-full h-full grid place-items-center text-faint text-2xl">{Icons.image}</div>
+          <DoorArt toolId={tool.id} />
         )}
       </div>
       <DoorHead
@@ -239,24 +242,20 @@ function DoorThumb({ blob }: { blob: Blob }) {
 }
 
 /**
- * An editor with no door of its own yet: its name and pitch, under the same
- * empty tile as the others' first visit, so a row of doors stays a row.
+ * An editor with no door of its own yet: its name and pitch, under its
+ * drawing (`DoorArt`), the same tile as the others' first visit, so a row of
+ * doors stays a row.
  */
 function PlainDoor({ tool }: { tool: Tool }) {
   return (
     <a href={`#${tool.path}`} className={door}>
-      <div className="h-24 rounded-[10px] bg-paper-2 grid place-items-center text-faint text-2xl">
-        {PLAIN_ICONS[tool.id] ?? Icons.grid}
+      <div className="h-24 rounded-[10px] overflow-hidden bg-paper-2">
+        <DoorArt toolId={tool.id} />
       </div>
       <DoorHead tool={tool} last={null} />
     </a>
   );
 }
-
-const PLAIN_ICONS: Record<string, ReactNode> = {
-  atlas: Icons.map,
-  storytelling: Icons.play,
-};
 
 const DOORS: Record<string, ComponentType<{ tool: Tool }>> = {
   studio: StudioDoor,
