@@ -2,13 +2,14 @@
 
 > A local-first suite of browser tools for your captures — photo and video, across devices (DJI, Apple, Sony, …): everything runs in your browser and files never leave your machine — no upload, no account, no server.
 
-Atelier is a thin shell plus self-contained tools that share one asset library: import a folder once and switch tools freely, each tool seeing the subset of files it can use. The editors (Studio, Trips, Develop) are where the suite is converging; the instruments are standalone pages. Navigation is hash-based, so every tool has its own address. A few optional features can make a request (an OpenStreetMap base map, Nominatim place search, Lensfun lens profiles, a Winnow instance of your own), all off by default; the legal notice lists every one. Visits are counted lightly and cookie-free with the author's own Umami.
+Atelier is a thin shell plus self-contained tools that share one asset library: import a folder once and switch tools freely, each tool seeing the subset of files it can use. The editors (Studio, Trips, Develop, Storytelling) are where the suite is converging; the instruments are standalone pages. Navigation is hash-based, so every tool has its own address. A few optional features can make a request (an OpenStreetMap base map, Nominatim place search, Lensfun lens profiles, a Winnow instance of your own), all off by default; the legal notice lists every one. Visits are counted lightly and cookie-free with the author's own Umami.
 
 ## Editors
 
 - [Studio](https://atelier.steeve.website/#/studio): One place to edit a clip or a photo: overlay telemetry and text, grade through a LUT, and export the result — the editor the whole suite is converging on.
 - [Trips](https://atelier.steeve.website/#/roadtrip): Give a trip its dates and every photo knows which day it belongs to — a grid of the whole journey shows what you have told and what you never have.
 - [Develop](https://atelier.steeve.website/#/develop): Gather the photographs and clips you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.
+- [Storytelling](https://atelier.steeve.website/#/storytelling): Tell a project in short narrated videos: each post plays from its own code with your script, voice and music, then exports as a vertical MP4 that knows the post before and after it.
 
 ## Instruments
 

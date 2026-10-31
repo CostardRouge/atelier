@@ -11,6 +11,17 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
+  its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the
+  source.
+- Storytelling, a new editor for a series of short narrated videos: each post plays on a vertical stage with its
+  captions, its map and its counters, from a script file of your own that stays in this browser. Add a voice-over, a
+  music bed and sound effects from your own files (or the built-in sounds), and export the post as an MP4 with its sound, or its cover as a PNG. The ending of each
+  post names the next one and shows its cover.
+- Storytelling opens on a map of subjects: every subject of the series by pillar, against every channel, each crossing a
+  state (idea, in progress, ready, published, not for that channel) changed with a click and saved back into your
+  script.
+- Storytelling can send an exported post and its cover to a connected Winnow, to archive them there.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back
@@ -28,6 +39,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Sending exports to a Winnow with an app token no longer ends in « not allowed to do that » after the files arrived:
+  an archive is not reconciled, and finals sent by an editor say that linking them needs an admin.
+- Exports keep their sound in browsers that cannot encode AAC (Chromium on Linux, for one): the voice, music, ticks
+  and effects are then encoded to Opus, in sync with the picture, instead of being left out.
+- An export whose sound this browser cannot encode now says it went out without its sound, rather than without its ticks.
 - Flight Atlas: the intro and the outro no longer jump. Their lines used to shift each time the next one faded in (the
   title moved up when its second line, then the drone, appeared; the summary moved as its totals and the drone came in),
   and the totals' row could re-flow as it counted. An atlas now starts playing once its fonts, coastline and place names

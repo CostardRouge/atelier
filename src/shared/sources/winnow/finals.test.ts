@@ -25,6 +25,9 @@ describe('finalsPath — Winnow\'s nouns, never a trip\'s', () => {
     expect(finalsPath('12', 'a.mp4')).toBe('12/a.mp4');
     expect(finalsPath(null, 'a.mp4')).toBe('a.mp4');
     expect(finalsPath('', 'a.mp4')).toBe('a.mp4');
+    expect(finalsPath(null, 'a.mp4', 'Storytelling/Season 1')).toBe('Storytelling/Season 1/a.mp4');
+    expect(finalsPath(null, 'a.mp4', '../x/./y')).toBe('x/y/a.mp4');
+    expect(finalsPath('12', 'a.mp4', 'Storytelling')).toBe('12/a.mp4');
   });
 
   it('never lets a file name carry a directory of its own', () => {
@@ -105,5 +108,27 @@ describe('finalsPlan', () => {
     expect(plan.problems).toHaveLength(1);
     expect(plan.problems[0]).toContain('b.jpg');
     expect(plan.problems[0]).toContain('other.example');
+  });
+});
+
+describe('an archive', () => {
+  it('files under its folder and says nothing about matching a capture', () => {
+    const plan = finalsPlan({
+      files: [{ name: 'ep04.mp4', size: 10 }],
+      assetId: null,
+      targetSourceId: 'winnow.example',
+      maxUploadBytes: null,
+      archive: { folder: 'Storytelling/Season 1' },
+    });
+    expect(plan.items[0].path).toBe('Storytelling/Season 1/ep04.mp4');
+    expect(plan.notes).toEqual([]);
+    expect(plan.problems).toEqual([]);
+  });
+  it('reconciles after a send of finals, never after an archive', () => {
+    const files = [{ name: 'a.mp4', size: 10 }];
+    expect(finalsPlan({ files, assetId: null, targetSourceId: HOST, maxUploadBytes: null }).reconcile).toBe(true);
+    expect(
+      finalsPlan({ files, assetId: null, targetSourceId: HOST, maxUploadBytes: null, archive: { folder: 'Storytelling/EP.00' } }).reconcile,
+    ).toBe(false);
   });
 });

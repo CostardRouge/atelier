@@ -29,6 +29,7 @@ const LOAD = {
   map: () => import('../tools/map/MapTool'),
   overlay: () => import('../tools/overlay/OverlayStudio'),
   roadtrip: () => import('../tools/roadtrip/RoadTripTool'),
+  storytelling: () => import('../tools/storytelling/StorytellingTool'),
   studio: () => import('../tools/studio/StudioTool'),
   telemetry: () => import('../tools/telemetry/TelemetryTool'),
 };
@@ -41,6 +42,7 @@ const LutStudio = lazy(LOAD.lut);
 const MapTool = lazy(LOAD.map);
 const OverlayStudio = lazy(LOAD.overlay);
 const RoadTripTool = lazy(LOAD.roadtrip);
+const StorytellingTool = lazy(LOAD.storytelling);
 const StudioTool = lazy(LOAD.studio);
 const TelemetryTool = lazy(LOAD.telemetry);
 
@@ -119,6 +121,18 @@ export const TOOLS: Tool[] = [
     Component: DevelopTool,
     preload: LOAD.develop,
     accepts: ['photo', 'video+telemetry', 'video'],
+  },
+  {
+    id: 'storytelling',
+    group: 'editor',
+    path: '/storytelling',
+    label: 'Storytelling',
+    subtitle: 'Series · posts · voice',
+    blurb:
+      'Tell a project in short narrated videos: each post plays from its own code with your script, voice and music, then exports as a vertical MP4 that knows the post before and after it.',
+    Component: StorytellingTool,
+    preload: LOAD.storytelling,
+    accepts: [],
   },
   {
     id: 'telemetry',

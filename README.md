@@ -4,7 +4,7 @@ A local-first **suite of browser tools for your captures** — photo and video,
 across devices (DJI, Apple, Sony, …). Everything runs in your browser; files
 never leave your machine — no upload, no account, no server.
 
-Today it ships ten tools, converging into a few editors:
+Today it ships twelve tools, converging into a few editors:
 
 - **Studio** — the unified editor the suite is converging on. Opens on your
   **projects** (saved compositions with a baked preview); each project keeps
@@ -18,6 +18,11 @@ Today it ships ten tools, converging into a few editors:
   **roll**, kept in this browser or on your Winnow; give each its own light,
   colour, look and (a photograph) crop, and export them — from the proxy or the
   original, a clip as an MP4 graded frame by frame.
+- **Storytelling** — tell a project in a series of short narrated videos. Each
+  **post** plays from its own code over a shared charte; its words come from
+  your **script**, a file of your own kept in this browser, never in the app;
+  add your voice, a music bed and sound effects of your own, and export a
+  vertical MP4 whose ending shows the next post's cover.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -2945,6 +2950,49 @@ first), the strip and the chip say when a picture is shown from its preview,
 an export made from one says so, and *Stop keeping them* deletes them.
 Pictures from your Winnow never get one: the instance is where they live.
 
+## Storytelling tool
+
+A series of narrated vertical videos (1080 × 1920), the first being *Le tri
+d'Australie*. A post is **code**: `src/tools/storytelling/posts.ts` lists, for
+each post, the blocks it plays, how long each lasts and when its caption
+speaks; the blocks, the captions, the HUD, the grain and the cover are drawn on
+a canvas by `src/shared/story/` — the series' **charte** (palette, Geist,
+motion), the same for every post. A new post starts as a copy of the one before
+it and may grow blocks of its own.
+
+- **The script is yours, not the app's.** The words said, the numbers, the
+  places and the trip the maps draw are in a `.story.json` file you keep (its
+  `kind` is `atelier.story-script`, version 1). *Load script…* reads it and
+  keeps it in this browser until *Forget*; without one, every post still plays,
+  its captions as placeholders.
+- **Sound.** Add a voice-over and a music bed from files on this device; they
+  play with the stage, each at its start time and level, and are mixed into the
+  export's sound track — AAC, or Opus in a browser that cannot encode AAC (the
+  music fades in and out).
+- **Effects.** Place sound effects at moments of the post (*Add an effect* puts
+  one at the playhead): each is a file of your own — a click, a whoosh you
+  like — or one of the suite's built-in synthesised sounds, with its time and
+  level.
+- **The map of subjects.** `#/storytelling` opens on the series as a map: every
+  subject you mean to tell, filed by pillar (from your script's `topics`),
+  against every channel (`channels`) — Instagram, TikTok, LinkedIn… Each
+  crossing is a state (idea, in progress, ready, published, not for that
+  channel), one click from the next; the posts wear their cover and open on
+  their stage; *Still to do* keeps only what has work left. The states live in
+  your script: *Save script* downloads it back with them, to keep with your
+  notes.
+- **Continuity.** Each post knows the one before and after it: the ending names
+  the next post and shows its cover, and the panel opens either in one click.
+- **Export.** *Export video* writes an H.264 MP4 at 30 frames a second in this
+  browser; *Export cover* a PNG of the post's cover.
+- **Archive.** After an export, the video and its cover can be sent to a Winnow
+  you connected — the one running on this computer, or your server's with an app
+  token (see "Sources — connecting a Winnow") — where they are imported into its
+  Incoming like any upload, filed by the instance's own rule (camera, date).
+
+Work on a post's blocks happens in the code, with `npm run dev`: the stage
+reloads on every save.
+
 ## Telemetry tool
 
 When a DJI drone records, the memory card holds both the video (`.mp4`) and a
@@ -3151,6 +3199,25 @@ and named after the add, which keeps the rest; a clip whose folder was moved
 carries an old, dead log beside the live one, and the live one is taken). A Cancel stops the download
 and keeps what landed. A DJI clip brings its flight log along either way, and a
 clip whose log came alone can still be added later and joins it.
+
+**Signing in.** On the same site as the instance (`atelier.example.org` beside
+`winnow.example.org`) Atelier uses Winnow's own sign-in: its cookie travels and
+nothing is stored here. On **another site** — Atelier running on your computer
+(`npm run dev`, `http://localhost:5173`) beside your Winnow on its server — that
+cookie cannot reach this page, so the connect form asks for an **app token**,
+minted on the instance's *Users › App tokens*. It is kept in this browser with
+the connection until you forget the source, sent as `Authorization: Bearer` on
+every call and as `access_token` on the four byte routes a picture or a video
+loads by URL. The instance must also list this page's origin in its
+`CORS_ALLOWED_ORIGINS` (add `http://localhost:5173` for a local Atelier).
+
+**Everything on one machine.** Winnow runs locally too: its development stack
+(`docker compose -f docker-compose.yml -f docker-compose.dev.yml up`, in the
+Winnow repository) serves `http://localhost:3000` and already allows a local
+Atelier's origin. Connect `http://localhost:3000` here — same site, its sign-in
+works — and the whole video workflow runs on your computer: pick from the
+local Winnow, edit, export, then send the export to a Winnow (the local one,
+or your server's with a token) to archive it.
 
 When the Winnow serves its **timeline** (media grouped into legs by place and
 date), a trip can be seeded from it: the legs become the trip's stages — span, places, order — and nothing

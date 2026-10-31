@@ -15,6 +15,7 @@
 
 import { withDeadline } from '../lib/abortable';
 import type { SoundEvent } from './sound-event';
+import { clipWindow, scheduleClips, type SoundClip } from './sound-clip';
 import { scheduleVoice } from './voices';
 
 /** The bed's format — what the AAC encoder is asked for and platforms expect. */
@@ -61,9 +62,10 @@ export function scheduleScore(
 }
 
 /**
- * Render `seconds` of bed. Null when there is nothing to play, or when this
- * browser has no `OfflineAudioContext` — in both cases the video is simply
- * silent, which is what it was before the bed existed.
+ * Render `seconds` of bed — the scored ticks and any recorded clips. Null
+ * when there is nothing to play, or when this browser has no
+ * `OfflineAudioContext` — in both cases the video is simply silent, which is
+ * what it was before the bed existed.
  */
 export async function renderBed(
   events: readonly SoundEvent[],
@@ -72,6 +74,7 @@ export async function renderBed(
     leadSeconds = 0,
     sampleRate = BED_SAMPLE_RATE,
     channels = BED_CHANNELS,
+    clips = [],
   }: {
     /**
      * Render every sound this much EARLY. An encoder that primes (AAC delays
@@ -87,10 +90,18 @@ export async function renderBed(
      */
     sampleRate?: number;
     channels?: number;
+    /**
+     * Recorded sound placed in the clip — a voice-over, a music track
+     * (`sound-clip.ts`). Each plays at its own gain, outside the ticks'
+     * master headroom; the whole bed is still held under the ceiling.
+     */
+    clips?: readonly SoundClip[];
   } = {},
 ): Promise<AudioBuffer | null> {
   const playable = eventsWithin(events, seconds);
-  if (!playable.length || !(seconds > 0)) return null;
+  const lead = Math.max(0, leadSeconds);
+  const heard = clips.filter((clip) => clipWindow(clip, clip.buffer.duration, seconds, lead));
+  if ((!playable.length && !heard.length) || !(seconds > 0)) return null;
   if (typeof OfflineAudioContext === 'undefined') return null;
 
   const rate = sampleRate > 0 ? sampleRate : BED_SAMPLE_RATE;
@@ -100,13 +111,13 @@ export async function renderBed(
   const master = ctx.createGain();
   master.gain.value = MASTER_GAIN;
   master.connect(ctx.destination);
-  const lead = Math.max(0, leadSeconds);
   scheduleScore(
     ctx,
     master,
     playable.map((event) => ({ ...event, at: Math.max(0, event.at - lead) })),
     0,
   );
+  scheduleClips(ctx, ctx.destination, heard, seconds, lead);
   // iOS has been seen to never answer an offline render (a context made
   // while the tab was away): past the deadline the clip ships silent and the
   // caller is told, rather than the run holding on this slide for good.

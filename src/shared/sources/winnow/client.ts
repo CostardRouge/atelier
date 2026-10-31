@@ -14,12 +14,15 @@
  *
  * Two facts shape everything here:
  *
- * - **Auth is Winnow's own session cookie.** Atelier at `atelier.steeve.website`
- *   and Winnow at `winnow.steeve.website` are cross-origin but same-SITE, so a
- *   `SameSite=Lax` cookie travels with `credentials: 'include'` once Winnow's
- *   CORS allowlist names this origin. No token is stored anywhere. A foreign
- *   instance would need one; `auth: 'token'` is the seam for it and is not
- *   offered in the UI yet.
+ * - **Auth is Winnow's own session cookie** when the two are on one SITE.
+ *   Atelier at `atelier.steeve.website` and Winnow at `winnow.steeve.website`
+ *   are cross-origin but same-site, so a `SameSite=Lax` cookie travels with
+ *   `credentials: 'include'` once Winnow's CORS allowlist names this origin.
+ *   Across sites — Atelier on `localhost` beside the instance on its server —
+ *   the cookie never travels, and the connection carries an APP TOKEN the
+ *   person minted on Winnow (Users › App tokens): `Authorization: Bearer` on
+ *   every call, and `access_token` on the four byte routes an `<img>` or a
+ *   `<video>` loads by URL, the only ones Winnow reads it on.
  * - **Atelier never calls a server the user did not name.** The base URL
  *   comes from the connect flow (`#/connect`, confirmed by the user) and is
  *   stored locally; nothing here runs at boot.
@@ -35,8 +38,38 @@ import { TIMELINE_SYNC_ENABLED } from './features';
 export type WinnowAuth =
   /** Same-site: the browser sends Winnow's session cookie. */
   | { mode: 'cookie' }
-  /** Foreign origin: a bearer token the user pasted. Seam only — no UI yet. */
+  /** Another site: an app token the user pasted on `#/sources`. */
   | { mode: 'token'; token: string };
+
+/**
+ * The byte routes Winnow reads `access_token` on (its `QUERY_TOKEN_ROUTES`):
+ * an element cannot send a header. Anything else carrying it is refused, so
+ * the token goes on these and nowhere else.
+ */
+const QUERY_TOKEN_PATHS = [/^\/api\/assets\/\d+\/(thumb|proxy|download)$/, /^\/api\/sidecars\/\d+\/download$/];
+
+/**
+ * Whether two hosts are the same SITE, which is what decides if Winnow's
+ * `SameSite=Lax` cookie travels: `atelier.x.org` and `winnow.x.org` are, and
+ * `localhost` and a server's name are not. The site is the last two labels —
+ * no public-suffix list, so `a.co.uk` and `b.co.uk` read as one site; the
+ * worst that does is offer the cookie where a token was needed, and the
+ * person can still tick the token. An IP or a single label is its own site.
+ * (pure)
+ */
+export function sameSite(a: string, b: string): boolean {
+  const site = (host: string) => {
+    const h = host.toLowerCase().replace(/\.$/, '');
+    if (/^[\d.]+$/.test(h) || h.includes(':') || !h.includes('.')) return h;
+    return h.split('.').slice(-2).join('.');
+  };
+  return site(a) === site(b);
+}
+
+/** Whether `path` is one an element may load with the token in its query. (pure) */
+export function takesQueryToken(path: string): boolean {
+  return QUERY_TOKEN_PATHS.some((re) => re.test(path));
+}
 
 export interface WinnowConfig {
   /** Origin of the instance, no path, no trailing slash. */
@@ -844,22 +877,31 @@ export class WinnowClient {
     return url.toString();
   }
 
+  /**
+   * A byte route's URL as an element loads it: in token mode the token rides
+   * in the query, on the routes Winnow accepts it on and no other.
+   */
+  private mediaUrl(path: string, params: Record<string, string | number | null | undefined> = {}): string {
+    const auth = this.config.auth;
+    return this.url(path, auth.mode === 'token' && takesQueryToken(path) ? { ...params, access_token: auth.token } : params);
+  }
+
   // --- the file routes, as URLs an <img>/<video> or a fetch can take ------
   thumbUrl(id: number): string {
-    return this.url(`/api/assets/${id}/thumb`);
+    return this.mediaUrl(`/api/assets/${id}/thumb`);
   }
   /** A 256 px square crop of one detected face — the avatar Winnow's People page draws. */
   faceThumbUrl(faceId: number): string {
     return this.url(`/api/faces/${faceId}/thumb`);
   }
   proxyUrl(id: number): string {
-    return this.url(`/api/assets/${id}/proxy`);
+    return this.mediaUrl(`/api/assets/${id}/proxy`);
   }
   originalUrl(id: number): string {
-    return this.url(`/api/assets/${id}/download`);
+    return this.mediaUrl(`/api/assets/${id}/download`);
   }
   sidecarUrl(id: number): string {
-    return this.url(`/api/sidecars/${id}/download`);
+    return this.mediaUrl(`/api/sidecars/${id}/download`);
   }
   /**
    * The same thumbnail, asked for again after a failed load.
@@ -879,7 +921,7 @@ export class WinnowClient {
   thumbRetryUrl(id: number, attempt: number): string {
     return attempt <= 1
       ? this.thumbUrl(id)
-      : this.url(`/api/assets/${id}/thumb`, { retry: attempt });
+      : this.mediaUrl(`/api/assets/${id}/thumb`, { retry: attempt });
   }
 
   /**
@@ -994,6 +1036,15 @@ export class WinnowClient {
     } catch {
       throw new WinnowError('protocol', `${url} did not return JSON.`, res.status);
     }
+  }
+
+  /**
+   * `GET /api/auth/me` — who this connection is. The one auth route an app
+   * token may read; asked on connect in token mode, since the capabilities
+   * sheet answers anyone and so cannot tell a good token from a bad one.
+   */
+  me(): Promise<unknown> {
+    return this.json(this.url('/api/auth/me'));
   }
 
   capabilities(): Promise<WinnowCapabilities> {
