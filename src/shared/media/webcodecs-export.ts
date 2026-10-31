@@ -731,7 +731,7 @@ export async function exportProcessedVideo(
     },
     audio: madeAudio
       ? {
-          codec: 'aac',
+          codec: madeAudio.codec,
           sampleRate: madeAudio.sampleRate,
           numberOfChannels: madeAudio.numberOfChannels,
         }

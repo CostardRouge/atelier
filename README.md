@@ -2967,7 +2967,8 @@ it and may grow blocks of its own.
   its captions as placeholders.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
-  export's AAC track (the music fades in and out).
+  export's sound track — AAC, or Opus in a browser that cannot encode AAC (the
+  music fades in and out).
 - **Effects.** Place sound effects at moments of the post (*Add an effect* puts
   one at the playhead): each is a file of your own — a click, a whoosh you
   like — or one of the suite's built-in synthesised sounds, with its time and

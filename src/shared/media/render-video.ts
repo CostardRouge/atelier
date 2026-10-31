@@ -147,7 +147,7 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
     // No audio track is declared unless there is audio to put in it: an empty
     // track would be a silent lie about what the file holds.
     audio: audio
-      ? { codec: 'aac', sampleRate: audio.sampleRate, numberOfChannels: audio.numberOfChannels }
+      ? { codec: audio.codec, sampleRate: audio.sampleRate, numberOfChannels: audio.numberOfChannels }
       : undefined,
     fastStart: 'in-memory',
     // An encoder that stamps its first packet before zero is rebased with the
