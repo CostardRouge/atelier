@@ -91,3 +91,18 @@ export function countedSpan(trip: TripDoc, sources: ScriptSources): CountedSpan 
   const skip = (sources.days?.skip ?? []).filter((d) => d >= from && d <= to);
   return { from, to, ...(skip.length ? { skip } : {}) };
 }
+
+/**
+ * The script with the wall chosen by hand: the choice kept in the series'
+ * sources (so the next counting keeps it) and the pictures it gives frozen
+ * at once, the other numbers untouched — what was hidden or picked is drawn,
+ * not counted.
+ */
+export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null, tiles: number[]): StoryScript {
+  const sources: ScriptSources = { ...(script.sources ?? {}) };
+  if (wall && (wall.skip?.length || Object.keys(wall.pick ?? {}).length)) sources.wall = wall;
+  else delete sources.wall;
+  const facts = script.facts ? { ...script.facts, ...(tiles.length ? { tiles } : {}) } : undefined;
+  if (facts && !tiles.length) delete facts.tiles;
+  return { ...script, sources, ...(facts ? { facts } : {}) };
+}

@@ -2,8 +2,9 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withWall } from '../../shared/story/sources';
 import DaysModal from './DaysModal';
+import WallModal from './WallModal';
 import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPicks } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
 import { TILES } from '../../shared/story/scenes/Hook';
@@ -43,6 +44,7 @@ export default function SourcesPanel({
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [counting, setCounting] = useState<Counting>({ state: 'idle' });
   const [choosingDays, setChoosingDays] = useState(false);
+  const [choosingWall, setChoosingWall] = useState(false);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   useEffect(() => {
     let alive = true;
@@ -116,7 +118,7 @@ export default function SourcesPanel({
           .catch(() => null),
       ]);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
-      const tiles = wallPicks(all, span, TILES.length);
+      const tiles = wallPicks(all, span, TILES.length, sources.wall);
       const before = script.facts?.values ?? null;
       onScript(
         withSeriesFacts(script, {
@@ -301,6 +303,29 @@ export default function SourcesPanel({
             </div>
           ))}
         </dl>
+      ) : null}
+      {wall && trip && connection ? (
+        <div className="flex items-center gap-2">
+          <span className="flex-1 min-w-0 text-2xs text-muted">
+            {sources.wall ? `Chosen by hand: ${sources.wall.skip?.length ?? 0} hidden, ${Object.keys(sources.wall.pick ?? {}).length} picked.` : 'Each day’s cover on the Winnow.'}
+          </span>
+          <Button size="sm" onClick={() => setChoosingWall(true)}>
+            Choose pictures…
+          </Button>
+          {choosingWall ? (
+            <WallModal
+              span={countedSpan(trip, sources)}
+              current={sources.wall}
+              tiles={TILES.length}
+              connection={connection}
+              onCancel={() => setChoosingWall(false)}
+              onApply={(chosen, picks) => {
+                setChoosingWall(false);
+                onScript(withWall(script, chosen, picks));
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
       {wall ? (
         <p className="m-0 text-2xs text-muted leading-relaxed" role="status">

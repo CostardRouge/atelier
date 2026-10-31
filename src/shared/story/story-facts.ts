@@ -78,12 +78,20 @@ export function factsFromCalendars(all: WinnowCalendar, photos: WinnowCalendar, 
  * days than the wall has tiles. The maintainer's pick (2026-10-31): his own
  * thumbnails, spread across every day, rather than invented colours.
  */
-export function wallPicks(all: WinnowCalendar, span: Span, n: number): number[] {
+export function wallPicks(
+  all: WinnowCalendar,
+  span: Span,
+  n: number,
+  chosen: { skip?: readonly number[]; pick?: Readonly<Record<string, number>> } = {},
+): number[] {
+  // The author's own picture for a day stands for its cover; a picture he hid takes its day off the wall.
   const days = all.days
     .filter((d) => counts(d.date, span) && d.count > 0 && d.cover_id > 0)
+    .map((d) => ({ date: d.date, id: chosen.pick?.[d.date] ?? d.cover_id }))
+    .filter((d) => !chosen.skip?.includes(d.id))
     .sort((a, b) => a.date.localeCompare(b.date));
   const picked = days.length <= n ? days : Array.from({ length: n }, (_, i) => days[Math.round((i * (days.length - 1)) / Math.max(1, n - 1))]);
-  return [...new Set(picked.map((d) => d.cover_id))];
+  return [...new Set(picked.map((d) => d.id))];
 }
 
 /** What changed between two countings, for the line under Count again: `[key, before, after]`. */

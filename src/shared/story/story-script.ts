@@ -72,6 +72,12 @@ export interface ScriptSources {
    * a first and last day, and days left out (`skip`, ISO dates).
    */
   days?: { from?: string; to?: string; skip?: string[] };
+  /**
+   * The wall's pictures as the author chose them: Winnow asset ids never to
+   * show (`skip`), and a picture of his own choosing for a day (`pick`,
+   * ISO day → asset id) in place of that day's cover.
+   */
+  wall?: { skip?: number[]; pick?: Record<string, number> };
 }
 
 /**
@@ -282,7 +288,15 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const skip = Array.isArray(days.skip) ? days.skip.map(day).filter((d): d is string => !!d) : [];
     if (from || to || skip.length) out.days = { ...(from ? { from } : {}), ...(to ? { to } : {}), ...(skip.length ? { skip } : {}) };
   }
-  return out.trip || out.winnow || out.map || out.days ? out : undefined;
+  const wall = raw.wall;
+  if (isObject(wall)) {
+    const id = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
+    const skip = Array.isArray(wall.skip) ? wall.skip.filter(id) : [];
+    const pick: Record<string, number> = {};
+    if (isObject(wall.pick)) for (const [d, v] of Object.entries(wall.pick)) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && id(v)) pick[d] = v;
+    if (skip.length || Object.keys(pick).length) out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}) };
+  }
+  return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
 }
 
 function readFacts(raw: unknown): ScriptFacts | undefined {

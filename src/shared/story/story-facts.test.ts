@@ -147,3 +147,13 @@ describe('days left out', () => {
     expect(geoFacts([g('2025-09-03'), g('2025-09-04'), g('2025-09-05')], span).holes).toEqual([['2025-09-03', '2025-09-05']]);
   });
 });
+
+describe('the wall chosen by hand', () => {
+  const all = { days: [{ date: '2025-09-03', count: 4, cover_id: 1 }, { date: '2025-09-04', count: 4, cover_id: 2 }, { date: '2025-09-05', count: 4, cover_id: 3 }], bounds: null };
+  const span = { from: '2025-09-03', to: '2025-09-05' };
+
+  it('shows a day’s picked picture in place of its cover, and leaves a hidden one’s day off', () => {
+    expect(wallPicks(all, span, 10, { pick: { '2025-09-04': 42 }, skip: [3] })).toEqual([1, 42]);
+    expect(wallPicks(all, span, 10, { skip: [42], pick: { '2025-09-04': 42 } })).toEqual([1, 3]);
+  });
+});

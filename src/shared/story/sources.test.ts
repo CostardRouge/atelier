@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources, withWall } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -137,5 +137,25 @@ describe('the days a series counts', () => {
     expect(parsed.ok && parsed.script.sources).toEqual({ days: { from: '2025-09-10', skip: ['2025-09-12'] } });
     const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 1 } } };
     expect(withSeriesSources(counted, { days: { skip: ['2025-09-12'] } }).facts).toBeUndefined();
+  });
+});
+
+describe('withWall', () => {
+  const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 3 }, tiles: [1, 2, 3] } };
+
+  it('keeps the choice, freezes its pictures, and leaves the numbers as they were', () => {
+    const next = withWall(counted, { skip: [3], pick: { '2025-09-04': 42 } }, [1, 42]);
+    expect(next.sources?.wall).toEqual({ skip: [3], pick: { '2025-09-04': 42 } });
+    expect(next.facts).toEqual({ at: 'x', values: { days: 3 }, tiles: [1, 42] });
+    expect(next.sources?.trip).toEqual(counted.sources?.trip);
+  });
+
+  it('forgets an empty choice', () => {
+    expect(withWall(counted, null, [1, 2, 3]).sources?.wall).toBeUndefined();
+  });
+
+  it('reads the choice from a script file, dropping what is not an id or a day', () => {
+    const parsed = parseScript({ ...base, sources: { wall: { skip: [3, -1, 'x'], pick: { '2025-09-04': 42, soon: 7, '2025-09-05': 0 } } } });
+    expect(parsed.ok && parsed.script.sources).toEqual({ wall: { skip: [3], pick: { '2025-09-04': 42 } } });
   });
 });
