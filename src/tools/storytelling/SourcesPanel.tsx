@@ -2,9 +2,11 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
-import { factChanges, factsFromCalendars, factText, gearFacts, geoFacts, wallPicks } from '../../shared/story/story-facts';
-import { tripFacts } from '../../shared/story/trip-map';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withWall } from '../../shared/story/sources';
+import DaysModal from './DaysModal';
+import WallModal from './WallModal';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPicks } from '../../shared/story/story-facts';
+import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
 import { TILES } from '../../shared/story/scenes/Hook';
 import type { WallProgress } from './wall-cache';
 import type { StoryScript } from '../../shared/story/story-script';
@@ -41,6 +43,8 @@ export default function SourcesPanel({
 }) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [counting, setCounting] = useState<Counting>({ state: 'idle' });
+  const [choosingDays, setChoosingDays] = useState(false);
+  const [choosingWall, setChoosingWall] = useState(false);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   useEffect(() => {
     let alive = true;
@@ -93,12 +97,13 @@ export default function SourcesPanel({
     setCounting({ state: 'busy' });
     try {
       const client = new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth });
+      // The days the kept stages cover; every stage = the trip's own span.
+      const span = countedSpan(trip, sources);
       const [all, photos] = await Promise.all([
-        client.calendar(trip.startDate, trip.endDate),
-        client.calendar(trip.startDate, trip.endDate, { mediaType: 'photo' }),
+        client.calendar(span.from, span.to),
+        client.calendar(span.from, span.to, { mediaType: 'photo' }),
       ]);
-      const span = { from: trip.startDate, to: trip.endDate };
-      const sumOf = (cal: typeof all) => cal.days.filter((d) => d.date >= span.from && d.date <= span.to).reduce((n, d) => n + d.count, 0);
+      const sumOf = (cal: typeof all) => cal.days.filter((d) => counts(d.date, span)).reduce((n, d) => n + d.count, 0);
       // The cameras (the library's busiest twelve, each counted over the trip's days) and the
       // positions by day. Either may be missing on an older instance: the totals stand without them.
       const [gear, geo] = await Promise.all([
@@ -112,8 +117,8 @@ export default function SourcesPanel({
           .then((days) => geoFacts(days, span))
           .catch(() => null),
       ]);
-      const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip), ...gear, ...(geo?.values ?? {}) };
-      const tiles = wallPicks(all, span, TILES.length);
+      const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
+      const tiles = wallPicks(all, span, TILES.length, sources.wall);
       const before = script.facts?.values ?? null;
       onScript(
         withSeriesFacts(script, {
@@ -146,7 +151,44 @@ export default function SourcesPanel({
           />
         </div>
         {trip ? (
-          <p className="m-0 text-2xs text-muted leading-relaxed">{tripLine(trip)}</p>
+          <>
+            <p className="m-0 text-2xs text-muted leading-relaxed">{tripLine(trip)}</p>
+            {trip.stages.length > 1 ? (
+              <fieldset className="m-0 p-0 border-0 flex flex-col gap-1">
+                <legend className="mb-1 text-2xs text-muted">Stages told — the route, its towns and the counted days</legend>
+                {trip.stages
+                  .slice()
+                  .sort((a, b) => a.startDate.localeCompare(b.startDate))
+                  .map((stage) => {
+                    const kept = !sources.trip?.stages || sources.trip.stages.includes(stage.id);
+                    return (
+                      <label key={stage.id} className="flex items-center gap-2 min-w-0 text-xs text-ink-soft cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={kept}
+                          onChange={() => {
+                            const all = trip.stages.map((s) => s.id);
+                            const now = sources.trip?.stages ?? all;
+                            const next = kept ? now.filter((id) => id !== stage.id) : [...now, stage.id];
+                            if (!next.length || !sources.trip) return;
+                            const rest = { id: sources.trip.id, name: sources.trip.name };
+                            onScript(
+                              withSeriesSources(script, {
+                                trip: next.length === all.length ? rest : { ...rest, stages: all.filter((id) => next.includes(id)) },
+                              }),
+                            );
+                          }}
+                        />
+                        <span className="min-w-0 truncate">{stageLabel(stage) || 'Unnamed stage'}</span>
+                        <span className="ml-auto shrink-0 font-mono text-2xs text-muted tabular-nums">
+                          {stage.startDate.slice(5)} → {stage.endDate.slice(5)}
+                        </span>
+                      </label>
+                    );
+                  })}
+              </fieldset>
+            ) : null}
+          </>
         ) : sources.trip && trips ? (
           <p className="m-0 text-2xs text-danger leading-relaxed">
             « {sources.trip.name} » is not in this browser. Open Trips here and import it, or choose another.
@@ -172,6 +214,67 @@ export default function SourcesPanel({
           </p>
         ) : null}
       </div>
+      {trip ? (
+        (() => {
+          const span = countedSpan(trip, sources);
+          const n = spanDays(span.from, span.to) - (span.skip?.length ?? 0);
+          return (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-ink-soft w-16">Days</span>
+              <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted tabular-nums" title="The days Count reads">
+                {span.from} → {span.to} · {n} day{n === 1 ? '' : 's'}
+                {span.skip?.length ? ` · ${span.skip.length} left out` : ''}
+              </span>
+              <Button size="sm" onClick={() => setChoosingDays(true)}>
+                Choose…
+              </Button>
+              {choosingDays ? (
+                <DaysModal
+                  base={stagesSpan(trip, sources)}
+                  current={sources.days}
+                  connection={connection}
+                  onCancel={() => setChoosingDays(false)}
+                  onApply={(days) => {
+                    setChoosingDays(false);
+                    onScript(withSeriesSources(script, { days }));
+                  }}
+                />
+              ) : null}
+            </div>
+          );
+        })()
+      ) : null}
+      {sources.trip ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-ink-soft w-16">Names</span>
+            <SelectField<MapPoints>
+              label="Which points the map names"
+              value={sources.map?.points ?? 'ends'}
+              options={[
+                { id: 'ends', label: 'Where stages start and end' },
+                { id: 'starts', label: 'Where stages start' },
+                { id: 'places', label: 'Every place' },
+              ]}
+              onChange={(points) => onScript(withSeriesSources(script, { map: { ...sources.map, points } }))}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-ink-soft w-16">Says</span>
+            <SelectField<MapLabel>
+              label="What each named point says"
+              value={sources.map?.label ?? 'place'}
+              options={[
+                { id: 'place', label: 'The place' },
+                { id: 'stage', label: 'The stage' },
+                { id: 'place-date', label: 'The place and its day' },
+                { id: 'none', label: 'Nothing — a dot' },
+              ]}
+              onChange={(label) => onScript(withSeriesSources(script, { map: { ...sources.map, label } }))}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" onClick={() => void count()} disabled={blocked !== null || !trip || counting.state === 'busy'}>
           {counting.state === 'busy' ? 'Counting…' : facts ? 'Count again' : 'Count'}
@@ -200,6 +303,29 @@ export default function SourcesPanel({
             </div>
           ))}
         </dl>
+      ) : null}
+      {wall && trip && connection ? (
+        <div className="flex items-center gap-2">
+          <span className="flex-1 min-w-0 text-2xs text-muted">
+            {sources.wall ? `Chosen by hand: ${sources.wall.skip?.length ?? 0} hidden, ${Object.keys(sources.wall.pick ?? {}).length} picked.` : 'Each day’s cover on the Winnow.'}
+          </span>
+          <Button size="sm" onClick={() => setChoosingWall(true)}>
+            Choose pictures…
+          </Button>
+          {choosingWall ? (
+            <WallModal
+              span={countedSpan(trip, sources)}
+              current={sources.wall}
+              tiles={TILES.length}
+              connection={connection}
+              onCancel={() => setChoosingWall(false)}
+              onApply={(chosen, picks) => {
+                setChoosingWall(false);
+                onScript(withWall(script, chosen, picks));
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
       {wall ? (
         <p className="m-0 text-2xs text-muted leading-relaxed" role="status">

@@ -52,10 +52,32 @@ export interface ScriptPost {
  * stays in this browser, the Winnow behind its connection.
  */
 export interface ScriptSources {
-  /** The trip's id, and the name it had, so a trip gone from this device is still named. */
-  trip?: { id: string; name: string };
+  /**
+   * The trip's id, and the name it had, so a trip gone from this device is
+   * still named; `stages` keeps only those stages (by id) for the route, the
+   * towns and the counted days — a trip that begins in Bali told from
+   * Australia. Absent = every stage.
+   */
+  trip?: { id: string; name: string; stages?: string[] };
   /** A connected Winnow, by its source id (its host). */
   winnow?: { source: string };
+  /**
+   * What the map names (`trip-map.ts`): which points — where each stage
+   * starts and ends (`ends`, the default), starts only, or every place — and
+   * what each says: the place, the stage, the place and its day, or nothing.
+   */
+  map?: { points?: 'ends' | 'starts' | 'places'; label?: 'place' | 'stage' | 'place-date' | 'none' };
+  /**
+   * The days counted, when the series says so rather than its kept stages:
+   * a first and last day, and days left out (`skip`, ISO dates).
+   */
+  days?: { from?: string; to?: string; skip?: string[] };
+  /**
+   * The wall's pictures as the author chose them: Winnow asset ids never to
+   * show (`skip`), and a picture of his own choosing for a day (`pick`,
+   * ISO day → asset id) in place of that day's cover.
+   */
+  wall?: { skip?: number[]; pick?: Record<string, number> };
 }
 
 /**
@@ -245,11 +267,36 @@ function readSources(raw: unknown): ScriptSources | undefined {
   const out: ScriptSources = {};
   const trip = raw.trip;
   if (isObject(trip) && typeof trip.id === 'string' && trip.id) {
-    out.trip = { id: trip.id, name: typeof trip.name === 'string' ? trip.name : '' };
+    const stages = Array.isArray(trip.stages) ? trip.stages.filter((s): s is string => typeof s === 'string' && s.length > 0) : null;
+    out.trip = { id: trip.id, name: typeof trip.name === 'string' ? trip.name : '', ...(stages ? { stages } : {}) };
   }
   const winnow = raw.winnow;
   if (isObject(winnow) && typeof winnow.source === 'string' && winnow.source) out.winnow = { source: winnow.source };
-  return out.trip || out.winnow ? out : undefined;
+  const map = raw.map;
+  if (isObject(map)) {
+    const points = ['ends', 'starts', 'places'].includes(map.points as string) ? (map.points as 'ends' | 'starts' | 'places') : undefined;
+    const label = ['place', 'stage', 'place-date', 'none'].includes(map.label as string)
+      ? (map.label as 'place' | 'stage' | 'place-date' | 'none')
+      : undefined;
+    if (points || label) out.map = { ...(points ? { points } : {}), ...(label ? { label } : {}) };
+  }
+  const days = raw.days;
+  if (isObject(days)) {
+    const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+    const from = day(days.from);
+    const to = day(days.to);
+    const skip = Array.isArray(days.skip) ? days.skip.map(day).filter((d): d is string => !!d) : [];
+    if (from || to || skip.length) out.days = { ...(from ? { from } : {}), ...(to ? { to } : {}), ...(skip.length ? { skip } : {}) };
+  }
+  const wall = raw.wall;
+  if (isObject(wall)) {
+    const id = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
+    const skip = Array.isArray(wall.skip) ? wall.skip.filter(id) : [];
+    const pick: Record<string, number> = {};
+    if (isObject(wall.pick)) for (const [d, v] of Object.entries(wall.pick)) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && id(v)) pick[d] = v;
+    if (skip.length || Object.keys(pick).length) out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}) };
+  }
+  return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
 }
 
 function readFacts(raw: unknown): ScriptFacts | undefined {

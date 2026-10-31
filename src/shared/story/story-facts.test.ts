@@ -135,3 +135,25 @@ describe('the season recap', () => {
     expect(assemble(reg[1], given, reg).blocks[0]?.params?.episodes).toEqual([{ number: 'X', title: 'Y', line: 'Z' }]);
   });
 });
+
+describe('days left out', () => {
+  it('are not counted, nor walled, nor holes', () => {
+    const span = { from: '2025-09-03', to: '2025-09-05', skip: ['2025-09-04'] };
+    const all = { days: [{ date: '2025-09-03', count: 10, cover_id: 1 }, { date: '2025-09-04', count: 7, cover_id: 2 }, { date: '2025-09-05', count: 3, cover_id: 3 }], bounds: null };
+    const photos = { days: [{ date: '2025-09-04', count: 7, cover_id: 2 }], bounds: null };
+    expect(factsFromCalendars(all, photos, span)).toEqual({ 'media.total': 13, 'media.photo': 0, 'media.video': 13, days: 2, 'trip.days': 2 });
+    expect(wallPicks(all, span, 10)).toEqual([1, 3]);
+    const g = (date: string) => ({ date, lat: null, lon: null, count: 2, measured: 0, source: null });
+    expect(geoFacts([g('2025-09-03'), g('2025-09-04'), g('2025-09-05')], span).holes).toEqual([['2025-09-03', '2025-09-05']]);
+  });
+});
+
+describe('the wall chosen by hand', () => {
+  const all = { days: [{ date: '2025-09-03', count: 4, cover_id: 1 }, { date: '2025-09-04', count: 4, cover_id: 2 }, { date: '2025-09-05', count: 4, cover_id: 3 }], bounds: null };
+  const span = { from: '2025-09-03', to: '2025-09-05' };
+
+  it('shows a day’s picked picture in place of its cover, and leaves a hidden one’s day off', () => {
+    expect(wallPicks(all, span, 10, { pick: { '2025-09-04': 42 }, skip: [3] })).toEqual([1, 42]);
+    expect(wallPicks(all, span, 10, { skip: [42], pick: { '2025-09-04': 42 } })).toEqual([1, 3]);
+  });
+});

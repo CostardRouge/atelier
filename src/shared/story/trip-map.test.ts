@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeTripRoad, type RoadFix } from '../roadtrip/road-track';
 import { createTripDoc, type TripDoc, type TripPlace } from '../roadtrip/trip-types';
 import { proj, setMap, STOP_REACH, STOP_XY, ROUTE, STOPS } from './geo';
-import { gapsOf, stageEndStops, tripFacts, tripMap, tripRoadPoints, withGaps } from './trip-map';
+import { gapsOf, stageEndStops, tripFacts, tripMap, tripRoadPoints, tripStops, withGaps } from './trip-map';
 
 const place = (name: string, lat: number, lon: number): TripPlace => ({ id: name, name, state: '', coords: { lat, lon } });
 const SYD = place('Sydney', -33.87, 151.21);
@@ -140,5 +140,45 @@ describe('gapsOf', () => {
     expect(out.blocks[1].params).toEqual({ gaps: [[0, 0.1]] });
     expect(out.blocks[2]).toBe(ep.blocks[2]);
     expect(withGaps(ep, null)).toBe(ep);
+  });
+});
+
+describe('the map a series chooses', () => {
+  /** Bali first, then Australia: the maintainer's real case. */
+  function withBali(): TripDoc {
+    const t = trip();
+    t.startDate = '2025-08-20';
+    t.stages = [
+      { id: 'bali', name: 'Bali', region: '', startDate: '2025-08-20', endDate: '2025-09-02', places: [place('Ubud', -8.5, 115.26), place('Canggu', -8.65, 115.13)] },
+      ...t.stages,
+    ];
+    return t;
+  }
+
+  it('leaves out the stages it does not keep, from the towns and the road', () => {
+    const t = withBali();
+    const fixes = [{ t: Date.UTC(2025, 7, 25) / 1000, lat: -8.5, lon: 115.26 }, { t: Date.UTC(2025, 7, 26) / 1000, lat: -8.65, lon: 115.13 }, ...drive()];
+    t.road = makeTripRoad(fixes, t, null, 0);
+    const all = tripMap(t)!;
+    expect(all.stops[0][0]).toBe('Ubud');
+    expect(all.road[0]).toEqual([115.26, -8.5]);
+    const told = tripMap(t, { stages: ['s1', 's2'] })!;
+    expect(told.stops.map((s) => s[0])).toEqual(['Sydney', 'Melbourne', 'Adélaïde']);
+    expect(told.road[0]).toEqual([151.21, -33.87]);
+    expect(tripFacts(t, { stages: ['s1', 's2'] })['trip.stages']).toBe(2);
+    expect(tripFacts(t, { stages: ['s1', 's2'] })['trip.km']).toBeLessThan(tripFacts(t)['trip.km']);
+  });
+
+  it('names stage starts only, or every place', () => {
+    expect(tripStops(trip(), { points: 'starts' }).map((s) => s[0])).toEqual(['Sydney', 'Melbourne']);
+    expect(tripStops(trip(), { points: 'places' }).map((s) => s[0])).toEqual(['Sydney', 'Canberra', 'Melbourne', 'Adélaïde']);
+  });
+
+  it('says the stage, the place and its day, or nothing', () => {
+    const t = trip();
+    t.stages[1].name = 'La côte est';
+    expect(tripStops(t, { points: 'starts', label: 'stage' }).map((s) => s[0])).toEqual(['La côte est', 'Melbourne → Adélaïde']);
+    expect(tripStops(t, { label: 'place-date' })[0][0]).toMatch(/^Sydney · 03 sept/);
+    expect(tripStops(t, { label: 'none' }).every((s) => s[0] === '')).toBe(true);
   });
 });

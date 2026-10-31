@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources, withWall } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -94,5 +94,68 @@ describe('withSeriesFacts', () => {
     const next = withSeriesFacts(script, { at: 'y', from: 'Australie · w', values: { days: 2 } });
     expect(next.facts).toEqual({ at: 'y', from: 'Australie · w', values: { days: 2 } });
     expect(next.sources).toEqual(script.sources);
+  });
+});
+
+describe('the stages and the map a series keeps', () => {
+  it('reads kept stages and the map’s names from a script file', () => {
+    const parsed = parseScript({ ...base, sources: { trip: { id: 't', name: 'A', stages: ['s1', 3, ''] }, map: { points: 'places', label: 'shout' } } });
+    expect(parsed.ok && parsed.script.sources).toEqual({ trip: { id: 't', name: 'A', stages: ['s1'] }, map: { points: 'places' } });
+  });
+
+  it('keeps the numbers when only the map’s names change, drops them when the stages do', () => {
+    const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 1 } } };
+    expect(withSeriesSources(counted, { map: { label: 'stage' } }).facts).toEqual(counted.facts);
+    expect(withSeriesSources(counted, { trip: { id: 't1', name: 'A', stages: ['s1'] } }).facts).toBeUndefined();
+  });
+
+  it('counts the kept stages’ days', () => {
+    const t = createTripDoc('Bali puis Australie', '2025-08-20', '2026-02-28');
+    t.stages = [
+      { id: 'bali', name: 'Bali', region: '', startDate: '2025-08-20', endDate: '2025-09-02', places: [] },
+      { id: 'au', name: 'Australie', region: '', startDate: '2025-09-03', endDate: '2026-02-28', places: [] },
+    ];
+    expect(countedSpan(t, { trip: { id: t.id, name: 'x', stages: ['au'] } })).toEqual({ from: '2025-09-03', to: '2026-02-28' });
+    expect(countedSpan(t, { trip: { id: t.id, name: 'x' } })).toEqual({ from: '2025-08-20', to: '2026-02-28' });
+    expect(mapChoiceOf({ trip: { id: t.id, name: 'x', stages: ['au'] }, map: { label: 'none' } })).toEqual({ stages: ['au'], label: 'none' });
+  });
+});
+
+describe('the days a series counts', () => {
+  const t = createTripDoc('Australie', '2025-09-03', '2025-09-30');
+
+  it('takes its own first and last day, and leaves the skipped days inside them out', () => {
+    expect(countedSpan(t, { trip: { id: t.id, name: 'x' }, days: { from: '2025-09-10', skip: ['2025-09-12', '2025-09-01'] } })).toEqual({
+      from: '2025-09-10',
+      to: '2025-09-30',
+      skip: ['2025-09-12'],
+    });
+  });
+
+  it('reads the days from a script file, and drops the numbers when they change', () => {
+    const parsed = parseScript({ ...base, sources: { days: { from: '2025-09-10', to: 'soon', skip: ['2025-09-12', 4] } } });
+    expect(parsed.ok && parsed.script.sources).toEqual({ days: { from: '2025-09-10', skip: ['2025-09-12'] } });
+    const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 1 } } };
+    expect(withSeriesSources(counted, { days: { skip: ['2025-09-12'] } }).facts).toBeUndefined();
+  });
+});
+
+describe('withWall', () => {
+  const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 3 }, tiles: [1, 2, 3] } };
+
+  it('keeps the choice, freezes its pictures, and leaves the numbers as they were', () => {
+    const next = withWall(counted, { skip: [3], pick: { '2025-09-04': 42 } }, [1, 42]);
+    expect(next.sources?.wall).toEqual({ skip: [3], pick: { '2025-09-04': 42 } });
+    expect(next.facts).toEqual({ at: 'x', values: { days: 3 }, tiles: [1, 42] });
+    expect(next.sources?.trip).toEqual(counted.sources?.trip);
+  });
+
+  it('forgets an empty choice', () => {
+    expect(withWall(counted, null, [1, 2, 3]).sources?.wall).toBeUndefined();
+  });
+
+  it('reads the choice from a script file, dropping what is not an id or a day', () => {
+    const parsed = parseScript({ ...base, sources: { wall: { skip: [3, -1, 'x'], pick: { '2025-09-04': 42, soon: 7, '2025-09-05': 0 } } } });
+    expect(parsed.ok && parsed.script.sources).toEqual({ wall: { skip: [3], pick: { '2025-09-04': 42 } } });
   });
 });

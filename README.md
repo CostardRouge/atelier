@@ -2975,7 +2975,14 @@ it and may grow blocks of its own.
   in your script; the trip and the pictures stay on this device. With a trip
   chosen, the maps follow its road — the GPS track imported in Trips, read in
   the trip's own mode — and name the towns where a stage starts or ends; without
-  one, they join the stops written in the script. *Count* asks the Winnow how
+  one, they join the stops written in the script. Untick a stage to leave it
+  out of the route, its towns and the counted days (a trip that begins in Bali,
+  told from Australia). *Names* chooses which points are named (where stages
+  start and end, where they start, every place) and *Says* what each says (the
+  place, the stage, the place and its day, or nothing). *Days* → *Choose…*
+  sets exactly which days are counted: a first and last day, and days left out
+  one by one on a calendar that shows each day's media when the Winnow is
+  connected. *Count* asks the Winnow how
   many media the trip's days hold — a RAW + JPEG pair counting once, as Winnow
   counts it — and keeps the numbers in your script with the date they were
   counted, so a post exports the same tomorrow; *Count again* replaces them and
@@ -2989,7 +2996,10 @@ it and may grow blocks of its own.
   wall's pictures: each day's cover on the Winnow, one a day in order (thinned
   evenly past the wall's 180 tiles). Small squares of them are kept in this
   browser, so the wall draws — and exports — without asking the Winnow again;
-  *Forget* on the script clears them. Counting also finds the days with media
+  *Forget* on the script clears them. *Choose pictures…* shows the wall's
+  picture for each counted day: click one to hide it, or *Other* to pick
+  another picture of that day; the choice is kept in your script and the next
+  counting respects it. Counting also finds the days with media
   but no position: a map with holes (`map-holes`) that the script leaves without
   `gaps` draws them where the road was driven on those days. A season recap the
   script does not spell out lists the season's posts, their titles and cover
