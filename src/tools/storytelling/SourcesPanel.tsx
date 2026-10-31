@@ -2,8 +2,9 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
-import { factChanges, factsFromCalendars, factText, gearFacts, geoFacts, wallPicks } from '../../shared/story/story-facts';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
+import DaysModal from './DaysModal';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPicks } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
 import { TILES } from '../../shared/story/scenes/Hook';
 import type { WallProgress } from './wall-cache';
@@ -41,6 +42,7 @@ export default function SourcesPanel({
 }) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [counting, setCounting] = useState<Counting>({ state: 'idle' });
+  const [choosingDays, setChoosingDays] = useState(false);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   useEffect(() => {
     let alive = true;
@@ -99,7 +101,7 @@ export default function SourcesPanel({
         client.calendar(span.from, span.to),
         client.calendar(span.from, span.to, { mediaType: 'photo' }),
       ]);
-      const sumOf = (cal: typeof all) => cal.days.filter((d) => d.date >= span.from && d.date <= span.to).reduce((n, d) => n + d.count, 0);
+      const sumOf = (cal: typeof all) => cal.days.filter((d) => counts(d.date, span)).reduce((n, d) => n + d.count, 0);
       // The cameras (the library's busiest twelve, each counted over the trip's days) and the
       // positions by day. Either may be missing on an older instance: the totals stand without them.
       const [gear, geo] = await Promise.all([
@@ -210,6 +212,36 @@ export default function SourcesPanel({
           </p>
         ) : null}
       </div>
+      {trip ? (
+        (() => {
+          const span = countedSpan(trip, sources);
+          const n = spanDays(span.from, span.to) - (span.skip?.length ?? 0);
+          return (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-ink-soft w-16">Days</span>
+              <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted tabular-nums" title="The days Count reads">
+                {span.from} → {span.to} · {n} day{n === 1 ? '' : 's'}
+                {span.skip?.length ? ` · ${span.skip.length} left out` : ''}
+              </span>
+              <Button size="sm" onClick={() => setChoosingDays(true)}>
+                Choose…
+              </Button>
+              {choosingDays ? (
+                <DaysModal
+                  base={stagesSpan(trip, sources)}
+                  current={sources.days}
+                  connection={connection}
+                  onCancel={() => setChoosingDays(false)}
+                  onApply={(days) => {
+                    setChoosingDays(false);
+                    onScript(withSeriesSources(script, { days }));
+                  }}
+                />
+              ) : null}
+            </div>
+          );
+        })()
+      ) : null}
       {sources.trip ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">

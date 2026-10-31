@@ -33,12 +33,12 @@ export function withSeriesSources(script: StoryScript, change: { [K in keyof Scr
     else if (value !== undefined) (next as Record<string, unknown>)[key] = value;
   }
   // The map's names are drawn, not counted: changing them keeps the numbers.
-  const counted = (s: ScriptSources) => JSON.stringify({ trip: s.trip ?? null, winnow: s.winnow ?? null });
+  const counted = (s: ScriptSources) => JSON.stringify({ trip: s.trip ?? null, winnow: s.winnow ?? null, days: s.days ?? null });
   const same = counted(next) === counted(script.sources ?? {});
   const out: StoryScript = { ...script };
   delete out.sources;
   delete out.facts;
-  if (next.trip || next.winnow || next.map) out.sources = next;
+  if (next.trip || next.winnow || next.map || next.days) out.sources = next;
   if (same && script.facts) out.facts = script.facts;
   return out;
 }
@@ -65,8 +65,15 @@ export function mapChoiceOf(sources: ScriptSources): MapChoice {
   return { ...(sources.trip?.stages ? { stages: sources.trip.stages } : {}), ...(sources.map ?? {}) };
 }
 
-/** The days a series counts: from its first kept stage to its last, else the trip's whole span. */
-export function countedSpan(trip: TripDoc, sources: ScriptSources): { from: string; to: string } {
+/** The days a series counts, as `story-facts.ts` reads them: a first and last day, and days left out. */
+export interface CountedSpan {
+  from: string;
+  to: string;
+  skip?: readonly string[];
+}
+
+/** The days its kept stages cover: their first to last day, else the trip's whole span. */
+export function stagesSpan(trip: TripDoc, sources: ScriptSources): { from: string; to: string } {
   const choice = mapChoiceOf(sources);
   const stages = chosenStages(trip, choice);
   if (!choice.stages || !stages.length) return { from: trip.startDate, to: trip.endDate };
@@ -74,4 +81,13 @@ export function countedSpan(trip: TripDoc, sources: ScriptSources): { from: stri
     from: stages.reduce((m, s) => (s.startDate < m ? s.startDate : m), stages[0].startDate),
     to: stages.reduce((m, s) => (s.endDate > m ? s.endDate : m), stages[0].endDate),
   };
+}
+
+/** The days a series counts: its own first and last day and the days it leaves out, over its kept stages' span. */
+export function countedSpan(trip: TripDoc, sources: ScriptSources): CountedSpan {
+  const base = stagesSpan(trip, sources);
+  const from = sources.days?.from ?? base.from;
+  const to = sources.days?.to ?? base.to;
+  const skip = (sources.days?.skip ?? []).filter((d) => d >= from && d <= to);
+  return { from, to, ...(skip.length ? { skip } : {}) };
 }

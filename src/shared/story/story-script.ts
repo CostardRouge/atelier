@@ -67,6 +67,11 @@ export interface ScriptSources {
    * what each says: the place, the stage, the place and its day, or nothing.
    */
   map?: { points?: 'ends' | 'starts' | 'places'; label?: 'place' | 'stage' | 'place-date' | 'none' };
+  /**
+   * The days counted, when the series says so rather than its kept stages:
+   * a first and last day, and days left out (`skip`, ISO dates).
+   */
+  days?: { from?: string; to?: string; skip?: string[] };
 }
 
 /**
@@ -269,7 +274,15 @@ function readSources(raw: unknown): ScriptSources | undefined {
       : undefined;
     if (points || label) out.map = { ...(points ? { points } : {}), ...(label ? { label } : {}) };
   }
-  return out.trip || out.winnow || out.map ? out : undefined;
+  const days = raw.days;
+  if (isObject(days)) {
+    const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+    const from = day(days.from);
+    const to = day(days.to);
+    const skip = Array.isArray(days.skip) ? days.skip.map(day).filter((d): d is string => !!d) : [];
+    if (from || to || skip.length) out.days = { ...(from ? { from } : {}), ...(to ? { to } : {}), ...(skip.length ? { skip } : {}) };
+  }
+  return out.trip || out.winnow || out.map || out.days ? out : undefined;
 }
 
 function readFacts(raw: unknown): ScriptFacts | undefined {

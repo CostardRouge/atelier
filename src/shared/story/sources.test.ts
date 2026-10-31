@@ -120,3 +120,22 @@ describe('the stages and the map a series keeps', () => {
     expect(mapChoiceOf({ trip: { id: t.id, name: 'x', stages: ['au'] }, map: { label: 'none' } })).toEqual({ stages: ['au'], label: 'none' });
   });
 });
+
+describe('the days a series counts', () => {
+  const t = createTripDoc('Australie', '2025-09-03', '2025-09-30');
+
+  it('takes its own first and last day, and leaves the skipped days inside them out', () => {
+    expect(countedSpan(t, { trip: { id: t.id, name: 'x' }, days: { from: '2025-09-10', skip: ['2025-09-12', '2025-09-01'] } })).toEqual({
+      from: '2025-09-10',
+      to: '2025-09-30',
+      skip: ['2025-09-12'],
+    });
+  });
+
+  it('reads the days from a script file, and drops the numbers when they change', () => {
+    const parsed = parseScript({ ...base, sources: { days: { from: '2025-09-10', to: 'soon', skip: ['2025-09-12', 4] } } });
+    expect(parsed.ok && parsed.script.sources).toEqual({ days: { from: '2025-09-10', skip: ['2025-09-12'] } });
+    const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 1 } } };
+    expect(withSeriesSources(counted, { days: { skip: ['2025-09-12'] } }).facts).toBeUndefined();
+  });
+});

@@ -37,6 +37,16 @@ export function fillParams(value: unknown, values: FactValues | null): unknown {
   return value;
 }
 
+/** The days a series counts: a first and last day, both included, and days left out. */
+export interface Span {
+  from: string;
+  to: string;
+  skip?: readonly string[];
+}
+
+/** Whether a day is counted. */
+export const counts = (date: string, span: Span): boolean => date >= span.from && date <= span.to && !span.skip?.includes(date);
+
 /** Calendar days from `from` to `to`, both included. */
 export function spanDays(from: string, to: string): number {
   const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
@@ -48,8 +58,8 @@ export function spanDays(from: string, to: string): number {
  * span — every media, then the photographs alone. A RAW + JPEG pair counts
  * once, as Winnow's own day list counts it.
  */
-export function factsFromCalendars(all: WinnowCalendar, photos: WinnowCalendar, span: { from: string; to: string }): Record<string, number> {
-  const inSpan = (d: { date: string }) => d.date >= span.from && d.date <= span.to;
+export function factsFromCalendars(all: WinnowCalendar, photos: WinnowCalendar, span: Span): Record<string, number> {
+  const inSpan = (d: { date: string }) => counts(d.date, span);
   const days = all.days.filter((d) => inSpan(d) && d.count > 0);
   const total = days.reduce((n, d) => n + d.count, 0);
   const photo = photos.days.filter(inSpan).reduce((n, d) => n + d.count, 0);
@@ -58,7 +68,7 @@ export function factsFromCalendars(all: WinnowCalendar, photos: WinnowCalendar, 
     'media.photo': photo,
     'media.video': Math.max(0, total - photo),
     days: days.length,
-    'trip.days': spanDays(span.from, span.to),
+    'trip.days': spanDays(span.from, span.to) - (span.skip?.filter((d) => d >= span.from && d <= span.to).length ?? 0),
   };
 }
 
@@ -68,9 +78,9 @@ export function factsFromCalendars(all: WinnowCalendar, photos: WinnowCalendar, 
  * days than the wall has tiles. The maintainer's pick (2026-10-31): his own
  * thumbnails, spread across every day, rather than invented colours.
  */
-export function wallPicks(all: WinnowCalendar, span: { from: string; to: string }, n: number): number[] {
+export function wallPicks(all: WinnowCalendar, span: Span, n: number): number[] {
   const days = all.days
-    .filter((d) => d.date >= span.from && d.date <= span.to && d.count > 0 && d.cover_id > 0)
+    .filter((d) => counts(d.date, span) && d.count > 0 && d.cover_id > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
   const picked = days.length <= n ? days : Array.from({ length: n }, (_, i) => days[Math.round((i * (days.length - 1)) / Math.max(1, n - 1))]);
   return [...new Set(picked.map((d) => d.cover_id))];
@@ -100,8 +110,8 @@ export function gearFacts(counts: readonly (readonly [string, number])[]): Recor
  * with no media between two unplaced days do not close a hole: nothing says
  * where those were either.
  */
-export function geoFacts(days: readonly WinnowGeoDay[], span: { from: string; to: string }): { values: Record<string, number>; holes: [string, string][] } {
-  const shot = days.filter((d) => d.date >= span.from && d.date <= span.to && d.count > 0).sort((a, b) => a.date.localeCompare(b.date));
+export function geoFacts(days: readonly WinnowGeoDay[], span: Span): { values: Record<string, number>; holes: [string, string][] } {
+  const shot = days.filter((d) => counts(d.date, span) && d.count > 0).sort((a, b) => a.date.localeCompare(b.date));
   const placed = (d: WinnowGeoDay) => d.lat !== null && d.lon !== null;
   const holes: [string, string][] = [];
   shot.forEach((d, i) => {

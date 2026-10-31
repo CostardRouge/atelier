@@ -2979,7 +2979,10 @@ it and may grow blocks of its own.
   out of the route, its towns and the counted days (a trip that begins in Bali,
   told from Australia). *Names* chooses which points are named (where stages
   start and end, where they start, every place) and *Says* what each says (the
-  place, the stage, the place and its day, or nothing). *Count* asks the Winnow how
+  place, the stage, the place and its day, or nothing). *Days* → *Choose…*
+  sets exactly which days are counted: a first and last day, and days left out
+  one by one on a calendar that shows each day's media when the Winnow is
+  connected. *Count* asks the Winnow how
   many media the trip's days hold — a RAW + JPEG pair counting once, as Winnow
   counts it — and keeps the numbers in your script with the date they were
   counted, so a post exports the same tomorrow; *Count again* replaces them and
