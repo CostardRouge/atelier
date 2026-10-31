@@ -20,14 +20,33 @@ export const COLS = 10,
   CELL = 1080 / COLS,
   ROWS = Math.ceil(1920 / CELL) + 1;
 
+/**
+ * The author's own pictures for the tiles (`compose.ts` sets them from the
+ * series' counted `tiles`, `wall-cache.ts`), square and in day order; a tile
+ * without one keeps its colour. Empty = the invented colours, as before.
+ */
+let WALL: readonly (CanvasImageSource | null)[] = [];
+export function setWall(images: readonly (CanvasImageSource | null)[] | null | undefined) {
+  WALL = images ?? [];
+}
+
 /** v2 deviation: one extra column on the left (col −1). The page's end framing is offset by
  * (54, −66) px, which left a bare 54 px strip on the left edge of the wall. */
 export function drawTiles(c: Ctx, alphaOf: (col: number, r: number, tl: Tile) => number) {
   for (let r = 0; r < ROWS; r++)
     for (let col = -1; col < COLS; col++) {
-      const tl = TILES[(r * COLS + ((col + COLS) % COLS)) % TILES.length],
+      const k = (r * COLS + ((col + COLS) % COLS)) % TILES.length,
+        tl = TILES[k],
         a = alphaOf(col, r, tl);
       if (a <= 0) continue;
+      const img = WALL.length ? WALL[k % WALL.length] : null;
+      if (img) {
+        c.save();
+        c.globalAlpha *= Math.min(1, a);
+        c.drawImage(img, col * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
+        c.restore();
+        continue;
+      }
       c.fillStyle = tileColor(tl, a);
       c.fillRect(col * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
     }

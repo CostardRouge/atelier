@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { factChanges, factsFromCalendars, factText, fillParams, fillText, spanDays } from './story-facts';
+import { factChanges, factsFromCalendars, factText, fillParams, fillText, spanDays, wallPicks } from './story-facts';
 import { assemble, SCRIPT_KIND, type PostSkeleton, type StoryScript } from './story-script';
 
 const values = { 'media.total': 98412, days: 178 };
@@ -79,5 +79,21 @@ describe('assemble with facts', () => {
   it('prefers the post’s own counting', () => {
     const own = { ...script, posts: { a: { ...script.posts.a, facts: { at: 'x', values: { 'media.total': 5, days: 1 } } } } };
     expect(assemble(skeleton, own, [skeleton]).blocks[0]?.params?.count).toBe(5);
+  });
+});
+
+describe('wallPicks', () => {
+  const day = (date: string, cover_id: number, count = 3) => ({ date, count, cover_id });
+  const span = { from: '2025-09-01', to: '2025-09-30' };
+
+  it('takes each day’s cover in day order, inside the span, skipping empty days', () => {
+    const cal = { days: [day('2025-09-03', 30), day('2025-08-31', 9), day('2025-09-01', 10), day('2025-09-02', 20, 0)], bounds: null };
+    expect(wallPicks(cal, span, 180)).toEqual([10, 30]);
+  });
+
+  it('thins evenly to the wall’s size, keeping the first and last day', () => {
+    const days = Array.from({ length: 30 }, (_, i) => day(`2025-09-${String(i + 1).padStart(2, '0')}`, 100 + i));
+    const picks = wallPicks({ days, bounds: null }, span, 4);
+    expect(picks).toEqual([100, 110, 119, 129]);
   });
 });

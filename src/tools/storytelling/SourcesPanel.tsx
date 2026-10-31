@@ -3,7 +3,9 @@ import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
 import { factsOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources } from '../../shared/story/sources';
-import { factChanges, factsFromCalendars, factText } from '../../shared/story/story-facts';
+import { factChanges, factsFromCalendars, factText, wallPicks } from '../../shared/story/story-facts';
+import { TILES } from '../../shared/story/scenes/Hook';
+import type { WallProgress } from './wall-cache';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import { Readout, SelectField } from '../../shared/ui/Inspector';
@@ -26,10 +28,13 @@ export default function SourcesPanel({
   postId,
   script,
   onScript,
+  wall,
 }: {
   postId: string;
   script: StoryScript | null;
   onScript: (script: StoryScript) => void;
+  /** How far the wall's pictures have come in (`use-wall.ts`); null before a counting chose them. */
+  wall: WallProgress | null;
 }) {
   const [trips, setTrips] = useState<TripDoc[] | null>(null);
   const [counting, setCounting] = useState<Counting>({ state: 'idle' });
@@ -89,9 +94,18 @@ export default function SourcesPanel({
         client.calendar(trip.startDate, trip.endDate),
         client.calendar(trip.startDate, trip.endDate, { mediaType: 'photo' }),
       ]);
-      const values = factsFromCalendars(all, photos, { from: trip.startDate, to: trip.endDate });
+      const span = { from: trip.startDate, to: trip.endDate };
+      const values = factsFromCalendars(all, photos, span);
+      const tiles = wallPicks(all, span, TILES.length);
       const before = script.facts?.values ?? null;
-      onScript(withSeriesFacts(script, { at: new Date().toISOString(), from: `${trip.name} · ${connection.id}`, values }));
+      onScript(
+        withSeriesFacts(script, {
+          at: new Date().toISOString(),
+          from: `${trip.name} · ${connection.id}`,
+          values,
+          ...(tiles.length ? { tiles } : {}),
+        }),
+      );
       setCounting({ state: 'done', changes: before ? factChanges(before, values) : [] });
     } catch (err) {
       setCounting({ state: 'failed', message: err instanceof Error ? err.message : String(err) });
@@ -168,6 +182,15 @@ export default function SourcesPanel({
             </div>
           ))}
         </dl>
+      ) : null}
+      {wall ? (
+        <p className="m-0 text-2xs text-muted leading-relaxed" role="status">
+          {wall.done < wall.total
+            ? `Wall: bringing in pictures ${wall.done}/${wall.total}…`
+            : wall.missing === 0
+              ? `Wall: ${wall.total} pictures of the trip, one a day.`
+              : `Wall: ${wall.total - wall.missing} of ${wall.total} pictures; the others keep a colour${connection ? '' : ' until the Winnow is connected'}.`}
+        </p>
       ) : null}
       {facts ? (
         <p className="m-0 text-2xs text-faint leading-relaxed">Write a fact in braces in your script — a caption, a title, a block&apos;s setting — and the post reads its number.</p>

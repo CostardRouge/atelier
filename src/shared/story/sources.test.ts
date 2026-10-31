@@ -32,6 +32,11 @@ describe('reading sources and facts from a script file', () => {
     expect(parsed.script.sources).toBeUndefined();
     expect(parsed.script.facts?.values).toEqual({ days: 4 });
   });
+
+  it('keeps the wall’s picture ids, dropping what is not an id', () => {
+    const parsed = parseScript({ ...base, facts: { at: 'x', values: {}, tiles: [12, -1, 3.5, '7', 40] } });
+    expect(parsed.ok && parsed.script.facts?.tiles).toEqual([12, 40]);
+  });
 });
 
 describe('sourcesOf / factsOf', () => {

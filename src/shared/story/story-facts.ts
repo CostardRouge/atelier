@@ -62,6 +62,20 @@ export function factsFromCalendars(all: WinnowCalendar, photos: WinnowCalendar, 
   };
 }
 
+/**
+ * The pictures of the wall: each day's cover, in day order, for the days of
+ * the span that hold media — evenly thinned to `n` when the trip has more
+ * days than the wall has tiles. The maintainer's pick (2026-10-31): his own
+ * thumbnails, spread across every day, rather than invented colours.
+ */
+export function wallPicks(all: WinnowCalendar, span: { from: string; to: string }, n: number): number[] {
+  const days = all.days
+    .filter((d) => d.date >= span.from && d.date <= span.to && d.count > 0 && d.cover_id > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const picked = days.length <= n ? days : Array.from({ length: n }, (_, i) => days[Math.round((i * (days.length - 1)) / Math.max(1, n - 1))]);
+  return [...new Set(picked.map((d) => d.cover_id))];
+}
+
 /** What changed between two countings, for the line under Count again: `[key, before, after]`. */
 export function factChanges(before: FactValues | null, after: FactValues): [string, number | null, number][] {
   return Object.entries(after)

@@ -69,6 +69,12 @@ export interface ScriptFacts {
   /** What they were counted from, as said (« Australie · winnow.example »). */
   from?: string;
   values: Record<string, number>;
+  /**
+   * The pictures the wall shows, Winnow asset ids in day order — one per day
+   * of the trip, chosen when it was counted (`story-facts.ts`, `wallPicks`).
+   * Ids only: the thumbnails are kept on this device (`wall-cache.ts`).
+   */
+  tiles?: number[];
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -250,8 +256,14 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
   for (const [k, v] of Object.entries(raw.values)) {
     if (FACT_KEY.test(k) && typeof v === 'number' && Number.isFinite(v)) values[k] = v;
   }
-  return { at: raw.at, from: typeof raw.from === 'string' ? raw.from : undefined, values };
+  const tiles = Array.isArray(raw.tiles)
+    ? raw.tiles.filter((n): n is number => Number.isInteger(n) && (n as number) > 0).slice(0, MAX_TILES)
+    : undefined;
+  return { at: raw.at, from: typeof raw.from === 'string' ? raw.from : undefined, values, ...(tiles?.length ? { tiles } : {}) };
 }
+
+/** No wall shows more pictures than this; a script asking for more is cut. */
+const MAX_TILES = 400;
 
 /** What a caption reads when no script is loaded. */
 export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} ⟩`;

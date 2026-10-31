@@ -2982,8 +2982,11 @@ it and may grow blocks of its own.
   says what changed. Write one in braces anywhere in the script — `{media.total}`,
   `{media.photo}`, `{media.video}`, `{days}` (days with media), `{trip.days}` —
   and the post reads « 98 412 »; a block setting that is only `{media.total}`
-  gets the number itself, so a counter can run up to it. The wall's pictures
-  come from the Winnow next.
+  gets the number itself, so a counter can run up to it. Counting also picks the
+  wall's pictures: each day's cover on the Winnow, one a day in order (thinned
+  evenly past the wall's 180 tiles). Small squares of them are kept in this
+  browser, so the wall draws — and exports — without asking the Winnow again;
+  *Forget* on the script clears them.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the
