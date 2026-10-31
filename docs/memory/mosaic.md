@@ -27,6 +27,28 @@ chain step end on the whole next picture; the cell SIZE is in stage pixels
 cells are read with the same arithmetic as a picture (`cellGridsOf` over
 `gridOfRect`), so like is compared with like.
 
+## One decode, two products; the device first; a miss is skipped (2026-10-31, M2)
+
+**Decision.** `shared/mosaic/measure-worker.ts` (a module worker, Vite's ES
+format like `jxl-worker.ts`) decodes a Winnow thumbnail ONCE and makes the
+160 × 90 JPEG tile a cell draws AND the 6 × 6 grid, the grid read off the
+tile's own cover crop (`coverSource`) so a portrait or a panorama is
+measured as it will be drawn. `tools/mosaic/measure-pool.ts` fetches on the
+MAIN thread (the client holds the auth and the retry; six in flight) and
+hands blobs to the idlest worker (`measurePoolSize`: cores − 1, two to six,
+one or two on a constrained device); without `Worker`/`OffscreenCanvas` the
+same measure runs here in batches of eight with a yield. **Rules**: before
+any request, the document's grids and the device's `measures` are copied in
+and only a picture with no grid OR no kept tile is fetched — a run
+cancelled keeps what landed (grids and tiles are flushed to
+`atelier-mosaic` every 48 pictures and at the end), the next run starts
+there; a thumbnail that 404s or will not decode is `failed` and SKIPPED,
+never the end of the run; the fetches in flight at a cancel are the only
+ones repeated. `runMeasure` wraps it as one masthead task with a Cancel.
+Driven headless against a stub (300 pictures, cancelled at 150: 148 kept,
+the resumed run fetched the other 152 and the two failures; the fallback on
+100 more; the tiles 160 × 90 JPEG ~850 B each).
+
 ## The chain is a clock, the picks are seeded (2026-10-31, M1)
 
 `chain.ts` gives a step's phase and camera as a FUNCTION of the time since

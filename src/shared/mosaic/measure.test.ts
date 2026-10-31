@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { Raster } from '../media/thumb-metrics';
-import { GRID, GRID_BYTES, decodeGrid, descriptorsOf, dimsOf, encodeGrid, gridOf, gridOfRect, levelOf, meanOf, oklab, oklabOf } from './measure';
+import {
+  GRID,
+  GRID_BYTES,
+  coverSource,
+  decodeGrid,
+  descriptorsOf,
+  dimsOf,
+  encodeGrid,
+  gridOf,
+  gridOfRect,
+  levelOf,
+  meanOf,
+  oklab,
+  oklabOf,
+} from './measure';
 
 /** A raster painted by a function of (x, y) → [r, g, b]. */
 function raster(width: number, height: number, paint: (x: number, y: number) => [number, number, number]): Raster {
@@ -56,6 +70,24 @@ describe('gridOf', () => {
     expect(left[1]).toBe(0);
     expect(right[0]).toBe(0);
     expect(right[1]).toBe(200);
+  });
+});
+
+describe('coverSource', () => {
+  it('crops the long side of a picture that is not the frame’s shape, centred', () => {
+    expect(coverSource(1600, 900, 160, 90)).toEqual({ x: 0, y: 0, w: 1600, h: 900 });
+    const portrait = coverSource(600, 800, 160, 90);
+    expect(portrait.w).toBe(600);
+    expect(portrait.h).toBeCloseTo(337.5);
+    expect(portrait.y).toBeCloseTo((800 - 337.5) / 2);
+    const pano = coverSource(3000, 1000, 160, 90);
+    expect(pano.h).toBe(1000);
+    expect(pano.w).toBeCloseTo(1777.78, 1);
+    expect(pano.x).toBeCloseTo((3000 - pano.w) / 2);
+  });
+
+  it('survives a degenerate size', () => {
+    expect(coverSource(0, 0, 160, 90)).toEqual({ x: 0, y: 0, w: 1, h: 1 });
   });
 });
 

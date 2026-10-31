@@ -1,8 +1,10 @@
 # Mosaic — a picture made of all the others
 
-**Status: decided (2026-10-31); M1 built the same day** (`src/shared/mosaic/`:
-`measure.ts`, `match.ts`, `chain.ts`, `mosaic-doc.ts`, each with its spec),
-M2–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
+**Status: decided (2026-10-31); M1 and M2 built the same day** (M1
+`src/shared/mosaic/`: `measure.ts`, `match.ts`, `chain.ts`, `mosaic-doc.ts`,
+each with its spec; M2 `measure-worker.ts`, `tools/mosaic/measure-pool.ts`
+and `mosaic-store.ts`, the legal notice's line — Q2 answered yes, the tiles
+are kept), M3–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
 §8 the questions still his. Lab (French,
 synthetic pictures, six modes playable):
 <https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi>. §1 is fact, read in
@@ -312,10 +314,9 @@ are the suite's standards.
 
 1. **Group and door.** `editor` with `wip` (recommended: it has documents and
    a gallery), or `instrument` to keep it off the home page's editors?
-2. **Tiles kept on the device.** The 160 × 90 JPEG per asset (~6 kB, 60 MB
-   for 10 000), deleted with the last mosaic that references it — yes
-   (recommended; without it every play refetches thumbnails and a phone
-   cannot play offline), or thumbnails fetched each time?
+2. ~~**Tiles kept on the device.**~~ **Answered yes (2026-10-31)**: the
+   160 × 90 JPEG per asset (~1–6 kB), deleted with the last mosaic that
+   references it (M2).
 3. **Clips.** Their poster as a still (recommended, free), or excluded?
 4. **Library ceiling.** `SPAN_CAP` 20 000 per add is the picker's; is a
    mosaic of more than 20 000 tiles wanted (two adds), and should the

@@ -78,6 +78,23 @@ export function gridOfRect(
   return out;
 }
 
+/** The tile a cell draws: a 16:9 cover crop of the picture, kept on the device at this size. */
+export const TILE_W = 160;
+export const TILE_H = 90;
+
+/**
+ * The source rectangle of a `sw × sh` picture that COVERS a `dw × dh` frame,
+ * centred — what a cell shows of its picture, and what its grid is measured
+ * on, so a portrait and a panorama are read as they will be drawn.
+ */
+export function coverSource(sw: number, sh: number, dw: number, dh: number): { x: number; y: number; w: number; h: number } {
+  if (!(sw > 0 && sh > 0 && dw > 0 && dh > 0)) return { x: 0, y: 0, w: Math.max(1, sw), h: Math.max(1, sh) };
+  const scale = Math.max(dw / sw, dh / sh);
+  const w = dw / scale;
+  const h = dh / scale;
+  return { x: (sw - w) / 2, y: (sh - h) / 2, w, h };
+}
+
 /** The whole raster's 6 × 6 grid — a picture's measure. */
 export function gridOf(raster: Raster): Uint8Array {
   const out = new Uint8Array(GRID_BYTES);
