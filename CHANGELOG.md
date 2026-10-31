@@ -31,6 +31,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   shows the number.
 - Storytelling: the wall of the first episode shows your own pictures — one per day of the trip, from your Winnow — in
   place of coloured squares. They are kept in this browser once fetched.
+- Storytelling: counting also gives each camera's media, the days with and without a position and the trip's
+  kilometres, stages and places to cite in the script; the map with holes draws the days without a position on the
+  road, and a season recap lists the season's posts when the script does not.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back

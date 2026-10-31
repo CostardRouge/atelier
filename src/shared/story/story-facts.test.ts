@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { factChanges, factsFromCalendars, factText, fillParams, fillText, spanDays, wallPicks } from './story-facts';
+import { deviceKey, factChanges, factsFromCalendars, factText, fillParams, fillText, gearFacts, geoFacts, spanDays, wallPicks } from './story-facts';
 import { assemble, SCRIPT_KIND, type PostSkeleton, type StoryScript } from './story-script';
 
 const values = { 'media.total': 98412, days: 178 };
@@ -95,5 +95,43 @@ describe('wallPicks', () => {
     const days = Array.from({ length: 30 }, (_, i) => day(`2025-09-${String(i + 1).padStart(2, '0')}`, 100 + i));
     const picks = wallPicks({ days, bounds: null }, span, 4);
     expect(picks).toEqual([100, 110, 119, 129]);
+  });
+});
+
+describe('the cameras and the positions of a trip', () => {
+  it('keys a camera by its squeezed name and adds names that squeeze alike', () => {
+    expect(deviceKey('Sony ILCE-7CM2')).toBe('gear.sonyilce7cm2');
+    expect(deviceKey('—')).toBe('gear.unknown');
+    expect(gearFacts([['DJI FC8482', 120], ['dji fc-8482', 3], ['iPhone 15 Pro', 0]])).toEqual({ 'gear.djifc8482': 123 });
+  });
+
+  it('counts placed and unplaced days and finds the runs of unplaced ones', () => {
+    const g = (date: string, placed: boolean, count = 4) => ({ date, lat: placed ? -33 : null, lon: placed ? 151 : null, count, measured: placed ? count : 0, source: placed ? ('measured' as const) : null });
+    const days = [g('2025-09-01', true), g('2025-09-02', false), g('2025-09-04', false), g('2025-09-05', true), g('2025-09-06', false), g('2025-09-07', false, 0), g('2025-10-01', false)];
+    const out = geoFacts(days, { from: '2025-09-01', to: '2025-09-30' });
+    expect(out.values).toEqual({ 'geo.days.located': 2, 'geo.days.unlocated': 3 });
+    // 09-02 and 09-04 are one hole (09-03 had no media); 09-06 stands alone; 10-01 is outside the span.
+    expect(out.holes).toEqual([['2025-09-02', '2025-09-04'], ['2025-09-06', '2025-09-06']]);
+  });
+});
+
+describe('the season recap', () => {
+  const reg: PostSkeleton[] = [
+    { id: 'a', number: 'EP.00', season: 1, blocks: [] },
+    { id: 'b', number: 'EP.01', season: 1, blocks: [{ block: 'season-recap', len: 5, cap: null }] },
+    { id: 'c', number: 'EP.00', season: 2, blocks: [] },
+  ];
+  const script: StoryScript = { kind: SCRIPT_KIND, version: 1, facts: { at: 'x', values: { days: 9 } }, posts: { a: { title: 'Un', cover: '{days} jours' }, b: { title: 'Deux' } } };
+
+  it('lists the season’s own posts when the script does not spell them out', () => {
+    expect(assemble(reg[1], script, reg).blocks[0]?.params?.episodes).toEqual([
+      { number: 'EP.00', title: 'Un', line: '9 jours' },
+      { number: 'EP.01', title: 'Deux', line: '' },
+    ]);
+  });
+
+  it('keeps the episodes the script gives', () => {
+    const given = { ...script, posts: { ...script.posts, b: { blocks: [{ params: { episodes: [{ number: 'X', title: 'Y', line: 'Z' }] } }] } } };
+    expect(assemble(reg[1], given, reg).blocks[0]?.params?.episodes).toEqual([{ number: 'X', title: 'Y', line: 'Z' }]);
   });
 });

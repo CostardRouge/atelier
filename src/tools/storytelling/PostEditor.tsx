@@ -16,6 +16,7 @@ import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
 import type { ComposeOptions } from '../../shared/story/compose';
+import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
@@ -160,6 +161,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     return ep.next ? { ...ep, next: { ...ep.next, thumb: nextThumb } } : ep;
   }, [episodeOf, skeleton, nextThumb]);
   const total = totalSeconds(episode);
+  // The map's holes from the last counting, placed on the trip's road by date (`trip-map.ts`).
+  const holes = factsOf(script, postId)?.holes;
+  const shown = useMemo(
+    () => withGaps(episode, tripMap.state === 'ready' && tripMap.map && holes ? gapsOf(holes, tripMap.map, tripMap.span) : null),
+    [episode, tripMap, holes],
+  );
 
   // The list's thumbnails, painted once per script.
   const covers = useMemo(() => {
@@ -172,8 +179,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   useEffect(() => {
     const ctx = stageRef.current?.getContext('2d');
     if (!ctx || !fontsReady) return;
-    drawEpisode(ctx, episode, Math.min(t, total - 0.001), mapOpts);
-  }, [episode, t, total, fontsReady, mapOpts]);
+    drawEpisode(ctx, shown, Math.min(t, total - 0.001), mapOpts);
+  }, [shown, t, total, fontsReady, mapOpts]);
 
   // Playback: the clock, and the sound alongside it.
   const audioRef = useRef<{ ctx: AudioContext; nodes: AudioBufferSourceNode[] } | null>(null);
@@ -310,7 +317,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           skipped = reason;
         },
         draw: (sec) => {
-          drawEpisode(ctx, episode, Math.min(sec, total - 0.001), mapOpts);
+          drawEpisode(ctx, shown, Math.min(sec, total - 0.001), mapOpts);
           return canvas;
         },
         onProgress: (p) => setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`),
