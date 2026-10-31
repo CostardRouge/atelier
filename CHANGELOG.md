@@ -42,6 +42,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: a post can open on a hook instead of its title — your words over the first picture, typed letter by
   letter with a key click each, then a word landing as a sticker. Edit it under Hook: its lines, how they arrive and
   leave, its timing, place and ink, its sounds (built-in or your own files), variants to test, and the post's promise.
+- Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
+  themselves (next episode, before / after, midnight…) follow the language chosen under Script.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
   header (Light, Tone, Colour, White balance, Levels, Curve, the mixer, Colour grading): the bar greys and keeps its
   number, and a second click — or moving the bar — brings it back. What is off is saved with the picture, taken back

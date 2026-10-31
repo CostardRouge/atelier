@@ -80,6 +80,13 @@ describe('assemble with facts', () => {
     const own = { ...script, posts: { a: { ...script.posts.a, facts: { at: 'x', values: { 'media.total': 5, days: 1 } } } } };
     expect(assemble(skeleton, own, [skeleton]).blocks[0]?.params?.count).toBe(5);
   });
+
+  it('writes the facts in the series’ language', () => {
+    const ep = assemble(skeleton, { ...script, lang: 'en' }, [skeleton]);
+    expect(ep.lang).toBe('en');
+    expect(ep.blocks[0].cap?.text).toBe('98,412 photos.');
+    expect(assemble(skeleton, script, [skeleton]).lang).toBe('fr');
+  });
 });
 
 describe('wallPicks', () => {

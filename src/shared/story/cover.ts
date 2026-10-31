@@ -1,4 +1,5 @@
 /** A post's cover: the « Une, puis mille » wall, settled, under a calm title band. */
+import { setLang, word } from './locale';
 import { H, W } from './charte';
 import type { Episode } from './episode';
 import { fit, PAL, text, TYPO, type Ctx } from './motion';
@@ -8,6 +9,7 @@ import { drawWall } from './scenes/Hook';
 export const COVER = { bandTop: 760, bandBottom: 1200, wallScrim: 0.5 };
 
 export function drawCover(c: Ctx, ep: Episode): void {
+  setLang(ep.lang);
   c.save();
   c.fillStyle = PAL.bg;
   c.fillRect(0, 0, W, H);
@@ -20,7 +22,7 @@ export function drawCover(c: Ctx, ep: Episode): void {
   c.fillStyle = PAL.dim;
   c.fillRect(0, COVER.bandTop, W, 2);
   c.fillRect(0, COVER.bandBottom - 2, W, 2);
-  text(c, `${ep.number} · SAISON ${ep.season}`, 540, 880, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: 'center', track: 5 });
+  text(c, `${ep.number} · ${word('season')} ${ep.season}`, 540, 880, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: 'center', track: 5 });
   const z = fit(c, ep.title, 860, 140, TYPO.hw, TYPO.fam);
   text(c, ep.title, 540, 1020, z, PAL.ink, { align: 'center' });
   c.fillStyle = PAL.acc;

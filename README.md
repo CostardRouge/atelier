@@ -3014,6 +3014,11 @@ it and may grow blocks of its own.
   one post; the one selected plays and exports, so each can be exported and
   tested. *Promise* says what the post pays off, beside the hook. The wall
   under a hook shows its picture only. The words are kept in your script.
+- **Language.** *Language* (in the Script section) says whether the series is
+  told in English or French: its counted numbers (98,412 or 98 412), the days
+  on the map (Sep 3 or 03 sept.) and the few words the blocks write themselves
+  (NEXT EPISODE, BEFORE / AFTER, MIDNIGHT…) follow it. Your own words stay as
+  your script writes them.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the

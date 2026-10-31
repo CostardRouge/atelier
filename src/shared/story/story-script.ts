@@ -13,6 +13,7 @@ import type { Stop } from './geo';
 import type { Episode } from './episode';
 import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
+import type { Lang } from './locale';
 
 export interface SkeletonBlock {
   block: string;
@@ -158,6 +159,8 @@ export interface ScriptTopic {
 export interface StoryScript {
   kind: typeof SCRIPT_KIND;
   version: 1;
+  /** The language the series is told in (`locale.ts`): its numbers, its days, the blocks' own words. Absent = French. */
+  lang?: Lang;
   /** The series' name, on the season's closing card. */
   series?: string;
   /** The account, on the closing card. */
@@ -257,6 +260,7 @@ export function parseScript(raw: unknown): ScriptParse {
     script: {
       kind: SCRIPT_KIND,
       version: 1,
+      ...(raw.lang === 'en' || raw.lang === 'fr' ? { lang: raw.lang } : {}),
       series: text(raw.series),
       handle: text(raw.handle),
       ask: text(raw.ask),
@@ -398,7 +402,8 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
   // The numbers this post cites (`story-facts.ts`): its own counting, else the series'.
   const values = (mine?.facts ?? script?.facts)?.values ?? null;
   const hook = activeHook(mine);
-  const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values);
+  const lang: Lang = script?.lang ?? 'fr';
+  const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values, lang);
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
   const next = after && after.season === skeleton.season ? after : undefined;
@@ -409,8 +414,9 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     season: skeleton.season,
     next: next ? { number: next.number, title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
-    cover: { line: fillText(mine?.cover ?? '', values) },
-    hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values)) } : null,
+    cover: { line: fillText(mine?.cover ?? '', values, lang) },
+    lang,
+    hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
@@ -420,13 +426,13 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry
           .filter((p) => p.season === skeleton.season)
-          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values) }));
+          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
       }
       return {
         block: b.block,
         len: b.len,
-        params: fillParams(given, values) as Record<string, unknown>,
-        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values) } : null,
+        params: fillParams(given, values, lang) as Record<string, unknown>,
+        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values, lang) } : null,
       };
     }),
   };

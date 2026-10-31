@@ -1,5 +1,6 @@
 // Mur de photos « unemille »: one tile, the camera pulls back ×6 → ×1 revealing the wall,
 // tiles fading in by distance; then a 72 % background scrim, « 100 000 » and « photos ».
+import { word, numberText } from "../locale";
 import { appear, clamp, E, enter, fit, K, PAL, rng, text, TYPO, type Ctx } from "../motion";
 
 const R = rng(11);
@@ -85,9 +86,9 @@ export function drawHook(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   c.restore();
   appear(c, enter(lt, 2.3, 1.3), () => {
     // A counted fact arrives as a number (`story-facts.ts`): written the way the series writes numbers.
-    const count = typeof _p.count === "number" ? Math.round(_p.count).toLocaleString("fr-FR") : String(_p.count ?? "100 000");
+    const count = typeof _p.count === "number" ? numberText(_p.count) : String(_p.count ?? numberText(100000));
     const z = fit(c, count, 860, 250, TYPO.hw, TYPO.fam);
     text(c, count, 540, 1000, z, PAL.ink, { align: "center" });
   }, 20);
-  appear(c, enter(lt, 2.7, 1), () => text(c, String(_p.label ?? "photos"), 540, 1090, 56, PAL.acc, { w: TYPO.lw, align: "center" }), 12);
+  appear(c, enter(lt, 2.7, 1), () => text(c, String(_p.label ?? word("photos")), 540, 1090, 56, PAL.acc, { w: TYPO.lw, align: "center" }), 12);
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ScriptSources } from '../../shared/story/story-script';
 import type { TripMap } from '../../shared/story/trip-map';
+import type { Lang } from '../../shared/story/locale';
 
 export type TripMapState =
   | { state: 'none' }
@@ -16,10 +17,10 @@ export type TripMapState =
  * `ready` with a null map is a trip with nothing to draw; `span` is the days
  * the kept stages cover (`countedSpan`).
  */
-export function useTripMap(sources: ScriptSources): TripMapState {
+export function useTripMap(sources: ScriptSources, lang?: Lang): TripMapState {
   const [state, setState] = useState<TripMapState>({ state: 'none' });
   const tripId = sources.trip?.id;
-  const key = JSON.stringify({ trip: sources.trip ?? null, map: sources.map ?? null });
+  const key = JSON.stringify({ trip: sources.trip ?? null, map: sources.map ?? null, lang: lang ?? 'fr' });
   useEffect(() => {
     if (!tripId) {
       setState({ state: 'none' });
@@ -35,7 +36,7 @@ export function useTripMap(sources: ScriptSources): TripMapState {
           setState({ state: 'missing' });
           return;
         }
-        setState({ state: 'ready', map: maps.tripMap(trip, src.mapChoiceOf(sources)), span: src.countedSpan(trip, sources) });
+        setState({ state: 'ready', map: maps.tripMap(trip, { ...src.mapChoiceOf(sources), lang }), span: src.countedSpan(trip, sources) });
       })
       .catch(() => {
         if (alive) setState({ state: 'missing' });

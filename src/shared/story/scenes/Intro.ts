@@ -1,5 +1,6 @@
 // Ouverture « ligne »: a hairline draws from the centre outward, the title rises from behind
 // a clip line, then « EP.00 · SAISON 1 » in mono.
+import { word } from "../locale";
 import { appear, enter, fit, PAL, text, TYPO, type Ctx } from "../motion";
 
 export function drawIntro(c: Ctx, lt: number, ep: { title: string; number: string; season?: number }) {
@@ -21,5 +22,5 @@ export function drawIntro(c: Ctx, lt: number, ep: { title: string; number: strin
   c.globalAlpha *= q;
   text(c, title, 540, 980 + (1 - q) * 150, z, PAL.ink, { align: "center" });
   c.restore();
-  appear(c, enter(lt, 1.5, 1), () => text(c, `${ep.number} · SAISON ${ep.season ?? 1}`, 540, 1070, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 5 }), 8);
+  appear(c, enter(lt, 1.5, 1), () => text(c, `${ep.number} · ${word("season")} ${ep.season ?? 1}`, 540, 1070, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 5 }), 8);
 }

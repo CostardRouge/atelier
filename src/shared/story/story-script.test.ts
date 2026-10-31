@@ -40,6 +40,13 @@ describe('parseScript', () => {
     expect(v2.ok).toBe(false);
     if (!v2.ok) expect(v2.reason).toContain('version 2');
   });
+
+  it('reads the series’ language, English or French, and nothing else', () => {
+    const en = parseScript({ ...script, lang: 'en' });
+    expect(en.ok && en.script.lang).toBe('en');
+    const de = parseScript({ ...script, lang: 'de' });
+    expect(de.ok && de.script.lang).toBeUndefined();
+  });
 });
 
 describe('assemble', () => {

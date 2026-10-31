@@ -1,6 +1,7 @@
 // Dossiers « colonnes »: Finder column view. Window, three columns arriving from the right
 // with a fade, rows staggered, selection at accent 22 % on 2026 then 2026-02, the four card
 // folders with counts, the breadcrumb, then « 8 940 photos à trier ce mois-ci ».
+import { word, numberText } from "../locale";
 import { appear, enter, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
 
 /** a Finder folder, drawn calmly: no scale pop */
@@ -70,7 +71,7 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
   // — with none, the lab's fixed 2026 › 2026-02 › cards view.
   const pCols = Array.isArray(_p.columns) ? (_p.columns as ColParam[]) : null;
   const pPath = Array.isArray(_p.path) ? (_p.path as string[]) : null;
-  const footnote = _p.footnote === undefined ? "8 940 photos à trier ce mois-ci" : String(_p.footnote);
+  const footnote = _p.footnote === undefined ? `${numberText(8940)} ${word("toSortThisMonth")}` : String(_p.footnote);
   const x0 = 70,
     y0 = 540,
     w = 830,
@@ -141,7 +142,7 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
       }
       folder(c, rx + 22, ry + 20, 38, 0);
       text(c, name, rx + 54, ry + 31, 27, PAL.ink, { fam: TYPO.sys, w: 400 });
-      if (col.counts) text(c, col.counts[i] + " photos", rx + 54, ry + 66, 22, PAL.dim, { fam: TYPO.mono, w: 400 });
+      if (col.counts) text(c, col.counts[i] + " " + word("photos"), rx + 54, ry + 66, 22, PAL.dim, { fam: TYPO.mono, w: 400 });
       else if (c.measureText(name).width < cw - 100) text(c, "›", x0 + (ci + 1) * cw - 28, ry + 31, 28, PAL.dim, { fam: TYPO.sys, w: 400 }); // no chevron under a long name
       c.restore();
     });

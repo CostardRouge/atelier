@@ -7,6 +7,7 @@
  */
 import { OV, type Cap } from './charte';
 import type { Hook } from './hook';
+import type { Lang } from './locale';
 
 export interface BlockSpec {
   block: string;
@@ -31,6 +32,8 @@ export interface Episode {
   cover?: { line: string };
   /** The first seconds' words, over the first block, in place of the title opening (`hook.ts`). */
   hook?: Hook | null;
+  /** The language it is told in (`locale.ts`); absent = French. */
+  lang?: Lang;
 }
 
 export type Slot = BlockSpec & { a: number; b: number; start: number; key: string };

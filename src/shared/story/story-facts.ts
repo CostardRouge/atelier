@@ -7,32 +7,33 @@
  * silently reading 0.
  */
 import type { WinnowCalendar, WinnowGeoDay } from '../sources/winnow/client';
+import { numberText, type Lang } from './locale';
 
 export type FactValues = Readonly<Record<string, number>>;
 
 const PLACEHOLDER = /\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}/g;
 const ALONE = /^\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}$/;
 
-/** A number the way the series writes it: French grouping. */
-export const factText = (n: number): string => Math.round(n).toLocaleString('fr-FR');
+/** A number the way the series writes it, in its language (`locale.ts`): « 98 412 », « 98,412 ». */
+export const factText = (n: number, lang: Lang = 'fr'): string => numberText(n, lang);
 
 /** A text with every counted fact written in. */
-export function fillText(text: string, values: FactValues | null): string {
+export function fillText(text: string, values: FactValues | null, lang: Lang = 'fr'): string {
   if (!values) return text;
-  return text.replace(PLACEHOLDER, (whole, key: string) => (key in values ? factText(values[key]) : whole));
+  return text.replace(PLACEHOLDER, (whole, key: string) => (key in values ? factText(values[key], lang) : whole));
 }
 
 /** A block's params with the facts filled in: a lone fact becomes its number, a fact in a text is written in. */
-export function fillParams(value: unknown, values: FactValues | null): unknown {
+export function fillParams(value: unknown, values: FactValues | null, lang: Lang = 'fr'): unknown {
   if (!values) return value;
   if (typeof value === 'string') {
     const alone = ALONE.exec(value);
     if (alone && alone[1] in values) return values[alone[1]];
-    return fillText(value, values);
+    return fillText(value, values, lang);
   }
-  if (Array.isArray(value)) return value.map((v) => fillParams(v, values));
+  if (Array.isArray(value)) return value.map((v) => fillParams(v, values, lang));
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fillParams(v, values)]));
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fillParams(v, values, lang)]));
   }
   return value;
 }

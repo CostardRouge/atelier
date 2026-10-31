@@ -18,6 +18,7 @@ import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture } from './overlays';
 import { setWall } from './scenes/Hook';
 import { drawHook, hookTimeline } from './hook';
+import { setLang } from './locale';
 
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
@@ -68,6 +69,7 @@ function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
 }
 
 export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions = {}): void {
+  setLang(ep.lang);
   setMap(opts.stops ?? null, opts.road ?? null);
   setWall(opts.wall ?? null);
   const slots = slotsOf(ep);

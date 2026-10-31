@@ -291,7 +291,7 @@ export default function SourcesPanel({
         <p className="m-0 text-2xs text-muted leading-relaxed" role="status">
           {counting.changes.length === 0
             ? 'Counted: nothing changed since the last time.'
-            : counting.changes.map(([k, a, b]) => `${k} ${a === null ? '' : `${factText(a)} → `}${factText(b)}`).join(' · ')}
+            : counting.changes.map(([k, a, b]) => `${k} ${a === null ? '' : `${factText(a, script.lang)} → `}${factText(b, script.lang)}`).join(' · ')}
         </p>
       ) : null}
       {facts && Object.keys(facts.values).length > 0 ? (
@@ -299,7 +299,7 @@ export default function SourcesPanel({
           {Object.entries(facts.values).map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-muted">{`{${k}}`}</dt>
-              <dd className="m-0 text-ink tabular-nums text-right">{factText(v)}</dd>
+              <dd className="m-0 text-ink tabular-nums text-right">{factText(v, script.lang)}</dd>
             </div>
           ))}
         </dl>

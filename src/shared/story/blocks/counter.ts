@@ -1,9 +1,10 @@
 // `counter` — one big number that moves, calmly: {from, to, label, unit?, sub?}
 // The number eases over the block's middle; label under it in accent; optional second line.
+import { numberText } from "../locale";
 import { register } from "./index";
 import { appear, clamp, E, enter, fit, K, PAL, text, TYPO } from "../motion";
 
-const fr = (n: number) => Math.round(n).toLocaleString("fr-FR");
+const fr = (n: number) => numberText(n);
 register("counter", (c, lt, p) => {
   const from = Number(p.from ?? 0), to = Number(p.to ?? 100000);
   const label = String(p.label ?? ""), unit = p.unit ? String(p.unit) : "", sub = p.sub ? String(p.sub) : "";
