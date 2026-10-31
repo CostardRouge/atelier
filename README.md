@@ -2972,8 +2972,11 @@ it and may grow blocks of its own.
 - **Sources.** Name where the series' data comes from: a trip of Trips in this
   browser, whose road and towns will draw the map, and a connected Winnow,
   whose counts and pictures will fill the numbers and the wall. They are saved
-  in your script; the trip and the pictures stay on this device. Choosing them
-  is the first step; the map, the counts and the wall read them next.
+  in your script; the trip and the pictures stay on this device. With a trip
+  chosen, the maps follow its road — the GPS track imported in Trips, read in
+  the trip's own mode — and name the towns where a stage starts or ends; without
+  one, they join the stops written in the script. The counts and the wall read
+  the Winnow next.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the

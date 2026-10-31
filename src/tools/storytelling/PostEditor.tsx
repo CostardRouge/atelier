@@ -12,6 +12,9 @@ import { totalSeconds, type Episode } from '../../shared/story/episode';
 import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
+import { useTripMap } from './use-trip-map';
+import { sourcesOf } from '../../shared/story/sources';
+import type { ComposeOptions } from '../../shared/story/compose';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
@@ -106,6 +109,18 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
 
   const episodeOf = useCallback((skeleton: PostSkeleton) => assemble(skeleton, script, POSTS), [script]);
 
+  // The map follows the series' trip when it names one and this browser has
+  // it (`trip-map.ts`): its road, and the towns where a stage starts or ends.
+  // Otherwise the script's typed stops, as before.
+  const tripMap = useTripMap(sourcesOf(script, postId).trip?.id);
+  const mapOpts = useMemo<ComposeOptions>(
+    () =>
+      tripMap.state === 'ready' && tripMap.map
+        ? { stops: tripMap.map.stops, road: tripMap.map.road }
+        : { stops: script?.stops },
+    [tripMap, script],
+  );
+
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
   const mine = sounds[skeleton.id] ?? NO_SOUND;
   const { voice, music, effects } = mine;
@@ -146,8 +161,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   useEffect(() => {
     const ctx = stageRef.current?.getContext('2d');
     if (!ctx || !fontsReady) return;
-    drawEpisode(ctx, episode, Math.min(t, total - 0.001), { stops: script?.stops });
-  }, [episode, t, total, fontsReady, script]);
+    drawEpisode(ctx, episode, Math.min(t, total - 0.001), mapOpts);
+  }, [episode, t, total, fontsReady, mapOpts]);
 
   // Playback: the clock, and the sound alongside it.
   const audioRef = useRef<{ ctx: AudioContext; nodes: AudioBufferSourceNode[] } | null>(null);
@@ -284,7 +299,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           skipped = reason;
         },
         draw: (sec) => {
-          drawEpisode(ctx, episode, Math.min(sec, total - 0.001), { stops: script?.stops });
+          drawEpisode(ctx, episode, Math.min(sec, total - 0.001), mapOpts);
           return canvas;
         },
         onProgress: (p) => setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`),
