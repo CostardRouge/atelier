@@ -57,6 +57,8 @@ export interface QueueSource {
   onDraw?: (index: number, id: number) => void;
   /** A queued entry the person picked by hand: it wins over the aim. */
   picked?: (index: number) => boolean;
+  /** The person steered the chain by a click: the entry becomes their pick. */
+  onPick?: (index: number, id: number) => void;
 }
 
 /** What the player says of itself, for the status line. */
@@ -115,8 +117,34 @@ export class MosaicPlayer {
   private status: PlayerStatus = IDLE_STATUS;
   private listeners = new Set<(s: PlayerStatus) => void>();
   private scenes = new Map<number, Promise<MosaicScene>>();
+  /** The step and frame on screen, for a click to steer from. */
+  private live: { step: Step; frame: StepFrame; index: number } | null = null;
+  private liveOpts: PlayerOptions | null = null;
+  /** Drops the steps prepared from `from` on and prepares them again — after a steer. */
+  private replan: ((from: number) => void) | null = null;
 
   constructor(private builder: SceneBuilder) {}
+
+  /**
+   * A click on cell `cell` while a run plays (lab 3, the Steer recipe and
+   * every other): when the arrived mosaic is on screen, the picture in that
+   * cell becomes the next step's, as a pick of the queue, and the steps
+   * prepared ahead are prepared again. False when the click cannot steer —
+   * mid-dive, or on the picture already next.
+   */
+  steer(cell: number): boolean {
+    const l = this.live;
+    const q = this.liveOpts?.queue;
+    if (!l || !q?.onPick || !l.frame.arrived || l.frame.base !== 'to') return false;
+    const scene = l.step.sceneTo;
+    const index = scene.matching.ids[cell];
+    if (index === undefined || index < 0) return false;
+    const id = scene.tiles[index].id;
+    if (id === l.step.to || q.next(l.index + 1) === id) return false;
+    q.onPick(l.index + 1, id);
+    this.replan?.(l.index + 1);
+    return true;
+  }
 
   attach(canvas: HTMLCanvasElement | null, size: StageSize): void {
     this.canvas = canvas;
@@ -153,6 +181,8 @@ export class MosaicPlayer {
     this.rnd = mulberry32(opts.seed);
     this.history = [opts.from];
     this.scenes = new Map();
+    this.live = null;
+    this.liveOpts = opts;
     this.controller = new AbortController();
     this.say({ playing: true, current: opts.from, stepIndex: 0, done: 0, phase: 'starting', waiting: false, error: null, note: null, prepMs: null, waits: 0, waitMs: 0 });
     const signal = this.controller.signal;
@@ -169,6 +199,8 @@ export class MosaicPlayer {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
     if (this.status.playing) this.say({ playing: false, phase: '', waiting: false });
+    this.live = null;
+    this.replan = null;
   }
 
   /** A step's build: the whole mosaic in one lot on the pool — nothing is shown while it is prepared. */
@@ -226,11 +258,20 @@ export class MosaicPlayer {
         pendings.set(k, p);
       }
     };
+    this.replan = (from) => {
+      for (const k of [...pendings.keys()]) {
+        if (k >= from) {
+          pendings.delete(k);
+          since.delete(k);
+        }
+      }
+      ensure(index + ahead);
+    };
     // The run opens on the picture already on screen: its arrival, without the fade-in.
     const opening = await this.sceneOf(current, opts, signal, opts.crop);
     if (signal.aborted) return;
     ensure(ahead);
-    await this.playStep({ depart: departAt(opts.motion, 0), from: current, to: current, sceneFrom: opening, sceneTo: opening, geo: geometryOf(opening, -1, -1), cellA: -1, cellB: -1, waveOrder: null, revealOrder: this.revealOrderFor(opening) }, opts, signal, true);
+    await this.playStep({ depart: departAt(opts.motion, 0), from: current, to: current, sceneFrom: opening, sceneTo: opening, geo: geometryOf(opening, -1, -1), cellA: -1, cellB: -1, waveOrder: null, revealOrder: this.revealOrderFor(opening) }, opts, signal, true, -1);
     if (signal.aborted) return;
     for (;;) {
       ensure(index + ahead);
@@ -255,7 +296,7 @@ export class MosaicPlayer {
         return;
       }
       this.say({ waiting: false, stepIndex: index, current });
-      await this.playStep(step, opts, signal, false);
+      await this.playStep(step, opts, signal, false, index);
       if (signal.aborted) return;
       pendings.delete(index);
       current = step.to;
@@ -295,17 +336,27 @@ export class MosaicPlayer {
   private nextFor(depart: StepDeparture, index: number, fromIndex: number, sceneFrom: MosaicScene, opts: PlayerOptions): number | 'end' | null {
     const tiles = this.builder.tiles;
     const queued = opts.queue?.next(index);
-    if (queued !== undefined) {
+    const picked = opts.queue?.picked?.(index) ?? false;
+    // The queue's entry is the next picture — always when the person picked it, else when the aim is the chain's; a drawn entry yields to the best or a random cell.
+    if (queued !== undefined && (picked || opts.motion.aim === 'queue' || depart === 'pull')) {
       const i = tiles.findIndex((t) => t.id === queued);
       if (i >= 0 && i !== fromIndex) return i;
     }
-    if (opts.queue && !opts.queue.draw) return 'end';
+    if (opts.queue && !opts.queue.draw && queued === undefined) return 'end';
     let next: number;
-    if (depart !== 'pull') {
-      const cell = pickCell(sceneFrom.matching, sceneFrom.shape.cols, sceneFrom.shape.rows, { target: fromIndex, history: this.historyIndexes(), rnd: this.rnd });
+    const history = this.historyIndexes();
+    if (depart === 'pull') next = pickNextTarget(this.builder.labGrids(), tiles.length, fromIndex, { history, rnd: this.rnd });
+    else if (opts.motion.aim === 'random') {
+      const ids = sceneFrom.matching.ids;
+      const cells: number[] = [];
+      for (let c = 0; c < ids.length; c++) if (ids[c] >= 0 && ids[c] !== fromIndex && !history.includes(ids[c])) cells.push(c);
+      if (!cells.length) return null;
+      next = ids[cells[Math.floor(this.rnd() * cells.length)]];
+    } else {
+      const cell = pickCell(sceneFrom.matching, sceneFrom.shape.cols, sceneFrom.shape.rows, { target: fromIndex, history, rnd: this.rnd });
       if (cell < 0) return null;
       next = sceneFrom.matching.ids[cell];
-    } else next = pickNextTarget(this.builder.labGrids(), tiles.length, fromIndex, { history: this.historyIndexes(), rnd: this.rnd });
+    }
     if (next < 0) return null;
     opts.queue?.onDraw?.(index, tiles[next].id);
     return next;
@@ -351,12 +402,13 @@ export class MosaicPlayer {
   }
 
   /** One step drawn frame by frame until its clock says it is over. */
-  private playStep(step: Step, opts: PlayerOptions, signal: AbortSignal, opening: boolean): Promise<void> {
+  private playStep(step: Step, opts: PlayerOptions, signal: AbortSignal, opening: boolean, index: number): Promise<void> {
     return new Promise<void>((resolve) => {
       const t0 = performance.now();
       const frame = (now: number) => {
         if (signal.aborted) return resolve();
         const f = stepFrameAt(opts.motion, opts.speed, step.depart, step.geo, now - t0, opening);
+        this.live = { step, frame: f, index };
         if (f.phase !== this.status.phase) this.say({ phase: f.phase });
         // The arrived picture is on screen: the band's now, and the target a Stop writes.
         if (f.arrived && this.status.current !== step.to) this.say({ current: step.to });

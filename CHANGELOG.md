@@ -21,8 +21,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   pick. Zooming the still stage frames it: what you see becomes the part rebuilt, with as many cells on it; undo and
   redo step through every edit. The animated modes are recipes of one step — a departure, a trajectory, an arrival —
   and *Mosaics*, the default, goes from mosaic to mosaic without ever showing the photo; *Wave* lands the next mosaic's
-  cells on this one from the aimed cell outward, *Slideshow* cuts to a new mosaic at a steady beat; the camera never
-  cuts between steps, and the Performance section measures how long a step takes to be ready. Each mosaic, the colours of its
+  cells on this one from the aimed cell outward, *Slideshow* cuts to a new mosaic at a steady beat, *Steer* lets a click
+  on the held mosaic choose where the chain goes next; a Motion section opens every part of the step (departure,
+  arrival, the reveal's direction, sharpening, aim, move, hold, cadence, drift) and a part set by hand makes the mode
+  *Custom*; the camera never cuts between steps, and the Performance section measures how long a step takes to be ready. Each mosaic, the colours of its
   pictures and a small tile of each are kept in this browser; a `.mosaic.json` file carries it elsewhere.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the

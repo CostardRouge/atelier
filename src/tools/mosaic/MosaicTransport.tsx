@@ -15,6 +15,8 @@ const MODES: readonly { id: MosaicMode; label: string; title: string }[] = [
   { id: 'drift', label: 'Drift', title: 'The camera wanders over the mosaic, then fades to the next' },
   { id: 'wave', label: 'Wave', title: 'The next mosaic’s cells land on this one, from the aimed cell outward — no zoom, no photo' },
   { id: 'slideshow', label: 'Slideshow', title: 'A mosaic every six seconds, cut to the next, at a steady beat' },
+  { id: 'steer', label: 'Steer', title: 'A long hold on each mosaic: click a cell to choose where the chain goes next' },
+  { id: 'custom', label: 'Custom', title: 'The Motion section’s own settings, part by part' },
 ];
 type ChainDepart = Extract<Departure, 'dive' | 'pull' | 'alternate'>;
 const DIRECTIONS: readonly { id: ChainDepart; label: string; title: string }[] = [

@@ -3214,7 +3214,17 @@ real picture from a point; *Drift* wanders over the mosaic at mid zoom,
 then fades to the next. *Wave* lands the next mosaic's cells on this one,
 from the aimed cell outward, with no zoom and no photo: the mosaic turns
 into another without moving. *Slideshow* cuts to a new mosaic every six
-seconds, at a steady beat.
+seconds, at a steady beat. *Steer* holds each mosaic four seconds: click a
+cell meanwhile and the chain goes there next — a click on any held mosaic
+does that in every mode. Every mode is a recipe of one step, and the
+**Motion** section of the inspector opens its parts: the departure (a dive,
+a pull back, both in turn, a wave, a fade, a cut), the arrival (the next
+mosaic, its photo, or its cells revealed — to the photo, to the mosaic, or
+there and back), when a growing cell sharpens over its tile (early, late,
+never), which cell a dive aims at (the chain's picture, the best match, any
+one), the move and hold lengths, a cadence that beats whatever the parts
+take, and a drift while the mosaic is held. A part set by hand makes the
+mode *Custom*; choosing a mode again puts its recipe back.
 Each step prepares the next picture while it plays, so a chain of thousands
 never asks you to wait; the picks come from the mosaic's own seed, so Play
 twice shows the same chain. Play and Stop on Space, Escape stops; whatever

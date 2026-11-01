@@ -29,6 +29,8 @@ interface MosaicStageProps {
   reveal: Reveal;
   /** A cell was clicked: the picture index it shows, and the cell. */
   onPick: (pictureIndex: number, cell: number) => void;
+  /** A cell was clicked while a run plays: steer the chain there (the player decides whether it can). */
+  onSteer?: (cell: number) => void;
   /** The frames a propagation drew per second, once it settled — the panel's measure. */
   onFps?: (fps: number) => void;
   /** The zoom over the stage while the hand moves, or once a zoom is kept to look (F6); identity draws the mosaic as built. */
@@ -99,7 +101,7 @@ function drawReveal(ctx: CanvasRenderingContext2D, scene: MosaicScene, reveal: R
  * on a cell makes its picture the target. While a build runs, the previous
  * mosaic stays and the word says what is being done.
  */
-export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, onPick, onFps, zoom = IDENTITY_VIEW, playing = false, canvasOut }: MosaicStageProps) {
+export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, onPick, onSteer, onFps, zoom = IDENTITY_VIEW, playing = false, canvasOut }: MosaicStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const scene = state.status === 'ready' ? state.scene : state.status === 'building' || state.status === 'failed' ? state.previous : null;
@@ -193,11 +195,16 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
       <canvas
         ref={canvasRef}
         aria-label="Mosaic"
-        className={`block w-full h-full ${scene && !playing ? (isIdentityView(zoom) ? 'cursor-crosshair' : 'cursor-grab') : ''}`}
+        className={`block w-full h-full ${scene && !playing ? (isIdentityView(zoom) ? 'cursor-crosshair' : 'cursor-grab') : playing && onSteer ? 'cursor-crosshair' : ''}`}
         onMouseMove={(e) => setHover(playing || !isIdentityView(zoom) ? null : cellAt(e))}
         onMouseLeave={() => setHover(null)}
         onClick={(e) => {
-          if (playing || !isIdentityView(zoom)) return;
+          if (playing) {
+            const c = cellAt(e);
+            if (c !== null) onSteer?.(c);
+            return;
+          }
+          if (!isIdentityView(zoom)) return;
           const c = cellAt(e);
           if (c === null || !scene) return;
           const index = scene.matching.ids[c];

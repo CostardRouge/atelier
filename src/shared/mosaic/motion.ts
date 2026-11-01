@@ -32,7 +32,7 @@ export const ARRIVALS = ['mosaic', 'photo', 'reveal'] as const;
 export type Arrival = (typeof ARRIVALS)[number];
 export const SHARPNESSES = ['early', 'late', 'never'] as const;
 export type Sharpness = (typeof SHARPNESSES)[number];
-export const AIMS = ['queue', 'best', 'random', 'click'] as const;
+export const AIMS = ['queue', 'best', 'random'] as const;
 export type Aim = (typeof AIMS)[number];
 export const REVEAL_DIRECTIONS = ['toPhoto', 'toMosaic', 'roundTrip'] as const;
 export type RevealDirection = (typeof REVEAL_DIRECTIONS)[number];
@@ -46,7 +46,7 @@ export interface Motion {
   moveMs: number;
   /** When a cell's true content sharpens over its tile as it grows: from ×1.6, from ×3.2, or never. */
   sharpness: Sharpness;
-  /** Which cell a dive aims at: the queue's picture, the best match near the centre, one at random, or the one clicked. */
+  /** Which cell a dive aims at: the queue's picture, the best match near the centre, or one at random — a picture picked by hand always wins, and so does a click on the held mosaic. */
   aim: Aim;
   reveal: RevealDirection;
   /** A step every N ms whatever its parts take (the hold absorbs the rest); 0 = none. */
@@ -70,7 +70,7 @@ export const RECIPE_MOTIONS: Record<Recipe, Motion> = {
   mosaics: { depart: 'dive', arrival: 'mosaic', holdMs: 2000, moveMs: 4000, sharpness: 'never', aim: 'queue', reveal: 'toPhoto', cadenceMs: 0, drift: true },
   wave: { depart: 'wave', arrival: 'mosaic', holdMs: 3000, moveMs: 3000, sharpness: 'never', aim: 'queue', reveal: 'toPhoto', cadenceMs: 0, drift: false },
   slideshow: { depart: 'cut', arrival: 'mosaic', holdMs: 0, moveMs: 3000, sharpness: 'never', aim: 'queue', reveal: 'toPhoto', cadenceMs: 6000, drift: false },
-  steer: { depart: 'dive', arrival: 'mosaic', holdMs: 1500, moveMs: 4000, sharpness: 'late', aim: 'click', reveal: 'toPhoto', cadenceMs: 0, drift: false },
+  steer: { depart: 'dive', arrival: 'mosaic', holdMs: 4000, moveMs: 4000, sharpness: 'late', aim: 'queue', reveal: 'toPhoto', cadenceMs: 0, drift: false },
 };
 
 /** A recipe plays once, not endlessly. */

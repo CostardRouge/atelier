@@ -414,6 +414,36 @@ tile cache again. Driven headless: a wave's frames change through its 3 s
 (`the next one spreads`), a slideshow's steps come at 6 s each, Drift says
 `fading to the next`.
 
+## The Motion section, the aims, steering by a click (2026-11-01, A5 + A6)
+
+Lab 3's A5 (the reveal's direction and round trip, the drift during holds,
+the cadence) was built in A2's clock and verified by A4's drive; what it
+still owed was the UI, which is A6's — so the two are ONE commit. **The
+section** (`MosaicSettings`, *Motion*, closed by default, after *Reading*):
+Departure (select), Arrival (segmented; the Reveal direction row shows
+under *Reveal*), Sharpen, Aim, Move and Hold (sliders in tenths of a
+second), Cadence (`none` at 0), Drift; `setMotion` bounds the patch
+(`sanitizeMotion`) and renames the mode (`recipeOf(motion, mode)`) — so a
+part set by hand reads *Custom* in the transport and choosing a mode puts
+its recipe back; a line under them says which recipe the parts are.
+**Aims**: `queue` takes the chain's entry; `best` and `random` let a DRAWN
+entry yield (the player picks the cell and reports the picture back, so
+the band shows what will happen), a PICKED entry always wins
+(`QueueSource.picked`), and a pull always takes the queue's (its picture
+must hold the current one's mean). **Steering**: a click on the stage
+while a run plays reaches `MosaicPlayer.steer(cell)`, which acts only
+while the ARRIVED mosaic is on screen (`frame.arrived && base === 'to'`):
+the picture in that cell becomes the next step's as a pick of the queue
+(`onPick`) and the steps prepared ahead are dropped and prepared again
+(`replan`); mid-dive a click does nothing — the lab's «le pas en cours si
+la plongée n'a pas dépassé la moitié» was refused as a camera re-aim the
+pure clock cannot express; the *Steer* recipe is a 4 s hold on each
+mosaic to give the click its time. `aim: 'click'` was dropped: steering
+works in every recipe. Driven headless: Arrival → Photo under Mosaics
+reads Custom and back; a reveal there and back says `back into its
+cells`; aim *Best match* replaces the drawn head; a click on the held
+mosaic makes the next step land on that picture.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

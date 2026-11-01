@@ -8,6 +8,22 @@ import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import { CELL_ANIMATIONS, LOT_SIZES, PROPAGATIONS, type CellAnimation, type LotSize, type PerfPrefs, type Propagation } from '../../shared/mosaic/perf';
+import {
+  AIMS,
+  ARRIVALS,
+  DEPARTURES,
+  MOTION_BOUNDS,
+  REVEAL_DIRECTIONS,
+  SHARPNESSES,
+  recipeOf,
+  sanitizeMotion,
+  type Aim,
+  type Arrival,
+  type Departure,
+  type Motion,
+  type RevealDirection,
+  type Sharpness,
+} from '../../shared/mosaic/motion';
 import type { StageView } from './MosaicStage';
 import type { SceneState } from './use-mosaic-scene';
 
@@ -62,8 +78,20 @@ const PROPAGATION_LABELS: Record<Propagation, string> = { rows: 'Top down', poin
 const ANIMATION_LABELS: Record<CellAnimation, string> = { appear: 'Appear', fade: 'Fade', flip: 'Flip', none: 'None' };
 const LOT_LABELS: Record<LotSize, string> = { 0: 'A row', 64: '64 cells', 256: '256 cells', 1024: '1 024 cells' };
 
+const DEPART_LABELS: Record<Departure, string> = { dive: 'Dive in', pull: 'Pull back', alternate: 'Dive, then pull back', wave: 'Wave', fade: 'Fade', cut: 'Cut' };
+const ARRIVAL_LABELS: Record<Arrival, string> = { mosaic: 'Mosaic', photo: 'Photo', reveal: 'Reveal' };
+const REVEAL_LABELS: Record<RevealDirection, string> = { toPhoto: 'To the photo', toMosaic: 'To the mosaic', roundTrip: 'There and back' };
+const SHARPNESS_LABELS: Record<Sharpness, string> = { early: 'Early', late: 'Late', never: 'Never' };
+const AIM_LABELS: Record<Aim, string> = { queue: 'The chain’s', best: 'Best match', random: 'Any' };
+
 export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
+  // A part set by hand: the motion bounded, the mode the recipe it still is — or custom.
+  const setMotion = (patch: Partial<Motion>) =>
+    update((s) => {
+      const motion = sanitizeMotion({ ...s.motion, ...patch }, s.motion);
+      return { ...s, motion, mode: s.mode === 'single' ? 'single' : recipeOf(motion, s.mode) };
+    });
   return (
     <div className="flex flex-col gap-3 px-1.5">
       <InspectorSection id="mosaic-target" title="Target" remember="session">
@@ -147,6 +175,39 @@ export default function MosaicSettings({ settings, update, view, setView, state,
             {scene.shape.cols} × {scene.shape.rows} cells · matched in {Math.round(scene.matchMs)} ms {scene.on === 'worker' ? 'in the background' : 'here'}
           </p>
         )}
+      </InspectorSection>
+      <InspectorSection id="mosaic-motion" title="Motion" remember="session" defaultOpen={false}>
+        <SelectField<Departure> label="Departure" value={settings.motion.depart} options={DEPARTURES.map((id) => ({ id, label: DEPART_LABELS[id] }))} onChange={(depart) => setMotion({ depart })} />
+        <FieldRow label="Arrival" hint={<p><b>Mosaic</b>: land on the next picture’s mosaic. <b>Photo</b>: its picture fades in, holds, dissolves. <b>Reveal</b>: its cells flip to the picture.</p>}>
+          <Segmented<Arrival> size="sm" fill value={settings.motion.arrival} options={ARRIVALS.map((id) => ({ id, label: ARRIVAL_LABELS[id] }))} onChange={(arrival) => setMotion({ arrival })} />
+        </FieldRow>
+        {settings.motion.arrival === 'reveal' && (
+          <FieldRow label="Reveal">
+            <Segmented<RevealDirection> size="sm" fill value={settings.motion.reveal} options={REVEAL_DIRECTIONS.map((id) => ({ id, label: REVEAL_LABELS[id] }))} onChange={(reveal) => setMotion({ reveal })} />
+          </FieldRow>
+        )}
+        <FieldRow label="Sharpen" hint={<p>When a growing cell shows what it really is over its tile: from ×1.6, from ×3.2, or never — the next mosaic then lands over the tile at the end.</p>}>
+          <Segmented<Sharpness> size="sm" fill value={settings.motion.sharpness} options={SHARPNESSES.map((id) => ({ id, label: SHARPNESS_LABELS[id] }))} onChange={(sharpness) => setMotion({ sharpness })} />
+        </FieldRow>
+        <FieldRow label="Aim" hint={<p>Which cell a dive enters: the chain’s next picture, the best match near the centre, or any. A picture you picked in the band always wins, and so does a click on the held mosaic.</p>}>
+          <Segmented<Aim> size="sm" fill value={settings.motion.aim} options={AIMS.map((id) => ({ id, label: AIM_LABELS[id] }))} onChange={(aim) => setMotion({ aim })} />
+        </FieldRow>
+        <SliderRow label="Move" name="move" value={Math.round(settings.motion.moveMs / 100)} min={MOTION_BOUNDS.moveMs[0] / 100} max={MOTION_BOUNDS.moveMs[1] / 100} step={1} reset={38} format={(v) => `${(v / 10).toFixed(1)} s`} onChange={(v) => setMotion({ moveMs: v * 100 })} />
+        <SliderRow label="Hold" name="hold" value={Math.round(settings.motion.holdMs / 100)} min={0} max={MOTION_BOUNDS.holdMs[1] / 100} step={1} reset={11} format={(v) => `${(v / 10).toFixed(1)} s`} onChange={(v) => setMotion({ holdMs: v * 100 })} />
+        <SliderRow
+          label="Cadence"
+          name="cadence"
+          value={Math.round(settings.motion.cadenceMs / 1000)}
+          min={0}
+          max={MOTION_BOUNDS.cadenceMs[1] / 1000}
+          step={1}
+          reset={0}
+          format={(v) => (v ? `every ${v} s` : 'none')}
+          onChange={(v) => setMotion({ cadenceMs: v * 1000 })}
+          hint={<p>A step at a steady beat whatever its parts take: the hold absorbs what the move leaves of it.</p>}
+        />
+        <SwitchRow label="Drift while the mosaic is held" checked={settings.motion.drift} onChange={(drift) => setMotion({ drift })} />
+        <p className="m-0 font-mono text-2xs text-muted">{settings.mode === 'single' ? 'played by the modes under the stage' : settings.mode === 'custom' ? 'custom · the recipes are presets of these parts' : `recipe · ${settings.mode}`}</p>
       </InspectorSection>
       <InspectorSection id="mosaic-perf" title="Performance" remember="local" defaultOpen={false}>
         <SelectField<string>

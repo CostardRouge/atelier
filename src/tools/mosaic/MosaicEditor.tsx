@@ -147,6 +147,8 @@ function MosaicWorkbench({
       next: (index: number) => chainOf(docRef.current).queue[index]?.id,
       draw: chain.draw,
       onDraw: (index: number, id: number) => change((d) => queueSet(d, index, id, 'draw')),
+      onPick: (index: number, id: number) => change((d) => queueSet(d, index, id, 'pick')),
+      picked: (index: number) => chainOf(docRef.current).queue[index]?.by === 'pick',
     }),
     [chain.draw, change],
   );
@@ -255,6 +257,7 @@ function MosaicWorkbench({
                 setOrigin(cell);
                 setTarget(state.scene.tiles[index].id);
               }}
+              onSteer={chained ? (cell) => void player?.steer(cell) : undefined}
             />
             {!status.playing && mode === 'single' && (zoom.zoomed || cropped) && (
               <div className="absolute right-2 top-2 flex items-center gap-1 rounded-control bg-frame/75 p-1" role="group" aria-label="Zoom">
