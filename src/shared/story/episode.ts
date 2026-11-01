@@ -10,6 +10,7 @@ import type { Hook } from './hook';
 import type { Lang } from './locale';
 import type { WallGrid, WallGroup } from './wall-grid';
 import type { Charte, StyleBook } from './objects';
+import type { MapGround } from './map-ground';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -22,6 +23,8 @@ export interface StoryLook {
   charte?: Charte;
   /** The series' settings for its objects, by key (`objects.ts`). */
   objects?: StyleBook;
+  /** What the maps are drawn over: the outline, nothing, or OpenStreetMap's tiles (`map-ground.ts`). */
+  map?: MapGround;
 }
 
 export interface BlockSpec {

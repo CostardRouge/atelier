@@ -1,6 +1,8 @@
 import { PAL } from '../../shared/story/charte';
-import { FONT_ROLES, ROLE_LABEL, STORY_FONTS } from '../../shared/story/fonts';
-import { PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
+import { storyFaceChoices, storyRoleChoices } from '../../shared/story/fonts';
+import FontPicker from '../../shared/ui/FontPicker';
+import type { FontChoice } from '../../shared/ui/font-picker';
+import { geometryKey, PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
 import { styleIn, withSceneTiming, withStyle, withoutStyle, type StyleScope } from '../../shared/story/studio-edit';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
@@ -12,11 +14,9 @@ const SCOPES = [
   { id: 'post' as const, label: 'This post', title: 'Set it for this post alone, over the series' },
 ];
 
-const FONT_OPTIONS: readonly SelectOption<string>[] = [
-  { id: '', label: 'As drawn' },
-  ...FONT_ROLES.map((r) => ({ id: `@${r}`, label: `Charte · ${ROLE_LABEL[r]}` })),
-  ...Object.entries(STORY_FONTS).map(([id, f]) => ({ id, label: f.label })),
-];
+/** « As drawn »: the face the block asks for — no setting of its own. */
+const AS_DRAWN: FontChoice = { id: '', label: 'As drawn', family: 'Geist, "Helvetica Neue", Arial, sans-serif', weights: [300, 400, 600], group: 'The block’s own', note: 'block', system: true };
+const FACES = storyFaceChoices();
 const WEIGHTS: readonly SelectOption<string>[] = [{ id: '', label: 'As drawn' }, ...[300, 400, 500, 600, 700, 800, 900].map((w) => ({ id: String(w), label: String(w) }))];
 const CASES: readonly SelectOption<string>[] = [
   { id: '', label: 'As written' },
@@ -55,6 +55,10 @@ interface ObjectPanelProps {
   /** Where the settings are written: every post of the series, or this post alone (shared with a drag on the stage). */
   scope: StyleScope;
   onScope: (scope: StyleScope) => void;
+  /** The object's own words, which its font picker writes its rows in. */
+  sample?: string;
+  /** A style being tried while a face list is browsed (the stage draws it), null when it closes. */
+  onPreview?: (s: StoryScript | null) => void;
 }
 
 /**
@@ -63,7 +67,7 @@ interface ObjectPanelProps {
  * for every post of the series or this post alone, the post's winning. A
  * scene also takes its length and its caption's window, this post's own.
  */
-export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope }: ObjectPanelProps) {
+export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope, sample, onPreview }: ObjectPanelProps) {
   if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the settings are kept in it.</p>;
   const series = styleIn(script, postId, objKey, 'series');
   const own = styleIn(script, postId, objKey, 'post');
@@ -71,6 +75,10 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
   const here = scope === 'series' ? series : own;
   const set = (patch: Partial<Record<keyof ObjectStyle, unknown>>) => onScript(withStyle(script, postId, objKey, patch, scope));
   const num = (v: number | undefined, d: number) => v ?? d;
+  // A part of a map takes the map's place, size and turn: its Place rows set the map's (`geometryKey`).
+  const gk = geometryKey(objKey);
+  const geo: ObjectStyle = gk === objKey ? shown : scope === 'series' ? styleIn(script, postId, gk, 'series') : { ...styleIn(script, postId, gk, 'series'), ...styleIn(script, postId, gk, 'post') };
+  const setGeo = (patch: Partial<Record<keyof ObjectStyle, unknown>>) => onScript(withStyle(script, postId, gk, patch, scope));
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -80,19 +88,20 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
       <SwitchRow label="Shown" checked={!shown.hidden} onChange={(on) => set({ hidden: on ? undefined : true })} />
 
       <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Place</p>
-      <SliderRow label="Across" value={num(shown.dx, 0)} min={-540} max={540} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => set({ dx: v || undefined })} />
-      <SliderRow label="Down" value={num(shown.dy, 0)} min={-960} max={960} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => set({ dy: v || undefined })} />
+      {gk !== objKey ? <Readout muted>Drawn on the map, it moves, grows and turns with it: these set the map.</Readout> : null}
+      <SliderRow label="Across" value={num(geo.dx, 0)} min={-540} max={540} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dx: v || undefined })} />
+      <SliderRow label="Down" value={num(geo.dy, 0)} min={-960} max={960} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dy: v || undefined })} />
       <SliderRow
         label="Size"
-        value={Math.round(num(shown.scale, 1) * 100)}
+        value={Math.round(num(geo.scale, 1) * 100)}
         min={10}
         max={300}
         step={1}
         reset={100}
         format={(v) => `${v} %`}
-        onChange={(v) => set({ scale: v === 100 ? undefined : v / 100 })}
+        onChange={(v) => setGeo({ scale: v === 100 ? undefined : v / 100 })}
       />
-      <SliderRow label="Turn" value={num(shown.rotate, 0)} min={-180} max={180} step={0.5} reset={0} format={(v) => `${v}°`} onChange={(v) => set({ rotate: v || undefined })} />
+      <SliderRow label="Turn" value={num(geo.rotate, 0)} min={-180} max={180} step={0.5} reset={0} format={(v) => `${v}°`} onChange={(v) => setGeo({ rotate: v || undefined })} />
       <SliderRow
         label="Opacity"
         value={Math.round(num(shown.opacity, 1) * 100)}
@@ -108,7 +117,15 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
         <>
           <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Text</p>
           <FieldRow label="Font">
-            <SelectField label="Font" value={shown.font ?? ''} options={FONT_OPTIONS} onChange={(id) => set({ font: id || undefined })} />
+            <FontPicker
+              label="Font"
+              value={shown.font ?? ''}
+              options={[AS_DRAWN, ...storyRoleChoices(script.look?.charte?.fonts), ...FACES]}
+              sample={sample}
+              weight={shown.weight ?? 600}
+              onChange={(id) => set({ font: id || undefined })}
+              onPreview={onPreview ? (id) => onPreview(id === null ? null : withStyle(script, postId, objKey, { font: id || undefined }, scope)) : undefined}
+            />
           </FieldRow>
           <FieldRow label="Weight">
             <SelectField label="Weight" value={shown.weight ? String(shown.weight) : ''} options={WEIGHTS} onChange={(id) => set({ weight: id ? Number(id) : undefined })} />

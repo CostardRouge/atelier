@@ -18,8 +18,8 @@ type TextOpt = { w?: number; fam?: string; align?: CanvasTextAlign; track?: numb
 export function text(c: Ctx, s: string, x: number, y: number, size: number, color: string, opt: TextOpt = {}) {
   // The object being drawn may set its own colour, case, spacing and outline (`objects.ts`).
   const style = currentStyle();
-  if (style) markText();
   const shown = style?.textCase === "upper" ? s.toUpperCase() : style?.textCase === "lower" ? s.toLowerCase() : s;
+  if (style) markText(s);
   const track = style?.tracking ?? opt.track;
   c.font = font(size, opt.w ?? TYPO.hw, opt.fam ?? TYPO.fam);
   c.fillStyle = colorOf(style?.color, color);

@@ -8,10 +8,8 @@
  * frame drawn over them.
  *
  * The atlas's canvas IS Web Mercator, so a tile is drawn as it comes — one
- * affine `drawImage` per tile — and TONED once when it lands (inverted and
- * greyed for a night look, greyed, or sepia), never per frame: the blend
- * modes that tone it are cheap on one opaque 256 px tile and wrong on a
- * frame with holes in it.
+ * affine `drawImage` per tile — and TONED once when it lands
+ * (`shared/map/tile-tone.ts`), never per frame.
  *
  * While a tile is on its way its nearest loaded ancestor stands in, cut and
  * enlarged, so a zoom never flashes the bare ground.
@@ -20,7 +18,7 @@
 import { fetchPatch, TILE_WORKERS } from '../../shared/map/osm-tiles';
 import type { WorldBox } from './atlas-flight';
 import type { Ctx2D, TileLayer } from './atlas-paint';
-import type { TileTone } from './atlas-settings';
+import { toneRaster, type TileTone } from '../../shared/map/tile-tone';
 import type { Affine } from './atlas-view';
 
 const TILE = 256;
@@ -38,27 +36,6 @@ function makeCanvas(w: number, h: number): Canvas {
   c.width = w;
   c.height = h;
   return c;
-}
-
-/** Tone an opaque tile in place. */
-function toneTile(ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D, tone: TileTone): void {
-  if (tone === 'natural') return;
-  const fill = (op: GlobalCompositeOperation, colour: string) => {
-    ctx.globalCompositeOperation = op;
-    ctx.fillStyle = colour;
-    ctx.fillRect(0, 0, TILE, TILE);
-  };
-  fill('saturation', '#808080');
-  if (tone === 'night') {
-    fill('difference', '#ffffff');
-    fill('multiply', '#a9a7c4');
-  } else if (tone === 'grey') {
-    fill('multiply', '#d8d8d8');
-  } else {
-    fill('color', '#a3814f');
-    fill('multiply', '#f4ead6');
-  }
-  ctx.globalCompositeOperation = 'source-over';
 }
 
 interface Entry {
@@ -178,7 +155,7 @@ export class AtlasTiles implements TileLayer {
       const g = c.getContext('2d') as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
       if (!g) return null;
       g.drawImage(e.raw, 0, 0);
-      toneTile(g, this.tone);
+      toneRaster(g, this.tone, TILE, TILE);
       e.toned = c;
     }
     // Recently used: move to the end of the map's order.

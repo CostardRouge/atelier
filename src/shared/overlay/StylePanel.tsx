@@ -1,4 +1,6 @@
-import { CURATED_FONTS, type FontWeight } from './overlay-types';
+import { type FontWeight } from './overlay-types';
+import { OVERLAY_FONT_CHOICES } from './font-choices';
+import FontPicker from '../ui/FontPicker';
 import {
   glowLayersFor,
   themeFromPreset,
@@ -166,11 +168,12 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
             <Readout muted>{theme.style.color}</Readout>
           </FieldRow>
           <FieldRow label="Font">
-            <SelectField
+            <FontPicker
               label="Font"
               value={theme.style.fontFamily}
-              onChange={(fontFamily) => patchStyle({ fontFamily })}
-              options={CURATED_FONTS.map((f) => ({ id: f, label: f }))}
+              options={OVERLAY_FONT_CHOICES}
+              weight={theme.style.weight}
+              onChange={(fontFamily) => patchStyle({ fontFamily: fontFamily as typeof theme.style.fontFamily })}
             />
           </FieldRow>
           <FieldRow label="Weight">

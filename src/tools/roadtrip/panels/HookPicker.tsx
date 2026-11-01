@@ -42,7 +42,7 @@ import {
 import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registry';
 import { tripPlaces, type MapStop } from '../../../shared/roadtrip/hooks/stops';
 import HookPicturesModal from '../HookPicturesModal';
-import StopsMapSheet from '../StopsMapSheet';
+import StopsMapSheet from '../../../shared/roadtrip/hooks/StopsMapSheet';
 import type { HopChoice } from '../../../shared/roadtrip/trip-hops';
 import type { VehicleRef } from '../../../shared/roadtrip/vehicle-fleet';
 

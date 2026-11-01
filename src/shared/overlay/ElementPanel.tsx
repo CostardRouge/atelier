@@ -3,7 +3,6 @@ import { BATTERY_KEYS } from './battery';
 import { SPEED_UNITS } from '../telemetry/motion';
 import type { DateStyle, TimeFormatOptions } from '../telemetry/time-format';
 import {
-  CURATED_FONTS,
   type Anchor,
   type BatterySource,
   type FontWeight,
@@ -22,6 +21,8 @@ import KnockoutRows from './KnockoutRows';
 import Button from '../ui/Button';
 import { FieldRow, NativeSelect, SwitchRow, TextField, ToggleField, swatchClass, SliderRow } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
+import FontPicker from '../ui/FontPicker';
+import { OVERLAY_FONT_CHOICES } from './font-choices';
 
 const SPEED_FIELDS: ReadonlySet<TelemetryFieldKey> = new Set(['gnd_speed', 'vert_speed']);
 
@@ -787,17 +788,14 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
             </>
           }
         >
-          <NativeSelect
+          <FontPicker
             label="Font"
             value={st.fontFamily}
-            onChange={(e) => change({ fontFamily: e.target.value as OverlayElement['fontFamily'] })}
-          >
-            {CURATED_FONTS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </NativeSelect>
+            options={OVERLAY_FONT_CHOICES}
+            sample={element.text?.trim() || undefined}
+            weight={st.weight}
+            onChange={(f) => change({ fontFamily: f as OverlayElement['fontFamily'] })}
+          />
         </FieldRow>
       )}
 

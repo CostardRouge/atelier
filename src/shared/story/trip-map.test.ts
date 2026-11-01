@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { makeTripRoad, type RoadFix } from '../roadtrip/road-track';
 import { createTripDoc, type TripDoc, type TripPlace } from '../roadtrip/trip-types';
 import { proj, setMap, STOP_REACH, STOP_XY, ROUTE, STOPS } from './geo';
-import { gapsOf, stageEndStops, tripFacts, tripMap, tripRoadPoints, tripStops, withGaps } from './trip-map';
+import { clipToStops, gapsOf, groupedStops, ownStops, stageEndStops, tripFacts, tripMap, tripRoadPoints, tripStops, withGaps } from './trip-map';
+import { parseScript } from './story-script';
 
 const place = (name: string, lat: number, lon: number): TripPlace => ({ id: name, name, state: '', coords: { lat, lon } });
 const SYD = place('Sydney', -33.87, 151.21);
@@ -180,5 +181,74 @@ describe('the map a series chooses', () => {
     expect(tripStops(t, { points: 'starts', label: 'stage' }).map((s) => s[0])).toEqual(['La côte est', 'Melbourne → Adélaïde']);
     expect(tripStops(t, { label: 'place-date' })[0][0]).toMatch(/^Sydney · 03 sept/);
     expect(tripStops(t, { label: 'none' }).every((s) => s[0] === '')).toBe(true);
+  });
+
+  it('draws the author’s own stops, and the road only between the first and the last', () => {
+    const t = withBali();
+    const fixes = [{ t: Date.UTC(2025, 7, 25) / 1000, lat: -8.5, lon: 115.26 }, { t: Date.UTC(2025, 7, 26) / 1000, lat: -8.65, lon: 115.13 }, ...drive()];
+    t.road = makeTripRoad(fixes, t, null, 0);
+    // Every stage kept — Bali is in the trip — but Ubud and Canggu taken off the list.
+    const stops = [
+      { name: 'Sydney', lat: -33.87, lon: 151.21, day: '2025-09-03' },
+      { name: 'Melbourne', lat: -37.81, lon: 144.96, day: '2025-09-15' },
+    ];
+    const own = tripMap(t, { stops })!;
+    expect(own.stops.map((s) => s[0])).toEqual(['Sydney', 'Melbourne']);
+    expect(own.road[0]).toEqual([151.21, -33.87]);
+    const [lon, lat] = own.road[own.road.length - 1];
+    expect(Math.abs(lon - 144.96) + Math.abs(lat + 37.81)).toBeLessThan(0.3);
+    expect(own.times.length).toBe(own.road.length);
+    // The whole road on request, the old map untouched without a list.
+    expect(tripMap(t, { stops, route: 'all' })!.road[0]).toEqual([115.26, -8.5]);
+    expect(tripMap(t)!.road[0]).toEqual([115.26, -8.5]);
+  });
+
+  it('names its own stops as asked, a stop knowing no stage', () => {
+    const stops = [{ name: 'Perth', lat: -31.95, lon: 115.86, day: '2025-09-03' }, { name: 'Albany', lat: -35.02, lon: 117.88 }];
+    expect(ownStops({ stops }).map((s) => s[0])).toEqual(['Perth', 'Albany']);
+    expect(ownStops({ stops, label: 'place-date' })[0][0]).toMatch(/^Perth · 03 sept/);
+    expect(ownStops({ stops, label: 'place-date' })[1][0]).toBe('Albany');
+    expect(ownStops({ stops, label: 'none' }).every((s) => s[0] === '')).toBe(true);
+  });
+
+  it('draws nearby stops as one halt, the list untouched', () => {
+    const list = ownStops({
+      stops: [
+        { name: 'Sydney', lat: -33.87, lon: 151.21 },
+        { name: 'Bondi', lat: -33.89, lon: 151.27 },
+        { name: 'Canberra', lat: -35.28, lon: 149.13 },
+      ],
+    });
+    expect(groupedStops(list, undefined)).toHaveLength(3);
+    const g = groupedStops(list, { km: 10 });
+    expect(g.map((s) => s[0])).toEqual(['Sydney', 'Canberra']);
+  });
+
+  it('cuts a road to its stops in recorded order, and leaves it whole with fewer than two', () => {
+    const fixes = [0, 1, 2, 3, 4, 5].map((i) => ({ lat: 0, lon: i }));
+    expect(clipToStops(fixes, [['a', 1, 0, ''], ['b', 4, 0, '']]).map((f) => f.lon)).toEqual([1, 2, 3, 4]);
+    expect(clipToStops(fixes, [['a', 1, 0, '']])).toHaveLength(6);
+  });
+
+  it('keeps its stops, its grouping and its road in the script', () => {
+    const parsed = parseScript({
+      kind: 'atelier.story-script',
+      version: 1,
+      posts: {},
+      sources: {
+        map: {
+          stops: [{ name: 'Perth', lat: -31.95, lon: 115.86, day: '2025-09-03' }, { name: 'bad', lat: 200, lon: 0 }],
+          took: 'ends',
+          group: { km: 10, visits: 'all', name: 'nope' },
+          route: 'stops',
+        },
+      },
+    });
+    expect(parsed.ok).toBe(true);
+    const map = parsed.ok ? parsed.script.sources?.map : undefined;
+    expect(map?.stops).toEqual([{ name: 'Perth', lat: -31.95, lon: 115.86, day: '2025-09-03' }]);
+    expect(map?.took).toBe('ends');
+    expect(map?.group).toEqual({ km: 10, visits: 'all' });
+    expect(map?.route).toBe('stops');
   });
 });

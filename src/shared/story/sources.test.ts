@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withChosenWall, withLook, withWall } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withChosenWall, withLook, withWall, withWallRules } from './sources';
+import { DEFAULT_WALL_RULES } from './wall-pick';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -209,6 +210,21 @@ describe('the wall chosen in the picker', () => {
     const chosen = withChosenWall(counted, [[7, '2025-09-01']], null);
     expect(withChosenWall(chosen, null, null).sources?.wall).toBeUndefined();
     expect(withWall(chosen, { skip: [3] }, [{ id: 7, day: '2025-09-01' }]).sources?.wall).toEqual({ skip: [3], chosen: [[7, '2025-09-01']] });
+  });
+
+  it('keeps the rules apart from his pins and removals, and drops both going back to one a day', () => {
+    const ruled = withWallRules(counted, { rules: DEFAULT_WALL_RULES }, null);
+    expect(ruled.sources?.wall?.rules).toEqual(DEFAULT_WALL_RULES);
+    const corrected = withWallRules(ruled, { pin: [4], skip: [5] }, [{ id: 4, day: '2025-09-01' }]);
+    expect(corrected.sources?.wall).toMatchObject({ rules: DEFAULT_WALL_RULES, pin: [4], skip: [5] });
+    expect(corrected.facts?.tiles).toEqual([4]);
+    // A new rule keeps his corrections.
+    expect(withWallRules(corrected, { rules: { ...DEFAULT_WALL_RULES, unit: 'week' } }, null).sources?.wall?.pin).toEqual([4]);
+    const back = withWallRules(corrected, { rules: null }, null).sources?.wall;
+    expect(back?.rules).toBeUndefined();
+    expect(back?.pin).toBeUndefined();
+    const parsed = parseScript(corrected);
+    expect(parsed.ok && parsed.script.sources?.wall).toMatchObject({ rules: DEFAULT_WALL_RULES, pin: [4], skip: [5] });
   });
 
   it('reads a pool from a script file, keeping only ids with a day', () => {

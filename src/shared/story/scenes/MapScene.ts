@@ -1,19 +1,31 @@
 // Carte « camera »: zoomed ×2.3 following the route head (sine in-out), then the camera
 // pulls back to the whole map over the last 1.4 s. Coast dim, route accent, stops as reached.
 import { clamp, E, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
-import { coastPaths, ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
+import { ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
+import { drawGround, groundCredit } from "../map-ground";
 import { obj } from "../objects";
 
-/** the coastline at dim, for every map-based block (alpha and width in map units) */
+/** the map's ground — the coastline at dim, the tiles, or nothing (`map-ground.ts`) — for every map-based block (alpha and width in map units) */
 export function drawCoast(c: Ctx, alpha: number, width: number) {
-  if (alpha <= 0) return;
-  c.save();
-  c.globalAlpha *= alpha;
-  c.strokeStyle = PAL.dim;
-  c.lineJoin = "round";
-  c.lineWidth = width;
-  coastPaths().forEach((p) => c.stroke(p));
-  c.restore();
+  drawGround(c, alpha, width);
+}
+
+/**
+ * The tiles' credit, as the licence asks, on the frames that draw them and no
+ * other — an object of its own (`map.credit`), one for every map block, so
+ * its place, face and size are set once for the series. Drawn in the frame's
+ * pixels, outside the map's camera.
+ */
+export function drawMapCredit(c: Ctx, lt: number, from = 0) {
+  const credit = groundCredit();
+  if (!credit) return;
+  obj(c, "map.credit", [880, 1214], lt, (lt) => {
+    c.save();
+    // In ink, not the muted tone: over the tiles the muted one all but vanished (seen headless).
+    c.globalAlpha *= enter(lt, from, 0.8) * 0.75;
+    text(c, credit, 1010, 1222, 20, PAL.ink, { fam: TYPO.mono, w: 400, align: "right" });
+    c.restore();
+  }, from);
 }
 
 export function drawRoute(c: Ctx, frac: number, width: number) {
@@ -69,13 +81,7 @@ export function drawMap(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   c.translate(-fx, -fy);
   // Under the camera, three objects: the coast, the route and the named stops (each on its own clock).
   obj(c, "map-camera.coast", [fx, fy], lt, (lt) => {
-    c.save();
-    c.globalAlpha *= enter(lt, 0, 0.8);
-    c.strokeStyle = PAL.dim;
-    c.lineJoin = "round";
-    c.lineWidth = (2.5 / s) * 1.4;
-    coastPaths().forEach((p) => c.stroke(p));
-    c.restore();
+    drawGround(c, enter(lt, 0, 0.8), (2.5 / s) * 1.4);
   }, 0);
   const progress = (lt: number) => (still ? clamp((lt - 0.4) / (4.4 * K)) : clamp((lt - 0.3) / (3.6 * K)));
   obj(c, "map-camera.route", [fx, fy], lt, (lt) => drawRoute(c, sineInOut(progress(lt)), (5 / s) * 1.6));
@@ -83,4 +89,5 @@ export function drawMap(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
     mapLabels(c, sineInOut(progress(lt)), still ? 26 : (26 / s) * 1.3, still ? E(clamp((lt - 4.6 * K) / (0.9 * K))) : 0, still),
   );
   c.restore();
+  drawMapCredit(c, lt);
 }

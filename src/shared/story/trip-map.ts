@@ -9,6 +9,8 @@ import { lineKm, roadPieces, simplify, tripRoadFixes, tripRoadLine } from '../ro
 import type { TripDoc } from '../roadtrip/trip-types';
 import type { Stop } from './geo';
 import { dayText, type Lang } from './locale';
+import { groupName, groupStops, type NamedTown } from '../roadtrip/hooks/stop-clusters';
+import type { MapStopRef } from './story-script';
 
 /**
  * The tolerance the road is simplified to, metres. At the story map's widest
@@ -45,6 +47,17 @@ export interface MapChoice {
   label?: MapLabel;
   /** The language its days are written in. */
   lang?: Lang;
+  /** The author's own stops, in visiting order: present, they are the map's points (`ScriptSources.map.stops`). */
+  stops?: readonly MapStopRef[];
+  /** Nearby stops drawn as one halt, `km` apart at most (Trips' rules, `stop-clusters.ts`). */
+  group?: { km: number; visits?: 'consecutive' | 'all'; name?: 'town' | 'first' | 'central' };
+  /** The town index when it is at hand, so a group can take the name of the biggest town near it. */
+  towns?: readonly NamedTown[] | null;
+  /**
+   * The recorded road drawn: from the fix nearest the first stop to the one nearest the last (`stops`), or all of
+   * it. Unset, it is `stops` for the author's own list and `all` otherwise — a map made before keeps its road.
+   */
+  route?: 'stops' | 'all';
 }
 
 type Stage = TripDoc['stages'][number];
@@ -67,9 +80,8 @@ export function chosenStages(trip: TripDoc, choice: MapChoice = {}): Stage[] {
  * by default where each kept stage starts or ends (the maintainer's pick), a
  * town that ends one stage and starts the next named once.
  */
-export function tripStops(trip: TripDoc, choice: MapChoice = {}): Stop[] {
+function pickedPlaces(trip: TripDoc, choice: MapChoice) {
   const points = choice.points ?? 'ends';
-  const label = choice.label ?? 'place';
   const picked: { name: string; lon: number; lat: number; date: string; stage: Stage }[] = [];
   for (const stage of chosenStages(trip, choice)) {
     const placed = stage.places.filter((p) => p.coords);
@@ -86,10 +98,55 @@ export function tripStops(trip: TripDoc, choice: MapChoice = {}): Stop[] {
       picked.push({ name: place.name, lon: place.coords!.lon, lat: place.coords!.lat, date, stage });
     }
   }
-  return picked.map((p): Stop => {
+  return picked;
+}
+
+/** The towns `tripStops` would name, as stops a series can take over and edit (`ScriptSources.map.stops`). */
+export function derivedStops(trip: TripDoc, choice: MapChoice = {}): MapStopRef[] {
+  return pickedPlaces(trip, choice).map((p) => ({ name: p.name, lat: p.lat, lon: p.lon, day: p.date }));
+}
+
+/** Every located place of the trip, every stage, in the order lived — what the big map offers as rings. */
+export function tripPlaces(trip: TripDoc): (MapStopRef & { id: string })[] {
+  const out: (MapStopRef & { id: string })[] = [];
+  for (const stage of chosenStages(trip, {})) {
+    const placed = stage.places.filter((p) => p.coords);
+    placed.forEach((p, i) =>
+      out.push({ id: p.id, name: p.name, lat: p.coords!.lat, lon: p.coords!.lon, day: i === placed.length - 1 && i > 0 ? stage.endDate : stage.startDate }),
+    );
+  }
+  return out;
+}
+
+export function tripStops(trip: TripDoc, choice: MapChoice = {}): Stop[] {
+  const label = choice.label ?? 'place';
+  return pickedPlaces(trip, choice).map((p): Stop => {
     const name =
       label === 'none' ? '' : label === 'stage' ? stageLabel(p.stage) : label === 'place-date' ? `${p.name} · ${dayLabel(p.date, choice.lang)}` : p.name;
     return [name, p.lon, p.lat, dayLabel(p.date, choice.lang)];
+  });
+}
+
+/** The author's own stops, as the map names them (`choice.label`; a stop knows no stage, so « stage » names the place). */
+export function ownStops(choice: MapChoice): Stop[] {
+  const label = choice.label ?? 'place';
+  return (choice.stops ?? []).map((s): Stop => {
+    const day = s.day ? dayLabel(s.day, choice.lang) : '';
+    const name = label === 'none' ? '' : label === 'place-date' && day ? `${s.name} · ${day}` : s.name;
+    return [name, s.lon, s.lat, day];
+  });
+}
+
+/** Stops `km` apart at most drawn as one, on the member nearest their middle, named by the first or that one. */
+export function groupedStops(stops: readonly Stop[], group: MapChoice['group'], towns: readonly NamedTown[] | null = null): Stop[] {
+  if (!group || !(group.km > 0) || stops.length < 2) return stops.slice();
+  const pts = stops.map(([name, lon, lat]) => ({ name, lat, lon }));
+  return groupStops(pts, group.km, group.visits ?? 'consecutive').map((g): Stop => {
+    const at = stops[g.anchor];
+    const first = stops[g.members[0]];
+    const name = g.members.length < 2 ? at[0] : groupName(pts, g, group.name ?? 'first', towns);
+    // The halt's day is the first visit's: the order the map tells it in.
+    return [name, at[1], at[2], first[3]];
   });
 }
 
@@ -120,15 +177,44 @@ function tripRoadFixesForMap(trip: TripDoc, choice: MapChoice = {}) {
 
 /** The map of a trip as a series chooses it, or null when it has neither a road nor two named points to draw. */
 export function tripMap(trip: TripDoc, choice: MapChoice = {}): TripMap | null {
-  const fixes = tripRoadFixesForMap(trip, choice);
+  const listed = choice.stops ? ownStops(choice) : tripStops(trip, choice);
+  const stops = groupedStops(listed, choice.group, choice.towns ?? null);
+  const all = tripRoadFixesForMap(trip, choice);
+  const fixes = (choice.route ?? (choice.stops ? 'stops' : 'all')) === 'stops' ? clipToStops(all, listed) : all;
   const road = fixes.map((f): [number, number] => [f.lon, f.lat]);
   const times = fixes.map((f) => f.t);
-  const stops = tripStops(trip, choice);
   if (road.length < 2) return stops.length >= 2 ? { road: [], times: [], stops } : null;
   if (stops.length >= 2) return { road, times, stops };
   // A road with no named stage ends still starts and ends somewhere: two unnamed dots, never the placeholder's.
   const [a, b] = [road[0], road[road.length - 1]];
   return { road, times, stops: [['', a[0], a[1], ''], ['', b[0], b[1], '']] };
+}
+
+/**
+ * The road from the fix nearest the first stop to the fix nearest the last one after it, in recorded order — so
+ * a stopover the author took off the list (a flight in, a country after) leaves the drawn road too. Fewer than
+ * two stops, or a road too short, is left whole.
+ */
+export function clipToStops<F extends { lat: number; lon: number }>(fixes: readonly F[], stops: readonly Stop[]): F[] {
+  if (stops.length < 2 || fixes.length < 2) return fixes.slice();
+  const nearest = (lon: number, lat: number, from: number) => {
+    let best = from;
+    let bestD = Infinity;
+    const k = Math.cos((lat * Math.PI) / 180);
+    for (let i = from; i < fixes.length; i++) {
+      const d = ((fixes[i].lon - lon) * k) ** 2 + (fixes[i].lat - lat) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+  const [, lon0, lat0] = stops[0];
+  const [, lon1, lat1] = stops[stops.length - 1];
+  const a = nearest(lon0, lat0, 0);
+  const b = nearest(lon1, lat1, a);
+  return b > a ? fixes.slice(a, b + 1) : fixes.slice();
 }
 
 /** The episode with the map's holes put where its `map-holes` blocks leave `gaps` unset. */

@@ -45,7 +45,7 @@ function StoryTransport({ clock, disabled, trailing }: { clock: PlayClock; disab
   const fraction = total > 0 ? Math.min(1, t / total) : 0;
 
   return (
-    <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft min-w-0">
+    <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft min-w-0">
       <IconButton label={playing ? 'Pause (Space)' : 'Play (Space)'} onClick={() => clock.toggle()} variant="primary" disabled={disabled}>
         {playing ? Icons.pause : Icons.play}
       </IconButton>

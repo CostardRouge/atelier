@@ -32,7 +32,7 @@ export const NETWORK_EXCEPTIONS: readonly NetworkException[] = [
     host: 'tile.openstreetmap.org',
     module: 'src/shared/map/track-map.ts',
     when:
-      'Only once you turn a map background on, on this device — in Flight Map, Composer, Flight Atlas, the map of a trip or an opener that draws it. The tiles tell that server which area you look at; they are kept on this device for a month, and every frame they appear in credits © OpenStreetMap contributors.',
+      'Only once you turn a map background on, on this device — in Flight Map, Composer, Flight Atlas, the map of a trip, an opener that draws it or a Storytelling series whose maps are drawn over it. The tiles tell that server which area you look at; they are kept on this device for a month, and every frame they appear in credits © OpenStreetMap contributors.',
   },
   {
     name: 'OpenStreetMap place search',

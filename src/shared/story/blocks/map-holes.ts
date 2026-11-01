@@ -7,7 +7,7 @@ import { register } from "./index";
 import { appear, clamp, enter, font, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
 import { obj } from "../objects";
 import { routeAt, STOPS } from "../geo";
-import { drawCoast, mapLabels } from "../scenes/MapScene";
+import { drawCoast, drawMapCredit, mapLabels } from "../scenes/MapScene";
 import { MAP_DY } from "./journey-impossible";
 
 type Gap = [number, number];
@@ -127,6 +127,7 @@ register("map-holes", (c, lt, p) => {
     }), 3.1);
   }
   c.restore();
+  drawMapCredit(c, lt);
   if (!fill) obj(c, "map-holes.legend", [400, 1206], lt, (lt) => legend(c, lt, 2.4, [{ kind: "line", color: PAL.acc, label: word("camera") }, { kind: "dots", color: PAL.dim, label: word("noPosition") }]), 2.4);
   else obj(c, "map-holes.legend", [400, 1206], lt, (lt) => legend(c, lt, 1.6, [{ kind: "line", color: PAL.acc, label: "Polarsteps" }, { kind: "tri", color: PAL.ink, label: "drone" }]), 1.6);
 });
