@@ -2990,6 +2990,8 @@ it and may grow blocks of its own.
   drag). A bar selects its object and moves the playhead into it; a click on
   an empty stretch moves the playhead there; drag a scene's right edge to
   change its length, a caption's edges to time its window — this post's own.
+  Every change is undone with ↶ beside the post's name or ⌘Z / Ctrl+Z, and
+  redone with ↷ or ⇧⌘Z; the edits of one object within a moment are one step.
   On a phone the stage comes first, the inspector under it, the list last.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its

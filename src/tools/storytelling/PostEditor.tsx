@@ -16,6 +16,7 @@ import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
 import ChartePanel from './ChartePanel';
+import useHistory from '../../shared/history/use-history';
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
@@ -201,6 +202,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const [selected, setSelected] = useState<StudioSelection | null>({ kind: 'panel', id: 'charte' });
   // Where an object's settings are written — the inspector's switch, and what a drag on the stage writes too.
   const [scope, setScope] = useState<StyleScope>('series');
+  // Undo and redo over the script (`shared/history`): every setting of the Studio is a change to it,
+  // so watching it covers them all; edits of one object within a moment are one step.
+  const history = useHistory<StoryScript | null>({
+    value: script,
+    onRestore: (s) => onScript(s),
+    label: selected?.kind === 'object' ? selected.key : (selected?.id ?? null),
+    what: 'change',
+  });
   const scenes = useMemo(() => sceneSpans(shown), [shown]);
   const [tracks, setTracks] = useState<ObjectTrack[]>([]);
   useEffect(() => {
@@ -693,6 +702,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   return (
     <div className="flex-1 min-h-0 flex flex-col @container">
       <PageBar back={{ label: 'Map', onClick: onBack, title: 'Back to the map of subjects' }}>
+        <span className="self-center">{history.control}</span>
         <span className="self-center w-[min(22rem,60vw)]">
           <SelectField
             label="Post"
