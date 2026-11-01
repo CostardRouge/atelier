@@ -90,7 +90,7 @@ const BLOCK_LABEL: Record<string, string> = {
   'card-recovery': 'Card recovery',
   'season-recap': 'Season recap',
 };
-const PART_LABEL: Record<string, string> = { caption: 'Caption', hud: 'HUD', hook: 'Hook' };
+const PART_LABEL: Record<string, string> = { caption: 'Caption', hud: 'HUD', hook: 'Hook', 'transfer.nas': 'NAS' };
 
 /** How the Studio names an object by its key: a scene by its block, a part by its last name. */
 export function objectLabel(key: string): string {

@@ -1,4 +1,5 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { memo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import type { PlayClock } from '../../shared/media/play-clock';
 import { objectLabel, type ObjectTrack, type SceneSpan } from '../../shared/story/studio';
 import type { StudioSelection } from './StudioTree';
 
@@ -16,9 +17,8 @@ const ROW = 'relative h-6 pointer-coarse:h-9 flex-1 min-w-0';
  * right edge is dragged to change its length, a caption's two edges to time
  * its window — this post's own (`withSceneTiming`), committed on release.
  */
-export default function StudioTimeline({
-  total,
-  t,
+function StudioTimeline({
+  clock,
   scenes,
   tracks,
   selected,
@@ -26,8 +26,7 @@ export default function StudioTimeline({
   onSeek,
   onTiming,
 }: {
-  total: number;
-  t: number;
+  clock: PlayClock;
   scenes: readonly SceneSpan[];
   tracks: readonly ObjectTrack[];
   selected: StudioSelection | null;
@@ -36,6 +35,8 @@ export default function StudioTimeline({
   onTiming: (index: number, timing: { len?: number; cap?: { a: number; b: number } }) => void;
 }) {
   const [drag, setDrag] = useState<Drag | null>(null);
+  // The length only: the playhead below follows the clock on its own, so a playing post does not redraw every bar.
+  const total = useSyncExternalStore(clock.subscribe, () => clock.total);
   const lane = useRef<HTMLDivElement>(null);
   const pct = (s: number) => `${(Math.max(0, Math.min(total, s)) / total) * 100}%`;
   const secAt = (clientX: number) => {
@@ -233,10 +234,19 @@ export default function StudioTimeline({
         <div className="pointer-events-none absolute inset-y-0 left-0 right-0 flex gap-2">
           <span className={`${LABEL_W} shrink-0`} />
           <span className="relative flex-1">
-            <span className="absolute inset-y-0 w-[2px] -translate-x-1/2 bg-danger" style={{ left: pct(t) }} />
+            <Playhead clock={clock} />
           </span>
         </div>
       </div>
     </div>
   );
 }
+
+/** The timeline's playhead: the one part of it that moves with the clock. */
+function Playhead({ clock }: { clock: PlayClock }) {
+  useSyncExternalStore(clock.subscribe, clock.getVersion);
+  const at = clock.total > 0 ? Math.min(1, clock.t / clock.total) : 0;
+  return <span className="absolute inset-y-0 w-[2px] -translate-x-1/2 bg-danger" style={{ left: `${at * 100}%` }} />;
+}
+
+export default memo(StudioTimeline);

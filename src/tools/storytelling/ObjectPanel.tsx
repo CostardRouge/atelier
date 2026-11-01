@@ -65,7 +65,7 @@ interface ObjectPanelProps {
  * scene also takes its length and its caption's window, this post's own.
  */
 export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope }: ObjectPanelProps) {
-  if (!script) return <Readout muted>Load your script first: the settings are kept in it.</Readout>;
+  if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the settings are kept in it.</p>;
   const series = styleIn(script, postId, objKey, 'series');
   const own = styleIn(script, postId, objKey, 'post');
   const shown: ObjectStyle = scope === 'series' ? series : { ...series, ...own };

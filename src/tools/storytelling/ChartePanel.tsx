@@ -3,7 +3,7 @@ import { PALETTE_KEYS, PALETTE_LABEL, type PaletteKey } from '../../shared/story
 import { withCharte } from '../../shared/story/studio-edit';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
-import { FieldRow, Readout, SelectField, swatchClass, type SelectOption } from '../../shared/ui/Inspector';
+import { FieldRow, SelectField, swatchClass, type SelectOption } from '../../shared/ui/Inspector';
 
 /** The charte « lin » of the labs — what every token is until the series says otherwise. */
 const LIN: Record<PaletteKey, string> = { bg: '#f1eee8', ink: '#18191c', acc: '#2f4fbf', dim: '#9b9890', soft: '#e2ded5', deep: '#d9d4c9' };
@@ -28,7 +28,7 @@ const DEFAULT_FACE: Record<(typeof FONT_ROLES)[number], StoryFontId> = { title: 
  * preset and each colour can then be set alone.
  */
 export default function ChartePanel({ script, onScript }: { script: StoryScript | null; onScript: (s: StoryScript) => void }) {
-  if (!script) return <Readout muted>Load your script first: the charte is kept in it.</Readout>;
+  if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the charte is kept in it.</p>;
   const charte = script.look?.charte ?? {};
   const palette = { ...LIN, ...(charte.palette ?? {}) };
   const preset = PRESETS.find((p) => PALETTE_KEYS.every((k) => p.palette[k] === palette[k]))?.id ?? '';

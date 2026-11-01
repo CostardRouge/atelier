@@ -4,7 +4,7 @@ import { HOOK_DEFAULTS, hookSoundFor, type Hook, type HookEntry, type HookExit, 
 import { withPostHooks } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button, { buttonClass } from '../../shared/ui/Button';
-import { FieldRow, Readout, SelectField, SliderRow, TextAreaField, TextField, type SelectOption } from '../../shared/ui/Inspector';
+import { FieldRow, SelectField, SliderRow, TextAreaField, TextField, type SelectOption } from '../../shared/ui/Inspector';
 
 export type HookSoundKind = 'keys' | 'impact' | 'whoosh';
 /** The author's own files for the hook's sounds, held for the visit like the voice and the music. */
@@ -67,7 +67,7 @@ export default function HookPanel({
   /** A file this browser cannot decode: the editor says so where it says it for the other sounds. */
   onUnreadable: (name: string) => void;
 }) {
-  if (!script) return <Readout muted>Load your script first: the hook&apos;s words are kept in it.</Readout>;
+  if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the hook&apos;s words are kept in it.</p>;
   const post = script.posts[postId] ?? {};
   const hooks = post.hooks ?? [];
   const active = Math.min(hooks.length - 1, Math.max(0, post.hookActive ?? 0));

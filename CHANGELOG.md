@@ -57,7 +57,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: the series' charte — its six colours (or a whole palette: linen, night, kraft, white paper, sea), its
   faces for titles, text, numbers and hand, and its weights — every block is drawn in it.
 - Storytelling: every part of every scene is an object of its own in the Studio — the wall's number, the map's route,
-  the counter's label, the HUD's progress line… — and every change in the Studio can be undone and redone (⌘Z / ⇧⌘Z). Twelve faces
+  the counter's label, the HUD's progress line… — and every change in the Studio can be undone and redone (⌘Z / ⇧⌘Z).
+- Storytelling: the Studio is laid out like Flight Atlas — the stage stays in place while the inspector scrolls, on a
+  phone too — with Space to play and pause, and the safe areas of TikTok, Reels and Shorts (and a grid) over the
+  preview, never in the export. Twelve faces
   ship with Atelier for it.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.

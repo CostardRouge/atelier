@@ -2970,7 +2970,8 @@ it and may grow blocks of its own.
   text, numbers, hand) among the twelve shipped, and the title and light
   weights. Every block is drawn in them; *Back to the charte « lin »* forgets
   it all.
-- **The Studio.** A post opens in three columns: the list on the left — the
+- **The Studio.** A post opens like Flight Atlas or Trips: panels around a
+  stage that never scrolls away. Wide, three columns: the list on the left — the
   series' *Charte & look*, *Script* and *Sources*, the post's *Hook*, *Sound &
   effects* and *Export & archive*, then the post's **scenes** in order, each
   with the **objects** it draws (its caption, its parts) and what sits over
@@ -2992,7 +2993,13 @@ it and may grow blocks of its own.
   change its length, a caption's edges to time its window — this post's own.
   Every change is undone with ↶ beside the post's name or ⌘Z / Ctrl+Z, and
   redone with ↷ or ⇧⌘Z; the edits of one object within a moment are one step.
-  On a phone the stage comes first, the inspector under it, the list last.
+  **Space** plays and pauses (unless a text field has the key); ← and → on
+  the scrubber step a tenth of a second (a second with ⇧). *Guides* beside
+  Play draws the safe area of TikTok, Instagram Reels or YouTube Shorts — where
+  their buttons and captions cover the video — and a grid over the preview,
+  never into the export (remembered on this device). Narrower, the list moves
+  into the inspector as a tab; on a phone the stage keeps the top of the
+  screen, the inspector scrolls under it, and the timeline is its third tab.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and

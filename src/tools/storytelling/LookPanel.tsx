@@ -31,7 +31,7 @@ interface LookPanelProps {
  * pictures to the grid's places, so every post's wall is the same.
  */
 export default function LookPanel({ postId, script, onScript }: LookPanelProps) {
-  if (!script) return <Readout muted>Load a script to keep a look for the series.</Readout>;
+  if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load a script to keep a look for the series.</p>;
   const look = script.look ?? {};
   const g = wallGrid(look.wall);
   const setWall = (wall: Partial<WallGrid>) => onScript(withLook(script, { wall }));
