@@ -8,7 +8,7 @@
 import { OV, type Cap } from './charte';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
-import type { WallGrid } from './wall-grid';
+import type { WallGrid, WallGroup } from './wall-grid';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -46,6 +46,8 @@ export interface Episode {
   lang?: Lang;
   /** The series' look: the wall's grid, the grain and the vignette (`story-script.ts`, `StoryLook`). */
   look?: StoryLook;
+  /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
+  wallGroups?: WallGroup[] | null;
 }
 
 export type Slot = BlockSpec & { a: number; b: number; start: number; key: string };

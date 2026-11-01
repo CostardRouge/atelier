@@ -3019,7 +3019,9 @@ it and may grow blocks of its own.
   between pictures, their corners, a share of pictures twice as big, the order
   the days are laid in (along the rows, down the columns, out from the centre
   — the first day where the camera starts — or shuffled) and how close the
-  camera ends; then the grain and the vignette. *Count* chooses one picture per
+  camera ends; *Groups* lays the pictures in one band of rows per stage of the
+  trip or per month, each named on its first picture (*Name each group*); then
+  the grain and the vignette. *Count* chooses one picture per
   place of the wall; after changing the grid, *Count again* gives each place
   its own. *Back to the charte's look* forgets it all.
 - **Language.** *Language* (in the Script section) says whether the series is

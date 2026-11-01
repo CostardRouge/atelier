@@ -10,7 +10,7 @@ export const COVER = { bandTop: 760, bandBottom: 1200, wallScrim: 0.5 };
 
 export function drawCover(c: Ctx, ep: Episode): void {
   setLang(ep.lang);
-  setWallGrid(ep.look?.wall);
+  setWallGrid(ep.look?.wall, ep.wallGroups);
   setTexture(ep.look);
   c.save();
   c.fillStyle = PAL.bg;

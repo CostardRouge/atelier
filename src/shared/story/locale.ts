@@ -26,6 +26,10 @@ export const dayText = (iso: string, lang: Lang = LANG): string =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString(LOCALE[lang], lang === 'fr' ? { day: '2-digit', month: 'short', timeZone: 'UTC' } : { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 /** The words the blocks draw of their own, in each language — the French ones as the labs chose them. */
+/** A month as a wall's band names it: « Sep 2025 » / « sept. 2025 ». */
+export const monthText = (iso: string, lang: Lang = LANG) =>
+  new Date(`${iso.slice(0, 7)}-15T12:00:00Z`).toLocaleDateString(LOCALE[lang], { month: 'short', year: 'numeric', timeZone: 'UTC' });
+
 const WORDS = {
   fr: {
     nextEpisode: 'ÉPISODE SUIVANT',

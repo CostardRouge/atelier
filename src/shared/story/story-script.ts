@@ -14,7 +14,8 @@ import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
-import { readWallGrid } from './wall-grid';
+import { readWallGrid, wallGroups, type WallStage } from './wall-grid';
+import { monthText } from './locale';
 
 export interface SkeletonBlock {
   block: string;
@@ -109,6 +110,10 @@ export interface ScriptFacts {
    * Ids only: the thumbnails are kept on this device (`wall-cache.ts`).
    */
   tiles?: number[];
+  /** Each tile's day, ISO, aligned with `tiles` — what groups the wall by stage or month. */
+  tileDays?: string[];
+  /** The stages counted, their names and days, in date order — what a wall grouped by stage reads. */
+  stages?: WallStage[];
   /** Runs of days with media but no position, `[first, last]` ISO dates — the map's holes (`geoFacts`). */
   holes?: [string, string][];
 }
@@ -396,11 +401,23 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
   const holes = Array.isArray(raw.holes)
     ? raw.holes.filter((h): h is [string, string] => Array.isArray(h) && h.length === 2 && isDay(h[0]) && isDay(h[1]) && h[0] <= h[1])
     : undefined;
+  // The tiles' days count only when there is one for each tile.
+  const tileDays =
+    tiles?.length && Array.isArray(raw.tileDays) && raw.tileDays.length === tiles.length && raw.tileDays.every(isDay)
+      ? (raw.tileDays as string[])
+      : undefined;
+  const stages = Array.isArray(raw.stages)
+    ? raw.stages.flatMap((s): WallStage[] =>
+        isObject(s) && typeof s.label === 'string' && isDay(s.from) && isDay(s.to) && s.from <= s.to ? [{ label: s.label, from: s.from, to: s.to }] : [],
+      )
+    : undefined;
   return {
     at: raw.at,
     from: typeof raw.from === 'string' ? raw.from : undefined,
     values,
     ...(tiles?.length ? { tiles } : {}),
+    ...(tileDays ? { tileDays } : {}),
+    ...(stages?.length ? { stages } : {}),
     ...(holes?.length ? { holes: holes.map((h): [string, string] => [h[0], h[1]]) } : {}),
   };
 }
@@ -436,6 +453,12 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     cover: { line: fillText(mine?.cover ?? '', values, lang) },
     lang,
     ...(script?.look ? { look: script.look } : {}),
+    wallGroups: wallGroups(
+      (mine?.facts ?? script?.facts)?.tileDays,
+      script?.look?.wall?.group ?? 'none',
+      (mine?.facts ?? script?.facts)?.stages,
+      (iso) => monthText(iso, lang),
+    ),
     hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];

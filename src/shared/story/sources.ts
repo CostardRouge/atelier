@@ -6,10 +6,11 @@
  */
 import type { TripDoc } from '../roadtrip/trip-types';
 import type { ScriptFacts, ScriptPost, ScriptSources, StoryScript } from './story-script';
-import { chosenStages, type MapChoice } from './trip-map';
+import { chosenStages, stageLabel, type MapChoice } from './trip-map';
+import type { WallPick } from './story-facts';
 import { TEXTURE } from './charte';
 import type { StoryLook } from './episode';
-import { WALL_DEFAULTS, type WallGrid } from './wall-grid';
+import { WALL_DEFAULTS, type WallGrid, type WallStage } from './wall-grid';
 
 /** The sources a post reads: its own fields over the series'. */
 export function sourcesOf(script: StoryScript | null, postId: string): ScriptSources {
@@ -101,13 +102,28 @@ export function countedSpan(trip: TripDoc, sources: ScriptSources): CountedSpan 
  * at once, the other numbers untouched — what was hidden or picked is drawn,
  * not counted.
  */
-export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null, tiles: number[]): StoryScript {
+export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null, picks: readonly WallPick[]): StoryScript {
   const sources: ScriptSources = { ...(script.sources ?? {}) };
   if (wall && (wall.skip?.length || Object.keys(wall.pick ?? {}).length)) sources.wall = wall;
   else delete sources.wall;
-  const facts = script.facts ? { ...script.facts, ...(tiles.length ? { tiles } : {}) } : undefined;
-  if (facts && !tiles.length) delete facts.tiles;
-  return { ...script, sources, ...(facts ? { facts } : {}) };
+  return { ...script, sources, ...(script.facts ? { facts: withTiles(script.facts, picks) } : {}) };
+}
+
+/** Facts with the wall's pictures (and their days) replaced; none takes the wall's pictures away. */
+export function withTiles(facts: ScriptFacts, picks: readonly WallPick[]): ScriptFacts {
+  const next: ScriptFacts = { ...facts };
+  delete next.tiles;
+  delete next.tileDays;
+  if (picks.length) {
+    next.tiles = picks.map((p) => p.id);
+    next.tileDays = picks.map((p) => p.day);
+  }
+  return next;
+}
+
+/** The kept stages as counting freezes them for a wall grouped by stage: their names and days, in date order. */
+export function countedStages(trip: TripDoc, sources: ScriptSources): WallStage[] {
+  return chosenStages(trip, mapChoiceOf(sources)).map((s) => ({ label: stageLabel(s), from: s.startDate, to: s.endDate }));
 }
 
 /**

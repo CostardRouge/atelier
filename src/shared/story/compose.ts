@@ -72,7 +72,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setLang(ep.lang);
   setMap(opts.stops ?? null, opts.road ?? null);
   setWall(opts.wall ?? null);
-  setWallGrid(ep.look?.wall);
+  setWallGrid(ep.look?.wall, ep.wallGroups);
   setTexture(ep.look);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;

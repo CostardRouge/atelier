@@ -85,6 +85,22 @@ export function wallPicks(
   n: number,
   chosen: { skip?: readonly number[]; pick?: Readonly<Record<string, number>> } = {},
 ): number[] {
+  return wallPickDays(all, span, n, chosen).map((p) => p.id);
+}
+
+/** A picture of the wall and the day it stands for. */
+export interface WallPick {
+  id: number;
+  day: string;
+}
+
+/** `wallPicks` with each picture's day — what groups the wall by stage or month (`ScriptFacts.tileDays`). */
+export function wallPickDays(
+  all: WinnowCalendar,
+  span: Span,
+  n: number,
+  chosen: { skip?: readonly number[]; pick?: Readonly<Record<string, number>> } = {},
+): WallPick[] {
   // The author's own picture for a day stands for its cover; a picture he hid takes its day off the wall.
   const days = all.days
     .filter((d) => counts(d.date, span) && d.count > 0 && d.cover_id > 0)
@@ -92,7 +108,8 @@ export function wallPicks(
     .filter((d) => !chosen.skip?.includes(d.id))
     .sort((a, b) => a.date.localeCompare(b.date));
   const picked = days.length <= n ? days : Array.from({ length: n }, (_, i) => days[Math.round((i * (days.length - 1)) / Math.max(1, n - 1))]);
-  return [...new Set(picked.map((d) => d.id))];
+  const seen = new Set<number>();
+  return picked.flatMap((d) => (seen.has(d.id) ? [] : (seen.add(d.id), [{ id: d.id, day: d.date }])));
 }
 
 /** What changed between two countings, for the line under Count again: `[key, before, after]`. */

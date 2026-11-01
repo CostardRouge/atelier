@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deviceKey, factChanges, factsFromCalendars, factText, fillParams, fillText, gearFacts, geoFacts, spanDays, wallPicks } from './story-facts';
-import { assemble, SCRIPT_KIND, type PostSkeleton, type StoryScript } from './story-script';
+import { deviceKey, factChanges, factsFromCalendars, factText, fillParams, fillText, gearFacts, geoFacts, spanDays, wallPickDays, wallPicks } from './story-facts';
+import { assemble, parseScript, SCRIPT_KIND, type PostSkeleton, type StoryScript } from './story-script';
 
 const values = { 'media.total': 98412, days: 178 };
 
@@ -162,5 +162,43 @@ describe('the wall chosen by hand', () => {
   it('shows a day’s picked picture in place of its cover, and leaves a hidden one’s day off', () => {
     expect(wallPicks(all, span, 10, { pick: { '2025-09-04': 42 }, skip: [3] })).toEqual([1, 42]);
     expect(wallPicks(all, span, 10, { skip: [42], pick: { '2025-09-04': 42 } })).toEqual([1, 3]);
+  });
+});
+
+describe('wallPickDays', () => {
+  it('gives each picture of the wall the day it stands for', () => {
+    const cal = { days: [{ date: '2025-09-02', count: 4, cover_id: 20 }, { date: '2025-09-01', count: 2, cover_id: 10 }], bounds: null };
+    expect(wallPickDays(cal, { from: '2025-09-01', to: '2025-09-30' }, 10)).toEqual([
+      { id: 10, day: '2025-09-01' },
+      { id: 20, day: '2025-09-02' },
+    ]);
+  });
+});
+
+describe('the wall’s days and stages in a script', () => {
+  const skeleton: PostSkeleton = { id: 'a', number: 'EP.00', season: 1, blocks: [{ block: 'wall', len: 4, cap: null }] };
+  const facts = {
+    at: 'x',
+    values: {},
+    tiles: [10, 20, 30],
+    tileDays: ['2025-09-01', '2025-09-02', '2025-10-01'],
+    stages: [{ label: 'Sydney', from: '2025-09-01', to: '2025-09-30' }, { label: 'Cairns', from: '2025-10-01', to: '2025-10-09' }],
+  };
+
+  it('reads them, the days only when there is one for each tile', () => {
+    const parsed = parseScript({ kind: SCRIPT_KIND, version: 1, posts: {}, facts });
+    expect(parsed.ok && parsed.script.facts?.tileDays).toEqual(facts.tileDays);
+    expect(parsed.ok && parsed.script.facts?.stages).toEqual(facts.stages);
+    const short = parseScript({ kind: SCRIPT_KIND, version: 1, posts: {}, facts: { ...facts, tileDays: ['2025-09-01'] } });
+    expect(short.ok && short.script.facts?.tileDays).toBeUndefined();
+  });
+
+  it('hands every post the wall’s groups when the look groups it', () => {
+    const script: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: {}, facts, look: { wall: { group: 'stage' } } };
+    expect(assemble(skeleton, script, [skeleton]).wallGroups).toEqual([
+      { label: 'Sydney', n: 2 },
+      { label: 'Cairns', n: 1 },
+    ]);
+    expect(assemble(skeleton, { ...script, look: undefined }, [skeleton]).wallGroups).toBeNull();
   });
 });

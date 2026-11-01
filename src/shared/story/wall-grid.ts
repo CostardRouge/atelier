@@ -15,6 +15,9 @@ import { rng } from './motion';
 
 export type WallOrder = 'rows' | 'columns' | 'centre' | 'shuffle';
 export const WALL_ORDERS: readonly WallOrder[] = ['rows', 'columns', 'centre', 'shuffle'];
+/** How the pictures are grouped: not at all, by the trip's stage, or by month — each group a band of rows. */
+export type WallGroupBy = 'none' | 'stage' | 'month';
+export const WALL_GROUP_BYS: readonly WallGroupBy[] = ['none', 'stage', 'month'];
 
 export interface WallGrid {
   /** Columns across the frame. */
@@ -31,9 +34,13 @@ export interface WallGrid {
   order: WallOrder;
   /** How close the camera ends: 1 = the whole frame of pictures, 2 = twice as close. */
   zoom: number;
+  /** Grouped by stage or month: each group its own band of rows, in day order inside. */
+  group: WallGroupBy;
+  /** A grouped wall names each band on its first picture. */
+  labels: boolean;
 }
 
-export const WALL_DEFAULTS: WallGrid = { cols: 10, rows: 0, gap: 6, radius: 0, big: 0, order: 'rows', zoom: 1 };
+export const WALL_DEFAULTS: WallGrid = { cols: 10, rows: 0, gap: 6, radius: 0, big: 0, order: 'rows', zoom: 1, group: 'none', labels: true };
 
 /** The settings' bounds; a script asking for more is brought back into them. */
 export const WALL_LIMITS = {
@@ -66,6 +73,8 @@ export function readWallGrid(raw: unknown): Partial<WallGrid> | undefined {
   if (typeof r.order === 'string' && (WALL_ORDERS as readonly string[]).includes(r.order)) out.order = r.order as WallOrder;
   const zoom = num(r.zoom);
   if (zoom !== undefined) out.zoom = clamp(zoom, WALL_LIMITS.zoom);
+  if (typeof r.group === 'string' && (WALL_GROUP_BYS as readonly string[]).includes(r.group)) out.group = r.group as WallGroupBy;
+  if (typeof r.labels === 'boolean') out.labels = r.labels;
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -81,6 +90,70 @@ export interface WallRect {
   d: number;
   /** The centre cell, where the camera starts. */
   centre: boolean;
+  /** On a grouped wall: the picture it shows (an index into the wall's pictures), its band, and whether it opens the band. */
+  pic?: number;
+  band?: number;
+  head?: boolean;
+}
+
+/** A group of the wall's pictures, consecutive in day order: its name and how many pictures it holds. */
+export interface WallGroup {
+  label: string;
+  n: number;
+}
+
+/** A stage as counting froze it: its name and its days (`ScriptFacts.stages`). */
+export interface WallStage {
+  label: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * The wall's pictures cut into groups by their days (`ScriptFacts.tileDays`):
+ * by the stage a day falls in — a day in none joins the stage before it — or
+ * by month. Consecutive runs only, so the groups follow the wall's day order.
+ * Null when there is nothing to group by. (pure)
+ */
+export function wallGroups(days: readonly string[] | undefined, by: WallGroupBy, stages: readonly WallStage[] | undefined, monthLabel: (iso: string) => string): WallGroup[] | null {
+  if (by === 'none' || !days?.length) return null;
+  if (by === 'stage' && !stages?.length) return null;
+  const sorted = by === 'stage' ? [...stages!].sort((a, b) => a.from.localeCompare(b.from)) : [];
+  const keyOf = (day: string): string => {
+    if (by === 'month') return day.slice(0, 7);
+    const inside = sorted.find((s) => s.from <= day && day <= s.to);
+    if (inside) return inside.label;
+    const before = sorted.filter((s) => s.from <= day).pop();
+    return (before ?? sorted[0]).label;
+  };
+  const out: WallGroup[] = [];
+  for (const day of days) {
+    const key = keyOf(day);
+    const label = by === 'month' ? monthLabel(`${key}-01`) : key;
+    const last = out[out.length - 1];
+    if (last && last.label === label) last.n += 1;
+    else out.push({ label, n: 1 });
+  }
+  return out;
+}
+
+/** Rows given to each group, in proportion to its pictures, one row at least, `R` in all (largest remainders). */
+export function bandRows(sizes: readonly number[], R: number): number[] {
+  const N = sizes.reduce((a, b) => a + b, 0);
+  const exact = sizes.map((n) => (n / N) * R);
+  const rows = exact.map((e) => Math.max(1, Math.floor(e)));
+  let sum = rows.reduce((a, b) => a + b, 0);
+  while (sum > R) {
+    const i = rows.reduce((best, v, k) => (v > rows[best] ? k : best), 0);
+    rows[i] -= 1;
+    sum -= 1;
+  }
+  const byRemainder = exact.map((e, i) => [e - Math.floor(e), i] as const).sort((a, b) => b[0] - a[0]);
+  for (let k = 0; sum < R; k = (k + 1) % byRemainder.length) {
+    rows[byRemainder[k][1]] += 1;
+    sum += 1;
+  }
+  return rows;
 }
 
 export interface WallLayout {
@@ -97,9 +170,9 @@ const layouts = new Map<string, WallLayout>();
  * one until the frame is covered; a big picture takes 2 × 2 cells, placed
  * by a seeded draw (the same wall every time), never over the centre cell.
  */
-export function wallLayout(given?: Partial<WallGrid> | null): WallLayout {
+export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly number[] | null): WallLayout {
   const g = wallGrid(given);
-  const key = `${g.cols}|${g.rows}|${g.big}|${g.order}`;
+  const key = `${g.cols}|${g.rows}|${g.big}|${g.order}|${g.gap}|${groups?.join(',') ?? ''}`;
   const known = layouts.get(key);
   if (known) return known;
   const cellW = W / g.cols;
@@ -113,6 +186,15 @@ export function wallLayout(given?: Partial<WallGrid> | null): WallLayout {
   const ri = ny;
   const x0 = W / 2 - cellW / 2 - nx * cellW;
   const y0 = H / 2 - cellH / 2 - ny * cellH;
+  // A grouped wall: each group a band of whole rows, in proportion to its pictures.
+  const banded = groups && groups.length > 1 && groups.length <= R && groups.every((n) => n > 0);
+  const bandOf = new Int16Array(R);
+  if (banded) {
+    let r = 0;
+    bandRows(groups, R).forEach((rows, b) => {
+      for (let k = 0; k < rows; k++) bandOf[r++] = b;
+    });
+  }
   const taken = new Uint8Array(C * R);
   const placed: { c: number; r: number; span: number }[] = [];
   // The big pictures first: a seeded shuffle of every top-left corner, each kept when its four cells are free.
@@ -132,6 +214,7 @@ export function wallLayout(given?: Partial<WallGrid> | null): WallLayout {
       const four = [k, k + 1, k + C, k + C + 1];
       if (four.some((q) => taken[q])) continue;
       if ((r === ri || r + 1 === ri) && (c === ci || c + 1 === ci)) continue;
+      if (banded && bandOf[r] !== bandOf[r + 1]) continue;
       four.forEach((q) => (taken[q] = 1));
       placed.push({ c, r, span: 2 });
     }
@@ -152,6 +235,52 @@ export function wallLayout(given?: Partial<WallGrid> | null): WallLayout {
     };
   });
   const byRows = (a: { c: number; r: number }, b: { c: number; r: number }) => a.r - b.r || a.c - b.c;
+  if (banded) {
+    // Day order inside each band, along its rows or down its columns; the band's top row stands apart.
+    const byCols = (a: { c: number; r: number }, b: { c: number; r: number }) => a.c - b.c || a.r - b.r;
+    rects.sort((a, b) => bandOf[a.r] - bandOf[b.r] || (g.order === 'columns' ? byCols(a, b) : byRows(a, b)));
+    const sep = Math.max(8, g.gap * 2);
+    const firstRow = (b: number) => bandOf.indexOf(b);
+    let start = 0;
+    const counts = new Map<number, number>();
+    rects.forEach((q) => counts.set(bandOf[q.r], (counts.get(bandOf[q.r]) ?? 0) + 1));
+    const startOf: number[] = [];
+    groups.forEach((n, b) => {
+      startOf[b] = start;
+      start += n;
+    });
+    const seen = new Map<number, number>();
+    // A band is named on its first place wholly inside the frame (the grid spills past every edge).
+    const heads = new Map<number, (typeof rects)[number]>();
+    for (const q of rects) {
+      const b = bandOf[q.r];
+      if (!heads.has(b) && q.x >= -0.5 && q.y >= -0.5 && q.x + q.w <= W + 0.5) heads.set(b, q);
+    }
+    const layout: WallLayout = {
+      rects: rects.map((q) => {
+        const b = bandOf[q.r];
+        const j = seen.get(b) ?? 0;
+        seen.set(b, j + 1);
+        const opens = b > 0 && q.r === firstRow(b);
+        return {
+          x: q.x,
+          y: q.y + (opens ? sep : 0),
+          w: q.w,
+          h: q.h - (opens ? sep : 0),
+          d: q.d,
+          centre: q.centre,
+          band: b,
+          head: (heads.get(b) ?? rects.find((x) => bandOf[x.r] === b)) === q,
+          pic: startOf[b] + pictureFor(j, counts.get(b) ?? 1, groups[b]),
+        };
+      }),
+      cellW,
+      cellH,
+    };
+    if (layouts.size > 32) layouts.clear();
+    layouts.set(key, layout);
+    return layout;
+  }
   if (g.order === 'columns') rects.sort((a, b) => a.c - b.c || a.r - b.r);
   else if (g.order === 'centre') rects.sort((a, b) => (a.centre ? -1 : b.centre ? 1 : a.d - b.d || byRows(a, b)));
   else if (g.order === 'shuffle') {

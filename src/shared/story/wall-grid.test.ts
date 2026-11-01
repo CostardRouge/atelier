@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pictureFor, readWallGrid, wallCells, wallLayout, WALL_DEFAULTS } from './wall-grid';
+import { bandRows, pictureFor, readWallGrid, wallCells, wallGroups, wallLayout, WALL_DEFAULTS } from './wall-grid';
 
 describe('wallLayout', () => {
   it('lays the default exactly as the wall was first drawn: 11 × 19 cells of 108 px, its centre on the frame’s', () => {
@@ -65,5 +65,52 @@ describe('readWallGrid', () => {
     expect(readWallGrid('nope')).toBeUndefined();
     expect(readWallGrid({})).toBeUndefined();
     expect(WALL_DEFAULTS.cols).toBe(10);
+  });
+});
+
+describe('grouping the wall', () => {
+  const stages = [
+    { label: 'Sydney → Byron', from: '2025-09-01', to: '2025-09-10' },
+    { label: 'Queensland', from: '2025-09-12', to: '2025-09-30' },
+  ];
+  const days = ['2025-09-01', '2025-09-05', '2025-09-11', '2025-09-12', '2025-10-02'];
+
+  it('cuts the pictures into consecutive groups by stage — a day between stages joins the one before — or by month', () => {
+    expect(wallGroups(days, 'stage', stages, (iso) => iso)).toEqual([
+      { label: 'Sydney → Byron', n: 3 },
+      { label: 'Queensland', n: 2 },
+    ]);
+    expect(wallGroups(days, 'month', undefined, (iso) => `m${iso.slice(5, 7)}`)).toEqual([
+      { label: 'm09', n: 4 },
+      { label: 'm10', n: 1 },
+    ]);
+    expect(wallGroups(days, 'stage', undefined, (iso) => iso)).toBeNull();
+    expect(wallGroups(undefined, 'month', undefined, (iso) => iso)).toBeNull();
+    expect(wallGroups(days, 'none', stages, (iso) => iso)).toBeNull();
+  });
+
+  it('gives each group rows in proportion, one at least, all the rows in all', () => {
+    expect(bandRows([100, 100], 19)).toEqual([10, 9]);
+    expect(bandRows([1000, 1, 1], 19)).toEqual([17, 1, 1]);
+    expect(bandRows([3, 1], 4).reduce((a, b) => a + b, 0)).toBe(4);
+  });
+
+  it('lays each group in its own band, in day order, opening on a head, and its pictures inside it', () => {
+    const { rects } = wallLayout({ cols: 10, big: 0.2 }, [120, 60, 30]);
+    const bands = [0, 1, 2].map((b) => rects.filter((r) => r.band === b));
+    bands.forEach((list) => expect(list.filter((r) => r.head)).toHaveLength(1));
+    // A band's pictures are its own: 0–119, 120–179, 180–209.
+    expect(Math.max(...bands[0].map((r) => r.pic!))).toBeLessThan(120);
+    expect(Math.min(...bands[1].map((r) => r.pic!))).toBe(120);
+    expect(Math.max(...bands[2].map((r) => r.pic!))).toBe(209);
+    // Bands follow each other down the frame, the next one's head below the last one's rows.
+    expect(bands[1][0].y).toBeGreaterThan(Math.max(...bands[0].map((r) => r.y)));
+    // Pictures increase along the band.
+    bands[0].forEach((r, i) => i && expect(r.pic!).toBeGreaterThanOrEqual(bands[0][i - 1].pic!));
+  });
+
+  it('falls back to one wall when there is a single group or more groups than rows', () => {
+    expect(wallLayout({ cols: 10 }, [50]).rects[0].band).toBeUndefined();
+    expect(wallLayout({ cols: 10 }, Array.from({ length: 40 }, () => 1)).rects[0].band).toBeUndefined();
   });
 });

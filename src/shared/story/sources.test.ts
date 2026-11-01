@@ -144,14 +144,14 @@ describe('withWall', () => {
   const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 3 }, tiles: [1, 2, 3] } };
 
   it('keeps the choice, freezes its pictures, and leaves the numbers as they were', () => {
-    const next = withWall(counted, { skip: [3], pick: { '2025-09-04': 42 } }, [1, 42]);
+    const next = withWall(counted, { skip: [3], pick: { '2025-09-04': 42 } }, [{ id: 1, day: '2025-09-03' }, { id: 42, day: '2025-09-04' }]);
     expect(next.sources?.wall).toEqual({ skip: [3], pick: { '2025-09-04': 42 } });
-    expect(next.facts).toEqual({ at: 'x', values: { days: 3 }, tiles: [1, 42] });
+    expect(next.facts).toEqual({ at: 'x', values: { days: 3 }, tiles: [1, 42], tileDays: ['2025-09-03', '2025-09-04'] });
     expect(next.sources?.trip).toEqual(counted.sources?.trip);
   });
 
   it('forgets an empty choice', () => {
-    expect(withWall(counted, null, [1, 2, 3]).sources?.wall).toBeUndefined();
+    expect(withWall(counted, null, [{ id: 1, day: '2025-09-03' }]).sources?.wall).toBeUndefined();
   });
 
   it('reads the choice from a script file, dropping what is not an id or a day', () => {

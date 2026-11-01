@@ -1,9 +1,15 @@
 import { TEXTURE } from '../../shared/story/charte';
 import { factsOf, withLook } from '../../shared/story/sources';
 import { MAX_TILES, type StoryScript } from '../../shared/story/story-script';
-import { wallCells, wallGrid, WALL_DEFAULTS, WALL_LIMITS, type WallGrid, type WallOrder } from '../../shared/story/wall-grid';
+import { wallCells, wallGrid, WALL_DEFAULTS, WALL_LIMITS, type WallGrid, type WallGroupBy, type WallOrder } from '../../shared/story/wall-grid';
 import Button from '../../shared/ui/Button';
 import { FieldRow, Readout, SelectField, SliderRow, SwitchRow, type SelectOption } from '../../shared/ui/Inspector';
+
+const GROUPS: readonly SelectOption<WallGroupBy>[] = [
+  { id: 'none', label: 'Not grouped' },
+  { id: 'stage', label: 'By stage' },
+  { id: 'month', label: 'By month' },
+];
 
 const ORDERS: readonly SelectOption<WallOrder>[] = [
   { id: 'rows', label: 'Along the rows' },
@@ -30,7 +36,17 @@ export default function LookPanel({ postId, script, onScript }: LookPanelProps) 
   const g = wallGrid(look.wall);
   const setWall = (wall: Partial<WallGrid>) => onScript(withLook(script, { wall }));
   const cells = wallCells(g);
-  const tiles = factsOf(script, postId)?.tiles?.length ?? 0;
+  const facts = factsOf(script, postId);
+  const tiles = facts?.tiles?.length ?? 0;
+  const grouped = g.group !== 'none';
+  // Why a grouping chosen cannot show yet: the pictures' days, or the stages, come from a count.
+  const groupWaits = !grouped
+    ? null
+    : !facts?.tileDays
+      ? 'Count again under Sources to know each picture’s day.'
+      : g.group === 'stage' && !facts.stages?.length
+        ? 'Count again with a trip under Sources to know its stages.'
+        : null;
   const wants = Math.min(cells, MAX_TILES);
   const px = (v: number) => `${Math.round(v)} px`;
   const pct = (v: number) => `${Math.round(v)} %`;
@@ -63,8 +79,19 @@ export default function LookPanel({ postId, script, onScript }: LookPanelProps) 
         format={(v) => `×${v.toFixed(2)}`}
         onChange={(zoom) => setWall({ zoom })}
       />
+      <FieldRow label="Groups">
+        <SelectField label="How the pictures are grouped" value={g.group} options={GROUPS} onChange={(group) => setWall({ group })} />
+      </FieldRow>
+      {grouped ? <SwitchRow label="Name each group" checked={g.labels} onChange={(labels) => setWall({ labels })} /> : null}
+      {groupWaits ? <Readout muted>{groupWaits}</Readout> : null}
       <FieldRow label="Order">
-        <SelectField label="The order the pictures are laid in" value={g.order} options={ORDERS} onChange={(order) => setWall({ order })} />
+        <SelectField
+          label="The order the pictures are laid in"
+          // A grouped wall keeps its days in order inside each band: along its rows or down its columns.
+          value={grouped && (g.order === 'centre' || g.order === 'shuffle') ? 'rows' : g.order}
+          options={grouped ? ORDERS.slice(0, 2) : ORDERS}
+          onChange={(order) => setWall({ order })}
+        />
       </FieldRow>
       <Readout muted>
         {`${cells} places on the wall.`}

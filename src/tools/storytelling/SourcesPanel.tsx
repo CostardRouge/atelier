@@ -2,10 +2,10 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withWall } from '../../shared/story/sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withTiles, withWall, countedStages } from '../../shared/story/sources';
 import DaysModal from './DaysModal';
 import WallModal from './WallModal';
-import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPicks } from '../../shared/story/story-facts';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPickDays } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
 import { wallCells } from '../../shared/story/wall-grid';
 import type { WallProgress } from './wall-cache';
@@ -118,16 +118,23 @@ export default function SourcesPanel({
           .catch(() => null),
       ]);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
-      const tiles = wallPicks(all, span, Math.min(MAX_TILES, wallCells(script.look?.wall)), sources.wall);
+      const picks = wallPickDays(all, span, Math.min(MAX_TILES, wallCells(script.look?.wall)), sources.wall);
+      const stages = countedStages(trip, sources);
       const before = script.facts?.values ?? null;
       onScript(
-        withSeriesFacts(script, {
-          at: new Date().toISOString(),
-          from: `${trip.name} · ${connection.id}`,
-          values,
-          ...(tiles.length ? { tiles } : {}),
-          ...(geo?.holes.length ? { holes: geo.holes } : {}),
-        }),
+        withSeriesFacts(
+          script,
+          withTiles(
+            {
+              at: new Date().toISOString(),
+              from: `${trip.name} · ${connection.id}`,
+              values,
+              ...(stages.length ? { stages } : {}),
+              ...(geo?.holes.length ? { holes: geo.holes } : {}),
+            },
+            picks,
+          ),
+        ),
       );
       setCounting({ state: 'done', changes: before ? factChanges(before, values) : [] });
     } catch (err) {
