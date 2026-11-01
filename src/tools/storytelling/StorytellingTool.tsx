@@ -1,16 +1,31 @@
 import '@fontsource/geist/300.css';
 import '@fontsource/geist/400.css';
 import '@fontsource/geist/600.css';
+// The Studio's other faces (`shared/story/fonts.ts`): from our own origin, like every font of the suite.
+// Space Grotesk, Instrument Serif, Montserrat, VT323 and JetBrains Mono are the shell's already (`main.tsx`).
+import '@fontsource/fraunces/400.css';
+import '@fontsource/fraunces/600.css';
+import '@fontsource/fraunces/900.css';
+import '@fontsource/caveat/600.css';
+import '@fontsource/zilla-slab/600.css';
+import '@fontsource/zilla-slab/700.css';
+import '@fontsource/archivo-black/400.css';
+import '@fontsource/special-elite/400.css';
 import { useCallback, useEffect, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import type { StoryScript } from '../../shared/story/story-script';
+import { STORY_FONTS } from '../../shared/story/fonts';
 import PostEditor, { type PostSound } from './PostEditor';
 import { POSTS } from './posts';
 import { loadStoredScript, storeScript } from './script-store';
 import StoryGallery from './StoryGallery';
 
-/** The faces the posts draw with, loaded before the first frame is painted. */
-const FACES = ['300 40px Geist', '400 40px Geist', '600 40px Geist', '400 40px "JetBrains Mono"'];
+/**
+ * The faces the posts may draw with (`STORY_FONTS`), every weight shipped,
+ * loaded before the first frame is painted: a canvas draws a face still
+ * loading in its fallback and never redraws, and an export must not.
+ */
+const FACES = Object.values(STORY_FONTS).flatMap((f) => f.weights.map((w) => `${'italic' in f && f.italic ? 'italic ' : ''}${w} 40px ${f.family}`));
 
 const BASE = '/storytelling';
 
