@@ -37,6 +37,12 @@ export interface ComposeOptions {
    * frame holds (`studio.ts`).
    */
   dry?: boolean;
+  /**
+   * Draw straight onto `c` under this transform (a, b, c, d, e, f) instead of
+   * the identity, no layer per slot — a canvas of one pixel, or a small one,
+   * for the Studio to learn what a point or an object covers (`stage-pick.ts`).
+   */
+  base?: readonly [number, number, number, number, number, number];
 }
 
 let layer: HTMLCanvasElement | null = null;
@@ -91,7 +97,8 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
   c.save();
-  c.setTransform(1, 0, 0, 1, 0, 0);
+  if (opts.base) c.setTransform(...opts.base);
+  else c.setTransform(1, 0, 0, 1, 0, 0);
   c.globalAlpha = 1;
   c.globalCompositeOperation = 'source-over';
   c.fillStyle = PAL.bg;
@@ -99,7 +106,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   slots.forEach((slot, i) => {
     const alpha = slotAlpha(slots, i, t);
     if (alpha <= 0) return;
-    if (opts.dry) {
+    if (opts.dry || opts.base) {
       c.save();
       c.globalAlpha = alpha;
       drawSlot(c, ep, slot, t - slot.start);

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { PAL } from '../../shared/story/charte';
 import { FONT_ROLES, ROLE_LABEL, STORY_FONTS } from '../../shared/story/fonts';
 import { PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
@@ -54,6 +53,9 @@ interface ObjectPanelProps {
   text: boolean;
   /** For a scene: its index among the post's blocks and its timing as drawn, so it can be timed anew. */
   scene?: { index: number; len: number; cap: { a: number; b: number } | null; set: { len?: number; cap?: { a: number; b: number } } } | null;
+  /** Where the settings are written: every post of the series, or this post alone (shared with a drag on the stage). */
+  scope: StyleScope;
+  onScope: (scope: StyleScope) => void;
 }
 
 /**
@@ -62,8 +64,7 @@ interface ObjectPanelProps {
  * for every post of the series or this post alone, the post's winning. A
  * scene also takes its length and its caption's window, this post's own.
  */
-export default function ObjectPanel({ script, onScript, postId, objKey, text, scene }: ObjectPanelProps) {
-  const [scope, setScope] = useState<StyleScope>('series');
+export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope }: ObjectPanelProps) {
   if (!script) return <Readout muted>Load your script first: the settings are kept in it.</Readout>;
   const series = styleIn(script, postId, objKey, 'series');
   const own = styleIn(script, postId, objKey, 'post');

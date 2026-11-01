@@ -2979,7 +2979,9 @@ it and may grow blocks of its own.
   setting is kept in your script; with none, a post draws exactly as its code.
   Under the stage, the **timeline** lays the post on one clock: a row of
   scenes, the hook, the captions, the HUD, then the parts of the selected
-  scene. A bar selects its object and moves the playhead into it; a click on
+  scene. On the **stage**, a click selects the object under it and outlines
+  it; drag the selected object to move it (on a phone, tap to select, then
+  drag). A bar selects its object and moves the playhead into it; a click on
   an empty stretch moves the playhead there; drag a scene's right edge to
   change its length, a caption's edges to time its window — this post's own.
   On a phone the stage comes first, the inspector under it, the list last.

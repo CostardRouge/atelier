@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { BED_SAMPLE_RATE, renderBed } from '../../shared/audio/render-bed';
 import { decodeSoundFile, type SoundClip } from '../../shared/audio/sound-clip';
 import type { SoundEvent } from '../../shared/audio/sound-event';
@@ -31,7 +31,8 @@ import ObjectPanel from './ObjectPanel';
 import StageView from './StageView';
 import StudioTree, { type StudioPanel, type StudioSelection } from './StudioTree';
 import StudioTimeline from './StudioTimeline';
-import { withSceneTiming } from '../../shared/story/studio-edit';
+import { styleIn, withSceneTiming, withStyle, type StyleScope } from '../../shared/story/studio-edit';
+import { boxOf, pickAt } from './stage-pick';
 import { objectTracks, sceneSpans, type ObjectTrack } from '../../shared/story/studio';
 
 export interface Sound {
@@ -133,7 +134,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const [archiveTo, setArchiveTo] = useState<string>('');
   const target = connections.find((c) => c.id === archiveTo) ?? connections[0] ?? null;
 
-  const episodeOf = useCallback((skeleton: PostSkeleton) => assemble(skeleton, script, POSTS), [script]);
+  // While an object is dragged on the stage, the post is drawn from a DRAFT of the script, written on release.
+  const [draft, setDraft] = useState<StoryScript | null>(null);
+  const live = draft ?? script;
+  const episodeOf = useCallback((skeleton: PostSkeleton) => assemble(skeleton, live, POSTS), [live]);
 
   // The map follows the series' trip when it names one and this browser has
   // it (`trip-map.ts`): its road, and the towns where a stage starts or ends.
@@ -194,6 +198,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
 
   // --- the Studio: what is selected, and the objects the post draws over time ----
   const [selected, setSelected] = useState<StudioSelection | null>({ kind: 'panel', id: 'charte' });
+  // Where an object's settings are written — the inspector's switch, and what a drag on the stage writes too.
+  const [scope, setScope] = useState<StyleScope>('series');
   const scenes = useMemo(() => sceneSpans(shown), [shown]);
   const [tracks, setTracks] = useState<ObjectTrack[]>([]);
   useEffect(() => {
@@ -205,6 +211,49 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     setPlaying(false);
     setT(Math.max(0, at));
   }, []);
+
+  // The selected object's outline on the stage, found by comparing frames (`stage-pick.ts`), once the playhead rests.
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const selId = selected?.kind === 'object' ? selected.id : null;
+  useEffect(() => {
+    if (!selId || playing || !fontsReady) {
+      setBox(null);
+      return;
+    }
+    const id = window.setTimeout(() => setBox(boxOf(shown, Math.min(t, total - 0.001), mapOpts, selId)), 60);
+    return () => window.clearTimeout(id);
+  }, [selId, playing, fontsReady, shown, t, total, mapOpts]);
+
+  // A press on the stage picks what is under it; held and moved on the selected object, it moves it.
+  const press = useRef<{ x: number; y: number; key: string; dx: number; dy: number; moved: boolean } | null>(null);
+  const onStageDown = (e: ReactPointerEvent<HTMLDivElement>, scale: number) => {
+    if (!fontsReady) return;
+    setPlaying(false);
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - r.left) / scale;
+    const y = (e.clientY - r.top) / scale;
+    const hit = pickAt(shown, Math.min(t, total - 0.001), mapOpts, x, y);
+    if (!hit) return;
+    setSelected({ kind: 'object', id: hit.id, key: hit.key, slot: hit.slot });
+    if (!script) return;
+    const style = scope === 'series' ? styleIn(script, postId, hit.key, 'series') : { ...styleIn(script, postId, hit.key, 'series'), ...styleIn(script, postId, hit.key, 'post') };
+    press.current = { x: e.clientX, y: e.clientY, key: hit.key, dx: style.dx ?? 0, dy: style.dy ?? 0, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onStageMove = (e: ReactPointerEvent<HTMLDivElement>, scale: number) => {
+    const p = press.current;
+    if (!p || !script) return;
+    const mx = (e.clientX - p.x) / scale;
+    const my = (e.clientY - p.y) / scale;
+    if (!p.moved && Math.hypot(mx, my) < 4 / scale) return;
+    p.moved = true;
+    setDraft(withStyle(script, postId, p.key, { dx: Math.round(p.dx + mx) || undefined, dy: Math.round(p.dy + my) || undefined }, scope));
+  };
+  const onStageUp = () => {
+    if (press.current?.moved && draft) onScript(draft);
+    press.current = null;
+    setDraft(null);
+  };
 
   // The list's thumbnails, painted once per script.
   const covers = useMemo(() => {
@@ -622,6 +671,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           onScript={onScript}
           postId={postId}
           objKey={sel.key}
+          scope={scope}
+          onScope={setScope}
           text={track?.text ?? false}
           scene={
             scene && scene.index !== null && block
@@ -652,7 +703,26 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
 
         <section aria-label="Stage" className="order-1 flex-none @min-[1000px]:order-none flex flex-col @min-[1000px]:min-h-0 gap-2 p-3">
           <div className="flex-none h-[calc(var(--app-h)*0.62)] @min-[1000px]:h-auto @min-[1000px]:flex-1 @min-[1000px]:min-h-0">
-            <StageView canvasRef={stageRef} label={`${episode.number} ${episode.title}, at ${fmt(t)}`} />
+            <StageView canvasRef={stageRef} label={`${episode.number} ${episode.title}, at ${fmt(t)}`}>
+              {(scale) => (
+                <div
+                  className={`absolute inset-0 cursor-crosshair ${selected?.kind === 'object' ? 'touch-none' : ''}`}
+                  title="Click an object to select it; drag the selected one to move it"
+                  onPointerDown={(e) => onStageDown(e, scale)}
+                  onPointerMove={(e) => onStageMove(e, scale)}
+                  onPointerUp={onStageUp}
+                  onPointerCancel={onStageUp}
+                >
+                  {box ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute pointer-events-none rounded-[3px] outline outline-2 outline-accent outline-offset-2"
+                      style={{ left: box.x * scale, top: box.y * scale, width: box.w * scale, height: box.h * scale }}
+                    />
+                  ) : null}
+                </div>
+              )}
+            </StageView>
           </div>
           <div className="flex items-center gap-3 w-full max-w-[32rem] mx-auto">
             <Button
