@@ -3014,6 +3014,14 @@ it and may grow blocks of its own.
   one post; the one selected plays and exports, so each can be exported and
   tested. *Promise* says what the post pays off, beside the hook. The wall
   under a hook shows its picture only. The words are kept in your script.
+- **Look.** The Look section sets the series' wall and texture, the same in
+  every post: its columns, square pictures or a number of rows, the gap
+  between pictures, their corners, a share of pictures twice as big, the order
+  the days are laid in (along the rows, down the columns, out from the centre
+  — the first day where the camera starts — or shuffled) and how close the
+  camera ends; then the grain and the vignette. *Count* chooses one picture per
+  place of the wall; after changing the grid, *Count again* gives each place
+  its own. *Back to the charte's look* forgets it all.
 - **Language.** *Language* (in the Script section) says whether the series is
   told in English or French: its counted numbers (98,412 or 98 412), the days
   on the map (Sep 3 or 03 sept.) and the few words the blocks write themselves

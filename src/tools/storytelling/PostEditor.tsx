@@ -14,6 +14,7 @@ import { totalSeconds, type Episode } from '../../shared/story/episode';
 import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
+import LookPanel from './LookPanel';
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
@@ -475,6 +476,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device."
           >
             <SourcesPanel postId={postId} script={script} onScript={onScript} wall={wall.progress} />
+          </InspectorSection>
+
+          <InspectorSection
+            id="story-look"
+            title="Look"
+            info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything."
+          >
+            <LookPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
 
           <InspectorSection

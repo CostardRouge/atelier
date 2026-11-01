@@ -42,6 +42,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: a post can open on a hook instead of its title — your words over the first picture, typed letter by
   letter with a key click each, then a word landing as a sticker. Edit it under Hook: its lines, how they arrive and
   leave, its timing, place and ink, its sounds (built-in or your own files), variants to test, and the post's promise.
+- Storytelling: choose the series' look under Look — the wall's columns and rows, the gap between pictures, rounded
+  corners, some pictures twice as big, the order the days are laid in and how close the camera ends — and the grain and
+  vignette over every post.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's

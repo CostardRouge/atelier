@@ -7,6 +7,9 @@
 import type { TripDoc } from '../roadtrip/trip-types';
 import type { ScriptFacts, ScriptPost, ScriptSources, StoryScript } from './story-script';
 import { chosenStages, type MapChoice } from './trip-map';
+import { TEXTURE } from './charte';
+import type { StoryLook } from './episode';
+import { WALL_DEFAULTS, type WallGrid } from './wall-grid';
 
 /** The sources a post reads: its own fields over the series'. */
 export function sourcesOf(script: StoryScript | null, postId: string): ScriptSources {
@@ -131,4 +134,31 @@ export function withPostHooks(
     else delete post.promise;
   }
   return { ...script, posts: { ...script.posts, [postId]: post } };
+}
+
+/**
+ * The script with the series' look changed (`wall-grid.ts`, `StoryLook`): a
+ * field set back to its default is removed, so a script keeps only what was
+ * chosen, and an empty look leaves no trace.
+ */
+export function withLook(script: StoryScript, change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null } | null): StoryScript {
+  if (!change) {
+    const rest = { ...script };
+    delete rest.look;
+    return rest;
+  }
+  const was = script.look ?? {};
+  const wall: Partial<WallGrid> = { ...(was.wall ?? {}), ...(change.wall ?? {}) };
+  for (const k of Object.keys(wall) as (keyof WallGrid)[]) if (wall[k] === WALL_DEFAULTS[k]) delete wall[k];
+  const look: StoryLook = { ...was, ...(Object.keys(wall).length ? { wall } : {}) };
+  if (!Object.keys(wall).length) delete look.wall;
+  for (const k of ['vignette', 'grain'] as const) {
+    const v = change[k];
+    if (v === undefined) continue;
+    if (v === null || v === TEXTURE[k]) delete look[k];
+    else look[k] = v;
+  }
+  const next: StoryScript = { ...script, look };
+  if (!Object.keys(look).length) delete next.look;
+  return next;
 }

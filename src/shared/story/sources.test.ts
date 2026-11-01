@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withWall } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withLook, withWall } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -173,5 +173,19 @@ describe('withPostHooks', () => {
   it('takes the hook away with an empty list, and the promise with an empty line', () => {
     const next = withPostHooks(withPostHooks(s, 'a', { hooks: [hook], promise: 'x' }), 'a', { hooks: [], promise: ' ' });
     expect(next.posts.a).toEqual({ title: 'Un' });
+  });
+});
+
+describe('withLook', () => {
+  it('keeps only what departs from the defaults', () => {
+    const one = withLook(base, { wall: { cols: 6, gap: 6 } });
+    expect(one.look).toEqual({ wall: { cols: 6 } });
+    const two = withLook(one, { vignette: 0.4, grain: 0.055 });
+    expect(two.look).toEqual({ wall: { cols: 6 }, vignette: 0.4 });
+    expect(withLook(two, { wall: { cols: 10 }, vignette: null }).look).toBeUndefined();
+  });
+
+  it('goes back to the charte’s look', () => {
+    expect(withLook(withLook(base, { grain: 0.1 }), null)).toEqual(base);
   });
 });
