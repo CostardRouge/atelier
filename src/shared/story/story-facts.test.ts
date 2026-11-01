@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deviceKey, factChanges, factsFromCalendars, factText, fillParams, fillText, gearFacts, geoFacts, spanDays, wallPickDays, wallPicks } from './story-facts';
+import { chosenPicks, deviceKey, factChanges, factsFromCalendars, factText, fillParams, fillText, gearFacts, geoFacts, spanDays, wallPickDays, wallPicks, thinEvenly } from './story-facts';
 import { assemble, parseScript, SCRIPT_KIND, type PostSkeleton, type StoryScript } from './story-script';
 
 const values = { 'media.total': 98412, days: 178 };
@@ -200,5 +200,20 @@ describe('the wall’s days and stages in a script', () => {
       { label: 'Cairns', n: 1 },
     ]);
     expect(assemble(skeleton, { ...script, look: undefined }, [skeleton]).wallGroups).toBeNull();
+  });
+});
+
+describe('chosenPicks', () => {
+  it('keeps the counted days’ pictures, the hidden ones out, in day order, thinned to the wall', () => {
+    const chosen: [number, string][] = [[3, '2025-09-03'], [1, '2025-09-01'], [2, '2025-09-02'], [9, '2025-08-30'], [4, '2025-09-04']];
+    const span = { from: '2025-09-01', to: '2025-09-30', skip: ['2025-09-02'] };
+    expect(chosenPicks(chosen, span, 10, [4])).toEqual([{ id: 1, day: '2025-09-01' }, { id: 3, day: '2025-09-03' }]);
+    expect(chosenPicks(chosen, { from: '2025-09-01', to: '2025-09-30' }, 2).map((p) => p.id)).toEqual([1, 4]);
+  });
+
+  it('thins evenly from first to last', () => {
+    expect(thinEvenly([1, 2, 3, 4, 5], 3)).toEqual([1, 3, 5]);
+    expect(thinEvenly([1, 2], 5)).toEqual([1, 2]);
+    expect(thinEvenly([1, 2], 0)).toEqual([]);
   });
 });

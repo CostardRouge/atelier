@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withLook, withWall } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withChosenWall, withLook, withWall } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -187,5 +187,32 @@ describe('withLook', () => {
 
   it('goes back to the charte’s look', () => {
     expect(withLook(withLook(base, { grain: 0.1 }), null)).toEqual(base);
+  });
+});
+
+describe('the wall chosen in the picker', () => {
+  const counted: StoryScript = { ...base, facts: { at: 'x', values: { days: 3 }, tiles: [1] } };
+
+  it('keeps the pool in day order and freezes the wall when given its pictures', () => {
+    const next = withChosenWall(counted, [[9, '2025-09-02'], [7, '2025-09-01']], [{ id: 7, day: '2025-09-01' }]);
+    expect(next.sources?.wall?.chosen).toEqual([[7, '2025-09-01'], [9, '2025-09-02']]);
+    expect(next.facts?.tiles).toEqual([7]);
+    expect(withChosenWall(counted, [[9, '2025-09-02']], null).facts?.tiles).toEqual([1]);
+  });
+
+  it('thins a pool too big for a script evenly over its days', () => {
+    const many = Array.from({ length: 5000 }, (_, i): [number, string] => [i + 1, `2025-09-${String(1 + (i % 28)).padStart(2, '0')}`]);
+    expect(withChosenWall(base, many, null).sources?.wall?.chosen).toHaveLength(2000);
+  });
+
+  it('goes back to one a day, and a hidden picture or a day’s pick keeps the pool', () => {
+    const chosen = withChosenWall(counted, [[7, '2025-09-01']], null);
+    expect(withChosenWall(chosen, null, null).sources?.wall).toBeUndefined();
+    expect(withWall(chosen, { skip: [3] }, [{ id: 7, day: '2025-09-01' }]).sources?.wall).toEqual({ skip: [3], chosen: [[7, '2025-09-01']] });
+  });
+
+  it('reads a pool from a script file, keeping only ids with a day', () => {
+    const parsed = parseScript({ ...base, sources: { wall: { chosen: [[7, '2025-09-01'], [0, '2025-09-02'], [8, 'soon'], 'x'] } } });
+    expect(parsed.ok && parsed.script.sources?.wall).toEqual({ chosen: [[7, '2025-09-01']] });
   });
 });

@@ -112,6 +112,27 @@ export function wallPickDays(
   return picked.flatMap((d) => (seen.has(d.id) ? [] : (seen.add(d.id), [{ id: d.id, day: d.date }])));
 }
 
+/** `n` of a list, taken evenly from its first to its last; the whole list when it holds no more. (pure) */
+export function thinEvenly<T>(list: readonly T[], n: number): T[] {
+  if (list.length <= n) return [...list];
+  if (n <= 0) return [];
+  return Array.from({ length: n }, (_, i) => list[Math.round((i * (list.length - 1)) / Math.max(1, n - 1))]);
+}
+
+/**
+ * The wall's pictures from those ticked in the Winnow picker
+ * (`ScriptSources.wall.chosen`): the counted days' only, the hidden ones out,
+ * in day order, thinned evenly to the wall's `n` places.
+ */
+export function chosenPicks(chosen: readonly (readonly [number, string])[], span: Span, n: number, skip: readonly number[] = []): WallPick[] {
+  const hidden = new Set(skip);
+  const kept = chosen
+    .filter(([id, day]) => counts(day, span) && !hidden.has(id))
+    .map(([id, day]) => ({ id, day }))
+    .sort((a, b) => a.day.localeCompare(b.day));
+  return thinEvenly(kept, n);
+}
+
 /** What changed between two countings, for the line under Count again: `[key, before, after]`. */
 export function factChanges(before: FactValues | null, after: FactValues): [string, number | null, number][] {
   return Object.entries(after)

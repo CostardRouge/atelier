@@ -5,9 +5,9 @@
  * same rule, a post's own over the series'.
  */
 import type { TripDoc } from '../roadtrip/trip-types';
-import type { ScriptFacts, ScriptPost, ScriptSources, StoryScript } from './story-script';
+import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
 import { chosenStages, stageLabel, type MapChoice } from './trip-map';
-import type { WallPick } from './story-facts';
+import { thinEvenly, type WallPick } from './story-facts';
 import { TEXTURE } from './charte';
 import type { StoryLook } from './episode';
 import { WALL_DEFAULTS, type WallGrid, type WallStage } from './wall-grid';
@@ -103,10 +103,31 @@ export function countedSpan(trip: TripDoc, sources: ScriptSources): CountedSpan 
  * not counted.
  */
 export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null, picks: readonly WallPick[]): StoryScript {
+  // The pictures ticked in the picker are kept: a hidden one or a day's pick does not undo them.
+  const chosen = script.sources?.wall?.chosen;
+  return withWallSources(script, { ...(wall ?? {}), ...(chosen ? { chosen } : {}) }, picks);
+}
+
+/**
+ * The script with the pictures ticked in the Winnow picker as the wall's
+ * pool (`chosen`, thinned evenly to `MAX_CHOSEN` over their days), or with
+ * none — the wall back to one cover a day. `picks`, when given, freezes the
+ * wall's pictures at once; without them the next counting does.
+ */
+export function withChosenWall(script: StoryScript, chosen: readonly (readonly [number, string])[] | null, picks: readonly WallPick[] | null): StoryScript {
+  const was = script.sources?.wall ?? {};
+  const pool = chosen?.length ? thinEvenly([...chosen].sort((a, b) => a[1].localeCompare(b[1])), MAX_CHOSEN).map((c): [number, string] => [c[0], c[1]]) : null;
+  const wall: NonNullable<ScriptSources['wall']> = { ...was };
+  if (pool) wall.chosen = pool;
+  else delete wall.chosen;
+  return withWallSources(script, wall, picks);
+}
+
+function withWallSources(script: StoryScript, wall: NonNullable<ScriptSources['wall']>, picks: readonly WallPick[] | null): StoryScript {
   const sources: ScriptSources = { ...(script.sources ?? {}) };
-  if (wall && (wall.skip?.length || Object.keys(wall.pick ?? {}).length)) sources.wall = wall;
+  if (wall.skip?.length || Object.keys(wall.pick ?? {}).length || wall.chosen?.length) sources.wall = wall;
   else delete sources.wall;
-  return { ...script, sources, ...(script.facts ? { facts: withTiles(script.facts, picks) } : {}) };
+  return { ...script, sources, ...(script.facts && picks ? { facts: withTiles(script.facts, picks) } : {}) };
 }
 
 /** Facts with the wall's pictures (and their days) replaced; none takes the wall's pictures away. */

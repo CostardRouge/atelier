@@ -2996,10 +2996,16 @@ it and may grow blocks of its own.
   wall's pictures: each day's cover on the Winnow, one a day in order (thinned
   evenly past the wall's 180 tiles). Small squares of them are kept in this
   browser, so the wall draws — and exports — without asking the Winnow again;
-  *Forget* on the script clears them. *Choose pictures…* shows the wall's
+  *Forget* on the script clears them. *Per day…* shows the wall's
   picture for each counted day: click one to hide it, or *Other* to pick
   another picture of that day; the choice is kept in your script and the next
-  counting respects it. Counting also finds the days with media
+  counting respects it. *Choose in Winnow…* opens the same picker as Develop's
+  *Add a day* on the counted days, with nothing ticked: filter by camera (the
+  drone, a phone), photos or clips, extension (leave out `.png` and its
+  screenshots), Winnow's picks and stars, then tick *All* or *⚑ Picks* and
+  *Put N on the wall* — the wall then draws from those pictures, in day order,
+  rather than one a day (up to 2 000 kept in your script, thinned evenly);
+  *One a day* goes back. Counting also finds the days with media
   but no position: a map with holes (`map-holes`) that the script leaves without
   `gaps` draws them where the road was driven on those days. A season recap the
   script does not spell out lists the season's posts, their titles and cover

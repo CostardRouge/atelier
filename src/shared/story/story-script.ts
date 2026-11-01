@@ -88,9 +88,11 @@ export interface ScriptSources {
   /**
    * The wall's pictures as the author chose them: Winnow asset ids never to
    * show (`skip`), and a picture of his own choosing for a day (`pick`,
-   * ISO day → asset id) in place of that day's cover.
+   * ISO day → asset id) in place of that day's cover. `chosen`: the pictures
+   * ticked in the Winnow picker, `[asset id, ISO day]` in day order — the
+   * wall then draws from them rather than one cover a day (`chosenPicks`).
    */
-  wall?: { skip?: number[]; pick?: Record<string, number> };
+  wall?: { skip?: number[]; pick?: Record<string, number>; chosen?: [number, string][] };
 }
 
 /**
@@ -368,7 +370,14 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const skip = Array.isArray(wall.skip) ? wall.skip.filter(id) : [];
     const pick: Record<string, number> = {};
     if (isObject(wall.pick)) for (const [d, v] of Object.entries(wall.pick)) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && id(v)) pick[d] = v;
-    if (skip.length || Object.keys(pick).length) out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}) };
+    const chosen = Array.isArray(wall.chosen)
+      ? wall.chosen
+          .filter((c): c is [number, string] => Array.isArray(c) && c.length === 2 && id(c[0]) && typeof c[1] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c[1]))
+          .slice(0, MAX_CHOSEN)
+          .map((c): [number, string] => [c[0], c[1]])
+      : [];
+    if (skip.length || Object.keys(pick).length || chosen.length)
+      out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}), ...(chosen.length ? { chosen } : {}) };
   }
   return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
 }
@@ -421,6 +430,9 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
     ...(holes?.length ? { holes: holes.map((h): [string, string] => [h[0], h[1]]) } : {}),
   };
 }
+
+/** The pictures ticked in the picker a script keeps at most; more are thinned evenly over their days (`withChosenWall`). */
+export const MAX_CHOSEN = 2000;
 
 /** No wall shows more pictures than this; a script asking for more is cut. */
 export const MAX_TILES = 400;

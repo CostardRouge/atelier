@@ -46,6 +46,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   corners, some pictures twice as big, the order the days are laid in and how close the camera ends — and the grain and
   vignette over every post. The wall can also be grouped by stage of the trip or by month, each group a band of rows
   named on its first picture.
+- Storytelling: choose the wall's pictures in the same Winnow picker as Develop's *Add a day*, filtered by camera, type,
+  extension, picks and stars — so screenshots and PNGs stay off the wall.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
