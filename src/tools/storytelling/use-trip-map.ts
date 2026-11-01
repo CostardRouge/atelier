@@ -3,6 +3,7 @@ import type { ScriptSources } from '../../shared/story/story-script';
 import type { TripMap } from '../../shared/story/trip-map';
 import type { Lang } from '../../shared/story/locale';
 import { mapNamesOf } from '../../shared/story/map-names';
+import { useTripVersion } from './trip-changes';
 
 export type TripMapState =
   | { state: 'none' }
@@ -21,7 +22,9 @@ export type TripMapState =
 export function useTripMap(sources: ScriptSources, lang?: Lang): TripMapState {
   const [state, setState] = useState<TripMapState>({ state: 'none' });
   const tripId = sources.trip?.id;
-  const key = JSON.stringify({ trip: sources.trip ?? null, map: sources.map ?? null, lang: lang ?? 'fr' });
+  // A trip written back from Storytelling (its road) is a new map too.
+  const version = useTripVersion();
+  const key = JSON.stringify({ trip: sources.trip ?? null, map: sources.map ?? null, lang: lang ?? 'fr', version });
   useEffect(() => {
     if (!tripId) {
       setState({ state: 'none' });
