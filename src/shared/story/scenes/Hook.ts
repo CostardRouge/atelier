@@ -1,7 +1,10 @@
 // Mur de photos « unemille »: one tile, the camera pulls back ×6 → ×1 revealing the wall,
 // tiles fading in by distance; then a 72 % background scrim, « 100 000 » and « photos ».
+// The grid — columns, rows, gap, corners, big pictures, order, the camera's end — is the
+// series' look (`wall-grid.ts`); its default is this wall as it was first drawn.
 import { word, numberText } from "../locale";
 import { appear, clamp, E, enter, fit, K, PAL, rng, text, TYPO, type Ctx } from "../motion";
+import { pictureFor, wallGrid, wallLayout, type WallGrid, type WallRect } from "../wall-grid";
 
 const R = rng(11);
 type Tile = { warm: boolean; l: number; s: number; h0: number; delay: number };
@@ -17,10 +20,6 @@ export const tileColor = (tl: Tile, a = 1) => {
   return `hsla(${hue} ${tl.s}% ${tl.l}% / ${a})`;
 };
 
-export const COLS = 10,
-  CELL = 1080 / COLS,
-  ROWS = Math.ceil(1920 / CELL) + 1;
-
 /**
  * The author's own pictures for the tiles (`compose.ts` sets them from the
  * series' counted `tiles`, `wall-cache.ts`), square and in day order; a tile
@@ -31,42 +30,65 @@ export function setWall(images: readonly (CanvasImageSource | null)[] | null | u
   WALL = images ?? [];
 }
 
-/** v2 deviation: one extra column on the left (col −1). The page's end framing is offset by
- * (54, −66) px, which left a bare 54 px strip on the left edge of the wall. */
-export function drawTiles(c: Ctx, alphaOf: (col: number, r: number, tl: Tile) => number) {
-  for (let r = 0; r < ROWS; r++)
-    for (let col = -1; col < COLS; col++) {
-      const k = (r * COLS + ((col + COLS) % COLS)) % TILES.length,
-        tl = TILES[k],
-        a = alphaOf(col, r, tl);
-      if (a <= 0) continue;
-      const img = WALL.length ? WALL[k % WALL.length] : null;
-      if (img) {
-        c.save();
-        c.globalAlpha *= Math.min(1, a);
-        c.drawImage(img, col * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
-        c.restore();
-        continue;
-      }
-      c.fillStyle = tileColor(tl, a);
-      c.fillRect(col * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
-    }
+/** The series' grid (`wall-grid.ts`), set with the pictures by `compose.ts` and `cover.ts`. */
+let GRID: Partial<WallGrid> | null = null;
+export function setWallGrid(grid: Partial<WallGrid> | null | undefined) {
+  GRID = grid ?? null;
 }
 
-export const HOOK_CI = 4,
-  HOOK_RI = 9;
-/** the wall at camera progress p (0 = one tile at ×6, 1 = the whole wall) */
+/** The picture, cropped from its centre to the place's shape (the cache keeps squares). */
+function drawPicture(c: Ctx, img: CanvasImageSource, x: number, y: number, w: number, h: number) {
+  const iw = (img as { width: number }).width || 1;
+  const ih = (img as { height: number }).height || 1;
+  const k = Math.min(iw / w, ih / h);
+  const sw = w * k;
+  const sh = h * k;
+  c.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
+}
+
+export function drawTiles(c: Ctx, alphaOf: (rect: WallRect, i: number) => number) {
+  const g = wallGrid(GRID);
+  const { rects } = wallLayout(g);
+  const inset = g.gap / 2;
+  rects.forEach((rect, i) => {
+    const a = alphaOf(rect, i);
+    if (a <= 0) return;
+    const x = rect.x + inset,
+      y = rect.y + inset,
+      w = rect.w - g.gap,
+      h = rect.h - g.gap;
+    if (w <= 0 || h <= 0) return;
+    const at = pictureFor(i, rects.length, WALL.length);
+    const img = at >= 0 ? WALL[at] : null;
+    c.save();
+    if (g.radius > 0) {
+      c.beginPath();
+      c.roundRect(x, y, w, h, Math.min(g.radius, w / 2, h / 2));
+      c.clip();
+    }
+    if (img) {
+      c.globalAlpha *= Math.min(1, a);
+      drawPicture(c, img, x, y, w, h);
+    } else {
+      c.fillStyle = tileColor(TILES[i % TILES.length], a);
+      c.fillRect(x, y, w, h);
+    }
+    c.restore();
+  });
+}
+
+/** the wall at camera progress p (0 = the centre picture filling most of the frame, 1 = the whole wall at its zoom) */
 export function drawWall(c: Ctx, p: number, centre: number) {
-  const s = 6 - 5 * p,
-    cx = HOOK_CI * CELL + CELL / 2,
-    cy = HOOK_RI * CELL + CELL / 2;
+  const g = wallGrid(GRID);
+  const { cellW } = wallLayout(g);
+  // The camera starts with the centre picture 648 px wide — ×6 on the default's 108 px cell.
+  const s0 = Math.max(g.zoom, 648 / cellW);
+  const s = s0 + (g.zoom - s0) * p;
   c.save();
   c.translate(540, 960);
   c.scale(s, s);
-  c.translate(-cx, -cy);
-  drawTiles(c, (col, r) =>
-    col === HOOK_CI && r === HOOK_RI ? centre : clamp((p - 0.15 - Math.hypot(col - HOOK_CI, r - HOOK_RI) * 0.02) * 2.2),
-  );
+  c.translate(-540, -960);
+  drawTiles(c, (rect) => (rect.centre ? centre : clamp((p - 0.15 - rect.d * 0.02) * 2.2)));
   c.restore();
 }
 

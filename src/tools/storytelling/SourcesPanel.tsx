@@ -7,9 +7,9 @@ import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPicks } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
-import { TILES } from '../../shared/story/scenes/Hook';
+import { wallCells } from '../../shared/story/wall-grid';
 import type { WallProgress } from './wall-cache';
-import type { StoryScript } from '../../shared/story/story-script';
+import { MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import { Readout, SelectField } from '../../shared/ui/Inspector';
 
@@ -118,7 +118,7 @@ export default function SourcesPanel({
           .catch(() => null),
       ]);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
-      const tiles = wallPicks(all, span, TILES.length, sources.wall);
+      const tiles = wallPicks(all, span, Math.min(MAX_TILES, wallCells(script.look?.wall)), sources.wall);
       const before = script.facts?.values ?? null;
       onScript(
         withSeriesFacts(script, {
@@ -316,7 +316,7 @@ export default function SourcesPanel({
             <WallModal
               span={countedSpan(trip, sources)}
               current={sources.wall}
-              tiles={TILES.length}
+              tiles={Math.min(MAX_TILES, wallCells(script.look?.wall))}
               connection={connection}
               onCancel={() => setChoosingWall(false)}
               onApply={(chosen, picks) => {

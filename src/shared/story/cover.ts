@@ -3,13 +3,15 @@ import { setLang, word } from './locale';
 import { H, W } from './charte';
 import type { Episode } from './episode';
 import { fit, PAL, text, TYPO, type Ctx } from './motion';
-import { drawTexture } from './overlays';
-import { drawWall } from './scenes/Hook';
+import { drawTexture, setTexture } from './overlays';
+import { drawWall, setWallGrid } from './scenes/Hook';
 
 export const COVER = { bandTop: 760, bandBottom: 1200, wallScrim: 0.5 };
 
 export function drawCover(c: Ctx, ep: Episode): void {
   setLang(ep.lang);
+  setWallGrid(ep.look?.wall);
+  setTexture(ep.look);
   c.save();
   c.fillStyle = PAL.bg;
   c.fillRect(0, 0, W, H);

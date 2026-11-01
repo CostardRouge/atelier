@@ -8,6 +8,16 @@
 import { OV, type Cap } from './charte';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
+import type { WallGrid } from './wall-grid';
+
+/** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
+export interface StoryLook {
+  wall?: Partial<WallGrid>;
+  /** The vignette's darkness at the corners, 0 to 0.8 (the charte's 0.25 when absent). */
+  vignette?: number;
+  /** The moving grain's strength, 0 to 0.2 (the charte's 0.055 when absent). */
+  grain?: number;
+}
 
 export interface BlockSpec {
   block: string;
@@ -34,6 +44,8 @@ export interface Episode {
   hook?: Hook | null;
   /** The language it is told in (`locale.ts`); absent = French. */
   lang?: Lang;
+  /** The series' look: the wall's grid, the grain and the vignette (`story-script.ts`, `StoryLook`). */
+  look?: StoryLook;
 }
 
 export type Slot = BlockSpec & { a: number; b: number; start: number; key: string };

@@ -10,10 +10,11 @@
  * be judged and nothing personal ships with the code. (pure)
  */
 import type { Stop } from './geo';
-import type { Episode } from './episode';
+import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
+import { readWallGrid } from './wall-grid';
 
 export interface SkeletonBlock {
   block: string;
@@ -173,6 +174,8 @@ export interface StoryScript {
   /** The series' sources and the numbers counted from them; a post may override both. */
   sources?: ScriptSources;
   facts?: ScriptFacts;
+  /** The series' look: the wall's grid, the grain, the vignette (`episode.ts`, `StoryLook`). */
+  look?: StoryLook;
   /** The map of subjects: its channels and its lines (`story-map.ts`). */
   channels?: ScriptChannel[];
   topics?: ScriptTopic[];
@@ -268,6 +271,7 @@ export function parseScript(raw: unknown): ScriptParse {
       posts,
       sources: readSources(raw.sources),
       facts: readFacts(raw.facts),
+      look: readLook(raw.look),
       channels,
       topics,
     },
@@ -364,6 +368,21 @@ function readSources(raw: unknown): ScriptSources | undefined {
   return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
 }
 
+/** The series' look, kept field by field when well formed. */
+function readLook(raw: unknown): StoryLook | undefined {
+  if (!isObject(raw)) return undefined;
+  const level = (v: unknown, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(0, v)) : undefined);
+  const wall = readWallGrid(raw.wall);
+  const vignette = level(raw.vignette, 0.8);
+  const grain = level(raw.grain, 0.2);
+  const look: StoryLook = {
+    ...(wall ? { wall } : {}),
+    ...(vignette !== undefined ? { vignette } : {}),
+    ...(grain !== undefined ? { grain } : {}),
+  };
+  return Object.keys(look).length ? look : undefined;
+}
+
 function readFacts(raw: unknown): ScriptFacts | undefined {
   if (!isObject(raw) || typeof raw.at !== 'string' || !isObject(raw.values)) return undefined;
   const values: Record<string, number> = {};
@@ -387,7 +406,7 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
 }
 
 /** No wall shows more pictures than this; a script asking for more is cut. */
-const MAX_TILES = 400;
+export const MAX_TILES = 400;
 
 /** What a caption reads when no script is loaded. */
 export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} ⟩`;
@@ -416,6 +435,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
     cover: { line: fillText(mine?.cover ?? '', values, lang) },
     lang,
+    ...(script?.look ? { look: script.look } : {}),
     hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];

@@ -15,8 +15,8 @@ import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
 import { PAL, text, TYPO, type Ctx } from './motion';
-import { drawHud, drawTexture } from './overlays';
-import { setWall } from './scenes/Hook';
+import { drawHud, drawTexture, setTexture } from './overlays';
+import { setWall, setWallGrid } from './scenes/Hook';
 import { drawHook, hookTimeline } from './hook';
 import { setLang } from './locale';
 
@@ -72,6 +72,8 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setLang(ep.lang);
   setMap(opts.stops ?? null, opts.road ?? null);
   setWall(opts.wall ?? null);
+  setWallGrid(ep.look?.wall);
+  setTexture(ep.look);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
   c.save();
