@@ -20,7 +20,7 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   under the stage, ten ahead and refilled as it goes: replace, remove, add or shuffle them, or let it end on your last
   pick. Zooming the stage while nothing plays frames it (an Auto-frame switch turns that off): what you see becomes the part
   rebuilt, with as many cells on it; undo and
-  redo step through every edit. The animated modes are recipes of one step — a departure, a trajectory, an arrival —
+  redo step through every edit, and a ‹ › pair in the bar walks back and forward over the targets visited. The animated modes are recipes of one step — a departure, a trajectory, an arrival —
   and *Mosaics*, the default, goes from mosaic to mosaic without ever showing the photo; *Wave* lands the next mosaic's
   cells on this one from the aimed cell outward, *Slideshow* cuts to a new mosaic at a steady beat, *Steer* lets a click
   on the held mosaic choose where the chain goes next; a Motion section opens every part of the step (departure,

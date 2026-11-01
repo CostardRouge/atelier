@@ -47,6 +47,8 @@ import { pictureCountLine } from './MosaicGallery';
 import { useMosaicCover } from './use-mosaic-cover';
 import { randomTarget, useMosaicScene, type MosaicScene } from './use-mosaic-scene';
 import { useStageZoom } from './use-stage-zoom';
+import TargetStepsControl from './TargetStepsControl';
+import { useTargetSteps, type TargetSteps } from './use-target-steps';
 
 /** Where the editor's save stands, as its bar says it. */
 export type SaveState = 'saved' | 'saving' | 'failed';
@@ -83,6 +85,7 @@ function MosaicWorkbench({
   update,
   setTarget,
   setCrop,
+  steps,
 }: {
   doc: MosaicDoc;
   client: WinnowClient | null;
@@ -90,6 +93,8 @@ function MosaicWorkbench({
   update: (fn: (s: Settings) => Settings) => void;
   setTarget: (id: number) => void;
   setCrop: (crop: Crop | undefined) => void;
+  /** Previous and next over the targets visited — the arrows on the stage. */
+  steps: TargetSteps;
 }) {
   const [boxRef, room] = useElementSize<HTMLDivElement>();
   // The Performance panel's say (this device's), the matching pool it sizes, and where a propagation starts.
@@ -230,7 +235,15 @@ function MosaicWorkbench({
         return;
       }
       if (status.playing) return;
-      const action = zoomKeyAction(describeZoomKey(e), zoom.zoomed);
+      const press = describeZoomKey(e);
+      const action = zoomKeyAction(press, zoom.zoomed);
+      // ← and → walk the targets visited while no zoom is kept (a kept zoom pans with them).
+      if (!action && !zoom.zoomed && !press.altKey && !press.ctrlKey && !press.metaKey && !press.defaultPrevented && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        if (e.key === 'ArrowLeft') steps.back();
+        else steps.forward();
+        return;
+      }
       if (!action) return;
       e.preventDefault();
       if (action.kind === 'toggle') {
@@ -240,7 +253,7 @@ function MosaicWorkbench({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [status.playing, mode, play, stop, zoom, cropped, setCrop]);
+  }, [status.playing, mode, play, stop, zoom, cropped, setCrop, steps]);
 
   const fullscreen = useCallback(() => {
     const el = boxRef.current;
@@ -456,6 +469,8 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
   const setCrop = useCallback((crop: Crop | undefined) => change((d) => withCrop(d, crop)), [change]);
 
   const update = useCallback((fn: (s: Settings) => Settings) => change((d) => ({ ...d, settings: sanitizeSettings(fn(d.settings)), updatedAt: Date.now() })), [change]);
+  // Previous and next over the targets visited, as a browser's back and forward.
+  const steps = useTargetSteps(doc, change);
 
   const failed = doc.tiles.filter((t) => t.failed).length;
   const pending = unmeasured(doc, false).length;
@@ -467,6 +482,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         back={{ label: 'Mosaics', onClick: onBack, iconOnly: compact }}
         trailing={
           <span className="inline-flex items-center gap-2">
+            {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
             {headerExtra}
             <span
               className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}
@@ -554,7 +570,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
           here with its colours.
         </EmptyState>
       ) : (
-        <MosaicWorkbench doc={doc} client={client} change={change} update={update} setTarget={setTarget} setCrop={setCrop} />
+        <MosaicWorkbench doc={doc} client={client} change={change} update={update} setTarget={setTarget} setCrop={setCrop} steps={steps} />
       )}
     </section>
   );

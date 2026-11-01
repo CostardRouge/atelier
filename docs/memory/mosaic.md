@@ -468,6 +468,24 @@ ctrl-wheel pinch on a stopped Mosaics stage writes a crop and leaves the
 page at scale 1; off, a pinch keeps the crop and *Frame this* writes it; a
 plain wheel at the corner of Still frames the top-left.
 
+## Previous and next target, as a browser's back and forward (2026-11-01)
+
+His ask («à chaque fois que je clique dans une image je ne peux pas
+revenir à l'image précédente … des flèches … dans la barre en haut»).
+**Rules**: `shared/mosaic/target-history.ts` (pure) keeps `past` and
+`future` steps `{id, crop}`, 50 deep; `useTargetSteps` WATCHES the
+document's target — a click, the chooser, a draw, a run that stopped
+elsewhere, an undo all count as a visit — and a step it makes itself is
+not one; a step carries the crop the picture last wore, so a return lands
+on the part framed; a picture removed from the mosaic is skipped. Kept for
+the editor's session, never in the document (where he has been is not
+what the mosaic is). The pair sits in the bar before ↶ ↷, in the history
+pair's look with chevrons (`TargetStepsControl`, `UndoRedo`'s `HALF`): the
+two walk different things, pictures vs edits. ← → do the same on the stage
+while no zoom view is kept (a kept view pans with them). Driven headless:
+three targets, back by the button and by ←, forward by → and the button,
+the crop of a target back with it.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

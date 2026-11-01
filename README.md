@@ -3161,7 +3161,9 @@ over its picture, what lets the target read from afar —, a **ghost** of the
 target to check the reading, and the cell lines. The mosaic is painted once;
 a small one is matched on the spot, a big one in the background, the
 previous mosaic staying on screen meanwhile. Click a cell to make its
-picture the target, or *Draw a target*. The gallery card's cover is the
+picture the target, or *Draw a target*; the ‹ › pair in the bar (or ← →
+on the stage) walks back and forward over the targets visited, each with
+the part of it that was framed. The gallery card's cover is the
 mosaic as the stage last painted it.
 
 **The target and its frame.** The inspector opens on the **target**, as
