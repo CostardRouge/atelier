@@ -6,6 +6,7 @@ import type { DrawnObject } from '../../shared/story/objects';
 import { drawGuides } from '../../shared/overlay/draw-guides';
 import type { GuidesState } from '../../shared/overlay/guides';
 import type { PlayClock } from '../../shared/media/play-clock';
+import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 import { boxOf, pickAt } from './stage-pick';
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -145,11 +146,17 @@ function StoryStage({ clock, episode, opts, fontsReady, guides, selectedId, drag
 
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const scale = size ? size.w / W : 1;
+  // How far around a press counts, in SCREEN pixels: a few under a mouse; under a finger, when that finds
+  // nothing, a fingertip's half-width (`frontend.md`'s 44 px target) — so what is right under it still wins.
+  const coarse = useCoarsePointer();
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!fontsReady || e.button !== 0) return;
     clock.setPlaying(false);
     const r = e.currentTarget.getBoundingClientRect();
-    const hit = pickAt(episode, Math.min(clock.t, clock.total - 0.001), opts, (e.clientX - r.left) / scale, (e.clientY - r.top) / scale);
+    const t = Math.min(clock.t, clock.total - 0.001);
+    const x = (e.clientX - r.left) / scale;
+    const y = (e.clientY - r.top) / scale;
+    const hit = pickAt(episode, t, opts, x, y, 6 / scale) ?? (coarse ? pickAt(episode, t, opts, x, y, 22 / scale) : null);
     if (!hit || !drag.onPick(hit)) return;
     press.current = { x: e.clientX, y: e.clientY, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);

@@ -17,12 +17,13 @@ import { drawnObjects, hideObject, type DrawnObject } from '../../shared/story/o
 let pointCanvas: HTMLCanvasElement | null = null;
 let boxCanvas: HTMLCanvasElement | null = null;
 const BOX_SCALE = 1 / 6;
-/** How far around a click an object counts as hit, frame pixels. */
+/** How far around a click an object counts as hit, frame pixels, by default (a mouse on a desktop stage). */
 const REACH = 12;
 
-function ctxOf(which: 'point' | 'box'): CanvasRenderingContext2D {
+function ctxOf(which: 'point' | 'box', side = 2 * REACH + 1): CanvasRenderingContext2D {
   if (which === 'point') {
-    pointCanvas ??= Object.assign(document.createElement('canvas'), { width: 2 * REACH + 1, height: 2 * REACH + 1 });
+    pointCanvas ??= document.createElement('canvas');
+    if (pointCanvas.width !== side) Object.assign(pointCanvas, { width: side, height: side });
     return pointCanvas.getContext('2d', { willReadFrequently: true })!;
   }
   boxCanvas ??= Object.assign(document.createElement('canvas'), { width: Math.round(W * BOX_SCALE), height: Math.round(H * BOX_SCALE) });
@@ -42,11 +43,16 @@ function frame(c: CanvasRenderingContext2D, ep: Episode, t: number, opts: Compos
 const differs = (a: Uint8ClampedArray, b: Uint8ClampedArray, at: number) =>
   Math.abs(a[at] - b[at]) + Math.abs(a[at + 1] - b[at + 1]) + Math.abs(a[at + 2] - b[at + 2]) > 6;
 
-/** The object seen at (x, y) of the frame (its pixels, 0–1080 × 0–1920) at `t`: the topmost one whose absence changes the patch around it. */
-export function pickAt(ep: Episode, t: number, opts: ComposeOptions, x: number, y: number): DrawnObject | null {
-  const c = ctxOf('point');
-  const side = 2 * REACH + 1;
-  const base = [1, 0, 0, 1, REACH - Math.floor(x), REACH - Math.floor(y)] as const;
+/**
+ * The object seen at (x, y) of the frame (its pixels, 0–1080 × 0–1920) at `t`: the topmost one whose absence
+ * changes the patch around it. `reach` is the patch's half-side in frame pixels — the caller sizes it to the
+ * finger or the mouse ON SCREEN (`StoryStage`), since a phone's stage shows a frame pixel at a third of a pixel.
+ */
+export function pickAt(ep: Episode, t: number, opts: ComposeOptions, x: number, y: number, reach = REACH): DrawnObject | null {
+  const r = Math.max(1, Math.round(reach));
+  const side = 2 * r + 1;
+  const c = ctxOf('point', side);
+  const base = [1, 0, 0, 1, r - Math.floor(x), r - Math.floor(y)] as const;
   frame(c, ep, t, opts, base, null);
   const seen = c.getImageData(0, 0, side, side).data.slice();
   const objects = [...drawnObjects()];
