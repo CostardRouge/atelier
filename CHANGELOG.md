@@ -86,6 +86,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Storytelling: choose the stops the series' map names under Sources. Take the trip's stage ends, starts or every
+  place, then remove, move or add stops, here or on the same big map as Trips' openers; nearby stops can be drawn as
+  one, and the road now runs from your first stop to your last, so a stopover before or after the trip leaves the map.
 - Choosing a font shows each one in itself: the Storytelling charte and its objects, the Studio's title styles and
   elements, and Trips' Look tab list every face written in it, over a line of your own text, with a search. In
   Storytelling the picture tries the face as you move through the list; Escape puts it back.

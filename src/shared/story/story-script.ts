@@ -98,7 +98,7 @@ export interface ScriptSources {
     stops?: MapStopRef[];
     took?: 'ends' | 'starts' | 'places';
     /** Nearby stops drawn as one halt (Trips' `stop-clusters.ts`), never edited out of the list. */
-    group?: { km: number; visits?: 'consecutive' | 'all'; name?: 'first' | 'central' };
+    group?: { km: number; visits?: 'consecutive' | 'all'; name?: 'town' | 'first' | 'central' };
     /** Which recorded road is drawn: between the first and last stop, or the whole trip. */
     route?: 'stops' | 'all';
   };
@@ -411,7 +411,7 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const took = ['ends', 'starts', 'places'].includes(map.took as string) ? (map.took as 'ends' | 'starts' | 'places') : undefined;
     const g = isObject(map.group) && num(map.group.km, 0.5, 80) ? map.group : null;
     const visits = g?.visits === 'all' || g?.visits === 'consecutive' ? (g.visits as 'all' | 'consecutive') : undefined;
-    const naming = g?.name === 'first' || g?.name === 'central' ? (g.name as 'first' | 'central') : undefined;
+    const naming = g?.name === 'town' || g?.name === 'first' || g?.name === 'central' ? (g.name as 'town' | 'first' | 'central') : undefined;
     const group = g ? { km: g.km as number, ...(visits ? { visits } : {}), ...(naming ? { name: naming } : {}) } : undefined;
     const route = map.route === 'stops' || map.route === 'all' ? map.route : undefined;
     if (points || label || stops || group || route)

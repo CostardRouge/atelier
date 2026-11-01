@@ -7,7 +7,8 @@ import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import WallPicker from './WallPicker';
 import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
-import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
+import { stageLabel, tripFacts, type MapLabel } from '../../shared/story/trip-map';
+import MapStopsSection from './MapStopsSection';
 import { wallCells } from '../../shared/story/wall-grid';
 import type { WallProgress } from './wall-cache';
 import { MAX_CHOSEN, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
@@ -196,7 +197,7 @@ export default function SourcesPanel({
             <p className="m-0 text-2xs text-muted leading-relaxed">{tripLine(trip)}</p>
             {trip.stages.length > 1 ? (
               <fieldset className="m-0 p-0 border-0 flex flex-col gap-1">
-                <legend className="mb-1 text-2xs text-muted">Stages told — the route, its towns and the counted days</legend>
+                <legend className="mb-1 text-2xs text-muted">Stages told — the counted days and the wall; the map's towns too until you take them over</legend>
                 {trip.stages
                   .slice()
                   .sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -287,19 +288,8 @@ export default function SourcesPanel({
       ) : null}
       {sources.trip ? (
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-ink-soft w-16">Names</span>
-            <SelectField<MapPoints>
-              label="Which points the map names"
-              value={sources.map?.points ?? 'ends'}
-              options={[
-                { id: 'ends', label: 'Where stages start and end' },
-                { id: 'starts', label: 'Where stages start' },
-                { id: 'places', label: 'Every place' },
-              ]}
-              onChange={(points) => onScript(withSeriesSources(script, { map: { ...sources.map, points } }))}
-            />
-          </div>
+          <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">The map</p>
+          {trip ? <MapStopsSection trip={trip} script={script} onScript={onScript} lang={script.lang} /> : null}
           <div className="flex items-center gap-2">
             <span className="text-sm text-ink-soft w-16">Says</span>
             <SelectField<MapLabel>
