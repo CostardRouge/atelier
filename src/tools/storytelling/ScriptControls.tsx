@@ -2,6 +2,7 @@ import { useState, type ChangeEvent } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { parseScript, type StoryScript } from '../../shared/story/story-script';
 import Button, { buttonClass } from '../../shared/ui/Button';
+import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import type { Lang } from '../../shared/story/locale';
 import { SelectField } from '../../shared/ui/Inspector';
 import { POSTS } from './posts';
@@ -51,6 +52,7 @@ export default function ScriptControls({
   verbs?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [forgetting, setForgetting] = useState(false);
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -85,15 +87,32 @@ export default function ScriptControls({
                 Save script
               </Button>
             ) : null}
-            <Button size="sm" variant="ghost" onClick={() => {
-                void clearWall();
-                onScript(null);
-              }}>
+            <Button size="sm" variant="ghost" onClick={() => setForgetting(true)}>
               Forget
             </Button>
           </>
         ) : null}
       </div>
+      {forgetting && script ? (
+        // The suite asks before anything is lost for good (`ConfirmDialog`): this browser's copy of the
+        // script holds what changed here (the Studio's settings, the map's states) and the wall's pictures.
+        <ConfirmDialog
+          title={`Forget “${script.series || 'your script'}” on this device?`}
+          confirmLabel="Forget"
+          danger
+          onCancel={() => setForgetting(false)}
+          onConfirm={() => {
+            setForgetting(false);
+            void clearWall();
+            onScript(null);
+          }}
+        >
+          <p className="m-0">
+            What changed here since you loaded it — the Studio&apos;s settings, the map&apos;s states — and the wall&apos;s pictures
+            go with it. Save script first to keep them; your own file is not touched.
+          </p>
+        </ConfirmDialog>
+      ) : null}
       {script && !compact ? (
         <div className="flex items-center gap-2">
           <span className="text-sm text-ink-soft w-16">Language</span>
