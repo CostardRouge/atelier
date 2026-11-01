@@ -3,11 +3,11 @@ import { ASPECTS, type AspectId } from '../../shared/mosaic/frame';
 import { MAX_CELL_PX, MIN_CELL_PX } from '../../shared/mosaic/match';
 import type { Level, Space } from '../../shared/mosaic/measure';
 import { sanitizeSettings, type MosaicSettings as Settings } from '../../shared/mosaic/mosaic-doc';
-import { FieldRow, InspectorSection, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
 import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
-import type { PerfPrefs } from '../../shared/mosaic/perf';
+import { CELL_ANIMATIONS, LOT_SIZES, PROPAGATIONS, type CellAnimation, type LotSize, type PerfPrefs, type Propagation } from '../../shared/mosaic/perf';
 import type { StageView } from './MosaicStage';
 import type { SceneState } from './use-mosaic-scene';
 
@@ -56,9 +56,11 @@ const SPACES: readonly { id: Space; label: string; title: string }[] = [
  * matching compares and how the picture reads, each a setting of the
  * document; the grid and the ghost are this screen's, never saved.
  */
-export default function MosaicSettings(props: MosaicSettingsProps) {
-  // The Performance panel's props are taken here already; its section follows in F4.
-  const { settings, update, view, setView, state, target, cropped, onWhole, onChoose } = props;
+const PROPAGATION_LABELS: Record<Propagation, string> = { rows: 'Top down', point: 'From the point', spiral: 'Spiral', random: 'Random', none: 'All at once' };
+const ANIMATION_LABELS: Record<CellAnimation, string> = { appear: 'Appear', fade: 'Fade', flip: 'Flip', none: 'None' };
+const LOT_LABELS: Record<LotSize, string> = { 0: 'A row', 64: '64 cells', 256: '256 cells', 1024: '1 024 cells' };
+
+export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   return (
     <div className="flex flex-col gap-3 px-1.5">
@@ -141,6 +143,50 @@ export default function MosaicSettings(props: MosaicSettingsProps) {
         {scene && (
           <p className="m-0 font-mono text-2xs text-muted tabular-nums">
             {scene.shape.cols} × {scene.shape.rows} cells · matched in {Math.round(scene.matchMs)} ms {scene.on === 'worker' ? 'in the background' : 'here'}
+          </p>
+        )}
+      </InspectorSection>
+      <InspectorSection id="mosaic-perf" title="Performance" remember="local" defaultOpen={false}>
+        <SelectField<string>
+          label="Workers"
+          value={String(perf.workers)}
+          options={[{ id: '0', label: `Auto · ${workers} here` }, ...[1, 2, 3, 4, 6, 8].map((n) => ({ id: String(n), label: String(n) }))]}
+          onChange={(v) => setPerf({ workers: Number(v) })}
+        />
+        <FieldRow label="Measure" hint={<p>Where a picture’s colours are read: the pool, one worker, or this thread — which stalls the page, to compare.</p>}>
+          <Segmented<PerfPrefs['measure']> size="sm" fill value={perf.measure} options={[{ id: 'pool', label: 'Pool' }, { id: 'one', label: '1 worker' }, { id: 'main', label: 'This thread' }]} onChange={(measure) => setPerf({ measure })} />
+        </FieldRow>
+        <SelectField<string>
+          label="Matching"
+          value={String(perf.lot)}
+          options={LOT_SIZES.map((n) => ({ id: String(n), label: LOT_LABELS[n] }))}
+          onChange={(v) => setPerf({ lot: Number(v) as LotSize })}
+        />
+        <SelectField<Propagation>
+          label="Propagation"
+          value={perf.propagation}
+          options={PROPAGATIONS.map((id) => ({ id, label: PROPAGATION_LABELS[id] }))}
+          onChange={(propagation) => setPerf({ propagation })}
+        />
+        <SwitchRow
+          label="Show each lot as it lands"
+          checked={perf.showAsItComes}
+          onChange={(showAsItComes) => setPerf({ showAsItComes })}
+          hint={<p>Off, the mosaic appears whole once every lot is in. With several workers the lots in flight do not see each other, so the no-twins rule may differ at their edges from a single block — top down with one worker is exact.</p>}
+        />
+        <FieldRow label="A cell">
+          <Segmented<CellAnimation> size="sm" fill value={perf.cellAnimation} options={CELL_ANIMATIONS.map((id) => ({ id, label: ANIMATION_LABELS[id] }))} onChange={(cellAnimation) => setPerf({ cellAnimation })} />
+        </FieldRow>
+        <SliderRow label="Animation" name="animation" value={perf.animationMs} min={0} max={600} step={20} reset={160} format={(v) => `${v} ms`} onChange={(animationMs) => setPerf({ animationMs })} />
+        <SelectField<string> label="Tiles in memory" value={String(perf.tileCache)} options={[600, 2000, 4000].map((n) => ({ id: String(n), label: n.toLocaleString() }))} onChange={(v) => setPerf({ tileCache: Number(v) as PerfPrefs['tileCache'] })} />
+        <SelectField<string> label="Scenes ahead" value={String(perf.ahead)} options={[1, 2, 3].map((n) => ({ id: String(n), label: String(n) }))} onChange={(v) => setPerf({ ahead: Number(v) as PerfPrefs['ahead'] })} />
+        <FieldRow label="Motion">
+          <Segmented<PerfPrefs['motion']> size="sm" fill value={perf.motion} options={[{ id: 'system', label: 'System' }, { id: 'reduced', label: 'Reduced' }, { id: 'full', label: 'Full' }]} onChange={(motion) => setPerf({ motion })} />
+        </FieldRow>
+        {scene && (
+          <p className="m-0 font-mono text-2xs text-muted tabular-nums">
+            last matching · {scene.lots} lot{scene.lots === 1 ? '' : 's'} · {Math.round(scene.matchMs / Math.max(1, scene.lots))} ms a lot · {scene.on === 'worker' ? 'in the background' : 'here'}
+            {fps !== null ? ` · ${fps} fps while it came in` : ''}
           </p>
         )}
       </InspectorSection>

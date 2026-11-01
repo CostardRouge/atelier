@@ -15,8 +15,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   photo whose colours match, then played as the screen saver that dove from picture to picture — or pulled back, revealed
   the picture cell by cell, or drifted over it — on the whole screen if you like. Choose the target from a grid of your
   pictures, its shape (16:9 to 9:16, square), and the part of it rebuilt by dragging a frame on it. A big mosaic is
-  matched in lots painted as they land, spreading from the cell you clicked, with a hairline saying how far it has come.
-  Each mosaic, the colours of its
+  matched in lots painted as they land, spreading from the cell you clicked, with a hairline saying how far it has come;
+  a Performance section sets this device's workers, lots, propagation and animations. Each mosaic, the colours of its
   pictures and a small tile of each are kept in this browser; a `.mosaic.json` file carries it elsewhere.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the

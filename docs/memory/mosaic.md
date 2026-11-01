@@ -231,6 +231,24 @@ the queue, else every later `take` waits forever. Driven headless: 1 500
 pictures, 37 × 37 cells, 22 lots at 9 ms a lot on the pool, the frames
 distinct as they land, a click propagating from its cell.
 
+## Performance is the device's panel, never the document's (2026-11-01, F4)
+
+His ask («tout un panel pour gérer la performance et les animations ou le
+worker … au peigne fin, tous les paramètres du premier artefact»). **Rules**:
+`PerfPrefs` (`perf.ts`) live in `localStorage` `atelier.mosaic.perf`
+(`use-mosaic-perf.ts`, bounded on read by `sanitizePerf`) — a `.mosaic.json`
+opened on a phone must not impose six workers; the document keeps what the
+mosaic IS, the device how it is computed and shown. The section sits at the
+inspector's foot, closed by default: workers (Auto · N here, 1–8), where the
+measure runs (pool, one worker, this thread), the lot (a row, 64, 256,
+1 024), the propagation, *Show each lot as it lands*, the cell animation and
+its ms, tiles in memory, scenes ahead, the zoom's meaning (F6), motion; a
+measured line «last matching · N lots · ms a lot · where · fps» under them.
+`workers: 0` is auto (`workersFor`: cores − 1, two to six, one or two
+constrained); the pool is remade on that number; `measure()` reads the pref
+at call time. **How to apply**: a new knob is a field with a default and a
+bound in `sanitizePerf`, read through the hook, never a new store.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

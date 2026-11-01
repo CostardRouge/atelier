@@ -3182,7 +3182,15 @@ so.
 its answer lands — from the cell you clicked outward by default, else row
 by row, in a spiral, at random, or all at once — and each cell fades,
 appears or flips into place; a hairline along the stage's bottom edge says
-how far the matching has come while the word says *matching…*.
+how far the matching has come while the word says *matching…*. The
+**Performance** section at the inspector's foot is this device's, not the
+mosaic's: how many workers (auto is every core but one), where the colours
+are measured (a pool, one worker, this thread), the size of a lot, the
+propagation, whether each lot is shown as it lands or the whole at once,
+the cell animation and its length, how many tiles stay in memory, how many
+scenes a chain prepares ahead, and whether motion follows the system. Under
+them, the last matching's measure: its lots, the time a lot took, where it
+ran, the frames per second drawn.
 
 **The modes.** Under the stage: *Still* is the mosaic as above. *Pull back*
 plays once what the screen saver did — the picture pulls back and turns out
