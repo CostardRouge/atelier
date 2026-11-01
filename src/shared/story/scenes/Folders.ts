@@ -3,6 +3,7 @@
 // folders with counts, the breadcrumb, then « 8 940 photos à trier ce mois-ci ».
 import { word, numberText } from "../locale";
 import { appear, enter, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
+import { obj } from "../objects";
 
 /** a Finder folder, drawn calmly: no scale pop */
 export function folder(c: Ctx, cx: number, cy: number, w: number, open = 0) {
@@ -77,7 +78,7 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
     w = 830,
     h = 640, // v2 deviation: the lab's 760 put « 8 940 photos… » (y 1370) under the caption
     cw = w / 3;
-  appear(c, enter(lt, 0, 1), () => {
+  obj(c, "folders.window", [x0 + w / 2, y0 + h / 2], lt, (lt) => appear(c, enter(lt, 0, 1), () => {
     c.fillStyle = PAL.soft;
     rr(c, x0, y0, w, h, 22);
     c.fill();
@@ -104,7 +105,7 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
       c.fillRect(x0 + i * cw, y0 + 64, 1.5, h - 64);
       c.restore();
     }
-  }, 10);
+  }, 10), 0);
   const cols: { t0: number; items: string[]; counts?: string[]; sel: number; selAt?: number }[] = pCols
     ? pCols.map((col, i) => ({
         t0: 0.2 + i * 1.2,
@@ -118,7 +119,7 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
         { t0: 1.3, items: ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05"], sel: 1, selAt: 2.3 },
         { t0: 2.6, items: CARDS.map((x) => x[0]), counts: CARDS.map((x) => x[1]), sel: -1 },
       ];
-  cols.forEach((col, ci) => {
+  obj(c, "folders.columns", [x0 + w / 2, y0 + h / 2], lt, (lt) => cols.forEach((col, ci) => {
     const p = enter(lt, col.t0, 1.1);
     if (p <= 0) return;
     c.save();
@@ -147,7 +148,7 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
       c.restore();
     });
     c.restore();
-  });
+  }), cols[0]?.t0 ?? 0);
   if (pPath) {
     // path[0] at once, then each segment when the matching column's selection lands
     const steps: [number, string][] = [];
@@ -155,13 +156,13 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
       const at = i === 0 ? 0 : cols[i - 1]?.selAt ?? 0.2 + (i - 1) * 1.2 + 0.9;
       steps.push([at, pPath.slice(0, i + 1).join(" › ")]);
     });
-    crumb(c, lt, steps);
+    obj(c, "folders.path", [300, 460], lt, (lt) => crumb(c, lt, steps), 0);
   } else {
-    crumb(c, lt, [
+    obj(c, "folders.path", [300, 460], lt, (lt) => crumb(c, lt, [
       [0, "Photos"],
       [1.0, "Photos › 2026"],
       [2.3, "Photos › 2026 › 2026-02"],
-    ]);
+    ]), 0);
   }
-  if (footnote) appear(c, enter(lt, 3.6, 1), () => text(c, footnote, 90, 1250, 32, PAL.ink, { fam: TYPO.fam, w: TYPO.lw }), 10);
+  if (footnote) obj(c, "folders.footnote", [400, 1240], lt, (lt) => appear(c, enter(lt, 3.6, 1), () => text(c, footnote, 90, 1250, 32, PAL.ink, { fam: TYPO.fam, w: TYPO.lw }), 10), 3.6);
 }

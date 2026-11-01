@@ -11,6 +11,7 @@
 import { isVoice } from '../audio/voices';
 import type { SoundEvent } from '../audio/sound-event';
 import { clamp, E, font, PAL, rr, text, TYPO, type Ctx } from './motion';
+import { obj } from './objects';
 
 export type HookEntry = 'type' | 'rise' | 'word' | 'fade';
 export type HookExit = 'fade' | 'erase' | 'fly' | 'cut';
@@ -140,13 +141,14 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
   const leaving = t >= tl.leave;
   // The scrim, under the words, as long as they are there.
   const scrim = clamp(hook.scrim ?? HOOK_DEFAULTS.scrim);
-  if (scrim > 0) {
-    c.save();
-    c.globalAlpha = scrim * E(clamp((t - tl.lines[0].start) / 0.4)) * (exit === 'fade' || exit === 'fly' ? 1 - out : 1);
-    c.fillStyle = ink === PAL.bg ? PAL.ink : PAL.bg;
-    c.fillRect(0, 0, 1080, 1920);
-    c.restore();
-  }
+  if (scrim > 0)
+    obj(c, 'hook.veil', [540, 960], t, () => {
+      c.save();
+      c.globalAlpha = scrim * E(clamp((t - tl.lines[0].start) / 0.4)) * (exit === 'fade' || exit === 'fly' ? 1 - out : 1);
+      c.fillStyle = ink === PAL.bg ? PAL.ink : PAL.bg;
+      c.fillRect(0, 0, 1080, 1920);
+      c.restore();
+    });
   const heights = tl.lines.map((l) => (l.sticker ? STICKER_SIZE + 44 : SIZE));
   const total = heights.reduce((a, b) => a + b, 0) + LINE_GAP * (tl.lines.length - 1);
   let y = PLACE_Y[hook.place ?? HOOK_DEFAULTS.place] - total / 2;
@@ -156,40 +158,43 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
     y += h + LINE_GAP;
     if (t < line.start) return;
     const p = clamp((t - line.start) / (line.done - line.start));
-    c.save();
-    if (leaving && exit === 'fade') c.globalAlpha *= 1 - E(out);
-    if (leaving && exit === 'fly') {
-      c.globalAlpha *= 1 - out;
-      c.translate(0, -E(out) * 120);
-    }
-    if (line.sticker) {
-      drawSticker(c, line.text, 540, base, p, i);
-    } else {
-      let shown = line.text;
-      const chars = [...line.text];
-      if (entry === 'type') shown = chars.slice(0, Math.floor(p * chars.length + 1e-6)).join('');
-      if (leaving && exit === 'erase') shown = chars.slice(0, Math.ceil(chars.length * (1 - out))).join('');
-      if (entry === 'word' && !leaving) {
-        const words = line.text.split(' ');
-        shown = words.slice(0, Math.max(1, Math.ceil(p * words.length))).join(' ');
+    // The typed lines are one object, the sticker another: each set, moved or styled alone.
+    obj(c, line.sticker ? 'hook.sticker' : 'hook.lines', [540, base - h * 0.4], t, () => {
+      c.save();
+      if (leaving && exit === 'fade') c.globalAlpha *= 1 - E(out);
+      if (leaving && exit === 'fly') {
+        c.globalAlpha *= 1 - out;
+        c.translate(0, -E(out) * 120);
       }
-      if (entry === 'rise' || entry === 'fade') {
-        c.globalAlpha *= E(p);
-        if (entry === 'rise') c.translate(0, (1 - E(p)) * 24);
+      if (line.sticker) {
+        drawSticker(c, line.text, 540, base, p, i);
+      } else {
+        let shown = line.text;
+        const chars = [...line.text];
+        if (entry === 'type') shown = chars.slice(0, Math.floor(p * chars.length + 1e-6)).join('');
+        if (leaving && exit === 'erase') shown = chars.slice(0, Math.ceil(chars.length * (1 - out))).join('');
+        if (entry === 'word' && !leaving) {
+          const words = line.text.split(' ');
+          shown = words.slice(0, Math.max(1, Math.ceil(p * words.length))).join(' ');
+        }
+        if (entry === 'rise' || entry === 'fade') {
+          c.globalAlpha *= E(p);
+          if (entry === 'rise') c.translate(0, (1 - E(p)) * 24);
+        }
+        const size = fitSize(c, line.text, 900, SIZE);
+        text(c, shown, 540, base, size, ink, { align: 'center' });
+        // The caret: while typing, and blinking on the last typed line until the next arrives.
+        const typing = entry === 'type' && (p < 1 || i === tl.lines.length - 1 || t < tl.lines[i + 1].start);
+        if (typing && !leaving && Math.floor(t * 2.2) % 2 === 0) {
+          c.font = font(size, TYPO.hw, TYPO.fam);
+          const full = c.measureText(line.text).width;
+          const at = 540 - full / 2 + c.measureText(shown).width + 6;
+          c.fillStyle = ink;
+          c.fillRect(at, base - size * 0.78, 5, size * 0.9);
+        }
       }
-      const size = fitSize(c, line.text, 900, SIZE);
-      text(c, shown, 540, base, size, ink, { align: 'center' });
-      // The caret: while typing, and blinking on the last typed line until the next arrives.
-      const typing = entry === 'type' && (p < 1 || i === tl.lines.length - 1 || t < tl.lines[i + 1].start);
-      if (typing && !leaving && Math.floor(t * 2.2) % 2 === 0) {
-        c.font = font(size, TYPO.hw, TYPO.fam);
-        const full = c.measureText(line.text).width;
-        const at = 540 - full / 2 + c.measureText(shown).width + 6;
-        c.fillStyle = ink;
-        c.fillRect(at, base - size * 0.78, 5, size * 0.9);
-      }
-    }
-    c.restore();
+      c.restore();
+    });
   });
 }
 

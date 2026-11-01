@@ -103,7 +103,13 @@ export default function StudioTree({
       })}
       {over.length ? <p className={heading}>Over every scene</p> : null}
       {over.map((t) => (
-        <button key={t.id} type="button" className={rowClass(sameSel(selected, { kind: 'object', id: t.id, key: t.key, slot: t.slot }))} onClick={() => pick(t)}>
+        // A part of what sits over every scene (`hud.number`) is drawn under its whole (`hud`).
+        <button
+          key={t.id}
+          type="button"
+          className={rowClass(sameSel(selected, { kind: 'object', id: t.id, key: t.key, slot: t.slot }), over.some((o) => t.key.startsWith(`${o.key}.`)) ? 1 : 0)}
+          onClick={() => pick(t)}
+        >
           {objectLabel(t.key)}
         </button>
       ))}
