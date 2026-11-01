@@ -43,21 +43,31 @@ export interface ComposeOptions {
    * for the Studio to learn what a point or an object covers (`stage-pick.ts`).
    */
   base?: readonly [number, number, number, number, number, number];
+  /**
+   * The size `c` is drawn at, as a share of 1080 × 1920 — the Studio's stage
+   * draws at the size it is SHOWN (its box × the screen's density), never a
+   * full frame it then shrinks; the layers follow. 1 (the export) draws every
+   * pixel as before.
+   */
+  scale?: number;
 }
 
 let layer: HTMLCanvasElement | null = null;
-function slotLayer(): CanvasRenderingContext2D {
-  if (!layer) {
-    layer = document.createElement('canvas');
-    layer.width = W;
-    layer.height = H;
+function slotLayer(scale: number): CanvasRenderingContext2D {
+  const w = Math.round(W * scale);
+  const h = Math.round(H * scale);
+  if (!layer || layer.width !== w || layer.height !== h) {
+    layer ??= document.createElement('canvas');
+    layer.width = w;
+    layer.height = h;
   }
   const c = layer.getContext('2d')!;
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.globalAlpha = 1;
   c.globalCompositeOperation = 'source-over';
   c.filter = 'none';
-  c.clearRect(0, 0, W, H);
+  c.clearRect(0, 0, w, h);
+  c.setTransform(scale, 0, 0, scale, 0, 0);
   return c;
 }
 
@@ -96,9 +106,10 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setTexture(ep.look);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
+  const scale = opts.scale ?? 1;
   c.save();
   if (opts.base) c.setTransform(...opts.base);
-  else c.setTransform(1, 0, 0, 1, 0, 0);
+  else c.setTransform(scale, 0, 0, scale, 0, 0);
   c.globalAlpha = 1;
   c.globalCompositeOperation = 'source-over';
   c.fillStyle = PAL.bg;
@@ -113,10 +124,10 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
       c.restore();
       return;
     }
-    const l = slotLayer();
+    const l = slotLayer(scale);
     drawSlot(l, ep, slot, t - slot.start);
     c.globalAlpha = alpha;
-    c.drawImage(l.canvas, 0, 0);
+    c.drawImage(l.canvas, 0, 0, W, H);
     c.globalAlpha = 1;
   });
   setSlot('');

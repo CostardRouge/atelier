@@ -35,6 +35,7 @@ import StoryTransport from './StoryTransport';
 import GuidesMenu, { storyGuides } from './GuidesMenu';
 import { useStoryPlayback, type TimedBuffer } from './use-story-playback';
 import { useEditorMode, type Pane } from './use-editor-mode';
+import { useSettled } from './use-settled';
 import { useLocalPref } from '../../shared/ui/local-pref';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import Segmented from '../../shared/ui/Segmented';
@@ -185,11 +186,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const prev = at > 0 ? POSTS[at - 1] : null;
   const nextSkeleton = at < POSTS.length - 1 && POSTS[at + 1].season === skeleton.season ? POSTS[at + 1] : null;
 
-  // The next post's cover rides into this post's ending — the continuity the series lives on.
+  // The next post's cover rides into this post's ending — the continuity the series lives on. It is a whole
+  // frame to paint, so it follows the script once the edits SETTLE, never on every step of a slider.
+  const settled = useSettled(live, 400);
   const nextThumb = useMemo(
-    () => (fontsReady && nextSkeleton ? paintCover(episodeOf(nextSkeleton), 0.5) : null),
-    [fontsReady, nextSkeleton, episodeOf],
+    () => (fontsReady && nextSkeleton ? paintCover(assemble(nextSkeleton, settled, POSTS), 0.5) : null),
+    [fontsReady, nextSkeleton, settled],
   );
+  const postOptions = useMemo(() => POSTS.map((p) => ({ id: p.id, label: `${p.number} · ${assemble(p, settled, POSTS).title}` })), [settled]);
   const episode = useMemo<Episode>(() => {
     const ep = episodeOf(skeleton);
     return ep.next ? { ...ep, next: { ...ep.next, thumb: nextThumb } } : ep;
@@ -686,7 +690,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           <SelectField
             label="Post"
             value={skeleton.id}
-            options={POSTS.map((p) => ({ id: p.id, label: `${p.number} · ${episodeOf(p).title}` }))}
+            options={postOptions}
             onChange={choose}
           />
         </span>

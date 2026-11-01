@@ -66,12 +66,12 @@ function StoryStage({ clock, episode, opts, fontsReady, guides, selectedId, drag
   }, []);
 
   // What the loop paints from, refreshed every render without restarting it.
-  const live = useRef({ episode, opts, fontsReady });
-  live.current = { episode, opts, fontsReady };
+  const live = useRef({ episode, opts, fontsReady, size });
+  live.current = { episode, opts, fontsReady, size };
   const dirty = useRef(true);
   useEffect(() => {
     dirty.current = true;
-  }, [episode, opts, fontsReady]);
+  }, [episode, opts, fontsReady, size]);
   useEffect(() => clock.subscribe(() => (dirty.current = true)), [clock]);
 
   useEffect(() => {
@@ -82,11 +82,22 @@ function StoryStage({ clock, episode, opts, fontsReady, guides, selectedId, drag
       last = now;
       const starting = clock.starting;
       clock.tick(dt);
-      const { episode: ep, opts: o, fontsReady: ready } = live.current;
-      const ctx = canvasRef.current?.getContext('2d');
-      if (ctx && ready && dirty.current) {
+      const { episode: ep, opts: o, fontsReady: ready, size: sz } = live.current;
+      const canvas = canvasRef.current;
+      if (canvas && sz && ready && dirty.current) {
         dirty.current = false;
-        drawEpisode(ctx, ep, Math.min(clock.t, clock.total - 0.001), o);
+        // Drawn at the size shown (× the screen's density, at most the frame's own): a full frame shrunk by the
+        // browser cost three times the pixels and most of a slider step's time.
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const scale = Math.min(1, (sz.w * dpr) / W);
+        const bw = Math.round(W * scale);
+        const bh = Math.round(H * scale);
+        if (canvas.width !== bw || canvas.height !== bh) {
+          canvas.width = bw;
+          canvas.height = bh;
+        }
+        const ctx = canvas.getContext('2d');
+        if (ctx) drawEpisode(ctx, ep, Math.min(clock.t, clock.total - 0.001), { ...o, scale });
       }
       // The post moves from the end of its first frame: what that frame cost is not a jump on the next.
       if (starting) last = performance.now();

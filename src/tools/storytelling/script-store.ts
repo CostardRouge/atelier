@@ -19,10 +19,43 @@ export function loadStoredScript(): StoryScript | null {
 }
 
 export function storeScript(script: StoryScript | null): void {
+  window.clearTimeout(pending.timer);
+  pending.script = undefined;
+  write(script);
+}
+
+function write(script: StoryScript | null): void {
   try {
     if (script) localStorage.setItem(KEY, JSON.stringify(script));
     else localStorage.removeItem(KEY);
   } catch {
     // A full or blocked storage keeps the script for this tab only.
   }
+}
+
+/**
+ * The same, a moment later: the Studio changes the script on every step of a
+ * slider, and the whole script — its wall's pool, its counted tiles — is
+ * serialised on each write. The last version is written once the steps pause
+ * (`STORE_AFTER_MS`), and at once when the page is hidden or closed.
+ */
+const STORE_AFTER_MS = 500;
+const pending: { script: StoryScript | null | undefined; timer: number } = { script: undefined, timer: 0 };
+export function storeScriptSoon(script: StoryScript | null): void {
+  pending.script = script;
+  window.clearTimeout(pending.timer);
+  pending.timer = window.setTimeout(flushScript, STORE_AFTER_MS);
+}
+export function flushScript(): void {
+  window.clearTimeout(pending.timer);
+  if (pending.script === undefined) return;
+  const s = pending.script;
+  pending.script = undefined;
+  write(s);
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushScript);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushScript();
+  });
 }

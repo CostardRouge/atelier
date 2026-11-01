@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ObjectTrack } from '../../shared/story/studio';
 import { objectLabel } from '../../shared/story/studio';
 
@@ -40,7 +41,7 @@ const sameSel = (a: StudioSelection | null, b: StudioSelection) =>
  * parts and its caption — and what sits over every scene (the hook, the
  * HUD). A row selects; a scene's row also moves the playhead to it.
  */
-export default function StudioTree({
+function StudioTree({
   scenes,
   tracks,
   selected,
@@ -116,3 +117,5 @@ export default function StudioTree({
     </nav>
   );
 }
+
+export default memo(StudioTree);

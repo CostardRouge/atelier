@@ -17,7 +17,7 @@ import type { StoryScript } from '../../shared/story/story-script';
 import { STORY_FONTS } from '../../shared/story/fonts';
 import PostEditor, { type PostSound } from './PostEditor';
 import { POSTS } from './posts';
-import { loadStoredScript, storeScript } from './script-store';
+import { flushScript, loadStoredScript, storeScriptSoon } from './script-store';
 import StoryGallery from './StoryGallery';
 
 /**
@@ -43,8 +43,10 @@ export default function StorytellingTool() {
 
   const onScript = useCallback((next: StoryScript | null) => {
     setScriptState(next);
-    storeScript(next);
+    // Loading or forgetting a script is written at once; an edit, once the edits pause (`script-store.ts`).
+    storeScriptSoon(next);
   }, []);
+  useEffect(() => () => flushScript(), []);
 
   useEffect(() => {
     let alive = true;
