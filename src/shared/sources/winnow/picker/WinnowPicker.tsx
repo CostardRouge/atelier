@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import {
   listsBurstFrames,
   WinnowError,
@@ -31,7 +31,8 @@ import { readFlightLog } from './flight-logs';
 import { logFailureOf, type LogFailure } from './log-failures';
 import type { FlightTrack } from './flight-track';
 import SpanPicker from './SpanPicker';
-import { dayHeading, dayRuns, openingSpan, rowDay, spanChunks, spanDays, spanMonths, spanPresets } from './span';
+import { dayHeading, dayRuns, openingSpan, rowDay, spanChunks, spanDays, spanMonths, spanPresets, type SpanChunk } from './span';
+import { nextParts, partOf, type PartState } from './span-queue';
 import PickerTile, { type PileBadge } from './PickerTile';
 import {
   activeFacets,
@@ -66,12 +67,14 @@ const DAY_CAP = 600;
 const FOLDER_CAP = 2000;
 /**
  * A span is asked for in PARTS of about this many media (`spanChunks`, from
- * the instance's own day counts), oldest first, the grid filling as each
- * lands — never one capped walk, which showed a year as its first weeks.
+ * the instance's own day counts): the parts on screen or jumped to first,
+ * then the rest in order (`span-queue.ts`) — never one capped walk, which
+ * showed a year as its first weeks, and no longer oldest first only, which
+ * made a click on a late month do nothing until everything before it landed.
  */
-const SPAN_CHUNK = 2000;
-/** What one span may hold before it stops, said on the status line. */
-const SPAN_CAP = 20_000;
+const SPAN_CHUNK = 1000;
+/** Parts asked for at once. */
+const SPAN_PARALLEL = 2;
 /** Pages of the most the instance serves (its `PAGE_MAX`): a span is many of them. */
 const SPAN_PAGE = 500;
 /** Tiles mounted per batch, the next as the end of the grid nears. */
@@ -176,6 +179,15 @@ export default function WinnowPicker({
   const [truncated, setTruncated] = useState(false);
   // A span's day counts, as the instance's calendar answered them.
   const [spanCounts, setSpanCounts] = useState<WinnowCalendarDay[] | null>(null);
+  // A span's parts, what each is doing, and the rows each brought (`span-queue.ts`).
+  const [parts, setParts] = useState<SpanChunk[] | null>(null);
+  const [partStates, setPartStates] = useState<PartState[]>([]);
+  const [partRows, setPartRows] = useState<ReadonlyMap<number, WinnowAssetRow[]>>(new Map());
+  // The parts the grid shows or was sent to, most wanted first, and the day a month click went to.
+  const [wantedParts, setWantedParts] = useState<number[]>([]);
+  const [jumpDay, setJumpDay] = useState<string | null>(null);
+  const partAsks = useRef(new Map<number, AbortController>());
+  const spanAsk = useRef<{ narrowing: Record<string, unknown>; key: number }>({ narrowing: {}, key: 0 });
   const [problem, setProblem] = useState<Problem | null>(null);
   const [generation, setGeneration] = useState(0);
   // Every frame of a pile, where the instance says it can list them (Winnow
@@ -206,6 +218,11 @@ export default function WinnowPicker({
     setLoaded(false);
     setTruncated(false);
     setSpanCounts(null);
+    setParts(null);
+    setPartStates([]);
+    setPartRows(new Map());
+    setWantedParts([]);
+    setJumpDay(null);
     setProblem(null);
     if (scope === 'session' && sessionId === null) return;
     const controller = new AbortController();
@@ -234,37 +251,72 @@ export default function WinnowPicker({
         })
         .catch(fail);
     } else {
-      // A span: its day counts first (one request), then its parts in order,
-      // each one shown as it lands.
+      // A span: its day counts first (one request), which give every day its
+      // place in the grid at once; the parts are then asked for by the queue below.
+      spanAsk.current = { narrowing, key: spanAsk.current.key + 1 };
       void (async () => {
         const calendar = await client.calendar(span.from, span.to, filter, signal);
         if (cancelled) return;
+        const cut = spanChunks(calendar.days, { from: span.from, to: span.to }, SPAN_CHUNK);
         setSpanCounts(calendar.days);
-        const all: WinnowAssetRow[] = [];
-        for (const part of spanChunks(calendar.days, { from: span.from, to: span.to }, SPAN_CHUNK)) {
-          const got = await client.allAssets(
-            { dateFrom: part.from, dateTo: part.to, ...narrowing, limit: SPAN_PAGE },
-            SPAN_CAP - all.length,
-            signal,
-          );
-          if (cancelled) return;
-          all.push(...got);
-          setRows([...all]);
-          if (all.length >= SPAN_CAP) {
-            setTruncated(true);
-            break;
-          }
-        }
-        if (cancelled) return;
-        setRows([...all]);
-        setLoaded(true);
+        setParts(cut);
+        setPartStates(cut.map(() => 'idle'));
+        setRows([]);
+        if (cut.length === 0) setLoaded(true);
       })().catch(fail);
     }
+    const asks = partAsks.current;
     return () => {
       cancelled = true;
       controller.abort();
+      for (const c of asks.values()) c.abort();
+      asks.clear();
     };
   }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, device, generation, framesListed]);
+
+  // A span's parts, asked for by the queue: wanted first, two at a time, the
+  // rest in order; a part nobody looks at any more gives its slot up.
+  useEffect(() => {
+    if (scope !== 'span' || !parts) return;
+    const step = nextParts(partStates, wantedParts, SPAN_PARALLEL);
+    if (!step.start.length && !step.abort.length) return;
+    const key = spanAsk.current.key;
+    for (const i of step.abort) {
+      partAsks.current.get(i)?.abort();
+      partAsks.current.delete(i);
+    }
+    setPartStates((cur) => cur.map((st, i) => (step.abort.includes(i) ? 'idle' : step.start.includes(i) ? 'loading' : st)));
+    for (const i of step.start) {
+      const ask = new AbortController();
+      partAsks.current.set(i, ask);
+      const part = parts[i];
+      client
+        .allAssets({ dateFrom: part.from, dateTo: part.to, ...spanAsk.current.narrowing, limit: SPAN_PAGE }, Math.max(SPAN_PAGE, part.count * 2 + 200), ask.signal)
+        .then((got) => {
+          if (ask.signal.aborted || key !== spanAsk.current.key) return;
+          partAsks.current.delete(i);
+          setPartRows((cur) => new Map(cur).set(i, got));
+          setPartStates((cur) => cur.map((st, k) => (k === i ? 'done' : st)));
+        })
+        .catch((err: unknown) => {
+          if (ask.signal.aborted || key !== spanAsk.current.key) return;
+          partAsks.current.delete(i);
+          setPartStates((cur) => cur.map((st, k) => (k === i ? 'failed' : st)));
+          setProblem(explain(err, client, connection.id));
+        });
+    }
+  }, [scope, parts, partStates, wantedParts, client, connection.id]);
+  // The rows the landed parts brought, in the span's order; whole once every part is in.
+  useEffect(() => {
+    if (scope !== 'span' || !parts) return;
+    const all: WinnowAssetRow[] = [];
+    parts.forEach((_, i) => {
+      const got = partRows.get(i);
+      if (got) all.push(...got);
+    });
+    setRows(all);
+    if (parts.length && partStates.every((st) => st === 'done')) setLoaded(true);
+  }, [scope, parts, partRows, partStates]);
 
   // A folded pile's frames, asked for on its unfold where the scope's list
   // could not carry them. Forgotten with the scope.
@@ -585,6 +637,15 @@ export default function WinnowPicker({
   const gridBox = useRef<HTMLDivElement>(null);
   const [jump, setJump] = useState<string | null>(null);
   const jumpTo = (month: string) => {
+    if (virtual) {
+      // Every day of a span has its section from the calendar's counts: go there now, its part asked first.
+      const target = spanDayList.find((d) => d.date >= month);
+      if (!target) return;
+      setJumpDay(target.date);
+      const el = gridBox.current?.querySelector<HTMLElement>(`[data-span-day="${target.date}"]`);
+      if (el) revealInScroller(el, { block: 'start', scroller: gridBox.current });
+      return;
+    }
     const at = shownItems.findIndex((it) => (rowDay(it.row) ?? '') >= month);
     if (at < 0) return;
     setLimit((n) => Math.max(n, at + BATCH));
@@ -664,6 +725,143 @@ export default function WinnowPicker({
   }, [host.anchor, today]);
   // Several days in one grid read under day headings, in the list's own order.
   const grouped = scope !== 'day' && sort === 'time';
+  // A span's grid is VIRTUAL: every day the calendar counted has its section at
+  // its real height from the first moment, so the scrollbar knows the year and
+  // a month click lands at once; only the sections near the view mount tiles.
+  const virtual = scope === 'span' && grouped && view === 'grid' && parts !== null;
+  const spanDayList = useMemo(
+    () => (spanCounts ? spanCounts.filter((d) => d.count > 0 && d.date >= span.from && d.date <= span.to).sort((a, b) => (a.date < b.date ? -1 : 1)) : []),
+    [spanCounts, span.from, span.to],
+  );
+  const byDay = useMemo(() => {
+    const m = new Map<string, PickItem[]>();
+    if (!virtual) return m;
+    for (const it of shownItems) {
+      const d = rowDay(it.row);
+      if (!d) continue;
+      const list = m.get(d);
+      if (list) list.push(it);
+      else m.set(d, [it]);
+    }
+    return m;
+  }, [virtual, shownItems]);
+  const [nearDays, setNearDays] = useState<ReadonlySet<string>>(new Set());
+  const [cell, setCell] = useState({ cols: 6, row: 96, gap: 8, pad: 8 });
+  const measureRef = useRef<HTMLUListElement>(null);
+  // The grid's real columns and rows, read from a hidden grid of the same classes, as the box resizes.
+  useEffect(() => {
+    if (!virtual) return;
+    const box = gridBox.current;
+    const probe = measureRef.current;
+    if (!box || !probe) return;
+    const read = () => {
+      const cs = getComputedStyle(probe);
+      const cols = cs.gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+      const row = parseFloat(cs.gridAutoRows) || 96;
+      const gap = parseFloat(cs.rowGap) || 0;
+      const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      setCell((was) => (was.cols === cols && was.row === row && was.gap === gap && was.pad === pad ? was : { cols, row, gap, pad }));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [virtual, tiles]);
+  const blockHeight = (n: number) => {
+    const rowsN = Math.ceil(n / cell.cols);
+    return rowsN ? rowsN * cell.row + (rowsN - 1) * cell.gap + cell.pad : 0;
+  };
+  // Which sections are near the view: those mount tiles, and their parts are wanted.
+  const daysKey = spanDayList.map((d) => d.date).join(',');
+  useEffect(() => {
+    if (!virtual) return;
+    const box = gridBox.current;
+    if (!box) return;
+    const near = new Set<string>();
+    let frame = 0;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const d = (e.target as HTMLElement).dataset.spanDay;
+          if (!d) continue;
+          if (e.isIntersecting) near.add(d);
+          else near.delete(d);
+        }
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => setNearDays(new Set(near)));
+      },
+      { root: box, rootMargin: '1200px 0px' },
+    );
+    box.querySelectorAll<HTMLElement>('[data-span-day]').forEach((el) => io.observe(el));
+    return () => {
+      cancelAnimationFrame(frame);
+      io.disconnect();
+    };
+  }, [virtual, daysKey]);
+  // Wanted: the part a month click went to, then the parts on screen, in order.
+  useEffect(() => {
+    if (!virtual || !parts) return;
+    const want: number[] = [];
+    if (jumpDay) want.push(partOf(parts, jumpDay));
+    for (const d of spanDayList) if (nearDays.has(d.date)) want.push(partOf(parts, d.date));
+    const next = [...new Set(want.filter((i) => i >= 0))];
+    setWantedParts((cur) => (cur.length === next.length && cur.every((v, i) => v === next[i]) ? cur : next));
+  }, [virtual, parts, jumpDay, nearDays, spanDayList]);
+  const partDone = (d: string) => !!parts && partStates[partOf(parts, d)] === 'done';
+  // What the person is looking at stays put while parts above it land and
+  // change heights: the first day in view and its offset, kept on scroll and
+  // given back after each change (the browser's own anchoring loses it when a
+  // spacer becomes a grid).
+  const anchor = useRef<{ day: string; off: number } | null>(null);
+  useEffect(() => {
+    if (!virtual) return;
+    const box = gridBox.current;
+    if (!box) return;
+    let frame = 0;
+    const read = () => {
+      const top = box.getBoundingClientRect().top;
+      for (const el of box.querySelectorAll<HTMLElement>('[data-span-day]')) {
+        if (el.hidden) continue;
+        const r = el.getBoundingClientRect();
+        if (r.bottom > top + 1) {
+          anchor.current = { day: el.dataset.spanDay!, off: r.top - top };
+          return;
+        }
+      }
+    };
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(read);
+    };
+    read();
+    box.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      box.removeEventListener('scroll', onScroll);
+    };
+  }, [virtual]);
+  useLayoutEffect(() => {
+    if (!virtual || jumpDay) return;
+    const box = gridBox.current;
+    const a = anchor.current;
+    if (!box || !a || box.scrollTop === 0) return;
+    const el = box.querySelector<HTMLElement>(`[data-span-day="${a.day}"]`);
+    if (!el || el.hidden) return;
+    const off = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    if (Math.abs(off - a.off) > 1) box.scrollTop += off - a.off;
+  }, [virtual, jumpDay, rows, partStates, nearDays, cell]);
+  // A month click keeps its day at the top while the parts around it land and
+  // change heights, and is answered once that day's own rows are drawn.
+  useLayoutEffect(() => {
+    if (!jumpDay || !virtual || !parts) return;
+    const el = gridBox.current?.querySelector<HTMLElement>(`[data-span-day="${jumpDay}"]`);
+    if (el) revealInScroller(el, { block: 'start', scroller: gridBox.current });
+    const done = partStates[partOf(parts, jumpDay)] === 'done';
+    if (done && (byDay.has(jumpDay) || rows !== null)) {
+      const id = requestAnimationFrame(() => setJumpDay(null));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [jumpDay, virtual, parts, partStates, byDay, rows, cell]);
 
   const pileBadge = (it: PickItem, inRow: boolean): PileBadge | null => {
     if (it.pileId === null) return null;
@@ -805,7 +1003,13 @@ export default function WinnowPicker({
           {landing && (
             <span>
               {' '}
-              · loading {rows!.length}
+              {jumpDay ? (
+                <b className="font-semibold text-accent-ink">
+                  · loading {formatIsoDate(jumpDay).split(' ').slice(1).join(' ')} first ·{' '}
+                  {spanDayList.filter((d) => d.date.slice(0, 7) === jumpDay.slice(0, 7)).reduce((n, d) => n + d.count, 0)} media
+                </b>
+              ) : null}
+              {' '}· loading {rows!.length}
               {spanTotal !== null ? ` of about ${spanTotal}` : ''}…
             </span>
           )}
@@ -942,7 +1146,12 @@ export default function WinnowPicker({
               />
             </div>
             {grouped && scope === 'span' && months.length > 1 && (
-              <MonthStrip months={months} landedThrough={loaded ? null : landedThrough} onJump={jumpTo} />
+              <MonthStrip
+                months={months}
+                waiting={(month) => (virtual ? spanDayList.some((d) => d.date.startsWith(month) && !partDone(d.date)) : !loaded && landedThrough !== null && month > landedThrough.slice(0, 7))}
+                pending={jumpDay ? jumpDay.slice(0, 7) : null}
+                onJump={jumpTo}
+              />
             )}
             {/* The verdict mix, drawn once: a hidden bucket is dimmed, never removed. */}
             {counts.total > 0 && (
@@ -958,12 +1167,12 @@ export default function WinnowPicker({
                 )}
               </div>
             )}
-            <div ref={gridBox} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <div ref={gridBox} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${virtual ? '[overflow-anchor:none]' : ''}`}>
               {asking ? (
                 <LoadingState label={`Asking ${connection.id}…`} />
               ) : scope === 'session' && sessionId === null ? (
                 <p className="m-0 text-sm text-muted">Choose a folder above — its pictures are listed, nothing is downloaded until you add them.</p>
-              ) : shownItems.length === 0 ? (
+              ) : shownItems.length === 0 && !(virtual && !loaded) ? (
                 <p className="m-0 text-sm text-muted">
                   {counts.total ? 'Nothing passes these filters. ' : ''}
                   {counts.total > 0 && (
@@ -1012,6 +1221,42 @@ export default function WinnowPicker({
                         </Fragment>
                       );
                     });
+                  if (virtual) {
+                    // Every counted day, at its real height: tiles near the view, a spacer
+                    // (grey while its part is on its way) everywhere else.
+                    return (
+                      <>
+                        <ul ref={measureRef} aria-hidden="true" className={`${grid} invisible h-0 overflow-hidden !py-0`} />
+                        {spanDayList.map((d) => {
+                          const done = partDone(d.date);
+                          const its = byDay.get(d.date) ?? [];
+                          const n = done ? its.length : d.count;
+                          const near = nearDays.has(d.date);
+                          // A day the filters empty is HIDDEN, never unmounted: the sections are
+                          // observed once, and a part's state lands a render before its rows.
+                          return (
+                            <section key={d.date} data-span-day={d.date} aria-label={dayHeading(d.date)} className="mb-3" hidden={done && n === 0}>
+                              <h3 data-day={d.date} className="sticky top-0 z-[2] m-0 px-1 py-1.5 bg-surface flex items-baseline gap-2 text-xs font-semibold">
+                                {dayHeading(d.date)}
+                                <span className="font-mono text-3xs font-normal text-muted tabular-nums">
+                                  {n} media{done ? '' : jumpDay === d.date ? ' · loading first' : ' · on its way'}
+                                </span>
+                              </h3>
+                              {done && near ? (
+                                <ul className={grid}>{cells(its)}</ul>
+                              ) : (
+                                <div
+                                  aria-hidden="true"
+                                  className={done ? '' : 'rounded-paper bg-paper-2 animate-pulse motion-reduce:animate-none'}
+                                  style={{ height: blockHeight(n) }}
+                                />
+                              )}
+                            </section>
+                          );
+                        })}
+                      </>
+                    );
+                  }
                   const batch = shownItems.slice(0, limit);
                   if (view === 'book') {
                     return (
@@ -1295,12 +1540,15 @@ function FolderPicker({
  */
 function MonthStrip({
   months,
-  landedThrough,
+  waiting: isWaiting,
+  pending,
   onJump,
 }: {
   months: readonly { month: string; count: number }[];
-  /** The last day whose rows are here while a span lands; null once it is whole. */
-  landedThrough: string | null;
+  /** Whether a month's rows are still on their way. */
+  waiting: (month: string) => boolean;
+  /** The month a click went to, while its rows come — ringed and spinning, so the click shows it was heard. */
+  pending: string | null;
   onJump: (month: string) => void;
 }) {
   const max = Math.max(1, ...months.map((m) => m.count));
@@ -1309,19 +1557,24 @@ function MonthStrip({
     <div className="flex-none flex items-end gap-0.5" role="group" aria-label="Jump to a month of the span">
       {months.map((m) => {
         const name = NAMES[Number(m.month.slice(5, 7)) - 1];
-        const waiting = landedThrough !== null && m.month > landedThrough.slice(0, 7);
+        const waiting = isWaiting(m.month);
+        const asked = pending === m.month;
         return (
           <button
             key={m.month}
             type="button"
             disabled={m.count === 0}
             onClick={() => onJump(m.month)}
-            title={`${name} ${m.month.slice(0, 4)} · ${m.count} media${waiting ? ' · still loading' : ''}`}
+            title={`${name} ${m.month.slice(0, 4)} · ${m.count} media${asked ? ' · loading first' : waiting ? ' · still loading' : ''}`}
+            aria-busy={asked || undefined}
             className="flex-1 min-w-0 flex flex-col items-stretch gap-0.5 p-0 border-0 bg-transparent cursor-pointer disabled:cursor-default group"
           >
-            <span className="relative h-6 flex items-end">
+            <span className={`relative h-6 flex items-end ${asked ? 'outline outline-2 outline-accent outline-offset-1 rounded-[2px]' : ''}`}>
+              {asked ? (
+                <span className="absolute left-1/2 top-0.5 -translate-x-1/2 w-2.5 h-2.5 rounded-full border-2 border-accent border-r-transparent animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : null}
               <span
-                className={`w-full rounded-t-[2px] ${m.count ? 'bg-accent group-hover:bg-accent-ink' : 'bg-line'} ${waiting ? 'opacity-35' : ''}`}
+                className={`w-full rounded-t-[2px] ${m.count ? 'bg-accent group-hover:bg-accent-ink' : 'bg-line'} ${waiting && !asked ? 'opacity-35' : ''}`}
                 style={{ height: `${m.count ? Math.max(12, (m.count / max) * 100) : 6}%` }}
               />
             </span>

@@ -197,6 +197,30 @@ and a trip or a season of flights is neither one day nor one Winnow session.
   every reset (ticks, unfolded piles, the batch) keys on `scopeKey`, never on
   `rows`, which a span receives part by part; the opening ticks are seeded once
   the list is WHOLE (`loaded`) and added to what was ticked meanwhile.
+- **A span is loaded ON DEMAND and drawn VIRTUAL** (2026-11-01, his report: a
+  year's month strip did not jump, no feedback, repeated clicks piled up
+  requests; lab https://claude.ai/artifact/XN3NqA19mwWwU1GNfiYX6H). The calendar
+  answer gives every counted day its SECTION at its real height at once
+  (`ceil(n / cols) × row + gaps`, the columns and row read from a hidden grid of
+  the same classes), so the scrollbar knows the year and a month click scrolls
+  there now; only sections within 1 200 px mount tiles (an `IntersectionObserver`
+  on the sections), the rest are spacers, grey while their part is on its way.
+  Parts (`SPAN_CHUNK` 1 000, i.e. two pages) are asked by `span-queue.ts`
+  (pure, tested): the clicked month's part first, then the parts on screen, two
+  at a time, a part nobody looks at any more ABORTED for a wanted one, the rest
+  in order one at a time — no `SPAN_CAP` any more. The clicked month is ringed
+  with a spinner and the status line says « loading <month> first · N media ».
+  **Traps**: (1) a part's state lands a render BEFORE its rows (the rows are
+  assembled in an effect): a day that looked empty for that one render was
+  UNMOUNTED and came back as a new node the observer never watched — so a
+  section is `hidden`, never removed; (2) parts above the view change height as
+  they land (estimate → filtered count) and the browser's scroll anchoring
+  loses it when a spacer becomes a grid — the picker keeps its own anchor (first
+  day in view and its offset, given back after each change, `overflow-anchor:
+  none`), and a month click keeps ITS day at the top until that day's rows are
+  drawn. Day and Folder scopes, the Logbook and a span sorted by stars keep the
+  batches. Measured on a stub of 8 983 photos, 1 s a page: a click on November
+  draws it in about a second, stable over four runs.
 - **A span asks the server for only what the rail keeps** (2026-10-13, his
   «quand les filtres … et que l'appareil est sélectionné, il faut que le filtre
   soit appliqué sur les médias venant du drone»): `serverFacets` sends the one
