@@ -90,6 +90,33 @@ rows → *Add 44 to the mosaic* → 44 grids on the document, 9 clips, the
 tiles held, a reload refetching nothing, the same span reopened with every
 row «in this mosaic».
 
+## The stage: one painted canvas, a scene rebuilt by its inputs (2026-11-01, M5)
+
+`use-mosaic-scene.ts` rebuilds the mosaic when the target, the measured
+library, a matching setting (`cellPx`, `level`, `space`, `tint`,
+`distinctNeighbours`) or the stage's size changes: the target's PROXY
+fetched (a clip's thumbnail; the last four targets held as bitmaps), its
+cells read off a cover crop at the stage's shape (`targetCellsOf`), matched
+on this thread or — past 20 M multiply-adds, `match-client.ts` — in a
+one-off `measure-worker.ts` (its second message kind), the tiles' bitmaps
+read from the device (`tile-bitmaps.ts`, an LRU of 2 000 / 600 on a phone,
+a missing tile fetched from the thumbnail and kept again), the mosaic
+painted ONCE (`paintMosaic`); the previous scene stays on screen until the
+new one lands. The cell count follows the stage's CSS width (D2), the paint
+is at `dpr`. **Traps**: the room is measured on the WORKBENCH mounted with
+the pictures (`MosaicWorkbench`) — a size hook on the editor measured a box
+that did not exist yet and the canvas stayed 1 × 1; `SliderBar`'s range
+input is named by its `name` prop in lower case (`getByRole('slider', {
+name: /^cell$/i })`). The ghost and the grid are the screen's (`StageView`),
+never the document's; the gallery's poster is the scene's own canvas scaled
+to 640 × 360 after 2 s still (`use-mosaic-cover.ts`); a click on a cell
+makes its picture the target; *Draw a target* picks one from the seed. The
+gallery's «winnow.example does not keep mosaics» line is `AbsentSourceNotes`
+being honest until M8. Driven headless: 400 synthetic pictures, 18 × 18
+cells matched in 6 ms here, a click retargeting (one proxy fetched each),
+Zones + 12 px → 58 × 58 cells matched in 65 ms in the background, the ghost
+changing the pixels, the poster written, no overflow at 390 px.
+
 ## The chain is a clock, the picks are seeded (2026-10-31, M1)
 
 `chain.ts` gives a step's phase and camera as a FUNCTION of the time since

@@ -1,14 +1,16 @@
 /**
- * A picture MEASURED off the main thread (`docs/mosaic.md` §4.2): the main
- * thread fetches the Winnow thumbnail (the client holds the auth and the
- * retry) and hands the blob here; this worker decodes it once and makes two
- * things of it —
+ * The Mosaic instrument's worker (`docs/mosaic.md` §4.2–§4.3), two jobs:
  *
- * - the TILE a cell draws, a 160 × 90 JPEG cover crop (`TILE_W × TILE_H`),
- *   kept on the device by the caller (his pick, 2026-10-31: «oui pour les
- *   tuiles 160 px»);
- * - the GRID, 6 × 6 mean colours read off that same crop, so the measure
- *   describes the picture as a cell will show it.
+ * MEASURE — the main thread fetches a Winnow thumbnail (the client holds
+ * the auth and the retry) and hands the blob here; it is decoded once and
+ * two things are made of it: the TILE a cell draws, a 160 × 90 JPEG cover
+ * crop (`TILE_W × TILE_H`), kept on the device by the caller (his pick,
+ * 2026-10-31: «oui pour les tuiles 160 px»); and the GRID, 6 × 6 mean
+ * colours read off that same crop, so the measure describes the picture as
+ * a cell will show it.
+ *
+ * MATCH — a target's cells against the library's descriptors, when the
+ * brute force is big enough to stall a frame (`match-client.ts`'s rule).
  *
  * A module worker (Vite emits ES-format workers, `vite.config.ts`), so it
  * imports the arithmetic it shares with the main thread instead of copying
@@ -16,12 +18,26 @@
  * error that would take the pool down.
  */
 
+import { matchCells } from './match';
 import { TILE_H, TILE_W, coverSource, gridOf } from './measure';
 
-export type MeasureRequest = { kind: 'measure'; id: number; blob: Blob };
+export type MeasureRequest =
+  | { kind: 'measure'; id: number; blob: Blob }
+  | {
+      kind: 'match';
+      id: number;
+      cells: Float32Array;
+      pictures: Float32Array;
+      dims: number;
+      cols: number;
+      rows: number;
+      distinct: boolean;
+      exclude: Int32Array;
+    };
 export type MeasureReply =
   | { kind: 'measured'; id: number; grid: Uint8Array; tile: Blob }
-  | { kind: 'failed'; id: number; error: string };
+  | { kind: 'failed'; id: number; error: string }
+  | { kind: 'matched'; id: number; ids: Int32Array; dist: Float32Array };
 
 const tileCanvas = new OffscreenCanvas(TILE_W, TILE_H);
 const tileCtx = tileCanvas.getContext('2d', { willReadFrequently: true });
@@ -46,11 +62,19 @@ async function measure(blob: Blob): Promise<{ grid: Uint8Array; tile: Blob }> {
 const post = (reply: MeasureReply, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(reply, transfer);
 
 self.onmessage = async (event: MessageEvent<MeasureRequest>) => {
-  const { id, blob } = event.data;
+  const req = event.data;
+  if (req.kind === 'match') {
+    const { ids, dist } = matchCells(req.cells, req.pictures, req.dims, req.cols, req.rows, {
+      distinctNeighbours: req.distinct,
+      exclude: req.exclude.length ? new Set(req.exclude) : undefined,
+    });
+    post({ kind: 'matched', id: req.id, ids, dist }, [ids.buffer, dist.buffer]);
+    return;
+  }
   try {
-    const { grid, tile } = await measure(blob);
-    post({ kind: 'measured', id, grid, tile }, [grid.buffer]);
+    const { grid, tile } = await measure(req.blob);
+    post({ kind: 'measured', id: req.id, grid, tile }, [grid.buffer]);
   } catch (e) {
-    post({ kind: 'failed', id, error: e instanceof Error ? e.message : String(e) });
+    post({ kind: 'failed', id: req.id, error: e instanceof Error ? e.message : String(e) });
   }
 };

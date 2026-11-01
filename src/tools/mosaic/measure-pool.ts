@@ -116,7 +116,7 @@ class WorkerPool {
         if (!job) return;
         this.jobs.delete(event.data.id);
         if (event.data.kind === 'measured') job.resolve({ grid: event.data.grid, tile: event.data.tile });
-        else job.reject(new Error(event.data.error));
+        else job.reject(new Error(event.data.kind === 'failed' ? event.data.error : 'an unexpected answer from the worker'));
         this.busy[i] -= 1;
         this.waiting.shift()?.();
       };

@@ -1,15 +1,30 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../../app/use-hash-route';
-import { cleanMosaicTitle, withMeasures, withPictures, type MosaicDoc, type MosaicTile } from '../../shared/mosaic/mosaic-doc';
+import {
+  cleanMosaicTitle,
+  sanitizeSettings,
+  withMeasures,
+  withPictures,
+  type MosaicDoc,
+  type MosaicSettings as Settings,
+  type MosaicTile,
+} from '../../shared/mosaic/mosaic-doc';
+import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
+import { Icons } from '../../shared/ui/icons';
+import { useElementSize } from '../../shared/ui/use-element-width';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
+import MosaicSettings from './MosaicSettings';
+import MosaicStage, { type StageView } from './MosaicStage';
 import { pictureCountLine } from './MosaicGallery';
+import { useMosaicCover } from './use-mosaic-cover';
+import { randomTarget, useMosaicScene } from './use-mosaic-scene';
 
 /** Where the editor's save stands, as its bar says it. */
 export type SaveState = 'saved' | 'saving' | 'failed';
@@ -32,12 +47,52 @@ function unmeasured(doc: MosaicDoc, retryFailed: boolean): MosaicTile[] {
 }
 
 /**
+ * The stage and its dials, mounted only once the mosaic has pictures: the
+ * room is measured on THIS element, so the stage gets its size the moment
+ * it exists (a size hook on the editor measured nothing, the box not being
+ * there yet).
+ */
+function MosaicWorkbench({
+  doc,
+  client,
+  update,
+  setTarget,
+}: {
+  doc: MosaicDoc;
+  client: WinnowClient | null;
+  update: (fn: (s: Settings) => Settings) => void;
+  setTarget: (id: number) => void;
+}) {
+  const [boxRef, room] = useElementSize<HTMLDivElement>();
+  const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+  // The widest 16:9 the room holds, never taller than it.
+  const stageW = Math.floor(Math.min(room.width, (room.height || Infinity) * (16 / 9)));
+  const stageH = Math.floor(stageW * (9 / 16));
+  const state = useMosaicScene({ doc, client, stageW, stageH, dpr });
+  useMosaicCover(doc.id, state);
+  const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
+  return (
+    <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
+      <div ref={boxRef} className="min-h-[200px] flex-1 @min-[860px]:flex-none min-w-0 flex items-start justify-center">
+        <div style={{ width: stageW || undefined, height: stageH || undefined }}>
+          <MosaicStage state={state} view={view} stageW={stageW} stageH={stageH} dpr={dpr} onPick={(index) => state.status === 'ready' && setTarget(state.scene.tiles[index].id)} />
+        </div>
+      </div>
+      <aside className="min-h-0 overflow-auto" aria-label="Mosaic settings">
+        <MosaicSettings settings={doc.settings} update={update} view={view} setView={setView} state={state} />
+      </aside>
+    </div>
+  );
+}
+
+/**
  * Mosaic — WORK IN PROGRESS. One MOSAIC (`shared/mosaic/mosaic-doc.ts`): its
  * library of pictures from one Winnow, each measured once, and the picture
- * rebuilt out of them. Built so far (`docs/mosaic.md`): the frame (M3) and
- * the door — the shared picker adds references, and every add starts a
- * measuring run whose grids land on the document (M4). The stage (M5) and
- * the animated modes (M6) follow.
+ * rebuilt out of them. Built so far (`docs/mosaic.md`): the frame (M3), the
+ * door — the shared picker adds references, every add starts a measuring run
+ * (M4) — and the stage in SINGLE mode: the target rebuilt out of the
+ * library, its dials beside it, a click on a cell making its picture the
+ * target (M5). The animated modes (M6) follow.
  */
 export default function MosaicEditor({ doc, change, saveState, onBack, band }: MosaicEditorProps) {
   useSurface('darkroom');
@@ -103,6 +158,18 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
     [change, measure],
   );
 
+  // --- the target: the picture rebuilt; the first measured one until a click or a draw says otherwise ---
+  const measuredCount = doc.tiles.filter((t) => t.grid).length;
+  const salt = useRef(0);
+  useEffect(() => {
+    if (doc.target !== undefined || !measuredCount) return;
+    const id = randomTarget(doc, salt.current++);
+    if (id !== undefined) change((d) => ({ ...d, target: id, updatedAt: Date.now() }));
+  }, [doc, measuredCount, change]);
+  const setTarget = useCallback((id: number) => change((d) => (d.target === id ? d : { ...d, target: id, updatedAt: Date.now() })), [change]);
+
+  const update = useCallback((fn: (s: Settings) => Settings) => change((d) => ({ ...d, settings: sanitizeSettings(fn(d.settings)), updatedAt: Date.now() })), [change]);
+
   const failed = doc.tiles.filter((t) => t.failed).length;
   const pending = unmeasured(doc, false).length;
   const canMeasure = Boolean(client && connection && doc.instance === connection.id) && !progress;
@@ -148,6 +215,20 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
             : `${pictureCountLine(doc)}${failed ? ` · ${failed} skipped` : ''}`}
         </span>
         <span className="flex-1" />
+        {measuredCount > 1 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Icons.swap}
+            onClick={() => {
+              const id = randomTarget(doc, salt.current++);
+              if (id !== undefined) setTarget(id);
+            }}
+            title="Another picture of the library as the target — or click a cell on the stage"
+          >
+            Draw a target
+          </Button>
+        )}
         {!progress && (pending > 0 || failed > 0) && (
           <Button size="sm" variant="ghost" disabled={!canMeasure} onClick={() => void measure(pending === 0)} title={pending ? `Read the colours of ${pending} picture${pending === 1 ? '' : 's'} not measured yet` : 'Try the skipped pictures once more'}>
             {pending ? `Measure ${pending.toLocaleString()}` : 'Measure again'}
@@ -166,7 +247,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
           {notice}
         </p>
       )}
-      {doc.tiles.length === 0 && (
+      {doc.tiles.length === 0 ? (
         <EmptyState
           title="No pictures yet"
           actions={
@@ -182,6 +263,8 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
           A mosaic starts with pictures from your Winnow — a span of days, hundreds or thousands of them. Each is measured once and kept
           here with its colours.
         </EmptyState>
+      ) : (
+        <MosaicWorkbench doc={doc} client={client} update={update} setTarget={setTarget} />
       )}
     </section>
   );

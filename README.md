@@ -3111,9 +3111,10 @@ reloads on every save.
 ## Mosaic tool
 
 *Work in progress* — the home page and the tool menu say so with a badge. What
-exists: mosaics, their gallery and their file, and the door to a Winnow's
-pictures with the measuring of their colours. The stage and the animated
-modes come next (`docs/mosaic.md`).
+exists: mosaics, their gallery and their file, the door to a Winnow's
+pictures with the measuring of their colours, and the stage in its still
+mode. The animated modes, the exports and keeping a mosaic on a Winnow come
+next (`docs/mosaic.md`).
 
 The photo-mosaic screen saver macOS once had, over your own pictures: one
 picture rebuilt out of hundreds of others, each cell a photo whose colours
@@ -3146,6 +3147,22 @@ resumes by itself. A picture whose thumbnail cannot be read is skipped and
 counted; *Measure again* tries it once more. A mosaic's pictures come from
 ONE instance: with another connected, the band says where they come from
 instead of offering the door.
+
+**The stage.** One picture of the library is the **target**, rebuilt out of
+all the others: the stage is cut into cells the shape of the frame, each
+cell's colours are read off the target (its Winnow proxy; a clip's poster)
+and the picture whose measured colours are nearest takes the cell — never
+the same picture as the one to its left or above, unless you allow it. The
+dials beside it: the **cell** width on this screen (a bigger screen gets
+more cells, not bigger ones), what is **compared** (the mean colour, the
+quarters, nine zones), the **distance** (OKLab, which weighs the shadows the
+way the eye does, or RGB), the **tint** — a veil of each cell's own colour
+over its picture, what lets the target read from afar —, a **ghost** of the
+target to check the reading, and the cell lines. The mosaic is painted once;
+a small one is matched on the spot, a big one in the background, the
+previous mosaic staying on screen meanwhile. Click a cell to make its
+picture the target, or *Draw a target*. The gallery card's cover is the
+mosaic as the stage last painted it.
 
 ## Telemetry tool
 
