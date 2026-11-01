@@ -39,6 +39,7 @@ import GuidesMenu, { storyGuides } from './GuidesMenu';
 import StoryShortcuts from './StoryShortcuts';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
+import { useRememberedScroll } from '../../shared/ui/use-remembered-scroll';
 import { useStoryPlayback, type TimedBuffer } from './use-story-playback';
 import { useEditorMode, type Pane } from './use-editor-mode';
 import { useSettled } from './use-settled';
@@ -734,14 +735,15 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   };
 
   const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} />;
+  const settingsRef = useRef<HTMLDivElement>(null);
   const settingsPane = (
-    <>
+    <div ref={settingsRef}>
       {exportSince !== null ? (
         // Stuck to the top of the inspector's scroll, wherever the author is in it (the suite's place for it).
         <RunLockNotice since={exportSince}>What you change now reaches the post, not this file: export again to have it.</RunLockNotice>
       ) : null}
       {selected?.kind === 'object' ? objectPanel(selected) : panelOf(selected?.kind === 'panel' ? selected.id : 'charte')}
-    </>
+    </div>
   );
   const timeline = (
     <StudioTimeline
@@ -761,6 +763,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     ...(mode === 'narrow' ? [{ id: 'timeline' as const, label: 'Timeline' }] : []),
   ];
   const shownPane: Pane = panes.some((p) => p.id === pane) ? pane : 'settings';
+  // Each panel's scroll kept, as Develop keeps each tab's (`use-remembered-scroll.ts`): back on an object or on
+  // Charte & look, the inspector opens where it was left. The key is empty while the settings are not shown, so a
+  // pane or a drawer coming back runs the restore again.
+  const settingsShown = compact ? inspectorOpen && pane === 'settings' : shownPane === 'settings';
+  useRememberedScroll(
+    settingsShown ? `story.inspector.${selected?.kind === 'object' ? `object.${selected.key}` : selected?.kind === 'panel' ? selected.id : 'charte'}` : '',
+    settingsRef,
+  );
   const settingsLabel = selected?.kind === 'object' ? objectLabel(selected.key) : (PANEL_LABEL[selected?.kind === 'panel' ? selected.id : 'charte'] ?? 'Settings');
   usePublishSectionBar(
     useMemo(
