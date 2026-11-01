@@ -1,3 +1,4 @@
+import Button from '../ui/Button';
 import { type FontWeight } from './overlay-types';
 import { OVERLAY_FONT_CHOICES } from './font-choices';
 import FontPicker from '../ui/FontPicker';
@@ -14,6 +15,10 @@ import { useState, type ReactNode } from 'react';
 import IconButton from '../ui/IconButton';
 import { FieldRow, Readout, SelectField, ToggleField, SliderRow } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
+import { downloadBlob } from '../media/save';
+import { pickFilesOf } from '../sources/file-sources';
+import type { BadgePieceStyles } from '../roadtrip/badge-layout';
+import { readStyleFile, STYLE_FILE_EXT, styleFileName, styleFileText } from './style-file';
 
 /**
  * The title-style picker: preset cards, then the theme's own knobs (font,
@@ -26,6 +31,7 @@ import { Icons } from '../ui/icons';
  * generic half out rather than reaching across tools. Same move the element
  * list and the guides control already made.
  */
+
 interface StylePanelProps {
   theme: StyleTheme | null;
   onChange: (theme: StyleTheme | null) => void;
@@ -35,6 +41,9 @@ interface StylePanelProps {
    * says whose style it is) passes its own so the two do not stack.
    */
   heading?: ReactNode;
+  /** The badge's per-piece styles, when the surface has them: they ride in the exported file and come back from one. */
+  pieceStyles?: BadgePieceStyles;
+  onPieceStyles?: (styles: BadgePieceStyles) => void;
 }
 
 const labelClass =
@@ -75,8 +84,26 @@ const ADVANCED_FIELDS: Array<{
  * per-layer advanced disclosure for the fine hand. Elements follow the theme
  * unless they override a property (see ElementPanel).
  */
-export default function StylePanel({ theme, onChange, heading }: StylePanelProps) {
+export default function StylePanel({ theme, onChange, heading, pieceStyles, onPieceStyles }: StylePanelProps) {
   const [advanced, setAdvanced] = useState(false);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  // The look as a file (`style-file.ts`): Trips, the Studio and Storytelling each write it and read it back.
+  const exportLook = () => {
+    if (!theme) return;
+    downloadBlob(new Blob([styleFileText({ theme, ...(pieceStyles ? { pieceStyles } : {}) })], { type: 'application/json' }), styleFileName(theme));
+  };
+  const importLook = async () => {
+    const [file] = await pickFilesOf(`${STYLE_FILE_EXT},application/json`);
+    if (!file) return;
+    const read = readStyleFile(await file.text());
+    if (!read) {
+      setFileNote(`${file.name} is not a badge style.`);
+      return;
+    }
+    onChange(read.theme);
+    if (read.pieceStyles && onPieceStyles) onPieceStyles(read.pieceStyles);
+    setFileNote(`Style read from ${file.name}.`);
+  };
 
   function patchStyle(patch: Partial<StyleTheme['style']>) {
     if (!theme) return;
@@ -279,6 +306,15 @@ export default function StylePanel({ theme, onChange, heading }: StylePanelProps
           )}
         </div>
       )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" onClick={exportLook} disabled={!theme} title="Save this style as a file Trips, the Studio and Storytelling all read">
+          Export style…
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void importLook()} title="Use a style saved from Trips, the Studio or Storytelling">
+          Import style…
+        </Button>
+        {fileNote ? <span className="text-2xs text-muted" role="status">{fileNote}</span> : null}
+      </div>
     </div>
   );
 }
