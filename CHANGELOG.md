@@ -11,6 +11,26 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Mosaic, a new editor (work in progress): one picture rebuilt out of hundreds of others from your Winnow, each cell a
+  photo whose colours match, then played as the screen saver that dove from picture to picture — or pulled back, revealed
+  the picture cell by cell, or drifted over it — on the whole screen if you like. Choose the target from a grid of your
+  pictures, its shape (16:9 to 9:16, square), and the part of it rebuilt by dragging a frame on it. A big mosaic is
+  matched in lots painted as they land, spreading from the cell you clicked, with a hairline saying how far it has come;
+  a Performance section sets this device's workers, lots, propagation and animations. The chain is a band of pictures
+  under the stage, ten ahead and refilled as it goes: replace, remove, add or shuffle them, or let it end on your last
+  pick. Zooming the stage while nothing plays frames it (an Auto-frame switch turns that off): what you see becomes the part
+  rebuilt, with as many cells on it; undo and
+  redo step through every edit, and a ‹ › pair in the bar walks back and forward over the targets visited. On a phone the editor takes the whole screen: one header line, the
+  stage, the chain's band and the transport, and the settings as five tabs of the floating bottom bar, each a drawer
+  under the stage. The animated modes are recipes of one step — a departure, a trajectory, an arrival —
+  and *Mosaics*, the default, goes from mosaic to mosaic without ever showing the photo; *Wave* lands the next mosaic's
+  cells on this one from the aimed cell outward, *Slideshow* cuts to a new mosaic at a steady beat, *Steer* lets a click
+  on the held mosaic choose where the chain goes next; a Motion section opens every part of the step (departure,
+  arrival, the reveal's direction, sharpening, aim, move, hold, cadence, drift) and a part set by hand makes the mode
+  *Custom*; the camera never cuts between steps, and the Performance section measures how long a step takes to be ready. Each mosaic, the colours of its
+  pictures and a small tile of each are kept in this browser; a `.mosaic.json` file carries it elsewhere. Save the mosaic as a PNG
+  up to 4K, or its motion as an MP4 film of the steps you choose — the same chain Play shows, more cells for a bigger
+  file or the stage's own.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the
   source.
