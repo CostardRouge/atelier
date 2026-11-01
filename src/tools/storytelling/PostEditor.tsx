@@ -944,7 +944,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             { id: 'keys', label: 'Keys and gestures', rule: true, onSelect: () => setKeysOpen(true) },
           ]}
         />
-        <div className="relative flex-1 min-h-[10rem] flex rounded-paper-lg bg-frame border border-line p-1.5">
+        {/* No minimum height (Develop's stage, `DevelopViewport`): the drawer takes its share of the column, and on a
+            phone held sideways a floor here pushed the drawer below the screen. */}
+        <div className="relative flex-1 min-h-0 flex rounded-paper-lg bg-frame border border-line p-1.5">
           <StoryStage
             clock={clock}
             episode={shown}
