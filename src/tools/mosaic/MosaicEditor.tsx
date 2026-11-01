@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../../app/use-hash-route';
 import {
+  QUEUE_REFILL_AT,
+  chainAdvanced,
+  chainOf,
   cleanMosaicTitle,
+  queueInsert,
+  queueRemove,
+  queueSet,
+  queueShuffle,
+  refillQueue,
   sanitizeSettings,
+  withChainDraw,
   withCrop,
   withMeasures,
   withPictures,
@@ -21,6 +30,7 @@ import { Icons } from '../../shared/ui/icons';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
+import ChainBand from './ChainBand';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
 import MosaicSettings from './MosaicSettings';
@@ -29,7 +39,7 @@ import MosaicTransport from './MosaicTransport';
 import TargetChooser from './TargetChooser';
 import TargetFrame from './TargetFrame';
 import { MatchPool } from './match-pool';
-import { MosaicPlayer, type PlayerStatus } from './mosaic-player';
+import { IDLE_STATUS, MosaicPlayer, type PlayerStatus } from './mosaic-player';
 import { MOSAIC_PERF_PREF, motionReduced, useMosaicPerf, workersHere } from './use-mosaic-perf';
 import { pictureCountLine } from './MosaicGallery';
 import { useMosaicCover } from './use-mosaic-cover';
@@ -64,12 +74,14 @@ function unmeasured(doc: MosaicDoc, retryFailed: boolean): MosaicTile[] {
 function MosaicWorkbench({
   doc,
   client,
+  change,
   update,
   setTarget,
   setCrop,
 }: {
   doc: MosaicDoc;
   client: WinnowClient | null;
+  change: (fn: (doc: MosaicDoc) => MosaicDoc) => void;
   update: (fn: (s: Settings) => Settings) => void;
   setTarget: (id: number) => void;
   setCrop: (crop: Crop | undefined) => void;
@@ -90,7 +102,8 @@ function MosaicWorkbench({
   const { state, builder, stageW, stageH, frameAspect: aspect } = useMosaicScene({ doc, client, room, dpr, pool, perf, origin });
   useMosaicCover(doc.id, state);
   const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
-  const [choosing, setChoosing] = useState(false);
+  // What the chooser is for: the target, an entry of the chain in place, or one more at its end.
+  const [choosing, setChoosing] = useState<null | { for: 'target' } | { for: 'replace'; at: number } | { for: 'insert' }>(null);
   const measured = useMemo(() => doc.tiles.filter((t) => t.grid), [doc.tiles]);
   // The target's picture for its card: the scene's own once it is this target's.
   const shown = state.status === 'ready' ? state.scene : state.status === 'idle' ? null : state.previous;
@@ -98,7 +111,7 @@ function MosaicWorkbench({
 
   // --- the player: the animated modes over the builder's scenes ---
   const player = useMemo(() => (builder ? new MosaicPlayer(builder) : null), [builder]);
-  const [status, setStatus] = useState<PlayerStatus>({ playing: false, current: -1, stepIndex: 0, phase: '', waiting: false, error: null });
+  const [status, setStatus] = useState<PlayerStatus>(IDLE_STATUS);
   useEffect(() => {
     if (!player) return;
     const unsubscribe = player.subscribe(setStatus);
@@ -116,18 +129,42 @@ function MosaicWorkbench({
   }, [player, stageW, stageH, dpr, status.playing]);
 
   const { mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours } = doc.settings;
+
+  // --- the chain's queue (lab 2, R6): in the document, read by the player as it prepares each step ---
+  const chain = chainOf(doc);
+  const chained = mode === 'chain' || mode === 'dezoom';
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const queueSource = useMemo(
+    () => ({
+      next: (index: number) => chainOf(docRef.current).queue[index]?.id,
+      draw: chain.draw,
+      onDraw: (index: number, id: number) => change((d) => queueSet(d, index, id, 'draw')),
+    }),
+    [chain.draw, change],
+  );
+  // Under five ahead, the queue refills itself from the seed — by colour, over the library the builder holds.
+  const ahead = chain.queue.length - (status.playing ? status.done : 0);
+  const canRefill = chained && chain.draw && Boolean(builder) && measured.length >= 2 && doc.target !== undefined && ahead < QUEUE_REFILL_AT;
+  useEffect(() => {
+    if (!canRefill || !builder) return;
+    const done = status.playing ? status.done : 0;
+    change((d) => refillQueue(d, builder.labGrids(), builder.tiles, done));
+    // `ahead` and the target are what decide a refill; the rest is read when it runs.
+  }, [canRefill, builder, change, status.playing, status.done, doc.target]);
+
   const play = useCallback(() => {
     if (!player || mode === 'single' || doc.target === undefined || player.playing) return;
     player.attach(canvasRef.current, { stageW, stageH, dpr });
-    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool });
-  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool]);
+    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool, queue: chained ? queueSource : undefined });
+  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource]);
   const stop = useCallback(() => player?.stop(), [player]);
-  // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now.
+  // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
   const wasPlaying = useRef(false);
   useEffect(() => {
-    if (wasPlaying.current && !status.playing && status.current >= 0 && status.current !== doc.target) setTarget(status.current);
+    if (wasPlaying.current && !status.playing && status.current >= 0) change((d) => chainAdvanced(d, status.done, status.current));
     wasPlaying.current = status.playing;
-  }, [status.playing, status.current, doc.target, setTarget]);
+  }, [status.playing, status.current, status.done, change]);
   // A mode or a dial changed under a running player: the run stops, the next Play takes them.
   const dialsKey = `${mode}|${direction}|${cellPx}|${level}|${space}|${tint}|${distinctNeighbours}|${doc.settings.aspect}`;
   const lastDials = useRef(dialsKey);
@@ -185,6 +222,22 @@ function MosaicWorkbench({
             />
           </div>
         </div>
+        {chained && doc.instance && (
+          <ChainBand
+            instance={doc.instance}
+            client={client}
+            current={status.playing && status.current >= 0 ? status.current : doc.target}
+            queue={chain.queue}
+            done={status.done}
+            playing={status.playing}
+            draw={chain.draw}
+            setDraw={(v) => change((d) => withChainDraw(d, v))}
+            onReplace={(at) => setChoosing({ for: 'replace', at })}
+            onInsert={() => setChoosing({ for: 'insert' })}
+            onRemove={(at) => change((d) => queueRemove(d, at))}
+            onShuffle={() => change((d) => queueShuffle(d))}
+          />
+        )}
         <MosaicTransport
           mode={mode}
           direction={direction}
@@ -210,7 +263,7 @@ function MosaicWorkbench({
           fps={fps}
           cropped={Boolean(doc.crop) && !status.playing}
           onWhole={() => setCrop(undefined)}
-          onChoose={() => setChoosing(true)}
+          onChoose={() => setChoosing({ for: 'target' })}
           target={
             <TargetFrame
               bitmap={targetBitmap}
@@ -218,7 +271,7 @@ function MosaicWorkbench({
               aspect={aspect}
               crop={doc.crop}
               onCrop={setCrop}
-              onChoose={() => setChoosing(true)}
+              onChoose={() => setChoosing({ for: 'target' })}
               frozen={status.playing}
             />
           }
@@ -227,11 +280,15 @@ function MosaicWorkbench({
           <TargetChooser
             tiles={measured}
             client={client}
-            current={doc.target}
-            onClose={() => setChoosing(false)}
+            current={choosing.for === 'replace' ? chain.queue[choosing.at]?.id : doc.target}
+            title={choosing.for === 'target' ? 'Choose the target' : choosing.for === 'replace' ? `Picture ${choosing.at + 1} of the chain` : 'Add a picture to the chain'}
+            onClose={() => setChoosing(null)}
             onChoose={(id) => {
-              setChoosing(false);
-              setTarget(id);
+              const what = choosing;
+              setChoosing(null);
+              if (what.for === 'target') setTarget(id);
+              else if (what.for === 'replace') change((d) => queueSet(d, what.at, id));
+              else change((d) => queueInsert(d, chainOf(d).queue.length, id));
             }}
           />
         )}
@@ -423,7 +480,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
           here with its colours.
         </EmptyState>
       ) : (
-        <MosaicWorkbench doc={doc} client={client} update={update} setTarget={setTarget} setCrop={setCrop} />
+        <MosaicWorkbench doc={doc} client={client} change={change} update={update} setTarget={setTarget} setCrop={setCrop} />
       )}
     </section>
   );

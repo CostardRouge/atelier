@@ -3202,7 +3202,18 @@ real picture from a point; *Drift* wanders over the mosaic at mid zoom.
 Each step prepares the next picture while it plays, so a chain of thousands
 never asks you to wait; the picks come from the mosaic's own seed, so Play
 twice shows the same chain. Play and Stop on Space, Escape stops; whatever
-is on screen when a run stops is the target now. *Screen* takes the stage
+is on screen when a run stops is the target now.
+
+**The chain's band.** In *Chain* and *Pull back*, a band under the stage
+shows the chain as a file of pictures: the one on screen first, then the
+ten to come — drawn from the seed in grey, picked by you in white — and the
+band refills itself as the chain advances, so it never runs dry. Press a
+picture to replace it with one of the mosaic's, its × removes it, **+** adds
+one at the end, the arrow shuffles the drawn ones (your picks stay), and
+*Draw the next ones* switched off lets the chain end at the last picture you
+picked. A picture you pick for a dive is placed in the cell of the current
+mosaic it resembles most. The chain is part of the mosaic: reopened, or
+imported from its file, it plays the same. *Screen* takes the stage
 to the whole screen — a Mac left open on Atelier is the screen saver.
 *Speed* is in the dials.
 

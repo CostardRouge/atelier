@@ -299,10 +299,26 @@ export class SceneBuilder {
       await paintLot(all);
     }
     if (opts.force !== undefined && opts.force >= 0 && opts.force < tiles.length) {
-      const forced = forceInto(matching, cellsK, pictures, dims, opts.force);
-      ids[forced.cell] = opts.force;
-      scene.forcedCell = forced.cell;
-      await paintLot([forced.cell]);
+      // A picture the matching already placed keeps its cell — the one nearest the centre when it has several — else it takes the cell it resembles most.
+      let best = -1;
+      let bestD = Infinity;
+      for (let c = 0; c < count; c++) {
+        if (ids[c] !== opts.force) continue;
+        const i = c % shape.cols;
+        const j = (c - i) / shape.cols;
+        const d = Math.hypot((i + 0.5) / shape.cols - 0.5, (j + 0.5) / shape.rows - 0.5);
+        if (d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      if (best >= 0) scene.forcedCell = best;
+      else {
+        const forced = forceInto(matching, cellsK, pictures, dims, opts.force);
+        ids[forced.cell] = opts.force;
+        scene.forcedCell = forced.cell;
+        await paintLot([forced.cell]);
+      }
     }
     if (signal?.aborted) throw new DOMException('Build cancelled', 'AbortError');
     scene.matchMs = performance.now() - t0;

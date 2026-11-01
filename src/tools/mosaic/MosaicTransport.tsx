@@ -76,6 +76,11 @@ export default function MosaicTransport({ mode, direction, setMode, setDirection
           {status.error}
         </span>
       )}
+      {status.note && !status.error && !status.playing && (
+        <span className="font-mono text-2xs text-muted" role="status">
+          {status.note}
+        </span>
+      )}
       <Button size="sm" variant="ghost" icon={Icons.monitor} onClick={onFullscreen} title="The stage on the whole screen — the screen saver; Escape leaves it">
         Screen
       </Button>

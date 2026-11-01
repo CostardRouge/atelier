@@ -46,6 +46,20 @@ export interface PlayerOptions {
   crop?: Crop;
   /** The matching pool, so a step ahead is matched off the main thread. */
   pool?: MatchPool | null;
+  /** The chain's queue in the document (lab 2, R6); without one the player draws every step itself. */
+  queue?: QueueSource;
+}
+
+/**
+ * The document's queue as the player reads it: the picture step `index`
+ * ends on, read when the step is PREPARED (so an edit of a later entry is
+ * honoured); `undefined` past the end — the player then draws one itself and
+ * reports it when `draw` is on, or ends the chain when it is off.
+ */
+export interface QueueSource {
+  next: (index: number) => number | undefined;
+  draw: boolean;
+  onDraw?: (index: number, id: number) => void;
 }
 
 /** What the player says of itself, for the status line. */
@@ -54,11 +68,17 @@ export interface PlayerStatus {
   /** The picture on screen (or about to be), its asset id. */
   current: number;
   stepIndex: number;
+  /** Steps played to their end this run — what the queue has consumed. */
+  done: number;
   phase: string;
   /** The next scene is not ready yet and the step waits on its last frame. */
   waiting: boolean;
   error: string | null;
+  /** Why a run ended by itself, when it did — not an error. */
+  note: string | null;
 }
+
+export const IDLE_STATUS: PlayerStatus = { playing: false, current: -1, stepIndex: 0, done: 0, phase: '', waiting: false, error: null, note: null };
 
 interface ChainStep {
   kind: ChainKind;
@@ -82,7 +102,7 @@ export class MosaicPlayer {
   private controller: AbortController | null = null;
   private rnd: () => number = Math.random;
   private history: number[] = [];
-  private status: PlayerStatus = { playing: false, current: -1, stepIndex: 0, phase: '', waiting: false, error: null };
+  private status: PlayerStatus = IDLE_STATUS;
   private listeners = new Set<(s: PlayerStatus) => void>();
 
   constructor(private builder: SceneBuilder) {}
@@ -122,7 +142,7 @@ export class MosaicPlayer {
     this.rnd = mulberry32(opts.seed);
     this.history = [opts.from];
     this.controller = new AbortController();
-    this.say({ playing: true, current: opts.from, stepIndex: 0, phase: 'starting', waiting: false, error: null });
+    this.say({ playing: true, current: opts.from, stepIndex: 0, done: 0, phase: 'starting', waiting: false, error: null, note: null });
     const signal = this.controller.signal;
     void this.run(opts, signal).catch((e: unknown) => {
       if (signal.aborted) return;
@@ -150,11 +170,20 @@ export class MosaicPlayer {
     // Dézoom: one step out. Chain: endless, the direction's kinds.
     let index = 0;
     let current = opts.from;
-    let pending: Promise<ChainStep | null> = this.prepare(opts.mode === 'dezoom' ? 'out' : stepKind(opts.direction, 0), current, opts, signal, opts.crop);
+    // A step prepared ahead may be abandoned by a Stop before it is awaited: its abort must not surface as an unhandled rejection.
+    const ahead = (p: Promise<ChainStep | 'end' | null>) => {
+      p.catch(() => undefined);
+      return p;
+    };
+    let pending = ahead(this.prepare(opts.mode === 'dezoom' ? 'out' : stepKind(opts.direction, 0), current, 0, opts, signal, opts.crop));
     for (;;) {
       this.say({ waiting: true, phase: 'preparing' });
       const step = await pending;
       if (signal.aborted) return;
+      if (step === 'end') {
+        this.say({ playing: false, phase: 'done', note: index ? 'The chain ended at the last picked picture.' : 'Nothing queued: pick a picture, or let the chain draw the next ones.' });
+        return;
+      }
       if (!step) {
         this.say({ playing: false, error: 'No other picture to go to.' });
         return;
@@ -162,36 +191,69 @@ export class MosaicPlayer {
       this.say({ waiting: false, stepIndex: index, current });
       // The following step is built while this one plays.
       const nextKind = opts.mode === 'dezoom' ? null : stepKind(opts.direction, index + 1);
-      pending = nextKind ? this.prepare(nextKind, step.next, opts, signal) : Promise.resolve(null);
+      pending = nextKind ? ahead(this.prepare(nextKind, step.next, index + 1, opts, signal)) : Promise.resolve(null);
       await this.playStep(step, opts, signal);
       if (signal.aborted) return;
       current = step.next;
       this.remember(current);
-      this.say({ current });
+      index += 1;
+      this.say({ current, done: index });
       if (opts.mode === 'dezoom') {
         this.say({ playing: false, phase: 'done' });
         return;
       }
-      index += 1;
     }
   }
 
+  /**
+   * The picture step `index` ends on: the queue's when it has one, else drawn
+   * here by colour (a well-matched cell near the centre for a dive, a picture
+   * holding the current one's mean for a pull-back) and reported, or `'end'`
+   * when the queue is out and says not to draw.
+   */
+  private nextFor(kind: ChainKind, index: number, fromIndex: number, scene: MosaicScene | null, opts: PlayerOptions): number | 'end' | null {
+    const tiles = this.builder.tiles;
+    const queued = opts.queue?.next(index);
+    if (queued !== undefined) {
+      const i = tiles.findIndex((t) => t.id === queued);
+      if (i >= 0 && i !== fromIndex) return i;
+    }
+    if (opts.queue && !opts.queue.draw) return 'end';
+    let next: number;
+    if (kind === 'in' && scene) {
+      const cell = pickCell(scene.matching, scene.shape.cols, scene.shape.rows, { target: fromIndex, history: this.historyIndexes(), rnd: this.rnd });
+      if (cell < 0) return null;
+      next = scene.matching.ids[cell];
+    } else next = pickNextTarget(this.builder.labGrids(), tiles.length, fromIndex, { history: this.historyIndexes(), rnd: this.rnd });
+    if (next < 0) return null;
+    opts.queue?.onDraw?.(index, tiles[next].id);
+    return next;
+  }
+
   /** The step that takes the chain from `from`: its next picture chosen, its scene built. */
-  private async prepare(kind: ChainKind, from: number, opts: PlayerOptions, signal: AbortSignal, crop?: Crop): Promise<ChainStep | null> {
+  private async prepare(kind: ChainKind, from: number, index: number, opts: PlayerOptions, signal: AbortSignal, crop?: Crop): Promise<ChainStep | 'end' | null> {
     const tiles = this.builder.tiles;
     const fromIndex = tiles.findIndex((t) => t.id === from);
     if (fromIndex < 0 || tiles.length < 2) return null;
     if (kind === 'in') {
-      const scene = await this.builder.build(from, opts.settings, this.size, { signal, crop, plan: this.planFor(opts) });
-      const cell = pickCell(scene.matching, scene.shape.cols, scene.shape.rows, { target: fromIndex, history: this.historyIndexes(), rnd: this.rnd });
-      if (cell < 0) return null;
-      const nextIndex = scene.matching.ids[cell];
+      // The current picture's mosaic first; a queued next picture is forced into the cell it resembles most (or keeps its own cell).
+      const queued = opts.queue?.next(index);
+      const queuedIndex = queued === undefined ? -1 : tiles.findIndex((t) => t.id === queued);
+      const scene = await this.builder.build(from, opts.settings, this.size, { signal, crop, plan: this.planFor(opts), force: queuedIndex >= 0 && queuedIndex !== fromIndex ? queuedIndex : undefined });
+      const nextIndex = this.nextFor(kind, index, fromIndex, scene, opts);
+      if (nextIndex === 'end' || nextIndex === null) return nextIndex;
+      let cell = scene.forcedCell ?? -1;
+      if (cell < 0 || scene.matching.ids[cell] !== nextIndex) {
+        cell = -1;
+        for (let c = 0; c < scene.matching.ids.length; c++) if (scene.matching.ids[c] === nextIndex) cell = c;
+        if (cell < 0) return null;
+      }
       const next = tiles[nextIndex].id;
       const focus = await this.builder.targetBitmap(tiles[nextIndex], signal);
       return { kind, scene, cell, next, focus, nextScene: null };
     }
-    const nextIndex = pickNextTarget(this.builder.labGrids(), tiles.length, fromIndex, { history: this.historyIndexes(), rnd: this.rnd });
-    if (nextIndex < 0) return null;
+    const nextIndex = this.nextFor(kind, index, fromIndex, null, opts);
+    if (nextIndex === 'end' || nextIndex === null) return nextIndex;
     const next = tiles[nextIndex].id;
     const scene = await this.builder.build(next, opts.settings, this.size, { signal, force: fromIndex, plan: this.planFor(opts) });
     const focus = await this.builder.targetBitmap(tiles[fromIndex], signal);
@@ -324,6 +386,8 @@ export class MosaicPlayer {
       });
       if (signal.aborted) return;
       this.remember(current);
+      index += 1;
+      this.say({ done: index });
       const others = tiles.filter((t) => t.id !== current && !this.history.includes(t.id));
       const pool = others.length ? others : tiles.filter((t) => t.id !== current);
       if (!pool.length) {
@@ -331,7 +395,6 @@ export class MosaicPlayer {
         return;
       }
       current = pool[Math.floor(this.rnd() * pool.length)].id;
-      index += 1;
     }
   }
 

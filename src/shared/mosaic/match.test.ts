@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../lib/prng';
 import type { Raster } from '../media/thumb-metrics';
-import { cellGridsOf, cellMeansLab, forceInto, gridShape, matchCells, matchLot, pickCell, pickNextTarget } from './match';
+import { cellGridsOf, cellMeansLab, forceInto, gridShape, matchCells, matchLot, pickCell, pickDive, pickNextTarget } from './match';
 import { GRID_BYTES, descriptorsOf, dimsOf, levelOf, oklabOf } from './measure';
 
 function raster(width: number, height: number, paint: (x: number, y: number) => [number, number, number]): Raster {
@@ -179,6 +179,30 @@ describe('pickNextTarget', () => {
       expect(n).toBe(0);
     }
     expect(pickNextTarget(lab, 1, 0, { rnd: mulberry32(1) })).toBe(-1);
+  });
+});
+
+describe('pickDive', () => {
+  it('finds the picture whose mean sits in a cell of the current one', () => {
+    const grids = new Uint8Array(4 * GRID_BYTES);
+    // The current picture: dark, with one red cell.
+    const current = flatGrids([[20, 20, 20]]);
+    current[0] = 200;
+    current[1] = 30;
+    current[2] = 30;
+    grids.set(current, 0);
+    grids.set(flatGrids([[0, 0, 255]]), GRID_BYTES);
+    grids.set(flatGrids([[0, 255, 0]]), 2 * GRID_BYTES);
+    grids.set(flatGrids([[200, 30, 30]]), 3 * GRID_BYTES);
+    const lab = oklabOf(grids, 4);
+    expect(pickDive(lab, 4, 0, { rnd: mulberry32(2), tries: 60 })).toBe(3);
+  });
+
+  it('is deterministic, never the current nor the history, −1 alone', () => {
+    const lab = oklabOf(flatGrids([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 3);
+    for (let seed = 0; seed < 20; seed++) expect(pickDive(lab, 3, 1, { history: [2], rnd: mulberry32(seed) })).toBe(0);
+    expect(pickDive(lab, 1, 0, { rnd: mulberry32(1) })).toBe(-1);
+    expect(pickDive(lab, 3, 0, { rnd: mulberry32(9) })).toBe(pickDive(lab, 3, 0, { rnd: mulberry32(9) }));
   });
 });
 

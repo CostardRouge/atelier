@@ -23,12 +23,15 @@ export default function TargetChooser({
   tiles,
   client,
   current,
+  title = 'Choose the target',
   onChoose,
   onClose,
 }: {
   tiles: readonly MosaicTile[];
   client: WinnowClient;
   current: number | undefined;
+  /** What the pick is for — the target by default, else an entry of the chain. */
+  title?: string;
   onChoose: (id: number) => void;
   onClose: () => void;
 }) {
@@ -47,12 +50,12 @@ export default function TargetChooser({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Choose the target"
+        aria-label={title}
         className="flex flex-col w-full max-w-5xl max-h-full bg-paper border border-line rounded-paper-lg shadow-paper max-[820px]:h-full max-[820px]:rounded-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
-          <h2 className="m-0 font-serif text-xl">Choose the target</h2>
+          <h2 className="m-0 font-serif text-xl">{title}</h2>
           <span className="font-mono text-2xs text-muted tabular-nums">{tiles.length.toLocaleString()} measured pictures</span>
           <span className="flex-1" />
           <IconButton label="Close" onClick={onClose}>
@@ -68,7 +71,7 @@ export default function TargetChooser({
                 data-target-tile={t.id}
                 onClick={() => onChoose(t.id)}
                 className={`block rounded-control overflow-hidden border-2 ${t.id === current ? 'border-accent' : 'border-transparent hover:border-line-strong'} focus-visible:outline-2 focus-visible:outline-accent`}
-                title={t.id === current ? 'The target now' : 'Make this picture the target'}
+                title={t.id === current ? 'The one now' : 'Choose this picture'}
               >
                 <WinnowThumb client={client} id={t.id} label={t.kind} box="w-full h-[80px]" />
               </button>

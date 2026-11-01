@@ -249,6 +249,37 @@ constrained); the pool is remade on that number; `measure()` reads the pref
 at call time. **How to apply**: a new knob is a field with a default and a
 bound in `sanitizePerf`, read through the hook, never a new store.
 
+## The chain is a queue in the document, shown as a band (2026-11-01, F5)
+
+His ask («une bande … l'image de début et l'image de fin … un carrousel de
+10 images … une liste infinie qui insère automatiquement les images … le
+random reste un paramètre»). **Model** (`mosaic-doc.ts`, doc v2, a v1 body
+reads with none): `MosaicDoc.chain = { queue: [{id, by: 'draw' | 'pick'}],
+draw }` — the pictures AFTER the target, ten ahead (`QUEUE_AHEAD`), refilled
+under five (`QUEUE_REFILL_AT`) by `refillQueue`, pure and deterministic: one
+`mulberry32` per draw seeded from the document's seed, the picture before
+and the position, so a reopened mosaic and another device fill the same
+queue; a dive draws by `pickDive` (a picture whose MEAN sits in a cell of
+the one before), a pull-back by `pickNextTarget`. Two neighbours are never
+the same picture; a new target drops the DRAWN entries and keeps the picks;
+*Shuffle* drops the drawn and turns the seed (`nextSeed`); a run ended
+(`chainAdvanced(done, current)`) makes the picture seen the target and
+slices the played entries off. **Player**: `QueueSource.next(index)` is
+read when a step is PREPARED (so an edit of a later entry is honoured), a
+queued picture is forced into the current mosaic's cell it resembles most
+(`build`'s `force`, which first keeps a cell the matching already gave it),
+`draw` off ends the chain with a note, and a step drawn by the player is
+reported back (`onDraw`) so the document carries it. **Band**
+(`ChainBand.tsx`, under the stage in Chain and Pull back): the device's
+tiles through object URLs (`getTile`, no request), now in vermilion, next
+underlined, drawn grey / picked white, press → the chooser in place, × →
+remove, + → append, ↻ → shuffle, the *Draw the next ones* switch; while
+playing the played entries fall away and the entry being prepared is
+locked. **Known limit**: the × is 20 px, under the 44 px rule — a tile is
+80 × 44 and a second 44 px target would not fit; his call. **Trap for
+drives**: the shell saves 600 ms after an edit — read the store only after
+*Saved* shows, or the document read is the one before.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

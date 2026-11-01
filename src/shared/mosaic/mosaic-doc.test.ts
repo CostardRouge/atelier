@@ -1,24 +1,125 @@
 import { describe, expect, it } from 'vitest';
-import { GRID_BYTES, encodeGrid } from './measure';
+import { GRID_BYTES, encodeGrid, oklabOf } from './measure';
 import {
   DEFAULT_SETTINGS,
   MAX_MOSAIC_TILES,
   MOSAIC_DOC_VERSION,
+  QUEUE_AHEAD,
+  QUEUE_REFILL_AT,
+  chainAdvanced,
+  chainOf,
   createMosaicDoc,
   measuredTiles,
+  queueInsert,
+  queueRemove,
+  queueSet,
+  queueShuffle,
   readMosaicDoc,
   readTiles,
+  refillQueue,
   sanitizeSettings,
   unionSpan,
+  withChainDraw,
   withCrop,
   withMeasures,
   withPictures,
   withTarget,
   withTiles,
   withoutTiles,
+  type MosaicDoc,
+  type MosaicTile,
 } from './mosaic-doc';
 
 const grid = encodeGrid(new Uint8Array(GRID_BYTES).fill(77));
+
+/** A library of `n` measured pictures, each one flat colour so a draw can tell them apart. */
+function library(n: number): MosaicTile[] {
+  return Array.from({ length: n }, (_, i) => {
+    const g = new Uint8Array(GRID_BYTES);
+    for (let c = 0; c < 36; c++) {
+      g[c * 3] = (i * 37) % 256;
+      g[c * 3 + 1] = (i * 91) % 256;
+      g[c * 3 + 2] = (i * 151) % 256;
+    }
+    return { id: 100 + i, kind: 'photo', grid: encodeGrid(g) };
+  });
+}
+
+function withChainLibrary(n: number, target = 100): { doc: MosaicDoc; lab: Float32Array; measured: MosaicTile[] } {
+  const doc = { ...withTiles(createMosaicDoc('m', 's', 1), library(n), 2), target };
+  const { tiles, grids } = measuredTiles(doc);
+  return { doc, lab: oklabOf(grids, tiles.length), measured: tiles };
+}
+
+describe('the chain’s queue', () => {
+  it('fills from the seed to QUEUE_AHEAD, the same way twice, never twice the same picture in a row', () => {
+    const { doc, lab, measured } = withChainLibrary(40);
+    const a = refillQueue(doc, lab, measured, 0, 3);
+    expect(chainOf(a).queue.length).toBe(QUEUE_AHEAD);
+    expect(chainOf(a).queue.every((e) => e.by === 'draw')).toBe(true);
+    const ids = [doc.target, ...chainOf(a).queue.map((e) => e.id)];
+    for (let i = 1; i < ids.length; i++) expect(ids[i]).not.toBe(ids[i - 1]);
+    expect(chainOf(refillQueue(doc, lab, measured, 0, 9)).queue).toEqual(chainOf(a).queue);
+    // Enough ahead: the same object back.
+    expect(refillQueue(a, lab, measured, 0)).toBe(a);
+    // Played past the refill mark: filled again, the played entries kept.
+    const b = refillQueue(a, lab, measured, QUEUE_AHEAD - QUEUE_REFILL_AT + 1, 4);
+    expect(chainOf(b).queue.length).toBe(QUEUE_AHEAD + QUEUE_AHEAD - QUEUE_REFILL_AT + 1);
+    expect(chainOf(b).queue.slice(0, QUEUE_AHEAD)).toEqual(chainOf(a).queue);
+  });
+
+  it('does not fill with draw off, without a target, or alone in the library', () => {
+    const { doc, lab, measured } = withChainLibrary(40);
+    expect(refillQueue(withChainDraw(doc, false), lab, measured)).toEqual(expect.objectContaining({ chain: { queue: [], draw: false } }));
+    expect(refillQueue({ ...doc, target: undefined }, lab, measured)).toEqual({ ...doc, target: undefined });
+    const one = withChainLibrary(1);
+    expect(refillQueue(one.doc, one.lab, one.measured)).toBe(one.doc);
+  });
+
+  it('sets, inserts, removes and shuffles — the picks stay, the drawn go, the seed turns', () => {
+    const { doc, lab, measured } = withChainLibrary(40);
+    const a = refillQueue(doc, lab, measured);
+    const b = queueSet(a, 2, 130, 'pick', 5);
+    expect(chainOf(b).queue[2]).toEqual({ id: 130, by: 'pick' });
+    expect(queueSet(b, 2, 999)).toBe(b);
+    const c = queueInsert(b, chainOf(b).queue.length, 131, 6);
+    expect(chainOf(c).queue[chainOf(c).queue.length - 1]).toEqual({ id: 131, by: 'pick' });
+    const d = queueRemove(c, 0, 7);
+    expect(chainOf(d).queue.length).toBe(chainOf(c).queue.length - 1);
+    expect(queueRemove(d, 99)).toBe(d);
+    const e = queueShuffle(d, 8);
+    expect(chainOf(e).queue.map((x) => x.id)).toEqual([130, 131]);
+    expect(e.settings.seed).not.toBe(d.settings.seed);
+    expect(chainOf(refillQueue(e, lab, measured)).queue.slice(0, 2).map((x) => x.id)).toEqual([130, 131]);
+  });
+
+  it('a run ended: the picture seen is the target, the steps played leave the queue, a head already seen too', () => {
+    const { doc, lab, measured } = withChainLibrary(40);
+    const a = refillQueue(doc, lab, measured);
+    const q = chainOf(a).queue;
+    const b = chainAdvanced(a, 3, q[2].id, 9);
+    expect(b.target).toBe(q[2].id);
+    expect(chainOf(b).queue).toEqual(q.slice(3));
+    // A pull-back stopped in its hold: `current` is the head not yet counted done.
+    const c = chainAdvanced(a, 2, q[2].id, 10);
+    expect(c.target).toBe(q[2].id);
+    expect(chainOf(c).queue).toEqual(q.slice(3));
+    expect(chainAdvanced(a, 0, a.target as number)).toBe(a);
+  });
+
+  it('a new target drops the drawn entries and keeps the picks; a removed picture leaves the queue; the file reads v1 and v2', () => {
+    const { doc, lab, measured } = withChainLibrary(40);
+    const a = queueSet(refillQueue(doc, lab, measured), 4, 120);
+    const b = withTarget(a, 101);
+    expect(chainOf(b).queue).toEqual([{ id: 120, by: 'pick' }]);
+    expect(chainOf(withoutTiles(a, [120])).queue.some((e) => e.id === 120)).toBe(false);
+    const read = readMosaicDoc(JSON.parse(JSON.stringify(a)), 's')!;
+    expect(read.chain).toEqual(a.chain);
+    expect(readMosaicDoc({ ...JSON.parse(JSON.stringify(doc)), version: 1 }, 's')!.chain).toBeUndefined();
+    // A queue of pictures the library has not got, or malformed, reads as none.
+    expect(readMosaicDoc({ ...a, chain: { queue: [{ id: 5 }, 'x', { id: 101, by: 'pick' }], draw: true } }, 's')!.chain).toEqual({ queue: [{ id: 101, by: 'pick' }], draw: true });
+  });
+});
 
 describe('sanitizeSettings', () => {
   it('gives the defaults for nothing and bounds every number', () => {

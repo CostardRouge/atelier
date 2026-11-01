@@ -301,6 +301,56 @@ export function pickNextTarget(
 }
 
 /**
+ * The picture a chain DIVES into when the queue draws it before any scene
+ * exists (`refillQueue`): among `tries` random pictures, the one whose MEAN
+ * colour sits closest to one of the current picture's grid cells — so it
+ * reads as a cell of the current mosaic once forced into its best one. The
+ * mirror of `pickNextTarget`. −1 when the library has no other picture.
+ */
+export function pickDive(
+  lab: Float32Array,
+  n: number,
+  current: number,
+  opts: { history?: readonly number[]; rnd: () => number; tries?: number },
+): number {
+  if (n < 2) return -1;
+  const history = opts.history ?? [];
+  let best = -1;
+  let bestD = Infinity;
+  const tries = opts.tries ?? 24;
+  const co = current * GRID_BYTES;
+  for (let t = 0; t < tries; t++) {
+    const cand = Math.floor(opts.rnd() * n);
+    if (cand === current || history.includes(cand)) continue;
+    const m = [0, 0, 0];
+    for (let c = 0; c < GRID_CELLS; c++) {
+      const o = cand * GRID_BYTES + c * 3;
+      m[0] += lab[o];
+      m[1] += lab[o + 1];
+      m[2] += lab[o + 2];
+    }
+    m[0] /= GRID_CELLS;
+    m[1] /= GRID_CELLS;
+    m[2] /= GRID_CELLS;
+    let d = Infinity;
+    for (let c = 0; c < GRID_CELLS; c++) {
+      const o = co + c * 3;
+      const e0 = lab[o] - m[0];
+      const e1 = lab[o + 1] - m[1];
+      const e2 = lab[o + 2] - m[2];
+      d = Math.min(d, e0 * e0 + e1 * e1 + e2 * e2);
+    }
+    if (d < bestD) {
+      bestD = d;
+      best = cand;
+    }
+  }
+  if (best >= 0) return best;
+  for (let cand = 0; cand < n; cand++) if (cand !== current && !history.includes(cand)) return cand;
+  return (current + 1) % n;
+}
+
+/**
  * The cell of a matching that resembles picture `picture` most takes it: a
  * new `ids` and the cell changed. The zoom-out's seam — the picture on screen
  * must be a cell of the next target, whatever the library holds.
