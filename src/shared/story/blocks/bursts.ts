@@ -3,6 +3,7 @@
 // {n}
 import { register } from "./index";
 import { appear, clamp, E, enter, K, PAL, rng, rr, text, TYPO } from "../motion";
+import { obj } from "../objects";
 
 register("bursts", (c, lt, p) => {
   const n = Math.max(2, Number(p.n ?? 9));
@@ -41,7 +42,7 @@ register("bursts", (c, lt, p) => {
   // 1. the row arrives, staggered
   // 2. from 1.8 s the tiles fold into the stack, the farthest first, the elected one last
   const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => Math.abs(b - elected) - Math.abs(a - elected));
-  order.forEach((i) => {
+  obj(c, "bursts.frames", [cx, cy], lt, (lt) => order.forEach((i) => {
     const a = enter(lt, 0.2 + i * 0.08, 0.9);
     if (a <= 0) return;
     const rank = order.indexOf(i); // 0 = farthest from the elected one
@@ -53,13 +54,13 @@ register("bursts", (c, lt, p) => {
     const x = rx + (tx - rx) * f, y = ry + (ty - ry) * f;
     const under = i === elected ? 1 : 1 - 0.55 * f; // the others dim as they go behind
     appear(c, a, () => tile(x, y, w, i, under), 24);
-  });
+  }), 0.2);
   // 3. the elected one gets its frame and its count
-  appear(c, enter(lt, 3.5, 0.9), () => {
+  obj(c, "bursts.elected", [cx, cy], lt, (lt) => appear(c, enter(lt, 3.5, 0.9), () => {
     c.strokeStyle = PAL.acc;
     c.lineWidth = 3;
     rr(c, cx - big / 2 - 10, cy - big / 2 - 10, big + 20, big + 20, 24);
     c.stroke();
-  }, 6);
-  appear(c, enter(lt, 3.8, 0.9), () => text(c, `1 / ${n}`, cx, cy + big / 2 + 70, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 }), 8);
+  }, 6), 3.5);
+  obj(c, "bursts.count", [cx, cy + big / 2 + 60], lt, (lt) => appear(c, enter(lt, 3.8, 0.9), () => text(c, `1 / ${n}`, cx, cy + big / 2 + 70, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 }), 8), 3.8);
 });

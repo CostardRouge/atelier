@@ -4,6 +4,7 @@
 //  grid:  items = number of thumbnails, marks?: string of ✓ – ⊘ per cell (optional), picks?: number[]
 import { register } from "./index";
 import { appear, enter, PAL, rng, rr, text, TYPO } from "../motion";
+import { obj } from "../objects";
 
 const win = (c: CanvasRenderingContext2D, lt: number, x: number, y: number, w: number, h: number, title: string) => {
   appear(c, enter(lt, 0, 1), () => {
@@ -18,8 +19,8 @@ register("app", (c, lt, p) => {
   // h: optional window height (default 760 → bottom at 1300); a 3-line caption starts at ≈ 1265,
   // so an episode whose content ends early passes a shorter one (e.g. 660 → 1200).
   const x = 70, y = 540, w = 940, h = Number(p.h ?? 760);
-  win(c, lt, x, y, w, h, String(p.title ?? ""));
-  if (p.kind === "grid") {
+  obj(c, "app.window", [540, y + h / 2], lt, (lt) => win(c, lt, x, y, w, h, String(p.title ?? "")), 0);
+  if (p.kind === "grid") obj(c, "app.grid", [540, y + h / 2], lt, (lt) => {
     const n = Number(p.items ?? 24), cols = 6, cell = (w - 40) / cols, R = rng(7);
     const marks = typeof p.marks === "string" ? (p.marks as string) : "";
     const picks = Array.isArray(p.picks) ? (p.picks as number[]) : [];
@@ -34,8 +35,9 @@ register("app", (c, lt, p) => {
       if (picks.includes(i)) { const pk = enter(lt, 2.0 + i * 0.05, 0.8); c.globalAlpha = a * pk; c.strokeStyle = PAL.acc; c.lineWidth = 4; rr(c, cx + 2, cy + 2, cell - 4, cell - 4, 10); c.stroke(); }
       c.restore();
     }
-    if (p.flag) appear(c, enter(lt, 2.8, 1), () => { c.fillStyle = PAL.acc; rr(c, x + 24, y + h - 78, 24 + String(p.flag).length * 15, 48, 24); c.fill(); text(c, String(p.flag), x + 36, y + h - 46, 24, PAL.bg, { fam: TYPO.mono, w: 400 }); }, 8);
-  } else {
+  }, 0.3);
+  if (p.kind === "grid" && p.flag) obj(c, "app.flag", [x + 24 + (24 + String(p.flag).length * 15) / 2, y + h - 54], lt, (lt) => appear(c, enter(lt, 2.8, 1), () => { c.fillStyle = PAL.acc; rr(c, x + 24, y + h - 78, 24 + String(p.flag).length * 15, 48, 24); c.fill(); text(c, String(p.flag), x + 36, y + h - 46, 24, PAL.bg, { fam: TYPO.mono, w: 400 }); }, 8), 2.8);
+  if (p.kind !== "grid") obj(c, "app.cards", [540, y + h / 2], lt, (lt) => {
     const items = (Array.isArray(p.items) ? p.items : []) as { title: string; sub?: string; stops?: string[] }[];
     let cy = y + 80;
     items.forEach((it, i) => {
@@ -49,6 +51,6 @@ register("app", (c, lt, p) => {
         c.restore(); }
       cy += ch;
     });
-    if (p.flag) appear(c, enter(lt, 2.8, 1), () => text(c, String(p.flag), x + 44, y + h - 40, 26, PAL.acc, { fam: TYPO.mono, w: 400 }), 8);
-  }
+  }, 0.4);
+  if (p.kind !== "grid" && p.flag) obj(c, "app.flag", [x + 140, y + h - 50], lt, (lt) => appear(c, enter(lt, 2.8, 1), () => text(c, String(p.flag), x + 44, y + h - 40, 26, PAL.acc, { fam: TYPO.mono, w: 400 }), 8), 2.8);
 });

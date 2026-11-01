@@ -2,6 +2,7 @@
 // pulls back to the whole map over the last 1.4 s. Coast dim, route accent, stops as reached.
 import { clamp, E, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
 import { coastPaths, ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
+import { obj } from "../objects";
 
 /** the coastline at dim, for every map-based block (alpha and width in map units) */
 export function drawCoast(c: Ctx, alpha: number, width: number) {
@@ -66,14 +67,20 @@ export function drawMap(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   c.translate(540, 900);
   c.scale(s, s);
   c.translate(-fx, -fy);
-  c.save();
-  c.globalAlpha *= enter(lt, 0, 0.8);
-  c.strokeStyle = PAL.dim;
-  c.lineJoin = "round";
-  c.lineWidth = (2.5 / s) * 1.4;
-  coastPaths().forEach((p) => c.stroke(p));
-  c.restore();
-  drawRoute(c, sineInOut(rp), (5 / s) * 1.6);
-  mapLabels(c, sineInOut(rp), still ? 26 : (26 / s) * 1.3, still ? E(clamp((lt - 4.6 * K) / (0.9 * K))) : 0, still);
+  // Under the camera, three objects: the coast, the route and the named stops (each on its own clock).
+  obj(c, "map-camera.coast", [fx, fy], lt, (lt) => {
+    c.save();
+    c.globalAlpha *= enter(lt, 0, 0.8);
+    c.strokeStyle = PAL.dim;
+    c.lineJoin = "round";
+    c.lineWidth = (2.5 / s) * 1.4;
+    coastPaths().forEach((p) => c.stroke(p));
+    c.restore();
+  }, 0);
+  const progress = (lt: number) => (still ? clamp((lt - 0.4) / (4.4 * K)) : clamp((lt - 0.3) / (3.6 * K)));
+  obj(c, "map-camera.route", [fx, fy], lt, (lt) => drawRoute(c, sineInOut(progress(lt)), (5 / s) * 1.6));
+  obj(c, "map-camera.stops", [fx, fy], lt, (lt) =>
+    mapLabels(c, sineInOut(progress(lt)), still ? 26 : (26 / s) * 1.3, still ? E(clamp((lt - 4.6 * K) / (0.9 * K))) : 0, still),
+  );
   c.restore();
 }

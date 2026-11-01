@@ -5,20 +5,29 @@
  */
 import { H, HUD, TEXTURE, W } from './charte';
 import { clamp, PAL, rng, text, TYPO, type Ctx } from './motion';
+import { obj } from './objects';
 
 export function drawHud(c: Ctx, t: number, label: string, hookStart: number, total: number): void {
   const a = clamp((t - (hookStart + HUD.delay)) / HUD.fade);
   if (a <= 0) return;
   const len = HUD.x1 - HUD.x0;
-  c.save();
-  c.globalAlpha = a * HUD.track;
-  c.fillStyle = PAL.dim;
-  c.fillRect(HUD.x0, HUD.y, len, 2);
-  c.globalAlpha = a;
-  c.fillStyle = PAL.acc;
-  c.fillRect(HUD.x0, HUD.y, len * clamp(t / total), 2);
-  text(c, label, HUD.x0, HUD.labelY, 26, PAL.ink, { fam: TYPO.mono, w: 400, track: 3 });
-  c.restore();
+  // Two objects: the progress line and the post's number under it (`objects.ts`).
+  obj(c, 'hud.progress', [540, HUD.y], t, () => {
+    c.save();
+    c.globalAlpha = a * HUD.track;
+    c.fillStyle = PAL.dim;
+    c.fillRect(HUD.x0, HUD.y, len, 2);
+    c.globalAlpha = a;
+    c.fillStyle = PAL.acc;
+    c.fillRect(HUD.x0, HUD.y, len * clamp(t / total), 2);
+    c.restore();
+  });
+  obj(c, 'hud.number', [HUD.x0 + 50, HUD.labelY - 10], t, () => {
+    c.save();
+    c.globalAlpha = a;
+    text(c, label, HUD.x0, HUD.labelY, 26, PAL.ink, { fam: TYPO.mono, w: 400, track: 3 });
+    c.restore();
+  });
 }
 
 // A 256×256 grey noise tile, made once from a seeded rng: the same post grains the same way.

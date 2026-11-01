@@ -3,6 +3,7 @@
 import { word, numberText } from "../locale";
 import { register } from "./index";
 import { appear, clamp, E, enter, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
+import { obj } from "../objects";
 
 const fr = (n: number) => numberText(n);
 
@@ -49,23 +50,31 @@ register("transfer", (c, lt, p) => {
   const prefix = String(p.prefix ?? "DSC0"), ext = String(p.ext ?? ".ARW");
   const yL = 900, x0 = 300, x1 = 790;
   const T0 = 0.9, DUR = 3.5;
-  const u = E(clamp((lt - T0 * K) / (DUR * K)));
-  appear(c, enter(lt, 0.1, 1), () => card(c, 120, yL - 100, label), 16);
-  appear(c, enter(lt, 0.4, 1), () => nas(c, 820, yL - 130, u > 0 && u < 1 ? 1 : 0), 16);
+  // Each part reads the copy's progress on its own clock (an object may be delayed, `objects.ts`).
+  const progress = (lt: number) => E(clamp((lt - T0 * K) / (DUR * K)));
+  obj(c, "transfer.card", [195, 900], lt, (lt) => appear(c, enter(lt, 0.1, 1), () => card(c, 120, yL - 100, label), 16), 0.1);
+  obj(c, "transfer.nas", [900, 900], lt, (lt) => {
+    const u = progress(lt);
+    appear(c, enter(lt, 0.4, 1), () => nas(c, 820, yL - 130, u > 0 && u < 1 ? 1 : 0), 16);
+  }, 0.4);
   // the line: a dim track, the accent fill
-  appear(c, enter(lt, 0.6, 0.8), () => {
-    c.save();
-    c.strokeStyle = PAL.dim; c.globalAlpha *= 0.5; c.lineWidth = 2; c.lineCap = "round";
-    c.beginPath(); c.moveTo(x0, yL); c.lineTo(x1, yL); c.stroke();
-    c.restore();
-    if (u > 0) {
-      c.strokeStyle = PAL.acc; c.lineWidth = 3; c.lineCap = "round";
-      c.beginPath(); c.moveTo(x0, yL); c.lineTo(x0 + (x1 - x0) * u, yL); c.stroke();
-    }
-  }, 0);
+  obj(c, "transfer.line", [545, yL], lt, (lt) => {
+    const u = progress(lt);
+    appear(c, enter(lt, 0.6, 0.8), () => {
+      c.save();
+      c.strokeStyle = PAL.dim; c.globalAlpha *= 0.5; c.lineWidth = 2; c.lineCap = "round";
+      c.beginPath(); c.moveTo(x0, yL); c.lineTo(x1, yL); c.stroke();
+      c.restore();
+      if (u > 0) {
+        c.strokeStyle = PAL.acc; c.lineWidth = 3; c.lineCap = "round";
+        c.beginPath(); c.moveTo(x0, yL); c.lineTo(x0 + (x1 - x0) * u, yL); c.stroke();
+      }
+    }, 0);
+  }, 0.6);
   // file names streaming under the line: a new one every STEP s, the last four stacked
   const STEP = 0.16;
-  if (lt > T0 * K && u < 1) {
+  obj(c, "transfer.files", [540, yL + 120], lt, (lt) => {
+    if (progress(lt) >= 1) return;
     const cur = Math.floor((lt - T0 * K) / (STEP * K));
     for (let i = Math.max(0, cur - 3); i <= cur; i++) {
       const age = (lt - T0 * K - i * STEP * K) / (STEP * K); // 0 at birth, 1 when the next arrives
@@ -77,13 +86,15 @@ register("transfer", (c, lt, p) => {
       text(c, name, 540, yL + 70 + (cur - i) * 34 - clamp(age) * 0 , 22, i === cur ? PAL.ink : PAL.dim, { fam: TYPO.mono, w: 400, align: "center" });
       c.restore();
     }
-  }
+  }, T0 * K);
   // the count, moving with the line, then the total in Geist
-  if (u > 0 && u < 1) {
+  obj(c, "transfer.count", [545, yL - 34], lt, (lt) => {
+    const u = progress(lt);
+    if (!(u > 0 && u < 1)) return;
     c.save(); c.globalAlpha *= 0.8;
     text(c, fr(Math.round(total * u)) + " / " + fr(total), 545, yL - 28, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center" });
     c.restore();
-  }
-  appear(c, enter(lt, T0 + DUR + 0.1, 1), () => text(c, fr(total) + " fichiers", 540, yL + 270, 56, PAL.ink, { align: "center" }), 14);
-  appear(c, enter(lt, T0 + DUR + 0.4, 1), () => text(c, word("copied"), 540, yL + 318, 32, PAL.acc, { align: "center", w: TYPO.lw }), 10);
+  }, T0 * K);
+  obj(c, "transfer.total", [540, yL + 252], lt, (lt) => appear(c, enter(lt, T0 + DUR + 0.1, 1), () => text(c, `${fr(total)} ${word("files")}`, 540, yL + 270, 56, PAL.ink, { align: "center" }), 14), T0 + DUR + 0.1);
+  obj(c, "transfer.copied", [540, yL + 308], lt, (lt) => appear(c, enter(lt, T0 + DUR + 0.4, 1), () => text(c, word("copied"), 540, yL + 318, 32, PAL.acc, { align: "center", w: TYPO.lw }), 10), T0 + DUR + 0.4);
 });

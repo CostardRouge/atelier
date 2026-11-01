@@ -2,6 +2,7 @@ import { useState, type ChangeEvent } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { parseScript, type StoryScript } from '../../shared/story/story-script';
 import Button, { buttonClass } from '../../shared/ui/Button';
+import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import type { Lang } from '../../shared/story/locale';
 import { SelectField } from '../../shared/ui/Inspector';
 import { POSTS } from './posts';
@@ -18,6 +19,21 @@ export function scriptFileName(script: StoryScript): string {
   return `${base || 'story'}.story.json`;
 }
 
+/** Read a script file: the script, or why it cannot be one. */
+export async function readScriptFile(file: File): Promise<{ ok: true; script: StoryScript } | { ok: false; reason: string }> {
+  try {
+    const parsed = parseScript(JSON.parse(await file.text()));
+    return parsed.ok ? { ok: true, script: parsed.script } : { ok: false, reason: parsed.reason };
+  } catch {
+    return { ok: false, reason: 'This file is not readable JSON.' };
+  }
+}
+
+/** Download the script with what changed here, to keep with the author's notes. */
+export function saveScriptFile(script: StoryScript): void {
+  downloadBlob(new Blob([JSON.stringify(script, null, 2) + '\n'], { type: 'application/json' }), scriptFileName(script));
+}
+
 /**
  * Load, save and forget the author's script — the private half of every post
  * (`story-script.ts`). Saving writes the file back with what changed here
@@ -27,31 +43,26 @@ export default function ScriptControls({
   script,
   onScript,
   compact = false,
+  verbs = true,
 }: {
   script: StoryScript | null;
   onScript: (next: StoryScript | null) => void;
   compact?: boolean;
+  /** False where Load and Save are the shell's bottom bar (a phone's gallery): Forget stays here. */
+  verbs?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [forgetting, setForgetting] = useState(false);
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    try {
-      const parsed = parseScript(JSON.parse(await file.text()));
-      if (!parsed.ok) {
-        setError(parsed.reason);
-        return;
-      }
-      setError(null);
-      onScript(parsed.script);
-    } catch {
-      setError('This file is not readable JSON.');
-    }
+    const read = await readScriptFile(file);
+    setError(read.ok ? null : read.reason);
+    if (read.ok) onScript(read.script);
   };
   const save = () => {
-    if (!script) return;
-    downloadBlob(new Blob([JSON.stringify(script, null, 2) + '\n'], { type: 'application/json' }), scriptFileName(script));
+    if (script) saveScriptFile(script);
   };
   const named = script ? Object.keys(script.posts).filter((id) => POSTS.some((p) => p.id === id)).length : 0;
   return (
@@ -63,24 +74,45 @@ export default function ScriptControls({
       )}
       {error ? <p className="m-0 text-xs text-danger">{error}</p> : null}
       <div className="flex gap-2 flex-wrap">
-        <label className={buttonClass('default', 'sm')}>
-          {script ? 'Load another…' : 'Load script…'}
-          <input type="file" accept=".json,application/json" className="sr-only" onChange={onFile} />
-        </label>
+        {verbs ? (
+          <label className={buttonClass('default', 'sm')}>
+            {script ? 'Load another…' : 'Load script…'}
+            <input type="file" accept=".json,application/json" className="sr-only" onChange={onFile} />
+          </label>
+        ) : null}
         {script ? (
           <>
-            <Button size="sm" onClick={save} title="Download the script with what changed here, to keep with your notes">
-              Save script
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => {
-                void clearWall();
-                onScript(null);
-              }}>
+            {verbs ? (
+              <Button size="sm" onClick={save} title="Download the script with what changed here, to keep with your notes">
+                Save script
+              </Button>
+            ) : null}
+            <Button size="sm" variant="ghost" onClick={() => setForgetting(true)}>
               Forget
             </Button>
           </>
         ) : null}
       </div>
+      {forgetting && script ? (
+        // The suite asks before anything is lost for good (`ConfirmDialog`): this browser's copy of the
+        // script holds what changed here (the Studio's settings, the map's states) and the wall's pictures.
+        <ConfirmDialog
+          title={`Forget “${script.series || 'your script'}” on this device?`}
+          confirmLabel="Forget"
+          danger
+          onCancel={() => setForgetting(false)}
+          onConfirm={() => {
+            setForgetting(false);
+            void clearWall();
+            onScript(null);
+          }}
+        >
+          <p className="m-0">
+            What changed here since you loaded it — the Studio&apos;s settings, the map&apos;s states — and the wall&apos;s pictures
+            go with it. Save script first to keep them; your own file is not touched.
+          </p>
+        </ConfirmDialog>
+      ) : null}
       {script && !compact ? (
         <div className="flex items-center gap-2">
           <span className="text-sm text-ink-soft w-16">Language</span>

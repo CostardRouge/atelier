@@ -13,7 +13,7 @@ import { invertAffine, panView, viewAffine, zoomViewAbout, type AtlasView } from
 import { cameraHeldBy } from './atlas-story';
 import { safeRect } from './atlas-safe';
 import type { SceneCore } from './use-atlas-scene';
-import type { PlayClock } from './play-clock';
+import type { PlayClock } from '../../shared/media/play-clock';
 
 interface AtlasStageProps {
   core: SceneCore;

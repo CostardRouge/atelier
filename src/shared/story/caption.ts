@@ -32,10 +32,11 @@ export function drawCaption(c: Ctx, cap: Cap, lt: number, sceneId = "") {
   if (CAPTION.scrim > 0 && CAPTION.scrimScenes.includes(sceneId)) {
     const mid = (CAPTION.scrimTop + CAPTION.scrimBottom) / 2;
     const g = c.createLinearGradient(0, CAPTION.scrimTop, 0, CAPTION.scrimBottom);
-    g.addColorStop(0, "rgba(241,238,232,0)");
+    const clear = `${PAL.bg}00`;
+    g.addColorStop(0, clear);
     g.addColorStop((mid - 60 - CAPTION.scrimTop) / (CAPTION.scrimBottom - CAPTION.scrimTop), PAL.bg);
     g.addColorStop((mid + 40 - CAPTION.scrimTop) / (CAPTION.scrimBottom - CAPTION.scrimTop), PAL.bg);
-    g.addColorStop(1, "rgba(241,238,232,0)");
+    g.addColorStop(1, clear);
     c.save();
     c.globalAlpha = alpha * CAPTION.scrim;
     c.fillStyle = g;

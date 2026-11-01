@@ -13,7 +13,7 @@ import AtlasTransport from './AtlasTransport';
 import { AtlasTiles } from './atlas-tiles';
 import { visibleBox, type AtlasView } from './atlas-view';
 import type { WorldBox } from './atlas-flight';
-import { PlayClock } from './play-clock';
+import { PlayClock } from '../../shared/media/play-clock';
 import { useAtlasExport, type ExportKind } from './use-atlas-export';
 import { useAtlasDocFlights } from './use-atlas-doc-flights';
 import { useAtlasLogos } from './atlas-logos';

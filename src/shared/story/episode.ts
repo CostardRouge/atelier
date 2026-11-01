@@ -9,6 +9,7 @@ import { OV, type Cap } from './charte';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
 import type { WallGrid, WallGroup } from './wall-grid';
+import type { Charte, StyleBook } from './objects';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -17,6 +18,10 @@ export interface StoryLook {
   vignette?: number;
   /** The moving grain's strength, 0 to 0.2 (the charte's 0.055 when absent). */
   grain?: number;
+  /** The palette, the font roles and the weights every post is drawn in (`objects.ts`). */
+  charte?: Charte;
+  /** The series' settings for its objects, by key (`objects.ts`). */
+  objects?: StyleBook;
 }
 
 export interface BlockSpec {
@@ -46,6 +51,8 @@ export interface Episode {
   lang?: Lang;
   /** The series' look: the wall's grid, the grain and the vignette (`story-script.ts`, `StoryLook`). */
   look?: StoryLook;
+  /** This post's own settings for its objects, over the series' `look.objects` (`objects.ts`). */
+  objects?: StyleBook;
   /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
   wallGroups?: WallGroup[] | null;
 }

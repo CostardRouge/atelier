@@ -12,7 +12,7 @@ import { wallCells } from '../../shared/story/wall-grid';
 import type { WallProgress } from './wall-cache';
 import { MAX_CHOSEN, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
-import { Readout, SelectField } from '../../shared/ui/Inspector';
+import { SelectField } from '../../shared/ui/Inspector';
 
 type Counting = { state: 'idle' } | { state: 'busy' } | { state: 'done'; changes: [string, number | null, number][] } | { state: 'failed'; message: string };
 
@@ -63,7 +63,7 @@ export default function SourcesPanel({
     };
   }, []);
 
-  if (!script) return <Readout muted>Load your script first: the sources are kept in it.</Readout>;
+  if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the sources are kept in it.</p>;
 
   const sources = sourcesOf(script, postId);
   const trip = sources.trip ? (trips?.find((t) => t.id === sources.trip?.id) ?? null) : null;

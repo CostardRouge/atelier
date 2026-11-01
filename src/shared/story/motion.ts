@@ -1,5 +1,6 @@
 // The lab page's motion vocabulary and canvas helpers, ported as-is.
 import { BLUR, PAL, RISE, TEMPO, TYPO } from "./charte";
+import { colorOf, currentStyle, markText, resolveFont } from "./objects";
 
 export type Ctx = CanvasRenderingContext2D;
 export const clamp = (x: number, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -10,17 +11,31 @@ export const E = TEMPO.ease;
 /** progress of an entrance that starts at t0 and lasts d (scaled by tempo) */
 export const enter = (lt: number, t0: number, d = 1) => E(clamp((lt - t0 * K) / (d * K)));
 
-export const font = (size: number, w: number, fam: string) => `${w} ${size}px ${fam}`;
+/** The CSS font for canvas text — as the charte and the object being drawn set it (`objects.ts`). */
+export const font = (size: number, w: number, fam: string) => resolveFont(size, w, fam);
 
 type TextOpt = { w?: number; fam?: string; align?: CanvasTextAlign; track?: number };
 export function text(c: Ctx, s: string, x: number, y: number, size: number, color: string, opt: TextOpt = {}) {
+  // The object being drawn may set its own colour, case, spacing and outline (`objects.ts`).
+  const style = currentStyle();
+  if (style) markText();
+  const shown = style?.textCase === "upper" ? s.toUpperCase() : style?.textCase === "lower" ? s.toLowerCase() : s;
+  const track = style?.tracking ?? opt.track;
   c.font = font(size, opt.w ?? TYPO.hw, opt.fam ?? TYPO.fam);
-  c.fillStyle = color;
+  c.fillStyle = colorOf(style?.color, color);
   c.textAlign = opt.align ?? "left";
   c.textBaseline = "alphabetic";
-  if (opt.track) c.letterSpacing = `${opt.track}px`;
-  c.fillText(s, x, y);
-  if (opt.track) c.letterSpacing = "0px";
+  if (track) c.letterSpacing = `${track}px`;
+  if (style?.outline) {
+    c.save();
+    c.lineJoin = "round";
+    c.lineWidth = style.outline * 2;
+    c.strokeStyle = colorOf(style.outlineColor, PAL.bg);
+    c.strokeText(shown, x, y);
+    c.restore();
+  }
+  c.fillText(shown, x, y);
+  if (track) c.letterSpacing = "0px";
 }
 
 export function fit(c: Ctx, s: string, max: number, size: number, w: number, fam: string) {

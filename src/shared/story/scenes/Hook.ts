@@ -5,6 +5,7 @@
 import { word, numberText } from "../locale";
 import { appear, clamp, E, enter, fit, font, K, PAL, rng, text, TYPO, type Ctx } from "../motion";
 import { pictureFor, wallGrid, wallLayout, type WallGrid, type WallGroup, type WallRect } from "../wall-grid";
+import { obj } from "../objects";
 
 const R = rng(11);
 type Tile = { warm: boolean; l: number; s: number; h0: number; delay: number };
@@ -128,24 +129,28 @@ export function drawWall(c: Ctx, p: number, centre: number) {
 }
 
 export function drawHook(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
-  const p = E(clamp((lt - 0.6 * K) / (2.4 * K)));
   // Under a post's hook (`hook.ts`) the wall is the picture only: its one photo there from the first frame,
   // no veil and no number — the hook's words are on it.
   const quiet = _p.quiet === true;
-  drawWall(c, p, quiet ? 1 : enter(lt, 0, 0.8));
+  obj(c, "wall.pictures", [540, 960], lt, (lt) => {
+    const p = E(clamp((lt - 0.6 * K) / (2.4 * K)));
+    drawWall(c, p, quiet ? 1 : enter(lt, 0, 0.8));
+  }, quiet ? undefined : 0);
   if (quiet) return;
   // the number, after the image has settled
-  const sp = enter(lt, 2.0, 1.2);
-  c.save();
-  c.fillStyle = PAL.bg;
-  c.globalAlpha *= 0.72 * sp;
-  c.fillRect(0, 0, 1080, 1920);
-  c.restore();
-  appear(c, enter(lt, 2.3, 1.3), () => {
+  obj(c, "wall.veil", [540, 960], lt, (lt) => {
+    const sp = enter(lt, 2.0, 1.2);
+    c.save();
+    c.fillStyle = PAL.bg;
+    c.globalAlpha *= 0.72 * sp;
+    c.fillRect(0, 0, 1080, 1920);
+    c.restore();
+  }, 2.0);
+  obj(c, "wall.number", [540, 920], lt, (lt) => appear(c, enter(lt, 2.3, 1.3), () => {
     // A counted fact arrives as a number (`story-facts.ts`): written the way the series writes numbers.
     const count = typeof _p.count === "number" ? numberText(_p.count) : String(_p.count ?? numberText(100000));
     const z = fit(c, count, 860, 250, TYPO.hw, TYPO.fam);
     text(c, count, 540, 1000, z, PAL.ink, { align: "center" });
-  }, 20);
-  appear(c, enter(lt, 2.7, 1), () => text(c, String(_p.label ?? word("photos")), 540, 1090, 56, PAL.acc, { w: TYPO.lw, align: "center" }), 12);
+  }, 20), 2.3);
+  obj(c, "wall.label", [540, 1072], lt, (lt) => appear(c, enter(lt, 2.7, 1), () => text(c, String(_p.label ?? word("photos")), 540, 1090, 56, PAL.acc, { w: TYPO.lw, align: "center" }), 12), 2.7);
 }

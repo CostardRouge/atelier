@@ -5,11 +5,16 @@ import type { Episode } from './episode';
 import { fit, PAL, text, TYPO, type Ctx } from './motion';
 import { drawTexture, setTexture } from './overlays';
 import { drawWall, setWallGrid } from './scenes/Hook';
+import { applyCharte, beginFrame, setSlot, setStyles } from './objects';
 
 export const COVER = { bandTop: 760, bandBottom: 1200, wallScrim: 0.5 };
 
 export function drawCover(c: Ctx, ep: Episode): void {
   setLang(ep.lang);
+  applyCharte(ep.look?.charte);
+  setStyles(ep.look?.objects, ep.objects);
+  beginFrame();
+  setSlot('cover');
   setWallGrid(ep.look?.wall, ep.wallGroups);
   setTexture(ep.look);
   c.save();

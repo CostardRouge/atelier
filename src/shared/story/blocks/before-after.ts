@@ -3,22 +3,28 @@
 import { word } from "../locale";
 import { register } from "./index";
 import { appear, clamp, E, enter, fit, K, PAL, text, TYPO } from "../motion";
+import { obj } from "../objects";
 
 const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : [String(v ?? "")]);
 register("before-after", (c, lt, p) => {
   const before = lines(p.before), after = lines(p.after), label = p.label ? String(p.label) : "";
-  const w = E(clamp((lt - 2.0 * K) / (1.4 * K))); // the wipe
+  const wipe = (lt: number) => E(clamp((lt - 2.0 * K) / (1.4 * K))); // the wipe
   const draw = (eyebrow: string, ls: string[], color: string, y0: number) => {
     text(c, eyebrow, 90, y0, 26, PAL.dim, { fam: TYPO.mono, w: 400, track: 5 });
     ls.forEach((l, i) => { const z = fit(c, l, 900, i === 0 ? 96 : 60, i === 0 ? TYPO.hw : TYPO.lw, TYPO.fam); text(c, l, 90, y0 + 110 + i * 84, z, color); });
   };
   // before, fading out as the wipe advances
-  c.save(); c.globalAlpha = enter(lt, 0.2, 1) * (1 - w); c.translate(0, -w * 20); draw(word("before"), before, PAL.dim, 760); c.restore();
+  obj(c, "before-after.before", [540, 880], lt, (lt) => {
+    const w = wipe(lt);
+    c.save(); c.globalAlpha = enter(lt, 0.2, 1) * (1 - w); c.translate(0, -w * 20); draw(word("before"), before, PAL.dim, 760); c.restore();
+  }, 0.2);
   // after, revealed by a rising edge
-  if (w > 0) {
+  obj(c, "before-after.after", [540, 880], lt, (lt) => {
+    const w = wipe(lt);
+    if (w <= 0) return;
     c.save(); c.beginPath(); c.rect(0, 700 + (1 - w) * 500, 1080, 500); c.clip(); c.globalAlpha = w;
     draw(word("after"), after, PAL.ink, 760); c.restore();
     c.fillStyle = PAL.acc; c.globalAlpha = w * (1 - E(clamp((lt - 3.6 * K) / (0.8 * K)))); c.fillRect(90, 700 + (1 - w) * 500, 900, 2); c.globalAlpha = 1;
-  }
-  if (label) appear(c, enter(lt, 3.4, 1), () => text(c, label, 90, 1250, 32, PAL.dim, { w: TYPO.lw }), 8);
+  }, 2.0);
+  if (label) obj(c, "before-after.label", [540, 1240], lt, (lt) => appear(c, enter(lt, 3.4, 1), () => text(c, label, 90, 1250, 32, PAL.dim, { w: TYPO.lw }), 8), 3.4);
 });

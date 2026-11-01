@@ -2964,6 +2964,46 @@ a canvas by `src/shared/story/` — the series' **charte** (palette, Geist,
 motion), the same for every post. A new post starts as a copy of the one before
 it and may grow blocks of its own.
 
+- **The charte.** *Charte & look* sets the series' six colours (ground, ink,
+  accent, muted, soft, deep — a whole palette in one click: linen, night,
+  kraft, white paper, sea — then any colour alone), its four faces (titles,
+  text, numbers, hand) among the twelve shipped, and the title and light
+  weights. Every block is drawn in them; *Back to the charte « lin »* forgets
+  it all.
+- **The Studio.** A post opens like Flight Atlas or Trips: panels around a
+  stage that never scrolls away. Wide, three columns: the list on the left — the
+  series' *Charte & look*, *Script* and *Sources*, the post's *Hook*, *Sound &
+  effects* and *Export & archive*, then the post's **scenes** in order, each
+  with the **objects** it draws (its caption, its parts) and what sits over
+  every scene (the hook, the HUD); the stage in the middle; the inspector on
+  the right, showing what is selected. Select an object and set it: shown or
+  hidden, moved across and down, its size, turn and opacity; when it draws
+  text, its font (one of the charte's roles or any of the shipped faces), its
+  weight, size, letter spacing, colour (a charte colour or any), case and
+  outline; a shadow; a delay. *Every post* keeps the setting for that object in
+  the whole series, *This post* for this post alone, over the series. A
+  scene also takes its length and its caption's window in this post. Every
+  setting is kept in your script; with none, a post draws exactly as its code.
+  Under the stage, the **timeline** lays the post on one clock: a row of
+  scenes, the hook, the captions, the HUD, then the parts of the selected
+  scene. On the **stage**, a click selects the object under it and outlines
+  it; drag the selected object to move it (on a phone, tap to select, then
+  drag). A bar selects its object and moves the playhead into it; a click on
+  an empty stretch moves the playhead there; drag a scene's right edge to
+  change its length, a caption's edges to time its window — this post's own.
+  Every change is undone with ↶ beside the post's name or ⌘Z / Ctrl+Z, and
+  redone with ↷ or ⇧⌘Z; the edits of one object within a moment are one step.
+  With an object selected, the arrows nudge it a pixel (ten with ⇧) and Escape
+  lets it go. **Space** plays and pauses (unless a text field has the key); ← and → on
+  the scrubber step a tenth of a second (a second with ⇧). *Guides* beside
+  Play draws the safe area of TikTok, Instagram Reels or YouTube Shorts — where
+  their buttons and captions cover the video — and a grid over the preview,
+  never into the export (remembered on this device). Narrower, the list moves
+  into the inspector as a tab. On a phone the Studio is the suite's other
+  editors': one header line (the post, ↶ ↷, and the series' panels behind ⋯),
+  the stage over the screen, and the bottom bar — *Objects* opens the list as
+  a sheet, the selected object's settings and the *Timeline* open as drawers
+  that leave the picture in sight.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and

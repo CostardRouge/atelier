@@ -4,7 +4,7 @@ import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 import { describeKeyTarget, targetOwnsSpace } from '../../shared/media/transport-keys';
 import { formatElapsed } from './atlas-hud';
-import type { PlayClock } from './play-clock';
+import type { PlayClock } from '../../shared/media/play-clock';
 import type { Story } from './atlas-story';
 
 interface AtlasTransportProps {

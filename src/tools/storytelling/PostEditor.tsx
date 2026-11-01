@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { BED_SAMPLE_RATE, renderBed } from '../../shared/audio/render-bed';
 import { decodeSoundFile, type SoundClip } from '../../shared/audio/sound-clip';
 import type { SoundEvent } from '../../shared/audio/sound-event';
-import { scheduleVoice, VOICE_NAMES, type VoiceName } from '../../shared/audio/voices';
+import { VOICE_NAMES, type VoiceName } from '../../shared/audio/voices';
 import { aacPrimingSeconds } from '../../shared/media/audio-encode';
 import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
@@ -15,6 +15,10 @@ import { assemble, type PostSkeleton, type StoryScript } from '../../shared/stor
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
+import ChartePanel from './ChartePanel';
+import useHistory from '../../shared/history/use-history';
+import { startTask } from '../../shared/tasks/tasks';
+import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
@@ -23,10 +27,37 @@ import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
+import RunLockNotice from '../../shared/ui/RunLockNotice';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { imageResult } from '../../shared/commands/image-result';
+import { checkStylePatch, postOutline } from '../../shared/story/story-commands';
 import PageBar from '../../shared/ui/PageBar';
 import { paintCover } from './covers';
 import { POSTS } from './posts';
 import ScriptControls from './ScriptControls';
+import ObjectPanel from './ObjectPanel';
+import StoryStage, { type StageDrag } from './StoryStage';
+import StoryTransport from './StoryTransport';
+import GuidesMenu, { storyGuides } from './GuidesMenu';
+import StoryShortcuts from './StoryShortcuts';
+import IconButton from '../../shared/ui/IconButton';
+import { Icons } from '../../shared/ui/icons';
+import { useRememberedScroll } from '../../shared/ui/use-remembered-scroll';
+import { useStoryPlayback, type TimedBuffer } from './use-story-playback';
+import { useEditorMode, type Pane } from './use-editor-mode';
+import { useSettled } from './use-settled';
+import { useLocalPref } from '../../shared/ui/local-pref';
+import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
+import Segmented from '../../shared/ui/Segmented';
+import PanelHost from '../../shared/ui/PanelHost';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import StudioTree, { PANEL_LABEL, type StudioPanel, type StudioSelection } from './StudioTree';
+import StudioTimeline from './StudioTimeline';
+import { styleIn, withSceneTiming, withStyle, type StyleScope } from '../../shared/story/studio-edit';
+import { objectLabel, objectTracks, sceneSpans, type ObjectTrack } from '../../shared/story/studio';
 
 export interface Sound {
   name: string;
@@ -115,11 +146,11 @@ interface PostEditorProps {
  * the exported MP4, which can then be sent to a connected Winnow to archive.
  */
 export default function PostEditor({ postId, script, onScript, fontsReady, sounds, setSounds, onOpen, onBack }: PostEditorProps) {
-  const [t, setT] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const [soundError, setSoundError] = useState<string | null>(null);
   const effectIds = useRef(0);
   const [exporting, setExporting] = useState<string | null>(null);
+  // When the running export took the post (`RunLockNotice`): edits stay free, and the file is the post as it was then.
+  const [exportSince, setExportSince] = useState<number | null>(null);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [exported, setExported] = useState<File[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -127,7 +158,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const [archiveTo, setArchiveTo] = useState<string>('');
   const target = connections.find((c) => c.id === archiveTo) ?? connections[0] ?? null;
 
-  const episodeOf = useCallback((skeleton: PostSkeleton) => assemble(skeleton, script, POSTS), [script]);
+  // While an object is dragged on the stage, the post is drawn from a DRAFT of the script, written on release.
+  const [draft, setDraft] = useState<StoryScript | null>(null);
+  const live = draft ?? script;
+  const episodeOf = useCallback((skeleton: PostSkeleton) => assemble(skeleton, live, POSTS), [live]);
 
   // The map follows the series' trip when it names one and this browser has
   // it (`trip-map.ts`): its road, and the towns where a stage starts or ends.
@@ -169,11 +203,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const prev = at > 0 ? POSTS[at - 1] : null;
   const nextSkeleton = at < POSTS.length - 1 && POSTS[at + 1].season === skeleton.season ? POSTS[at + 1] : null;
 
-  // The next post's cover rides into this post's ending — the continuity the series lives on.
+  // The next post's cover rides into this post's ending — the continuity the series lives on. It is a whole
+  // frame to paint, so it follows the script once the edits SETTLE, never on every step of a slider.
+  const settled = useSettled(live, 400);
   const nextThumb = useMemo(
-    () => (fontsReady && nextSkeleton ? paintCover(episodeOf(nextSkeleton), 0.5) : null),
-    [fontsReady, nextSkeleton, episodeOf],
+    () => (fontsReady && nextSkeleton ? paintCover(assemble(nextSkeleton, settled, POSTS), 0.5) : null),
+    [fontsReady, nextSkeleton, settled],
   );
+  const postOptions = useMemo(() => POSTS.map((p) => ({ id: p.id, label: `${p.number} · ${assemble(p, settled, POSTS).title}` })), [settled]);
   const episode = useMemo<Episode>(() => {
     const ep = episodeOf(skeleton);
     return ep.next ? { ...ep, next: { ...ep.next, thumb: nextThumb } } : ep;
@@ -186,81 +223,255 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     [episode, tripMap, holes],
   );
 
-  // The list's thumbnails, painted once per script.
-  const covers = useMemo(() => {
-    if (!fontsReady) return new Map<string, string>();
-    return new Map(POSTS.map((p) => [p.id, paintCover(episodeOf(p), 0.12).toDataURL('image/png')]));
-  }, [fontsReady, episodeOf]);
-
-  // --- the stage --------------------------------------------------------------
-  const stageRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const ctx = stageRef.current?.getContext('2d');
-    if (!ctx || !fontsReady) return;
-    drawEpisode(ctx, shown, Math.min(t, total - 0.001), mapOpts);
-  }, [shown, t, total, fontsReady, mapOpts]);
-
-  // Playback: the clock, and the sound alongside it.
-  const audioRef = useRef<{ ctx: AudioContext; nodes: AudioBufferSourceNode[] } | null>(null);
-  const stopSound = useCallback(() => {
-    audioRef.current?.nodes.forEach((n) => {
-      try {
-        n.stop();
-      } catch {
-        // already ended
-      }
-    });
-    if (audioRef.current) audioRef.current.nodes = [];
+  // --- the Studio: what is selected, and the objects the post draws over time ----
+  const [selected, setSelected] = useState<StudioSelection | null>({ kind: 'panel', id: 'charte' });
+  // Where an object's settings are written — the inspector's switch, and what a drag on the stage writes too.
+  const [scope, setScope] = useState<StyleScope>('series');
+  // What the inspector shows where the list (and on a phone the timeline) has no column of its own.
+  const [pane, setPane] = useState<Pane>('settings');
+  // On a phone (the shell's compact mode) the inspector is the suite's: its tabs are the shell's bottom bar and
+  // each opens over the stage — the list as a sheet, the settings and the timeline as drawers that leave the
+  // picture in sight (Develop's rule: what is judged on the picture never goes under a wash).
+  const compact = useIsCompact();
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const select = useCallback((s: StudioSelection) => {
+    setSelected(s);
+    setPane('settings');
   }, []);
-  const tRef = useRef(t);
-  tRef.current = t;
+  // The editor's own width decides its columns (`frontend.md`: a tool splits on its container, never the viewport).
+  const sectionRef = useRef<HTMLElement>(null);
+  const mode = useEditorMode(sectionRef);
+  const [guides, setGuides] = useLocalPref(storyGuides, DEFAULT_GUIDES);
+  // Undo and redo over the script (`shared/history`): every setting of the Studio is a change to it,
+  // so watching it covers them all; edits of one object within a moment are one step.
+  const history = useHistory<StoryScript | null>({
+    value: script,
+    onRestore: (s) => onScript(s),
+    label: selected?.kind === 'object' ? selected.key : (selected?.id ?? null),
+    what: 'change',
+  });
+  const scenes = useMemo(() => sceneSpans(shown), [shown]);
+  const [tracks, setTracks] = useState<ObjectTrack[]>([]);
   useEffect(() => {
-    if (!playing) {
-      stopSound();
-      return;
-    }
-    const from = tRef.current >= total - 0.01 ? 0 : tRef.current;
-    if (typeof AudioContext !== 'undefined' && (voice || music || effects.length || episode.hook)) {
-      const ctx = audioRef.current?.ctx ?? new AudioContext();
-      audioRef.current = { ctx, nodes: [] };
-      void ctx.resume();
-      const { score, clips } = splitEffects(effects);
-      for (const e of [...score, ...hookScoreOf(episode)]) {
-        if (e.at >= from) scheduleVoice(ctx, ctx.destination, ctx.currentTime + (e.at - from), e.voice, { gain: e.gain, rate: e.rate });
-      }
-      const files = [...clips, ...hookClipsOf(episode, mine.hookFiles)].map((c, i) => ({ name: `effect ${i}`, buffer: c.buffer, at: c.at, gain: c.gain ?? 1 }));
-      for (const s of [voice, music, ...files]) {
-        if (!s || s.at + s.buffer.duration <= from) continue;
-        const node = ctx.createBufferSource();
-        node.buffer = s.buffer;
-        const gain = ctx.createGain();
-        gain.gain.value = s.gain;
-        node.connect(gain).connect(ctx.destination);
-        node.start(ctx.currentTime + Math.max(0, s.at - from), Math.max(0, from - s.at));
-        audioRef.current.nodes.push(node);
-      }
-    }
-    let raf = 0;
-    const start = performance.now() - from * 1000;
-    const tick = (now: number) => {
-      const next = (now - start) / 1000;
-      if (next >= total) {
-        setT(total);
-        setPlaying(false);
+    // Run the post on a context that draws nothing (`studio.ts`), once the edits settle.
+    const id = window.setTimeout(() => setTracks(objectTracks(shown, { stops: mapOpts.stops, road: mapOpts.road })), 120);
+    return () => window.clearTimeout(id);
+  }, [shown, mapOpts.stops, mapOpts.road]);
+
+  // --- the playhead and the sound (`use-story-playback.ts`) ---------------------
+  const score = useMemo(() => [...splitEffects(effects).score, ...hookScoreOf(episode)], [effects, episode]);
+  const files = useMemo<TimedBuffer[]>(
+    () => [
+      ...(voice ? [{ buffer: voice.buffer, at: voice.at, gain: voice.gain }] : []),
+      ...(music ? [{ buffer: music.buffer, at: music.at, gain: music.gain }] : []),
+      ...[...splitEffects(effects).clips, ...hookClipsOf(episode, mine.hookFiles)].map((c) => ({ buffer: c.buffer, at: c.at, gain: c.gain ?? 1 })),
+    ],
+    [voice, music, effects, episode, mine.hookFiles],
+  );
+  const clock = useStoryPlayback(total, score, files);
+  const seek = useCallback(
+    (at: number) => {
+      clock.setPlaying(false);
+      clock.seek(at);
+    },
+    [clock],
+  );
+  const pause = () => clock.setPlaying(false);
+
+  const timing = useRef({ script, postId, onScript });
+  timing.current = { script, postId, onScript };
+  const onTiming = useCallback((index: number, t: { len?: number; cap?: { a: number; b: number } }) => {
+    const { script: sc, postId: pid, onScript: write } = timing.current;
+    if (sc) write(withSceneTiming(sc, pid, index, t));
+  }, []);
+
+  // --- the stage: a press picks, a drag moves the selected object (written on release) ---
+  const dragState = useRef<{ key: string; dx: number; dy: number } | null>(null);
+  const compactRef = useRef(compact);
+  compactRef.current = compact;
+  const studio = useRef({ script, postId, scope, draft });
+  studio.current = { script, postId, scope, draft };
+  const drag = useMemo<StageDrag>(
+    () => ({
+      onPick: (hit) => {
+        setSelected({ kind: 'object', id: hit.id, key: hit.key, slot: hit.slot });
+        setPane('settings');
+        if (compactRef.current) setInspectorOpen(true);
+        const { script: sc, postId: pid, scope: sp } = studio.current;
+        if (!sc) return false;
+        const style = sp === 'series' ? styleIn(sc, pid, hit.key, 'series') : { ...styleIn(sc, pid, hit.key, 'series'), ...styleIn(sc, pid, hit.key, 'post') };
+        dragState.current = { key: hit.key, dx: style.dx ?? 0, dy: style.dy ?? 0 };
+        return true;
+      },
+      onMove: (mx, my) => {
+        const d = dragState.current;
+        const { script: sc, postId: pid, scope: sp } = studio.current;
+        if (!d || !sc) return;
+        setDraft(withStyle(sc, pid, d.key, { dx: Math.round(d.dx + mx) || undefined, dy: Math.round(d.dy + my) || undefined }, sp));
+      },
+      onEnd: (moved) => {
+        const { draft: dr } = studio.current;
+        if (moved && dr) onScript(dr);
+        dragState.current = null;
+        setDraft(null);
+      },
+    }),
+    [onScript],
+  );
+
+  // Every key and gesture of the Studio, as a sheet (`StoryShortcuts`).
+  const [keysOpen, setKeysOpen] = useState(false);
+  // The keyboard on the selected object: arrows nudge it (⇧ ten pixels), Escape lets it go — unless a field,
+  // a slider or a select has the key (`transport-keys.ts`), or a control already took the press.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = describeKeyTarget(e.target);
+      if (targetOwnsTyping(target) || target?.role === 'slider') return;
+      if ((e.key === 'h' || e.key === 'H' || e.key === '?') && !e.repeat) {
+        // The same key closes it (Develop's rule): a sheet opened by a letter is closed by it.
+        setKeysOpen((was) => !was);
+        e.preventDefault();
         return;
       }
-      setT(next);
-      raf = requestAnimationFrame(tick);
+      const sel = selectedRef.current;
+      if (e.key === 'Escape' && sel?.kind === 'object') {
+        setSelected({ kind: 'panel', id: 'charte' });
+        e.preventDefault();
+        return;
+      }
+      const step = e.shiftKey ? 10 : 1;
+      const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      const { script: sc, postId: pid, scope: sp } = studio.current;
+      if (!move || sel?.kind !== 'object' || !sc) return;
+      e.preventDefault();
+      const was = sp === 'series' ? styleIn(sc, pid, sel.key, 'series') : { ...styleIn(sc, pid, sel.key, 'series'), ...styleIn(sc, pid, sel.key, 'post') };
+      onScript(withStyle(sc, pid, sel.key, { dx: (was.dx ?? 0) + move[0] || undefined, dy: (was.dy ?? 0) + move[1] || undefined }, sp));
     };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      stopSound();
-    };
-  }, [playing, total, voice, music, effects, episode, mine.hookFiles, stopSound]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onScript]);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+
+  // --- an agent drives the post through commands (`agent-commands.md`) ---------------------------------
+  // Each is the Studio's own gesture: a style is written like the inspector writes it (one undo step), a
+  // seek moves the same clock, a snapshot draws the post as the export does.
+  const agent = useRef({ script, postId, shown, mapOpts, scenes, tracks, total, episode, history, onScript });
+  agent.current = { script, postId, shown, mapOpts, scenes, tracks, total, episode, history, onScript };
+  useRegisterCommands('storytelling-post', [
+    {
+      id: 'story.post',
+      title: 'Read the open post',
+      description:
+        'The open Storytelling post: its number, title and length, the playhead, what is selected, its scenes on the post’s clock (with each caption’s window), every object it draws (key, label, scene slot, whether it is text, the seconds it is on the stage), and the styles set on objects for the series and for this post.',
+      run: () => {
+        const a = agent.current;
+        return {
+          post: a.postId,
+          number: a.episode.number,
+          title: a.episode.title,
+          seconds: Math.round(a.total * 10) / 10,
+          playhead: Math.round(clock.t * 10) / 10,
+          selected: selectedRef.current,
+          ...postOutline(a.scenes, a.tracks),
+          styles: { series: a.script?.look?.objects ?? {}, post: a.script?.posts[a.postId]?.objects ?? {} },
+          scriptLoaded: !!a.script,
+        };
+      },
+    },
+    {
+      id: 'story.seek',
+      title: 'Move the playhead',
+      description: 'Stop the post and put its playhead at a time, in seconds from its start.',
+      params: { t: { type: 'number', description: 'Seconds from the start.', min: 0 } },
+      run: (p) => {
+        const t = Math.min(p.t as number, agent.current.total);
+        seek(t);
+        return { playhead: Math.round(t * 10) / 10 };
+      },
+    },
+    {
+      id: 'story.select',
+      title: 'Select an object',
+      description: 'Select an object by its key (story.post lists them), as a click on the stage does; slot narrows it to one scene when the key is drawn in several.',
+      params: {
+        key: { type: 'string', description: 'The object’s key, e.g. counter.number or caption.' },
+        slot: { type: 'string', description: 'The scene slot it is drawn in.', optional: true },
+      },
+      run: (p) => {
+        const hit = agent.current.tracks.find((t) => t.key === p.key && (p.slot === undefined || t.slot === p.slot));
+        if (!hit) throw new Error(`no object “${String(p.key)}”${p.slot ? ` in ${String(p.slot)}` : ''} in this post`);
+        select({ kind: 'object', id: hit.id, key: hit.key, slot: hit.slot });
+        return { selected: { key: hit.key, slot: hit.slot } };
+      },
+    },
+    {
+      id: 'story.setStyle',
+      title: 'Set an object’s style',
+      description:
+        'Set fields of an object’s style for the whole series or this post only, as the inspector does (one undo step): hidden, dx/dy (frame pixels, 1080 × 1920), scale, rotate (degrees), opacity (0–1), font (@title, @text, @num, @hand or a face id), weight, size (% of the block’s), tracking, color (@bg @ink @acc @dim @soft @deep or #hex), textCase (upper, lower, as), outline, outlineColor, shadow, shadowY, shadowOpacity, shadowColor, delay (seconds). null clears a field. Out of range is refused, never clamped.',
+      params: {
+        key: { type: 'string', description: 'The object’s key (story.post).' },
+        style: { type: 'object', description: 'The fields to set; null clears one.' },
+        scope: { type: 'string', enum: ['series', 'post'], description: 'Every post of the series, or this one only (default series).', optional: true },
+      },
+      available: () => (agent.current.script ? true : 'no script is loaded: styles are kept in it'),
+      run: (p) => {
+        const a = agent.current;
+        const checked = checkStylePatch(p.style);
+        if (!checked.ok) throw new Error(checked.reason);
+        const sc = (p.scope as StyleScope | undefined) ?? 'series';
+        const next = withStyle(a.script!, a.postId, p.key as string, checked.patch, sc);
+        a.onScript(next);
+        return { key: p.key, scope: sc, style: styleIn(next, a.postId, p.key as string, sc) };
+      },
+    },
+    {
+      id: 'story.undo',
+      title: 'Undo',
+      description: 'Undo the last change to the script, the author’s or an agent’s.',
+      available: () => (agent.current.history.canUndo ? true : 'nothing to undo'),
+      run: () => {
+        agent.current.history.undo();
+        return { undone: true };
+      },
+    },
+    {
+      id: 'story.snapshot',
+      title: 'Look at a frame',
+      description: 'The post’s frame at a time (default the playhead), drawn as the export draws it, as a JPEG to look at.',
+      params: {
+        t: { type: 'number', description: 'Seconds from the start; default the playhead.', min: 0, optional: true },
+        longEdge: { type: 'number', description: 'Pixels on the long edge, 160–1920 (default 960).', min: 160, max: 1920, integer: true, optional: true },
+      },
+      available: () => (fontsReady ? true : 'the series’ faces are still loading'),
+      run: async (p) => {
+        const a = agent.current;
+        const t = Math.min((p.t as number | undefined) ?? clock.t, a.total - 0.001);
+        const scale = ((p.longEdge as number | undefined) ?? 960) / H;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(W * scale);
+        canvas.height = Math.round(H * scale);
+        drawEpisode(canvas.getContext('2d')!, a.shown, t, { ...a.mapOpts, scale });
+        const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/jpeg', 0.85));
+        if (!blob) throw new Error('the frame could not be encoded');
+        return imageResult(blob, canvas.width, canvas.height, `${a.episode.number} at ${t.toFixed(1)} s`);
+      },
+    },
+  ]);
+
+  // The list's thumbnails, painted when the Continuity panel shows them.
+  const showCovers = selected?.kind === 'panel' && selected.id === 'export';
+  const covers = useMemo(() => {
+    if (!fontsReady || !showCovers) return new Map<string, string>();
+    // From the SETTLED script, like the next post's cover: every post's cover repainted on each slider step
+    // while this panel is up would be the whole series drawn per step.
+    return new Map(POSTS.map((p) => [p.id, paintCover(assemble(p, settled, POSTS), 0.12).toDataURL('image/png')]));
+  }, [fontsReady, settled, showCovers]);
 
   const choose = (id: string) => {
-    setPlaying(false);
+    pause();
     onOpen(id);
   };
 
@@ -269,7 +480,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setPlaying(false);
+    pause();
     const buffer = await decodeSoundFile(file);
     if (!buffer) {
       setSoundError(`This browser cannot read “${file.name}”. A WAV, MP3 or M4A file usually works.`);
@@ -282,7 +493,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   };
 
   const patchEffect = (id: number, patch: Partial<Effect>) => {
-    setPlaying(false);
+    pause();
     setEffects((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   };
   const onEffectFile = (id: number) => async (e: ChangeEvent<HTMLInputElement>) => {
@@ -298,17 +509,21 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     patchEffect(id, { source: 'file', file: { name: file.name, buffer } });
   };
   const addEffect = () => {
-    setPlaying(false);
+    pause();
     effectIds.current += 1;
-    setEffects((list) => [...list, { id: effectIds.current, at: Math.min(t, Math.max(0, total - 0.1)), gain: 0.8, source: 'file', file: null }]);
+    setEffects((list) => [...list, { id: effectIds.current, at: Math.min(clock.t, Math.max(0, total - 0.1)), gain: 0.8, source: 'file', file: null }]);
   };
 
   // --- the export -------------------------------------------------------------
   const exportVideo = async () => {
-    setPlaying(false);
+    pause();
     const controller = new AbortController();
     abortRef.current = controller;
+    // The shell's task (`shared/tasks`): its pill says the export runs, with a bar and a Cancel, wherever the
+    // author is — on a phone the Export panel is a sheet that may well be closed.
+    const task = startTask({ label: `${episode.number} · video`, progress: 0, detail: 'the sound', cancel: () => controller.abort() });
     setExporting('Preparing the sound…');
+    setExportSince(Date.now());
     setExportNote(null);
     try {
       const clips: SoundClip[] = [];
@@ -339,7 +554,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           drawEpisode(ctx, shown, Math.min(sec, total - 0.001), mapOpts);
           return canvas;
         },
-        onProgress: (p) => setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`),
+        onProgress: (p) => {
+          setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`);
+          task.update(p.ratio === null ? { progress: null, detail: 'finishing the file' } : { progress: p.ratio, detail: `${Math.round(p.ratio * 100)} %` });
+        },
         signal: controller.signal,
       });
       const name = `${episode.number.toLowerCase().replace(/\W+/g, '')}-${slug(episode.title)}.mp4`;
@@ -354,8 +572,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     } catch (err) {
       setExportNote(controller.signal.aborted ? 'Export cancelled.' : err instanceof Error ? err.message : 'The export failed.');
     } finally {
+      task.done();
       abortRef.current = null;
       setExporting(null);
+      setExportSince(null);
     }
   };
   const exportCover = () => {
@@ -363,102 +583,38 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     c.toBlob((blob) => blob && downloadBlob(blob, `${episode.number.toLowerCase().replace(/\W+/g, '')}-cover.png`), 'image/png');
   };
 
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
   const archiveFolder = `Storytelling/${script?.series || `Season ${skeleton.season}`}/${episode.number}`;
 
-  return (
-    <div className="flex-1 min-h-0 overflow-y-auto pb-6">
-      <PageBar back={{ label: 'Map', onClick: onBack, title: 'Back to the map of subjects' }}>
-        <span className="font-mono text-2xs text-muted self-center">{episode.number}</span>
-        <span className="text-sm text-ink self-center truncate">{episode.title}</span>
-      </PageBar>
-      <div className="flex flex-wrap gap-5 items-start mt-3">
-        <nav aria-label="Posts" className="w-full min-[1100px]:w-56 shrink-0 flex flex-col gap-1.5">
-          <p className="m-0 mb-1 font-mono text-2xs uppercase tracking-[0.12em] text-muted">Season 1</p>
-          <div className="flex min-[1100px]:flex-col gap-1.5 overflow-x-auto pb-1">
-            {POSTS.map((p) => {
-              const ep = episodeOf(p);
-              const on = p.id === skeleton.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => choose(p.id)}
-                  aria-current={on ? 'true' : undefined}
-                  className={`flex items-center gap-2.5 text-left rounded-control border px-2 py-1.5 shrink-0 cursor-pointer transition-colors ${
-                    on ? 'border-ink bg-surface' : 'border-line bg-paper hover:border-line-strong'
-                  }`}
-                >
-                  {covers.get(p.id) ? (
-                    <img src={covers.get(p.id)} alt="" className="w-8 h-[3.55rem] rounded-[4px] border border-line object-cover" />
-                  ) : (
-                    <span className="w-8 h-[3.55rem] rounded-[4px] border border-line bg-paper-2" />
-                  )}
-                  <span className="flex flex-col min-w-0">
-                    <span className="font-mono text-2xs text-muted">{p.number}</span>
-                    <span className="text-sm text-ink truncate max-w-[9.5rem]">{ep.title}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-
-        <section aria-label="Stage" className="flex flex-col items-center gap-3 shrink-0 mx-auto">
-          <canvas
-            ref={stageRef}
-            width={W}
-            height={H}
-            className="block h-[min(calc(var(--app-h)*0.72),44rem)] max-w-full aspect-[9/16] rounded-paper-lg border border-line-strong bg-paper shadow-sm"
-            aria-label={`${episode.number} ${episode.title}, at ${fmt(t)}`}
-          />
-          <div className="flex items-center gap-3 w-full max-w-[24rem]">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                if (!playing && t >= total - 0.01) setT(0);
-                setPlaying((p) => !p);
-              }}
-              disabled={!fontsReady || exporting !== null}
-            >
-              {playing ? 'Pause' : 'Play'}
-            </Button>
-            <input
-              type="range"
-              data-playhead
-              min={0}
-              max={total}
-              step={0.01}
-              value={Math.min(t, total)}
-              onChange={(e) => {
-                setPlaying(false);
-                setT(Number(e.target.value));
-              }}
-              aria-label="Time in the post"
-              className="flex-1 accent-[var(--color-accent)]"
-            />
-            <span className="font-mono text-2xs text-muted tabular-nums w-[6.5rem] text-right">
-              {fmt(Math.min(t, total))} / {fmt(total)}
-            </span>
-          </div>
-        </section>
-
-        <aside aria-label="Post settings" className="w-full min-[1100px]:w-80 shrink-0 flex flex-col">
-          <InspectorSection
-            id="story-script"
-            title="Script"
-            info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere."
-          >
+  // --- the Studio's inspector: one panel at a time ----------------------------
+  const panelOf = (id: StudioPanel) => {
+    switch (id) {
+      case 'charte':
+        return (
+          <>
+          <InspectorSection id="story-charte" title="Charte" foldable={false} info="The series' colours, faces and weights — every post is drawn in them, and an object's colour or font can name one. Kept in your script.">
+            <ChartePanel script={script} onScript={onScript} />
+          </InspectorSection>
+          <InspectorSection id="story-look" title="Look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
+            <LookPanel postId={postId} script={script} onScript={onScript} />
+          </InspectorSection>
+          </>
+        );
+      case 'script':
+        return (
+          <InspectorSection id="story-script" title="Script" foldable={false} info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere.">
             <ScriptControls script={script} onScript={onScript} />
           </InspectorSection>
-
-          <InspectorSection
-            id="story-hook"
-            title="Hook"
-            info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports."
-          >
+        );
+      case 'sources':
+        return (
+          <InspectorSection id="story-sources" title="Sources" foldable={false} info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device.">
+            <SourcesPanel postId={postId} script={script} onScript={onScript} wall={wall.progress} />
+          </InspectorSection>
+        );
+      case 'hook':
+        return (
+          <InspectorSection id="story-hook" title="Hook" foldable={false} info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports.">
             <HookPanel
               postId={postId}
               script={script}
@@ -469,221 +625,405 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               onUnreadable={(name) => setSoundError(`This browser cannot read “${name}”. A WAV, MP3 or M4A file usually works.`)}
             />
           </InspectorSection>
-
-          <InspectorSection
-            id="story-sources"
-            title="Sources"
-            info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device."
-          >
-            <SourcesPanel postId={postId} script={script} onScript={onScript} wall={wall.progress} />
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-look"
-            title="Look"
-            info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything."
-          >
-            <LookPanel postId={postId} script={script} onScript={onScript} />
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-sound"
-            title="Sound"
-            info="Your voice and a music bed, read from files on this device. They play with the stage and go into the exported video; nothing is uploaded."
-          >
+        );
+      case 'sound':
+        return (
+          <>
+            <InspectorSection id="story-sound" title="Sound" foldable={false} info="Your voice and a music bed, read from files on this device. They play with the stage and go into the exported video; nothing is uploaded.">
             {(['voice', 'music'] as const).map((which) => {
-              const s = which === 'voice' ? voice : music;
-              const set = which === 'voice' ? setVoice : setMusic;
-              return (
-                <div key={which} className="flex flex-col gap-2 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-ink-soft w-12">{which === 'voice' ? 'Voice' : 'Music'}</span>
-                    <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{s ? s.name : 'none'}</span>
-                    <label className={buttonClass('default', 'sm')}>
-                      {s ? 'Change…' : 'Add…'}
-                      <input type="file" accept="audio/*" className="sr-only" onChange={onSoundFile(which)} />
-                    </label>
+                const s = which === 'voice' ? voice : music;
+                const set = which === 'voice' ? setVoice : setMusic;
+                return (
+                  <div key={which} className="flex flex-col gap-2 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-ink-soft w-12">{which === 'voice' ? 'Voice' : 'Music'}</span>
+                      <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{s ? s.name : 'none'}</span>
+                      <label className={buttonClass('default', 'sm')}>
+                        {s ? 'Change…' : 'Add…'}
+                        <input type="file" accept="audio/*" className="sr-only" onChange={onSoundFile(which)} />
+                      </label>
+                      {s ? (
+                        <Button size="sm" variant="ghost" onClick={() => set(null)}>
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
                     {s ? (
-                      <Button size="sm" variant="ghost" onClick={() => set(null)}>
-                        Remove
-                      </Button>
+                      <>
+                        <SliderRow
+                          label="Starts at"
+                          value={s.at}
+                          min={0}
+                          max={Math.max(1, Math.floor(total))}
+                          step={0.1}
+                          format={(v) => `${v.toFixed(1)} s`}
+                          onChange={(v) => {
+                            pause();
+                            set({ ...s, at: v });
+                          }}
+                        />
+                        <SliderRow
+                          label="Level"
+                          value={Math.round(s.gain * 100)}
+                          min={0}
+                          max={150}
+                          step={1}
+                          format={(v) => `${v} %`}
+                          onChange={(v) => set({ ...s, gain: v / 100 })}
+                        />
+                      </>
                     ) : null}
                   </div>
-                  {s ? (
-                    <>
-                      <SliderRow
-                        label="Starts at"
-                        value={s.at}
-                        min={0}
-                        max={Math.max(1, Math.floor(total))}
-                        step={0.1}
-                        format={(v) => `${v.toFixed(1)} s`}
-                        onChange={(v) => {
-                          setPlaying(false);
-                          set({ ...s, at: v });
-                        }}
-                      />
-                      <SliderRow
-                        label="Level"
-                        value={Math.round(s.gain * 100)}
-                        min={0}
-                        max={150}
-                        step={1}
-                        format={(v) => `${v} %`}
-                        onChange={(v) => set({ ...s, gain: v / 100 })}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              );
-            })}
-            {soundError ? <p className="m-0 text-xs text-danger">{soundError}</p> : null}
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-effects"
-            title="Effects"
-            info="Sound effects at moments of the post — a click, a whoosh, a pop. Each is a file of your own, or one of Atelier’s built-in synthesised sounds. Added at the playhead; they play with the stage and go into the export."
-          >
-            {effects.map((fx, i) => (
-              <div key={fx.id} className="flex flex-col gap-2 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-2xs text-muted w-5">{i + 1}</span>
-                  <SelectField
-                    label={`Sound of effect ${i + 1}`}
-                    value={fx.source}
-                    options={EFFECT_SOURCES}
-                    onChange={(v) => patchEffect(fx.id, { source: v })}
-                  />
-                  <Button size="sm" variant="ghost" onClick={() => setEffects((list) => list.filter((e) => e.id !== fx.id))}>
-                    Remove
-                  </Button>
-                </div>
-                {fx.source === 'file' ? (
-                  <div className="flex items-center gap-2 pl-7">
-                    <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{fx.file ? fx.file.name : 'no file yet'}</span>
-                    <label className={buttonClass('default', 'sm')}>
-                      {fx.file ? 'Change…' : 'Choose…'}
-                      <input type="file" accept="audio/*" className="sr-only" onChange={onEffectFile(fx.id)} />
-                    </label>
-                  </div>
-                ) : null}
-                <SliderRow
-                  label="At"
-                  value={fx.at}
-                  min={0}
-                  max={Math.max(0.1, Math.floor(total * 10) / 10)}
-                  step={0.05}
-                  format={(v) => `${v.toFixed(2)} s`}
-                  onChange={(v) => patchEffect(fx.id, { at: v })}
-                />
-                <SliderRow
-                  label="Level"
-                  value={Math.round(fx.gain * 100)}
-                  min={0}
-                  max={150}
-                  step={1}
-                  format={(v) => `${v} %`}
-                  onChange={(v) => patchEffect(fx.id, { gain: v / 100 })}
-                />
-              </div>
-            ))}
-            <div>
-              <Button size="sm" onClick={addEffect}>
-                Add an effect at {fmt(Math.min(t, total))}
-              </Button>
-            </div>
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-continuity"
-            title="Continuity"
-            info="Each post knows the one before and the one after. The ending names the next post and shows its cover."
-          >
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ['Previous', prev],
-                ['Next', nextSkeleton],
-              ].map(([label, p]) => {
-                const post = p as PostSkeleton | null;
-                return (
-                  <button
-                    key={label as string}
-                    type="button"
-                    disabled={!post}
-                    onClick={() => post && choose(post.id)}
-                    className="flex flex-col gap-1 items-start text-left rounded-control border border-line bg-paper p-2 cursor-pointer disabled:opacity-45 disabled:cursor-default"
-                  >
-                    <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">{label as string}</span>
-                    {post ? (
-                      <>
-                        {covers.get(post.id) ? (
-                          <img src={covers.get(post.id)} alt="" className="w-full aspect-[9/16] rounded-[4px] border border-line object-cover" />
-                        ) : null}
-                        <span className="text-xs text-ink-soft">
-                          {post.number} · {episodeOf(post).title}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted">{label === 'Next' ? 'the season ends' : 'the season opens'}</span>
-                    )}
-                  </button>
                 );
               })}
-            </div>
-          </InspectorSection>
-
-          <InspectorSection id="story-export" title="Export" info="An H.264 video at 1080 × 1920, 30 frames a second, written in this browser; and the cover as a PNG.">
-            <div className="flex gap-2 flex-wrap">
-              {exporting ? (
-                <Button size="sm" variant="ghost" onClick={() => abortRef.current?.abort()}>
-                  Cancel
-                </Button>
-              ) : (
-                <Button size="sm" variant="primary" onClick={() => void exportVideo()} disabled={!fontsReady}>
-                  Export video
-                </Button>
-              )}
-              <Button size="sm" onClick={exportCover} disabled={!fontsReady || exporting !== null}>
-                Export cover
-              </Button>
-            </div>
-            {exporting ? <Readout>{exporting}</Readout> : exportNote ? <Readout muted>{exportNote}</Readout> : null}
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-archive"
-            title="Archive"
-            info="Send the exported video and its cover to a Winnow you connected — the one on this computer or your server's — where they are imported into its Incoming, filed under Storytelling. A Winnow on another site is connected with an app token on Sources."
-          >
-            {connections.length === 0 ? (
-              <p className="m-0 text-xs text-muted leading-relaxed">
-                No Winnow is connected.{' '}
-                <a className="text-accent-ink font-semibold underline underline-offset-[3px]" href="#/sources">
-                  Connect one
-                </a>{' '}
-                — the one on this computer, or your server&apos;s with an app token.
-              </p>
-            ) : exported.length === 0 ? (
-              <Readout muted>Export the video first: the same files are sent from here.</Readout>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {connections.length > 1 && target ? (
-                  <SelectField
-                    label="Winnow to archive on"
-                    value={target.id}
-                    options={connections.map((c) => ({ id: c.id, label: c.id }))}
-                    onChange={setArchiveTo}
+              {soundError ? <p className="m-0 text-xs text-danger">{soundError}</p> : null}
+            </InspectorSection>
+            <InspectorSection id="story-effects" title="Effects" info="Sound effects at moments of the post — a click, a whoosh, a pop. Each is a file of your own, or one of Atelier’s built-in synthesised sounds. Added at the playhead; they play with the stage and go into the export.">
+            {effects.map((fx, i) => (
+                <div key={fx.id} className="flex flex-col gap-2 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-2xs text-muted w-5">{i + 1}</span>
+                    <SelectField
+                      label={`Sound of effect ${i + 1}`}
+                      value={fx.source}
+                      options={EFFECT_SOURCES}
+                      onChange={(v) => patchEffect(fx.id, { source: v })}
+                    />
+                    <Button size="sm" variant="ghost" onClick={() => setEffects((list) => list.filter((e) => e.id !== fx.id))}>
+                      Remove
+                    </Button>
+                  </div>
+                  {fx.source === 'file' ? (
+                    <div className="flex items-center gap-2 pl-7">
+                      <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{fx.file ? fx.file.name : 'no file yet'}</span>
+                      <label className={buttonClass('default', 'sm')}>
+                        {fx.file ? 'Change…' : 'Choose…'}
+                        <input type="file" accept="audio/*" className="sr-only" onChange={onEffectFile(fx.id)} />
+                      </label>
+                    </div>
+                  ) : null}
+                  <SliderRow
+                    label="At"
+                    value={fx.at}
+                    min={0}
+                    max={Math.max(0.1, Math.floor(total * 10) / 10)}
+                    step={0.05}
+                    format={(v) => `${v.toFixed(2)} s`}
+                    onChange={(v) => patchEffect(fx.id, { at: v })}
                   />
-                ) : null}
-                {target ? (
-                  <SendFinalsPanel key={`${target.id}:${exported[0].name}`} files={exported} sourceId={target.id} assetId={null} archiveFolder={archiveFolder} />
-                ) : null}
+                  <SliderRow
+                    label="Level"
+                    value={Math.round(fx.gain * 100)}
+                    min={0}
+                    max={150}
+                    step={1}
+                    format={(v) => `${v} %`}
+                    onChange={(v) => patchEffect(fx.id, { gain: v / 100 })}
+                  />
+                </div>
+              ))}
+              <div>
+                <Button size="sm" onClick={addEffect}>
+                  Add an effect at the playhead
+                </Button>
               </div>
-            )}
-          </InspectorSection>
+            </InspectorSection>
+          </>
+        );
+      case 'export':
+        return (
+          <>
+            <InspectorSection id="story-export" title="Export" foldable={false} info="An H.264 video at 1080 × 1920, 30 frames a second, written in this browser; and the cover as a PNG.">
+            <div className="flex gap-2 flex-wrap">
+                {exporting ? (
+                  <Button size="sm" variant="ghost" onClick={() => abortRef.current?.abort()}>
+                    Cancel
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="primary" onClick={() => void exportVideo()} disabled={!fontsReady}>
+                    Export video
+                  </Button>
+                )}
+                <Button size="sm" onClick={exportCover} disabled={!fontsReady || exporting !== null}>
+                  Export cover
+                </Button>
+              </div>
+              {exporting ? <Readout>{exporting}</Readout> : exportNote ? <Readout muted>{exportNote}</Readout> : null}
+            </InspectorSection>
+            <InspectorSection id="story-archive" title="Archive" info="Send the exported video and its cover to a Winnow you connected — the one on this computer or your server's — where they are imported into its Incoming, filed under Storytelling. A Winnow on another site is connected with an app token on Sources.">
+            {connections.length === 0 ? (
+                <p className="m-0 text-xs text-muted leading-relaxed">
+                  No Winnow is connected.{' '}
+                  <a className="text-accent-ink font-semibold underline underline-offset-[3px]" href="#/sources">
+                    Connect one
+                  </a>{' '}
+                  — the one on this computer, or your server&apos;s with an app token.
+                </p>
+              ) : exported.length === 0 ? (
+                <Readout muted>Export the video first: the same files are sent from here.</Readout>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {connections.length > 1 && target ? (
+                    <SelectField
+                      label="Winnow to archive on"
+                      value={target.id}
+                      options={connections.map((c) => ({ id: c.id, label: c.id }))}
+                      onChange={setArchiveTo}
+                    />
+                  ) : null}
+                  {target ? (
+                    <SendFinalsPanel key={`${target.id}:${exported[0].name}`} files={exported} sourceId={target.id} assetId={null} archiveFolder={archiveFolder} />
+                  ) : null}
+                </div>
+              )}
+            </InspectorSection>
+            <InspectorSection id="story-continuity" title="Continuity" info="Each post knows the one before and the one after. The ending names the next post and shows its cover.">
+            <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['Previous', prev],
+                  ['Next', nextSkeleton],
+                ].map(([label, p]) => {
+                  const post = p as PostSkeleton | null;
+                  return (
+                    <button
+                      key={label as string}
+                      type="button"
+                      disabled={!post}
+                      onClick={() => post && choose(post.id)}
+                      className="flex flex-col gap-1 items-start text-left rounded-control border border-line bg-paper p-2 cursor-pointer disabled:opacity-45 disabled:cursor-default"
+                    >
+                      <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">{label as string}</span>
+                      {post ? (
+                        <>
+                          {covers.get(post.id) ? (
+                            <img src={covers.get(post.id)} alt="" className="w-full aspect-[9/16] rounded-[4px] border border-line object-cover" />
+                          ) : null}
+                          <span className="text-xs text-ink-soft">
+                            {post.number} · {episodeOf(post).title}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted">{label === 'Next' ? 'the season ends' : 'the season opens'}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </InspectorSection>
+          </>
+        );
+    }
+  };
+  const objectPanel = (sel: Extract<StudioSelection, { kind: 'object' }>) => {
+    const track = tracks.find((t) => t.id === sel.id);
+    const scene = scenes.find((s) => s.key === sel.slot && s.block === sel.key);
+    const block = scene && scene.index !== null ? episode.blocks[scene.index] : null;
+    const words = scene && scene.index !== null ? script?.posts[postId]?.blocks?.[scene.index] : undefined;
+    return (
+      <InspectorSection
+        id="story-object"
+        title={objectLabel(sel.key)}
+        foldable={false}
+        info="Click an object on the stage, in the list or on the timeline; arrows nudge it (⇧ ten pixels), Escape lets it go. Its settings are kept in your script — for every post of the series, or this post alone."
+      >
+        <ObjectPanel
+          script={script}
+          onScript={onScript}
+          postId={postId}
+          objKey={sel.key}
+          scope={scope}
+          onScope={setScope}
+          text={track?.text ?? false}
+          scene={
+            scene && scene.index !== null && block
+              ? { index: scene.index, len: block.len, cap: block.cap ? { a: block.cap.a, b: block.cap.b } : null, set: { len: words?.len, cap: words?.cap } }
+              : null
+          }
+        />
+      </InspectorSection>
+    );
+  };
+
+  const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} />;
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const settingsPane = (
+    <div ref={settingsRef}>
+      {exportSince !== null ? (
+        // Stuck to the top of the inspector's scroll, wherever the author is in it (the suite's place for it).
+        <RunLockNotice since={exportSince}>What you change now reaches the post, not this file: export again to have it.</RunLockNotice>
+      ) : null}
+      {selected?.kind === 'object' ? objectPanel(selected) : panelOf(selected?.kind === 'panel' ? selected.id : 'charte')}
+    </div>
+  );
+  const timeline = (
+    <StudioTimeline
+      clock={clock}
+      scenes={scenes}
+      tracks={tracks}
+      selected={selected}
+      onSelect={select}
+      onSeek={seek}
+      onTiming={onTiming}
+    />
+  );
+  // The inspector's tabs where the list (and on a phone the timeline) has no column of its own.
+  const panes: { id: Pane; label: string }[] = [
+    ...(mode !== 'wide' ? [{ id: 'list' as const, label: 'Objects' }] : []),
+    { id: 'settings', label: selected?.kind === 'object' ? objectLabel(selected.key) : 'Settings' },
+    ...(mode === 'narrow' ? [{ id: 'timeline' as const, label: 'Timeline' }] : []),
+  ];
+  const shownPane: Pane = panes.some((p) => p.id === pane) ? pane : 'settings';
+  // Each panel's scroll kept, as Develop keeps each tab's (`use-remembered-scroll.ts`): back on an object or on
+  // Charte & look, the inspector opens where it was left. The key is empty while the settings are not shown, so a
+  // pane or a drawer coming back runs the restore again.
+  const settingsShown = compact ? inspectorOpen && pane === 'settings' : shownPane === 'settings';
+  useRememberedScroll(
+    settingsShown ? `story.inspector.${selected?.kind === 'object' ? `object.${selected.key}` : selected?.kind === 'panel' ? selected.id : 'charte'}` : '',
+    settingsRef,
+  );
+  const settingsLabel = selected?.kind === 'object' ? objectLabel(selected.key) : (PANEL_LABEL[selected?.kind === 'panel' ? selected.id : 'charte'] ?? 'Settings');
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact
+          ? {
+              sections: [
+                { id: 'list', label: 'Objects' },
+                { id: 'settings', label: settingsLabel },
+                { id: 'timeline', label: 'Timeline' },
+              ],
+              // Marked only while its panel is UP (`section-rail.tsx`).
+              active: inspectorOpen ? pane : null,
+              label: 'Post inspector',
+              onSelect: (id: string) => {
+                setPane(id as Pane);
+                setInspectorOpen(true);
+              },
+            }
+          : null,
+      [compact, inspectorOpen, pane, settingsLabel],
+    ),
+  );
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false, backdrop: 'frame' as const } : null), [compact]));
+  const openPanel = (id: StudioPanel) => {
+    setSelected({ kind: 'panel', id });
+    setPane('settings');
+    setInspectorOpen(true);
+  };
+  const panel = 'border border-line rounded-paper-lg bg-surface shadow-paper-soft';
+
+  const transportTrailing = (
+    <>
+      <GuidesMenu guides={guides} onGuides={setGuides} />
+      <IconButton label="Keys and gestures (H)" size="sm" onClick={() => setKeysOpen(true)}>
+        {Icons.keyboard}
+      </IconButton>
+    </>
+  );
+  const keysSheet = keysOpen ? <StoryShortcuts onClose={() => setKeysOpen(false)} /> : null;
+  const postSelect = (
+    <SelectField label="Post" value={skeleton.id} options={postOptions} onChange={choose} />
+  );
+
+  if (compact) {
+    const body = pane === 'list' ? listPane : pane === 'timeline' ? <div className="pt-2">{timeline}</div> : settingsPane;
+    return (
+      <section ref={sectionRef} className="@container flex-1 min-h-0 min-w-0 flex flex-col gap-2 pb-3" aria-label="Storytelling post">
+        <PhoneHeader
+          floating={false}
+          back={{ label: 'Back to the map of subjects', onClick: onBack }}
+          title={<span className="block min-w-0 w-full">{postSelect}</span>}
+          trailing={history.control}
+          menu={[
+            { id: 'charte', label: 'Charte & look', onSelect: () => openPanel('charte') },
+            { id: 'script', label: 'Script', onSelect: () => openPanel('script') },
+            { id: 'sources', label: 'Sources', onSelect: () => openPanel('sources') },
+            { id: 'hook', label: 'Hook', rule: true, onSelect: () => openPanel('hook') },
+            { id: 'sound', label: 'Sound & effects', onSelect: () => openPanel('sound') },
+            { id: 'export', label: 'Export & archive', onSelect: () => openPanel('export') },
+            { id: 'keys', label: 'Keys and gestures', rule: true, onSelect: () => setKeysOpen(true) },
+          ]}
+        />
+        {/* No minimum height (Develop's stage, `DevelopViewport`): the drawer takes its share of the column, and on a
+            phone held sideways a floor here pushed the drawer below the screen. */}
+        <div className="relative flex-1 min-h-0 flex rounded-paper-lg bg-frame border border-line p-1.5">
+          <StoryStage
+            clock={clock}
+            episode={shown}
+            opts={mapOpts}
+            fontsReady={fontsReady}
+            guides={guides}
+            selectedId={selected?.kind === 'object' ? selected.id : null}
+            drag={drag}
+            label={`${episode.number} ${episode.title}`}
+          />
+        </div>
+        <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={transportTrailing} />
+        <PanelHost
+          asSheet
+          compactAs={pane === 'list' ? 'sheet' : 'drawer'}
+          open={inspectorOpen}
+          onClose={() => setInspectorOpen(false)}
+          title={pane === 'list' ? 'Objects' : pane === 'timeline' ? 'Timeline' : settingsLabel}
+        >
+          <div className="px-1 pb-4 overflow-x-hidden">{body}</div>
+        </PanelHost>
+        {keysSheet}
+      </section>
+    );
+  }
+
+  return (
+    <section ref={sectionRef} className="@container flex-1 min-h-0 min-w-0 flex flex-col gap-3" aria-label="Storytelling post">
+      <PageBar back={{ label: 'Map', onClick: onBack, title: 'Back to the map of subjects', iconOnly: mode === 'narrow' }} trailing={history.control}>
+        <span className="min-w-0 flex-1 max-w-[24rem]">
+          {postSelect}
+        </span>
+      </PageBar>
+      <div
+        className={`flex-1 min-h-0 min-w-0 ${
+          mode === 'wide'
+            ? 'grid grid-cols-[13rem_minmax(0,1fr)_21rem] gap-3'
+            : mode === 'medium'
+              ? 'grid grid-cols-[minmax(0,1fr)_21rem] gap-3'
+              : 'flex flex-col gap-2'
+        }`}
+      >
+        {mode === 'wide' ? <div className={`${panel} min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain`}>{listPane}</div> : null}
+
+        <div className={`flex flex-col gap-2 min-h-0 min-w-0 ${mode === 'narrow' ? 'flex-[1.25]' : ''}`}>
+          <div className="relative flex-1 min-h-[12rem] flex rounded-paper-lg bg-frame border border-line p-2">
+            <StoryStage
+              clock={clock}
+              episode={shown}
+              opts={mapOpts}
+              fontsReady={fontsReady}
+              guides={guides}
+              selectedId={selected?.kind === 'object' ? selected.id : null}
+              drag={drag}
+              label={`${episode.number} ${episode.title}`}
+            />
+          </div>
+          <StoryTransport
+            clock={clock}
+            disabled={!fontsReady || exporting !== null}
+            trailing={transportTrailing}
+          />
+          {mode !== 'narrow' ? <div className={`${panel} flex-none max-h-[12.5rem] overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2`}>{timeline}</div> : null}
+        </div>
+
+        <aside aria-label="Inspector" className={`${panel} min-h-0 min-w-0 flex flex-col overflow-hidden ${mode === 'narrow' ? 'flex-1' : ''}`}>
+          {panes.length > 1 ? (
+            <div className="flex-none px-2 pt-2">
+              <Segmented options={panes} value={shownPane} onChange={setPane} size="sm" fill label="What the inspector shows" />
+            </div>
+          ) : null}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-6">
+            {shownPane === 'list' ? listPane : shownPane === 'timeline' ? <div className="pt-3">{timeline}</div> : settingsPane}
+          </div>
         </aside>
       </div>
-    </div>
+      {keysSheet}
+    </section>
   );
 }

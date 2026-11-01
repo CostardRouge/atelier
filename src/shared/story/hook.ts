@@ -10,7 +10,8 @@
  */
 import { isVoice } from '../audio/voices';
 import type { SoundEvent } from '../audio/sound-event';
-import { clamp, E, PAL, rr, text, TYPO, type Ctx } from './motion';
+import { clamp, E, font, PAL, rr, text, TYPO, type Ctx } from './motion';
+import { obj } from './objects';
 
 export type HookEntry = 'type' | 'rise' | 'word' | 'fade';
 export type HookExit = 'fade' | 'erase' | 'fly' | 'cut';
@@ -123,7 +124,8 @@ export function hookSounds(hook: Hook): { at: number; kind: 'keys' | 'impact' | 
 }
 
 const PLACE_Y: Record<HookPlace, number> = { top: 560, center: 900, bottom: 1240 };
-const INK: Record<HookInk, string> = { paper: PAL.bg, ink: PAL.ink, accent: PAL.acc };
+// Read at draw time: the charte may change the palette (`objects.ts`).
+const INK = (ink: HookInk): string => ({ paper: PAL.bg, ink: PAL.ink, accent: PAL.acc })[ink];
 const SIZE = 92;
 const STICKER_SIZE = 64;
 const LINE_GAP = 40;
@@ -134,18 +136,19 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
   if (!hook.lines.length || t < tl.lines[0].start || t >= tl.end) return;
   const entry = hook.entry ?? HOOK_DEFAULTS.entry;
   const exit = hook.exit ?? HOOK_DEFAULTS.exit;
-  const ink = INK[hook.ink ?? HOOK_DEFAULTS.ink];
+  const ink = INK(hook.ink ?? HOOK_DEFAULTS.ink);
   const out = exit === 'cut' ? 0 : clamp((t - tl.leave) / (tl.end - tl.leave));
   const leaving = t >= tl.leave;
   // The scrim, under the words, as long as they are there.
   const scrim = clamp(hook.scrim ?? HOOK_DEFAULTS.scrim);
-  if (scrim > 0) {
-    c.save();
-    c.globalAlpha = scrim * E(clamp((t - tl.lines[0].start) / 0.4)) * (exit === 'fade' || exit === 'fly' ? 1 - out : 1);
-    c.fillStyle = ink === PAL.bg ? PAL.ink : PAL.bg;
-    c.fillRect(0, 0, 1080, 1920);
-    c.restore();
-  }
+  if (scrim > 0)
+    obj(c, 'hook.veil', [540, 960], t, () => {
+      c.save();
+      c.globalAlpha = scrim * E(clamp((t - tl.lines[0].start) / 0.4)) * (exit === 'fade' || exit === 'fly' ? 1 - out : 1);
+      c.fillStyle = ink === PAL.bg ? PAL.ink : PAL.bg;
+      c.fillRect(0, 0, 1080, 1920);
+      c.restore();
+    });
   const heights = tl.lines.map((l) => (l.sticker ? STICKER_SIZE + 44 : SIZE));
   const total = heights.reduce((a, b) => a + b, 0) + LINE_GAP * (tl.lines.length - 1);
   let y = PLACE_Y[hook.place ?? HOOK_DEFAULTS.place] - total / 2;
@@ -155,49 +158,52 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
     y += h + LINE_GAP;
     if (t < line.start) return;
     const p = clamp((t - line.start) / (line.done - line.start));
-    c.save();
-    if (leaving && exit === 'fade') c.globalAlpha *= 1 - E(out);
-    if (leaving && exit === 'fly') {
-      c.globalAlpha *= 1 - out;
-      c.translate(0, -E(out) * 120);
-    }
-    if (line.sticker) {
-      drawSticker(c, line.text, 540, base, p, i);
-    } else {
-      let shown = line.text;
-      const chars = [...line.text];
-      if (entry === 'type') shown = chars.slice(0, Math.floor(p * chars.length + 1e-6)).join('');
-      if (leaving && exit === 'erase') shown = chars.slice(0, Math.ceil(chars.length * (1 - out))).join('');
-      if (entry === 'word' && !leaving) {
-        const words = line.text.split(' ');
-        shown = words.slice(0, Math.max(1, Math.ceil(p * words.length))).join(' ');
+    // The typed lines are one object, the sticker another: each set, moved or styled alone.
+    obj(c, line.sticker ? 'hook.sticker' : 'hook.lines', [540, base - h * 0.4], t, () => {
+      c.save();
+      if (leaving && exit === 'fade') c.globalAlpha *= 1 - E(out);
+      if (leaving && exit === 'fly') {
+        c.globalAlpha *= 1 - out;
+        c.translate(0, -E(out) * 120);
       }
-      if (entry === 'rise' || entry === 'fade') {
-        c.globalAlpha *= E(p);
-        if (entry === 'rise') c.translate(0, (1 - E(p)) * 24);
+      if (line.sticker) {
+        drawSticker(c, line.text, 540, base, p, i);
+      } else {
+        let shown = line.text;
+        const chars = [...line.text];
+        if (entry === 'type') shown = chars.slice(0, Math.floor(p * chars.length + 1e-6)).join('');
+        if (leaving && exit === 'erase') shown = chars.slice(0, Math.ceil(chars.length * (1 - out))).join('');
+        if (entry === 'word' && !leaving) {
+          const words = line.text.split(' ');
+          shown = words.slice(0, Math.max(1, Math.ceil(p * words.length))).join(' ');
+        }
+        if (entry === 'rise' || entry === 'fade') {
+          c.globalAlpha *= E(p);
+          if (entry === 'rise') c.translate(0, (1 - E(p)) * 24);
+        }
+        const size = fitSize(c, line.text, 900, SIZE);
+        text(c, shown, 540, base, size, ink, { align: 'center' });
+        // The caret: while typing, and blinking on the last typed line until the next arrives.
+        const typing = entry === 'type' && (p < 1 || i === tl.lines.length - 1 || t < tl.lines[i + 1].start);
+        if (typing && !leaving && Math.floor(t * 2.2) % 2 === 0) {
+          c.font = font(size, TYPO.hw, TYPO.fam);
+          const full = c.measureText(line.text).width;
+          const at = 540 - full / 2 + c.measureText(shown).width + 6;
+          c.fillStyle = ink;
+          c.fillRect(at, base - size * 0.78, 5, size * 0.9);
+        }
       }
-      const size = fitSize(c, line.text, 900, SIZE);
-      text(c, shown, 540, base, size, ink, { align: 'center' });
-      // The caret: while typing, and blinking on the last typed line until the next arrives.
-      const typing = entry === 'type' && (p < 1 || i === tl.lines.length - 1 || t < tl.lines[i + 1].start);
-      if (typing && !leaving && Math.floor(t * 2.2) % 2 === 0) {
-        c.font = `${TYPO.hw} ${size}px ${TYPO.fam}`;
-        const full = c.measureText(line.text).width;
-        const at = 540 - full / 2 + c.measureText(shown).width + 6;
-        c.fillStyle = ink;
-        c.fillRect(at, base - size * 0.78, 5, size * 0.9);
-      }
-    }
-    c.restore();
+      c.restore();
+    });
   });
 }
 
 function fitSize(c: Ctx, s: string, max: number, size: number): number {
   let z = size;
-  c.font = `${TYPO.hw} ${z}px ${TYPO.fam}`;
+  c.font = font(z, TYPO.hw, TYPO.fam);
   while (c.measureText(s).width > max && z > 24) {
     z -= 4;
-    c.font = `${TYPO.hw} ${z}px ${TYPO.fam}`;
+    c.font = font(z, TYPO.hw, TYPO.fam);
   }
   return z;
 }
@@ -208,7 +214,7 @@ function drawSticker(c: Ctx, s: string, cx: number, base: number, p: number, see
   const k = p >= 1 ? 1 : 1 - Math.exp(-6 * p) * Math.cos(9 * p);
   const scale = Math.max(0, k);
   const size = fitSize(c, s, 760, STICKER_SIZE);
-  c.font = `${TYPO.hw} ${size}px ${TYPO.fam}`;
+  c.font = font(size, TYPO.hw, TYPO.fam);
   const w = c.measureText(s).width + 64;
   const h = size + 44;
   c.save();

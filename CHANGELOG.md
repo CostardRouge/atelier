@@ -48,6 +48,25 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   named on its first picture.
 - Storytelling: choose the wall's pictures in the same Winnow picker as Develop's *Add a day*, filtered by camera, type,
   extension, picks and stars — so screenshots and PNGs stay off the wall.
+- Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
+  HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
+  size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every
+  post of the series or this post alone. A timeline under the stage shows the scenes, the hook, the captions and the
+  HUD on one clock: click a bar to select it, drag a scene's end or a caption's edges to time them in this post. Click an
+  object on the stage to select it — it is outlined — and drag it to move it.
+- Storytelling: the series' charte — its six colours (or a whole palette: linen, night, kraft, white paper, sea), its
+  faces for titles, text, numbers and hand, and its weights — every block is drawn in it.
+- Storytelling: every part of every scene is an object of its own in the Studio — the wall's number, the map's route,
+  the counter's label, the HUD's progress line… — and every change in the Studio can be undone and redone (⌘Z / ⇧⌘Z).
+- Storytelling: the Studio is laid out like Flight Atlas — the stage stays in place while the inspector scrolls, on a
+  phone too — with Space to play and pause, and the safe areas of TikTok, Reels and Shorts (and a grid) over the
+  preview, never in the export. Twelve faces
+  ship with Atelier for it.
+- Storytelling: H (or ⌨ beside the guides) lists every key and gesture of the Studio. A finger picks an object on a
+  phone's stage, Forget asks before it drops the script, and an open script is edited in one tab at a time — another
+  tab shows it read only, with *Edit here*. If the browser refuses to keep the script, the tool says so.
+- Storytelling: an agent connected on Sources can read the open post, move its playhead, select an object, set its
+  style for the series or the post, undo, and look at any frame.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
