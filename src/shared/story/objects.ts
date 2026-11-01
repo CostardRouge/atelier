@@ -183,6 +183,8 @@ export interface DrawnObject {
   key: string;
   slot: string;
   text: boolean;
+  /** The first words it drew — what a font picker writes its rows in. */
+  sample?: string;
 }
 
 let SLOT = '';
@@ -270,9 +272,12 @@ export function obj(
   }
 }
 
-/** Mark the objects around as holding text (the inspector then offers typography). */
-export function markText(): void {
-  for (const d of STACK) d.record.text = true;
+/** Mark the objects around as holding text (the inspector then offers typography), keeping the first words drawn. */
+export function markText(words?: string): void {
+  for (const d of STACK) {
+    d.record.text = true;
+    if (words && !d.record.sample && words.trim()) d.record.sample = words.trim();
+  }
 }
 
 function withAlpha(hex: string, a: number): string {

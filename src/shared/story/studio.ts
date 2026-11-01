@@ -16,6 +16,8 @@ export interface ObjectTrack {
   /** Its slot's key (`compose.ts`), '' for what sits over every slot. */
   slot: string;
   text: boolean;
+  /** The first words it drew, when it draws text. */
+  sample?: string;
   spans: [number, number][];
 }
 
@@ -32,6 +34,7 @@ export function objectTracks(ep: Episode, opts: ComposeOptions = {}, step = 0.1)
       let tr = tracks.get(d.id);
       if (!tr) tracks.set(d.id, (tr = { id: d.id, key: d.key, slot: d.slot, text: false, spans: [] }));
       tr.text ||= d.text;
+      tr.sample ??= d.sample;
       const last = tr.spans[tr.spans.length - 1];
       if (last && t - last[1] <= step * 1.5) last[1] = t;
       else tr.spans.push([t, t]);

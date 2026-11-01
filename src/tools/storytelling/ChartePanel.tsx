@@ -1,4 +1,5 @@
-import { FONT_ROLES, ROLE_LABEL, STORY_FONTS, type StoryFontId } from '../../shared/story/fonts';
+import { FONT_ROLES, ROLE_LABEL, storyFaceChoices, type FontRole, type StoryFontId } from '../../shared/story/fonts';
+import FontPicker from '../../shared/ui/FontPicker';
 import { PALETTE_KEYS, PALETTE_LABEL, type PaletteKey } from '../../shared/story/objects';
 import { withCharte } from '../../shared/story/studio-edit';
 import type { StoryScript } from '../../shared/story/story-script';
@@ -17,7 +18,7 @@ const PRESETS: readonly { id: string; label: string; palette: Record<PaletteKey,
   { id: 'sea', label: 'Sea', palette: { bg: '#e9f0f1', ink: '#10262e', acc: '#0f7c8c', dim: '#86999d', soft: '#d6e2e4', deep: '#c6d6d9' } },
 ];
 
-const FACES: readonly SelectOption<StoryFontId>[] = Object.entries(STORY_FONTS).map(([id, f]) => ({ id: id as StoryFontId, label: f.label }));
+const FACES = storyFaceChoices();
 const WEIGHTS: readonly SelectOption<string>[] = [100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => ({ id: String(w), label: String(w) }));
 const DEFAULT_FACE: Record<(typeof FONT_ROLES)[number], StoryFontId> = { title: 'geist', text: 'geist', num: 'mono', hand: 'caveat' };
 
@@ -27,7 +28,16 @@ const DEFAULT_FACE: Record<(typeof FONT_ROLES)[number], StoryFontId> = { title: 
  * text, numbers, hand) and its two weights. A palette is one click from a
  * preset and each colour can then be set alone.
  */
-export default function ChartePanel({ script, onScript }: { script: StoryScript | null; onScript: (s: StoryScript) => void }) {
+interface ChartePanelProps {
+  script: StoryScript | null;
+  onScript: (s: StoryScript) => void;
+  /** The words each role's picker writes its rows in — the post's own. */
+  samples?: Partial<Record<FontRole, string>>;
+  /** A charte being tried while a face list is browsed (the stage draws it), null when it closes. */
+  onPreview?: (s: StoryScript | null) => void;
+}
+
+export default function ChartePanel({ script, onScript, samples, onPreview }: ChartePanelProps) {
   if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the charte is kept in it.</p>;
   const charte = script.look?.charte ?? {};
   const palette = { ...LIN, ...(charte.palette ?? {}) };
@@ -68,11 +78,18 @@ export default function ChartePanel({ script, onScript }: { script: StoryScript 
       <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Faces</p>
       {FONT_ROLES.map((role) => (
         <FieldRow key={role} label={ROLE_LABEL[role]}>
-          <SelectField
+          <FontPicker
             label={`${ROLE_LABEL[role]} face`}
             value={charte.fonts?.[role] ?? DEFAULT_FACE[role]}
             options={FACES}
-            onChange={(id) => onScript(withCharte(script, { fonts: { [role]: id === DEFAULT_FACE[role] ? undefined : id } }))}
+            sample={samples?.[role]}
+            weight={role === 'title' ? (charte.titleWeight ?? 600) : role === 'text' ? (charte.lightWeight ?? 300) : 600}
+            onChange={(id) => onScript(withCharte(script, { fonts: { [role]: id === DEFAULT_FACE[role] ? undefined : (id as StoryFontId) } }))}
+            onPreview={
+              onPreview
+                ? (id) => onPreview(id === null ? null : withCharte(script, { fonts: { [role]: id === DEFAULT_FACE[role] ? undefined : (id as StoryFontId) } }))
+                : undefined
+            }
           />
         </FieldRow>
       ))}

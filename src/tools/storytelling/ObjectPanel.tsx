@@ -1,5 +1,7 @@
 import { PAL } from '../../shared/story/charte';
-import { FONT_ROLES, ROLE_LABEL, STORY_FONTS } from '../../shared/story/fonts';
+import { storyFaceChoices, storyRoleChoices } from '../../shared/story/fonts';
+import FontPicker from '../../shared/ui/FontPicker';
+import type { FontChoice } from '../../shared/ui/font-picker';
 import { PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
 import { styleIn, withSceneTiming, withStyle, withoutStyle, type StyleScope } from '../../shared/story/studio-edit';
 import type { StoryScript } from '../../shared/story/story-script';
@@ -12,11 +14,9 @@ const SCOPES = [
   { id: 'post' as const, label: 'This post', title: 'Set it for this post alone, over the series' },
 ];
 
-const FONT_OPTIONS: readonly SelectOption<string>[] = [
-  { id: '', label: 'As drawn' },
-  ...FONT_ROLES.map((r) => ({ id: `@${r}`, label: `Charte · ${ROLE_LABEL[r]}` })),
-  ...Object.entries(STORY_FONTS).map(([id, f]) => ({ id, label: f.label })),
-];
+/** « As drawn »: the face the block asks for — no setting of its own. */
+const AS_DRAWN: FontChoice = { id: '', label: 'As drawn', family: 'Geist, "Helvetica Neue", Arial, sans-serif', weights: [300, 400, 600], group: 'The block’s own', note: 'block', system: true };
+const FACES = storyFaceChoices();
 const WEIGHTS: readonly SelectOption<string>[] = [{ id: '', label: 'As drawn' }, ...[300, 400, 500, 600, 700, 800, 900].map((w) => ({ id: String(w), label: String(w) }))];
 const CASES: readonly SelectOption<string>[] = [
   { id: '', label: 'As written' },
@@ -55,6 +55,10 @@ interface ObjectPanelProps {
   /** Where the settings are written: every post of the series, or this post alone (shared with a drag on the stage). */
   scope: StyleScope;
   onScope: (scope: StyleScope) => void;
+  /** The object's own words, which its font picker writes its rows in. */
+  sample?: string;
+  /** A style being tried while a face list is browsed (the stage draws it), null when it closes. */
+  onPreview?: (s: StoryScript | null) => void;
 }
 
 /**
@@ -63,7 +67,7 @@ interface ObjectPanelProps {
  * for every post of the series or this post alone, the post's winning. A
  * scene also takes its length and its caption's window, this post's own.
  */
-export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope }: ObjectPanelProps) {
+export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope, sample, onPreview }: ObjectPanelProps) {
   if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the settings are kept in it.</p>;
   const series = styleIn(script, postId, objKey, 'series');
   const own = styleIn(script, postId, objKey, 'post');
@@ -108,7 +112,15 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
         <>
           <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Text</p>
           <FieldRow label="Font">
-            <SelectField label="Font" value={shown.font ?? ''} options={FONT_OPTIONS} onChange={(id) => set({ font: id || undefined })} />
+            <FontPicker
+              label="Font"
+              value={shown.font ?? ''}
+              options={[AS_DRAWN, ...storyRoleChoices(script.look?.charte?.fonts), ...FACES]}
+              sample={sample}
+              weight={shown.weight ?? 600}
+              onChange={(id) => set({ font: id || undefined })}
+              onPreview={onPreview ? (id) => onPreview(id === null ? null : withStyle(script, postId, objKey, { font: id || undefined }, scope)) : undefined}
+            />
           </FieldRow>
           <FieldRow label="Weight">
             <SelectField label="Weight" value={shown.weight ? String(shown.weight) : ''} options={WEIGHTS} onChange={(id) => set({ weight: id ? Number(id) : undefined })} />

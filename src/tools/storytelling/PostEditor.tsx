@@ -593,7 +593,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         return (
           <>
           <InspectorSection id="story-charte" title="Charte" foldable={false} info="The series' colours, faces and weights — every post is drawn in them, and an object's colour or font can name one. Kept in your script.">
-            <ChartePanel script={script} onScript={onScript} />
+            <ChartePanel script={script} onScript={onScript} samples={{ title: episode.title, text: episode.title, num: '98 412 · 2024', hand: episode.title }} onPreview={setDraft} />
           </InspectorSection>
           <InspectorSection id="story-look" title="Look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
             <LookPanel postId={postId} script={script} onScript={onScript} />
@@ -834,6 +834,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           scope={scope}
           onScope={setScope}
           text={track?.text ?? false}
+          sample={track?.sample}
+          onPreview={setDraft}
           scene={
             scene && scene.index !== null && block
               ? { index: scene.index, len: block.len, cap: block.cap ? { a: block.cap.a, b: block.cap.b } : null, set: { len: words?.len, cap: words?.cap } }
