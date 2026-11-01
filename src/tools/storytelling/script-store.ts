@@ -24,13 +24,31 @@ export function storeScript(script: StoryScript | null): void {
   write(script);
 }
 
+/** Told after every write: whether the browser kept it — a full or blocked storage keeps the script in this tab only. */
+type StoredListener = (ok: boolean) => void;
+const listeners = new Set<StoredListener>();
+export function onScriptStored(fn: StoredListener): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
 function write(script: StoryScript | null): void {
+  let ok = true;
   try {
     if (script) localStorage.setItem(KEY, JSON.stringify(script));
     else localStorage.removeItem(KEY);
   } catch {
-    // A full or blocked storage keeps the script for this tab only.
+    ok = false;
   }
+  for (const fn of listeners) fn(ok);
+}
+
+/** Drop the write still waiting — another tab took the script, and what this one held never reaches the store. */
+export function discardPendingScript(): void {
+  window.clearTimeout(pending.timer);
+  pending.script = undefined;
 }
 
 /**

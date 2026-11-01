@@ -11,13 +11,14 @@ import '@fontsource/zilla-slab/600.css';
 import '@fontsource/zilla-slab/700.css';
 import '@fontsource/archivo-black/400.css';
 import '@fontsource/special-elite/400.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import type { StoryScript } from '../../shared/story/story-script';
 import { STORY_FONTS } from '../../shared/story/fonts';
 import PostEditor, { type PostSound } from './PostEditor';
 import { POSTS } from './posts';
-import { flushScript, loadStoredScript, storeScriptSoon } from './script-store';
+import { useDocumentLock, useInertRef } from '../../shared/sources/use-document-lock';
+import { discardPendingScript, flushScript, loadStoredScript, onScriptStored, storeScriptSoon } from './script-store';
 import StoryGallery from './StoryGallery';
 
 /**
@@ -41,12 +42,46 @@ export default function StorytellingTool() {
   const [fontsReady, setFontsReady] = useState(false);
   const [sounds, setSounds] = useState<Record<string, PostSound>>({});
 
+  // One editor of the script across this browser's tabs (`use-document-lock.tsx`, as a trip, a project or a
+  // roll): another tab shows it read only, refreshed when this one writes, with *Edit here*. A reload is not an
+  // edit: the post's editor is mounted again (`generation`), so its history starts from the copy shown.
+  const [generation, setGeneration] = useState(0);
+  const lock = useDocumentLock<StoryScript>({
+    kind: 'script',
+    id: script ? 'script' : null,
+    flush: async () => flushScript(),
+    discard: discardPendingScript,
+    load: async () => loadStoredScript(),
+    onReload: (doc) => {
+      setScriptState(doc);
+      setGeneration((g) => g + 1);
+    },
+  });
+  const lockRef = useRef(lock);
+  lockRef.current = lock;
+  const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
+
   const onScript = useCallback((next: StoryScript | null) => {
+    // A read-only tab writes nothing (its editor is inert; this is the one write path, guarded anyway).
+    if (!lockRef.current.canWrite()) return;
     setScriptState(next);
     // Loading or forgetting a script is written at once; an edit, once the edits pause (`script-store.ts`).
     storeScriptSoon(next);
   }, []);
   useEffect(() => () => flushScript(), []);
+
+  // Whether the browser keeps the script: when it refuses (storage full or blocked), say so — the work lives in
+  // this tab only, and Save script is how to keep it (Studio's « Storage unavailable »). A kept write tells the
+  // read-only tabs to show it.
+  const [unstored, setUnstored] = useState(false);
+  useEffect(
+    () =>
+      onScriptStored((ok) => {
+        setUnstored(!ok);
+        if (ok) lockRef.current.saved({ id: 'script', updatedAt: Date.now() });
+      }),
+    [],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -68,9 +103,9 @@ export default function StorytellingTool() {
 
   const open = useCallback((id: string) => navigate(`${BASE}/${encodeURIComponent(id)}`), []);
 
-  return skeleton ? (
+  const view = skeleton ? (
     <PostEditor
-      key={skeleton.id}
+      key={`${skeleton.id}:${generation}`}
       postId={skeleton.id}
       script={script}
       onScript={onScript}
@@ -82,5 +117,20 @@ export default function StorytellingTool() {
     />
   ) : (
     <StoryGallery script={script} onScript={onScript} fontsReady={fontsReady} onOpen={open} />
+  );
+  return (
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-3">
+      {lock.band}
+      {unstored ? (
+        <p role="alert" className="m-0 rounded-paper border border-danger/40 bg-paper-2 px-3 py-2 text-xs text-danger leading-snug">
+          This browser refused to keep the script (its storage is full or blocked): what you change lives in this tab
+          only. Save script to keep it.
+        </p>
+      ) : null}
+      {/* Inert while another tab edits the script: nothing here can write it. */}
+      <div ref={editorRef} className="contents">
+        {view}
+      </div>
+    </div>
   );
 }
