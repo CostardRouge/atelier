@@ -2999,8 +2999,11 @@ it and may grow blocks of its own.
   Play draws the safe area of TikTok, Instagram Reels or YouTube Shorts — where
   their buttons and captions cover the video — and a grid over the preview,
   never into the export (remembered on this device). Narrower, the list moves
-  into the inspector as a tab; on a phone the stage keeps the top of the
-  screen, the inspector scrolls under it, and the timeline is its third tab.
+  into the inspector as a tab. On a phone the Studio is the suite's other
+  editors': one header line (the post, ↶ ↷, and the series' panels behind ⋯),
+  the stage over the screen, and the bottom bar — *Objects* opens the list as
+  a sheet, the selected object's settings and the *Timeline* open as drawers
+  that leave the picture in sight.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and

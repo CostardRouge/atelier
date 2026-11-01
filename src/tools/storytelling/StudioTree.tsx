@@ -9,6 +9,16 @@ export type StudioSelection =
 
 export type StudioPanel = 'charte' | 'script' | 'sources' | 'hook' | 'sound' | 'export';
 
+/** How each panel is named: in the list, a phone's bottom bar, a drawer's title. */
+export const PANEL_LABEL: Record<StudioPanel, string> = {
+  charte: 'Charte & look',
+  script: 'Script',
+  sources: 'Sources',
+  hook: 'Hook',
+  sound: 'Sound & effects',
+  export: 'Export & archive',
+};
+
 const SERIES_PANELS: readonly [StudioPanel, string][] = [
   ['charte', 'Charte & look'],
   ['script', 'Script'],

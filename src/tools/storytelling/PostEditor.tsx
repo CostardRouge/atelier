@@ -40,7 +40,12 @@ import { useSettled } from './use-settled';
 import { useLocalPref } from '../../shared/ui/local-pref';
 import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import Segmented from '../../shared/ui/Segmented';
-import StudioTree, { type StudioPanel, type StudioSelection } from './StudioTree';
+import PanelHost from '../../shared/ui/PanelHost';
+import PhoneHeader from '../../shared/ui/PhoneHeader';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import StudioTree, { PANEL_LABEL, type StudioPanel, type StudioSelection } from './StudioTree';
 import StudioTimeline from './StudioTimeline';
 import { styleIn, withSceneTiming, withStyle, type StyleScope } from '../../shared/story/studio-edit';
 import { objectLabel, objectTracks, sceneSpans, type ObjectTrack } from '../../shared/story/studio';
@@ -213,6 +218,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const [scope, setScope] = useState<StyleScope>('series');
   // What the inspector shows where the list (and on a phone the timeline) has no column of its own.
   const [pane, setPane] = useState<Pane>('settings');
+  // On a phone (the shell's compact mode) the inspector is the suite's: its tabs are the shell's bottom bar and
+  // each opens over the stage — the list as a sheet, the settings and the timeline as drawers that leave the
+  // picture in sight (Develop's rule: what is judged on the picture never goes under a wash).
+  const compact = useIsCompact();
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const select = useCallback((s: StudioSelection) => {
     setSelected(s);
     setPane('settings');
@@ -266,6 +276,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
 
   // --- the stage: a press picks, a drag moves the selected object (written on release) ---
   const dragState = useRef<{ key: string; dx: number; dy: number } | null>(null);
+  const compactRef = useRef(compact);
+  compactRef.current = compact;
   const studio = useRef({ script, postId, scope, draft });
   studio.current = { script, postId, scope, draft };
   const drag = useMemo<StageDrag>(
@@ -273,6 +285,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       onPick: (hit) => {
         setSelected({ kind: 'object', id: hit.id, key: hit.key, slot: hit.slot });
         setPane('settings');
+        if (compactRef.current) setInspectorOpen(true);
         const { script: sc, postId: pid, scope: sp } = studio.current;
         if (!sc) return false;
         const style = sp === 'series' ? styleIn(sc, pid, hit.key, 'series') : { ...styleIn(sc, pid, hit.key, 'series'), ...styleIn(sc, pid, hit.key, 'post') };
@@ -714,18 +727,90 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     ...(mode === 'narrow' ? [{ id: 'timeline' as const, label: 'Timeline' }] : []),
   ];
   const shownPane: Pane = panes.some((p) => p.id === pane) ? pane : 'settings';
+  const settingsLabel = selected?.kind === 'object' ? objectLabel(selected.key) : (PANEL_LABEL[selected?.kind === 'panel' ? selected.id : 'charte'] ?? 'Settings');
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        compact
+          ? {
+              sections: [
+                { id: 'list', label: 'Objects' },
+                { id: 'settings', label: settingsLabel },
+                { id: 'timeline', label: 'Timeline' },
+              ],
+              // Marked only while its panel is UP (`section-rail.tsx`).
+              active: inspectorOpen ? pane : null,
+              label: 'Post inspector',
+              onSelect: (id: string) => {
+                setPane(id as Pane);
+                setInspectorOpen(true);
+              },
+            }
+          : null,
+      [compact, inspectorOpen, pane, settingsLabel],
+    ),
+  );
+  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false, backdrop: 'frame' as const } : null), [compact]));
+  const openPanel = (id: StudioPanel) => {
+    setSelected({ kind: 'panel', id });
+    setPane('settings');
+    setInspectorOpen(true);
+  };
   const panel = 'border border-line rounded-paper-lg bg-surface shadow-paper-soft';
+
+  const postSelect = (
+    <SelectField label="Post" value={skeleton.id} options={postOptions} onChange={choose} />
+  );
+
+  if (compact) {
+    const body = pane === 'list' ? listPane : pane === 'timeline' ? <div className="pt-2">{timeline}</div> : settingsPane;
+    return (
+      <section ref={sectionRef} className="@container flex-1 min-h-0 min-w-0 flex flex-col gap-2 pb-3" aria-label="Storytelling post">
+        <PhoneHeader
+          floating={false}
+          back={{ label: 'Back to the map of subjects', onClick: onBack }}
+          title={<span className="block min-w-0 w-full">{postSelect}</span>}
+          trailing={history.control}
+          menu={[
+            { id: 'charte', label: 'Charte & look', onSelect: () => openPanel('charte') },
+            { id: 'script', label: 'Script', onSelect: () => openPanel('script') },
+            { id: 'sources', label: 'Sources', onSelect: () => openPanel('sources') },
+            { id: 'hook', label: 'Hook', rule: true, onSelect: () => openPanel('hook') },
+            { id: 'sound', label: 'Sound & effects', onSelect: () => openPanel('sound') },
+            { id: 'export', label: 'Export & archive', onSelect: () => openPanel('export') },
+          ]}
+        />
+        <div className="relative flex-1 min-h-[10rem] flex rounded-paper-lg bg-frame border border-line p-1.5">
+          <StoryStage
+            clock={clock}
+            episode={shown}
+            opts={mapOpts}
+            fontsReady={fontsReady}
+            guides={guides}
+            selectedId={selected?.kind === 'object' ? selected.id : null}
+            drag={drag}
+            label={`${episode.number} ${episode.title}`}
+          />
+        </div>
+        <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={<GuidesMenu guides={guides} onGuides={setGuides} />} />
+        <PanelHost
+          asSheet
+          compactAs={pane === 'list' ? 'sheet' : 'drawer'}
+          open={inspectorOpen}
+          onClose={() => setInspectorOpen(false)}
+          title={pane === 'list' ? 'Objects' : pane === 'timeline' ? 'Timeline' : settingsLabel}
+        >
+          <div className="px-1 pb-4 overflow-x-hidden">{body}</div>
+        </PanelHost>
+      </section>
+    );
+  }
 
   return (
     <section ref={sectionRef} className="@container flex-1 min-h-0 min-w-0 flex flex-col gap-3" aria-label="Storytelling post">
       <PageBar back={{ label: 'Map', onClick: onBack, title: 'Back to the map of subjects', iconOnly: mode === 'narrow' }} trailing={history.control}>
         <span className="min-w-0 flex-1 max-w-[24rem]">
-          <SelectField
-            label="Post"
-            value={skeleton.id}
-            options={postOptions}
-            onChange={choose}
-          />
+          {postSelect}
         </span>
       </PageBar>
       <div
