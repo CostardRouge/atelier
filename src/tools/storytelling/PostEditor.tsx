@@ -17,6 +17,7 @@ import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
 import ChartePanel from './ChartePanel';
 import useHistory from '../../shared/history/use-history';
+import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
@@ -293,6 +294,33 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     }),
     [onScript],
   );
+
+  // The keyboard on the selected object: arrows nudge it (⇧ ten pixels), Escape lets it go — unless a field,
+  // a slider or a select has the key (`transport-keys.ts`), or a control already took the press.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = describeKeyTarget(e.target);
+      if (targetOwnsTyping(target) || target?.role === 'slider') return;
+      const sel = selectedRef.current;
+      if (e.key === 'Escape' && sel?.kind === 'object') {
+        setSelected({ kind: 'panel', id: 'charte' });
+        e.preventDefault();
+        return;
+      }
+      const step = e.shiftKey ? 10 : 1;
+      const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      const { script: sc, postId: pid, scope: sp } = studio.current;
+      if (!move || sel?.kind !== 'object' || !sc) return;
+      e.preventDefault();
+      const was = sp === 'series' ? styleIn(sc, pid, sel.key, 'series') : { ...styleIn(sc, pid, sel.key, 'series'), ...styleIn(sc, pid, sel.key, 'post') };
+      onScript(withStyle(sc, pid, sel.key, { dx: (was.dx ?? 0) + move[0] || undefined, dy: (was.dy ?? 0) + move[1] || undefined }, sp));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onScript]);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   // The list's thumbnails, painted when the Continuity panel shows them.
   const showCovers = selected?.kind === 'panel' && selected.id === 'export';
@@ -642,7 +670,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     const block = scene && scene.index !== null ? episode.blocks[scene.index] : null;
     const words = scene && scene.index !== null ? script?.posts[postId]?.blocks?.[scene.index] : undefined;
     return (
-      <InspectorSection id="story-object" title="Object" foldable={false} info="Click an object on the stage, in the list or on the timeline. Its settings are kept in your script — for every post of the series, or this post alone.">
+      <InspectorSection
+        id="story-object"
+        title={objectLabel(sel.key)}
+        foldable={false}
+        info="Click an object on the stage, in the list or on the timeline; arrows nudge it (⇧ ten pixels), Escape lets it go. Its settings are kept in your script — for every post of the series, or this post alone."
+      >
         <ObjectPanel
           script={script}
           onScript={onScript}

@@ -2993,7 +2993,8 @@ it and may grow blocks of its own.
   change its length, a caption's edges to time its window — this post's own.
   Every change is undone with ↶ beside the post's name or ⌘Z / Ctrl+Z, and
   redone with ↷ or ⇧⌘Z; the edits of one object within a moment are one step.
-  **Space** plays and pauses (unless a text field has the key); ← and → on
+  With an object selected, the arrows nudge it a pixel (ten with ⇧) and Escape
+  lets it go. **Space** plays and pauses (unless a text field has the key); ← and → on
   the scrubber step a tenth of a second (a second with ⇧). *Guides* beside
   Play draws the safe area of TikTok, Instagram Reels or YouTube Shorts — where
   their buttons and captions cover the video — and a grid over the preview,

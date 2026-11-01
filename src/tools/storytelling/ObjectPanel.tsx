@@ -2,7 +2,6 @@ import { PAL } from '../../shared/story/charte';
 import { FONT_ROLES, ROLE_LABEL, STORY_FONTS } from '../../shared/story/fonts';
 import { PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
 import { styleIn, withSceneTiming, withStyle, withoutStyle, type StyleScope } from '../../shared/story/studio-edit';
-import { objectLabel } from '../../shared/story/studio';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import { FieldRow, Readout, SelectField, SliderRow, swatchClass, SwitchRow, type SelectOption } from '../../shared/ui/Inspector';
@@ -75,10 +74,6 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-2">
-        <span className="flex-1 min-w-0 truncate text-sm text-ink">{objectLabel(objKey)}</span>
-        <span className="font-mono text-3xs text-muted truncate">{objKey}</span>
-      </div>
       <Segmented options={SCOPES} value={scope} onChange={setScope} size="sm" fill label="Where these settings apply" />
       {scope === 'post' && Object.keys(series).length ? <Readout muted>The series&apos; settings show through; what you set here wins in this post.</Readout> : null}
 
