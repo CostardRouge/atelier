@@ -11,6 +11,7 @@
  */
 import { readMapGround } from './map-ground';
 import { readStoryCamera } from './story-camera';
+import { readRoutePace } from './route-pace';
 import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
@@ -491,7 +492,9 @@ function readLook(raw: unknown): StoryLook | undefined {
   const grain = level(raw.grain, 0.2);
   const map = readMapGround(raw.map);
   const camera = readStoryCamera(raw.camera);
+  const pace = readRoutePace(raw.pace);
   const look: StoryLook = {
+    ...(pace ? { pace } : {}),
     ...(map ? { map } : {}),
     ...(camera ? { camera } : {}),
     ...(wall ? { wall } : {}),

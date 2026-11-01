@@ -28,6 +28,8 @@ import { CAPTION, HUD } from './charte';
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
   stops?: readonly Stop[] | null;
+  /** When each road point was recorded (`TripMap.times`, aligned with `road`) — what the pace by days reads. */
+  times?: readonly number[] | null;
   /** Which stops carry their name (`map-names.ts`); all of them when absent. */
   named?: NamedWhich;
   /** The road the route follows, from a trip (`trip-map.ts`); without it the stops are joined in a line. */
@@ -107,7 +109,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   applyCharte(ep.look?.charte);
   setStyles(ep.look?.objects, ep.objects);
   beginFrame();
-  setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all');
+  setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all', { times: opts.times ?? null, pace: ep.look?.pace ?? null });
   setWall(opts.wall ?? null);
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);

@@ -12,6 +12,7 @@ import type { WallGrid, WallGroup } from './wall-grid';
 import type { Charte, StyleBook } from './objects';
 import type { MapGround } from './map-ground';
 import type { StoryCamera } from './story-camera';
+import type { RoutePace } from './route-pace';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -28,6 +29,8 @@ export interface StoryLook {
   map?: MapGround;
   /** How the map's camera follows the route: as before, or Trips' camera and its presets (`story-camera.ts`). */
   camera?: StoryCamera;
+  /** How the route is drawn over its scene: by distance or by days, pauses at the stops, a head (`route-pace.ts`). */
+  pace?: RoutePace;
 }
 
 export interface BlockSpec {

@@ -7,6 +7,7 @@
 import type { WallRules } from './wall-pick';
 import { MAP_GROUND_DEFAULTS, type MapGround } from './map-ground';
 import type { StoryCamera } from './story-camera';
+import { ROUTE_PACE_DEFAULTS, type RoutePace } from './route-pace';
 import type { TripDoc } from '../roadtrip/trip-types';
 import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
 import { chosenStages, stageLabel, type MapChoice } from './trip-map';
@@ -210,7 +211,7 @@ export function withPostHooks(
  */
 export function withLook(
   script: StoryScript,
-  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null } | null,
+  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null; pace?: Partial<RoutePace> } | null,
 ): StoryScript {
   if (!change) {
     // Only what the Look section sets: the charte and the objects have their own resets.
@@ -220,6 +221,7 @@ export function withLook(
     delete kept.grain;
     delete kept.map;
     delete kept.camera;
+    delete kept.pace;
     const rest: StoryScript = { ...script, look: kept };
     if (!Object.keys(kept).length) delete rest.look;
     return rest;
@@ -233,6 +235,12 @@ export function withLook(
     // « As before » is the absence of a camera: a series that never chose keeps the old path.
     if (change.camera === null || (change.camera.preset ?? 'before') === 'before') delete look.camera;
     else look.camera = change.camera.preset === 'own' ? change.camera : { preset: change.camera.preset };
+  }
+  if (change.pace) {
+    const pace: RoutePace = { ...(was.pace ?? {}), ...change.pace };
+    for (const k of Object.keys(pace) as (keyof RoutePace)[]) if (pace[k] === undefined || pace[k] === ROUTE_PACE_DEFAULTS[k]) delete pace[k];
+    if (Object.keys(pace).length) look.pace = pace;
+    else delete look.pace;
   }
   if (change.map) {
     // A field set back to its default is dropped, so a script keeps only what was chosen.

@@ -1,6 +1,7 @@
 import { withLook } from '../../shared/story/sources';
 import { cameraValues, STORY_CAMERA_LIMITS, STORY_CAMERA_PRESETS, type StoryCamera, type StoryCameraPreset } from '../../shared/story/story-camera';
 import type { StoryScript } from '../../shared/story/story-script';
+import { ROUTE_PACE_DEFAULTS, type RoutePace } from '../../shared/story/route-pace';
 import Segmented from '../../shared/ui/Segmented';
 import { SelectField, SwitchRow } from '../../shared/ui/Inspector';
 
@@ -23,6 +24,7 @@ export default function MapCameraSection({ script, onScript }: { script: StorySc
   const cam: StoryCamera = script.look?.camera ?? { preset: 'before' };
   const preset = cam.preset ?? 'before';
   const v = cameraValues(cam);
+  const pace = { ...ROUTE_PACE_DEFAULTS, ...(script.look?.pace ?? {}) };
   const write = (camera: StoryCamera | null) => onScript(withLook(script, { camera }));
   // A step moved: the series' own camera, from the values on screen.
   const tune = (patch: Partial<StoryCamera>) => v && write({ ...v, ...patch, preset: 'own' });
@@ -67,6 +69,49 @@ export default function MapCameraSection({ script, onScript }: { script: StorySc
       ) : (
         <p className="m-0 text-2xs text-muted leading-snug">The camera of the posts already made: close on the head of the route, then the whole map.</p>
       )}
+      <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">The route</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-ink-soft w-16">Pace</span>
+        <SelectField<string>
+          label="What the route's drawing follows: the distance or the days lived"
+          value={String(pace.days)}
+          options={PACES.map((p) => ({ id: String(p.v), label: p.label }))}
+          onChange={(v) => onScript(withLook(script, { pace: { days: Number(v) } }))}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-ink-soft w-16">Stops</span>
+        <SelectField<string>
+          label="How long the route pauses at each stop"
+          value={String(pace.dwell)}
+          options={DWELLS.map((p) => ({ id: String(p.v), label: p.label }))}
+          onChange={(v) => onScript(withLook(script, { pace: { dwell: Number(v) } }))}
+        />
+      </div>
+      <Segmented<NonNullable<RoutePace['head']>>
+        options={[
+          { id: 'none', label: 'No head' },
+          { id: 'dot', label: 'Dot' },
+          { id: 'arrow', label: 'Arrow', title: 'An arrow along the road, its direction read over a stretch of it' },
+        ]}
+        value={pace.head}
+        onChange={(head) => onScript(withLook(script, { pace: { head } }))}
+        size="sm"
+        fill
+        label="What marks the tip of the route"
+      />
+      {pace.days > 0 ? <p className="m-0 text-2xs text-muted leading-snug">By the days: a week in one town takes its share of the drawing; a map with no recorded road is drawn by distance.</p> : null}
     </div>
   );
 }
+
+const PACES = [
+  { v: 0, label: 'The distance' },
+  { v: 0.5, label: 'Half distance, half days' },
+  { v: 1, label: 'The days lived' },
+];
+const DWELLS = [
+  { v: 0, label: 'No pause' },
+  { v: 0.15, label: 'A short pause' },
+  { v: 0.3, label: 'A long pause' },
+];

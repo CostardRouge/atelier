@@ -3,6 +3,7 @@
 // finer than the page's 55-point polygon — which matters once the camera zooms ×2.3.
 import coast from "./australia.json";
 import type { NamedWhich } from "./map-names";
+import { paceTable, pacedAt, type RoutePace } from "./route-pace";
 
 /**
  * A stop on the trip: what it says (its first line), longitude, latitude, its
@@ -52,11 +53,51 @@ let lastRoad: RoadPoints | null = null;
  * the towns named along it, each reached where the road passes closest to it
  * — searched forward, so a road that passes a town twice names it in order.
  */
-export function setMap(stops: readonly Stop[] | null | undefined, road: RoadPoints | null | undefined, named: NamedWhich = 'all'): void {
+export function setMap(
+  stops: readonly Stop[] | null | undefined,
+  road: RoadPoints | null | undefined,
+  named: NamedWhich = 'all',
+  extra: { times?: readonly number[] | null; pace?: RoutePace | null } = {},
+): void {
   NAMED = named;
-  const next = stops && stops.length >= 2 ? stops.slice() : PLACEHOLDER_STOPS;
+  const given = stops && stops.length >= 2 ? stops : null;
   const line = road && road.length >= 2 ? road : null;
-  if (next === STOPS && line === lastRoad && ROUTE.length) return;
+  const times = line && extra.times && extra.times.length === line.length ? extra.times : null;
+  const paceKey = JSON.stringify(extra.pace ?? null);
+  // The same stops and road as the frame before (compared as GIVEN: a copy is new every time, and the
+  // route, its reaches and the camera's track — keyed on ROUTE — were all rebuilt for every frame).
+  if (given === lastStops && line === lastRoad && ROUTE.length) {
+    if (paceKey !== lastPaceKey || times !== lastTimes) setPaceTable(times, extra.pace ?? null, paceKey);
+    return;
+  }
+  lastStops = given;
+  setRoute(given ? given.slice() : PLACEHOLDER_STOPS, line);
+  setPaceTable(times, extra.pace ?? null, paceKey);
+}
+
+let lastStops: readonly Stop[] | null = null;
+
+let lastPaceKey = '';
+let lastTimes: readonly number[] | null = null;
+let PACE: Float64Array | null = null;
+/** Bumped whenever the pace changes — what a camera baked along the paced route is keyed on. */
+export let PACE_VERSION = 0;
+/** What marks the tip of the route as it is drawn (`route-pace.ts`). */
+export let HEAD: NonNullable<RoutePace['head']> = 'none';
+/** The road's times and the series' pace turned into the table `paced` reads (`route-pace.ts`). */
+function setPaceTable(times: readonly number[] | null, pace: RoutePace | null, key: string): void {
+  lastPaceKey = key;
+  lastTimes = times;
+  PACE_VERSION += 1;
+  HEAD = pace?.head ?? 'none';
+  const p = pace ?? {};
+  PACE = (p.days ?? 0) > 0 || (p.dwell ?? 0) > 0 ? paceTable(ROUTECUM, times, STOP_REACH, pace) : null;
+}
+
+/** The route fraction a block's eased progress `x` reaches, as the series' pace says (distance, days, pauses). */
+export const paced = (x: number): number => (PACE ? pacedAt(PACE, x) : x);
+
+function setRoute(next: Stop[], line: RoadPoints | null): void {
   STOPS = next;
   lastRoad = line;
   ROUTE = line ? line.map((p) => proj(p[0], p[1])) : STOPS.map((s) => proj(s[1], s[2]));

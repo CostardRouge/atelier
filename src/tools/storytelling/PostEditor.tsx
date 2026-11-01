@@ -190,7 +190,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const mapOpts = useMemo<ComposeOptions>(
     () => ({
       ...(tripMap.state === 'ready' && tripMap.map
-        ? { stops: tripMap.map.stops, road: tripMap.map.road }
+        ? { stops: tripMap.map.stops, road: tripMap.map.road, times: tripMap.map.times }
         : { stops: script?.stops }),
       wall: wall.images,
       ground: groundLayers,
@@ -629,7 +629,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             </InspectorSection>
           ) : null}
           {script ? (
-            <InspectorSection id="story-map-camera" title="Map camera" foldable={false} info="How the camera follows the route on the series' maps: as in the posts already made, or the camera of Trips' openers — calm, navigation or documentary, then your own width, smoothing and look-ahead.">
+            <InspectorSection id="story-map-camera" title="Map camera" foldable={false} info="How the camera follows the route on the series' maps: as in the posts already made, or the camera of Trips' openers — calm, navigation or documentary, then your own width, smoothing and look-ahead. Then how the route is drawn: by distance or by the days lived, a pause at each stop, a head at its tip.">
               <MapCameraSection script={script} onScript={onScript} />
             </InspectorSection>
           ) : null}

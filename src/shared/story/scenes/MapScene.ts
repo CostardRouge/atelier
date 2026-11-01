@@ -1,7 +1,7 @@
 // Carte « camera »: zoomed ×2.3 following the route head (sine in-out), then the camera
 // pulls back to the whole map over the last 1.4 s. Coast dim, route accent, stops as reached.
 import { clamp, E, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
-import { NAMED, ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
+import { HEAD, NAMED, PACE_VERSION, paced, ROUTE, ROUTELEN, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
 import { drawGround, groundCredit } from "../map-ground";
 import { frameScale, storyCamera, storyCameraTrack, type StoryCameraValues } from "../story-camera";
 import type { CameraTrack } from "../../roadtrip/hooks/drive-plan";
@@ -28,6 +28,42 @@ export function drawMapCredit(c: Ctx, lt: number, from = 0) {
     text(c, credit, 1010, 1222, 20, PAL.ink, { fam: TYPO.mono, w: 400, align: "right" });
     c.restore();
   }, from);
+}
+
+/**
+ * The tip of the route as it is drawn, as the series' pace says: nothing
+ * (before), a dot, or an arrow along the road — its direction read over a
+ * stretch of road either side, so a bend of the line never jerks it.
+ */
+export function drawHead(c: Ctx, frac: number, size: number) {
+  if (HEAD === "none" || frac <= 0) return;
+  const [x, y] = routeAt(frac);
+  c.save();
+  c.fillStyle = PAL.acc;
+  c.strokeStyle = PAL.bg;
+  c.lineWidth = size * 0.28;
+  if (HEAD === "dot") {
+    c.beginPath();
+    c.arc(x, y, size * 0.6, 0, 7);
+    c.fill();
+    c.stroke();
+  } else {
+    const reach = (size * 3) / Math.max(1, ROUTELEN);
+    const a = routeAt(Math.max(0, frac - reach));
+    const b = routeAt(Math.min(1, frac + reach));
+    const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    c.translate(x, y);
+    c.rotate(angle);
+    c.beginPath();
+    c.moveTo(size, 0);
+    c.lineTo(-size * 0.7, size * 0.65);
+    c.lineTo(-size * 0.35, 0);
+    c.lineTo(-size * 0.7, -size * 0.65);
+    c.closePath();
+    c.stroke();
+    c.fill();
+  }
+  c.restore();
 }
 
 export function drawRoute(c: Ctx, frac: number, width: number) {
@@ -100,10 +136,10 @@ export function mapLabels(c: Ctx, frac: number, size: number, tail = 0, spread =
 /** The baked track of the camera in force, for the route on the map now — one per route, camera and tempo. */
 let baked: { route: unknown; key: string; track: CameraTrack } | null = null;
 function trackFor(cam: StoryCameraValues, seconds: number, progress: (t: number) => number): CameraTrack {
-  const key = `${JSON.stringify(cam)}|${seconds}`;
+  const key = `${JSON.stringify(cam)}|${seconds}|${PACE_VERSION}`;
   if (baked && baked.route === ROUTE && baked.key === key) return baked.track;
   const track = storyCameraTrack(cam, seconds, (t) => {
-    const h = routeAt(sineInOut(progress(t)));
+    const h = routeAt(paced(sineInOut(progress(t))));
     return { x: h[0], y: h[1] };
   });
   baked = { route: ROUTE, key, track };
@@ -115,7 +151,7 @@ export function drawMap(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   const still = _p.still === true;
   const rp = still ? clamp((lt - 0.4) / (4.4 * K)) : clamp((lt - 0.3) / (3.6 * K)),
     zp = still ? 1 : E(clamp((lt - 3.6 * K) / (1.4 * K))),
-    head = routeAt(sineInOut(rp));
+    head = routeAt(paced(sineInOut(rp)));
   const progress = (lt: number) => (still ? clamp((lt - 0.4) / (4.4 * K)) : clamp((lt - 0.3) / (3.6 * K)));
   // The series' camera (`story-camera.ts`, Trips' own engine), or — none chosen — the one of before:
   // ×2.3 on the head, pulled back to the whole map over the last 1.4 s.
@@ -141,10 +177,15 @@ export function drawMap(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   obj(c, "map-camera.coast", [fx, fy], lt, (lt) => {
     drawGround(c, enter(lt, 0, 0.8), (2.5 / s) * 1.4);
   }, 0);
-  obj(c, "map-camera.route", [fx, fy], lt, (lt) => drawRoute(c, sineInOut(progress(lt)), (5 / s) * 1.6));
+  // The route's fraction drawn: the scene's eased clock, warped by the series' pace (`route-pace.ts`).
+  const drawn = (lt: number) => paced(sineInOut(progress(lt)));
+  obj(c, "map-camera.route", [fx, fy], lt, (lt) => {
+    drawRoute(c, drawn(lt), (5 / s) * 1.6);
+    drawHead(c, drawn(lt), still ? 16 : (16 / s) * 1.3);
+  });
   obj(c, "map-camera.stops", [fx, fy], lt, (lt) => {
     // Names stay upright when the map turns with the heading.
-    mapLabels(c, sineInOut(progress(lt)), still ? 26 : (26 / s) * 1.3, still ? E(clamp((lt - 4.6 * K) / (0.9 * K))) : 0, still, [], -turn);
+    mapLabels(c, drawn(lt), still ? 26 : (26 / s) * 1.3, still ? E(clamp((lt - 4.6 * K) / (0.9 * K))) : 0, still, [], -turn);
   });
   c.restore();
   drawMapCredit(c, lt);

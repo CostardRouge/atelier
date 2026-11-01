@@ -6,8 +6,8 @@ import { word } from "../locale";
 import { register } from "./index";
 import { appear, clamp, enter, font, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
 import { obj } from "../objects";
-import { routeAt, STOPS } from "../geo";
-import { drawCoast, drawMapCredit, mapLabels } from "../scenes/MapScene";
+import { paced, routeAt, STOPS } from "../geo";
+import { drawCoast, drawHead, drawMapCredit, mapLabels } from "../scenes/MapScene";
 import { MAP_DY } from "./journey-impossible";
 
 type Gap = [number, number];
@@ -98,8 +98,9 @@ register("map-holes", (c, lt, p) => {
   const W = 5;
   if (!fill) {
     obj(c, "map-holes.route", [540, 960], lt, (lt) => {
-      const rp = sineInOut(clamp((lt - 0.5) / (3.4 * K)));
+      const rp = paced(sineInOut(clamp((lt - 0.5) / (3.4 * K))));
       holeyRoute(c, rp, gaps, W);
+      drawHead(c, rp, 16);
       // once the head has arrived, the last labels finish lighting up
       mapLabels(c, rp + enter(lt, 3.9, 0.8) * 0.2, 24, 0, false, [STOPS[STOPS.length - 1][0]]);
     }, 0);
