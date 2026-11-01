@@ -140,7 +140,9 @@ export default function StoryGallery({
   );
 
   return (
-    <div className="@container flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-8 flex flex-col gap-4">
+    // Its children keep their own height (`[&>*]:flex-none`): in a scrolling flex column an `overflow-auto` child
+    // has no minimum height, and the subjects × channels matrix collapsed to 2 px on a phone held sideways.
+    <div className="@container flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-8 flex flex-col gap-4 [&>*]:flex-none">
       <header className="flex flex-wrap items-end gap-4 pt-2">
         <div className="min-w-0">
           <p className="m-0 font-mono text-2xs uppercase tracking-[0.12em] text-muted">Storytelling</p>
