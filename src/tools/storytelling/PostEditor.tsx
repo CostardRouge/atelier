@@ -27,6 +27,10 @@ import PageBar from '../../shared/ui/PageBar';
 import { paintCover } from './covers';
 import { POSTS } from './posts';
 import ScriptControls from './ScriptControls';
+import ObjectPanel from './ObjectPanel';
+import StageView from './StageView';
+import StudioTree, { type StudioPanel, type StudioSelection } from './StudioTree';
+import { objectTracks, sceneSpans, type ObjectTrack } from '../../shared/story/studio';
 
 export interface Sound {
   name: string;
@@ -185,6 +189,20 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     () => withGaps(episode, tripMap.state === 'ready' && tripMap.map && holes ? gapsOf(holes, tripMap.map, tripMap.span) : null),
     [episode, tripMap, holes],
   );
+
+  // --- the Studio: what is selected, and the objects the post draws over time ----
+  const [selected, setSelected] = useState<StudioSelection | null>({ kind: 'panel', id: 'charte' });
+  const scenes = useMemo(() => sceneSpans(shown), [shown]);
+  const [tracks, setTracks] = useState<ObjectTrack[]>([]);
+  useEffect(() => {
+    // Run the post on a context that draws nothing (`studio.ts`), once the edits settle.
+    const id = window.setTimeout(() => setTracks(objectTracks(shown, { stops: mapOpts.stops, road: mapOpts.road })), 120);
+    return () => window.clearTimeout(id);
+  }, [shown, mapOpts.stops, mapOpts.road]);
+  const seek = useCallback((at: number) => {
+    setPlaying(false);
+    setT(Math.max(0, at));
+  }, []);
 
   // The list's thumbnails, painted once per script.
   const covers = useMemo(() => {
@@ -367,53 +385,274 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
 
   const archiveFolder = `Storytelling/${script?.series || `Season ${skeleton.season}`}/${episode.number}`;
 
-  return (
-    <div className="flex-1 min-h-0 overflow-y-auto pb-6">
-      <PageBar back={{ label: 'Map', onClick: onBack, title: 'Back to the map of subjects' }}>
-        <span className="font-mono text-2xs text-muted self-center">{episode.number}</span>
-        <span className="text-sm text-ink self-center truncate">{episode.title}</span>
-      </PageBar>
-      <div className="flex flex-wrap gap-5 items-start mt-3">
-        <nav aria-label="Posts" className="w-full min-[1100px]:w-56 shrink-0 flex flex-col gap-1.5">
-          <p className="m-0 mb-1 font-mono text-2xs uppercase tracking-[0.12em] text-muted">Season 1</p>
-          <div className="flex min-[1100px]:flex-col gap-1.5 overflow-x-auto pb-1">
-            {POSTS.map((p) => {
-              const ep = episodeOf(p);
-              const on = p.id === skeleton.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => choose(p.id)}
-                  aria-current={on ? 'true' : undefined}
-                  className={`flex items-center gap-2.5 text-left rounded-control border px-2 py-1.5 shrink-0 cursor-pointer transition-colors ${
-                    on ? 'border-ink bg-surface' : 'border-line bg-paper hover:border-line-strong'
-                  }`}
-                >
-                  {covers.get(p.id) ? (
-                    <img src={covers.get(p.id)} alt="" className="w-8 h-[3.55rem] rounded-[4px] border border-line object-cover" />
-                  ) : (
-                    <span className="w-8 h-[3.55rem] rounded-[4px] border border-line bg-paper-2" />
-                  )}
-                  <span className="flex flex-col min-w-0">
-                    <span className="font-mono text-2xs text-muted">{p.number}</span>
-                    <span className="text-sm text-ink truncate max-w-[9.5rem]">{ep.title}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+  // --- the Studio's inspector: one panel at a time ----------------------------
+  const panelOf = (id: StudioPanel) => {
+    switch (id) {
+      case 'charte':
+        return (
+          <InspectorSection id="story-look" title="Charte & look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
+            <LookPanel postId={postId} script={script} onScript={onScript} />
+          </InspectorSection>
+        );
+      case 'script':
+        return (
+          <InspectorSection id="story-script" title="Script" foldable={false} info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere.">
+            <ScriptControls script={script} onScript={onScript} />
+          </InspectorSection>
+        );
+      case 'sources':
+        return (
+          <InspectorSection id="story-sources" title="Sources" foldable={false} info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device.">
+            <SourcesPanel postId={postId} script={script} onScript={onScript} wall={wall.progress} />
+          </InspectorSection>
+        );
+      case 'hook':
+        return (
+          <InspectorSection id="story-hook" title="Hook" foldable={false} info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports.">
+            <HookPanel
+              postId={postId}
+              script={script}
+              onScript={onScript}
+              title={episode.title}
+              files={mine.hookFiles ?? {}}
+              onFile={(kind, file) => patchSound(skeleton.id, (was) => ({ hookFiles: { ...was.hookFiles, [kind]: file ?? undefined } }))}
+              onUnreadable={(name) => setSoundError(`This browser cannot read “${name}”. A WAV, MP3 or M4A file usually works.`)}
+            />
+          </InspectorSection>
+        );
+      case 'sound':
+        return (
+          <>
+            <InspectorSection id="story-sound" title="Sound" foldable={false} info="Your voice and a music bed, read from files on this device. They play with the stage and go into the exported video; nothing is uploaded.">
+            {(['voice', 'music'] as const).map((which) => {
+                const s = which === 'voice' ? voice : music;
+                const set = which === 'voice' ? setVoice : setMusic;
+                return (
+                  <div key={which} className="flex flex-col gap-2 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-ink-soft w-12">{which === 'voice' ? 'Voice' : 'Music'}</span>
+                      <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{s ? s.name : 'none'}</span>
+                      <label className={buttonClass('default', 'sm')}>
+                        {s ? 'Change…' : 'Add…'}
+                        <input type="file" accept="audio/*" className="sr-only" onChange={onSoundFile(which)} />
+                      </label>
+                      {s ? (
+                        <Button size="sm" variant="ghost" onClick={() => set(null)}>
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                    {s ? (
+                      <>
+                        <SliderRow
+                          label="Starts at"
+                          value={s.at}
+                          min={0}
+                          max={Math.max(1, Math.floor(total))}
+                          step={0.1}
+                          format={(v) => `${v.toFixed(1)} s`}
+                          onChange={(v) => {
+                            setPlaying(false);
+                            set({ ...s, at: v });
+                          }}
+                        />
+                        <SliderRow
+                          label="Level"
+                          value={Math.round(s.gain * 100)}
+                          min={0}
+                          max={150}
+                          step={1}
+                          format={(v) => `${v} %`}
+                          onChange={(v) => set({ ...s, gain: v / 100 })}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {soundError ? <p className="m-0 text-xs text-danger">{soundError}</p> : null}
+            </InspectorSection>
+            <InspectorSection id="story-effects" title="Effects" info="Sound effects at moments of the post — a click, a whoosh, a pop. Each is a file of your own, or one of Atelier’s built-in synthesised sounds. Added at the playhead; they play with the stage and go into the export.">
+            {effects.map((fx, i) => (
+                <div key={fx.id} className="flex flex-col gap-2 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-2xs text-muted w-5">{i + 1}</span>
+                    <SelectField
+                      label={`Sound of effect ${i + 1}`}
+                      value={fx.source}
+                      options={EFFECT_SOURCES}
+                      onChange={(v) => patchEffect(fx.id, { source: v })}
+                    />
+                    <Button size="sm" variant="ghost" onClick={() => setEffects((list) => list.filter((e) => e.id !== fx.id))}>
+                      Remove
+                    </Button>
+                  </div>
+                  {fx.source === 'file' ? (
+                    <div className="flex items-center gap-2 pl-7">
+                      <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{fx.file ? fx.file.name : 'no file yet'}</span>
+                      <label className={buttonClass('default', 'sm')}>
+                        {fx.file ? 'Change…' : 'Choose…'}
+                        <input type="file" accept="audio/*" className="sr-only" onChange={onEffectFile(fx.id)} />
+                      </label>
+                    </div>
+                  ) : null}
+                  <SliderRow
+                    label="At"
+                    value={fx.at}
+                    min={0}
+                    max={Math.max(0.1, Math.floor(total * 10) / 10)}
+                    step={0.05}
+                    format={(v) => `${v.toFixed(2)} s`}
+                    onChange={(v) => patchEffect(fx.id, { at: v })}
+                  />
+                  <SliderRow
+                    label="Level"
+                    value={Math.round(fx.gain * 100)}
+                    min={0}
+                    max={150}
+                    step={1}
+                    format={(v) => `${v} %`}
+                    onChange={(v) => patchEffect(fx.id, { gain: v / 100 })}
+                  />
+                </div>
+              ))}
+              <div>
+                <Button size="sm" onClick={addEffect}>
+                  Add an effect at {fmt(Math.min(t, total))}
+                </Button>
+              </div>
+            </InspectorSection>
+          </>
+        );
+      case 'export':
+        return (
+          <>
+            <InspectorSection id="story-export" title="Export" foldable={false} info="An H.264 video at 1080 × 1920, 30 frames a second, written in this browser; and the cover as a PNG.">
+            <div className="flex gap-2 flex-wrap">
+                {exporting ? (
+                  <Button size="sm" variant="ghost" onClick={() => abortRef.current?.abort()}>
+                    Cancel
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="primary" onClick={() => void exportVideo()} disabled={!fontsReady}>
+                    Export video
+                  </Button>
+                )}
+                <Button size="sm" onClick={exportCover} disabled={!fontsReady || exporting !== null}>
+                  Export cover
+                </Button>
+              </div>
+              {exporting ? <Readout>{exporting}</Readout> : exportNote ? <Readout muted>{exportNote}</Readout> : null}
+            </InspectorSection>
+            <InspectorSection id="story-archive" title="Archive" info="Send the exported video and its cover to a Winnow you connected — the one on this computer or your server's — where they are imported into its Incoming, filed under Storytelling. A Winnow on another site is connected with an app token on Sources.">
+            {connections.length === 0 ? (
+                <p className="m-0 text-xs text-muted leading-relaxed">
+                  No Winnow is connected.{' '}
+                  <a className="text-accent-ink font-semibold underline underline-offset-[3px]" href="#/sources">
+                    Connect one
+                  </a>{' '}
+                  — the one on this computer, or your server&apos;s with an app token.
+                </p>
+              ) : exported.length === 0 ? (
+                <Readout muted>Export the video first: the same files are sent from here.</Readout>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {connections.length > 1 && target ? (
+                    <SelectField
+                      label="Winnow to archive on"
+                      value={target.id}
+                      options={connections.map((c) => ({ id: c.id, label: c.id }))}
+                      onChange={setArchiveTo}
+                    />
+                  ) : null}
+                  {target ? (
+                    <SendFinalsPanel key={`${target.id}:${exported[0].name}`} files={exported} sourceId={target.id} assetId={null} archiveFolder={archiveFolder} />
+                  ) : null}
+                </div>
+              )}
+            </InspectorSection>
+            <InspectorSection id="story-continuity" title="Continuity" info="Each post knows the one before and the one after. The ending names the next post and shows its cover.">
+            <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['Previous', prev],
+                  ['Next', nextSkeleton],
+                ].map(([label, p]) => {
+                  const post = p as PostSkeleton | null;
+                  return (
+                    <button
+                      key={label as string}
+                      type="button"
+                      disabled={!post}
+                      onClick={() => post && choose(post.id)}
+                      className="flex flex-col gap-1 items-start text-left rounded-control border border-line bg-paper p-2 cursor-pointer disabled:opacity-45 disabled:cursor-default"
+                    >
+                      <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">{label as string}</span>
+                      {post ? (
+                        <>
+                          {covers.get(post.id) ? (
+                            <img src={covers.get(post.id)} alt="" className="w-full aspect-[9/16] rounded-[4px] border border-line object-cover" />
+                          ) : null}
+                          <span className="text-xs text-ink-soft">
+                            {post.number} · {episodeOf(post).title}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted">{label === 'Next' ? 'the season ends' : 'the season opens'}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </InspectorSection>
+          </>
+        );
+    }
+  };
+  const objectPanel = (sel: Extract<StudioSelection, { kind: 'object' }>) => {
+    const track = tracks.find((t) => t.id === sel.id);
+    const scene = scenes.find((s) => s.key === sel.slot && s.block === sel.key);
+    const block = scene && scene.index !== null ? episode.blocks[scene.index] : null;
+    const words = scene && scene.index !== null ? script?.posts[postId]?.blocks?.[scene.index] : undefined;
+    return (
+      <InspectorSection id="story-object" title="Object" foldable={false} info="Click an object on the stage, in the list or on the timeline. Its settings are kept in your script — for every post of the series, or this post alone.">
+        <ObjectPanel
+          script={script}
+          onScript={onScript}
+          postId={postId}
+          objKey={sel.key}
+          text={track?.text ?? false}
+          scene={
+            scene && scene.index !== null && block
+              ? { index: scene.index, len: block.len, cap: block.cap ? { a: block.cap.a, b: block.cap.b } : null, set: { len: words?.len, cap: words?.cap } }
+              : null
+          }
+        />
+      </InspectorSection>
+    );
+  };
 
-        <section aria-label="Stage" className="flex flex-col items-center gap-3 shrink-0 mx-auto">
-          <canvas
-            ref={stageRef}
-            width={W}
-            height={H}
-            className="block h-[min(calc(var(--app-h)*0.72),44rem)] max-w-full aspect-[9/16] rounded-paper-lg border border-line-strong bg-paper shadow-sm"
-            aria-label={`${episode.number} ${episode.title}, at ${fmt(t)}`}
+  return (
+    <div className="flex-1 min-h-0 flex flex-col @container">
+      <PageBar back={{ label: 'Map', onClick: onBack, title: 'Back to the map of subjects' }}>
+        <span className="self-center w-[min(22rem,60vw)]">
+          <SelectField
+            label="Post"
+            value={skeleton.id}
+            options={POSTS.map((p) => ({ id: p.id, label: `${p.number} · ${episodeOf(p).title}` }))}
+            onChange={choose}
           />
-          <div className="flex items-center gap-3 w-full max-w-[24rem]">
+        </span>
+      </PageBar>
+      <div className="flex-1 min-h-0 mt-3 flex flex-col overflow-y-auto @min-[1000px]:grid @min-[1000px]:grid-cols-[13rem_minmax(0,1fr)_20rem] @min-[1000px]:overflow-hidden border-t border-line">
+        <div className="order-3 flex-none @min-[1000px]:order-none @min-[1000px]:overflow-y-auto @min-[1000px]:border-r border-line">
+          <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={setSelected} onSeek={seek} />
+        </div>
+
+        <section aria-label="Stage" className="order-1 flex-none @min-[1000px]:order-none flex flex-col @min-[1000px]:min-h-0 gap-2 p-3">
+          <div className="flex-none h-[calc(var(--app-h)*0.62)] @min-[1000px]:h-auto @min-[1000px]:flex-1 @min-[1000px]:min-h-0">
+            <StageView canvasRef={stageRef} label={`${episode.number} ${episode.title}, at ${fmt(t)}`} />
+          </div>
+          <div className="flex items-center gap-3 w-full max-w-[32rem] mx-auto">
             <Button
               variant="primary"
               size="sm"
@@ -432,10 +671,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               max={total}
               step={0.01}
               value={Math.min(t, total)}
-              onChange={(e) => {
-                setPlaying(false);
-                setT(Number(e.target.value));
-              }}
+              onChange={(e) => seek(Number(e.target.value))}
               aria-label="Time in the post"
               className="flex-1 accent-[var(--color-accent)]"
             />
@@ -445,243 +681,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           </div>
         </section>
 
-        <aside aria-label="Post settings" className="w-full min-[1100px]:w-80 shrink-0 flex flex-col">
-          <InspectorSection
-            id="story-script"
-            title="Script"
-            info="The words of the posts — captions, numbers, places — are yours and stay out of Atelier’s code. Load your script file; it is kept in this browser until you forget it, and nothing sends it anywhere."
-          >
-            <ScriptControls script={script} onScript={onScript} />
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-hook"
-            title="Hook"
-            info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports."
-          >
-            <HookPanel
-              postId={postId}
-              script={script}
-              onScript={onScript}
-              title={episode.title}
-              files={mine.hookFiles ?? {}}
-              onFile={(kind, file) => patchSound(skeleton.id, (was) => ({ hookFiles: { ...was.hookFiles, [kind]: file ?? undefined } }))}
-              onUnreadable={(name) => setSoundError(`This browser cannot read “${name}”. A WAV, MP3 or M4A file usually works.`)}
-            />
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-sources"
-            title="Sources"
-            info="Where the series' data comes from: a trip of Trips in this browser for the route and its towns, and a connected Winnow for the counts. Named in your script; the trip and the pictures stay on this device."
-          >
-            <SourcesPanel postId={postId} script={script} onScript={onScript} wall={wall.progress} />
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-look"
-            title="Look"
-            info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything."
-          >
-            <LookPanel postId={postId} script={script} onScript={onScript} />
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-sound"
-            title="Sound"
-            info="Your voice and a music bed, read from files on this device. They play with the stage and go into the exported video; nothing is uploaded."
-          >
-            {(['voice', 'music'] as const).map((which) => {
-              const s = which === 'voice' ? voice : music;
-              const set = which === 'voice' ? setVoice : setMusic;
-              return (
-                <div key={which} className="flex flex-col gap-2 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-ink-soft w-12">{which === 'voice' ? 'Voice' : 'Music'}</span>
-                    <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{s ? s.name : 'none'}</span>
-                    <label className={buttonClass('default', 'sm')}>
-                      {s ? 'Change…' : 'Add…'}
-                      <input type="file" accept="audio/*" className="sr-only" onChange={onSoundFile(which)} />
-                    </label>
-                    {s ? (
-                      <Button size="sm" variant="ghost" onClick={() => set(null)}>
-                        Remove
-                      </Button>
-                    ) : null}
-                  </div>
-                  {s ? (
-                    <>
-                      <SliderRow
-                        label="Starts at"
-                        value={s.at}
-                        min={0}
-                        max={Math.max(1, Math.floor(total))}
-                        step={0.1}
-                        format={(v) => `${v.toFixed(1)} s`}
-                        onChange={(v) => {
-                          setPlaying(false);
-                          set({ ...s, at: v });
-                        }}
-                      />
-                      <SliderRow
-                        label="Level"
-                        value={Math.round(s.gain * 100)}
-                        min={0}
-                        max={150}
-                        step={1}
-                        format={(v) => `${v} %`}
-                        onChange={(v) => set({ ...s, gain: v / 100 })}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              );
-            })}
-            {soundError ? <p className="m-0 text-xs text-danger">{soundError}</p> : null}
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-effects"
-            title="Effects"
-            info="Sound effects at moments of the post — a click, a whoosh, a pop. Each is a file of your own, or one of Atelier’s built-in synthesised sounds. Added at the playhead; they play with the stage and go into the export."
-          >
-            {effects.map((fx, i) => (
-              <div key={fx.id} className="flex flex-col gap-2 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-2xs text-muted w-5">{i + 1}</span>
-                  <SelectField
-                    label={`Sound of effect ${i + 1}`}
-                    value={fx.source}
-                    options={EFFECT_SOURCES}
-                    onChange={(v) => patchEffect(fx.id, { source: v })}
-                  />
-                  <Button size="sm" variant="ghost" onClick={() => setEffects((list) => list.filter((e) => e.id !== fx.id))}>
-                    Remove
-                  </Button>
-                </div>
-                {fx.source === 'file' ? (
-                  <div className="flex items-center gap-2 pl-7">
-                    <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted">{fx.file ? fx.file.name : 'no file yet'}</span>
-                    <label className={buttonClass('default', 'sm')}>
-                      {fx.file ? 'Change…' : 'Choose…'}
-                      <input type="file" accept="audio/*" className="sr-only" onChange={onEffectFile(fx.id)} />
-                    </label>
-                  </div>
-                ) : null}
-                <SliderRow
-                  label="At"
-                  value={fx.at}
-                  min={0}
-                  max={Math.max(0.1, Math.floor(total * 10) / 10)}
-                  step={0.05}
-                  format={(v) => `${v.toFixed(2)} s`}
-                  onChange={(v) => patchEffect(fx.id, { at: v })}
-                />
-                <SliderRow
-                  label="Level"
-                  value={Math.round(fx.gain * 100)}
-                  min={0}
-                  max={150}
-                  step={1}
-                  format={(v) => `${v} %`}
-                  onChange={(v) => patchEffect(fx.id, { gain: v / 100 })}
-                />
-              </div>
-            ))}
-            <div>
-              <Button size="sm" onClick={addEffect}>
-                Add an effect at {fmt(Math.min(t, total))}
-              </Button>
-            </div>
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-continuity"
-            title="Continuity"
-            info="Each post knows the one before and the one after. The ending names the next post and shows its cover."
-          >
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ['Previous', prev],
-                ['Next', nextSkeleton],
-              ].map(([label, p]) => {
-                const post = p as PostSkeleton | null;
-                return (
-                  <button
-                    key={label as string}
-                    type="button"
-                    disabled={!post}
-                    onClick={() => post && choose(post.id)}
-                    className="flex flex-col gap-1 items-start text-left rounded-control border border-line bg-paper p-2 cursor-pointer disabled:opacity-45 disabled:cursor-default"
-                  >
-                    <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">{label as string}</span>
-                    {post ? (
-                      <>
-                        {covers.get(post.id) ? (
-                          <img src={covers.get(post.id)} alt="" className="w-full aspect-[9/16] rounded-[4px] border border-line object-cover" />
-                        ) : null}
-                        <span className="text-xs text-ink-soft">
-                          {post.number} · {episodeOf(post).title}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted">{label === 'Next' ? 'the season ends' : 'the season opens'}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </InspectorSection>
-
-          <InspectorSection id="story-export" title="Export" info="An H.264 video at 1080 × 1920, 30 frames a second, written in this browser; and the cover as a PNG.">
-            <div className="flex gap-2 flex-wrap">
-              {exporting ? (
-                <Button size="sm" variant="ghost" onClick={() => abortRef.current?.abort()}>
-                  Cancel
-                </Button>
-              ) : (
-                <Button size="sm" variant="primary" onClick={() => void exportVideo()} disabled={!fontsReady}>
-                  Export video
-                </Button>
-              )}
-              <Button size="sm" onClick={exportCover} disabled={!fontsReady || exporting !== null}>
-                Export cover
-              </Button>
-            </div>
-            {exporting ? <Readout>{exporting}</Readout> : exportNote ? <Readout muted>{exportNote}</Readout> : null}
-          </InspectorSection>
-
-          <InspectorSection
-            id="story-archive"
-            title="Archive"
-            info="Send the exported video and its cover to a Winnow you connected — the one on this computer or your server's — where they are imported into its Incoming, filed under Storytelling. A Winnow on another site is connected with an app token on Sources."
-          >
-            {connections.length === 0 ? (
-              <p className="m-0 text-xs text-muted leading-relaxed">
-                No Winnow is connected.{' '}
-                <a className="text-accent-ink font-semibold underline underline-offset-[3px]" href="#/sources">
-                  Connect one
-                </a>{' '}
-                — the one on this computer, or your server&apos;s with an app token.
-              </p>
-            ) : exported.length === 0 ? (
-              <Readout muted>Export the video first: the same files are sent from here.</Readout>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {connections.length > 1 && target ? (
-                  <SelectField
-                    label="Winnow to archive on"
-                    value={target.id}
-                    options={connections.map((c) => ({ id: c.id, label: c.id }))}
-                    onChange={setArchiveTo}
-                  />
-                ) : null}
-                {target ? (
-                  <SendFinalsPanel key={`${target.id}:${exported[0].name}`} files={exported} sourceId={target.id} assetId={null} archiveFolder={archiveFolder} />
-                ) : null}
-              </div>
-            )}
-          </InspectorSection>
+        <aside aria-label="Inspector" className="order-2 flex-none @min-[1000px]:order-none @min-[1000px]:overflow-y-auto @min-[1000px]:border-l border-line px-3 pb-6 flex flex-col">
+          {selected?.kind === 'object' ? objectPanel(selected) : panelOf(selected?.kind === 'panel' ? selected.id : 'charte')}
         </aside>
       </div>
     </div>

@@ -31,6 +31,12 @@ export interface ComposeOptions {
   wall?: readonly (CanvasImageSource | null)[] | null;
   /** Leave the grain and vignette out — a still for a list, say. */
   bare?: boolean;
+  /**
+   * Draw straight onto `c`, no layer per slot and no texture — for a context
+   * that draws nothing (`null-context.ts`), run to learn which objects a
+   * frame holds (`studio.ts`).
+   */
+  dry?: boolean;
 }
 
 let layer: HTMLCanvasElement | null = null;
@@ -93,6 +99,13 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   slots.forEach((slot, i) => {
     const alpha = slotAlpha(slots, i, t);
     if (alpha <= 0) return;
+    if (opts.dry) {
+      c.save();
+      c.globalAlpha = alpha;
+      drawSlot(c, ep, slot, t - slot.start);
+      c.restore();
+      return;
+    }
     const l = slotLayer();
     drawSlot(l, ep, slot, t - slot.start);
     c.globalAlpha = alpha;
@@ -108,6 +121,6 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   // The HUD waits for the opening: the title's slot, or the hook's last word.
   const hudFrom = ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0);
   if (t >= hudFrom + HUD.delay) obj(c, 'hud', [540, HUD.y], t, (lt) => drawHud(c, lt, ep.number, hudFrom, total));
-  if (!opts.bare) drawTexture(c, t);
+  if (!opts.bare && !opts.dry) drawTexture(c, t);
   c.restore();
 }

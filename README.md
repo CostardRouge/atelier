@@ -2964,6 +2964,20 @@ a canvas by `src/shared/story/` — the series' **charte** (palette, Geist,
 motion), the same for every post. A new post starts as a copy of the one before
 it and may grow blocks of its own.
 
+- **The Studio.** A post opens in three columns: the list on the left — the
+  series' *Charte & look*, *Script* and *Sources*, the post's *Hook*, *Sound &
+  effects* and *Export & archive*, then the post's **scenes** in order, each
+  with the **objects** it draws (its caption, its parts) and what sits over
+  every scene (the hook, the HUD); the stage in the middle; the inspector on
+  the right, showing what is selected. Select an object and set it: shown or
+  hidden, moved across and down, its size, turn and opacity; when it draws
+  text, its font (one of the charte's roles or any of the shipped faces), its
+  weight, size, letter spacing, colour (a charte colour or any), case and
+  outline; a shadow; a delay. *Every post* keeps the setting for that object in
+  the whole series, *This post* for this post alone, over the series. A
+  scene also takes its length and its caption's window in this post. Every
+  setting is kept in your script; with none, a post draws exactly as its code.
+  On a phone the stage comes first, the inspector under it, the list last.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and

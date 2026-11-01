@@ -48,6 +48,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   named on its first picture.
 - Storytelling: choose the wall's pictures in the same Winnow picker as Develop's *Add a day*, filtered by camera, type,
   extension, picks and stars — so screenshots and PNGs stay off the wall.
+- Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
+  HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
+  size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every
+  post of the series or this post alone. A scene's length and its caption's timing can be set per post. Twelve faces
+  ship with Atelier for it.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's
