@@ -10,8 +10,12 @@
  * be judged and nothing personal ships with the code. (pure)
  */
 import type { Stop } from './geo';
-import type { Episode } from './episode';
+import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
+import type { Hook } from './hook';
+import type { Lang } from './locale';
+import { readWallGrid, wallGroups, type WallStage } from './wall-grid';
+import { monthText } from './locale';
 
 export interface SkeletonBlock {
   block: string;
@@ -43,6 +47,15 @@ export interface ScriptPost {
   sources?: ScriptSources;
   /** Numbers counted for this post alone, over the series'. */
   facts?: ScriptFacts;
+  /**
+   * The post's hook and its variants (`hook.ts`), in place of the title
+   * opening; `hookActive` says which one plays and exports. Its words are
+   * private, like the captions.
+   */
+  hooks?: Hook[];
+  hookActive?: number;
+  /** What the post pays off — kept beside the hook so it never promises more. */
+  promise?: string;
 }
 
 /**
@@ -75,9 +88,11 @@ export interface ScriptSources {
   /**
    * The wall's pictures as the author chose them: Winnow asset ids never to
    * show (`skip`), and a picture of his own choosing for a day (`pick`,
-   * ISO day → asset id) in place of that day's cover.
+   * ISO day → asset id) in place of that day's cover. `chosen`: the pictures
+   * ticked in the Winnow picker, `[asset id, ISO day]` in day order — the
+   * wall then draws from them rather than one cover a day (`chosenPicks`).
    */
-  wall?: { skip?: number[]; pick?: Record<string, number> };
+  wall?: { skip?: number[]; pick?: Record<string, number>; chosen?: [number, string][] };
 }
 
 /**
@@ -97,6 +112,10 @@ export interface ScriptFacts {
    * Ids only: the thumbnails are kept on this device (`wall-cache.ts`).
    */
   tiles?: number[];
+  /** Each tile's day, ISO, aligned with `tiles` — what groups the wall by stage or month. */
+  tileDays?: string[];
+  /** The stages counted, their names and days, in date order — what a wall grouped by stage reads. */
+  stages?: WallStage[];
   /** Runs of days with media but no position, `[first, last]` ISO dates — the map's holes (`geoFacts`). */
   holes?: [string, string][];
 }
@@ -148,6 +167,8 @@ export interface ScriptTopic {
 export interface StoryScript {
   kind: typeof SCRIPT_KIND;
   version: 1;
+  /** The language the series is told in (`locale.ts`): its numbers, its days, the blocks' own words. Absent = French. */
+  lang?: Lang;
   /** The series' name, on the season's closing card. */
   series?: string;
   /** The account, on the closing card. */
@@ -160,6 +181,8 @@ export interface StoryScript {
   /** The series' sources and the numbers counted from them; a post may override both. */
   sources?: ScriptSources;
   facts?: ScriptFacts;
+  /** The series' look: the wall's grid, the grain, the vignette (`episode.ts`, `StoryLook`). */
+  look?: StoryLook;
   /** The map of subjects: its channels and its lines (`story-map.ts`). */
   channels?: ScriptChannel[];
   topics?: ScriptTopic[];
@@ -204,6 +227,7 @@ export function parseScript(raw: unknown): ScriptParse {
       blocks,
       sources: readSources(value.sources),
       facts: readFacts(value.facts),
+      ...readHooks(value),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -246,6 +270,7 @@ export function parseScript(raw: unknown): ScriptParse {
     script: {
       kind: SCRIPT_KIND,
       version: 1,
+      ...(raw.lang === 'en' || raw.lang === 'fr' ? { lang: raw.lang } : {}),
       series: text(raw.series),
       handle: text(raw.handle),
       ask: text(raw.ask),
@@ -253,10 +278,61 @@ export function parseScript(raw: unknown): ScriptParse {
       posts,
       sources: readSources(raw.sources),
       facts: readFacts(raw.facts),
+      look: readLook(raw.look),
       channels,
       topics,
     },
   };
+}
+
+const HOOK_ENTRIES = ['type', 'rise', 'word', 'fade'];
+const HOOK_EXITS = ['fade', 'erase', 'fly', 'cut'];
+const HOOK_PLACES = ['top', 'center', 'bottom'];
+const HOOK_INKS = ['paper', 'ink', 'accent'];
+
+/** A post's hooks, kept field by field when well formed (`hook.ts`). */
+function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'hookActive' | 'promise'> {
+  const num = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined);
+  const oneOf = <T extends string>(v: unknown, list: string[]) => (typeof v === 'string' && list.includes(v) ? (v as T) : undefined);
+  const hooks = Array.isArray(raw.hooks)
+    ? raw.hooks.flatMap((h): Hook[] => {
+        if (!isObject(h) || !Array.isArray(h.lines)) return [];
+        const lines = h.lines.filter((l): l is string => typeof l === 'string').slice(0, 3);
+        if (!lines.length) return [];
+        const sounds = isObject(h.sounds) ? h.sounds : {};
+        const sound = (v: unknown) => (typeof v === 'string' && v.length < 40 ? v : undefined);
+        const hook: Hook = {
+          lines,
+          sticker: h.sticker === null ? null : num(h.sticker, 0, lines.length - 1),
+          spoken: typeof h.spoken === 'string' ? h.spoken : undefined,
+          entry: oneOf(h.entry, HOOK_ENTRIES),
+          exit: oneOf(h.exit, HOOK_EXITS),
+          at: num(h.at, 0, 10),
+          cps: num(h.cps, 2, 60),
+          gap: num(h.gap, 0, 10),
+          hold: num(h.hold, 0, 10),
+          place: oneOf(h.place, HOOK_PLACES),
+          ink: oneOf(h.ink, HOOK_INKS),
+          scrim: num(h.scrim, 0, 1),
+          sounds: { keys: sound(sounds.keys), impact: sound(sounds.impact), whoosh: sound(sounds.whoosh) },
+        };
+        // Absent fields stay absent: the defaults live in one place (`HOOK_DEFAULTS`).
+        for (const k of Object.keys(hook) as (keyof Hook)[]) if (hook[k] === undefined) delete hook[k];
+        return [hook];
+      })
+    : [];
+  const active = num(raw.hookActive, 0, Math.max(0, hooks.length - 1));
+  return {
+    ...(hooks.length ? { hooks } : {}),
+    ...(hooks.length && active !== undefined ? { hookActive: Math.round(active) } : {}),
+    ...(typeof raw.promise === 'string' && raw.promise ? { promise: raw.promise } : {}),
+  };
+}
+
+/** The hook a post plays: its active variant, else its first; null without one. */
+export function activeHook(post: ScriptPost | undefined): Hook | null {
+  if (!post?.hooks?.length) return null;
+  return post.hooks[Math.min(post.hooks.length - 1, Math.max(0, post.hookActive ?? 0))] ?? null;
 }
 
 /** A fact's name: dotted lowercase words, the way a caption cites it. */
@@ -294,9 +370,31 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const skip = Array.isArray(wall.skip) ? wall.skip.filter(id) : [];
     const pick: Record<string, number> = {};
     if (isObject(wall.pick)) for (const [d, v] of Object.entries(wall.pick)) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && id(v)) pick[d] = v;
-    if (skip.length || Object.keys(pick).length) out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}) };
+    const chosen = Array.isArray(wall.chosen)
+      ? wall.chosen
+          .filter((c): c is [number, string] => Array.isArray(c) && c.length === 2 && id(c[0]) && typeof c[1] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c[1]))
+          .slice(0, MAX_CHOSEN)
+          .map((c): [number, string] => [c[0], c[1]])
+      : [];
+    if (skip.length || Object.keys(pick).length || chosen.length)
+      out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}), ...(chosen.length ? { chosen } : {}) };
   }
   return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
+}
+
+/** The series' look, kept field by field when well formed. */
+function readLook(raw: unknown): StoryLook | undefined {
+  if (!isObject(raw)) return undefined;
+  const level = (v: unknown, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(0, v)) : undefined);
+  const wall = readWallGrid(raw.wall);
+  const vignette = level(raw.vignette, 0.8);
+  const grain = level(raw.grain, 0.2);
+  const look: StoryLook = {
+    ...(wall ? { wall } : {}),
+    ...(vignette !== undefined ? { vignette } : {}),
+    ...(grain !== undefined ? { grain } : {}),
+  };
+  return Object.keys(look).length ? look : undefined;
 }
 
 function readFacts(raw: unknown): ScriptFacts | undefined {
@@ -312,17 +410,32 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
   const holes = Array.isArray(raw.holes)
     ? raw.holes.filter((h): h is [string, string] => Array.isArray(h) && h.length === 2 && isDay(h[0]) && isDay(h[1]) && h[0] <= h[1])
     : undefined;
+  // The tiles' days count only when there is one for each tile.
+  const tileDays =
+    tiles?.length && Array.isArray(raw.tileDays) && raw.tileDays.length === tiles.length && raw.tileDays.every(isDay)
+      ? (raw.tileDays as string[])
+      : undefined;
+  const stages = Array.isArray(raw.stages)
+    ? raw.stages.flatMap((s): WallStage[] =>
+        isObject(s) && typeof s.label === 'string' && isDay(s.from) && isDay(s.to) && s.from <= s.to ? [{ label: s.label, from: s.from, to: s.to }] : [],
+      )
+    : undefined;
   return {
     at: raw.at,
     from: typeof raw.from === 'string' ? raw.from : undefined,
     values,
     ...(tiles?.length ? { tiles } : {}),
+    ...(tileDays ? { tileDays } : {}),
+    ...(stages?.length ? { stages } : {}),
     ...(holes?.length ? { holes: holes.map((h): [string, string] => [h[0], h[1]]) } : {}),
   };
 }
 
+/** The pictures ticked in the picker a script keeps at most; more are thinned evenly over their days (`withChosenWall`). */
+export const MAX_CHOSEN = 2000;
+
 /** No wall shows more pictures than this; a script asking for more is cut. */
-const MAX_TILES = 400;
+export const MAX_TILES = 400;
 
 /** What a caption reads when no script is loaded. */
 export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} ⟩`;
@@ -336,7 +449,9 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
   const mine = script?.posts[skeleton.id];
   // The numbers this post cites (`story-facts.ts`): its own counting, else the series'.
   const values = (mine?.facts ?? script?.facts)?.values ?? null;
-  const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values);
+  const hook = activeHook(mine);
+  const lang: Lang = script?.lang ?? 'fr';
+  const title = (id: PostSkeleton) => fillText(script?.posts[id.id]?.title ?? id.number, values, lang);
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
   const next = after && after.season === skeleton.season ? after : undefined;
@@ -347,21 +462,32 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     season: skeleton.season,
     next: next ? { number: next.number, title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
-    cover: { line: fillText(mine?.cover ?? '', values) },
+    cover: { line: fillText(mine?.cover ?? '', values, lang) },
+    lang,
+    ...(script?.look ? { look: script.look } : {}),
+    wallGroups: wallGroups(
+      (mine?.facts ?? script?.facts)?.tileDays,
+      script?.look?.wall?.group ?? 'none',
+      (mine?.facts ?? script?.facts)?.stages,
+      (iso) => monthText(iso, lang),
+    ),
+    hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
+      // Under a hook the first block is its picture: a wall says nothing of its own there.
+      if (hook && i === 0 && b.block === 'wall') given.quiet = true;
       // A season's recap the script does not spell out lists the season's own posts, from the series.
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry
           .filter((p) => p.season === skeleton.season)
-          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values) }));
+          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
       }
       return {
         block: b.block,
         len: b.len,
-        params: fillParams(given, values) as Record<string, unknown>,
-        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values) } : null,
+        params: fillParams(given, values, lang) as Record<string, unknown>,
+        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values, lang) } : null,
       };
     }),
   };

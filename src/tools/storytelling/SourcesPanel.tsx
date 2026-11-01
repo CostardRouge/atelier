@@ -2,14 +2,15 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withWall } from '../../shared/story/sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withTiles, withWall, withChosenWall, countedStages } from '../../shared/story/sources';
 import DaysModal from './DaysModal';
 import WallModal from './WallModal';
-import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPicks } from '../../shared/story/story-facts';
+import WallPicker from './WallPicker';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts, type MapLabel, type MapPoints } from '../../shared/story/trip-map';
-import { TILES } from '../../shared/story/scenes/Hook';
+import { wallCells } from '../../shared/story/wall-grid';
 import type { WallProgress } from './wall-cache';
-import type { StoryScript } from '../../shared/story/story-script';
+import { MAX_CHOSEN, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import { Readout, SelectField } from '../../shared/ui/Inspector';
 
@@ -45,6 +46,7 @@ export default function SourcesPanel({
   const [counting, setCounting] = useState<Counting>({ state: 'idle' });
   const [choosingDays, setChoosingDays] = useState(false);
   const [choosingWall, setChoosingWall] = useState(false);
+  const [pickingWall, setPickingWall] = useState(false);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   useEffect(() => {
     let alive = true;
@@ -118,22 +120,61 @@ export default function SourcesPanel({
           .catch(() => null),
       ]);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
-      const tiles = wallPicks(all, span, TILES.length, sources.wall);
+      const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
+      // The pictures ticked in the picker when there are some, else one cover a day.
+      const picks = sources.wall?.chosen?.length
+        ? chosenPicks(sources.wall.chosen, span, places, sources.wall.skip)
+        : wallPickDays(all, span, places, sources.wall);
+      const stages = countedStages(trip, sources);
       const before = script.facts?.values ?? null;
       onScript(
-        withSeriesFacts(script, {
-          at: new Date().toISOString(),
-          from: `${trip.name} · ${connection.id}`,
-          values,
-          ...(tiles.length ? { tiles } : {}),
-          ...(geo?.holes.length ? { holes: geo.holes } : {}),
-        }),
+        withSeriesFacts(
+          script,
+          withTiles(
+            {
+              at: new Date().toISOString(),
+              from: `${trip.name} · ${connection.id}`,
+              values,
+              ...(stages.length ? { stages } : {}),
+              ...(geo?.holes.length ? { holes: geo.holes } : {}),
+            },
+            picks,
+          ),
+        ),
       );
       setCounting({ state: 'done', changes: before ? factChanges(before, values) : [] });
     } catch (err) {
       setCounting({ state: 'failed', message: err instanceof Error ? err.message : String(err) });
     }
   }
+
+  const chosen = sources.wall?.chosen ?? null;
+  const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
+  // The pictures ticked in the picker join the wall's pool; with a counting, the wall changes at once.
+  const putOnWall = (picked: [number, string][]) => {
+    if (!trip) return;
+    const byId = new Map<number, [number, string]>((chosen ?? []).map((c) => [c[0], c]));
+    for (const c of picked) byId.set(c[0], c);
+    const pool = thinEvenly([...byId.values()].sort((a, b) => a[1].localeCompare(b[1])), MAX_CHOSEN);
+    onScript(withChosenWall(script, pool, facts ? chosenPicks(pool, countedSpan(trip, sources), places, sources.wall?.skip) : null));
+  };
+  // Back to one cover a day: one calendar of the counted days, the other numbers untouched.
+  const oneADay = async () => {
+    if (!trip || !connection) return;
+    const span = countedSpan(trip, sources);
+    try {
+      const client = new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth });
+      const all = await client.calendar(span.from, span.to);
+      onScript(withChosenWall(script, null, wallPickDays(all, span, places, sources.wall)));
+    } catch (err) {
+      setCounting({ state: 'failed', message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+  const wallLine = chosen
+    ? `${chosen.length} picture${chosen.length === 1 ? '' : 's'} chosen in ${connection?.id ?? 'Winnow'}${chosen.length > places ? `, ${places} on the wall` : ''}.`
+    : sources.wall
+      ? `One a day, by hand: ${sources.wall.skip?.length ?? 0} hidden, ${Object.keys(sources.wall.pick ?? {}).length} picked.`
+      : 'One a day: each day’s cover on the Winnow.';
 
   return (
     <div className="flex flex-col gap-3">
@@ -291,7 +332,7 @@ export default function SourcesPanel({
         <p className="m-0 text-2xs text-muted leading-relaxed" role="status">
           {counting.changes.length === 0
             ? 'Counted: nothing changed since the last time.'
-            : counting.changes.map(([k, a, b]) => `${k} ${a === null ? '' : `${factText(a)} → `}${factText(b)}`).join(' · ')}
+            : counting.changes.map(([k, a, b]) => `${k} ${a === null ? '' : `${factText(a, script.lang)} → `}${factText(b, script.lang)}`).join(' · ')}
         </p>
       ) : null}
       {facts && Object.keys(facts.values).length > 0 ? (
@@ -299,29 +340,45 @@ export default function SourcesPanel({
           {Object.entries(facts.values).map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-muted">{`{${k}}`}</dt>
-              <dd className="m-0 text-ink tabular-nums text-right">{factText(v)}</dd>
+              <dd className="m-0 text-ink tabular-nums text-right">{factText(v, script.lang)}</dd>
             </div>
           ))}
         </dl>
       ) : null}
-      {wall && trip && connection ? (
-        <div className="flex items-center gap-2">
-          <span className="flex-1 min-w-0 text-2xs text-muted">
-            {sources.wall ? `Chosen by hand: ${sources.wall.skip?.length ?? 0} hidden, ${Object.keys(sources.wall.pick ?? {}).length} picked.` : 'Each day’s cover on the Winnow.'}
-          </span>
-          <Button size="sm" onClick={() => setChoosingWall(true)}>
-            Choose pictures…
+      {trip && connection ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex-1 min-w-[10rem] text-2xs text-muted">{wallLine}</span>
+          <Button size="sm" onClick={() => setPickingWall(true)} title="Choose the wall's pictures in the Winnow picker: by camera, type, extension, verdict and stars">
+            Choose in Winnow…
           </Button>
+          {chosen ? (
+            <Button size="sm" variant="ghost" onClick={() => void oneADay()}>
+              One a day
+            </Button>
+          ) : wall ? (
+            <Button size="sm" variant="ghost" onClick={() => setChoosingWall(true)}>
+              Per day…
+            </Button>
+          ) : null}
+          {pickingWall ? (
+            <WallPicker
+              connection={connection}
+              span={countedSpan(trip, sources)}
+              chosen={(chosen ?? []).map((c) => c[0])}
+              onAdd={putOnWall}
+              onClose={() => setPickingWall(false)}
+            />
+          ) : null}
           {choosingWall ? (
             <WallModal
               span={countedSpan(trip, sources)}
               current={sources.wall}
-              tiles={TILES.length}
+              tiles={places}
               connection={connection}
               onCancel={() => setChoosingWall(false)}
-              onApply={(chosen, picks) => {
+              onApply={(picked, picks) => {
                 setChoosingWall(false);
-                onScript(withWall(script, chosen, picks));
+                onScript(withWall(script, picked, picks));
               }}
             />
           ) : null}
@@ -332,7 +389,7 @@ export default function SourcesPanel({
           {wall.done < wall.total
             ? `Wall: bringing in pictures ${wall.done}/${wall.total}…`
             : wall.missing === 0
-              ? `Wall: ${wall.total} pictures of the trip, one a day.`
+              ? `Wall: ${wall.total} pictures of the trip${chosen ? '' : ', one a day'}.`
               : `Wall: ${wall.total - wall.missing} of ${wall.total} pictures; the others keep a colour${connection ? '' : ' until the Winnow is connected'}.`}
         </p>
       ) : null}

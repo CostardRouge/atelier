@@ -2996,14 +2996,45 @@ it and may grow blocks of its own.
   wall's pictures: each day's cover on the Winnow, one a day in order (thinned
   evenly past the wall's 180 tiles). Small squares of them are kept in this
   browser, so the wall draws — and exports — without asking the Winnow again;
-  *Forget* on the script clears them. *Choose pictures…* shows the wall's
+  *Forget* on the script clears them. *Per day…* shows the wall's
   picture for each counted day: click one to hide it, or *Other* to pick
   another picture of that day; the choice is kept in your script and the next
-  counting respects it. Counting also finds the days with media
+  counting respects it. *Choose in Winnow…* opens the same picker as Develop's
+  *Add a day* on the counted days, with nothing ticked: filter by camera (the
+  drone, a phone), photos or clips, extension (leave out `.png` and its
+  screenshots), Winnow's picks and stars, then tick *All* or *⚑ Picks* and
+  *Put N on the wall* — the wall then draws from those pictures, in day order,
+  rather than one a day (up to 2 000 kept in your script, thinned evenly);
+  *One a day* goes back. Counting also finds the days with media
   but no position: a map with holes (`map-holes`) that the script leaves without
   `gaps` draws them where the road was driven on those days. A season recap the
   script does not spell out lists the season's posts, their titles and cover
   lines.
+- **Hook.** *Add a hook* (in the Hook section) and the post opens on it instead
+  of its title: one or two lines over the first block's picture, typed letter by letter
+  (each key a click) or rising, word by word or fading in, a line landing as a
+  sticker with one impact, then fading, erasing, flying off or cut. Its timing,
+  place and ink are under *Timing, place and ink*; each of its three sounds
+  (the keys, the impact, the exit) is a built-in sound or a file of your own,
+  held for the visit like the voice. Variants A, B, C… keep several hooks for
+  one post; the one selected plays and exports, so each can be exported and
+  tested. *Promise* says what the post pays off, beside the hook. The wall
+  under a hook shows its picture only. The words are kept in your script.
+- **Look.** The Look section sets the series' wall and texture, the same in
+  every post: its columns, square pictures or a number of rows, the gap
+  between pictures, their corners, a share of pictures twice as big, the order
+  the days are laid in (along the rows, down the columns, out from the centre
+  — the first day where the camera starts — or shuffled) and how close the
+  camera ends; *Groups* lays the pictures in one band of rows per stage of the
+  trip or per month, each named on its first picture (*Name each group*); then
+  the grain and the vignette. *Count* chooses one picture per
+  place of the wall; after changing the grid, *Count again* gives each place
+  its own. *Back to the charte's look* forgets it all.
+- **Language.** *Language* (in the Script section) says whether the series is
+  told in English or French: its counted numbers (98,412 or 98 412), the days
+  on the map (Sep 3 or 03 sept.) and the few words the blocks write themselves
+  (NEXT EPISODE, BEFORE / AFTER, MIDNIGHT…) follow it. Your own words stay as
+  your script writes them.
 - **Sound.** Add a voice-over and a music bed from files on this device; they
   play with the stage, each at its start time and level, and are mixed into the
   export's sound track — AAC, or Opus in a browser that cannot encode AAC (the

@@ -8,6 +8,7 @@
 import { lineKm, roadPieces, simplify, tripRoadFixes, tripRoadLine } from '../roadtrip/road-track';
 import type { TripDoc } from '../roadtrip/trip-types';
 import type { Stop } from './geo';
+import { dayText, type Lang } from './locale';
 
 /**
  * The tolerance the road is simplified to, metres. At the story map's widest
@@ -29,8 +30,7 @@ export interface TripMap {
 const dayStart = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 1000;
 const dayEnd = (iso: string) => dayStart(iso) + 86_400;
 
-const dayLabel = (iso: string): string =>
-  new Date(`${iso}T12:00:00Z`).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+const dayLabel = (iso: string, lang: Lang = 'fr'): string => dayText(iso, lang);
 
 /** Which points of a trip the map names: where each stage starts and ends, where each starts, or every place. */
 export type MapPoints = 'ends' | 'starts' | 'places';
@@ -43,6 +43,8 @@ export interface MapChoice {
   stages?: readonly string[];
   points?: MapPoints;
   label?: MapLabel;
+  /** The language its days are written in. */
+  lang?: Lang;
 }
 
 type Stage = TripDoc['stages'][number];
@@ -86,8 +88,8 @@ export function tripStops(trip: TripDoc, choice: MapChoice = {}): Stop[] {
   }
   return picked.map((p): Stop => {
     const name =
-      label === 'none' ? '' : label === 'stage' ? stageLabel(p.stage) : label === 'place-date' ? `${p.name} · ${dayLabel(p.date)}` : p.name;
-    return [name, p.lon, p.lat, dayLabel(p.date)];
+      label === 'none' ? '' : label === 'stage' ? stageLabel(p.stage) : label === 'place-date' ? `${p.name} · ${dayLabel(p.date, choice.lang)}` : p.name;
+    return [name, p.lon, p.lat, dayLabel(p.date, choice.lang)];
   });
 }
 

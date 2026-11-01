@@ -2,6 +2,7 @@
 // fill = true: the route is already there, a second, slightly offset track in accent (Polarsteps)
 // draws over the gaps, then a few small triangles (the drone's points) settle on the line; a
 // legend at the bottom-left. {gaps: [[fracStart, fracEnd], ...], fill: boolean}
+import { word } from "../locale";
 import { register } from "./index";
 import { appear, clamp, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
 import { routeAt, STOPS } from "../geo";
@@ -119,6 +120,6 @@ register("map-holes", (c, lt, p) => {
     });
   }
   c.restore();
-  if (!fill) legend(c, lt, 2.4, [{ kind: "line", color: PAL.acc, label: "appareil" }, { kind: "dots", color: PAL.dim, label: "jours sans position" }]);
+  if (!fill) legend(c, lt, 2.4, [{ kind: "line", color: PAL.acc, label: word("camera") }, { kind: "dots", color: PAL.dim, label: word("noPosition") }]);
   else legend(c, lt, 1.6, [{ kind: "line", color: PAL.acc, label: "Polarsteps" }, { kind: "tri", color: PAL.ink, label: "drone" }]);
 });

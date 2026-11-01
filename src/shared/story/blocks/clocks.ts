@@ -1,6 +1,7 @@
 // `clocks` — two clock faces side by side, the second's hour hand turning to show the offset;
 // under them a day line with a midnight tick, and a few photo tiles sliding from the morning
 // of the day to the evening of the day before. {zoneA, zoneB, offsetHours, pctWrong}
+import { word } from "../locale";
 import { register } from "./index";
 import { appear, enter, PAL, rr, text, TYPO, type Ctx } from "../motion";
 
@@ -76,9 +77,9 @@ register("clocks", (c, lt, p) => {
     c.moveTo(540, ly - 16);
     c.lineTo(540, ly + 16);
     c.stroke();
-    text(c, "MINUIT", 540, ly + 48, 20, PAL.ink, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
-    text(c, "11 FÉV.", 300, ly + 48, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
-    text(c, "12 FÉV.", 780, ly + 48, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
+    text(c, word("midnight"), 540, ly + 48, 20, PAL.ink, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
+    text(c, word("feb11"), 300, ly + 48, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
+    text(c, word("feb12"), 780, ly + 48, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
   }, 10);
   // the morning photos, sliding onto the day before
   const hues = [22, 196, 38, 204];

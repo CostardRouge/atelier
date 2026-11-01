@@ -15,8 +15,10 @@ import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
 import { PAL, text, TYPO, type Ctx } from './motion';
-import { drawHud, drawTexture } from './overlays';
-import { setWall } from './scenes/Hook';
+import { drawHud, drawTexture, setTexture } from './overlays';
+import { setWall, setWallGrid } from './scenes/Hook';
+import { drawHook, hookTimeline } from './hook';
+import { setLang } from './locale';
 
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
@@ -67,8 +69,11 @@ function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
 }
 
 export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions = {}): void {
+  setLang(ep.lang);
   setMap(opts.stops ?? null, opts.road ?? null);
   setWall(opts.wall ?? null);
+  setWallGrid(ep.look?.wall, ep.wallGroups);
+  setTexture(ep.look);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
   c.save();
@@ -86,7 +91,9 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
     c.drawImage(l.canvas, 0, 0);
     c.globalAlpha = 1;
   });
-  drawHud(c, t, ep.number, slots[1]?.a ?? 0, total);
+  if (ep.hook) drawHook(c, ep.hook, t);
+  // The HUD waits for the opening: the title's slot, or the hook's last word.
+  drawHud(c, t, ep.number, ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0), total);
   if (!opts.bare) drawTexture(c, t);
   c.restore();
 }

@@ -1,9 +1,11 @@
-import { clearWall } from './wall-cache';
 import { useState, type ChangeEvent } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { parseScript, type StoryScript } from '../../shared/story/story-script';
 import Button, { buttonClass } from '../../shared/ui/Button';
+import type { Lang } from '../../shared/story/locale';
+import { SelectField } from '../../shared/ui/Inspector';
 import { POSTS } from './posts';
+import { clearWall } from './wall-cache';
 
 /** A file name for the script, from its series. */
 export function scriptFileName(script: StoryScript): string {
@@ -79,6 +81,20 @@ export default function ScriptControls({
           </>
         ) : null}
       </div>
+      {script && !compact ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-ink-soft w-16">Language</span>
+          <SelectField<Lang>
+            label="The language the series is told in"
+            value={script.lang ?? 'fr'}
+            options={[
+              { id: 'en', label: 'English — 98,412 · Sep 3' },
+              { id: 'fr', label: 'Français — 98 412 · 03 sept.' },
+            ]}
+            onChange={(lang) => onScript({ ...script, lang })}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

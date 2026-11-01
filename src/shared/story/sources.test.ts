@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTripDoc } from '../roadtrip/trip-types';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withSeriesFacts, withSeriesSources, withWall } from './sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, tripLine, withPostHooks, withSeriesFacts, withSeriesSources, withChosenWall, withLook, withWall } from './sources';
 import { parseScript, SCRIPT_KIND, type StoryScript } from './story-script';
 
 const base: StoryScript = { kind: SCRIPT_KIND, version: 1, posts: { a: {}, b: {} } };
@@ -144,18 +144,75 @@ describe('withWall', () => {
   const counted: StoryScript = { ...base, sources: { trip: { id: 't1', name: 'A' } }, facts: { at: 'x', values: { days: 3 }, tiles: [1, 2, 3] } };
 
   it('keeps the choice, freezes its pictures, and leaves the numbers as they were', () => {
-    const next = withWall(counted, { skip: [3], pick: { '2025-09-04': 42 } }, [1, 42]);
+    const next = withWall(counted, { skip: [3], pick: { '2025-09-04': 42 } }, [{ id: 1, day: '2025-09-03' }, { id: 42, day: '2025-09-04' }]);
     expect(next.sources?.wall).toEqual({ skip: [3], pick: { '2025-09-04': 42 } });
-    expect(next.facts).toEqual({ at: 'x', values: { days: 3 }, tiles: [1, 42] });
+    expect(next.facts).toEqual({ at: 'x', values: { days: 3 }, tiles: [1, 42], tileDays: ['2025-09-03', '2025-09-04'] });
     expect(next.sources?.trip).toEqual(counted.sources?.trip);
   });
 
   it('forgets an empty choice', () => {
-    expect(withWall(counted, null, [1, 2, 3]).sources?.wall).toBeUndefined();
+    expect(withWall(counted, null, [{ id: 1, day: '2025-09-03' }]).sources?.wall).toBeUndefined();
   });
 
   it('reads the choice from a script file, dropping what is not an id or a day', () => {
     const parsed = parseScript({ ...base, sources: { wall: { skip: [3, -1, 'x'], pick: { '2025-09-04': 42, soon: 7, '2025-09-05': 0 } } } });
     expect(parsed.ok && parsed.script.sources).toEqual({ wall: { skip: [3], pick: { '2025-09-04': 42 } } });
+  });
+});
+
+describe('withPostHooks', () => {
+  const s: StoryScript = { ...base, posts: { a: { title: 'Un' } } };
+  const hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
+
+  it('sets a post’s hooks, which one plays, and its promise', () => {
+    const next = withPostHooks(s, 'a', { hooks: [hook, { lines: ['100 000 → ?'] }], hookActive: 1, promise: 'La méthode.' });
+    expect(next.posts.a).toEqual({ title: 'Un', hooks: [hook, { lines: ['100 000 → ?'] }], hookActive: 1, promise: 'La méthode.' });
+    expect(withPostHooks(next, 'a', { hookActive: 9 }).posts.a.hookActive).toBe(1);
+  });
+
+  it('takes the hook away with an empty list, and the promise with an empty line', () => {
+    const next = withPostHooks(withPostHooks(s, 'a', { hooks: [hook], promise: 'x' }), 'a', { hooks: [], promise: ' ' });
+    expect(next.posts.a).toEqual({ title: 'Un' });
+  });
+});
+
+describe('withLook', () => {
+  it('keeps only what departs from the defaults', () => {
+    const one = withLook(base, { wall: { cols: 6, gap: 6 } });
+    expect(one.look).toEqual({ wall: { cols: 6 } });
+    const two = withLook(one, { vignette: 0.4, grain: 0.055 });
+    expect(two.look).toEqual({ wall: { cols: 6 }, vignette: 0.4 });
+    expect(withLook(two, { wall: { cols: 10 }, vignette: null }).look).toBeUndefined();
+  });
+
+  it('goes back to the charte’s look', () => {
+    expect(withLook(withLook(base, { grain: 0.1 }), null)).toEqual(base);
+  });
+});
+
+describe('the wall chosen in the picker', () => {
+  const counted: StoryScript = { ...base, facts: { at: 'x', values: { days: 3 }, tiles: [1] } };
+
+  it('keeps the pool in day order and freezes the wall when given its pictures', () => {
+    const next = withChosenWall(counted, [[9, '2025-09-02'], [7, '2025-09-01']], [{ id: 7, day: '2025-09-01' }]);
+    expect(next.sources?.wall?.chosen).toEqual([[7, '2025-09-01'], [9, '2025-09-02']]);
+    expect(next.facts?.tiles).toEqual([7]);
+    expect(withChosenWall(counted, [[9, '2025-09-02']], null).facts?.tiles).toEqual([1]);
+  });
+
+  it('thins a pool too big for a script evenly over its days', () => {
+    const many = Array.from({ length: 5000 }, (_, i): [number, string] => [i + 1, `2025-09-${String(1 + (i % 28)).padStart(2, '0')}`]);
+    expect(withChosenWall(base, many, null).sources?.wall?.chosen).toHaveLength(2000);
+  });
+
+  it('goes back to one a day, and a hidden picture or a day’s pick keeps the pool', () => {
+    const chosen = withChosenWall(counted, [[7, '2025-09-01']], null);
+    expect(withChosenWall(chosen, null, null).sources?.wall).toBeUndefined();
+    expect(withWall(chosen, { skip: [3] }, [{ id: 7, day: '2025-09-01' }]).sources?.wall).toEqual({ skip: [3], chosen: [[7, '2025-09-01']] });
+  });
+
+  it('reads a pool from a script file, keeping only ids with a day', () => {
+    const parsed = parseScript({ ...base, sources: { wall: { chosen: [[7, '2025-09-01'], [0, '2025-09-02'], [8, 'soon'], 'x'] } } });
+    expect(parsed.ok && parsed.script.sources?.wall).toEqual({ chosen: [[7, '2025-09-01']] });
   });
 });

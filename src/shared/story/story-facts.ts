@@ -7,32 +7,33 @@
  * silently reading 0.
  */
 import type { WinnowCalendar, WinnowGeoDay } from '../sources/winnow/client';
+import { numberText, type Lang } from './locale';
 
 export type FactValues = Readonly<Record<string, number>>;
 
 const PLACEHOLDER = /\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}/g;
 const ALONE = /^\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}$/;
 
-/** A number the way the series writes it: French grouping. */
-export const factText = (n: number): string => Math.round(n).toLocaleString('fr-FR');
+/** A number the way the series writes it, in its language (`locale.ts`): « 98 412 », « 98,412 ». */
+export const factText = (n: number, lang: Lang = 'fr'): string => numberText(n, lang);
 
 /** A text with every counted fact written in. */
-export function fillText(text: string, values: FactValues | null): string {
+export function fillText(text: string, values: FactValues | null, lang: Lang = 'fr'): string {
   if (!values) return text;
-  return text.replace(PLACEHOLDER, (whole, key: string) => (key in values ? factText(values[key]) : whole));
+  return text.replace(PLACEHOLDER, (whole, key: string) => (key in values ? factText(values[key], lang) : whole));
 }
 
 /** A block's params with the facts filled in: a lone fact becomes its number, a fact in a text is written in. */
-export function fillParams(value: unknown, values: FactValues | null): unknown {
+export function fillParams(value: unknown, values: FactValues | null, lang: Lang = 'fr'): unknown {
   if (!values) return value;
   if (typeof value === 'string') {
     const alone = ALONE.exec(value);
     if (alone && alone[1] in values) return values[alone[1]];
-    return fillText(value, values);
+    return fillText(value, values, lang);
   }
-  if (Array.isArray(value)) return value.map((v) => fillParams(v, values));
+  if (Array.isArray(value)) return value.map((v) => fillParams(v, values, lang));
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fillParams(v, values)]));
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fillParams(v, values, lang)]));
   }
   return value;
 }
@@ -84,6 +85,22 @@ export function wallPicks(
   n: number,
   chosen: { skip?: readonly number[]; pick?: Readonly<Record<string, number>> } = {},
 ): number[] {
+  return wallPickDays(all, span, n, chosen).map((p) => p.id);
+}
+
+/** A picture of the wall and the day it stands for. */
+export interface WallPick {
+  id: number;
+  day: string;
+}
+
+/** `wallPicks` with each picture's day — what groups the wall by stage or month (`ScriptFacts.tileDays`). */
+export function wallPickDays(
+  all: WinnowCalendar,
+  span: Span,
+  n: number,
+  chosen: { skip?: readonly number[]; pick?: Readonly<Record<string, number>> } = {},
+): WallPick[] {
   // The author's own picture for a day stands for its cover; a picture he hid takes its day off the wall.
   const days = all.days
     .filter((d) => counts(d.date, span) && d.count > 0 && d.cover_id > 0)
@@ -91,7 +108,29 @@ export function wallPicks(
     .filter((d) => !chosen.skip?.includes(d.id))
     .sort((a, b) => a.date.localeCompare(b.date));
   const picked = days.length <= n ? days : Array.from({ length: n }, (_, i) => days[Math.round((i * (days.length - 1)) / Math.max(1, n - 1))]);
-  return [...new Set(picked.map((d) => d.id))];
+  const seen = new Set<number>();
+  return picked.flatMap((d) => (seen.has(d.id) ? [] : (seen.add(d.id), [{ id: d.id, day: d.date }])));
+}
+
+/** `n` of a list, taken evenly from its first to its last; the whole list when it holds no more. (pure) */
+export function thinEvenly<T>(list: readonly T[], n: number): T[] {
+  if (list.length <= n) return [...list];
+  if (n <= 0) return [];
+  return Array.from({ length: n }, (_, i) => list[Math.round((i * (list.length - 1)) / Math.max(1, n - 1))]);
+}
+
+/**
+ * The wall's pictures from those ticked in the Winnow picker
+ * (`ScriptSources.wall.chosen`): the counted days' only, the hidden ones out,
+ * in day order, thinned evenly to the wall's `n` places.
+ */
+export function chosenPicks(chosen: readonly (readonly [number, string])[], span: Span, n: number, skip: readonly number[] = []): WallPick[] {
+  const hidden = new Set(skip);
+  const kept = chosen
+    .filter(([id, day]) => counts(day, span) && !hidden.has(id))
+    .map(([id, day]) => ({ id, day }))
+    .sort((a, b) => a.day.localeCompare(b.day));
+  return thinEvenly(kept, n);
 }
 
 /** What changed between two countings, for the line under Count again: `[key, before, after]`. */

@@ -1,4 +1,5 @@
 // Fin « suivant »: « ÉPISODE SUIVANT » in mono, « L’arrivée » big, a short accent rule, « EP.01 ».
+import { word } from "../locale";
 import { appear, enter, fit, PAL, rr, text, TYPO, type Ctx } from "../motion";
 
 export function drawRecap(c: Ctx, lt: number, p: { next: { number: string; title: string; thumb?: CanvasImageSource | null } }) {
@@ -24,7 +25,7 @@ export function drawRecap(c: Ctx, lt: number, p: { next: { number: string; title
       c.stroke();
     }, 12);
   }
-  appear(c, enter(lt, 0.2, 1), () => text(c, "ÉPISODE SUIVANT", 540, 820, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 6 }), 8);
+  appear(c, enter(lt, 0.2, 1), () => text(c, word("nextEpisode"), 540, 820, 28, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 6 }), 8);
   appear(c, enter(lt, 0.6, 1.4), () => {
     const z = fit(c, p.next.title, 860, 170, TYPO.hw, TYPO.fam);
     text(c, p.next.title, 540, 990, z, PAL.ink, { align: "center" });

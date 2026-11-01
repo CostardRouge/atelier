@@ -5,8 +5,12 @@
  * same rule, a post's own over the series'.
  */
 import type { TripDoc } from '../roadtrip/trip-types';
-import type { ScriptFacts, ScriptSources, StoryScript } from './story-script';
-import { chosenStages, type MapChoice } from './trip-map';
+import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
+import { chosenStages, stageLabel, type MapChoice } from './trip-map';
+import { thinEvenly, type WallPick } from './story-facts';
+import { TEXTURE } from './charte';
+import type { StoryLook } from './episode';
+import { WALL_DEFAULTS, type WallGrid, type WallStage } from './wall-grid';
 
 /** The sources a post reads: its own fields over the series'. */
 export function sourcesOf(script: StoryScript | null, postId: string): ScriptSources {
@@ -98,11 +102,100 @@ export function countedSpan(trip: TripDoc, sources: ScriptSources): CountedSpan 
  * at once, the other numbers untouched — what was hidden or picked is drawn,
  * not counted.
  */
-export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null, tiles: number[]): StoryScript {
+export function withWall(script: StoryScript, wall: ScriptSources['wall'] | null, picks: readonly WallPick[]): StoryScript {
+  // The pictures ticked in the picker are kept: a hidden one or a day's pick does not undo them.
+  const chosen = script.sources?.wall?.chosen;
+  return withWallSources(script, { ...(wall ?? {}), ...(chosen ? { chosen } : {}) }, picks);
+}
+
+/**
+ * The script with the pictures ticked in the Winnow picker as the wall's
+ * pool (`chosen`, thinned evenly to `MAX_CHOSEN` over their days), or with
+ * none — the wall back to one cover a day. `picks`, when given, freezes the
+ * wall's pictures at once; without them the next counting does.
+ */
+export function withChosenWall(script: StoryScript, chosen: readonly (readonly [number, string])[] | null, picks: readonly WallPick[] | null): StoryScript {
+  const was = script.sources?.wall ?? {};
+  const pool = chosen?.length ? thinEvenly([...chosen].sort((a, b) => a[1].localeCompare(b[1])), MAX_CHOSEN).map((c): [number, string] => [c[0], c[1]]) : null;
+  const wall: NonNullable<ScriptSources['wall']> = { ...was };
+  if (pool) wall.chosen = pool;
+  else delete wall.chosen;
+  return withWallSources(script, wall, picks);
+}
+
+function withWallSources(script: StoryScript, wall: NonNullable<ScriptSources['wall']>, picks: readonly WallPick[] | null): StoryScript {
   const sources: ScriptSources = { ...(script.sources ?? {}) };
-  if (wall && (wall.skip?.length || Object.keys(wall.pick ?? {}).length)) sources.wall = wall;
+  if (wall.skip?.length || Object.keys(wall.pick ?? {}).length || wall.chosen?.length) sources.wall = wall;
   else delete sources.wall;
-  const facts = script.facts ? { ...script.facts, ...(tiles.length ? { tiles } : {}) } : undefined;
-  if (facts && !tiles.length) delete facts.tiles;
-  return { ...script, sources, ...(facts ? { facts } : {}) };
+  return { ...script, sources, ...(script.facts && picks ? { facts: withTiles(script.facts, picks) } : {}) };
+}
+
+/** Facts with the wall's pictures (and their days) replaced; none takes the wall's pictures away. */
+export function withTiles(facts: ScriptFacts, picks: readonly WallPick[]): ScriptFacts {
+  const next: ScriptFacts = { ...facts };
+  delete next.tiles;
+  delete next.tileDays;
+  if (picks.length) {
+    next.tiles = picks.map((p) => p.id);
+    next.tileDays = picks.map((p) => p.day);
+  }
+  return next;
+}
+
+/** The kept stages as counting freezes them for a wall grouped by stage: their names and days, in date order. */
+export function countedStages(trip: TripDoc, sources: ScriptSources): WallStage[] {
+  return chosenStages(trip, mapChoiceOf(sources)).map((s) => ({ label: stageLabel(s), from: s.startDate, to: s.endDate }));
+}
+
+/**
+ * The script with one post's hooks changed (`hook.ts`): its variants, which
+ * one plays, and its promise. An empty list takes the hook away — the post
+ * opens on its title again.
+ */
+export function withPostHooks(
+  script: StoryScript,
+  postId: string,
+  change: { hooks?: ScriptPost['hooks']; hookActive?: number; promise?: string },
+): StoryScript {
+  const post: ScriptPost = { ...(script.posts[postId] ?? {}) };
+  if (change.hooks !== undefined) {
+    if (change.hooks.length) post.hooks = change.hooks;
+    else {
+      delete post.hooks;
+      delete post.hookActive;
+    }
+  }
+  if (change.hookActive !== undefined && post.hooks?.length) post.hookActive = Math.min(post.hooks.length - 1, Math.max(0, change.hookActive));
+  if (change.promise !== undefined) {
+    if (change.promise.trim()) post.promise = change.promise;
+    else delete post.promise;
+  }
+  return { ...script, posts: { ...script.posts, [postId]: post } };
+}
+
+/**
+ * The script with the series' look changed (`wall-grid.ts`, `StoryLook`): a
+ * field set back to its default is removed, so a script keeps only what was
+ * chosen, and an empty look leaves no trace.
+ */
+export function withLook(script: StoryScript, change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null } | null): StoryScript {
+  if (!change) {
+    const rest = { ...script };
+    delete rest.look;
+    return rest;
+  }
+  const was = script.look ?? {};
+  const wall: Partial<WallGrid> = { ...(was.wall ?? {}), ...(change.wall ?? {}) };
+  for (const k of Object.keys(wall) as (keyof WallGrid)[]) if (wall[k] === WALL_DEFAULTS[k]) delete wall[k];
+  const look: StoryLook = { ...was, ...(Object.keys(wall).length ? { wall } : {}) };
+  if (!Object.keys(wall).length) delete look.wall;
+  for (const k of ['vignette', 'grain'] as const) {
+    const v = change[k];
+    if (v === undefined) continue;
+    if (v === null || v === TEXTURE[k]) delete look[k];
+    else look[k] = v;
+  }
+  const next: StoryScript = { ...script, look };
+  if (!Object.keys(look).length) delete next.look;
+  return next;
 }

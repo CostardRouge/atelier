@@ -1,9 +1,10 @@
 // `transfer` — a memory card → the NAS: a long thin line filling over ~3.5 s, file names
 // streaming under it in mono, then the total in Geist. {card, total, prefix?, ext?}
+import { word, numberText } from "../locale";
 import { register } from "./index";
 import { appear, clamp, E, enter, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
 
-const fr = (n: number) => n.toLocaleString("fr-FR");
+const fr = (n: number) => numberText(n);
 
 function card(c: Ctx, x: number, y: number, label: string) {
   // a rounded rect with the top-right corner notched
@@ -84,5 +85,5 @@ register("transfer", (c, lt, p) => {
     c.restore();
   }
   appear(c, enter(lt, T0 + DUR + 0.1, 1), () => text(c, fr(total) + " fichiers", 540, yL + 270, 56, PAL.ink, { align: "center" }), 14);
-  appear(c, enter(lt, T0 + DUR + 0.4, 1), () => text(c, "copiés", 540, yL + 318, 32, PAL.acc, { align: "center", w: TYPO.lw }), 10);
+  appear(c, enter(lt, T0 + DUR + 0.4, 1), () => text(c, word("copied"), 540, yL + 318, 32, PAL.acc, { align: "center", w: TYPO.lw }), 10);
 });

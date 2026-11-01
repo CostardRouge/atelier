@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { WinnowClient, type WinnowCalendarDay } from '../../shared/sources/winnow/client';
 import type { WinnowConnection } from '../../shared/sources/winnow/store';
 import type { CountedSpan } from '../../shared/story/sources';
-import { counts, wallPicks } from '../../shared/story/story-facts';
+import { counts, wallPickDays, type WallPick } from '../../shared/story/story-facts';
 import type { ScriptSources } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
@@ -33,7 +33,7 @@ export default function WallModal({
   tiles: number;
   connection: WinnowConnection;
   onCancel: () => void;
-  onApply: (wall: Wall | null, picks: number[]) => void;
+  onApply: (wall: Wall | null, picks: WallPick[]) => void;
 }) {
   const client = useMemo(() => new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth }), [connection]);
   const [days, setDays] = useState<WinnowCalendarDay[] | null>(null);
@@ -83,7 +83,7 @@ export default function WallModal({
     if (!days) return;
     const keptPick = Object.fromEntries(Object.entries(pick).filter(([d, id]) => days.some((x) => x.date === d && x.cover_id !== id)));
     const wall: Wall = { ...(skip.size ? { skip: [...skip] } : {}), ...(Object.keys(keptPick).length ? { pick: keptPick } : {}) };
-    const picks = wallPicks({ days, bounds: null }, span, tiles, wall);
+    const picks = wallPickDays({ days, bounds: null }, span, tiles, wall);
     onApply(wall.skip || wall.pick ? wall : null, picks);
   };
   useDialogKeys({ onCancel, onConfirm: days ? apply : null });

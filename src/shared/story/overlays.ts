@@ -39,19 +39,30 @@ function grain(): HTMLCanvasElement {
   return (grainTile = g);
 }
 
+/** The series' own grain and vignette (`StoryScript.look`), over the charte's; set by `compose.ts` and `cover.ts`. */
+let LOOK: { grain?: number; vignette?: number } = {};
+export function setTexture(look: { grain?: number; vignette?: number } | null | undefined): void {
+  LOOK = look ?? {};
+}
+
 export function drawTexture(c: Ctx, t: number): void {
+  const grainAlpha = LOOK.grain ?? TEXTURE.grain;
+  const vignette = LOOK.vignette ?? TEXTURE.vignette;
   const seed = Math.floor((t * 1000) / TEXTURE.grainMs);
   const ox = (seed * 97) % 256;
   const oy = (seed * 57) % 256;
   const g = grain();
-  c.save();
-  c.globalAlpha = TEXTURE.grain;
-  c.globalCompositeOperation = 'overlay';
-  for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) c.drawImage(g, x, y);
-  c.restore();
+  if (grainAlpha > 0) {
+    c.save();
+    c.globalAlpha = grainAlpha;
+    c.globalCompositeOperation = 'overlay';
+    for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) c.drawImage(g, x, y);
+    c.restore();
+  }
+  if (vignette <= 0) return;
   const v = c.createRadialGradient(W / 2, H / 2, TEXTURE.vignetteInner, W / 2, H / 2, TEXTURE.vignetteOuter);
   v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, `rgba(0,0,0,${TEXTURE.vignette})`);
+  v.addColorStop(1, `rgba(0,0,0,${vignette})`);
   c.save();
   c.fillStyle = v;
   c.fillRect(0, 0, W, H);

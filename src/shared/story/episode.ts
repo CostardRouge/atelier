@@ -6,6 +6,18 @@
  * script (the words, numbers and places) in `assemble`.
  */
 import { OV, type Cap } from './charte';
+import type { Hook } from './hook';
+import type { Lang } from './locale';
+import type { WallGrid, WallGroup } from './wall-grid';
+
+/** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
+export interface StoryLook {
+  wall?: Partial<WallGrid>;
+  /** The vignette's darkness at the corners, 0 to 0.8 (the charte's 0.25 when absent). */
+  vignette?: number;
+  /** The moving grain's strength, 0 to 0.2 (the charte's 0.055 when absent). */
+  grain?: number;
+}
 
 export interface BlockSpec {
   block: string;
@@ -28,6 +40,14 @@ export interface Episode {
   closing: { series: string; handle: string; ask: string };
   blocks: BlockSpec[];
   cover?: { line: string };
+  /** The first seconds' words, over the first block, in place of the title opening (`hook.ts`). */
+  hook?: Hook | null;
+  /** The language it is told in (`locale.ts`); absent = French. */
+  lang?: Lang;
+  /** The series' look: the wall's grid, the grain and the vignette (`story-script.ts`, `StoryLook`). */
+  look?: StoryLook;
+  /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
+  wallGroups?: WallGroup[] | null;
 }
 
 export type Slot = BlockSpec & { a: number; b: number; start: number; key: string };
@@ -38,7 +58,8 @@ export const OUTRO_LEN = 4.4;
 /** Opening + blocks + ending, each with its `[a, b)` slot and its overlapped start. (pure) */
 export function slotsOf(ep: Episode): Slot[] {
   const all: BlockSpec[] = [
-    { block: 'intro', len: INTRO_LEN, params: { title: ep.title, number: ep.number, season: ep.season } },
+    // A post with a hook opens on its first block, the hook over it: the title would cost the first seconds.
+    ...(ep.hook ? [] : [{ block: 'intro', len: INTRO_LEN, params: { title: ep.title, number: ep.number, season: ep.season } }]),
     ...ep.blocks,
     ep.next
       ? { block: 'recap', len: OUTRO_LEN, params: { next: ep.next } }

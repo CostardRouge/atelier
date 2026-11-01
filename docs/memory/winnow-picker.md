@@ -319,6 +319,10 @@ The index outgrew its ~200-line budget, so its long entries were moved here verb
 
 - ONE Winnow PICKER takes media from an instance everywhere (2026-10-01): `shared/sources/winnow/picker/`, a host passing only what differs (`PickerHost`: what it holds, what is ticked on open, its verbs — *Add to library* with fidelity, *Add to the roll* as refs); the rail filters over the scope's rows except the half (sent to the server), the verbs act on what is drawn, a burst shows its cover plus the frames Winnow said yes to. Since 2026-10-13 it lists a SPAN of days as well as a day or a folder (asked WHOLE, in parts planned from Winnow's calendar — one capped walk showed a year as its October), filters clips by FLIGHT LOG, shows a Logbook whose rows draw each flight's track, and the Library brings *Logs only* — a DJI clip's `.srt` without its video, which Flight Atlas's own door (`AtlasWinnow.tsx`) uses — `winnow-picker.md`, `flight-atlas.md`.
 
+## Storytelling hosts it for the wall (2026-11-01)
+
+Fourth host (`tools/storytelling/WallPicker.tsx`): the counted span, nothing ticked on open, *Put N on the wall* handing back ids and days. Nothing ticked because the rail's filters are the point there and a row ticked on open survives a filter that hides it — `storytelling.md`, « The wall's pictures from the Winnow picker ».
+
 ### Open items (were the index's "Open items")
 
 - 2026-10-01 — **The ONE Winnow picker is BUILT** — the Library's *browse all* and Develop's *Add a day* are the same modal (`docs/winnow-day-sheet-verdicts.md` §7, `winnow-picker.md`, labs https://claude.ai/artifact/9hZnWW5Kog8nzwmNk1WXdw and https://claude.ai/artifact/R99xvWQAi3bHWt3hehv2i1), his §7.4 answered by its recommendations. Open: driving it against his REAL instance (stub only here), merging and deploying Winnow #277 so a burst's picked frame is listed without an unfold, and re-reading the capabilities sheet (`#/sources`) once it is.
