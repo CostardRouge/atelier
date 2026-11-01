@@ -226,12 +226,22 @@ const defined = <T extends object>(o: T): Partial<T> =>
 /**
  * Draw an object: `key` names it for the settings, `anchor` is the point it
  * turns and grows about (its middle, in the frame's pixels), and `draw` gets
- * the local time less the object's delay. Hidden, or left out for picking,
- * it draws nothing.
+ * the local time less the object's delay. `from` is when it starts to show,
+ * on that delayed clock: before it, the object is neither drawn nor listed,
+ * so the timeline's bar starts where it appears. Hidden, or left out for
+ * picking, it draws nothing.
  */
-export function obj(c: CanvasRenderingContext2D, key: string, anchor: readonly [number, number], lt: number, draw: (lt: number) => void): void {
+export function obj(
+  c: CanvasRenderingContext2D,
+  key: string,
+  anchor: readonly [number, number],
+  lt: number,
+  draw: (lt: number) => void,
+  from?: number,
+): void {
   const id = `${SLOT}:${key}`;
   const style = styleOf(key);
+  if (from !== undefined && lt - (style.delay ?? 0) <= from) return;
   const record: DrawnObject = { id, key, slot: SLOT, text: false };
   DRAWN.push(record);
   if (style.hidden || HIDE === id) return;
@@ -285,6 +295,8 @@ const familyOf = (id: StoryFontId) => STORY_FONTS[id];
 export function resolveFont(size: number, w: number, fam: string): string {
   const s = STACK.length ? currentStyle() : null;
   let id: StoryFontId | null = null;
+  // The face the code itself names: the charte keeps it unless a role or the object says otherwise.
+  const native: StoryFontId | null = fam === BASE_SANS ? 'geist' : fam === BASE_MONO ? 'mono' : null;
   if (fam === BASE_SANS) id = ROLES[w >= 500 ? 'title' : 'text'];
   else if (fam === BASE_MONO) id = ROLES.num;
   if (s?.font) id = s.font.startsWith('@') ? ROLES[s.font.slice(1) as FontRole] : (s.font as StoryFontId);
@@ -293,5 +305,8 @@ export function resolveFont(size: number, w: number, fam: string): string {
   const px = Math.max(1, size * ((s?.size ?? 100) / 100));
   if (!id) return `${weight} ${px}px ${fam}`;
   const f = familyOf(id);
-  return `${'italic' in f && f.italic ? 'italic ' : ''}${nearestWeight(f, weight)} ${px}px ${f.family}`;
+  // A face chosen in the Studio is asked at a weight it ships (no synthetic bold of a one-weight face);
+  // the code's own face keeps the weight asked, so a glyph it lacks falls back exactly as before.
+  const shown = id === native ? weight : nearestWeight(f, weight);
+  return `${'italic' in f && f.italic ? 'italic ' : ''}${shown} ${px}px ${f.family}`;
 }
