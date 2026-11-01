@@ -3178,14 +3178,14 @@ frame's shape in the room it has, and nothing is ever stretched; each
 picture is compared on the part a cell of that shape shows of it, and drawn
 so.
 
-**Zooming is framing.** In *Still*, the wheel, a pinch or a drag zoom the
-stage, and the moment the hand rests what is in view becomes the part
-rebuilt: the frame on the target's card follows, and the mosaic is rebuilt
+**Zooming is framing.** While nothing plays, whatever the mode, the
+wheel, a pinch or a drag zoom the stage, and with **Auto-frame on zoom**
+(the switch in the Target section, on by default) the moment the hand
+rests what is in view becomes the part rebuilt: the frame on the target's card follows, and the mosaic is rebuilt
 for that part with as many cells as before — a zoom is more detail, never
 bigger cells. Zooming out stops at the whole picture; `Z` returns to it; ↶
-in the bar (⌘Z) takes any edit back, a zoom included. The Performance
-section can make a zoom only *look* instead, in which case *Frame this* on
-the stage writes it and `Z` drops it.
+in the bar (⌘Z) takes any edit back, a zoom included. Switched off, a
+zoom only *looks*: *Frame this* on the stage writes it and `Z` drops it.
 
 **As it lands.** A big mosaic is matched in lots, each painted the moment
 its answer lands — from the cell you clicked outward by default, else row

@@ -242,7 +242,7 @@ mosaic IS, the device how it is computed and shown. The section sits at the
 inspector's foot, closed by default: workers (Auto · N here, 1–8), where the
 measure runs (pool, one worker, this thread), the lot (a row, 64, 256,
 1 024), the propagation, *Show each lot as it lands*, the cell animation and
-its ms, tiles in memory, scenes ahead, the zoom's meaning (F6), motion; a
+its ms, tiles in memory, scenes ahead, motion (the zoom's meaning moved to the Target section's Auto-frame switch); a
 measured line «last matching · N lots · ms a lot · where · fps» under them.
 `workers: 0` is auto (`workersFor`: cores − 1, two to six, one or two
 constrained); the pool is remade on that number; `measure()` reads the pref
@@ -450,6 +450,23 @@ along a row until a cell holds another picture. Driven headless: Arrival → Pho
 reads Custom and back; a reveal there and back says `back into its
 cells`; aim *Best match* replaces the drawn head; a click on the held
 mosaic makes the next step land on that picture.
+
+## Auto-frame is a switch in Target, and the stage zooms in every stopped mode (2026-11-01)
+
+His report: «en style et quand je zoome, ça ne me fait pas le reframe
+automatiquement … une option pour auto-frame». **Cause found**: the stage
+heard the hand only in *Still* — in a stopped *Mosaics* or *Chain* the
+stage shows the same target's mosaic, but a trackpad pinch (a ctrl-wheel)
+reached the BROWSER, which zoomed the whole page and wrote no crop.
+**Rules**: `useStageZoom` is enabled whenever nothing plays, in every mode
+(the crop is the target's, the start of any run); the frame-or-look choice
+(`PerfPrefs.zoom`, still this device's) is the **Auto-frame on zoom**
+switch in the *Target* section, beside the frame it writes — the
+Performance panel's *Zoom* row is gone (a fact said once). Off, a zoom is a
+look and the stage's pill offers *Frame this*. Driven headless: a 20-step
+ctrl-wheel pinch on a stopped Mosaics stage writes a crop and leaves the
+page at scale 1; off, a pinch keeps the crop and *Frame this* writes it; a
+plain wheel at the corner of Still frames the top-left.
 
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 

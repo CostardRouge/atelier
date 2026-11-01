@@ -115,6 +115,12 @@ export default function MosaicSettings({ settings, update, view, setView, state,
             onChange={(id) => update((s) => ({ ...s, aspect: id }))}
           />
         </FieldRow>
+        <SwitchRow
+          label="Auto-frame on zoom"
+          checked={perf.zoom === 'frame'}
+          onChange={(on) => setPerf({ zoom: on ? 'frame' : 'look' })}
+          hint={<p>On, a zoom on the stage becomes the part rebuilt the moment your hand rests, with as many cells on it. Off, a zoom only enlarges what is there, and <i>Frame this</i> on the stage writes it. This device’s choice.</p>}
+        />
         <p className="m-0 text-xs text-muted">Drag the frame to choose the part rebuilt, its sides and corners to resize it. The rest is never read.</p>
       </InspectorSection>
       <InspectorSection id="mosaic-cells" title="Cells" remember="session">
@@ -243,9 +249,6 @@ export default function MosaicSettings({ settings, update, view, setView, state,
         <SliderRow label="Animation" name="animation" value={perf.animationMs} min={0} max={600} step={20} reset={160} format={(v) => `${v} ms`} onChange={(animationMs) => setPerf({ animationMs })} />
         <SelectField<string> label="Tiles in memory" value={String(perf.tileCache)} options={[600, 2000, 4000].map((n) => ({ id: String(n), label: n.toLocaleString() }))} onChange={(v) => setPerf({ tileCache: Number(v) as PerfPrefs['tileCache'] })} />
         <SelectField<string> label="Scenes ahead" value={String(perf.ahead)} options={[1, 2, 3].map((n) => ({ id: String(n), label: String(n) }))} onChange={(v) => setPerf({ ahead: Number(v) as PerfPrefs['ahead'] })} />
-        <FieldRow label="Zoom" hint={<p><b>Frames</b>: a zoom on the stage becomes the part rebuilt, with as many cells on it. <b>Looks</b>: a zoom only enlarges what is there, and <i>Frame this</i> on the stage writes it.</p>}>
-          <Segmented<PerfPrefs['zoom']> size="sm" fill value={perf.zoom} options={[{ id: 'frame', label: 'Frames' }, { id: 'look', label: 'Looks' }]} onChange={(zoom) => setPerf({ zoom })} />
-        </FieldRow>
         <FieldRow label="Motion">
           <Segmented<PerfPrefs['motion']> size="sm" fill value={perf.motion} options={[{ id: 'system', label: 'System' }, { id: 'reduced', label: 'Reduced' }, { id: 'full', label: 'Full' }]} onChange={(motion) => setPerf({ motion })} />
         </FieldRow>

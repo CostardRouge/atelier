@@ -194,11 +194,13 @@ function MosaicWorkbench({
     player?.stop();
   }, [dialsKey, player]);
 
-  // --- the zoom over the Still stage: a crop under `frame`, a look under `look` (F6) ---
+  // --- the zoom over the stage, whatever the mode while nothing plays: a crop with auto-frame, a look without (F6) ---
+  // In every mode, not only Still: a stopped stage shows the target's mosaic, and a pinch the stage did not hear was
+  // read by the browser, which zoomed the whole page instead.
   const stageRef = useRef<HTMLDivElement>(null);
   const zoom = useStageZoom({
     ref: stageRef,
-    enabled: !status.playing && mode === 'single',
+    enabled: !status.playing,
     stageW,
     stageH,
     scene: shown,
@@ -227,7 +229,7 @@ function MosaicWorkbench({
         else play();
         return;
       }
-      if (status.playing || mode !== 'single') return;
+      if (status.playing) return;
       const action = zoomKeyAction(describeZoomKey(e), zoom.zoomed);
       if (!action) return;
       e.preventDefault();
@@ -270,7 +272,7 @@ function MosaicWorkbench({
               }}
               onSteer={chained ? (cell) => void player?.steer(cell) : undefined}
             />
-            {!status.playing && mode === 'single' && (zoom.zoomed || cropped) && (
+            {!status.playing && (zoom.zoomed || cropped) && (
               <div className="absolute right-2 top-2 flex items-center gap-1 rounded-control bg-frame/75 p-1" role="group" aria-label="Zoom">
                 {zoom.zoomed && (
                   <span className="font-mono text-2xs text-on-media tabular-nums px-1" role="status">
@@ -278,7 +280,7 @@ function MosaicWorkbench({
                   </span>
                 )}
                 {zoom.zoomed && perf.zoom === 'look' && (
-                  <Button size="sm" variant="primary" onClick={zoom.commit} title="What is in view becomes the part rebuilt, with as many cells on it">
+                  <Button size="sm" variant="primary" onClick={zoom.commit} title="What is in view becomes the part rebuilt, with as many cells on it — Auto-frame does it on release">
                     Frame this
                   </Button>
                 )}
