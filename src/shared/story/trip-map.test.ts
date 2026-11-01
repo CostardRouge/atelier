@@ -179,7 +179,9 @@ describe('the map a series chooses', () => {
     const t = trip();
     t.stages[1].name = 'La côte est';
     expect(tripStops(t, { points: 'starts', label: 'stage' }).map((s) => s[0])).toEqual(['La côte est', 'Melbourne → Adélaïde']);
-    expect(tripStops(t, { label: 'place-date' })[0][0]).toMatch(/^Sydney · 03 sept/);
+    // The place and its day: two lines since 2026-11-01 (`map-names.ts`).
+    expect(tripStops(t, { label: 'place-date' })[0][0]).toBe('Sydney');
+    expect(tripStops(t, { label: 'place-date' })[0][4]).toMatch(/^03 sept/);
     expect(tripStops(t, { label: 'none' }).every((s) => s[0] === '')).toBe(true);
   });
 
@@ -206,8 +208,8 @@ describe('the map a series chooses', () => {
   it('names its own stops as asked, a stop knowing no stage', () => {
     const stops = [{ name: 'Perth', lat: -31.95, lon: 115.86, day: '2025-09-03' }, { name: 'Albany', lat: -35.02, lon: 117.88 }];
     expect(ownStops({ stops }).map((s) => s[0])).toEqual(['Perth', 'Albany']);
-    expect(ownStops({ stops, label: 'place-date' })[0][0]).toMatch(/^Perth · 03 sept/);
-    expect(ownStops({ stops, label: 'place-date' })[1][0]).toBe('Albany');
+    expect(ownStops({ stops, label: 'place-date' })[0][4]).toMatch(/^03 sept/);
+    expect(ownStops({ stops, label: 'place-date' })[1]).toEqual(['Albany', 117.88, -35.02, '', '', 'Albany']);
     expect(ownStops({ stops, label: 'none' }).every((s) => s[0] === '')).toBe(true);
   });
 

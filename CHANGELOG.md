@@ -58,6 +58,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   show. Set it under Charte & look › Maps or from the chip on the stage while a map is shown. The tiles are fetched only
   once this device says yes, and their credit appears on the map's frames alone, as an object you can move, size and
   set in another face.
+- Storytelling: choose what the map says at each point, on two lines — the place, the town it is in or near, the
+  state or its code, the country, the stage, the day of the trip, the date or the kilometres so far — with a place
+  written as in Trips (« Perth, WA »), which points carry their name (all, those passed, the current one, the first
+  and last, none), and a line said once. Ready-made settings cover the usual ones; a stop of your own list can be
+  renamed by hand. A new series says the town and its state's code.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
   HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
   size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every

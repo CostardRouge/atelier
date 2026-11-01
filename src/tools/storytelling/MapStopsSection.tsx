@@ -14,6 +14,7 @@ import Segmented from '../../shared/ui/Segmented';
 import { SelectField } from '../../shared/ui/Inspector';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
+import { focusOnMount } from '../../shared/ui/focus';
 
 type Source = 'ends' | 'starts' | 'places' | 'own';
 const SOURCES: readonly { id: Source; label: string; title: string }[] = [
@@ -46,6 +47,8 @@ export default function MapStopsSection({ trip, script, onScript, lang }: { trip
   const list = useMemo(() => own ?? derivedStops(trip, choice), [own, trip, choice]);
   const places = useMemo(() => tripPlaces(trip), [trip]);
   const [editing, setEditing] = useState(false);
+  // The stop whose own name is being typed (L4: it wins over the names' fields).
+  const [renaming, setRenaming] = useState<number | null>(null);
   const [towns, setTowns] = useState(() => townsIfLoaded());
   useEffect(() => {
     if (towns || map.group?.name !== 'town') return;
@@ -82,7 +85,7 @@ export default function MapStopsSection({ trip, script, onScript, lang }: { trip
       const place = (s.placeId && places.find((p) => p.id === s.placeId)) || places.find((p) => key(p) === key(s));
       const before = list.find((x) => key(x) === key(s));
       const day = before?.day ?? place?.day;
-      return { name: s.name, lat: s.lat, lon: s.lon, ...(day ? { day } : {}) };
+      return { name: s.name, lat: s.lat, lon: s.lon, ...(day ? { day } : {}), ...(before?.own ? { own: before.own } : {}) };
     });
 
   const move = (i: number, j: number) => {
@@ -127,10 +130,46 @@ export default function MapStopsSection({ trip, script, onScript, lang }: { trip
         {list.map((s, i) => (
           <li key={`${key(s)}-${i}`} className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 pl-2.5 pr-1 min-h-10 pointer-coarse:min-h-12 border-t border-line first:border-t-0">
             <span className="font-mono text-2xs text-muted text-right">{i + 1}</span>
-            <span className="min-w-0 truncate text-sm">
-              {s.name || 'Unnamed point'}
-              {s.day ? <span className="ml-1.5 font-mono text-3xs text-muted">{dayText(s.day, lang ?? 'en')}</span> : null}
-            </span>
+            {renaming === i ? (
+              <input
+                ref={focusOnMount}
+                aria-label={`What the map says for ${s.name}`}
+                defaultValue={s.own ?? ''}
+                placeholder={s.name}
+                maxLength={80}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') setRenaming(null);
+                }}
+                onBlur={(e) => {
+                  if (renaming === null) return;
+                  const own = e.currentTarget.value.trim();
+                  setRenaming(null);
+                  if ((own || undefined) === s.own) return;
+                  writeOwn(
+                    list.map((x, k) => {
+                      if (k !== i) return x;
+                      const next: MapStopRef = { ...x };
+                      if (own) next.own = own;
+                      else delete next.own;
+                      return next;
+                    }),
+                  );
+                }}
+                className="min-w-0 h-8 rounded-control border border-line bg-surface px-2 text-sm"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setRenaming(i)}
+                title="Type what the map says for this stop, whatever the names say"
+                className="min-w-0 truncate text-left text-sm cursor-text bg-transparent border-0 p-0"
+              >
+                {s.own ? <span className="text-ink">« {s.own} »</span> : s.name || 'Unnamed point'}
+                {s.own ? <span className="ml-1.5 text-3xs text-muted">{s.name}</span> : null}
+                {s.day ? <span className="ml-1.5 font-mono text-3xs text-muted">{dayText(s.day, lang ?? 'en')}</span> : null}
+              </button>
+            )}
             <span className="inline-flex">
               <IconButton label={`Move ${s.name} up`} size="sm" variant="ghost" disabled={i === 0} onClick={() => move(i, i - 1)}>
                 {Icons.up}

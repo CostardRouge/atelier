@@ -2,9 +2,14 @@
 // world-atlas land-50m extract (src/data/australia.json, same projection: scripts/gen-australia.mjs),
 // finer than the page's 55-point polygon — which matters once the camera zooms ×2.3.
 import coast from "./australia.json";
+import type { NamedWhich } from "./map-names";
 
-/** A stop on the trip: name, longitude, latitude, the date it is labelled with. */
-export type Stop = [string, number, number, string];
+/**
+ * A stop on the trip: what it says (its first line), longitude, latitude, its
+ * day as written, then — optional — its second line (`map-names.ts`) and the
+ * place's own name, which a block naming a stop looks it up by.
+ */
+export type Stop = [string, number, number, string, string?, string?];
 
 /**
  * The trip drawn on the map. It is CONTENT, so it comes from the private
@@ -31,6 +36,9 @@ export let STOP_REACH: number[] = [];
 /** A road as `[lon, lat]` points, in the order it was driven. */
 export type RoadPoints = readonly (readonly [number, number])[];
 
+/** Which stops carry their name as the route is drawn (`map-names.ts`, `namedAt`). */
+export let NAMED: NamedWhich = 'all';
+
 /** Point the map at a trip. Two stops at least; fewer keeps the placeholder. */
 export function setStops(stops: readonly Stop[] | null | undefined): void {
   setMap(stops, null);
@@ -44,7 +52,8 @@ let lastRoad: RoadPoints | null = null;
  * the towns named along it, each reached where the road passes closest to it
  * — searched forward, so a road that passes a town twice names it in order.
  */
-export function setMap(stops: readonly Stop[] | null | undefined, road: RoadPoints | null | undefined): void {
+export function setMap(stops: readonly Stop[] | null | undefined, road: RoadPoints | null | undefined, named: NamedWhich = 'all'): void {
+  NAMED = named;
   const next = stops && stops.length >= 2 ? stops.slice() : PLACEHOLDER_STOPS;
   const line = road && road.length >= 2 ? road : null;
   if (next === STOPS && line === lastRoad && ROUTE.length) return;

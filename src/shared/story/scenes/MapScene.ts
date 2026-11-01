@@ -1,7 +1,7 @@
 // Carte « camera »: zoomed ×2.3 following the route head (sine in-out), then the camera
 // pulls back to the whole map over the last 1.4 s. Coast dim, route accent, stops as reached.
 import { clamp, E, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
-import { ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
+import { NAMED, ROUTE, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
 import { drawGround, groundCredit } from "../map-ground";
 import { obj } from "../objects";
 
@@ -42,11 +42,27 @@ export function drawRoute(c: Ctx, frac: number, width: number) {
   return h;
 }
 
-/** tail: extra alpha once the route is complete, so the LAST stop (reach = 1) gets its label too */
+/**
+ * The stops' names. Which carry one is the series' (`NAMED`, `map-names.ts`):
+ * every one, those the route has reached, only the latest reached, the first
+ * and last, or none. A name has two lines: what it says, then smaller and
+ * muted its second line. `tail` adds alpha once the route is complete, so the
+ * LAST stop (reach = 1) gets its name too; `skip` leaves names out by text.
+ */
 export function mapLabels(c: Ctx, frac: number, size: number, tail = 0, spread = false, skip: string[] = []) {
+  const n = STOPS.length;
   STOPS.forEach((st, i) => {
     const reach = STOP_REACH[i] ?? 1;
-    const a = clamp((frac - reach) * 8 + (i === 0 ? 1 : 0) + tail);
+    // Reached: the dot (and, under « those passed », the name) arrives as the route gets there.
+    const reached = clamp((frac - reach) * 8 + (i === 0 ? 1 : 0) + tail);
+    const next = i < n - 1 ? clamp((frac - (STOP_REACH[i + 1] ?? 1)) * 8) : 0;
+    const named =
+      NAMED === "none" ? 0
+      : NAMED === "all" ? 1
+      : NAMED === "ends" ? (i === 0 ? 1 : i === n - 1 ? reached : 0)
+      : NAMED === "current" ? reached * (1 - next)
+      : reached;
+    const a = Math.max(reached, NAMED === "all" ? 1 : 0);
     if (a <= 0) return;
     const [x, y] = STOP_XY[i];
     // at ×1 two stops 20 px apart (Cairns, Daintree) would share a label line: the later one goes above
@@ -61,7 +77,14 @@ export function mapLabels(c: Ctx, frac: number, size: number, tail = 0, spread =
     c.lineWidth = 3;
     c.stroke();
     const right = x < 700;
-    if (!skip.includes(st[0])) text(c, st[0], x + (right ? 20 : -20), y + dy, size, PAL.ink, { fam: TYPO.mono, w: 400, align: right ? "left" : "right" });
+    const shown = named > 0 && !skip.includes(st[0]);
+    if (shown && (st[0] || st[4])) {
+      c.globalAlpha *= named / a;
+      const tx = x + (right ? 20 : -20);
+      const align = right ? "left" : "right";
+      text(c, st[0], tx, y + dy, size, PAL.ink, { fam: TYPO.mono, w: 400, align });
+      if (st[4]) text(c, st[4], tx, y + dy + size * 0.95, size * 0.72, PAL.dim, { fam: TYPO.mono, w: 400, align });
+    }
     c.restore();
   });
 }

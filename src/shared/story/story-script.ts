@@ -10,6 +10,7 @@
  * be judged and nothing personal ships with the code. (pure)
  */
 import { readMapGround } from './map-ground';
+import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
 import type { Episode, StoryLook } from './episode';
@@ -90,7 +91,10 @@ export interface ScriptSources {
    */
   map?: {
     points?: 'ends' | 'starts' | 'places';
+    /** What each point said before the two lines (`names`): read as the matching preset when `names` is absent. */
     label?: 'place' | 'stage' | 'place-date' | 'none';
+    /** What each point says: two lines of fields, a place's writing, which points (`map-names.ts`). */
+    names?: MapNames;
     /**
      * The author's own stops, in the order the map visits them — present, they
      * ARE the map's points (`points` then only says what they were taken from,
@@ -171,8 +175,10 @@ export interface MapStopRef {
   name: string;
   lat: number;
   lon: number;
-  /** Its day (ISO), when it came from the trip — said by « The place and its day ». */
+  /** Its day (ISO), when it came from the trip — said by the day and date fields. */
   day?: string;
+  /** A name typed by hand for it: the map says this, whatever the fields (`map-names.ts`). */
+  own?: string;
 }
 
 /** The most stops a series keeps on its map. */
@@ -239,11 +245,13 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 function isStop(v: unknown): v is Stop {
   return (
     Array.isArray(v) &&
-    v.length === 4 &&
+    v.length >= 4 &&
+    v.length <= 6 &&
     typeof v[0] === 'string' &&
     Number.isFinite(v[1]) &&
     Number.isFinite(v[2]) &&
-    typeof v[3] === 'string'
+    typeof v[3] === 'string' &&
+    v.slice(4).every((x) => typeof x === 'string')
   );
 }
 
@@ -416,6 +424,7 @@ function readSources(raw: unknown): ScriptSources | undefined {
             lat: s.lat as number,
             lon: s.lon as number,
             ...(typeof s.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.day) ? { day: s.day } : {}),
+            ...(typeof s.own === 'string' && s.own.trim() ? { own: s.own.trim().slice(0, 80) } : {}),
           }))
       : undefined;
     const took = ['ends', 'starts', 'places'].includes(map.took as string) ? (map.took as 'ends' | 'starts' | 'places') : undefined;
@@ -424,10 +433,12 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const naming = g?.name === 'town' || g?.name === 'first' || g?.name === 'central' ? (g.name as 'town' | 'first' | 'central') : undefined;
     const group = g ? { km: g.km as number, ...(visits ? { visits } : {}), ...(naming ? { name: naming } : {}) } : undefined;
     const route = map.route === 'stops' || map.route === 'all' ? map.route : undefined;
-    if (points || label || stops || group || route)
+    const names = readMapNames(map.names);
+    if (points || label || names || stops || group || route)
       out.map = {
         ...(points ? { points } : {}),
         ...(label ? { label } : {}),
+        ...(names ? { names } : {}),
         ...(stops ? { stops } : {}),
         ...(stops && took ? { took } : {}),
         ...(group ? { group } : {}),

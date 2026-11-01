@@ -15,6 +15,7 @@ import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
 import { setGround, type GroundLayer } from './map-ground';
+import type { NamedWhich } from './map-names';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
 import { setWall, setWallGrid } from './scenes/Hook';
@@ -26,6 +27,8 @@ import { CAPTION, HUD } from './charte';
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
   stops?: readonly Stop[] | null;
+  /** Which stops carry their name (`map-names.ts`); all of them when absent. */
+  named?: NamedWhich;
   /** The road the route follows, from a trip (`trip-map.ts`); without it the stops are joined in a line. */
   road?: RoadPoints | null;
   /** The wall's pictures, square, in day order (`wall-cache.ts`); without them its tiles are colours. */
@@ -103,7 +106,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   applyCharte(ep.look?.charte);
   setStyles(ep.look?.objects, ep.objects);
   beginFrame();
-  setMap(opts.stops ?? null, opts.road ?? null);
+  setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all');
   setWall(opts.wall ?? null);
   setGround(ep.look?.map, opts.ground ?? null);
   setWallGrid(ep.look?.wall, ep.wallGroups);

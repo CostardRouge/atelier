@@ -9,6 +9,7 @@ import { downloadBlob } from '../../shared/media/save';
 import { H, W } from '../../shared/story/charte';
 import { drawEpisode } from '../../shared/story/compose';
 import { geometryKey } from '../../shared/story/objects';
+import { mapNamesOf } from '../../shared/story/map-names';
 import { hookScore, hookSoundFor, hookSounds } from '../../shared/story/hook';
 import HookPanel, { type HookFiles } from './HookPanel';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
@@ -192,8 +193,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         : { stops: script?.stops }),
       wall: wall.images,
       ground: groundLayers,
+      named: mapNamesOf(sources.map).which,
     }),
-    [tripMap, script, wall.images, groundLayers],
+    [tripMap, script, wall.images, groundLayers, sources.map],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];

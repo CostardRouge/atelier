@@ -3021,8 +3021,13 @@ it and may grow blocks of its own.
   one, they join the stops written in the script. Untick a stage to leave it
   out of the route, its towns and the counted days (a trip that begins in Bali,
   told from Australia). *Names* chooses which points are named (where stages
-  start and end, where they start, every place) and *Says* what each says (the
-  place, the stage, the place and its day, or nothing). The maps are drawn
+  start and end, where they start, every place) and *Says* what each says, on
+  two lines: the place, the town it is in or near, the state or its code, the
+  country, the stage, the day of the trip, the date or the kilometres so far, a
+  place written as in Trips (« Perth, WA »); which points carry their name (all,
+  those passed, the current one, the first and last, none); a line the point
+  before said can be left out; and a stop of your own list can be renamed by
+  hand. The maps are drawn
   over the coastline that ships with Atelier, over no land at all, or over
   OpenStreetMap's tiles (*Charte & look* › *Maps*, or the *Map* chip on the
   stage while a map shows) — the tiles only once this device says yes, toned
