@@ -65,6 +65,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: H (or ⌨ beside the guides) lists every key and gesture of the Studio. A finger picks an object on a
   phone's stage, Forget asks before it drops the script, and an open script is edited in one tab at a time — another
   tab shows it read only, with *Edit here*. If the browser refuses to keep the script, the tool says so.
+- Storytelling: an agent connected on Sources can read the open post, move its playhead, select an object, set its
+  style for the series or the post, undo, and look at any frame.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.
 - Develop: switch a setting off without losing it. Click the dot beside a slider's name, or the eye in a section's

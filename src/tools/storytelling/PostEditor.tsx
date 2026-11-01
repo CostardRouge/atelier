@@ -28,6 +28,9 @@ import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
 import RunLockNotice from '../../shared/ui/RunLockNotice';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { imageResult } from '../../shared/commands/image-result';
+import { checkStylePatch, postOutline } from '../../shared/story/story-commands';
 import PageBar from '../../shared/ui/PageBar';
 import { paintCover } from './covers';
 import { POSTS } from './posts';
@@ -350,6 +353,113 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   }, [onScript]);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+
+  // --- an agent drives the post through commands (`agent-commands.md`) ---------------------------------
+  // Each is the Studio's own gesture: a style is written like the inspector writes it (one undo step), a
+  // seek moves the same clock, a snapshot draws the post as the export does.
+  const agent = useRef({ script, postId, shown, mapOpts, scenes, tracks, total, episode, history, onScript });
+  agent.current = { script, postId, shown, mapOpts, scenes, tracks, total, episode, history, onScript };
+  useRegisterCommands('storytelling-post', [
+    {
+      id: 'story.post',
+      title: 'Read the open post',
+      description:
+        'The open Storytelling post: its number, title and length, the playhead, what is selected, its scenes on the post’s clock (with each caption’s window), every object it draws (key, label, scene slot, whether it is text, the seconds it is on the stage), and the styles set on objects for the series and for this post.',
+      run: () => {
+        const a = agent.current;
+        return {
+          post: a.postId,
+          number: a.episode.number,
+          title: a.episode.title,
+          seconds: Math.round(a.total * 10) / 10,
+          playhead: Math.round(clock.t * 10) / 10,
+          selected: selectedRef.current,
+          ...postOutline(a.scenes, a.tracks),
+          styles: { series: a.script?.look?.objects ?? {}, post: a.script?.posts[a.postId]?.objects ?? {} },
+          scriptLoaded: !!a.script,
+        };
+      },
+    },
+    {
+      id: 'story.seek',
+      title: 'Move the playhead',
+      description: 'Stop the post and put its playhead at a time, in seconds from its start.',
+      params: { t: { type: 'number', description: 'Seconds from the start.', min: 0 } },
+      run: (p) => {
+        const t = Math.min(p.t as number, agent.current.total);
+        seek(t);
+        return { playhead: Math.round(t * 10) / 10 };
+      },
+    },
+    {
+      id: 'story.select',
+      title: 'Select an object',
+      description: 'Select an object by its key (story.post lists them), as a click on the stage does; slot narrows it to one scene when the key is drawn in several.',
+      params: {
+        key: { type: 'string', description: 'The object’s key, e.g. counter.number or caption.' },
+        slot: { type: 'string', description: 'The scene slot it is drawn in.', optional: true },
+      },
+      run: (p) => {
+        const hit = agent.current.tracks.find((t) => t.key === p.key && (p.slot === undefined || t.slot === p.slot));
+        if (!hit) throw new Error(`no object “${String(p.key)}”${p.slot ? ` in ${String(p.slot)}` : ''} in this post`);
+        select({ kind: 'object', id: hit.id, key: hit.key, slot: hit.slot });
+        return { selected: { key: hit.key, slot: hit.slot } };
+      },
+    },
+    {
+      id: 'story.setStyle',
+      title: 'Set an object’s style',
+      description:
+        'Set fields of an object’s style for the whole series or this post only, as the inspector does (one undo step): hidden, dx/dy (frame pixels, 1080 × 1920), scale, rotate (degrees), opacity (0–1), font (@title, @text, @num, @hand or a face id), weight, size (% of the block’s), tracking, color (@bg @ink @acc @dim @soft @deep or #hex), textCase (upper, lower, as), outline, outlineColor, shadow, shadowY, shadowOpacity, shadowColor, delay (seconds). null clears a field. Out of range is refused, never clamped.',
+      params: {
+        key: { type: 'string', description: 'The object’s key (story.post).' },
+        style: { type: 'object', description: 'The fields to set; null clears one.' },
+        scope: { type: 'string', enum: ['series', 'post'], description: 'Every post of the series, or this one only (default series).', optional: true },
+      },
+      available: () => (agent.current.script ? true : 'no script is loaded: styles are kept in it'),
+      run: (p) => {
+        const a = agent.current;
+        const checked = checkStylePatch(p.style);
+        if (!checked.ok) throw new Error(checked.reason);
+        const sc = (p.scope as StyleScope | undefined) ?? 'series';
+        const next = withStyle(a.script!, a.postId, p.key as string, checked.patch, sc);
+        a.onScript(next);
+        return { key: p.key, scope: sc, style: styleIn(next, a.postId, p.key as string, sc) };
+      },
+    },
+    {
+      id: 'story.undo',
+      title: 'Undo',
+      description: 'Undo the last change to the script, the author’s or an agent’s.',
+      available: () => (agent.current.history.canUndo ? true : 'nothing to undo'),
+      run: () => {
+        agent.current.history.undo();
+        return { undone: true };
+      },
+    },
+    {
+      id: 'story.snapshot',
+      title: 'Look at a frame',
+      description: 'The post’s frame at a time (default the playhead), drawn as the export draws it, as a JPEG to look at.',
+      params: {
+        t: { type: 'number', description: 'Seconds from the start; default the playhead.', min: 0, optional: true },
+        longEdge: { type: 'number', description: 'Pixels on the long edge, 160–1920 (default 960).', min: 160, max: 1920, integer: true, optional: true },
+      },
+      available: () => (fontsReady ? true : 'the series’ faces are still loading'),
+      run: async (p) => {
+        const a = agent.current;
+        const t = Math.min((p.t as number | undefined) ?? clock.t, a.total - 0.001);
+        const scale = ((p.longEdge as number | undefined) ?? 960) / H;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(W * scale);
+        canvas.height = Math.round(H * scale);
+        drawEpisode(canvas.getContext('2d')!, a.shown, t, { ...a.mapOpts, scale });
+        const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/jpeg', 0.85));
+        if (!blob) throw new Error('the frame could not be encoded');
+        return imageResult(blob, canvas.width, canvas.height, `${a.episode.number} at ${t.toFixed(1)} s`);
+      },
+    },
+  ]);
 
   // The list's thumbnails, painted when the Continuity panel shows them.
   const showCovers = selected?.kind === 'panel' && selected.id === 'export';

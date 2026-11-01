@@ -13,7 +13,8 @@ import '@fontsource/archivo-black/400.css';
 import '@fontsource/special-elite/400.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
-import type { StoryScript } from '../../shared/story/story-script';
+import { assemble, type StoryScript } from '../../shared/story/story-script';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { STORY_FONTS } from '../../shared/story/fonts';
 import PostEditor, { type PostSound } from './PostEditor';
 import { POSTS } from './posts';
@@ -102,6 +103,34 @@ export default function StorytellingTool() {
   }, [mine, postId, skeleton]);
 
   const open = useCallback((id: string) => navigate(`${BASE}/${encodeURIComponent(id)}`), []);
+
+  // The series for an agent (`agent-commands.md`): its posts, and opening one — the post's own commands
+  // (`story.post`, `story.setStyle`, `story.snapshot`…) are registered by its editor once it is open.
+  const posts = useRef(script);
+  posts.current = script;
+  useRegisterCommands('storytelling', [
+    {
+      id: 'story.posts',
+      title: 'List the series’ posts',
+      description: 'Every post of the Storytelling series: its id, number, title (from the script when one is loaded), and which one is open.',
+      run: () => ({
+        scriptLoaded: !!posts.current,
+        series: posts.current?.series ?? null,
+        open: postId,
+        posts: POSTS.map((p) => ({ id: p.id, number: p.number, title: assemble(p, posts.current, POSTS).title })),
+      }),
+    },
+    {
+      id: 'story.openPost',
+      title: 'Open a post',
+      description: 'Open a post of the series in its editor, by its id (story.posts); then app.waitFor story.post.',
+      params: { id: { type: 'string', description: 'The post’s id, e.g. ep01.', enum: POSTS.map((p) => p.id) } },
+      run: (p) => {
+        open(p.id as string);
+        return { opening: p.id };
+      },
+    },
+  ]);
 
   const view = skeleton ? (
     <PostEditor
