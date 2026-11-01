@@ -106,7 +106,7 @@ export default function StoryGallery({
   const posts = flatten(rows).filter((r) => r.post).length;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto pb-8 flex flex-col gap-4">
+    <div className="@container flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-8 flex flex-col gap-4">
       <header className="flex flex-wrap items-end gap-4 pt-2">
         <div className="min-w-0">
           <p className="m-0 font-mono text-2xs uppercase tracking-[0.12em] text-muted">Storytelling</p>
@@ -152,17 +152,17 @@ export default function StoryGallery({
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-paper-lg border border-line bg-surface">
+      <div className="overflow-x-auto overscroll-x-contain rounded-paper-lg border border-line bg-surface">
         <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 z-[1] bg-surface text-left font-mono text-2xs uppercase tracking-[0.1em] text-muted font-normal px-3 py-2 border-b border-line min-w-[19rem]">
+              <th scope="col" className="sticky left-0 z-[1] bg-surface text-left font-mono text-2xs uppercase tracking-[0.1em] text-muted font-normal px-3 py-2 border-b border-line min-w-[19rem] @max-[640px]:min-w-[10.5rem] @max-[640px]:w-[10.5rem] shadow-[1px_0_0_var(--color-line)]">
                 Subject
               </th>
               {channels.map((c) => (
-                <th key={c.id} scope="col" className="text-left font-normal px-3 py-2 border-b border-l border-line min-w-[7.5rem] align-bottom" title={c.voice}>
+                <th key={c.id} scope="col" className="text-left font-normal px-3 py-2 border-b border-l border-line min-w-[7.5rem] @max-[640px]:min-w-[5.25rem] @max-[640px]:px-2 align-bottom" title={c.voice}>
                   <span className="block text-sm font-semibold text-ink">{c.name}</span>
-                  {c.format ? <span className="block text-xs text-muted truncate max-w-[9rem]">{c.format}</span> : null}
+                  {c.format ? <span className="block text-xs text-muted truncate max-w-[9rem] @max-[640px]:hidden">{c.format}</span> : null}
                   <span className="block mt-1.5">
                     <CoverageBar rows={leaves} channel={c.id} />
                   </span>
@@ -178,7 +178,7 @@ export default function StoryGallery({
               const cover = r.post ? covers.get(r.post.id) : undefined;
               return (
                 <tr key={r.topic.id} className={top ? 'bg-paper-2' : ''}>
-                  <th scope="row" className={`sticky left-0 z-[1] text-left font-normal border-b border-line px-3 py-1.5 ${top ? 'bg-paper-2' : 'bg-surface'}`}>
+                  <th scope="row" className={`sticky left-0 z-[1] text-left font-normal border-b border-line px-3 @max-[640px]:px-2 py-1.5 shadow-[1px_0_0_var(--color-line)] @max-[640px]:max-w-[10.5rem] ${top ? 'bg-paper-2' : 'bg-surface'}`}>
                     <div className="flex items-center gap-2" style={{ paddingLeft: `${r.depth * 1.1}rem` }}>
                       <button
                         type="button"
@@ -201,16 +201,16 @@ export default function StoryGallery({
                           <button
                             type="button"
                             onClick={() => onOpen(r.post!.id)}
-                            className="text-left text-ink font-medium truncate max-w-[18rem] cursor-pointer hover:text-accent-ink underline-offset-[3px] hover:underline"
+                            className="text-left text-ink font-medium truncate max-w-[18rem] @max-[640px]:max-w-[7.5rem] cursor-pointer hover:text-accent-ink underline-offset-[3px] hover:underline"
                             title={`Open ${r.post.number}`}
                           >
                             <span className="font-mono text-2xs text-muted mr-1.5">{r.post.number}</span>
                             {script?.posts[r.post.id]?.title ?? r.topic.title}
                           </button>
                         ) : (
-                          <span className={`truncate max-w-[18rem] ${top ? 'font-semibold text-ink' : 'text-ink'}`}>{r.topic.title}</span>
+                          <span className={`truncate max-w-[18rem] @max-[640px]:max-w-[7.5rem] ${top ? 'font-semibold text-ink' : 'text-ink'}`}>{r.topic.title}</span>
                         )}
-                        {r.topic.hook && !top ? <span className="text-xs text-muted truncate max-w-[18rem]">{r.topic.hook}</span> : null}
+                        {r.topic.hook && !top ? <span className="text-xs text-muted truncate max-w-[18rem] @max-[640px]:hidden">{r.topic.hook}</span> : null}
                       </span>
                       {r.topic.proposed ? (
                         <span className="ml-1 rounded-full border border-warn-line bg-warn-wash text-warn text-3xs px-1.5 whitespace-nowrap">proposed</span>
