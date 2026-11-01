@@ -3,7 +3,10 @@ import { assemble, SCRIPT_KIND, type CellState, type StoryScript } from '../../s
 import { channelsOf, coverage, flatten, hasWork, leavesOf, mapRows, nextState, stateOf, withCell, type MapRow } from '../../shared/story/story-map';
 import { paintCover } from './covers';
 import { POSTS } from './posts';
-import ScriptControls from './ScriptControls';
+import ScriptControls, { readScriptFile, saveScriptFile } from './ScriptControls';
+import { pickFile } from '../../shared/sources/file-sources';
+import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 
 const STATE_LABEL: Record<CellState, string> = {
   idee: 'Idea',
@@ -105,6 +108,36 @@ export default function StoryGallery({
   const proposed = flatten(rows).filter((r) => r.topic.proposed).length;
   const posts = flatten(rows).filter((r) => r.post).length;
 
+  // On a phone, the gallery's verbs are the shell's bottom bar, as in every gallery of the suite (`section-rail.tsx`).
+  const phone = useIsCompact();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  usePublishSectionBar(
+    useMemo(
+      () =>
+        phone
+          ? {
+              sections: [{ id: 'load', label: script ? 'Load another' : 'Load script' }, ...(script ? [{ id: 'save', label: 'Save script' }] : [])],
+              active: null,
+              role: 'actions' as const,
+              label: 'Your script',
+              onSelect: (id: string) => {
+                if (id === 'save') {
+                  if (script) saveScriptFile(script);
+                  return;
+                }
+                void pickFile('.json,application/json').then(async (file) => {
+                  if (!file) return;
+                  const read = await readScriptFile(file);
+                  setLoadError(read.ok ? null : read.reason);
+                  if (read.ok) onScript(read.script);
+                });
+              },
+            }
+          : null,
+      [phone, script, onScript],
+    ),
+  );
+
   return (
     <div className="@container flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-8 flex flex-col gap-4">
       <header className="flex flex-wrap items-end gap-4 pt-2">
@@ -120,7 +153,8 @@ export default function StoryGallery({
           </p>
         </div>
         <div className="ml-auto">
-          <ScriptControls script={script} onScript={onScript} compact />
+          <ScriptControls script={script} onScript={onScript} compact verbs={!phone} />
+          {loadError ? <p className="m-0 mt-1 text-xs text-danger">{loadError}</p> : null}
         </div>
       </header>
 

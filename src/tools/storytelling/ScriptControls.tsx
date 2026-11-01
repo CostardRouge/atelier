@@ -18,6 +18,21 @@ export function scriptFileName(script: StoryScript): string {
   return `${base || 'story'}.story.json`;
 }
 
+/** Read a script file: the script, or why it cannot be one. */
+export async function readScriptFile(file: File): Promise<{ ok: true; script: StoryScript } | { ok: false; reason: string }> {
+  try {
+    const parsed = parseScript(JSON.parse(await file.text()));
+    return parsed.ok ? { ok: true, script: parsed.script } : { ok: false, reason: parsed.reason };
+  } catch {
+    return { ok: false, reason: 'This file is not readable JSON.' };
+  }
+}
+
+/** Download the script with what changed here, to keep with the author's notes. */
+export function saveScriptFile(script: StoryScript): void {
+  downloadBlob(new Blob([JSON.stringify(script, null, 2) + '\n'], { type: 'application/json' }), scriptFileName(script));
+}
+
 /**
  * Load, save and forget the author's script — the private half of every post
  * (`story-script.ts`). Saving writes the file back with what changed here
@@ -27,31 +42,25 @@ export default function ScriptControls({
   script,
   onScript,
   compact = false,
+  verbs = true,
 }: {
   script: StoryScript | null;
   onScript: (next: StoryScript | null) => void;
   compact?: boolean;
+  /** False where Load and Save are the shell's bottom bar (a phone's gallery): Forget stays here. */
+  verbs?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    try {
-      const parsed = parseScript(JSON.parse(await file.text()));
-      if (!parsed.ok) {
-        setError(parsed.reason);
-        return;
-      }
-      setError(null);
-      onScript(parsed.script);
-    } catch {
-      setError('This file is not readable JSON.');
-    }
+    const read = await readScriptFile(file);
+    setError(read.ok ? null : read.reason);
+    if (read.ok) onScript(read.script);
   };
   const save = () => {
-    if (!script) return;
-    downloadBlob(new Blob([JSON.stringify(script, null, 2) + '\n'], { type: 'application/json' }), scriptFileName(script));
+    if (script) saveScriptFile(script);
   };
   const named = script ? Object.keys(script.posts).filter((id) => POSTS.some((p) => p.id === id)).length : 0;
   return (
@@ -63,15 +72,19 @@ export default function ScriptControls({
       )}
       {error ? <p className="m-0 text-xs text-danger">{error}</p> : null}
       <div className="flex gap-2 flex-wrap">
-        <label className={buttonClass('default', 'sm')}>
-          {script ? 'Load another…' : 'Load script…'}
-          <input type="file" accept=".json,application/json" className="sr-only" onChange={onFile} />
-        </label>
+        {verbs ? (
+          <label className={buttonClass('default', 'sm')}>
+            {script ? 'Load another…' : 'Load script…'}
+            <input type="file" accept=".json,application/json" className="sr-only" onChange={onFile} />
+          </label>
+        ) : null}
         {script ? (
           <>
-            <Button size="sm" onClick={save} title="Download the script with what changed here, to keep with your notes">
-              Save script
-            </Button>
+            {verbs ? (
+              <Button size="sm" onClick={save} title="Download the script with what changed here, to keep with your notes">
+                Save script
+              </Button>
+            ) : null}
             <Button size="sm" variant="ghost" onClick={() => {
                 void clearWall();
                 onScript(null);
