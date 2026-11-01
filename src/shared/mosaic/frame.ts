@@ -18,15 +18,20 @@
 
 import { GRID, GRID_BYTES, TILE_H, TILE_W } from './measure';
 
-export const ASPECTS = ['16:9', '3:2', '4:3', '1:1', '4:5', '9:16'] as const;
+export const ASPECTS = ['original', '16:9', '3:2', '4:3', '1:1', '4:5', '9:16'] as const;
 export type AspectId = (typeof ASPECTS)[number];
-export const DEFAULT_ASPECT: AspectId = '16:9';
+/** The picture's own shape — the largest frame of a new target (the crop section of Develop's rule). */
+export const DEFAULT_ASPECT: AspectId = 'original';
 
 /** The tile's own shape — what every grid was measured on. */
 export const TILE_ASPECT = TILE_W / TILE_H;
 
-/** `16:9` → 1.777…; an unknown id reads as the default. */
-export function aspectRatio(id: string): number {
+/**
+ * `16:9` → 1.777…; `original` is the picture's own shape (`own`, 16:9 until
+ * the picture is known); an unknown id reads as 16:9.
+ */
+export function aspectRatio(id: string, own: number = 16 / 9): number {
+  if (id === 'original') return own > 0 && Number.isFinite(own) ? own : 16 / 9;
   const m = /^(\d+):(\d+)$/.exec(id);
   if (!m || !(ASPECTS as readonly string[]).includes(id)) return 16 / 9;
   return Number(m[1]) / Number(m[2]);

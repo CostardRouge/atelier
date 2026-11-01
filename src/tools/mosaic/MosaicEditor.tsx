@@ -13,7 +13,7 @@ import {
 } from '../../shared/mosaic/mosaic-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
-import { aspectRatio, type Crop } from '../../shared/mosaic/frame';
+import type { Crop } from '../../shared/mosaic/frame';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
@@ -75,11 +75,8 @@ function MosaicWorkbench({
   const [boxRef, room] = useElementSize<HTMLDivElement>();
   const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
   // The widest 16:9 the room holds, never taller than it.
-  // The widest frame of the mosaic's shape the room holds, never taller than it.
-  const aspect = aspectRatio(doc.settings.aspect);
-  const stageW = Math.floor(Math.min(room.width, (room.height || Infinity) * aspect));
-  const stageH = Math.floor(stageW / aspect);
-  const { state, builder } = useMosaicScene({ doc, client, stageW, stageH, dpr });
+  // The stage is the widest frame of the mosaic's shape the room holds — the picture's own shape for `original`.
+  const { state, builder, stageW, stageH, frameAspect: aspect } = useMosaicScene({ doc, client, room, dpr });
   useMosaicCover(doc.id, state);
   const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
   const [choosing, setChoosing] = useState(false);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mulberry32 } from '../../shared/lib/prng';
+import { aspectRatio } from '../../shared/mosaic/frame';
 import { measuredTiles, type MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { SceneBuilder, type BuildStep, type MosaicScene } from './scene-builder';
@@ -15,10 +16,15 @@ export type SceneState =
 interface SceneInputs {
   doc: MosaicDoc;
   client: WinnowClient | null;
-  /** The stage's logical size (CSS pixels). */
-  stageW: number;
-  stageH: number;
+  /** The room the stage may take (CSS pixels); the stage is the widest frame of the mosaic's shape in it, never taller. */
+  room: { width: number; height: number };
   dpr: number;
+}
+
+/** The widest `aspect` frame a room holds, never taller than it, in whole pixels. */
+export function stageIn(room: { width: number; height: number }, aspect: number): { stageW: number; stageH: number } {
+  const stageW = Math.max(0, Math.floor(Math.min(room.width, (room.height || Infinity) * aspect)));
+  return { stageW, stageH: Math.max(0, Math.floor(stageW / aspect)) };
 }
 
 /**
@@ -28,10 +34,14 @@ interface SceneInputs {
  * abandoned and the previous scene stays on screen meanwhile. The builder
  * is handed back for the player, which shares its caches.
  */
-export function useMosaicScene({ doc, client, stageW, stageH, dpr }: SceneInputs): { state: SceneState; builder: SceneBuilder | null } {
+export function useMosaicScene({ doc, client, room, dpr }: SceneInputs): { state: SceneState; builder: SceneBuilder | null; stageW: number; stageH: number; frameAspect: number } {
   const [state, setState] = useState<SceneState>({ status: 'idle', why: 'no-target' });
   const latest = useRef<MosaicScene | null>(null);
   const instance = doc.instance ?? null;
+  // The target's own shape, learnt from its picture — what `original` means.
+  const [own, setOwn] = useState<{ id: number; aspect: number } | null>(null);
+  const frameAspect = aspectRatio(doc.settings.aspect, own && own.id === doc.target ? own.aspect : undefined);
+  const { stageW, stageH } = stageIn(room, frameAspect);
 
   const builder = useMemo(() => (instance ? new SceneBuilder(instance, client) : null), [instance, client]);
   useEffect(() => () => builder?.dispose(), [builder]);
@@ -64,6 +74,19 @@ export function useMosaicScene({ doc, client, stageW, stageH, dpr }: SceneInputs
     }
     const controller = new AbortController();
     let alive = true;
+    const targetTile = library.tiles.find((t) => t.id === target);
+    // `original` needs the picture's shape before the stage can take it: the bitmap first, the build on the next render.
+    if (doc.settings.aspect === 'original' && (!own || own.id !== target) && targetTile) {
+      setState({ status: 'building', step: 'target', previous });
+      void builder.targetBitmap(targetTile, controller.signal).then(
+        (b) => alive && setOwn({ id: target, aspect: b.width / b.height }),
+        (e: unknown) => alive && !controller.signal.aborted && setState({ status: 'failed', error: e instanceof Error ? e.message : String(e), previous }),
+      );
+      return () => {
+        alive = false;
+        controller.abort();
+      };
+    }
     void builder
       .build(target, { cellPx, level, space, tint, distinctNeighbours }, { stageW, stageH, dpr }, {
         signal: controller.signal,
@@ -86,9 +109,9 @@ export function useMosaicScene({ doc, client, stageW, stageH, dpr }: SceneInputs
       alive = false;
       controller.abort();
     };
-  }, [client, builder, library, target, crop, stageW, stageH, dpr, cellPx, level, space, tint, distinctNeighbours]);
+  }, [client, builder, library, target, crop, stageW, stageH, dpr, cellPx, level, space, tint, distinctNeighbours, doc.settings.aspect, own]);
 
-  return { state, builder };
+  return { state, builder, stageW, stageH, frameAspect };
 }
 
 /** A target drawn at random among the measured tiles, from the document's seed and a salt. */

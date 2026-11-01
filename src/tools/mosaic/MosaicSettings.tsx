@@ -25,6 +25,7 @@ interface MosaicSettingsProps {
 }
 
 const ASPECT_TITLES: Record<AspectId, string> = {
+  original: 'The picture’s own shape — the largest frame it holds',
   '16:9': 'Wide, as a screen',
   '3:2': 'A camera’s frame',
   '4:3': 'A phone’s photo, or a compact’s',
@@ -67,9 +68,9 @@ export default function MosaicSettings({ settings, update, view, setView, state,
         <FieldRow label="Shape">
           <Segmented<AspectId>
             size="sm"
-            columns={3}
+            columns={4}
             value={settings.aspect}
-            options={ASPECTS.map((id) => ({ id, label: id, title: ASPECT_TITLES[id] }))}
+            options={ASPECTS.map((id) => ({ id, label: id === 'original' ? 'Own' : id, title: ASPECT_TITLES[id] }))}
             onChange={(id) => update((s) => ({ ...s, aspect: id }))}
           />
         </FieldRow>

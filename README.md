@@ -3171,8 +3171,10 @@ sides and corners to resize it (never under 48 px); *Whole picture* gives
 the largest frame back and disappears once it is whole; a press
 on the picture outside the frame, or *Choose…*, opens a grid of the
 mosaic's pictures to pick another target (a new target is framed whole).
-**Shape** sets the rebuilt picture's proportions — 16:9, 3:2, 4:3, square,
-4:5 or 9:16 — and the stage, its cells and the gallery's cover follow; each
+**Shape** is the frame's, never the picture's: *Own* (the picture's own
+proportions, the default), 16:9, 3:2, 4:3, square, 4:5 or 9:16 pose a frame
+of that shape on the picture at the same centre, the stage takes the
+frame's shape in the room it has, and nothing is ever stretched; each
 picture is compared on the part a cell of that shape shows of it, and drawn
 so.
 

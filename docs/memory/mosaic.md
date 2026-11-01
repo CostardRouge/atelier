@@ -168,6 +168,22 @@ rebuilds once; a press outside the frame opens the chooser) and
 240, opened on the current target's page) under a *Target* section first in
 the inspector, with *Choose…*, *Whole picture* and the shape.
 
+## The shape is the crop's; `original` is the picture's own (2026-11-01, F2)
+
+His rule («je n'ai pas envie que le changement d'aspect ratio déforme
+l'image … inspire-toi de la section crop de Develop»). **Rules**: the card
+always shows the WHOLE picture; the shape is the FRAME's, posed on it at the
+same centre (`frame.ts`, aspect-free crop); the stage is that frame's shape,
+letterboxed in the room (`stageIn`), nothing ever stretched. `original`
+joins the shapes and is the DEFAULT: the picture's own ratio, learnt from
+its bitmap — `useMosaicScene` fetches the target first, sets `own`, and
+builds on the next render; until known, 16:9. In a chain the stage keeps
+the shape it was attached with and later pictures are framed whole in it
+(`cropRect` with the stage's aspect). Driven headless: a 2:3 target gives
+a 2:3 stage under Own, 1:1 a square stage and a full-width square frame on
+the portrait card, 9:16 a tall one; drawing a landscape target turns the
+stage 16:9.
+
 ## The target card: three states, the trace inside, grips that stay in (2026-11-01, F1)
 
 His report on the first card (the trace lost against the picture's edge, a

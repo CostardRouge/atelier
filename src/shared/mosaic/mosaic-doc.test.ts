@@ -25,6 +25,7 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings(undefined)).toEqual(DEFAULT_SETTINGS);
     const s = sanitizeSettings({ aspect: '2:1', cellPx: 2, level: 9, space: 'lab', tint: 3, speed: 0.01, seed: -4, mode: 'spiral', direction: 'up', distinctNeighbours: 'yes' });
     expect(s).toEqual({ ...DEFAULT_SETTINGS, cellPx: 12, level: 3, tint: 0.7, speed: 0.4, seed: 1 });
+    expect(s.aspect).toBe('original');
   });
 
   it('keeps a valid setting as given', () => {

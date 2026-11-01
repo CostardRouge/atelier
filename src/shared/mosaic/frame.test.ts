@@ -22,6 +22,9 @@ describe('aspects', () => {
     expect(aspectRatio('9:16')).toBeCloseTo(0.5625);
     expect(aspectRatio('21:9')).toBeCloseTo(16 / 9);
     expect(aspectRatio('nope')).toBeCloseTo(16 / 9);
+    expect(aspectRatio('original')).toBeCloseTo(16 / 9);
+    expect(aspectRatio('original', 2 / 3)).toBeCloseTo(2 / 3);
+    expect(aspectRatio('original', 0)).toBeCloseTo(16 / 9);
     expect(ASPECTS.every(isAspect)).toBe(true);
     expect(isAspect('2:1')).toBe(false);
   });
