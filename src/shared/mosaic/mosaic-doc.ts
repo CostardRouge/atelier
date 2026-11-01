@@ -19,9 +19,14 @@ import { mulberry32 } from '../lib/prng';
 import { DEFAULT_ASPECT, isAspect, isWhole, readCrop, type AspectId, type Crop } from './frame';
 import { MAX_CELL_PX, MIN_CELL_PX, pickDive, pickNextTarget } from './match';
 import { decodeGrid, type Level, type Space } from './measure';
+import { RECIPES, RECIPE_MOTIONS, departAt, motionOf, sanitizeMotion, type Motion, type MotionMode } from './motion';
 
-/** v2 (2026-11-01): the chain's queue (`chain`) joins the document; a v1 body reads with an empty one. */
-export const MOSAIC_DOC_VERSION = 2;
+/**
+ * v2 (2026-11-01): the chain's queue (`chain`) joins the document; a v1 body reads with an empty one.
+ * v3 (2026-11-01): the animated step as a grammar (`settings.motion`, `motion.ts`); a v2 body's
+ * `mode` + `direction` read as the matching recipe.
+ */
+export const MOSAIC_DOC_VERSION = 3;
 
 /** How many pictures the chain keeps ahead of the one on screen, and under how many it refills itself. */
 export const QUEUE_AHEAD = 10;
@@ -33,8 +38,8 @@ export const MAX_QUEUE = 200;
 export const MAX_MOSAIC_TILES = 40000;
 export const MAX_MOSAIC_TITLE = 120;
 
-export type MosaicMode = 'single' | 'dezoom' | 'chain' | 'reveal' | 'drift';
-export type ChainDirection = 'in' | 'out' | 'alternate';
+/** The stage's mode: still, or an animated recipe of `motion.ts` (`custom` once a part was set by hand). */
+export type MosaicMode = 'single' | MotionMode;
 
 export interface MosaicTile {
   /** The Winnow asset id on the mosaic's source. */
@@ -59,7 +64,8 @@ export interface MosaicSettings {
   tint: number;
   distinctNeighbours: boolean;
   mode: MosaicMode;
-  direction: ChainDirection;
+  /** The animated step's parts (lab 3); the recipes of the transport are presets of it. */
+  motion: Motion;
   /** ×0.4..2.5 over the base lengths. */
   speed: number;
   /** The chain's picks and the reveal's origin — a replay and an export draw the same. */
@@ -122,13 +128,14 @@ export const DEFAULT_SETTINGS: MosaicSettings = {
   tint: 0.25,
   distinctNeighbours: true,
   mode: 'single',
-  direction: 'in',
+  motion: RECIPE_MOTIONS.chain,
   speed: 1,
   seed: 1,
 };
 
-const MODES: readonly MosaicMode[] = ['single', 'dezoom', 'chain', 'reveal', 'drift'];
-const DIRECTIONS: readonly ChainDirection[] = ['in', 'out', 'alternate'];
+const MODES: readonly MosaicMode[] = ['single', ...RECIPES, 'custom'];
+/** A v2 body's chain direction, read into the recipe's departure. */
+const LEGACY_DEPART: Record<string, Motion['depart']> = { in: 'dive', out: 'pull', alternate: 'alternate' };
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const num = (v: unknown, min: number, max: number, fallback: number): number =>
@@ -141,6 +148,11 @@ const oneOf = <T extends string>(v: unknown, all: readonly T[], fallback: T): T 
 export function sanitizeSettings(raw: unknown): MosaicSettings {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const level = Math.round(num(r.level, 1, 3, DEFAULT_SETTINGS.level)) as Level;
+  const mode = oneOf(r.mode, MODES, DEFAULT_SETTINGS.mode);
+  // The motion stored, bounded; a v2 body (mode and direction, no motion) reads as its recipe.
+  const recipe = mode === 'single' || mode === 'custom' ? DEFAULT_SETTINGS.motion : motionOf(mode, DEFAULT_SETTINGS.motion);
+  const legacy = typeof r.direction === 'string' && r.direction in LEGACY_DEPART && mode === 'chain' ? { ...recipe, depart: LEGACY_DEPART[r.direction] } : recipe;
+  const motion = r.motion && typeof r.motion === 'object' ? sanitizeMotion(r.motion, legacy) : legacy;
   return {
     aspect: isAspect(r.aspect) ? r.aspect : DEFAULT_SETTINGS.aspect,
     cellPx: Math.round(num(r.cellPx, MIN_CELL_PX, MAX_CELL_PX, DEFAULT_SETTINGS.cellPx)),
@@ -148,8 +160,8 @@ export function sanitizeSettings(raw: unknown): MosaicSettings {
     space: oneOf<Space>(r.space, ['oklab', 'rgb'], DEFAULT_SETTINGS.space),
     tint: num(r.tint, 0, 0.7, DEFAULT_SETTINGS.tint),
     distinctNeighbours: typeof r.distinctNeighbours === 'boolean' ? r.distinctNeighbours : DEFAULT_SETTINGS.distinctNeighbours,
-    mode: oneOf(r.mode, MODES, DEFAULT_SETTINGS.mode),
-    direction: oneOf(r.direction, DIRECTIONS, DEFAULT_SETTINGS.direction),
+    mode,
+    motion,
     speed: num(r.speed, 0.4, 2.5, DEFAULT_SETTINGS.speed),
     seed: Math.round(num(r.seed, 1, 2147483647, DEFAULT_SETTINGS.seed)),
   };
@@ -466,16 +478,16 @@ export function refillQueue(doc: MosaicDoc, lab: Float32Array, measured: readonl
   if (!indexOf.has(doc.target)) return doc;
   const queue = [...chain.queue];
   const history = () => [doc.target as number, ...queue.map((e) => e.id)].map((id) => indexOf.get(id)).filter((i): i is number => i !== undefined).slice(-12);
-  const { direction } = doc.settings;
   while (queue.length - done < QUEUE_AHEAD) {
     const position = queue.length;
     const fromId = position ? queue[position - 1].id : doc.target;
     const from = indexOf.get(fromId);
     if (from === undefined) break;
-    const kind = direction === 'alternate' ? (position % 2 === 0 ? 'in' : 'out') : direction;
+    // A pull-back wants a picture holding the current one's mean; every other departure one whose mean sits in a cell of it.
+    const kind = departAt(doc.settings.motion, position);
     const rnd = mulberry32(drawSeed(doc.settings.seed, fromId, position));
     const opts = { history: history(), rnd };
-    const next = kind === 'in' ? pickDive(lab, measured.length, from, opts) : pickNextTarget(lab, measured.length, from, opts);
+    const next = kind === 'pull' ? pickNextTarget(lab, measured.length, from, opts) : pickDive(lab, measured.length, from, opts);
     if (next < 0 || next === from) break;
     queue.push({ id: measured[next].id, by: 'draw' });
   }

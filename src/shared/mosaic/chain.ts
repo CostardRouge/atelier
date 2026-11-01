@@ -1,78 +1,20 @@
 /**
- * The CLOCK of an animated mosaic: a step's phases and, at any instant, where
- * the camera is and what is faded over what — a function of time, never an
- * accumulator in the frame loop (the atlas rule, `flight-atlas.md`), so the
- * stage and an MP4 at another frame rate draw the same frames.
- *
- * A step is one move of the chain. Zoom IN: the target is shown, dissolves
- * into its mosaic, the camera dives into one cell until that cell's picture
- * fills the frame — it is the next target. Zoom OUT: the picture on screen
- * is a cell of the next target's mosaic; the camera pulls back until the
- * mosaic fills the frame, which then resolves into the next target. Zoom is
- * in LOG space, so it reads as a constant speed; the camera's centre glides
- * from the frame's centre to the cell's (or back) meanwhile.
+ * The shared pieces of an animated mosaic's CLOCK — the step itself is the
+ * grammar of `motion.ts` (lab 3). What stays here is what every part uses:
+ * the easing, a cell's rectangle, the zoom in LOG space (a constant speed to
+ * the eye), when a growing cell's true content shows over its tile, the
+ * order a reveal flips cells in, and the drift's wander. Every function is
+ * a function of time, never an accumulator in the frame loop (the atlas
+ * rule, `flight-atlas.md`), so the stage and an MP4 draw the same frames.
  *
  * Pure and DOM-free. `docs/mosaic.md` §4.4–§5.
  */
-
-export type ChainKind = 'in' | 'out';
-export type Phase = 'hold' | 'dissolve' | 'zoom' | 'zoomout' | 'resolve';
-
-/** Base lengths in ms at speed ×1; a setting's `speed` divides them. */
-export const BASE_MS: Record<Phase, number> = {
-  hold: 1100,
-  dissolve: 900,
-  zoom: 3800,
-  zoomout: 3800,
-  resolve: 900,
-};
-
-/** The phases of a step, in order. */
-export const PHASES: Record<ChainKind, readonly Phase[]> = {
-  in: ['hold', 'dissolve', 'zoom'],
-  out: ['zoomout', 'resolve', 'hold'],
-};
-
-/** The frame's whole length in ms at this speed. */
-export function stepLength(kind: ChainKind, speed: number): number {
-  const k = speedFactor(speed);
-  return PHASES[kind].reduce((n, p) => n + BASE_MS[p] / k, 0);
-}
-
-function speedFactor(speed: number): number {
-  return Number.isFinite(speed) && speed > 0 ? Math.min(4, Math.max(0.25, speed)) : 1;
-}
 
 /** Smoothstep: 0 at or before 0, 1 at or after 1. */
 export function ease(x: number): number {
   if (!(x > 0)) return 0;
   if (x >= 1) return 1;
   return x * x * (3 - 2 * x);
-}
-
-export interface StepState {
-  phase: Phase;
-  /** Progress inside the phase, 0..1 (eased where the phase moves the camera). */
-  f: number;
-  /** Whether the step is over — `t` past its length. */
-  done: boolean;
-}
-
-/** Which phase a step is in at `t` ms since it began, and how far into it. */
-export function stepStateAt(kind: ChainKind, speed: number, t: number): StepState {
-  const k = speedFactor(speed);
-  let at = Math.max(0, t);
-  const phases = PHASES[kind];
-  for (let i = 0; i < phases.length; i++) {
-    const len = BASE_MS[phases[i]] / k;
-    if (at < len || i === phases.length - 1) {
-      const raw = len > 0 ? Math.min(1, at / len) : 1;
-      return { phase: phases[i], f: raw, done: at >= len && i === phases.length - 1 };
-    }
-    at -= len;
-  }
-  const last = phases[phases.length - 1];
-  return { phase: last, f: 1, done: true };
 }
 
 /** A cell's rectangle in stage units. */
@@ -116,45 +58,6 @@ export function focusAlpha(s: number): number {
 }
 
 /**
- * The camera at a step's state, for a frame of `W × H` whose focus cell is
- * `cell`. The focus cell fills the frame at `s = W / cell.w` (cells have the
- * frame's shape, `match.ts`).
- */
-export function cameraAt(state: StepState, cell: CellRect, W: number, H: number): Camera {
-  const sEnd = W / cell.w;
-  const cx = cell.x + cell.w / 2;
-  const cy = cell.y + cell.h / 2;
-  const still = { s: 1, vx: W / 2, vy: H / 2 };
-  switch (state.phase) {
-    case 'hold':
-      return { ...still, target: 1, focus: 0, mosaic: false };
-    case 'dissolve':
-      return { ...still, target: 1 - ease(state.f), focus: 0, mosaic: true };
-    case 'resolve':
-      return { ...still, target: ease(state.f), focus: 0, mosaic: true };
-    case 'zoom': {
-      const e = ease(state.f);
-      const s = logZoom(sEnd, state.f);
-      return { s, vx: W / 2 + (cx - W / 2) * e, vy: H / 2 + (cy - H / 2) * e, target: 0, focus: focusAlpha(s), mosaic: true };
-    }
-    case 'zoomout': {
-      const e = ease(state.f);
-      const s = logZoom(sEnd, state.f, true);
-      return { s, vx: cx + (W / 2 - cx) * e, vy: cy + (H / 2 - cy) * e, target: 0, focus: focusAlpha(s), mosaic: true };
-    }
-  }
-}
-
-/**
- * The kind of the step at index `i` under a direction: `alternate` goes in,
- * out, in, out…
- */
-export function stepKind(direction: 'in' | 'out' | 'alternate', i: number): ChainKind {
-  if (direction === 'alternate') return i % 2 === 0 ? 'in' : 'out';
-  return direction;
-}
-
-/**
  * The order the REVEAL flips cells in: outward from a seeded origin, a
  * little jitter so the front is not a perfect circle. Cells row-major.
  */
@@ -169,20 +72,6 @@ export function revealOrder(cols: number, rows: number, rnd: () => number): Int3
   }
   scored.sort((a, b) => a.d - b.d || a.c - b.c);
   return Int32Array.from(scored, (s) => s.c);
-}
-
-/** The reveal's phases: the mosaic held, the cells flipped, the picture held. */
-export const REVEAL_MS = { hold: 1100, reveal: 3200, after: 1800 } as const;
-
-/** How many cells are flipped at `t` ms into a reveal step, and whether the step is over. */
-export function revealAt(t: number, speed: number, count: number): { flipped: number; phase: 'hold' | 'reveal' | 'after'; done: boolean } {
-  const k = speedFactor(speed);
-  const hold = REVEAL_MS.hold / k;
-  const reveal = REVEAL_MS.reveal / k;
-  const after = REVEAL_MS.after / k;
-  if (t < hold) return { flipped: 0, phase: 'hold', done: false };
-  if (t < hold + reveal) return { flipped: Math.floor(ease((t - hold) / reveal) * count), phase: 'reveal', done: false };
-  return { flipped: count, phase: 'after', done: t >= hold + reveal + after };
 }
 
 /**

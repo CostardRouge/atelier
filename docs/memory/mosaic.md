@@ -351,6 +351,37 @@ state, never the pixels, to tell which picture is shown. **How to apply**:
 when he reports the chain stalling, read that line on his instance first;
 a step ready in more than the step's length is hypothesis 1 of the lab.
 
+## A step is a grammar: departure · trajectory · arrival (2026-11-01, A2)
+
+Lab 3's model, built with no visual change. **Rules**: `shared/mosaic/motion.ts`
+(pure) holds `Motion` — `depart` (dive · pull · alternate · wave · fade ·
+cut), `arrival` (mosaic · photo · reveal), `holdMs`, `moveMs`, `sharpness`
+(when a growing cell's true content shows over its tile: early ×1.6, late
+×3.2, never), `aim` (queue · best · random · click), `reveal` (toPhoto ·
+toMosaic · roundTrip), `cadenceMs` (the hold absorbs what the other parts
+leave), `drift` (a held mosaic wanders, ramped in and out over 2 s so every
+departure starts still) — and the RECIPES the transport's modes are
+(`RECIPE_MOTIONS`: chain, dezoom, reveal, drift as before to the
+millisecond, then mosaics, wave, slideshow, steer); a part set by hand makes
+`mode` `custom` (`recipeOf`, `motionOf`). The document is v3
+(`settings.motion`; a v2 `mode` + `direction` reads as its recipe). The
+clock `stepFrameAt` gives, at `t`, which mosaic the camera is over
+(`base`), the camera, and what is blended (the aimed cell's true content,
+the arrived mosaic crossing in or landing cell by cell, the base's photo
+whole or flipped cell by cell) — a dive ends with the cell filling the
+frame, which IS the next mosaic whole, and a pull starts there, so the
+camera is continuous (B2); the run OPENS on the picture on screen with its
+arrival minus the fade-in, nothing before a pull. **Player**: one runner
+over the grammar — scenes kept by picture (`sceneOf`, six held), a step's
+two mosaics prepared together, the aimed cell found or forced on the scene
+in place (`SceneBuilder.forceCell`, the scene carrying its `cells`
+descriptors, `means` and `settings`), a wave's order by distance from the
+aimed cell, a reveal's order from the seed; `arrived` on a frame is what
+sets the band's *now*. **Trap**: `chain.ts` keeps only the shared pieces
+(ease, cellRect, logZoom, focusAlpha, revealOrder, driftCamera); the old
+`stepStateAt` / `cameraAt` / `revealAt` are gone with their specs — the
+motion spec asserts the same numbers.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

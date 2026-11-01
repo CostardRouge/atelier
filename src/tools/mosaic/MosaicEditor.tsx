@@ -24,6 +24,7 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import type { Crop, Rect } from '../../shared/mosaic/frame';
 import { describeZoomKey, zoomKeyAction } from '../../shared/ui/zoom-keys';
+import { motionOf, recipeOf } from '../../shared/mosaic/motion';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
@@ -133,11 +134,12 @@ function MosaicWorkbench({
     player?.attach(canvasRef.current, { stageW, stageH, dpr });
   }, [player, stageW, stageH, dpr, status.playing]);
 
-  const { mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours } = doc.settings;
+  const { mode, motion, speed, seed, cellPx, level, space, tint, distinctNeighbours } = doc.settings;
 
   // --- the chain's queue (lab 2, R6): in the document, read by the player as it prepares each step ---
   const chain = chainOf(doc);
-  const chained = mode === 'chain' || mode === 'dezoom';
+  // Every animated recipe walks the queue (lab 3): a reveal and a drift move on to the next picture too.
+  const chained = mode !== 'single';
   const docRef = useRef(doc);
   docRef.current = doc;
   const queueSource = useMemo(
@@ -161,8 +163,8 @@ function MosaicWorkbench({
   const play = useCallback(() => {
     if (!player || mode === 'single' || doc.target === undefined || player.playing) return;
     player.attach(canvasRef.current, { stageW, stageH, dpr });
-    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool, queue: chained ? queueSource : undefined, ahead: perf.ahead });
-  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource, perf.ahead]);
+    player.start({ mode, motion, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool, queue: chained ? queueSource : undefined, ahead: perf.ahead });
+  }, [player, mode, motion, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource, perf.ahead]);
   const stop = useCallback(() => player?.stop(), [player]);
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
   const wasPlaying = useRef(false);
@@ -171,7 +173,7 @@ function MosaicWorkbench({
     wasPlaying.current = status.playing;
   }, [status.playing, status.current, status.done, change]);
   // A mode or a dial changed under a running player: the run stops, the next Play takes them.
-  const dialsKey = `${mode}|${direction}|${cellPx}|${level}|${space}|${tint}|${distinctNeighbours}|${doc.settings.aspect}`;
+  const dialsKey = `${mode}|${JSON.stringify(motion)}|${cellPx}|${level}|${space}|${tint}|${distinctNeighbours}|${doc.settings.aspect}`;
   const lastDials = useRef(dialsKey);
   useEffect(() => {
     if (lastDials.current === dialsKey) return;
@@ -292,9 +294,9 @@ function MosaicWorkbench({
         )}
         <MosaicTransport
           mode={mode}
-          direction={direction}
-          setMode={(m) => update((s) => ({ ...s, mode: m }))}
-          setDirection={(d) => update((s) => ({ ...s, direction: d }))}
+          motion={motion}
+          setMode={(m) => update((s) => ({ ...s, mode: m, motion: m === 'single' ? s.motion : motionOf(m, s.motion) }))}
+          setDepart={(d) => update((s) => ({ ...s, motion: { ...s.motion, depart: d }, mode: recipeOf({ ...s.motion, depart: d }, s.mode) }))}
           status={status}
           canPlay={Boolean(player) && doc.target !== undefined && state.status !== 'idle'}
           onPlay={play}

@@ -38,6 +38,11 @@ export interface MosaicScene {
   targetRect: Rect;
   /** The cell a picture was FORCED into (a zoom-out's seam), or null. */
   forcedCell: number | null;
+  /** The target's cells as the matching compared them, `count × dims` — what a later force reads. */
+  cells: Float32Array;
+  dims: number;
+  means: Uint8ClampedArray;
+  settings: MatchSettings;
   /** Where and how long the matching took. */
   matchMs: number;
   on: 'main' | 'worker';
@@ -96,6 +101,25 @@ export type BuildStep = 'target' | 'matching' | 'tiles' | 'painting';
 
 /** Target bitmaps held: the one on screen, the scenes ahead and the two proxies warmed past them (`mosaic-player.ts`). */
 const TARGETS_HELD = 8;
+
+/** The cell of `scene` showing picture `index` nearest the centre, or −1 when the matching gave it none. */
+export function cellOf(scene: MosaicScene, index: number): number {
+  const { cols, rows } = scene.shape;
+  const ids = scene.matching.ids;
+  let best = -1;
+  let bestD = Infinity;
+  for (let c = 0; c < ids.length; c++) {
+    if (ids[c] !== index) continue;
+    const i = c % cols;
+    const j = (c - i) / cols;
+    const d = Math.hypot((i + 0.5) / cols - 0.5, (j + 0.5) / rows - 0.5);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
 
 export class SceneBuilder {
   private targets = new Map<number, ImageBitmap>();
@@ -267,6 +291,10 @@ export class SceneBuilder {
       targetId: targetTile.id,
       targetRect,
       forcedCell: null,
+      cells: cellsK,
+      dims,
+      means,
+      settings,
       matchMs: 0,
       on: plan?.pool.onWorkers ? 'worker' : 'main',
       progress: 0,
@@ -334,32 +362,33 @@ export class SceneBuilder {
       onStep?.('painting');
       await paintLot(all);
     }
-    if (opts.force !== undefined && opts.force >= 0 && opts.force < tiles.length) {
-      // A picture the matching already placed keeps its cell — the one nearest the centre when it has several — else it takes the cell it resembles most.
-      let best = -1;
-      let bestD = Infinity;
-      for (let c = 0; c < count; c++) {
-        if (ids[c] !== opts.force) continue;
-        const i = c % shape.cols;
-        const j = (c - i) / shape.cols;
-        const d = Math.hypot((i + 0.5) / shape.cols - 0.5, (j + 0.5) / shape.rows - 0.5);
-        if (d < bestD) {
-          bestD = d;
-          best = c;
-        }
-      }
-      if (best >= 0) scene.forcedCell = best;
-      else {
-        const forced = forceInto(matching, cellsK, pictures, dims, opts.force);
-        ids[forced.cell] = opts.force;
-        scene.forcedCell = forced.cell;
-        await paintLot([forced.cell]);
-      }
-    }
     if (signal?.aborted) throw new DOMException('Build cancelled', 'AbortError');
     scene.matchMs = performance.now() - t0;
     scene.progress = 1;
+    if (opts.force !== undefined && opts.force >= 0 && opts.force < tiles.length) scene.forcedCell = await this.forceCell(scene, opts.force, signal);
     return scene;
+  }
+
+  /**
+   * The cell of `scene` that holds picture `index` — the one nearest the
+   * centre when the matching gave it several — or, when it has none, the
+   * cell that resembles it most, which then takes it: the matching's ids
+   * and the canvas are changed in place (a chain's seam, `motion.ts`).
+   */
+  async forceCell(scene: MosaicScene, index: number, signal?: AbortSignal): Promise<number> {
+    const have = cellOf(scene, index);
+    if (have >= 0) return have;
+    const pictures = this.descriptors(scene.settings.level, scene.settings.space, scene.shape.cw / scene.shape.ch);
+    const forced = forceInto(scene.matching, scene.cells, pictures, scene.dims, index);
+    scene.matching.ids[forced.cell] = index;
+    const cache = this.tileCache();
+    const bitmap = cache ? (await cache.all([scene.tiles[index].id], signal))[0] : null;
+    const ctx = scene.canvas.getContext('2d');
+    if (ctx) {
+      ctx.setTransform(scene.dpr, 0, 0, scene.dpr, 0, 0);
+      paintCells(ctx, { shape: scene.shape, matching: scene.matching, bitmapOf: () => bitmap, means: scene.means, tint: scene.settings.tint }, [forced.cell]);
+    }
+    return forced.cell;
   }
 
   /** The 6 × 6 grids in OKLab of the whole library — what a zoom-out's next target is picked on. */
