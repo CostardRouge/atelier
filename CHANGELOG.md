@@ -86,6 +86,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Choosing a font shows each one in itself: the Storytelling charte and its objects, the Studio's title styles and
+  elements, and Trips' Look tab list every face written in it, over a line of your own text, with a search. In
+  Storytelling the picture tries the face as you move through the list; Escape puts it back.
 - Flight Atlas is now one of the main tools: it has its own card on the home page and among the editors in the tool
   menu, and it is no longer marked experimental.
 - Each tool's card on the home page shows a drawing of what the tool does until you have a project, trip, roll or atlas
