@@ -27,25 +27,50 @@ interface ChainBandProps {
   onShuffle: () => void;
 }
 
+/** Object URLs of the tiles shown lately, by `instance:id`; the oldest revoked past `TILE_URLS`. */
+const tileUrls = new Map<string, Promise<string | null>>();
+const TILE_URLS = 64;
+
+/**
+ * The tile's object URL, made once and kept for a while: an element that
+ * revoked its own URL on unmount broke the picture React's development
+ * double-mount had just asked for, and a band re-rendered on every edit
+ * would read the store again for the same tile.
+ */
+function tileUrl(instance: string, id: number): Promise<string | null> {
+  const key = `${instance}:${id}`;
+  const have = tileUrls.get(key);
+  if (have) {
+    tileUrls.delete(key);
+    tileUrls.set(key, have);
+    return have;
+  }
+  const p = getTile(instance, id).then((blob) => (blob ? URL.createObjectURL(blob) : null));
+  tileUrls.set(key, p);
+  while (tileUrls.size > TILE_URLS) {
+    const oldest = tileUrls.keys().next().value;
+    if (oldest === undefined) break;
+    const gone = tileUrls.get(oldest);
+    tileUrls.delete(oldest);
+    void gone?.then((url) => url && URL.revokeObjectURL(url));
+  }
+  return p;
+}
+
 /**
  * The 160 × 90 tile the device keeps for a picture, as an `<img>` — free, no
  * request; the instance's thumbnail (`WinnowThumb`) only when the store has
- * none. The object URL lives as long as the element.
+ * none.
  */
 function TileThumb({ instance, client, id }: { instance: string; client: WinnowClient | null; id: number }) {
   const [url, setUrl] = useState<string | null | 'none'>(null);
   useEffect(() => {
     let alive = true;
-    let made: string | null = null;
-    void getTile(instance, id).then((blob) => {
-      if (!alive) return;
-      if (!blob) return setUrl('none');
-      made = URL.createObjectURL(blob);
-      setUrl(made);
+    void tileUrl(instance, id).then((made) => {
+      if (alive) setUrl(made ?? 'none');
     });
     return () => {
       alive = false;
-      if (made) URL.revokeObjectURL(made);
     };
   }, [instance, id]);
   if (url === 'none' && client) return <WinnowThumb client={client} id={id} label="picture" box="w-full h-full" />;
