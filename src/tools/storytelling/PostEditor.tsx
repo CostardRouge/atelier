@@ -27,6 +27,7 @@ import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
+import RunLockNotice from '../../shared/ui/RunLockNotice';
 import PageBar from '../../shared/ui/PageBar';
 import { paintCover } from './covers';
 import { POSTS } from './posts';
@@ -141,6 +142,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const [soundError, setSoundError] = useState<string | null>(null);
   const effectIds = useRef(0);
   const [exporting, setExporting] = useState<string | null>(null);
+  // When the running export took the post (`RunLockNotice`): edits stay free, and the file is the post as it was then.
+  const [exportSince, setExportSince] = useState<number | null>(null);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [exported, setExported] = useState<File[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -396,6 +399,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     // author is — on a phone the Export panel is a sheet that may well be closed.
     const task = startTask({ label: `${episode.number} · video`, progress: 0, detail: 'the sound', cancel: () => controller.abort() });
     setExporting('Preparing the sound…');
+    setExportSince(Date.now());
     setExportNote(null);
     try {
       const clips: SoundClip[] = [];
@@ -447,6 +451,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       task.done();
       abortRef.current = null;
       setExporting(null);
+      setExportSince(null);
     }
   };
   const exportCover = () => {
@@ -716,7 +721,15 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   };
 
   const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} />;
-  const settingsPane = selected?.kind === 'object' ? objectPanel(selected) : panelOf(selected?.kind === 'panel' ? selected.id : 'charte');
+  const settingsPane = (
+    <>
+      {exportSince !== null ? (
+        // Stuck to the top of the inspector's scroll, wherever the author is in it (the suite's place for it).
+        <RunLockNotice since={exportSince}>What you change now reaches the post, not this file: export again to have it.</RunLockNotice>
+      ) : null}
+      {selected?.kind === 'object' ? objectPanel(selected) : panelOf(selected?.kind === 'panel' ? selected.id : 'charte')}
+    </>
+  );
   const timeline = (
     <StudioTimeline
       clock={clock}
