@@ -308,7 +308,7 @@ anything about media sources or document storage:
   departures, the carousel bug's three hypotheses, seven commits A1–A7 and
   seven calls answered by recommendation, built the same day (A5 folded
   into A6, the section being what it owed);
-  M7 (the exports) built 2026-11-01, M8–M9 next; the rules it fixed in
+  M7 (the exports), M8 (kept on a Winnow) and M9 (agent commands) built 2026-11-01 — every phase; the rules it fixed in
   `mosaic.md`): macOS's « Mosaic » screen saver over his Winnow — a picture whose
   every cell is another picture. §1 is fact (`thumb-metrics.ts` measures one
   mean colour on the main thread, the picker's span, the atlas's document

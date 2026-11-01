@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { exportCellPx, exportSize } from '../../shared/mosaic/export-size';
-import type { MosaicDoc } from '../../shared/mosaic/mosaic-doc';
+import type { MosaicDoc, MosaicExport as ExportSettings } from '../../shared/mosaic/mosaic-doc';
 import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
@@ -14,13 +14,19 @@ export const FILM_FPS = 30;
 
 export type ExportKind = 'png' | 'mp4';
 
+/** What a run came to: the file saved, or why none was — said in the panel's note too. */
+export type ExportOutcome =
+  | { ok: true; name: string; width: number; height: number; bytes: number; seconds?: number }
+  | { ok: false; message: string; cancelled?: true };
+
 export interface MosaicExport {
   /** A sentence while running, null when idle. */
   running: string | null;
   progress: number | null;
   note: string | null;
   cancel: () => void;
-  run: (kind: ExportKind) => Promise<void>;
+  /** Write a file; `overrides` stand in for the mosaic's export settings for this run (an agent's, already saved). */
+  run: (kind: ExportKind, overrides?: Partial<ExportSettings>) => Promise<ExportOutcome>;
   /** Whether this browser can encode a film at all (WebCodecs' H.264). */
   canFilm: boolean;
 }
@@ -69,24 +75,20 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
   live.current = { doc, builder, pool, stageW, stageH, queue };
   const cancel = useCallback(() => controller.current?.abort(), []);
 
-  const run = useCallback(async (kind: ExportKind) => {
+  const run = useCallback(async (kind: ExportKind, overrides?: Partial<ExportSettings>): Promise<ExportOutcome> => {
     const { doc: d, builder: b, pool: p, stageW: sw, stageH: sh, queue: q } = live.current;
-    if (controller.current) return;
-    if (!b || d.target === undefined) {
-      setNote('Nothing to export yet — the mosaic needs a target.');
-      return;
-    }
-    if (kind === 'mp4' && !isEncodeSupported()) {
-      setNote('This browser cannot encode a film (no WebCodecs). The image still saves as PNG.');
-      return;
-    }
-    if (kind === 'mp4' && d.settings.mode === 'single') {
-      setNote('Choose a mode under the stage — Mosaics, Chain… — to film it.');
-      return;
-    }
+    const refuse = (message: string): ExportOutcome => {
+      setNote(message);
+      return { ok: false, message };
+    };
+    if (controller.current) return { ok: false, message: 'An export is already running.' };
+    if (!b || d.target === undefined) return refuse('Nothing to export yet — the mosaic needs a target.');
+    if (kind === 'mp4' && !isEncodeSupported()) return refuse('This browser cannot encode a film (no WebCodecs). The image still saves as PNG.');
+    if (kind === 'mp4' && d.settings.mode === 'single') return refuse('Choose a mode under the stage — Mosaics, Chain… — to film it.');
     const s = d.settings;
-    const { w, h } = exportSize(sw, sh, s.export.short);
-    const cellPx = exportCellPx(s.export.cells, s.cellPx, sw, sh, w);
+    const ex = { ...s.export, ...overrides };
+    const { w, h } = exportSize(sw, sh, ex.short);
+    const cellPx = exportCellPx(ex.cells, s.cellPx, sw, sh, w);
     const match: MatchSettings = { cellPx, level: s.level, space: s.space, tint: s.tint, distinctNeighbours: s.distinctNeighbours };
     const ctl = new AbortController();
     controller.current = ctl;
@@ -98,6 +100,7 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
     try {
       let blob: Blob;
       let name: string;
+      let seconds: number | undefined;
       if (kind === 'png') {
         const scene = await b.build(d.target, match, { stageW: w, stageH: h, dpr: 1 }, {
           signal: ctl.signal,
@@ -121,10 +124,11 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
             // Read, never written: a film must not change the document it films.
             queue: q ? { next: q.next, draw: q.draw, picked: q.picked } : undefined,
           },
-          s.export.steps,
+          ex.steps,
           { stageW: w, stageH: h, dpr: 1 },
           ctl.signal,
         );
+        seconds = Math.round(film.seconds * 10) / 10;
         const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h });
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('This browser cannot draw the frame.');
@@ -149,12 +153,16 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
       }
       downloadBlob(blob, name);
       setNote(`Saved ${name} (${blob.size < 1_048_576 ? `${Math.max(1, Math.round(blob.size / 1024))} KB` : `${(blob.size / 1_048_576).toFixed(1)} MB`}).`);
+      return { ok: true, name, width: w, height: h, bytes: blob.size, ...(seconds !== undefined ? { seconds } : {}) };
     } catch (err) {
-      if (ctl.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) setNote('Export cancelled — nothing was saved.');
-      else {
-        const message = err instanceof Error ? err.message : String(err);
-        setNote(/cannot encode/i.test(message) ? `${message.replace(/ The slides still export as images\.?/, '')} The image still saves as PNG.` : message);
+      if (ctl.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+        setNote('Export cancelled — nothing was saved.');
+        return { ok: false, message: 'Export cancelled — nothing was saved.', cancelled: true };
       }
+      const raw = err instanceof Error ? err.message : String(err);
+      const message = /cannot encode/i.test(raw) ? `${raw.replace(/ The slides still export as images\.?/, '')} The image still saves as PNG.` : raw;
+      setNote(message);
+      return { ok: false, message };
     } finally {
       task.done();
       controller.current = null;
