@@ -5,7 +5,7 @@ import { MAP_GROUND_DEFAULTS, type MapGround, type MapGroundKind } from '../../s
 import { withLook } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
-import { Readout, SliderRow } from '../../shared/ui/Inspector';
+import { SliderRow } from '../../shared/ui/Inspector';
 import { AnchoredPopover } from '../../shared/ui/OverflowMenu';
 import Segmented from '../../shared/ui/Segmented';
 import type { MapGroundState } from './use-map-ground';
@@ -60,13 +60,13 @@ export default function MapGroundControls({ script, onScript, state }: { script:
               </Button>
             </div>
           ) : (
-            <Readout muted>
+            <p className="m-0 text-2xs text-muted leading-snug">
               {state.state === 'loading'
                 ? 'Fetching the tiles… the outline stands in until they land.'
                 : state.state === 'failed'
                   ? `${state.message} The outline stands in.`
                   : 'Credited « © OpenStreetMap contributors » on the map’s frames only. Pick the credit on the stage to move it or set its face and size.'}
-            </Readout>
+            </p>
           )}
         </>
       ) : null}
@@ -104,7 +104,7 @@ export function MapGroundChip({
         aria-haspopup="dialog"
         onClick={() => setOpen((o) => !o)}
         title="What the maps are drawn over"
-        className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface/90 backdrop-blur-sm px-2.5 min-h-8 pointer-coarse:min-h-11 text-2xs text-ink-soft shadow-paper cursor-pointer hover:text-ink"
+        className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-control border border-line bg-surface/90 backdrop-blur-sm px-2.5 min-h-8 pointer-coarse:min-h-11 text-2xs text-ink-soft shadow-paper cursor-pointer hover:text-ink"
       >
         <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Map</span>
         {GROUND_LABEL[kind]}

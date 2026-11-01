@@ -941,7 +941,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     setPane('settings');
     setInspectorOpen(true);
   };
-  const panel = 'border border-line rounded-paper-lg bg-surface shadow-paper-soft';
+  // The editor's frames wear the CONTROL radius (his ask): the back pill, the post's select and the sliders' 11 px.
+  const panel = 'border border-line rounded-control bg-surface shadow-paper-soft';
 
   const transportTrailing = (
     <>
@@ -977,7 +978,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         />
         {/* No minimum height (Develop's stage, `DevelopViewport`): the drawer takes its share of the column, and on a
             phone held sideways a floor here pushed the drawer below the screen. */}
-        <div className="relative flex-1 min-h-0 flex rounded-paper-lg bg-frame border border-line p-1.5">
+        <div className="relative flex-1 min-h-0 flex rounded-control bg-frame border border-line p-1.5">
           <StoryStage
             clock={clock}
             episode={shown}
@@ -1024,7 +1025,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         {mode === 'wide' ? <div className={`${panel} min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain`}>{listPane}</div> : null}
 
         <div className={`flex flex-col gap-2 min-h-0 min-w-0 ${mode === 'narrow' ? 'flex-[1.25]' : ''}`}>
-          <div className="relative flex-1 min-h-[12rem] flex rounded-paper-lg bg-frame border border-line p-2">
+          <div className="relative flex-1 min-h-[12rem] flex rounded-control bg-frame border border-line p-2">
             <StoryStage
               clock={clock}
               episode={shown}
