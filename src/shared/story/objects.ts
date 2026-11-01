@@ -177,21 +177,49 @@ export function setStyles(series: StyleBook | null | undefined, post: StyleBook 
 /** An object's settings as drawn: the series' under the post's. (pure over the books set) */
 export const styleOf = (key: string): ObjectStyle => ({ ...(SERIES[key] ?? {}), ...(POST[key] ?? {}) });
 
+/**
+ * The parts of a map that sit ON it — a route, its stops, a second track, a
+ * line between two places — take the map's place, size and turn, never their
+ * own: moved apart, the route would leave the land it was drawn on (his
+ * « décalage entre la map et le tracé », 2026-11-01). A follower's own
+ * geometry is ignored, so an offset written before is gone; the Studio moves
+ * the map when one of them is dragged (`geometryKey`).
+ */
+const FOLLOWS: Readonly<Record<string, string>> = {
+  'map-camera.route': 'map-camera.coast',
+  'map-camera.stops': 'map-camera.coast',
+  'map-holes.route': 'map-holes.map',
+  'map-holes.polarsteps': 'map-holes.map',
+  'map-holes.drone': 'map-holes.map',
+  'journey-impossible.from': 'journey-impossible.map',
+  'journey-impossible.line': 'journey-impossible.map',
+  'journey-impossible.to': 'journey-impossible.map',
+};
+/** The object whose place, size and turn this one takes: itself, or the map it is drawn on. (pure) */
+export const geometryKey = (key: string): string => FOLLOWS[key] ?? key;
+/** Whether an object moves with another (`geometryKey`). (pure) */
+export const followsMap = (key: string): boolean => key in FOLLOWS;
+
 /** One object met while a frame was drawn: its instance (`slot:key`), its key, whether it set text. */
 export interface DrawnObject {
   id: string;
   key: string;
   slot: string;
   text: boolean;
+  /** The first words it drew — what a font picker writes its rows in. */
+  sample?: string;
 }
 
 let SLOT = '';
 let DRAWN: DrawnObject[] = [];
 let HIDE: string | null = null;
+/** Where each object of the frame turned and grew about, by instance — what a follower turns about. */
+const ANCHORS = new Map<string, readonly [number, number]>();
 /** Start a frame's list of objects. */
 export function beginFrame(): void {
   DRAWN = [];
   SLOT = '';
+  ANCHORS.clear();
 }
 /** The slot the next objects belong to (`compose.ts`, its key), '' for what sits over every slot. */
 export function setSlot(key: string): void {
@@ -244,14 +272,18 @@ export function obj(
   if (from !== undefined && lt - (style.delay ?? 0) <= from) return;
   const record: DrawnObject = { id, key, slot: SLOT, text: false };
   DRAWN.push(record);
+  ANCHORS.set(id, anchor);
   if (style.hidden || HIDE === id) return;
   c.save();
-  const [ax, ay] = anchor;
-  if (style.dx || style.dy) c.translate(style.dx ?? 0, style.dy ?? 0);
-  if ((style.scale !== undefined && style.scale !== 1) || style.rotate) {
+  // A part of a map takes the map's geometry, about the map's anchor (`FOLLOWS`).
+  const lead = geometryKey(key);
+  const geo = lead === key ? style : styleOf(lead);
+  const [ax, ay] = lead === key ? anchor : (ANCHORS.get(`${SLOT}:${lead}`) ?? anchor);
+  if (geo.dx || geo.dy) c.translate(geo.dx ?? 0, geo.dy ?? 0);
+  if ((geo.scale !== undefined && geo.scale !== 1) || geo.rotate) {
     c.translate(ax, ay);
-    if (style.rotate) c.rotate((style.rotate * Math.PI) / 180);
-    if (style.scale !== undefined) c.scale(style.scale, style.scale);
+    if (geo.rotate) c.rotate((geo.rotate * Math.PI) / 180);
+    if (geo.scale !== undefined) c.scale(geo.scale, geo.scale);
     c.translate(-ax, -ay);
   }
   if (style.opacity !== undefined) c.globalAlpha *= style.opacity;
@@ -270,9 +302,12 @@ export function obj(
   }
 }
 
-/** Mark the objects around as holding text (the inspector then offers typography). */
-export function markText(): void {
-  for (const d of STACK) d.record.text = true;
+/** Mark the objects around as holding text (the inspector then offers typography), keeping the first words drawn. */
+export function markText(words?: string): void {
+  for (const d of STACK) {
+    d.record.text = true;
+    if (words && !d.record.sample && words.trim()) d.record.sample = words.trim();
+  }
 }
 
 function withAlpha(hex: string, a: number): string {

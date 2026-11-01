@@ -8,6 +8,7 @@ import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
 import { H, W } from '../../shared/story/charte';
 import { drawEpisode } from '../../shared/story/compose';
+import { geometryKey } from '../../shared/story/objects';
 import { hookScore, hookSoundFor, hookSounds } from '../../shared/story/hook';
 import HookPanel, { type HookFiles } from './HookPanel';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
@@ -22,6 +23,8 @@ import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transpor
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
+import { useMapGround } from './use-map-ground';
+import MapGroundControls, { MapGroundChip } from './MapGroundControls';
 import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -85,6 +88,8 @@ export interface PostSound {
   /** The hook's sounds that are files of the author's own (`HookPanel`). */
   hookFiles?: HookFiles;
 }
+/** The blocks that draw a map — the ground's chip shows over them. */
+const MAP_BLOCKS = new Set(['map-camera', 'map-holes', 'journey-impossible']);
 const NO_SOUND: PostSound = { voice: null, music: null, effects: [] };
 
 const EFFECT_SOURCES: readonly SelectOption<VoiceName | 'file'>[] = [
@@ -175,14 +180,20 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     factsOf(script, postId)?.tiles,
     connections.find((c) => c.id === wallSource) ?? null,
   );
+  const mapStops = tripMap.state === 'ready' && tripMap.map ? tripMap.map.stops : script?.stops;
+  const mapRoad = tripMap.state === 'ready' && tripMap.map ? tripMap.map.road : null;
+  // What the maps are drawn over: the tiles, once fetched for this route (`use-map-ground.ts`).
+  const mapGround = useMapGround(script?.look?.map, mapStops, mapRoad);
+  const groundLayers = mapGround.ground.state === 'ready' ? mapGround.ground.layers : null;
   const mapOpts = useMemo<ComposeOptions>(
     () => ({
       ...(tripMap.state === 'ready' && tripMap.map
         ? { stops: tripMap.map.stops, road: tripMap.map.road }
         : { stops: script?.stops }),
       wall: wall.images,
+      ground: groundLayers,
     }),
-    [tripMap, script, wall.images],
+    [tripMap, script, wall.images, groundLayers],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
@@ -299,8 +310,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         if (compactRef.current) setInspectorOpen(true);
         const { script: sc, postId: pid, scope: sp } = studio.current;
         if (!sc) return false;
-        const style = sp === 'series' ? styleIn(sc, pid, hit.key, 'series') : { ...styleIn(sc, pid, hit.key, 'series'), ...styleIn(sc, pid, hit.key, 'post') };
-        dragState.current = { key: hit.key, dx: style.dx ?? 0, dy: style.dy ?? 0 };
+        // A part of a map (its route, its stops) moves the map, never itself (`geometryKey`).
+        const gk = geometryKey(hit.key);
+        const style = sp === 'series' ? styleIn(sc, pid, gk, 'series') : { ...styleIn(sc, pid, gk, 'series'), ...styleIn(sc, pid, gk, 'post') };
+        dragState.current = { key: gk, dx: style.dx ?? 0, dy: style.dy ?? 0 };
         return true;
       },
       onMove: (mx, my) => {
@@ -345,8 +358,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       const { script: sc, postId: pid, scope: sp } = studio.current;
       if (!move || sel?.kind !== 'object' || !sc) return;
       e.preventDefault();
-      const was = sp === 'series' ? styleIn(sc, pid, sel.key, 'series') : { ...styleIn(sc, pid, sel.key, 'series'), ...styleIn(sc, pid, sel.key, 'post') };
-      onScript(withStyle(sc, pid, sel.key, { dx: (was.dx ?? 0) + move[0] || undefined, dy: (was.dy ?? 0) + move[1] || undefined }, sp));
+      const gk = geometryKey(sel.key);
+      const was = sp === 'series' ? styleIn(sc, pid, gk, 'series') : { ...styleIn(sc, pid, gk, 'series'), ...styleIn(sc, pid, gk, 'post') };
+      onScript(withStyle(sc, pid, gk, { dx: (was.dx ?? 0) + move[0] || undefined, dy: (was.dy ?? 0) + move[1] || undefined }, sp));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -537,6 +551,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         ? await renderBed(fx.score, total, { leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE), clips })
         : null;
       let skipped: string | null = heard && !audio ? 'the browser did not render the sound in time' : null;
+      // The map's tiles, when the series draws over them: every frame of the file has them, or none does.
+      const ground = await mapGround.ready();
+      const frameOpts: ComposeOptions = { ...mapOpts, ground };
       const canvas = document.createElement('canvas');
       canvas.width = W;
       canvas.height = H;
@@ -551,7 +568,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           skipped = reason;
         },
         draw: (sec) => {
-          drawEpisode(ctx, shown, Math.min(sec, total - 0.001), mapOpts);
+          drawEpisode(ctx, shown, Math.min(sec, total - 0.001), frameOpts);
           return canvas;
         },
         onProgress: (p) => {
@@ -584,6 +601,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   };
 
 
+  // While a map is on the stage, its ground can be chosen where it is seen.
+  const mapSpans = useMemo(() => scenes.filter((sc) => MAP_BLOCKS.has(sc.block)).map((sc) => [sc.a, sc.b] as const), [scenes]);
+  const groundChip =
+    script && mapSpans.length && exporting === null ? <MapGroundChip clock={clock} spans={mapSpans} script={script} onScript={onScript} state={mapGround.ground} /> : null;
+
   const archiveFolder = `Storytelling/${script?.series || `Season ${skeleton.season}`}/${episode.number}`;
 
   // --- the Studio's inspector: one panel at a time ----------------------------
@@ -593,11 +615,16 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         return (
           <>
           <InspectorSection id="story-charte" title="Charte" foldable={false} info="The series' colours, faces and weights — every post is drawn in them, and an object's colour or font can name one. Kept in your script.">
-            <ChartePanel script={script} onScript={onScript} />
+            <ChartePanel script={script} onScript={onScript} samples={{ title: episode.title, text: episode.title, num: '98 412 · 2024', hand: episode.title }} onPreview={setDraft} />
           </InspectorSection>
           <InspectorSection id="story-look" title="Look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
             <LookPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
+          {script ? (
+            <InspectorSection id="story-map-ground" title="Maps" foldable={false} info="What every map of the series is drawn over: the coastline shipped with Atelier, no land at all, or OpenStreetMap's tiles — fetched only once this device says yes, and credited on the map's frames alone.">
+              <MapGroundControls script={script} onScript={onScript} state={mapGround.ground} />
+            </InspectorSection>
+          ) : null}
           </>
         );
       case 'script':
@@ -834,6 +861,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           scope={scope}
           onScope={setScope}
           text={track?.text ?? false}
+          sample={track?.sample}
+          onPreview={setDraft}
           scene={
             scene && scene.index !== null && block
               ? { index: scene.index, len: block.len, cap: block.cap ? { a: block.cap.a, b: block.cap.b } : null, set: { len: words?.len, cap: words?.cap } }
@@ -910,7 +939,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     setPane('settings');
     setInspectorOpen(true);
   };
-  const panel = 'border border-line rounded-paper-lg bg-surface shadow-paper-soft';
+  // The editor's frames wear the CONTROL radius (his ask): the back pill, the post's select and the sliders' 11 px.
+  const panel = 'border border-line rounded-control bg-surface shadow-paper-soft';
 
   const transportTrailing = (
     <>
@@ -946,7 +976,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         />
         {/* No minimum height (Develop's stage, `DevelopViewport`): the drawer takes its share of the column, and on a
             phone held sideways a floor here pushed the drawer below the screen. */}
-        <div className="relative flex-1 min-h-0 flex rounded-paper-lg bg-frame border border-line p-1.5">
+        <div className="relative flex-1 min-h-0 flex rounded-control bg-frame border border-line p-1.5">
           <StoryStage
             clock={clock}
             episode={shown}
@@ -957,6 +987,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             drag={drag}
             label={`${episode.number} ${episode.title}`}
           />
+          {groundChip}
         </div>
         <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={transportTrailing} />
         <PanelHost
@@ -992,7 +1023,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         {mode === 'wide' ? <div className={`${panel} min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain`}>{listPane}</div> : null}
 
         <div className={`flex flex-col gap-2 min-h-0 min-w-0 ${mode === 'narrow' ? 'flex-[1.25]' : ''}`}>
-          <div className="relative flex-1 min-h-[12rem] flex rounded-paper-lg bg-frame border border-line p-2">
+          <div className="relative flex-1 min-h-[12rem] flex rounded-control bg-frame border border-line p-2">
             <StoryStage
               clock={clock}
               episode={shown}
@@ -1003,6 +1034,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               drag={drag}
               label={`${episode.number} ${episode.title}`}
             />
+            {groundChip}
           </div>
           <StoryTransport
             clock={clock}

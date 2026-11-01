@@ -48,6 +48,16 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   named on its first picture.
 - Storytelling: choose the wall's pictures in the same Winnow picker as Develop's *Add a day*, filtered by camera, type,
   extension, picks and stars — so screenshots and PNGs stay off the wall.
+- Storytelling: choose the wall by rules under Sources — leave out rejects, screenshots, all but the best of a burst and
+  look-alikes; spread the places over days, folders or weeks, the same each or more on busy ones; and prefer, in your
+  order, picked pictures, stars, edits, people and sharpness. *Correct the wall…* shows what the rules chose and why:
+  remove a picture and the next under the same rules takes its place, pin one so it stays whatever the rules, or swap
+  it for another of its day. Your corrections are kept in the script, apart from the rules.
+- Storytelling: choose what the series' maps are drawn over — the coastline shipped with Atelier, no land at all, or
+  OpenStreetMap's streets and terrain, greyed, natural, sepia or night like Flight Atlas's ground, and how strongly they
+  show. Set it under Charte & look › Maps or from the chip on the stage while a map is shown. The tiles are fetched only
+  once this device says yes, and their credit appears on the map's frames alone, as an object you can move, size and
+  set in another face.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
   HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
   size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every
@@ -86,6 +96,15 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Storytelling: choose the stops the series' map names under Sources. Take the trip's stage ends, starts or every
+  place, then remove, move or add stops, here or on the same big map as Trips' openers; nearby stops can be drawn as
+  one, and the road now runs from your first stop to your last, so a stopover before or after the trip leaves the map.
+- The Winnow picker over a long span: a click on a month goes there at once and loads that month first, with a
+  spinner on it and the month named on the status line; the scrollbar covers the whole span from the start; requests
+  nobody needs any more are cancelled. A new filter, One per burst, keeps the best picture of each burst.
+- Choosing a font shows each one in itself: the Storytelling charte and its objects, the Studio's title styles and
+  elements, and Trips' Look tab list every face written in it, over a line of your own text, with a search. In
+  Storytelling the picture tries the face as you move through the list; Escape puts it back.
 - Flight Atlas is now one of the main tools: it has its own card on the home page and among the editors in the tool
   menu, and it is no longer marked experimental.
 - Each tool's card on the home page shows a drawing of what the tool does until you have a project, trip, roll or atlas
@@ -95,6 +114,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Storytelling: a map's route and stops can no longer drift off the land. They move, grow and turn with their map —
+  dragging the route moves the whole map — and an offset given to them alone before is dropped.
 - Sending exports to a Winnow with an app token no longer ends in « not allowed to do that » after the files arrived:
   an archive is not reconciled, and finals sent by an editor say that linking them needs an admin.
 - Exports keep their sound in browsers that cannot encode AAC (Chromium on Linux, for one): the voice, music, ticks

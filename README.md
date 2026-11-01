@@ -64,6 +64,9 @@ Today it ships twelve tools, converging into a few editors:
 >   are kept on the device for a month (at most 256 MB, 64 MB on a phone), so
 >   a second export asks the server nothing; taking the yes back forgets
 >   them, and the background row has a *Forget them* button.
+>   Storytelling's maps can be drawn over the same tiles too, when the
+>   series asks for them under *Maps* and this device has said yes —
+>   credited on the map's frames alone.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a
 >   structured address (the county, the state and its code, the country) and
@@ -3019,7 +3022,12 @@ it and may grow blocks of its own.
   out of the route, its towns and the counted days (a trip that begins in Bali,
   told from Australia). *Names* chooses which points are named (where stages
   start and end, where they start, every place) and *Says* what each says (the
-  place, the stage, the place and its day, or nothing). *Days* → *Choose…*
+  place, the stage, the place and its day, or nothing). The maps are drawn
+  over the coastline that ships with Atelier, over no land at all, or over
+  OpenStreetMap's tiles (*Charte & look* › *Maps*, or the *Map* chip on the
+  stage while a map shows) — the tiles only once this device says yes, toned
+  like Flight Atlas's ground and credited on the map's frames alone; a
+  route and its stops always move with their map. *Days* → *Choose…*
   sets exactly which days are counted: a first and last day, and days left out
   one by one on a calendar that shows each day's media when the Winnow is
   connected. *Count* asks the Winnow how

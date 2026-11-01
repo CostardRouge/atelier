@@ -4,6 +4,8 @@
  * — and a post may override either; the numbers frozen from them follow the
  * same rule, a post's own over the series'.
  */
+import type { WallRules } from './wall-pick';
+import { MAP_GROUND_DEFAULTS, type MapGround } from './map-ground';
 import type { TripDoc } from '../roadtrip/trip-types';
 import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
 import { chosenStages, stageLabel, type MapChoice } from './trip-map';
@@ -123,9 +125,36 @@ export function withChosenWall(script: StoryScript, chosen: readonly (readonly [
   return withWallSources(script, wall, picks);
 }
 
+/**
+ * The script with the wall chosen by rules (`wall-pick.ts`): `rules` (null =
+ * back to one a day, his pins dropped with them), his `pin`s and removed
+ * pictures (`skip`) as given, the rest of the wall kept. `picks`, when given,
+ * freezes the wall at once.
+ */
+export function withWallRules(
+  script: StoryScript,
+  patch: { rules?: WallRules | null; pin?: readonly number[]; skip?: readonly number[] },
+  picks: readonly WallPick[] | null,
+): StoryScript {
+  const wall: NonNullable<ScriptSources['wall']> = { ...(script.sources?.wall ?? {}) };
+  if (patch.rules === null) {
+    delete wall.rules;
+    delete wall.pin;
+  } else if (patch.rules) wall.rules = patch.rules;
+  if (patch.pin) {
+    if (patch.pin.length) wall.pin = [...patch.pin];
+    else delete wall.pin;
+  }
+  if (patch.skip) {
+    if (patch.skip.length) wall.skip = [...patch.skip];
+    else delete wall.skip;
+  }
+  return withWallSources(script, wall, picks);
+}
+
 function withWallSources(script: StoryScript, wall: NonNullable<ScriptSources['wall']>, picks: readonly WallPick[] | null): StoryScript {
   const sources: ScriptSources = { ...(script.sources ?? {}) };
-  if (wall.skip?.length || Object.keys(wall.pick ?? {}).length || wall.chosen?.length) sources.wall = wall;
+  if (wall.skip?.length || Object.keys(wall.pick ?? {}).length || wall.chosen?.length || wall.rules || wall.pin?.length) sources.wall = wall;
   else delete sources.wall;
   return { ...script, sources, ...(script.facts && picks ? { facts: withTiles(script.facts, picks) } : {}) };
 }
@@ -178,13 +207,17 @@ export function withPostHooks(
  * field set back to its default is removed, so a script keeps only what was
  * chosen, and an empty look leaves no trace.
  */
-export function withLook(script: StoryScript, change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null } | null): StoryScript {
+export function withLook(
+  script: StoryScript,
+  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround> } | null,
+): StoryScript {
   if (!change) {
     // Only what the Look section sets: the charte and the objects have their own resets.
     const kept: StoryLook = { ...(script.look ?? {}) };
     delete kept.wall;
     delete kept.vignette;
     delete kept.grain;
+    delete kept.map;
     const rest: StoryScript = { ...script, look: kept };
     if (!Object.keys(kept).length) delete rest.look;
     return rest;
@@ -194,6 +227,13 @@ export function withLook(script: StoryScript, change: { wall?: Partial<WallGrid>
   for (const k of Object.keys(wall) as (keyof WallGrid)[]) if (wall[k] === WALL_DEFAULTS[k]) delete wall[k];
   const look: StoryLook = { ...was, ...(Object.keys(wall).length ? { wall } : {}) };
   if (!Object.keys(wall).length) delete look.wall;
+  if (change.map) {
+    // A field set back to its default is dropped, so a script keeps only what was chosen.
+    const map: MapGround = { ...(was.map ?? {}), ...change.map };
+    for (const k of Object.keys(map) as (keyof MapGround)[]) if (map[k] === undefined || map[k] === MAP_GROUND_DEFAULTS[k]) delete map[k];
+    if (Object.keys(map).length) look.map = map;
+    else delete look.map;
+  }
   for (const k of ['vignette', 'grain'] as const) {
     const v = change[k];
     if (v === undefined) continue;

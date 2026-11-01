@@ -359,8 +359,10 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, filter,
       return;
     }
     let cancelled = false;
+    // Walking months leaves no request behind: the month left is aborted, not only ignored.
+    const controller = new AbortController();
     client
-      .calendar(span.from, span.to, JSON.parse(filterKey) as FilterQuery)
+      .calendar(span.from, span.to, JSON.parse(filterKey) as FilterQuery, controller.signal)
       .then((cal) => {
         if (cancelled) return;
         const got = {
@@ -375,6 +377,7 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, filter,
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [client, month, span.from, span.to, filterKey]);
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { GeoJSONSource, Map as MlMap, MapMouseEvent, Marker as MlMarker } from 'maplibre-gl';
-import PlaceSearchField from '../../shared/map/PlaceSearchField';
+import PlaceSearchField from '../../map/PlaceSearchField';
 import {
   labelTowns,
   markerBox,
@@ -13,7 +13,7 @@ import {
   townsInView,
   type Town,
   type TownLabel,
-} from '../../shared/map/pick-map';
+} from '../../map/pick-map';
 import {
   MAP_ACCENT,
   MAP_PAPER_BG,
@@ -21,10 +21,10 @@ import {
   TILES_TOGGLE,
   TRACK_MAP_STYLE,
   setTiles,
-} from '../../shared/map/track-map';
-import type { GazetteerCity } from '../../shared/roadtrip/gazetteer';
+} from '../../map/track-map';
+import type { GazetteerCity } from '../../roadtrip/gazetteer';
 // Read once per session and ordered once, off the main thread.
-import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
+import { loadTowns } from '../../roadtrip/load-gazetteer';
 import {
   addStop,
   moveStop,
@@ -35,26 +35,26 @@ import {
   sameStopPlace,
   searchPlace,
   type MapStop,
-} from '../../shared/roadtrip/hooks/stops';
-import { cityPlace, fillFromIndex, fillSummary, lackingLine, lacksIndexFacts, withCityFacts } from '../../shared/roadtrip/hooks/stop-index';
-import { dropLine, hopAt, insertAtHop, resolveDrop, swapAt, type StopDrop } from '../../shared/roadtrip/hooks/stop-drop';
-import { canRedo, canUndo, newHistory, record, redo, undo, type HistoryState } from '../../shared/history/history';
-import UndoRedo from '../../shared/history/UndoRedo';
-import { focusOnMount } from '../../shared/ui/focus';
-import { undoKeyAction } from '../../shared/history/undo-keys';
-import { describeKeyTarget } from '../../shared/media/transport-keys';
-import { loadLand } from '../../shared/map/load-land';
-import { stateCodeFor } from '../../shared/roadtrip/place-style';
-import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
-import { groupStops, type GroupOptions } from '../../shared/roadtrip/hooks/stop-clusters';
-import { newId } from '../../shared/roadtrip/trip-types';
-import Button from '../../shared/ui/Button';
-import { ToggleField } from '../../shared/ui/Inspector';
-import { Icons } from '../../shared/ui/icons';
-import { blockNativeZoom } from '../../shared/ui/native-gestures';
-import useDialogKeys from '../../shared/ui/use-dialog-keys';
-import { revealInScroller } from '../../shared/ui/reveal';
-import { useListReorder } from '../../shared/ui/use-list-reorder';
+} from '../../roadtrip/hooks/stops';
+import { cityPlace, fillFromIndex, fillSummary, lackingLine, lacksIndexFacts, withCityFacts } from '../../roadtrip/hooks/stop-index';
+import { dropLine, hopAt, insertAtHop, resolveDrop, swapAt, type StopDrop } from '../../roadtrip/hooks/stop-drop';
+import { canRedo, canUndo, newHistory, record, redo, undo, type HistoryState } from '../../history/history';
+import UndoRedo from '../../history/UndoRedo';
+import { focusOnMount } from '../../ui/focus';
+import { undoKeyAction } from '../../history/undo-keys';
+import { describeKeyTarget } from '../../media/transport-keys';
+import { loadLand } from '../../map/load-land';
+import { stateCodeFor } from '../../roadtrip/place-style';
+import type { HookPlace } from '../../roadtrip/hooks/hook-variant';
+import { groupStops, type GroupOptions } from '../../roadtrip/hooks/stop-clusters';
+import { newId } from '../../roadtrip/trip-types';
+import Button from '../../ui/Button';
+import { ToggleField } from '../../ui/Inspector';
+import { Icons } from '../../ui/icons';
+import { blockNativeZoom } from '../../ui/native-gestures';
+import useDialogKeys from '../../ui/use-dialog-keys';
+import { revealInScroller } from '../../ui/reveal';
+import { useListReorder } from '../../ui/use-list-reorder';
 
 type Place = HookPlace;
 
