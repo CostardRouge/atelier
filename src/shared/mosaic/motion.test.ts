@@ -7,6 +7,7 @@ import {
   RECIPE_MOTIONS,
   REVEAL_LEAD_MS,
   departAt,
+  filmParts,
   motionOf,
   recipeOf,
   sanitizeMotion,
@@ -177,3 +178,14 @@ describe('the frames of a step', () => {
     expect(stepFrameAt(RECIPE_MOTIONS.chain, 1, 'dive', geo, -50).cam.s).toBe(1);
   });
 });
+
+describe('a film of the motion', () => {
+  it('is the opening then each step with its own departure, one step for a recipe that plays once', () => {
+    const m = { ...RECIPE_MOTIONS.chain, depart: 'alternate' as const };
+    const parts = filmParts(m, 1, 3);
+    expect(parts).toEqual([stepLength(m, 1, 'dive', true), stepLength(m, 1, 'dive'), stepLength(m, 1, 'pull'), stepLength(m, 1, 'dive')]);
+    expect(filmParts(RECIPE_MOTIONS.dezoom, 1, 9, true).length).toBe(2);
+    expect(filmParts(RECIPE_MOTIONS.slideshow, 1, 4).reduce((a, b) => a + b, 0)).toBe(4 * 6000);
+  });
+});
+

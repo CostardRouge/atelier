@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GRID_BYTES, encodeGrid, oklabOf } from './measure';
 import { RECIPE_MOTIONS } from './motion';
 import {
+  DEFAULT_EXPORT,
   DEFAULT_SETTINGS,
   MAX_MOSAIC_TILES,
   MOSAIC_DOC_VERSION,
@@ -133,7 +134,10 @@ describe('sanitizeSettings', () => {
   it('keeps a valid setting as given', () => {
     const s = sanitizeSettings({ aspect: '1:1', cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', direction: 'alternate', speed: 2, seed: 42 });
     // A v2 body: its chain direction becomes the recipe's departure.
-    expect(s).toEqual({ aspect: '1:1', cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', motion: { ...RECIPE_MOTIONS.chain, depart: 'alternate' }, speed: 2, seed: 42 });
+    expect(s).toEqual({ aspect: '1:1', cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', motion: { ...RECIPE_MOTIONS.chain, depart: 'alternate' }, speed: 2, seed: 42, export: DEFAULT_EXPORT });
+    // An export's settings: kept when valid, bounded otherwise.
+    expect(sanitizeSettings({ export: { short: 2160, cells: 'screen', steps: 12 } }).export).toEqual({ short: 2160, cells: 'screen', steps: 12 });
+    expect(sanitizeSettings({ export: { short: 999, cells: 'x', steps: 400 } }).export).toEqual({ short: 1080, cells: 'pixels', steps: 40 });
     // A v3 body: the motion as stored, bounded; a recipe's name with no motion gives that recipe.
     expect(sanitizeSettings({ mode: 'wave', motion: { ...RECIPE_MOTIONS.wave, holdMs: 99999 } }).motion).toEqual({ ...RECIPE_MOTIONS.wave, holdMs: 8000 });
     expect(sanitizeSettings({ mode: 'reveal' }).motion).toEqual(RECIPE_MOTIONS.reveal);

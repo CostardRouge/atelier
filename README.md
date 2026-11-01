@@ -3120,9 +3120,9 @@ reloads on every save.
 
 *Work in progress* — the home page and the tool menu say so with a badge. What
 exists: mosaics, their gallery and their file, the door to a Winnow's
-pictures with the measuring of their colours, the stage and the animated
-modes. The exports and keeping a mosaic on a Winnow come next
-(`docs/mosaic.md`).
+pictures with the measuring of their colours, the stage, the animated
+modes and the exports. Keeping a mosaic on a Winnow and agent commands come
+next (`docs/mosaic.md`).
 
 The photo-mosaic screen saver macOS once had, over your own pictures: one
 picture rebuilt out of hundreds of others, each cell a photo whose colours
@@ -3216,8 +3216,8 @@ the way back, the title over the picture count, the ‹ › and ↶ ↷ pairs an
 a ⋯ with *Choose the target…*, *Draw a target*, *Add from …*, *Measure*
 and *Full screen* where the browser allows it; under the stage come the
 chain's band and a one-row transport (the mode as a list, Play). The
-settings are the four tabs of the bar floating at the bottom — Target,
-Cells, Motion, Performance — each opening a drawer under the stage, which
+settings are the five tabs of the bar floating at the bottom — Target,
+Cells, Motion, Export and Device (the Performance section) — each opening a drawer under the stage, which
 stays in sight: the mosaic keeps the size it was built for and is shown a
 little smaller while a drawer is up, so opening one rebuilds nothing.
 
@@ -3269,6 +3269,21 @@ Performance section says how long a step takes to be ready and how often
 the chain had to hold. *Screen* takes the stage
 to the whole screen — a Mac left open on Atelier is the screen saver.
 *Speed* is in the dials.
+
+**Export.** The Export section writes the mosaic out at a size named by its
+short side — 720p, 1080p, 1440p or 4K — in the stage's shape. *More cells*
+keeps a cell's width in the file's pixels, so a bigger file holds more
+pictures; *As on screen* keeps the stage's cells, each drawn bigger, up to
+a tile's own 160 px; the line under them gives the file's size and its
+cells. *Save image* writes the target's mosaic as a PNG. *Save film* writes
+the mode's motion as an MP4 (H.264, 30 frames a second, no sound): the
+opening, then the number of **steps** asked (a pull-back plays once), drawn
+by the stage's own painter from the mosaic's seed and its chain's band, so
+the film shows what Play shows — the line under the slider says how long it
+lasts. It needs a mode under the stage, and a browser that encodes video
+(WebCodecs); the image saves everywhere. Either runs as a task in the
+masthead with its Cancel, and downloads under the mosaic's name, its size
+and the moment.
 
 ## Telemetry tool
 

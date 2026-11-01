@@ -41,6 +41,8 @@ import ChainBand from './ChainBand';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
 import MosaicSettings, { SETTINGS_TABS, type SettingsTab } from './MosaicSettings';
+import MosaicExportPanel from './MosaicExportPanel';
+import { useMosaicExport } from './use-mosaic-export';
 import MosaicStage, { type Reveal, type StageView } from './MosaicStage';
 import MosaicTransport from './MosaicTransport';
 import TargetChooser from './TargetChooser';
@@ -204,6 +206,8 @@ function MosaicWorkbench({
     player.start({ mode, motion, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool, queue: chained ? queueSource : undefined, ahead: perf.ahead });
   }, [player, mode, motion, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource, perf.ahead]);
   const stop = useCallback(() => player?.stop(), [player]);
+  // Writing it out (M7): the stage's own builder and pool, a player of the film's own, the queue read and never written.
+  const exporter = useMosaicExport({ doc, builder, pool, stageW, stageH, queue: chained ? queueSource : undefined });
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
   const wasPlaying = useRef(false);
   useEffect(() => {
@@ -394,6 +398,7 @@ function MosaicWorkbench({
       cropped={Boolean(doc.crop) && !status.playing}
       onWhole={() => setCrop(undefined)}
       onChoose={() => setChoosing({ for: 'target' })}
+      exporting={<MosaicExportPanel settings={doc.settings} update={update} stageW={stageW} stageH={stageH} exporter={exporter} ready={Boolean(builder) && doc.target !== undefined} />}
       target={
         <TargetFrame
           bitmap={targetBitmap}
@@ -439,7 +444,7 @@ function MosaicWorkbench({
         </div>
         {band}
         {transport}
-        <PanelHost asSheet compactAs="drawer" open={tabOpen} onClose={() => setTabOpen(false)} title={SETTINGS_TABS.find((t) => t.id === tab)?.label ?? 'Settings'}>
+        <PanelHost asSheet compactAs="drawer" open={tabOpen} onClose={() => setTabOpen(false)} title={SETTINGS_TABS.find((t) => t.id === tab)?.title ?? 'Settings'}>
           <div className="px-1 pb-4 overflow-x-hidden">{settings(tab)}</div>
         </PanelHost>
         {chooser}

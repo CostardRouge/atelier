@@ -20,7 +20,7 @@ import { pickCell, pickNextTarget } from '../../shared/mosaic/match';
 import { coverSource } from '../../shared/mosaic/measure';
 import type { Crop } from '../../shared/mosaic/frame';
 import type { MosaicMode } from '../../shared/mosaic/mosaic-doc';
-import { ONCE, departAt, stepFrameAt, type Motion, type StepDeparture, type StepFrame, type StepGeometry } from '../../shared/mosaic/motion';
+import { ONCE, departAt, filmParts, playsOnce, stepFrameAt, type Motion, type StepDeparture, type StepFrame, type StepGeometry } from '../../shared/mosaic/motion';
 import { drawGrid, drawTarget } from './mosaic-paint';
 import type { MatchPool } from './match-pool';
 import { cellOf, type BuildPlan, type MatchSettings, type MosaicScene, type SceneBuilder, type StageSize } from './scene-builder';
@@ -117,6 +117,8 @@ export class MosaicPlayer {
   private status: PlayerStatus = IDLE_STATUS;
   private listeners = new Set<(s: PlayerStatus) => void>();
   private scenes = new Map<number, Promise<MosaicScene>>();
+  /** Scenes kept by picture: fewer for a big film, whose scenes are tens of megabytes each. */
+  private held = SCENES_HELD;
   /** The step and frame on screen, for a click to steer from. */
   private live: { step: Step; frame: StepFrame; index: number } | null = null;
   private liveOpts: PlayerOptions | null = null;
@@ -215,7 +217,7 @@ export class MosaicPlayer {
     const p = this.builder.build(id, opts.settings, this.size, { signal, crop, plan: this.planFor(opts) });
     p.catch(() => undefined);
     this.scenes.set(id, p);
-    while (this.scenes.size > SCENES_HELD) {
+    while (this.scenes.size > this.held) {
       const oldest = this.scenes.keys().next().value;
       if (oldest === undefined) break;
       this.scenes.delete(oldest);
@@ -446,79 +448,169 @@ export class MosaicPlayer {
   private drawFrame(step: Step, f: StepFrame, opts: PlayerOptions): void {
     const c = this.context();
     if (!c) return;
-    const { ctx, W, H, dpr } = c;
-    const base = f.base === 'from' ? step.sceneFrom : step.sceneTo;
-    const other = f.base === 'from' ? step.sceneTo : step.sceneFrom;
-    // The scene was built for its own size; the camera is in that space, scaled to the canvas.
-    const kx = W / base.stageW;
-    const ky = H / base.stageH;
-    const cam = f.cam;
-    ctx.setTransform(dpr * kx * cam.s, 0, 0, dpr * ky * cam.s, dpr * kx * (base.stageW / 2 - cam.vx * cam.s), dpr * ky * (base.stageH / 2 - cam.vy * cam.s));
-    ctx.drawImage(base.canvas, 0, 0, base.stageW, base.stageH);
-    const { cols, cw, ch } = base.shape;
-    if (f.wave >= 0 && step.waveOrder) {
-      // The arrived mosaic's cells, in order, over the departed one's.
-      for (let q = 0; q < f.wave && q < step.waveOrder.length; q++) {
-        const cell = step.waveOrder[q];
-        const i = cell % cols;
-        const j = (cell - i) / cols;
-        ctx.drawImage(other.canvas, i * cw * other.dpr, j * ch * other.dpr, cw * other.dpr, ch * other.dpr, i * cw, j * ch, cw + 0.5, ch + 0.5);
-      }
+    paintStepFrame(c.ctx, c.W, c.H, c.dpr, step, f, opts);
+  }
+
+  /**
+   * A FILM of the motion for an export (M7): the opening and `steps` steps (one for a recipe that plays once), at
+   * `size`, every frame a function of its time like the stage's. Steps are prepared ON DEMAND as the encoder asks for
+   * frames in time order — the one being drawn and the next — and the ones behind are let go, so a 4K film never
+   * holds its whole chain. Run on a player of its own: its own seed, picks and scenes; it reads the queue and never
+   * writes it. A step that cannot be made (the queue out, drawing off) holds the last frame to the end.
+   */
+  film(opts: PlayerOptions, steps: number, size: StageSize, signal: AbortSignal): { seconds: number; draw: (t: number, ctx: CanvasRenderingContext2D) => Promise<void> } {
+    this.size = size;
+    this.rnd = mulberry32(opts.seed);
+    this.history = [opts.from];
+    this.scenes = new Map();
+    this.held = size.stageW * size.stageH > 4_000_000 ? 3 : SCENES_HELD;
+    const once = playsOnce(opts.mode);
+    // The parts' lengths, known before anything is prepared: the opening, then each step's own departure.
+    const lengths = filmParts(opts.motion, opts.speed, steps, once);
+    const count = lengths.length - 1;
+    const starts: number[] = [];
+    let acc = 0;
+    for (const l of lengths) {
+      starts.push(acc);
+      acc += l;
     }
-    if (opts.grid && f.flipped < 0) {
-      ctx.strokeStyle = 'rgba(244,240,231,0.35)';
-      ctx.lineWidth = 1 / (dpr * cam.s);
-      ctx.beginPath();
-      for (let i = 1; i < cols; i++) {
-        ctx.moveTo(i * cw, 0);
-        ctx.lineTo(i * cw, base.stageH);
+    const total = acc;
+    let opening: Promise<Step> | null = null;
+    const prepared = new Map<number, Promise<Step | 'end' | null>>();
+    const ensure = (k: number) => {
+      for (let i = 0; i <= k && i < count; i++) {
+        if (prepared.has(i)) continue;
+        const before: Promise<Step | 'end' | null> = i === 0 ? Promise.resolve({ to: opts.from } as Step) : prepared.get(i - 1)!;
+        const p = before.then(async (prev) => {
+          if (!prev || prev === 'end') return prev;
+          const step = await this.prepare(i, prev.to, opts, signal);
+          if (step && step !== 'end') this.remember(step.to);
+          return step;
+        });
+        p.catch(() => undefined);
+        prepared.set(i, p);
       }
-      for (let j = 1; j < base.shape.rows; j++) {
-        ctx.moveTo(0, j * ch);
-        ctx.lineTo(base.stageW, j * ch);
+    };
+    let last: { step: Step; f: StepFrame } | null = null;
+    const draw = async (t: number, ctx: CanvasRenderingContext2D) => {
+      const ms = Math.min(total, Math.max(0, t * 1000));
+      let seg = 0;
+      while (seg + 1 < starts.length && ms >= starts[seg + 1]) seg++;
+      const local = ms - starts[seg];
+      let step: Step | 'end' | null;
+      if (seg === 0) {
+        opening ??= this.sceneOf(opts.from, opts, signal, opts.crop).then((scene) => ({
+          depart: departAt(opts.motion, 0),
+          from: opts.from,
+          to: opts.from,
+          sceneFrom: scene,
+          sceneTo: scene,
+          geo: geometryOf(scene, -1, -1),
+          cellA: -1,
+          cellB: -1,
+          waveOrder: null,
+          revealOrder: this.revealOrderFor(scene),
+        }));
+        step = await opening;
+        ensure(0);
+      } else {
+        const k = seg - 1;
+        ensure(k + 1);
+        step = await prepared.get(k)!;
+        // The steps behind are let go: their scenes leave with them.
+        for (const i of [...prepared.keys()]) if (i < k - 1) prepared.delete(i);
       }
-      ctx.stroke();
+      if (signal.aborted) throw new DOMException('Export cancelled', 'AbortError');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#100f0d';
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      if (step && step !== 'end') {
+        const f = stepFrameAt(opts.motion, opts.speed, step.depart, step.geo, local, seg === 0);
+        last = { step, f };
+      }
+      if (last) paintStepFrame(ctx, size.stageW, size.stageH, size.dpr, last.step, last.f, opts);
+    };
+    return { seconds: total / 1000, draw };
+  }
+}
+
+/**
+ * One frame of a step into `ctx`, `W × H` logical pixels at `dpr`: the base mosaic through the camera, the aimed
+ * cell's true content over its tile, the arrived mosaic's cells landing or the whole of it crossing in, the base's
+ * photo over it (whole, or cell by cell). The stage and a film draw with it alike.
+ */
+function paintStepFrame(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, step: Step, f: StepFrame, opts: PlayerOptions): void {
+  const base = f.base === 'from' ? step.sceneFrom : step.sceneTo;
+  const other = f.base === 'from' ? step.sceneTo : step.sceneFrom;
+  // The scene was built for its own size; the camera is in that space, scaled to the canvas.
+  const kx = W / base.stageW;
+  const ky = H / base.stageH;
+  const cam = f.cam;
+  ctx.setTransform(dpr * kx * cam.s, 0, 0, dpr * ky * cam.s, dpr * kx * (base.stageW / 2 - cam.vx * cam.s), dpr * ky * (base.stageH / 2 - cam.vy * cam.s));
+  ctx.drawImage(base.canvas, 0, 0, base.stageW, base.stageH);
+  const { cols, cw, ch } = base.shape;
+  if (f.wave >= 0 && step.waveOrder) {
+    // The arrived mosaic's cells, in order, over the departed one's.
+    for (let q = 0; q < f.wave && q < step.waveOrder.length; q++) {
+      const cell = step.waveOrder[q];
+      const i = cell % cols;
+      const j = (cell - i) / cols;
+      ctx.drawImage(other.canvas, i * cw * other.dpr, j * ch * other.dpr, cw * other.dpr, ch * other.dpr, i * cw, j * ch, cw + 0.5, ch + 0.5);
     }
-    if (f.cellFill > 0) {
-      // The aimed cell shows what it really is: the other side's photo (an arrival on the photo), else its mosaic.
-      const cell = step.depart === 'pull' ? step.cellB : step.cellA;
-      if (cell >= 0) {
-        const r = cellRect(cell, cols, cw, ch);
-        ctx.globalAlpha = f.cellFill;
-        if (opts.motion.arrival === 'photo') {
-          const src = coverSource(other.target.width, other.target.height, r.w, r.h);
-          ctx.drawImage(other.target, src.x, src.y, src.w, src.h, r.x, r.y, r.w, r.h);
-        } else ctx.drawImage(other.canvas, 0, 0, other.canvas.width, other.canvas.height, r.x, r.y, r.w, r.h);
-        ctx.globalAlpha = 1;
-      }
+  }
+  if (opts.grid && f.flipped < 0) {
+    ctx.strokeStyle = 'rgba(244,240,231,0.35)';
+    ctx.lineWidth = 1 / (dpr * cam.s);
+    ctx.beginPath();
+    for (let i = 1; i < cols; i++) {
+      ctx.moveTo(i * cw, 0);
+      ctx.lineTo(i * cw, base.stageH);
     }
-    if (f.cross > 0) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.globalAlpha = f.cross;
-      ctx.drawImage(step.sceneTo.canvas, 0, 0, W, H);
+    for (let j = 1; j < base.shape.rows; j++) {
+      ctx.moveTo(0, j * ch);
+      ctx.lineTo(base.stageW, j * ch);
+    }
+    ctx.stroke();
+  }
+  if (f.cellFill > 0) {
+    // The aimed cell shows what it really is: the other side's photo (an arrival on the photo), else its mosaic.
+    const cell = step.depart === 'pull' ? step.cellB : step.cellA;
+    if (cell >= 0) {
+      const r = cellRect(cell, cols, cw, ch);
+      ctx.globalAlpha = f.cellFill;
+      if (opts.motion.arrival === 'photo') {
+        const src = coverSource(other.target.width, other.target.height, r.w, r.h);
+        ctx.drawImage(other.target, src.x, src.y, src.w, src.h, r.x, r.y, r.w, r.h);
+      } else ctx.drawImage(other.canvas, 0, 0, other.canvas.width, other.canvas.height, r.x, r.y, r.w, r.h);
       ctx.globalAlpha = 1;
     }
-    if (f.flipped >= 0 && step.revealOrder) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = cols * base.shape.rows;
-      if (f.flipped >= count) drawTarget(ctx, base.target, W, H, dpr, 1, base.targetRect);
-      else {
-        const src = base.targetRect;
-        for (let q = 0; q < f.flipped; q++) {
-          const cell = step.revealOrder[q];
-          const i = cell % cols;
-          const j = (cell - i) / cols;
-          const x = i * cw * kx;
-          const y = j * ch * ky;
-          const w = cw * kx;
-          const h = ch * ky;
-          ctx.drawImage(base.target, src.x + (x / W) * src.w, src.y + (y / H) * src.h, (w / W) * src.w, (h / H) * src.h, x, y, w + 0.5, h + 0.5);
-        }
-        if (opts.grid) drawGrid(ctx, base.shape, W, H, dpr);
-      }
-    }
-    if (f.photo > 0) drawTarget(ctx, base.target, W, H, dpr, f.photo, base.targetRect);
   }
+  if (f.cross > 0) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = f.cross;
+    ctx.drawImage(step.sceneTo.canvas, 0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+  if (f.flipped >= 0 && step.revealOrder) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = cols * base.shape.rows;
+    if (f.flipped >= count) drawTarget(ctx, base.target, W, H, dpr, 1, base.targetRect);
+    else {
+      const src = base.targetRect;
+      for (let q = 0; q < f.flipped; q++) {
+        const cell = step.revealOrder[q];
+        const i = cell % cols;
+        const j = (cell - i) / cols;
+        const x = i * cw * kx;
+        const y = j * ch * ky;
+        const w = cw * kx;
+        const h = ch * ky;
+        ctx.drawImage(base.target, src.x + (x / W) * src.w, src.y + (y / H) * src.h, (w / W) * src.w, (h / H) * src.h, x, y, w + 0.5, h + 0.5);
+      }
+      if (opts.grid) drawGrid(ctx, base.shape, W, H, dpr);
+    }
+  }
+  if (f.photo > 0) drawTarget(ctx, base.target, W, H, dpr, f.photo, base.targetRect);
 }
 
 /** The stage a step plays on, from the departed scene (and the arrived one's cell for a pull). */

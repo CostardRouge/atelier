@@ -27,7 +27,7 @@ and `mosaic-store.ts`, the legal notice's line — Q2 answered yes, the tiles
 are kept; M3 the document's store, `mosaic-file.ts`, `MosaicGallery.tsx`,
 `MosaicEditor.tsx`'s frame, `MosaicTool.tsx`, the registry entry as an
 `editor` under `wip` — Q1 by recommendation —, the README and `llms.txt`),
-M7–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
+M7 (the PNG and the MP4 film, the Export tab, `export-size.ts`, `MosaicPlayer.film`) built 2026-11-01 — the film encodes headless here after all —, M8–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
 §8 the questions still his. Lab (French,
 synthetic pictures, six modes playable):
 <https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi>. §1 is fact, read in
@@ -326,7 +326,7 @@ the Winnow stub where it touches the instance.
 | M4 | **The door** | `MosaicPicker.tsx` over `WinnowPicker` (span by default, `all` ticks, *Add N to the mosaic* adds refs and starts M2's run); the editor's library band (count, measured, failed, *Measure again*). | Headless against the stub: a span of 44 → 44 tiles, 44 grids, 44 tiles kept. |
 | M5 | **Single** | `MosaicStage.tsx` + `mosaic-paint.ts`: the target's proxy fetched, cells read, matched, painted once; the settings panel (cell px, level, space, tint, distinct, grid, ghost); click a cell to retarget; the matching moved to the worker past 20 M operations. | Headless: a target reconstituted from the stub's 44 and from 3 000 synthetic grids; the match time read in the status line. |
 | M6 | **The animated modes** | Dézoom, Chain (in · out · alternate), Reveal, Drift; the camera from `chain.ts`'s clock; the next proxy fetched during the hold; Play / Escape; fullscreen. | Headless frames at fixed times compared with the clock's state; 60 fps on the synthetic library. |
-| M7 | **Exports** | PNG at a chosen width; MP4 of N steps through `encodeFrames` with the seed; the task and its cancel. | The PNG headless; the MP4 on his Mac (no H.264 here). |
+| M7 | **Exports** | PNG at a chosen width; MP4 of N steps through `encodeFrames` with the seed; the task and its cancel. | The PNG headless; the MP4 headless too (this Chromium encodes H.264), probed with ffprobe; a real library on his Mac. |
 | M8 | **Kept on a Winnow** | `mosaic-remote.ts` under `kind: 'mosaic'`, the atlas's driver; sync pill. | Against the stub listing the kind; the instance's side is his (Q6). |
 | M9 | **Agent commands** | `mosaic.add`, `mosaic.measure`, `mosaic.target`, `mosaic.mode`, `mosaic.export` through `useRegisterCommands`. | The MCP script driving a mosaic end to end. |
 
