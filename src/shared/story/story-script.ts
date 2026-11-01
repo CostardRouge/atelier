@@ -86,7 +86,22 @@ export interface ScriptSources {
    * starts and ends (`ends`, the default), starts only, or every place — and
    * what each says: the place, the stage, the place and its day, or nothing.
    */
-  map?: { points?: 'ends' | 'starts' | 'places'; label?: 'place' | 'stage' | 'place-date' | 'none' };
+  map?: {
+    points?: 'ends' | 'starts' | 'places';
+    label?: 'place' | 'stage' | 'place-date' | 'none';
+    /**
+     * The author's own stops, in the order the map visits them — present, they
+     * ARE the map's points (`points` then only says what they were taken from,
+     * `took`). Each keeps its name, position and day, nothing of the trip's ids:
+     * the map stays as made when the trip changes.
+     */
+    stops?: MapStopRef[];
+    took?: 'ends' | 'starts' | 'places';
+    /** Nearby stops drawn as one halt (Trips' `stop-clusters.ts`), never edited out of the list. */
+    group?: { km: number; visits?: 'consecutive' | 'all'; name?: 'first' | 'central' };
+    /** Which recorded road is drawn: between the first and last stop, or the whole trip. */
+    route?: 'stops' | 'all';
+  };
   /**
    * The days counted, when the series says so rather than its kept stages:
    * a first and last day, and days left out (`skip`, ISO dates).
@@ -140,6 +155,18 @@ export interface Cell {
   /** The published post, or a draft. */
   url?: string;
 }
+
+/** One stop of a series' own map. */
+export interface MapStopRef {
+  name: string;
+  lat: number;
+  lon: number;
+  /** Its day (ISO), when it came from the trip — said by « The place and its day ». */
+  day?: string;
+}
+
+/** The most stops a series keeps on its map. */
+export const MAX_MAP_STOPS = 200;
 
 /** A column of the map: where a subject can be told. */
 export interface ScriptChannel {
@@ -369,7 +396,33 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const label = ['place', 'stage', 'place-date', 'none'].includes(map.label as string)
       ? (map.label as 'place' | 'stage' | 'place-date' | 'none')
       : undefined;
-    if (points || label) out.map = { ...(points ? { points } : {}), ...(label ? { label } : {}) };
+    const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+    const stops = Array.isArray(map.stops)
+      ? map.stops
+          .filter((s): s is Record<string, unknown> => isObject(s) && typeof s.name === 'string' && num(s.lat, -90, 90) && num(s.lon, -180, 180))
+          .slice(0, MAX_MAP_STOPS)
+          .map((s): MapStopRef => ({
+            name: s.name as string,
+            lat: s.lat as number,
+            lon: s.lon as number,
+            ...(typeof s.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.day) ? { day: s.day } : {}),
+          }))
+      : undefined;
+    const took = ['ends', 'starts', 'places'].includes(map.took as string) ? (map.took as 'ends' | 'starts' | 'places') : undefined;
+    const g = isObject(map.group) && num(map.group.km, 0.5, 80) ? map.group : null;
+    const visits = g?.visits === 'all' || g?.visits === 'consecutive' ? (g.visits as 'all' | 'consecutive') : undefined;
+    const naming = g?.name === 'first' || g?.name === 'central' ? (g.name as 'first' | 'central') : undefined;
+    const group = g ? { km: g.km as number, ...(visits ? { visits } : {}), ...(naming ? { name: naming } : {}) } : undefined;
+    const route = map.route === 'stops' || map.route === 'all' ? map.route : undefined;
+    if (points || label || stops || group || route)
+      out.map = {
+        ...(points ? { points } : {}),
+        ...(label ? { label } : {}),
+        ...(stops ? { stops } : {}),
+        ...(stops && took ? { took } : {}),
+        ...(group ? { group } : {}),
+        ...(route ? { route } : {}),
+      };
   }
   const days = raw.days;
   if (isObject(days)) {
