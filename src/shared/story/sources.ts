@@ -6,6 +6,7 @@
  */
 import type { WallRules } from './wall-pick';
 import { MAP_GROUND_DEFAULTS, type MapGround } from './map-ground';
+import type { StoryCamera } from './story-camera';
 import type { TripDoc } from '../roadtrip/trip-types';
 import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
 import { chosenStages, stageLabel, type MapChoice } from './trip-map';
@@ -209,7 +210,7 @@ export function withPostHooks(
  */
 export function withLook(
   script: StoryScript,
-  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround> } | null,
+  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null } | null,
 ): StoryScript {
   if (!change) {
     // Only what the Look section sets: the charte and the objects have their own resets.
@@ -218,6 +219,7 @@ export function withLook(
     delete kept.vignette;
     delete kept.grain;
     delete kept.map;
+    delete kept.camera;
     const rest: StoryScript = { ...script, look: kept };
     if (!Object.keys(kept).length) delete rest.look;
     return rest;
@@ -227,6 +229,11 @@ export function withLook(
   for (const k of Object.keys(wall) as (keyof WallGrid)[]) if (wall[k] === WALL_DEFAULTS[k]) delete wall[k];
   const look: StoryLook = { ...was, ...(Object.keys(wall).length ? { wall } : {}) };
   if (!Object.keys(wall).length) delete look.wall;
+  if (change.camera !== undefined) {
+    // « As before » is the absence of a camera: a series that never chose keeps the old path.
+    if (change.camera === null || (change.camera.preset ?? 'before') === 'before') delete look.camera;
+    else look.camera = change.camera.preset === 'own' ? change.camera : { preset: change.camera.preset };
+  }
   if (change.map) {
     // A field set back to its default is dropped, so a script keeps only what was chosen.
     const map: MapGround = { ...(was.map ?? {}), ...change.map };

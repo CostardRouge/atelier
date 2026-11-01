@@ -11,6 +11,7 @@ import type { Lang } from './locale';
 import type { WallGrid, WallGroup } from './wall-grid';
 import type { Charte, StyleBook } from './objects';
 import type { MapGround } from './map-ground';
+import type { StoryCamera } from './story-camera';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -25,6 +26,8 @@ export interface StoryLook {
   objects?: StyleBook;
   /** What the maps are drawn over: the outline, nothing, or OpenStreetMap's tiles (`map-ground.ts`). */
   map?: MapGround;
+  /** How the map's camera follows the route: as before, or Trips' camera and its presets (`story-camera.ts`). */
+  camera?: StoryCamera;
 }
 
 export interface BlockSpec {

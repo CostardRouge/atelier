@@ -10,6 +10,7 @@
  * be judged and nothing personal ships with the code. (pure)
  */
 import { readMapGround } from './map-ground';
+import { readStoryCamera } from './story-camera';
 import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
@@ -489,8 +490,10 @@ function readLook(raw: unknown): StoryLook | undefined {
   const vignette = level(raw.vignette, 0.8);
   const grain = level(raw.grain, 0.2);
   const map = readMapGround(raw.map);
+  const camera = readStoryCamera(raw.camera);
   const look: StoryLook = {
     ...(map ? { map } : {}),
+    ...(camera ? { camera } : {}),
     ...(wall ? { wall } : {}),
     ...(charte ? { charte } : {}),
     ...(objects ? { objects } : {}),

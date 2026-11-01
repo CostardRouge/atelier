@@ -67,6 +67,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   recorded points joined corner to corner, so a camera close on the route no longer jerks at every point. The trip's
   road settings (which points, the detail, how the line is driven) can be tuned under Sources › The map, and they are
   the trip's own: Trips' openers and the story maps change together.
+- Storytelling: the map's camera can follow the route like Trips' openers do — Calm, Navigation (the map turning so
+  the road runs up the frame) or Documentary, or your own view width, smoothing, look-ahead and wide shots — under
+  Charte & look › Map camera. The posts already made keep their camera until you choose one.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
   HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
   size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every

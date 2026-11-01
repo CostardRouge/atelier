@@ -26,6 +26,7 @@ import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
 import { useMapGround } from './use-map-ground';
 import MapGroundControls, { MapGroundChip } from './MapGroundControls';
+import MapCameraSection from './MapCameraSection';
 import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -625,6 +626,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           {script ? (
             <InspectorSection id="story-map-ground" title="Maps" foldable={false} info="What every map of the series is drawn over: the coastline shipped with Atelier, no land at all, or OpenStreetMap's tiles — fetched only once this device says yes, and credited on the map's frames alone.">
               <MapGroundControls script={script} onScript={onScript} state={mapGround.ground} />
+            </InspectorSection>
+          ) : null}
+          {script ? (
+            <InspectorSection id="story-map-camera" title="Map camera" foldable={false} info="How the camera follows the route on the series' maps: as in the posts already made, or the camera of Trips' openers — calm, navigation or documentary, then your own width, smoothing and look-ahead.">
+              <MapCameraSection script={script} onScript={onScript} />
             </InspectorSection>
           ) : null}
           </>

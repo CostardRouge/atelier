@@ -16,6 +16,7 @@ import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
 import { setGround, type GroundLayer } from './map-ground';
 import type { NamedWhich } from './map-names';
+import { setStoryCamera } from './story-camera';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
 import { setWall, setWallGrid } from './scenes/Hook';
@@ -109,6 +110,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all');
   setWall(opts.wall ?? null);
   setGround(ep.look?.map, opts.ground ?? null);
+  setStoryCamera(ep.look?.camera);
   setWallGrid(ep.look?.wall, ep.wallGroups);
   setTexture(ep.look);
   const slots = slotsOf(ep);
