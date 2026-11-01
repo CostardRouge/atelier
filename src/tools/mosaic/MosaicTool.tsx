@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
-import useHistory from '../../shared/history/use-history';
+import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { cleanMosaicTitle, createMosaicDoc, type MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import { mosaicSummary } from '../../shared/mosaic/mosaic-summary';
 import { documentSourcesFor } from '../../shared/sources/document-gallery';
@@ -78,6 +78,12 @@ export default function MosaicTool() {
   const lockRef = useRef<DocumentLock | null>(null);
   const openRef = useRef<MosaicDoc | null>(null);
   openRef.current = open;
+  // The mosaic this render drew: an agent's command that reads the undo stack waits until it is the one written last.
+  const renderedRef = useRef<MosaicDoc | null>(open);
+  renderedRef.current = open;
+  const historyRef = useRef<DocumentHistory<MosaicDoc | null> | null>(null);
+  // While `mosaic.keep` moves the open mosaic, an edit would land on the copy being left: none is taken.
+  const moving = useRef(false);
 
   const syncDriver = useMemo<DocumentSyncDriver<MosaicDoc>>(
     () => ({
@@ -126,9 +132,16 @@ export default function MosaicTool() {
   lockRef.current = lock;
   const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
 
+  /**
+   * The mosaic replaced UNDER the tool — by the pill's verbs, by a resume that found the instance's copy newer than a
+   * clean mirror, by a move. Not an edit: undoing back onto what it replaced would push the losing version straight
+   * back up (Trips' and Develop's rule), so the history starts again from it, and a write the debounce still holds is
+   * dropped rather than landing over it.
+   */
   function replaceOpen(doc: MosaicDoc) {
     pending.current = null;
     setOpen(doc);
+    historyRef.current?.reset(doc);
   }
 
   const flush = useCallback(async () => {
@@ -161,6 +174,7 @@ export default function MosaicTool() {
   const change = useCallback(
     (fn: (doc: MosaicDoc) => MosaicDoc) => {
       if (lockRef.current && !lockRef.current.canWrite()) return;
+      if (moving.current) return;
       const cur = pending.current ?? openRef.current;
       if (!cur) return;
       const next = fn(cur);
@@ -222,6 +236,7 @@ export default function MosaicTool() {
     },
     what: 'edit',
   });
+  historyRef.current = history;
 
   // --- the mosaics for an agent (M9, `mosaic-remote.md`): the open mosaic's own commands are its editor's ---
   const findMosaic = async (id: unknown): Promise<MosaicDoc> => {
@@ -231,6 +246,13 @@ export default function MosaicTool() {
   };
   const listed = (m: MosaicDoc) => ({ id: m.id, ...mosaicSummary(m), keptOn: m.sourceId, open: m.id === openRef.current?.id && Boolean(ref) });
   const needOpen = () => (open && ref ? true : 'no mosaic is open — mosaic.open opens one');
+  const needWrite = () => (needOpen() !== true ? needOpen() : lock.readOnly ? 'another tab edits this mosaic — Edit here takes it over' : true);
+  // A write lands in the shell at once and in the undo stack after the render that follows: an undo asked right
+  // after an edit waits for that render (a second at most), then reads the stack as it is.
+  const settle = async () => {
+    for (let i = 0; i < 40 && renderedRef.current !== openRef.current; i++) await new Promise((r) => setTimeout(r, 25));
+    await new Promise((r) => setTimeout(r, 0));
+  };
   useRegisterCommands('mosaic', [
     {
       id: 'mosaic.list',
@@ -273,28 +295,51 @@ export default function MosaicTool() {
       description:
         'Move the open mosaic to where it is kept: "local" (this device only) or a connected Winnow whose document bucket keeps mosaics (its host, e.g. winnow.example). The instance is written first and the old copy removed after, so a refusal leaves it where it was. Answers where it is kept now.',
       params: { source: { type: 'string', description: '"local", or an instance’s host.' } },
-      available: needOpen,
+      available: needWrite,
       run: async (p) => {
-        const cur = openRef.current;
-        if (!cur) throw new CommandError('unavailable', 'no mosaic is open');
+        if (!openRef.current) throw new CommandError('unavailable', 'no mosaic is open');
+        if (moving.current) throw new CommandError('unavailable', 'the mosaic is already being moved');
         const sources = documentSourcesFor(MOSAIC_DOC_KIND).map((s) => s.id);
         if (!sources.includes(p.source as string)) {
           throw new CommandError('invalid', `"${String(p.source)}" cannot keep mosaics — it can be ${sources.map((s) => `"${s}"`).join(' or ')}`);
         }
+        // What the debounce holds is written first; from then until the move ends no edit is taken (it would land on
+        // the copy being left), and the sync lets go of the origin, so no push races the move's delete there.
+        if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
         await flushRef.current();
-        const result = await moveMosaic(openRef.current ?? cur, p.source as string);
-        if (!result.ok) throw new CommandError('failed', result.error);
-        replaceOpen(result.doc);
-        return { id: result.doc.id, keptOn: result.doc.sourceId };
+        moving.current = true;
+        clear();
+        let moved = false;
+        try {
+          const result = await moveMosaic(openRef.current, p.source as string);
+          if (!result.ok) throw new CommandError('failed', result.error);
+          moved = true;
+          // Its new source re-keys the resume effect, which takes the sync back on the new copy.
+          replaceOpen(result.doc);
+          return { id: result.doc.id, keptOn: result.doc.sourceId };
+        } finally {
+          moving.current = false;
+          if (!moved) {
+            // Kept where it was: the sync takes it back there.
+            const now = openRef.current;
+            if (now) void resume(now).then((r) => r?.replaced && replaceOpen(r.doc));
+          }
+        }
       },
     },
     {
       id: 'mosaic.undo',
       title: 'Undo',
       description: 'Undo the last change to the open mosaic, the author’s or an agent’s.',
-      available: () => (needOpen() !== true ? needOpen() : history.canUndo ? true : 'nothing to undo'),
-      run: () => {
-        history.undo();
+      available: needWrite,
+      run: async () => {
+        await settle();
+        const h = historyRef.current;
+        if (!h?.canUndo) throw new CommandError('unavailable', 'nothing to undo');
+        h.undo();
+        // The step put back reaches the editor at the next render: answered once it has, so the next command reads it.
+        await settle();
         return { undone: true };
       },
     },
@@ -302,9 +347,13 @@ export default function MosaicTool() {
       id: 'mosaic.redo',
       title: 'Redo',
       description: 'Redo what mosaic.undo took back.',
-      available: () => (needOpen() !== true ? needOpen() : history.canRedo ? true : 'nothing to redo'),
-      run: () => {
-        history.redo();
+      available: needWrite,
+      run: async () => {
+        await settle();
+        const h = historyRef.current;
+        if (!h?.canRedo) throw new CommandError('unavailable', 'nothing to redo');
+        h.redo();
+        await settle();
         return { redone: true };
       },
     },

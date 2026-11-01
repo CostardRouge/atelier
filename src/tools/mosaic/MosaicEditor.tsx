@@ -541,12 +541,14 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
     },
     [client, connection, act],
   );
-  // One run at a time: a second call answers the run already going, so an agent's `wait` waits for the real one.
+  // One run at a time, its list fixed when it starts: a call while one runs queues ANOTHER after it, which takes what
+  // the first could not see (pictures added meanwhile, a retry asked) and finds nothing to do when there is nothing.
+  // What it answers ends when every run asked so far has — what an agent's `wait` waits for.
   const runPromise = useRef<Promise<void> | null>(null);
   const measure = useCallback(
     (retryFailed: boolean): Promise<void> => {
-      if (runPromise.current) return runPromise.current;
-      const run = runOnce(retryFailed).finally(() => {
+      const start = () => runOnce(retryFailed);
+      const run = (runPromise.current ? runPromise.current.then(start) : start()).finally(() => {
         if (runPromise.current === run) runPromise.current = null;
       });
       runPromise.current = run;

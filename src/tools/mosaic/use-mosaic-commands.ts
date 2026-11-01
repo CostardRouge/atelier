@@ -44,7 +44,7 @@ export interface EditorCommandsContext {
   client: WinnowClient | null;
   /** Add pictures by reference; the measuring follows by itself. */
   add: (tiles: MosaicTile[], instance: string, span: { from: string; to: string } | undefined) => void;
-  /** Measure what is not yet (or, `again`, what failed too); resolves when the run ends — the one running if any. */
+  /** Measure what is not yet (or, `again`, what failed too), after any run going; resolves when every run asked so far has ended. */
   measure: (again: boolean) => Promise<void>;
   measuring: () => boolean;
   /** The target as the editor sets it (`withTarget`: the crop goes with the old one, the queue keeps its picks). */
@@ -107,11 +107,8 @@ export function useMosaicEditorCommands(ctx: EditorCommandsContext): void {
         const room = MAX_MOSAIC_TILES - before.tiles.length;
         if (fresh.length > room) throw new CommandError('invalid', `the mosaic holds ${before.tiles.length.toLocaleString()} pictures and takes ${MAX_MOSAIC_TILES.toLocaleString()} at most — ${fresh.length.toLocaleString()} would not fit`);
         if (fresh.length) c.current.add(fresh.map(tileOfRow), connection.id, spanOfRows(fresh));
-        if (p.wait === true && fresh.length) {
-          // The run the add started, or this one: `measure` answers the running one.
-          await new Promise((r) => setTimeout(r, 0));
-          await c.current.measure(false);
-        }
+        // The add queued its run; this one follows it and ends when every run asked so far has.
+        if (p.wait === true && fresh.length) await c.current.measure(false);
         return {
           listed: rows.length,
           matched: kept.length,

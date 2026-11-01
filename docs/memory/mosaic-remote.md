@@ -89,3 +89,27 @@ in one batch → stage → stop → get → export PNG 720 → undo → keep on 
 stub's instance; seven refusals (an unknown param, a picture not held, a
 scale under 0.1, a tint over 0.7, Play in Still, a short of 1000, an
 instance that cannot keep mosaics), each saying the range or the way out.
+
+## What the independent review caught, and the rules it left (2026-11-01, M8–M9)
+
+A fresh reviewer read the two commits; five findings were real, each
+reproduced by a drive (`drive-review.cjs` in the session's scratch) and fixed:
+(1) **a replacement is not an edit** — `replaceOpen` (a pull, the pill's
+verbs, a lock reload, a move) now `reset`s the undo history, Trips' and
+Develop's rule; Atlas has no history, which is why copying it missed it:
+an undo there pushed the losing copy back over another device's edit, or
+undid a move onto a deleted origin. (2) `mosaic.keep` (and undo/redo) are
+`unavailable` in a read-only tab (`needWrite`), since `moveMosaic` writes
+outside `change`. (3) **a move holds the document still**: the debounce
+is flushed, `moving` makes `change` a no-op, the sync is `clear()`ed so no
+push races the origin's delete, and the resume effect re-attaches on the
+new source (a manual `resume` only when the move failed). (4) **a measure
+asked during a run queues one after it** — a run's list is fixed when it
+starts, so answering the running one left pictures added meanwhile, or a
+retry, never measured. (5) **an undo waits for the render on both sides**:
+the stack records after the render that follows an edit, and the step put
+back reaches the editor's `docRef` only at the next one, so
+`mosaic.undo` / `.redo` `settle()` before reading the stack and before
+answering. **How to apply**: a write that does not go through the editor's
+`act` (the shell's undo, a pull) is invisible to the editor's commands until
+a render — a shell command that writes settles before it answers.
