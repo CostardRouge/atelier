@@ -105,6 +105,10 @@ that would let a script or an agent DRIVE the suite.
 
 **Decision.** Storytelling registers `story.posts` and `story.openPost` from `StorytellingTool`, and from the post's editor (`PostEditor`, owner `storytelling-post`) `story.post` (scenes on the post's clock, every object with its seconds on stage, the series' and the post's styles), `story.seek`, `story.select` (by key, as a click on the stage), `story.setStyle`, `story.undo` and `story.snapshot` (a JPEG drawn by `drawEpisode` at `scale`, as the export draws). **Why**: the Studio is objects with keys; an agent that can read them and set a style is the same door as the inspector, one undo step. **How to apply**: a style is ONE object param, so its fields are checked in `shared/story/story-commands.ts` (`checkStylePatch`, pure, tested) by the registry's own rule — refused when `readStyle` would not keep the value as given, never clamped; `null` clears. A caption's window is on its scene's clock: on the post's it is `start + cap` (`SceneSpan`), what `postOutline` answers. No bridge bump: the tab lists its commands live (`bridge-version.ts`).
 
+## Mosaic's commands: make, fill, tune, play, look, export, keep (2026-11-01)
+
+**Decision.** `mosaic.*` (M9 of `docs/mosaic.md`), registered at three levels — the shell, the editor, the stage — like Trips' trip and piece; every write goes through the editor's funnel (one undo step, saved, synced). **How to apply**: the rules a mosaic command follows — read the mosaic as it IS (`latest`), let the render catch up before Play or an export (`settle`) — are in `mosaic-remote.md`; no bridge bump (the tab lists its commands live).
+
 ## Moved from the MEMORY.md index (2026-10-22)
 
 The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.

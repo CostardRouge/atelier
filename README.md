@@ -3121,8 +3121,8 @@ reloads on every save.
 *Work in progress* — the home page and the tool menu say so with a badge. What
 exists: mosaics, their gallery and their file, the door to a Winnow's
 pictures with the measuring of their colours, the stage, the animated
-modes, the exports and a mosaic kept on a Winnow. Agent commands come next
-(`docs/mosaic.md`).
+modes, the exports, a mosaic kept on a Winnow and the commands an agent
+drives it with (`docs/mosaic.md`).
 
 The photo-mosaic screen saver macOS once had, over your own pictures: one
 picture rebuilt out of hundreds of others, each cell a photo whose colours
@@ -3299,6 +3299,19 @@ lasts. It needs a mode under the stage, and a browser that encodes video
 (WebCodecs); the image saves everywhere. Either runs as a task in the
 masthead with its Cancel, and downloads under the mosaic's name, its size
 and the moment.
+
+**For an agent.** Connected through the agent bridge (`#/agents`), an
+agent drives a mosaic with the same gestures: `mosaic.list`, `.create`,
+`.open` and `.keep` (where it is kept) from the gallery; in the editor
+`mosaic.get` (what it holds and how it is set), `.add` (Winnow pictures by
+id, or a day, a span, a folder, a person, narrowed like `winnow.assets` —
+rejects left out as the picker does), `.measure`, `.target`, `.frame`,
+`.set` (the dials and the title), `.motion` (the mode and the step's
+parts), `.stage`, `.play`, `.stop`, `.snapshot` (the stage as a picture)
+and `.export` (the PNG or the film into the downloads), and `.undo` /
+`.redo`. Every write is one step of the mosaic's undo, saved and synced
+like a gesture; a value out of range is refused with its range, never
+clamped.
 
 ## Telemetry tool
 

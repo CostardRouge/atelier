@@ -50,3 +50,42 @@ there, device B lists it by summary, opens it with nothing measured (40 of
 reopens it and takes B's title, B deletes it on both sides. **Trap**:
 `access-control-allow-headers: *` is literal under credentials; a stub must
 list `if-match`, `if-none-match`, `content-type` and expose `etag`.
+
+## The commands are registered at three levels, and read the mosaic as it IS (2026-11-01, M9)
+
+**Decision**: the shell (`MosaicTool`, owner `mosaic`) registers `mosaic.list`,
+`.create`, `.open`, `.keep` (`moveMosaic`, the open one, flushed first),
+`.undo`, `.redo`; the editor (`use-mosaic-commands.ts`,
+`useMosaicEditorCommands`) `mosaic.get`, `.add`, `.measure`, `.target`,
+`.frame`, `.set`, `.motion`; the stage (`useMosaicStageCommands`, mounted
+with the workbench) `mosaic.stage`, `.play`, `.stop`, `.snapshot`,
+`.export`. Bounds are typed params (refused, never clamped); what only the
+mosaic can say is `shared/mosaic/mosaic-commands.ts` (pure: the outline, a
+target that must be held AND measured, the crop, `withMotionAsked` — the
+transport's and the Motion section's rules in one). `mosaic.add` reuses
+`ASSET_QUERY_PARAMS` / `askFromParams` / `keepAsk` (Develop's door), lists up
+to 20 000 rows (the picker's span cap) and drops rejects unless a verdict is
+asked, like the picker's ticks. `mosaic.export` takes the export settings
+as overrides of ONE run (`useMosaicExport.run(kind, overrides)`, now
+answering an `ExportOutcome`) and saves them as the mosaic's. No bridge
+bump: the tab lists its commands live, and `MCP_INSTRUCTIONS` names only
+Develop and Trips — adding Mosaic there would force a reinstall
+(`bridge-version.ts`). **Traps fixed by the drive**: (1) a batch's
+`mosaic.motion` then `mosaic.play` ran before React rendered, so `play`
+and `available()` read the old mode — every write of the editor now goes
+through `act` (the shell's `change` that also writes the editor's
+`docRef` at once), the workbench receives that ref as `latest`, and the
+stage's play/export `settle()` until the render has caught up (1 s cap);
+(2) `mosaic.add {wait}` answered "0 measured" because the run wrote its
+grids through the raw `change` — it writes through `act` too, and
+`measure` hands back the run already going so a `wait` waits for the real
+one; (3) a snapshot of a scene still landing its lots showed a flat patch —
+it waits for `progress === 1` while still. **How to apply**: a new mosaic
+command reads `latest.current`, never the render's `doc`; one that runs the
+player or the exporter calls `settle()` first. Driven through
+`window.atelier` (the bridge's registry) on a 60-picture stub: create →
+add (wait) → target → frame (1:1, a crop) → set → snapshot → motion + play
+in one batch → stage → stop → get → export PNG 720 → undo → keep on the
+stub's instance; seven refusals (an unknown param, a picture not held, a
+scale under 0.1, a tint over 0.7, Play in Still, a short of 1000, an
+instance that cannot keep mosaics), each saying the range or the way out.

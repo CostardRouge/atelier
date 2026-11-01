@@ -27,7 +27,7 @@ and `mosaic-store.ts`, the legal notice's line — Q2 answered yes, the tiles
 are kept; M3 the document's store, `mosaic-file.ts`, `MosaicGallery.tsx`,
 `MosaicEditor.tsx`'s frame, `MosaicTool.tsx`, the registry entry as an
 `editor` under `wip` — Q1 by recommendation —, the README and `llms.txt`),
-M7 (the PNG and the MP4 film, the Export tab, `export-size.ts`, `MosaicPlayer.film`) built 2026-11-01 — the film encodes headless here after all —, M8 (`mosaic-remote.ts`, `mosaic-summary.ts`, the sync and the gallery's driver; Winnow's side still his, Q6) built the same day, M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
+M7 (the PNG and the MP4 film, the Export tab, `export-size.ts`, `MosaicPlayer.film`) built 2026-11-01 — the film encodes headless here after all —, M8 (`mosaic-remote.ts`, `mosaic-summary.ts`, the sync and the gallery's driver; Winnow's side still his, Q6) and M9 (the `mosaic.*` commands, `use-mosaic-commands.ts`, `mosaic-commands.ts`) built the same day — every phase of §7 built. §2 is what he chose; §3–§7 are the design that follows from it;
 §8 the questions still his. Lab (French,
 synthetic pictures, six modes playable):
 <https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi>. §1 is fact, read in
@@ -328,7 +328,7 @@ the Winnow stub where it touches the instance.
 | M6 | **The animated modes** | Dézoom, Chain (in · out · alternate), Reveal, Drift; the camera from `chain.ts`'s clock; the next proxy fetched during the hold; Play / Escape; fullscreen. | Headless frames at fixed times compared with the clock's state; 60 fps on the synthetic library. |
 | M7 | **Exports** | PNG at a chosen width; MP4 of N steps through `encodeFrames` with the seed; the task and its cancel. | The PNG headless; the MP4 headless too (this Chromium encodes H.264), probed with ffprobe; a real library on his Mac. |
 | M8 | **Kept on a Winnow** | `mosaic-remote.ts` under `kind: 'mosaic'`, the atlas's driver; sync pill. | Against the stub listing the kind, with two browser contexts as two devices (move, list by summary, open with nothing measured, an edit pulled back, delete); the instance's side is his (Q6). |
-| M9 | **Agent commands** | `mosaic.add`, `mosaic.measure`, `mosaic.target`, `mosaic.mode`, `mosaic.export` through `useRegisterCommands`. | The MCP script driving a mosaic end to end. |
+| M9 | **Agent commands** | `mosaic.add`, `mosaic.measure`, `mosaic.target`, `mosaic.mode`, `mosaic.export` through `useRegisterCommands`. | The commands driven end to end through `window.atelier` (the bridge's registry) on a stub: create → add → target → frame → set → play → snapshot → export → undo → keep, and their refusals. |
 
 M1–M5 make the instrument; M6 makes it the screen saver he described; M7–M9
 are the suite's standards.
