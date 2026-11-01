@@ -7,7 +7,12 @@ commits F1–F7: the card, the shape as the crop's, the matching in lots with
 `perf.ts` / `match-pool.ts`, the Performance panel, the chain's queue in
 the document and its band `ChainBand.tsx`, the zoom as a crop
 `stage-view.ts` / `use-stage-zoom.ts` and the document's undo, the scenes
-ahead and the warmed proxies — F1–F7 all built 2026-11-01, headless only)** (the target chosen
+ahead and the warmed proxies — F1–F7 all built 2026-11-01, headless only;
+then lab 3 <https://claude.ai/artifact/JpM4MT2LF8qdXGJhzFhgjh>, his review
+of the animations, as A1–A7 the same day: the chain measured, the step as a
+grammar in `motion.ts` with the modes as its recipes (doc v3), *Mosaics*
+the default, *Wave*, *Slideshow*, *Steer*, *Custom*, a Motion section and
+steering by a click — `docs/memory/mosaic.md` holds the rules)** (the target chosen
 in an image field, the mosaic's shape and the part of the target rebuilt —
 `frame.ts`, `TargetFrame.tsx`, `TargetChooser.tsx`; M6 `mosaic-player.ts`, `scene-builder.ts`,
 `MosaicTransport.tsx`, the reveal and drift clocks in `chain.ts`; M5

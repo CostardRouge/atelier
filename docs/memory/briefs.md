@@ -301,6 +301,13 @@ anything about media sources or document storage:
   https://claude.ai/artifact/Aoe4TKy6uSFKwbawpXE7i8 — twelve rules R1–R12
   over the card, the shape, the chain's queue, the zoom as a crop, the
   matching in lots and a Performance panel, built as F1–F7 the same day;
+  then his review of the animations as lab 3
+  https://claude.ai/artifact/JpM4MT2LF8qdXGJhzFhgjh — today's four modes
+  taken apart (one step: photo, mosaic, a camera move, the next photo), a
+  step GRAMMAR with every part optional, seven recipes, a live mock of the
+  departures, the carousel bug's three hypotheses, seven commits A1–A7 and
+  seven calls answered by recommendation, built the same day (A5 folded
+  into A6, the section being what it owed);
   M7–M9 next; the rules it fixed in
   `mosaic.md`): macOS's « Mosaic » screen saver over his Winnow — a picture whose
   every cell is another picture. §1 is fact (`thumb-metrics.ts` measures one
