@@ -7,6 +7,7 @@ import ScriptControls, { readScriptFile, saveScriptFile } from './ScriptControls
 import { pickFile } from '../../shared/sources/file-sources';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import EmptyState from '../../shared/ui/EmptyState';
 
 const STATE_LABEL: Record<CellState, string> = {
   idee: 'Idea',
@@ -281,8 +282,8 @@ export default function StoryGallery({
             })}
             {lines.length === 0 ? (
               <tr>
-                <td colSpan={channels.length + 1} className="px-3 py-6 text-center text-muted">
-                  Nothing left to do here.
+                <td colSpan={channels.length + 1}>
+                  <EmptyState compact>Nothing left to do here.</EmptyState>
                 </td>
               </tr>
             ) : null}

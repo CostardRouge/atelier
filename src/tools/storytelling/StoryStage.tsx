@@ -181,6 +181,13 @@ function StoryStage({ clock, episode, opts, fontsReady, guides, selectedId, drag
       <div className="relative" style={size ? { width: size.w, height: size.h } : { width: 0, height: 0 }}>
         <canvas ref={canvasRef} width={W} height={H} className="block w-full h-full rounded-[3px] bg-paper shadow-sm" aria-label={label} />
         <canvas ref={guideRef} aria-hidden="true" className="absolute inset-0 w-full h-full pointer-events-none" />
+        {!fontsReady ? (
+          // The faces load before the first frame (a frame drawn in a fallback face would jump): until then,
+          // Develop's thin bar says the stage is coming rather than leaving a blank sheet.
+          <div className="absolute top-0 inset-x-0 h-[2px] overflow-hidden pointer-events-none" role="progressbar" aria-label="Loading the series' faces">
+            <div className="h-full w-1/4 bg-accent animate-deck-load" />
+          </div>
+        ) : null}
         <div
           className={`absolute inset-0 cursor-crosshair ${selectedId ? 'touch-none' : ''}`}
           title="Click an object to select it; drag the selected one to move it"
