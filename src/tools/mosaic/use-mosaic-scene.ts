@@ -3,6 +3,8 @@ import { mulberry32 } from '../../shared/lib/prng';
 import { aspectRatio } from '../../shared/mosaic/frame';
 import { measuredTiles, type MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
+import type { PerfPrefs } from '../../shared/mosaic/perf';
+import type { MatchPool } from './match-pool';
 import { SceneBuilder, type BuildStep, type MosaicScene } from './scene-builder';
 
 export type { MosaicScene } from './scene-builder';
@@ -10,7 +12,8 @@ export type { MosaicScene } from './scene-builder';
 export type SceneState =
   | { status: 'idle'; why: 'no-target' | 'no-tiles' | 'no-client' | 'no-room' }
   | { status: 'building'; step: BuildStep; previous: MosaicScene | null }
-  | { status: 'ready'; scene: MosaicScene }
+  /** `tick` counts the lots landed on `scene`, so a stage redraws the same scene as it fills. */
+  | { status: 'ready'; scene: MosaicScene; tick: number }
   | { status: 'failed'; error: string; previous: MosaicScene | null };
 
 interface SceneInputs {
@@ -19,6 +22,11 @@ interface SceneInputs {
   /** The room the stage may take (CSS pixels); the stage is the widest frame of the mosaic's shape in it, never taller. */
   room: { width: number; height: number };
   dpr: number;
+  /** The matching pool and the Performance panel's say on lots and propagation. */
+  pool: MatchPool | null;
+  perf: PerfPrefs;
+  /** The cell a `point` propagation starts from (the last clicked), −1 for the centre. */
+  origin: number;
 }
 
 /** The widest `aspect` frame a room holds, never taller than it, in whole pixels. */
@@ -34,7 +42,7 @@ export function stageIn(room: { width: number; height: number }, aspect: number)
  * abandoned and the previous scene stays on screen meanwhile. The builder
  * is handed back for the player, which shares its caches.
  */
-export function useMosaicScene({ doc, client, room, dpr }: SceneInputs): { state: SceneState; builder: SceneBuilder | null; stageW: number; stageH: number; frameAspect: number } {
+export function useMosaicScene({ doc, client, room, dpr, pool, perf, origin }: SceneInputs): { state: SceneState; builder: SceneBuilder | null; stageW: number; stageH: number; frameAspect: number } {
   const [state, setState] = useState<SceneState>({ status: 'idle', why: 'no-target' });
   const latest = useRef<MosaicScene | null>(null);
   const instance = doc.instance ?? null;
@@ -45,6 +53,9 @@ export function useMosaicScene({ doc, client, room, dpr }: SceneInputs): { state
 
   const builder = useMemo(() => (instance ? new SceneBuilder(instance, client) : null), [instance, client]);
   useEffect(() => () => builder?.dispose(), [builder]);
+  useEffect(() => builder?.setTileLimit(perf.tileCache), [builder, perf.tileCache]);
+  const originRef = useRef(origin);
+  originRef.current = origin;
 
   const library = useMemo(() => measuredTiles(doc), [doc.tiles]);
   useEffect(() => builder?.setLibrary(library), [builder, library]);
@@ -87,6 +98,7 @@ export function useMosaicScene({ doc, client, room, dpr }: SceneInputs): { state
         controller.abort();
       };
     }
+    let tick = 0;
     void builder
       .build(target, { cellPx, level, space, tint, distinctNeighbours }, { stageW, stageH, dpr }, {
         signal: controller.signal,
@@ -94,11 +106,27 @@ export function useMosaicScene({ doc, client, room, dpr }: SceneInputs): { state
         onStep: (step) => {
           if (alive) setState({ status: 'building', step, previous });
         },
+        plan: pool
+          ? {
+              pool,
+              lot: perf.lot,
+              propagation: perf.propagation,
+              origin: originRef.current,
+              seed: doc.settings.seed,
+              previous,
+              onLot: perf.showAsItComes
+                ? (scene) => {
+                    latest.current = scene;
+                    if (alive) setState({ status: 'ready', scene, tick: ++tick });
+                  }
+                : undefined,
+            }
+          : undefined,
       })
       .then(
         (scene) => {
           latest.current = scene;
-          if (alive) setState({ status: 'ready', scene });
+          if (alive) setState({ status: 'ready', scene, tick: ++tick });
         },
         (e: unknown) => {
           if (!alive || controller.signal.aborted) return;
@@ -109,7 +137,8 @@ export function useMosaicScene({ doc, client, room, dpr }: SceneInputs): { state
       alive = false;
       controller.abort();
     };
-  }, [client, builder, library, target, crop, stageW, stageH, dpr, cellPx, level, space, tint, distinctNeighbours, doc.settings.aspect, own]);
+    // The origin is read when the build starts, never a reason to rebuild.
+  }, [client, builder, library, target, crop, stageW, stageH, dpr, cellPx, level, space, tint, distinctNeighbours, doc.settings.aspect, own, pool, perf.lot, perf.propagation, perf.showAsItComes, doc.settings.seed]);
 
   return { state, builder, stageW, stageH, frameAspect };
 }

@@ -293,11 +293,11 @@ export async function runMeasure(
   client: WinnowClient,
   sourceId: string,
   tiles: readonly MosaicTile[],
-  opts: { signal?: AbortSignal; onProgress?: (p: MeasureProgress) => void } = {},
+  opts: { signal?: AbortSignal; onProgress?: (p: MeasureProgress) => void; workers?: number } = {},
 ): Promise<MeasureResult> {
   const controller = new AbortController();
   opts.signal?.addEventListener('abort', () => controller.abort(), { once: true });
-  const on = workerPossible() ? 'in the background' : 'on this thread';
+  const on = workerPossible() && opts.workers !== 0 ? 'in the background' : 'on this thread';
   const task = startTask({
     label: `Measuring ${tiles.length.toLocaleString()} ${tiles.length === 1 ? 'picture' : 'pictures'}`,
     progress: 0,
@@ -307,6 +307,7 @@ export async function runMeasure(
   try {
     return await measureTiles(client, sourceId, tiles, {
       signal: controller.signal,
+      workers: opts.workers,
       onProgress: (p) => {
         task.update({
           progress: p.total ? p.done / p.total : 1,

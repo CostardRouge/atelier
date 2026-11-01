@@ -44,6 +44,11 @@ export class TileBitmaps {
     private client: WinnowClient | null,
   ) {}
 
+  /** The cache's size from the Performance panel; the oldest go at the next load past it. */
+  setLimit(limit: number): void {
+    this.limit = Math.max(100, limit);
+  }
+
   /** The bitmap for picture `id`, or null when neither the device nor the instance can give it. */
   get(id: number): Promise<ImageBitmap | null> {
     const have = this.held.get(id);

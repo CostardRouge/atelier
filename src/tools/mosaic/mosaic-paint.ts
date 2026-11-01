@@ -58,25 +58,24 @@ export interface MosaicPaint {
 }
 
 /**
- * The whole mosaic into `canvas`, sized `stageW × stageH` logical pixels at
- * `dpr`: each cell its tile — cover-cropped to the cell's shape, a 16:9 tile
- * in a square cell showing its middle —, then the veil of its own colour. A
- * cell whose tile is missing shows its colour alone.
+ * The cells `cells` of the mosaic painted into `ctx` (logical units, `dpr`
+ * already applied): each its tile — cover-cropped to the cell's shape, a
+ * 16:9 tile in a square cell showing its middle —, then the veil of its own
+ * colour. A cell whose tile is missing shows its colour alone; a cell with
+ * no picture yet (−1) is left as it is.
  */
-export function paintMosaic(canvas: HTMLCanvasElement | OffscreenCanvas, paint: MosaicPaint, stageW: number, stageH: number, dpr: number): void {
-  canvas.width = Math.round(stageW * dpr);
-  canvas.height = Math.round(stageH * dpr);
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-  if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+export function paintCells(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, paint: MosaicPaint, cells: ArrayLike<number>): void {
+  const { cols, cw, ch } = paint.shape;
   ctx.imageSmoothingQuality = 'medium';
-  const { cols, rows, cw, ch } = paint.shape;
-  for (let c = 0; c < cols * rows; c++) {
+  for (let k = 0; k < cells.length; k++) {
+    const c = cells[k];
+    const index = paint.matching.ids[c];
+    if (index < 0) continue;
     const i = c % cols;
     const j = (c - i) / cols;
     const x = i * cw;
     const y = j * ch;
-    const bitmap = paint.matching.ids[c] >= 0 ? paint.bitmapOf(paint.matching.ids[c]) : null;
+    const bitmap = paint.bitmapOf(index);
     const o = c * 3;
     if (bitmap) {
       const src = coverSource(bitmap.width, bitmap.height, cw, ch);
@@ -90,6 +89,25 @@ export function paintMosaic(canvas: HTMLCanvasElement | OffscreenCanvas, paint: 
       ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
     }
   }
+}
+
+/** A canvas sized `stageW × stageH` logical pixels at `dpr`, its context set to logical units. */
+export function stageCanvas(canvas: HTMLCanvasElement | OffscreenCanvas, stageW: number, stageH: number, dpr: number): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null {
+  canvas.width = Math.round(stageW * dpr);
+  canvas.height = Math.round(stageH * dpr);
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+/** The whole mosaic into `canvas`, sized `stageW × stageH` logical pixels at `dpr`. */
+export function paintMosaic(canvas: HTMLCanvasElement | OffscreenCanvas, paint: MosaicPaint, stageW: number, stageH: number, dpr: number): void {
+  const ctx = stageCanvas(canvas, stageW, stageH, dpr);
+  if (!ctx) return;
+  const all = new Int32Array(paint.shape.cols * paint.shape.rows);
+  for (let c = 0; c < all.length; c++) all[c] = c;
+  paintCells(ctx, paint, all);
 }
 
 /** The cell lines over the stage, one device pixel wide. */

@@ -24,11 +24,13 @@ import { useSurface } from '../../shared/ui/use-surface';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
 import MosaicSettings from './MosaicSettings';
-import MosaicStage, { type StageView } from './MosaicStage';
+import MosaicStage, { type Reveal, type StageView } from './MosaicStage';
 import MosaicTransport from './MosaicTransport';
 import TargetChooser from './TargetChooser';
 import TargetFrame from './TargetFrame';
+import { MatchPool } from './match-pool';
 import { MosaicPlayer, type PlayerStatus } from './mosaic-player';
+import { MOSAIC_PERF_PREF, motionReduced, useMosaicPerf, workersHere } from './use-mosaic-perf';
 import { pictureCountLine } from './MosaicGallery';
 import { useMosaicCover } from './use-mosaic-cover';
 import { randomTarget, useMosaicScene } from './use-mosaic-scene';
@@ -73,10 +75,19 @@ function MosaicWorkbench({
   setCrop: (crop: Crop | undefined) => void;
 }) {
   const [boxRef, room] = useElementSize<HTMLDivElement>();
+  // The Performance panel's say (this device's), the matching pool it sizes, and where a propagation starts.
+  const [perf, setPerf] = useMosaicPerf();
+  const workers = workersHere(perf);
+  const pool = useMemo(() => new MatchPool(workers), [workers]);
+  useEffect(() => () => pool.dispose(), [pool]);
+  const [origin, setOrigin] = useState(-1);
+  const [fps, setFps] = useState<number | null>(null);
+  const reduced = motionReduced(perf);
+  const reveal = useMemo<Reveal>(() => ({ animation: reduced ? 'none' : perf.cellAnimation, ms: perf.animationMs }), [reduced, perf.cellAnimation, perf.animationMs]);
   const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
   // The widest 16:9 the room holds, never taller than it.
   // The stage is the widest frame of the mosaic's shape the room holds — the picture's own shape for `original`.
-  const { state, builder, stageW, stageH, frameAspect: aspect } = useMosaicScene({ doc, client, room, dpr });
+  const { state, builder, stageW, stageH, frameAspect: aspect } = useMosaicScene({ doc, client, room, dpr, pool, perf, origin });
   useMosaicCover(doc.id, state);
   const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
   const [choosing, setChoosing] = useState(false);
@@ -108,8 +119,8 @@ function MosaicWorkbench({
   const play = useCallback(() => {
     if (!player || mode === 'single' || doc.target === undefined || player.playing) return;
     player.attach(canvasRef.current, { stageW, stageH, dpr });
-    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop });
-  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr]);
+    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool });
+  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool]);
   const stop = useCallback(() => player?.stop(), [player]);
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now.
   const wasPlaying = useRef(false);
@@ -162,9 +173,15 @@ function MosaicWorkbench({
               stageW={stageW}
               stageH={stageH}
               dpr={dpr}
+              reveal={reveal}
+              onFps={setFps}
               playing={status.playing}
               canvasOut={canvasOut}
-              onPick={(index) => state.status === 'ready' && setTarget(state.scene.tiles[index].id)}
+              onPick={(index, cell) => {
+                if (state.status !== 'ready') return;
+                setOrigin(cell);
+                setTarget(state.scene.tiles[index].id);
+              }}
             />
           </div>
         </div>
@@ -187,6 +204,10 @@ function MosaicWorkbench({
           view={view}
           setView={setView}
           state={state}
+          perf={perf}
+          setPerf={setPerf}
+          workers={workers}
+          fps={fps}
           cropped={Boolean(doc.crop) && !status.playing}
           onWhole={() => setCrop(undefined)}
           onChoose={() => setChoosing(true)}
@@ -260,7 +281,9 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
       running.current = controller;
       setNotice(null);
       try {
-        const result = await runMeasure(client, cur.instance, todo, { signal: controller.signal, onProgress: setProgress });
+        const perf = MOSAIC_PERF_PREF.get();
+        const workers = perf.measure === 'main' ? 0 : perf.measure === 'one' ? 1 : workersHere(perf);
+        const result = await runMeasure(client, cur.instance, todo, { signal: controller.signal, onProgress: setProgress, workers });
         changeRef.current((d) => withMeasures(d, result.grids, result.failed));
         if (result.failed.length) setNotice(`${result.failed.length} picture${result.failed.length === 1 ? '' : 's'} could not be read from ${connection.id} — skipped; Measure again tries them once more.`);
         else if (result.cancelled) setNotice('Measuring stopped; what was measured is kept.');

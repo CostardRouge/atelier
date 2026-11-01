@@ -7,6 +7,7 @@ import { FieldRow, InspectorSection, SliderRow, SwitchRow } from '../../shared/u
 import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
+import type { PerfPrefs } from '../../shared/mosaic/perf';
 import type { StageView } from './MosaicStage';
 import type { SceneState } from './use-mosaic-scene';
 
@@ -16,6 +17,12 @@ interface MosaicSettingsProps {
   view: StageView;
   setView: (fn: (v: StageView) => StageView) => void;
   state: SceneState;
+  /** The Performance panel's choices, this device's, and what they resolve to here. */
+  perf: PerfPrefs;
+  setPerf: (patch: Partial<PerfPrefs>) => void;
+  workers: number;
+  /** The frames a second the last propagation drew, or null until one did. */
+  fps: number | null;
   /** The target's card (`TargetFrame`) and its verbs, drawn first. */
   target: ReactNode;
   /** The target's crop is not the whole frame: *Whole picture* gives it back. */
@@ -49,7 +56,9 @@ const SPACES: readonly { id: Space; label: string; title: string }[] = [
  * matching compares and how the picture reads, each a setting of the
  * document; the grid and the ghost are this screen's, never saved.
  */
-export default function MosaicSettings({ settings, update, view, setView, state, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
+export default function MosaicSettings(props: MosaicSettingsProps) {
+  // The Performance panel's props are taken here already; its section follows in F4.
+  const { settings, update, view, setView, state, target, cropped, onWhole, onChoose } = props;
   const scene = state.status === 'ready' ? state.scene : null;
   return (
     <div className="flex flex-col gap-3 px-1.5">

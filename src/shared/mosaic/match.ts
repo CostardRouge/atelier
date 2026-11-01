@@ -142,6 +142,81 @@ export function matchCells(
   return { ids, dist };
 }
 
+/**
+ * ONE LOT of cells matched, the neighbour rule reading `known` — every cell's
+ * picture decided so far (−1 where none) — and the lot's own earlier
+ * decisions. Returns the lot's pictures and distances in the lot's order;
+ * nothing is written into `known`. With the lots run one after another in
+ * top-down order, the result is `matchCells`'s exactly.
+ */
+export function matchLot(
+  cells: Float32Array,
+  pictures: Float32Array,
+  dims: number,
+  cols: number,
+  lot: ArrayLike<number>,
+  known: Int32Array,
+  opts: MatchOptions = {},
+): Matching {
+  const distinct = opts.distinctNeighbours !== false;
+  const exclude = opts.exclude;
+  const n = Math.floor(pictures.length / dims);
+  const ids = new Int32Array(lot.length).fill(-1);
+  const dist = new Float32Array(lot.length);
+  const decided = new Map<number, number>();
+  const b = [-1, -1, -1];
+  const bd = [Infinity, Infinity, Infinity];
+  for (let k = 0; k < lot.length; k++) {
+    const c = lot[k];
+    b[0] = b[1] = b[2] = -1;
+    bd[0] = bd[1] = bd[2] = Infinity;
+    const co = c * dims;
+    for (let j = 0; j < n; j++) {
+      if (exclude && exclude.has(j)) continue;
+      const jo = j * dims;
+      let d = 0;
+      for (let q = 0; q < dims; q++) {
+        const e = cells[co + q] - pictures[jo + q];
+        d += e * e;
+        if (d >= bd[2]) break;
+      }
+      if (d >= bd[2]) continue;
+      if (d < bd[0]) {
+        bd[2] = bd[1];
+        b[2] = b[1];
+        bd[1] = bd[0];
+        b[1] = b[0];
+        bd[0] = d;
+        b[0] = j;
+      } else if (d < bd[1]) {
+        bd[2] = bd[1];
+        b[2] = b[1];
+        bd[1] = d;
+        b[1] = j;
+      } else {
+        bd[2] = d;
+        b[2] = j;
+      }
+    }
+    let pick = 0;
+    if (distinct) {
+      const i = c % cols;
+      const at = (cell: number) => decided.get(cell) ?? (cell >= 0 && cell < known.length ? known[cell] : -1);
+      const taken = new Set<number>();
+      if (i > 0) taken.add(at(c - 1));
+      if (i < cols - 1) taken.add(at(c + 1));
+      if (c >= cols) taken.add(at(c - cols));
+      if (c + cols < known.length) taken.add(at(c + cols));
+      taken.delete(-1);
+      while (pick < 2 && b[pick + 1] >= 0 && taken.has(b[pick])) pick++;
+    }
+    ids[k] = b[pick];
+    dist[k] = b[pick] >= 0 ? Math.sqrt(bd[pick] / dims) : Infinity;
+    decided.set(c, b[pick]);
+  }
+  return { ids, dist };
+}
+
 export interface PickOptions {
   /** The picture the mosaic shows — never dived into from itself. */
   target: number;

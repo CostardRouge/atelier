@@ -29,7 +29,8 @@ import { coverSource } from '../../shared/mosaic/measure';
 import type { Crop } from '../../shared/mosaic/frame';
 import type { ChainDirection, MosaicMode } from '../../shared/mosaic/mosaic-doc';
 import { drawGrid, drawTarget } from './mosaic-paint';
-import type { MatchSettings, MosaicScene, SceneBuilder, StageSize } from './scene-builder';
+import type { MatchPool } from './match-pool';
+import type { BuildPlan, MatchSettings, MosaicScene, SceneBuilder, StageSize } from './scene-builder';
 
 export interface PlayerOptions {
   mode: Exclude<MosaicMode, 'single'>;
@@ -43,6 +44,8 @@ export interface PlayerOptions {
   grid?: boolean;
   /** The part of `from` the frame rebuilds; the pictures after it are framed whole. */
   crop?: Crop;
+  /** The matching pool, so a step ahead is matched off the main thread. */
+  pool?: MatchPool | null;
 }
 
 /** What the player says of itself, for the status line. */
@@ -136,6 +139,11 @@ export class MosaicPlayer {
     if (this.status.playing) this.say({ playing: false, phase: '', waiting: false });
   }
 
+  /** A step's build: the whole mosaic in one lot on the pool — nothing is shown while it is prepared. */
+  private planFor(opts: PlayerOptions): BuildPlan | undefined {
+    return opts.pool ? { pool: opts.pool, lot: 0, propagation: 'none', origin: -1, seed: opts.seed } : undefined;
+  }
+
   private async run(opts: PlayerOptions, signal: AbortSignal): Promise<void> {
     if (opts.mode === 'drift') return this.runDrift(opts, signal);
     if (opts.mode === 'reveal') return this.runReveal(opts, signal);
@@ -174,7 +182,7 @@ export class MosaicPlayer {
     const fromIndex = tiles.findIndex((t) => t.id === from);
     if (fromIndex < 0 || tiles.length < 2) return null;
     if (kind === 'in') {
-      const scene = await this.builder.build(from, opts.settings, this.size, { signal, crop });
+      const scene = await this.builder.build(from, opts.settings, this.size, { signal, crop, plan: this.planFor(opts) });
       const cell = pickCell(scene.matching, scene.shape.cols, scene.shape.rows, { target: fromIndex, history: this.historyIndexes(), rnd: this.rnd });
       if (cell < 0) return null;
       const nextIndex = scene.matching.ids[cell];
@@ -185,7 +193,7 @@ export class MosaicPlayer {
     const nextIndex = pickNextTarget(this.builder.labGrids(), tiles.length, fromIndex, { history: this.historyIndexes(), rnd: this.rnd });
     if (nextIndex < 0) return null;
     const next = tiles[nextIndex].id;
-    const scene = await this.builder.build(next, opts.settings, this.size, { signal, force: fromIndex });
+    const scene = await this.builder.build(next, opts.settings, this.size, { signal, force: fromIndex, plan: this.planFor(opts) });
     const focus = await this.builder.targetBitmap(tiles[fromIndex], signal);
     return { kind, scene, cell: scene.forcedCell ?? 0, next, focus, nextScene: null };
   }
@@ -274,7 +282,7 @@ export class MosaicPlayer {
     const tiles = this.builder.tiles;
     for (;;) {
       this.say({ waiting: true, phase: 'preparing', stepIndex: index, current });
-      const scene = await this.builder.build(current, opts.settings, this.size, { signal, crop: index === 0 ? opts.crop : undefined });
+      const scene = await this.builder.build(current, opts.settings, this.size, { signal, crop: index === 0 ? opts.crop : undefined, plan: this.planFor(opts) });
       if (signal.aborted) return;
       const count = scene.shape.cols * scene.shape.rows;
       const order = revealOrder(scene.shape.cols, scene.shape.rows, this.rnd);
@@ -329,7 +337,7 @@ export class MosaicPlayer {
 
   private async runDrift(opts: PlayerOptions, signal: AbortSignal): Promise<void> {
     this.say({ waiting: true, phase: 'preparing' });
-    const scene = await this.builder.build(opts.from, opts.settings, this.size, { signal, crop: opts.crop });
+    const scene = await this.builder.build(opts.from, opts.settings, this.size, { signal, crop: opts.crop, plan: this.planFor(opts) });
     if (signal.aborted) return;
     this.say({ waiting: false, phase: 'drifting' });
     const t0 = performance.now();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../lib/prng';
 import type { Raster } from '../media/thumb-metrics';
-import { cellGridsOf, cellMeansLab, forceInto, gridShape, matchCells, pickCell, pickNextTarget } from './match';
+import { cellGridsOf, cellMeansLab, forceInto, gridShape, matchCells, matchLot, pickCell, pickNextTarget } from './match';
 import { GRID_BYTES, descriptorsOf, dimsOf, levelOf, oklabOf } from './measure';
 
 function raster(width: number, height: number, paint: (x: number, y: number) => [number, number, number]): Raster {
@@ -200,5 +200,35 @@ describe('cellMeansLab', () => {
     expect(out.length).toBe(6);
     expect(out[0]).toBeCloseTo(100, 0);
     expect(out[3]).toBeCloseTo(0, 1);
+  });
+});
+
+describe('matchLot', () => {
+  const library = flatGrids([
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [250, 5, 5],
+    [128, 128, 128],
+  ]);
+  const red4 = levelOf(flatGrids([[255, 0, 0], [255, 0, 0], [255, 0, 0], [255, 0, 0]]), 4, 1);
+  const lib = levelOf(library, 5, 1);
+
+  it('lot by lot in top-down order gives exactly what one block gives', () => {
+    const whole = matchCells(red4, lib, 3, 2, 2);
+    const known = new Int32Array(4).fill(-1);
+    for (const lot of [[0, 1], [2, 3]]) {
+      const m = matchLot(red4, lib, 3, 2, lot, known);
+      lot.forEach((c, k) => (known[c] = m.ids[k]));
+    }
+    expect(Array.from(known)).toEqual(Array.from(whole.ids));
+  });
+
+  it('reads the neighbours already decided on every side, and its own earlier cells', () => {
+    const known = new Int32Array([-1, 0, 0, -1]);
+    const m = matchLot(red4, lib, 3, 2, [0, 3], known);
+    expect(m.ids[0]).toBe(3);
+    expect(m.ids[1]).toBe(3);
+    expect(matchLot(red4, lib, 3, 2, [0], known, { distinctNeighbours: false }).ids[0]).toBe(0);
   });
 });

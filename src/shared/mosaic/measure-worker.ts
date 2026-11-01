@@ -18,11 +18,15 @@
  * error that would take the pool down.
  */
 
-import { matchCells } from './match';
+import { matchCells, matchLot } from './match';
 import { TILE_H, TILE_W, coverSource, gridOf } from './measure';
 
 export type MeasureRequest =
   | { kind: 'measure'; id: number; blob: Blob }
+  /** The library's descriptors kept under a token, for the lots that follow (the last two tokens are held). */
+  | { kind: 'library'; token: number; pictures: Float32Array; dims: number }
+  /** One lot of cells matched against a kept library, `known` the pictures decided so far. */
+  | { kind: 'lot'; id: number; token: number; cells: Float32Array; cols: number; lot: Int32Array; known: Int32Array; distinct: boolean }
   | {
       kind: 'match';
       id: number;
@@ -37,7 +41,10 @@ export type MeasureRequest =
 export type MeasureReply =
   | { kind: 'measured'; id: number; grid: Uint8Array; tile: Blob }
   | { kind: 'failed'; id: number; error: string }
-  | { kind: 'matched'; id: number; ids: Int32Array; dist: Float32Array };
+  | { kind: 'matched'; id: number; ids: Int32Array; dist: Float32Array }
+  | { kind: 'lot'; id: number; lot: Int32Array; ids: Int32Array; dist: Float32Array };
+
+const libraries = new Map<number, { pictures: Float32Array; dims: number }>();
 
 const tileCanvas = new OffscreenCanvas(TILE_W, TILE_H);
 const tileCtx = tileCanvas.getContext('2d', { willReadFrequently: true });
@@ -63,6 +70,21 @@ const post = (reply: MeasureReply, transfer: Transferable[] = []) => (self as un
 
 self.onmessage = async (event: MessageEvent<MeasureRequest>) => {
   const req = event.data;
+  if (req.kind === 'library') {
+    libraries.set(req.token, { pictures: req.pictures, dims: req.dims });
+    while (libraries.size > 2) libraries.delete(libraries.keys().next().value as number);
+    return;
+  }
+  if (req.kind === 'lot') {
+    const lib = libraries.get(req.token);
+    if (!lib) {
+      post({ kind: 'failed', id: req.id, error: 'the worker holds no such library' });
+      return;
+    }
+    const { ids, dist } = matchLot(req.cells, lib.pictures, lib.dims, req.cols, req.lot, req.known, { distinctNeighbours: req.distinct });
+    post({ kind: 'lot', id: req.id, lot: req.lot, ids, dist }, [req.lot.buffer, ids.buffer, dist.buffer]);
+    return;
+  }
   if (req.kind === 'match') {
     const { ids, dist } = matchCells(req.cells, req.pictures, req.dims, req.cols, req.rows, {
       distinctNeighbours: req.distinct,

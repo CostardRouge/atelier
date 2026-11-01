@@ -3178,6 +3178,12 @@ frame's shape in the room it has, and nothing is ever stretched; each
 picture is compared on the part a cell of that shape shows of it, and drawn
 so.
 
+**As it lands.** A big mosaic is matched in lots, each painted the moment
+its answer lands — from the cell you clicked outward by default, else row
+by row, in a spiral, at random, or all at once — and each cell fades,
+appears or flips into place; a hairline along the stage's bottom edge says
+how far the matching has come while the word says *matching…*.
+
 **The modes.** Under the stage: *Still* is the mosaic as above. *Pull back*
 plays once what the screen saver did — the picture pulls back and turns out
 to be one cell of another, which then appears whole. *Chain* never ends:

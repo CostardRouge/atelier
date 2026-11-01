@@ -1,8 +1,11 @@
 # Mosaic — a picture made of all the others
 
 **Status: decided (2026-10-31); M1–M3 built the same day, M4–M6 on
-2026-11-01, then his frame ask the same day** (the target chosen in an image
-field, the mosaic's shape and the part of the target rebuilt —
+2026-11-01, then his frame ask the same day, then the rules of his second
+review (lab 2 <https://claude.ai/artifact/Aoe4TKy6uSFKwbawpXE7i8>, seven
+commits F1–F7: the card, the shape as the crop's, the matching in lots with
+`perf.ts` / `match-pool.ts` …)** (the target chosen
+in an image field, the mosaic's shape and the part of the target rebuilt —
 `frame.ts`, `TargetFrame.tsx`, `TargetChooser.tsx`; M6 `mosaic-player.ts`, `scene-builder.ts`,
 `MosaicTransport.tsx`, the reveal and drift clocks in `chain.ts`; M5
 `use-mosaic-scene.ts`, `mosaic-paint.ts`,
