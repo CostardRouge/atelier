@@ -47,9 +47,10 @@ export default function WallModal({
   const spanKey = JSON.stringify(span);
   useEffect(() => {
     let alive = true;
+    const controller = new AbortController();
     const span = JSON.parse(spanKey) as CountedSpan;
     client
-      .calendar(span.from, span.to)
+      .calendar(span.from, span.to, {}, controller.signal)
       .then((cal) => {
         if (alive) setDays(cal.days.filter((d) => counts(d.date, span) && d.count > 0).sort((a, b) => a.date.localeCompare(b.date)));
       })
@@ -58,15 +59,17 @@ export default function WallModal({
       });
     return () => {
       alive = false;
+      controller.abort();
     };
   }, [client, spanKey]);
 
   useEffect(() => {
     if (!open) return;
     let alive = true;
+    const controller = new AbortController();
     setOthers(null);
     client
-      .allAssets({ dateFrom: open, dateTo: open }, 60)
+      .allAssets({ dateFrom: open, dateTo: open }, 60, controller.signal)
       .then((rows) => {
         if (alive) setOthers(rows.map((r) => r.id));
       })
@@ -75,6 +78,7 @@ export default function WallModal({
       });
     return () => {
       alive = false;
+      controller.abort();
     };
   }, [client, open]);
 

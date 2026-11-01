@@ -270,16 +270,23 @@ export default function WinnowPicker({
   // could not carry them. Forgotten with the scope.
   const [pileRows, setPileRows] = useState<ReadonlyMap<number, WinnowAssetRow[]>>(new Map());
   const [pileAsking, setPileAsking] = useState<ReadonlySet<number>>(new Set());
+  // The scope's pile asks share one signal: a new scope, or the picker closing, aborts them all.
+  const pileSignal = useRef(new AbortController());
   useEffect(() => {
     setPileRows(new Map());
     setPileAsking(new Set());
+    const controller = new AbortController();
+    pileSignal.current = controller;
+    return () => controller.abort();
   }, [scopeKey]);
   const askPile = (pileId: number) => {
+    if (pileAsking.has(pileId)) return;
     setPileAsking((cur) => new Set(cur).add(pileId));
+    const { signal } = pileSignal.current;
     client
-      .allAssets({ burstId: pileId, ...(half ? { half } : {}) }, 200)
-      .then((list) => setPileRows((cur) => new Map(cur).set(pileId, list)))
-      .catch((err: unknown) => setProblem(explain(err, client, connection.id)))
+      .allAssets({ burstId: pileId, ...(half ? { half } : {}) }, 200, signal)
+      .then((list) => !signal.aborted && setPileRows((cur) => new Map(cur).set(pileId, list)))
+      .catch((err: unknown) => !signal.aborted && setProblem(explain(err, client, connection.id)))
       .finally(() =>
         setPileAsking((cur) => {
           const next = new Set(cur);
@@ -364,12 +371,14 @@ export default function WinnowPicker({
   useEffect(() => {
     if (scope !== 'span' || bodies) return;
     let cancelled = false;
+    const controller = new AbortController();
     client
-      .facets()
+      .facets(controller.signal)
       .then((f) => !cancelled && setBodies(f.devices.map((d) => String(d.value))))
       .catch(() => !cancelled && setBodies([]));
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [scope, bodies, client]);
   const railCounts = useMemo(() => {

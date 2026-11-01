@@ -1076,8 +1076,8 @@ export class WinnowClient {
   }
 
   /** Values + counts for the filter pickers. Library-wide, one request. */
-  async facets(): Promise<WinnowFacets> {
-    const raw = await this.json<Partial<WinnowFacets>>(this.url('/api/facets'));
+  async facets(signal?: AbortSignal): Promise<WinnowFacets> {
+    const raw = await this.json<Partial<WinnowFacets>>(this.url('/api/facets'), signal);
     return {
       media_types: raw.media_types ?? [],
       extensions: raw.extensions ?? [],
