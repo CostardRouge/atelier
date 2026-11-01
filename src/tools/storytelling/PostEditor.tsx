@@ -354,8 +354,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const showCovers = selected?.kind === 'panel' && selected.id === 'export';
   const covers = useMemo(() => {
     if (!fontsReady || !showCovers) return new Map<string, string>();
-    return new Map(POSTS.map((p) => [p.id, paintCover(episodeOf(p), 0.12).toDataURL('image/png')]));
-  }, [fontsReady, episodeOf, showCovers]);
+    // From the SETTLED script, like the next post's cover: every post's cover repainted on each slider step
+    // while this panel is up would be the whole series drawn per step.
+    return new Map(POSTS.map((p) => [p.id, paintCover(assemble(p, settled, POSTS), 0.12).toDataURL('image/png')]));
+  }, [fontsReady, settled, showCovers]);
 
   const choose = (id: string) => {
     pause();
