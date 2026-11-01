@@ -23,13 +23,23 @@ export default function MosaicPicker({
   connection,
   client,
   onAdd,
+  open: openControlled,
+  onOpenChange,
+  trigger = true,
 }: {
   doc: MosaicDoc;
   connection: WinnowConnection;
   client: WinnowClient;
   onAdd: (tiles: MosaicTile[], instance: string, span: { from: string; to: string } | undefined) => void;
+  /** Opened from elsewhere (a phone's ⋯): the owner holds the state. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** False draws no button — the owner's menu is the door. */
+  trigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openOwn, setOpenOwn] = useState(false);
+  const open = openControlled ?? openOwn;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOpenOwn(v));
   const onAddRef = useRef(onAdd);
   onAddRef.current = onAdd;
   const other = doc.instance && doc.instance !== connection.id ? doc.instance : null;
@@ -61,6 +71,7 @@ export default function MosaicPicker({
   );
 
   if (other) {
+    if (!trigger) return null;
     return (
       <span className="font-mono text-2xs text-muted" title={`Its pictures come from ${other}; connect that instance on Sources to add more`}>
         pictures from {other}
@@ -69,9 +80,11 @@ export default function MosaicPicker({
   }
   return (
     <>
-      <Button size="sm" variant="ghost" icon={Icons.plus} onClick={() => setOpen(true)} title={`Pick pictures on ${connection.id}: references only, measured next`}>
-        From {connection.id}
-      </Button>
+      {trigger && (
+        <Button size="sm" variant="ghost" icon={Icons.plus} onClick={() => setOpen(true)} title={`Pick pictures on ${connection.id}: references only, measured next`}>
+          From {connection.id}
+        </Button>
+      )}
       {open && <WinnowPicker connection={connection} client={client} host={host} onClose={() => setOpen(false)} />}
     </>
   );

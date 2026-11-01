@@ -1,6 +1,7 @@
 import type { MosaicMode } from '../../shared/mosaic/mosaic-doc';
 import { PHASE_WORDS, type Departure, type Motion, type StepPhase } from '../../shared/mosaic/motion';
 import Button from '../../shared/ui/Button';
+import { SelectField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import type { PlayerStatus } from './mosaic-player';
@@ -37,6 +38,8 @@ interface MosaicTransportProps {
   onPlay: () => void;
   onStop: () => void;
   onFullscreen: () => void;
+  /** A phone: the mode as a select, no direction (the Motion tab has it), no Screen (the ⋯ has it). */
+  compact?: boolean;
 }
 
 /**
@@ -45,10 +48,35 @@ interface MosaicTransportProps {
  * key), the screen, and what the player is doing. The mode and the motion
  * are the document's.
  */
-export default function MosaicTransport({ mode, motion, setMode, setDepart, status, canPlay, onPlay, onStop, onFullscreen }: MosaicTransportProps) {
+export default function MosaicTransport({ mode, motion, setMode, setDepart, status, canPlay, onPlay, onStop, onFullscreen, compact = false }: MosaicTransportProps) {
   const playable = mode !== 'single';
   const listed = MODES.some((m) => m.id === mode);
   const chainDepart: ChainDepart = motion.depart === 'pull' || motion.depart === 'alternate' ? motion.depart : 'dive';
+  const word = status.playing
+    ? `${status.stepIndex + 1} · ${status.phase === 'hold' && motion.arrival === 'mosaic' ? 'the mosaic' : (PHASE_WORDS[status.phase as StepPhase] ?? EXTRA_WORDS[status.phase] ?? status.phase)}${status.waiting ? ' · waiting for the next picture' : ''}`
+    : null;
+  if (compact) {
+    return (
+      <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+        <span className="w-[9.5rem] flex-none">
+          <SelectField<MosaicMode> label="Mode" value={mode} options={MODES.map((m) => ({ id: m.id, label: m.label }))} onChange={setMode} />
+        </span>
+        {playable &&
+          (status.playing ? (
+            <Button size="sm" icon={Icons.pause} onClick={onStop} title="Stop — the picture on screen becomes the target">
+              Stop
+            </Button>
+          ) : (
+            <Button size="sm" variant="primary" icon={Icons.play} disabled={!canPlay} onClick={onPlay} title="Play">
+              Play
+            </Button>
+          ))}
+        <span className="flex-1 min-w-0 truncate font-mono text-2xs text-muted tabular-nums" role="status">
+          {word ?? (status.error && !status.playing ? status.error : status.note && !status.playing ? status.note : '')}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
       <Segmented<MosaicMode> size="sm" value={listed ? mode : 'single'} options={MODES} onChange={setMode} />
@@ -65,10 +93,9 @@ export default function MosaicTransport({ mode, motion, setMode, setDepart, stat
           </Button>
         ))}
       <span className="flex-1" />
-      {status.playing && (
+      {word && (
         <span className="font-mono text-2xs text-muted tabular-nums" role="status">
-          {status.stepIndex + 1} · {status.phase === 'hold' && motion.arrival === 'mosaic' ? 'the mosaic' : (PHASE_WORDS[status.phase as StepPhase] ?? EXTRA_WORDS[status.phase] ?? status.phase)}
-          {status.waiting ? ' · waiting for the next picture' : ''}
+          {word}
         </span>
       )}
       {status.error && !status.playing && (

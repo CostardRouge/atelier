@@ -27,6 +27,8 @@ interface ChainBandProps {
   onInsert: () => void;
   onRemove: (at: number) => void;
   onShuffle: () => void;
+  /** A phone: the switch without its words (its name stays its accessible name and its tooltip). */
+  compact?: boolean;
 }
 
 /** Object URLs of the tiles shown lately, by `instance:id`; the oldest revoked past `TILE_URLS`. */
@@ -89,7 +91,7 @@ function TileThumb({ instance, client, id }: { instance: string; client: WinnowC
  * a run plays the played entries fall away so the current stays at the left,
  * and the entry being prepared is not touched.
  */
-export default function ChainBand({ instance, client, current, queue, done, playing, waiting = false, draw, setDraw, onReplace, onInsert, onRemove, onShuffle }: ChainBandProps) {
+export default function ChainBand({ instance, client, current, queue, done, playing, waiting = false, draw, setDraw, onReplace, onInsert, onRemove, onShuffle, compact = false }: ChainBandProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const from = playing ? Math.min(done, queue.length) : 0;
   const coming = queue.slice(from);
@@ -157,7 +159,7 @@ export default function ChainBand({ instance, client, current, queue, done, play
       </IconButton>
       <span title="On, the chain draws the coming pictures from the mosaic’s seed; off, it ends at the last picture you picked">
         <ToggleField label="Draw the next ones" checked={draw} onChange={setDraw}>
-          Draw the next ones
+          {compact ? null : 'Draw the next ones'}
         </ToggleField>
       </span>
     </div>

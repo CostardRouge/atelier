@@ -47,6 +47,8 @@ interface MosaicSettingsProps {
   cropped: boolean;
   onWhole: () => void;
   onChoose: () => void;
+  /** On a phone: the one part of the panel its drawer shows. */
+  only?: SettingsTab;
 }
 
 const ASPECT_TITLES: Record<AspectId, string> = {
@@ -78,13 +80,23 @@ const PROPAGATION_LABELS: Record<Propagation, string> = { rows: 'Top down', poin
 const ANIMATION_LABELS: Record<CellAnimation, string> = { appear: 'Appear', fade: 'Fade', flip: 'Flip', none: 'None' };
 const LOT_LABELS: Record<LotSize, string> = { 0: 'A row', 64: '64 cells', 256: '256 cells', 1024: '1 024 cells' };
 
+/** The parts of the panel a phone's bottom bar opens one at a time (`MosaicEditor`). */
+export const SETTINGS_TABS = [
+  { id: 'target', label: 'Target' },
+  { id: 'cells', label: 'Cells' },
+  { id: 'motion', label: 'Motion' },
+  { id: 'perf', label: 'Performance' },
+] as const;
+export type SettingsTab = (typeof SETTINGS_TABS)[number]['id'];
+const FIRST_OF_TAB: Record<SettingsTab, string> = { target: 'mosaic-target', cells: 'mosaic-cells', motion: 'mosaic-motion', perf: 'mosaic-perf' };
+
 const DEPART_LABELS: Record<Departure, string> = { dive: 'Dive in', pull: 'Pull back', alternate: 'Dive, then pull back', wave: 'Wave', fade: 'Fade', cut: 'Cut' };
 const ARRIVAL_LABELS: Record<Arrival, string> = { mosaic: 'Mosaic', photo: 'Photo', reveal: 'Reveal' };
 const REVEAL_LABELS: Record<RevealDirection, string> = { toPhoto: 'To the photo', toMosaic: 'To the mosaic', roundTrip: 'There and back' };
 const SHARPNESS_LABELS: Record<Sharpness, string> = { early: 'Early', late: 'Late', never: 'Never' };
 const AIM_LABELS: Record<Aim, string> = { queue: 'The chain’s', best: 'Best match', random: 'Any' };
 
-export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
+export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose, only }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   // A part set by hand: the motion bounded, the mode the recipe it still is — or custom.
   const setMotion = (patch: Partial<Motion>) =>
@@ -92,9 +104,22 @@ export default function MosaicSettings({ settings, update, view, setView, state,
       const motion = sanitizeMotion({ ...s.motion, ...patch }, s.motion);
       return { ...s, motion, mode: s.mode === 'single' ? 'single' : recipeOf(motion, s.mode) };
     });
+  /**
+   * A section in place: folded and remembered beside the stage; on a phone, where each tab of the bottom bar opens
+   * ONE part in a drawer titled by it, the tab's first section is drawn bare and a second keeps its header, unfolded.
+   */
+  const section = (tab: SettingsTab, id: string, title: string, props: { remember: 'local' | 'session'; defaultOpen?: boolean }, body: ReactNode) => {
+    if (only && only !== tab) return null;
+    if (only) return id === FIRST_OF_TAB[tab] ? <div className="flex flex-col gap-3">{body}</div> : <InspectorSection id={id} title={title} foldable={false}>{body}</InspectorSection>;
+    return (
+      <InspectorSection id={id} title={title} {...props}>
+        {body}
+      </InspectorSection>
+    );
+  };
   return (
     <div className="flex flex-col gap-3 px-1.5">
-      <InspectorSection id="mosaic-target" title="Target" remember="session">
+      {section('target', 'mosaic-target', 'Target', { remember: 'session' }, <>
         {target}
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="ghost" icon={Icons.image} onClick={onChoose} title="Pick the picture the mosaic rebuilds">
@@ -122,8 +147,8 @@ export default function MosaicSettings({ settings, update, view, setView, state,
           hint={<p>On, a zoom on the stage becomes the part rebuilt the moment your hand rests, with as many cells on it. Off, a zoom only enlarges what is there, and <i>Frame this</i> on the stage writes it. This device’s choice.</p>}
         />
         <p className="m-0 text-xs text-muted">Drag the frame to choose the part rebuilt, its sides and corners to resize it. The rest is never read.</p>
-      </InspectorSection>
-      <InspectorSection id="mosaic-cells" title="Cells" remember="session">
+      </>)}
+      {section('cells', 'mosaic-cells', 'Cells', { remember: 'session' }, <>
         <SliderRow
           label="Cell"
           name="cell"
@@ -148,8 +173,8 @@ export default function MosaicSettings({ settings, update, view, setView, state,
           onChange={(v) => update((s) => ({ ...s, distinctNeighbours: v }))}
           hint={<p>A plain sky would otherwise be thirty copies of one photo: the second or third best stands in beside its twin.</p>}
         />
-      </InspectorSection>
-      <InspectorSection id="mosaic-look" title="Reading" remember="session">
+      </>)}
+      {section('cells', 'mosaic-look', 'Reading', { remember: 'session' }, <>
         <SliderRow
           label="Tint"
           name="tint"
@@ -181,9 +206,11 @@ export default function MosaicSettings({ settings, update, view, setView, state,
             {scene.shape.cols} × {scene.shape.rows} cells · matched in {Math.round(scene.matchMs)} ms {scene.on === 'worker' ? 'in the background' : 'here'}
           </p>
         )}
-      </InspectorSection>
-      <InspectorSection id="mosaic-motion" title="Motion" remember="session" defaultOpen={false}>
-        <SelectField<Departure> label="Departure" value={settings.motion.depart} options={DEPARTURES.map((id) => ({ id, label: DEPART_LABELS[id] }))} onChange={(depart) => setMotion({ depart })} />
+      </>)}
+      {section('motion', 'mosaic-motion', 'Motion', { remember: 'session', defaultOpen: false }, <>
+        <FieldRow label="Departure">
+          <SelectField<Departure> label="Departure" value={settings.motion.depart} options={DEPARTURES.map((id) => ({ id, label: DEPART_LABELS[id] }))} onChange={(depart) => setMotion({ depart })} />
+        </FieldRow>
         <FieldRow label="Arrival" hint={<p><b>Mosaic</b>: land on the next picture’s mosaic. <b>Photo</b>: its picture fades in, holds, dissolves. <b>Reveal</b>: its cells flip to the picture.</p>}>
           <Segmented<Arrival> size="sm" fill value={settings.motion.arrival} options={ARRIVALS.map((id) => ({ id, label: ARRIVAL_LABELS[id] }))} onChange={(arrival) => setMotion({ arrival })} />
         </FieldRow>
@@ -214,8 +241,8 @@ export default function MosaicSettings({ settings, update, view, setView, state,
         />
         <SwitchRow label="Drift while the mosaic is held" checked={settings.motion.drift} onChange={(drift) => setMotion({ drift })} />
         <p className="m-0 font-mono text-2xs text-muted">{settings.mode === 'single' ? 'played by the modes under the stage' : settings.mode === 'custom' ? 'custom · the recipes are presets of these parts' : `recipe · ${settings.mode}`}</p>
-      </InspectorSection>
-      <InspectorSection id="mosaic-perf" title="Performance" remember="local" defaultOpen={false}>
+      </>)}
+      {section('perf', 'mosaic-perf', 'Performance', { remember: 'local', defaultOpen: false }, <>
         <SelectField<string>
           label="Workers"
           value={String(perf.workers)}
@@ -264,7 +291,7 @@ export default function MosaicSettings({ settings, update, view, setView, state,
             {chain.waits ? ` · held ${chain.waits}× for ${Math.round(chain.waitMs / 100) / 10} s` : ' · never held'}
           </p>
         )}
-      </InspectorSection>
+      </>)}
     </div>
   );
 }

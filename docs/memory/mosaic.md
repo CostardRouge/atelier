@@ -486,6 +486,40 @@ while no zoom view is kept (a kept view pans with them). Driven headless:
 three targets, back by the button and by ←, forward by → and the button,
 the crop of a target back with it.
 
+## On a phone, the suite's editor arrangement: tabs in the bottom bar, drawers under the stage (2026-11-01)
+
+His report: «l'application n'est pas du tout responsive … tout le système
+de réglages … dans le menu qui flotte en bas, avec un tiroir comme on le
+fait déjà dans d'autres pages». Measured before: at 390 px the settings
+column was stacked OVER the stage and the transport pushed off screen.
+**Decision**: the compact shell (`useIsCompact`) is Storytelling's and
+Develop's arrangement, not the desktop one squeezed — the masthead goes
+(`usePublishShellChrome` immersive, the frame's black behind); ONE
+`PhoneHeader` line (back · the title over the count or the measuring
+progress · ‹ › · ↶ ↷ · ⋯ with *Choose the target…*, *Full screen* where the
+browser allows it, *Draw a target*, *Add from …*, *Measure*, then the
+shell's own); the stage takes the column; the chain band; a one-row
+transport (the mode as a select, Play, the status word — the chain's
+direction lives in the Motion tab); the settings as FOUR tabs of the
+shell's floating bottom bar (`usePublishSectionBar`: Target · Cells ·
+Motion · Performance, marked only while its drawer is up), each a
+`DockedDrawer` through `PanelHost` showing ONE part of `MosaicSettings`
+(`only`: the tab's first section bare, a second — Reading under Cells —
+with its header, unfolded). A drawer, never a sheet: what is judged is the
+mosaic, and a wash would falsify it (Develop's rule). **Rules**: while a
+drawer is up the stage is SHOWN smaller but BUILT for the room it had
+(`freeRoom`): opening a tab to turn a dial must not rebuild the mosaic at
+another cell count — the dial does that, once; the stage's wrapper is
+sized to fit the room at any time and the canvas, the clicks and the zoom
+all read proportions, so a scaled stage behaves. **Trap**: the phone's
+picker is opened from the ⋯ and must sit at ONE place in the tree — drawn
+inside the header, it moved from the empty state to the workbench at the
+add and mounted again, still open. Driven headless at 390 × 844 and
+390 × 664: no page scroll either way, the four drawers, a dial turned in
+the Cells drawer rebuilding once, Mosaics playing with the band and the
+transport in reach, the ⋯'s verbs; the gallery's storage line wraps whole
+figures at 390 px.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

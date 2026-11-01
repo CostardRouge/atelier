@@ -266,13 +266,15 @@ function StorageLine({
   const used = state.usage !== null ? formatBytes(state.usage) : null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 border border-line rounded-paper bg-surface text-xs text-muted">
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${state.persisted ? 'bg-ok' : 'bg-warn'}`} />
-        {state.persisted ? 'Kept on this device — the browser will not clear it by itself' : 'Kept on this device — the browser may clear it when the disk runs short'}
-        {used && <span className="font-mono tabular-nums text-faint"> · {used} in use{state.quota ? ` of ${formatBytes(state.quota)}` : ''}</span>}
+      {/* A wrapping line, each figure kept whole: an inline-flex squeezed its three parts into columns on a phone. */}
+      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+        <span className="min-w-0">
+          <span aria-hidden="true" className={`inline-block align-middle mr-1.5 w-1.5 h-1.5 rounded-full ${state.persisted ? 'bg-ok' : 'bg-warn'}`} />
+          {state.persisted ? 'Kept on this device — the browser will not clear it by itself' : 'Kept on this device — the browser may clear it when the disk runs short'}
+        </span>
+        {used && <span className="font-mono tabular-nums text-faint whitespace-nowrap">· {used} in use{state.quota ? ` of ${formatBytes(state.quota)}` : ''}</span>}
         {tiles && tiles.count > 0 && (
-          <span className="font-mono tabular-nums text-faint">
-            {' '}
+          <span className="font-mono tabular-nums text-faint whitespace-nowrap">
             · {tiles.count.toLocaleString()} picture tile{tiles.count === 1 ? '' : 's'}, {formatBytes(tiles.bytes)}
           </span>
         )}

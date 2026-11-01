@@ -3203,6 +3203,16 @@ scenes a chain prepares ahead, and whether motion follows the system. Under
 them, the last matching's measure: its lots, the time a lot took, where it
 ran, the frames per second drawn.
 
+**On a phone.** The editor takes the whole screen: one header line holds
+the way back, the title over the picture count, the ‹ › and ↶ ↷ pairs and
+a ⋯ with *Choose the target…*, *Draw a target*, *Add from …*, *Measure*
+and *Full screen* where the browser allows it; under the stage come the
+chain's band and a one-row transport (the mode as a list, Play). The
+settings are the four tabs of the bar floating at the bottom — Target,
+Cells, Motion, Performance — each opening a drawer under the stage, which
+stays in sight: the mosaic keeps the size it was built for and is shown a
+little smaller while a drawer is up, so opening one rebuilds nothing.
+
 **The modes.** Under the stage: *Still* is the mosaic as above. *Mosaics*,
 the default of a new mosaic, goes from mosaic to mosaic: the camera dives
 into a cell and lands on the next picture's mosaic, held a moment while the
