@@ -30,6 +30,8 @@ import ScriptControls from './ScriptControls';
 import ObjectPanel from './ObjectPanel';
 import StageView from './StageView';
 import StudioTree, { type StudioPanel, type StudioSelection } from './StudioTree';
+import StudioTimeline from './StudioTimeline';
+import { withSceneTiming } from '../../shared/story/studio-edit';
 import { objectTracks, sceneSpans, type ObjectTrack } from '../../shared/story/studio';
 
 export interface Sound {
@@ -678,6 +680,20 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             <span className="font-mono text-2xs text-muted tabular-nums w-[6.5rem] text-right">
               {fmt(Math.min(t, total))} / {fmt(total)}
             </span>
+          </div>
+          <div className="flex-none border-t border-line pt-2 max-h-[13rem] overflow-y-auto">
+            <StudioTimeline
+              total={total}
+              t={Math.min(t, total)}
+              scenes={scenes}
+              tracks={tracks}
+              selected={selected}
+              onSelect={setSelected}
+              onSeek={seek}
+              onTiming={(index, timing) => {
+                if (script) onScript(withSceneTiming(script, postId, index, timing));
+              }}
+            />
           </div>
         </section>
 

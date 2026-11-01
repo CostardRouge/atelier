@@ -2977,6 +2977,11 @@ it and may grow blocks of its own.
   the whole series, *This post* for this post alone, over the series. A
   scene also takes its length and its caption's window in this post. Every
   setting is kept in your script; with none, a post draws exactly as its code.
+  Under the stage, the **timeline** lays the post on one clock: a row of
+  scenes, the hook, the captions, the HUD, then the parts of the selected
+  scene. A bar selects its object and moves the playhead into it; a click on
+  an empty stretch moves the playhead there; drag a scene's right edge to
+  change its length, a caption's edges to time its window — this post's own.
   On a phone the stage comes first, the inspector under it, the list last.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its

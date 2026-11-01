@@ -40,12 +40,34 @@ export function objectTracks(ep: Episode, opts: ComposeOptions = {}, step = 0.1)
   return [...tracks.values()];
 }
 
-/** A post's scenes as the timeline draws them: each slot's key, block, index among the post's blocks, and seconds. */
-export function sceneSpans(ep: Episode): { key: string; block: string; index: number | null; a: number; b: number }[] {
+/**
+ * A post's scenes as the timeline draws them: each slot's key, block, index
+ * among the post's blocks (null for the opening and the ending), its seconds
+ * on the post's clock, `start` its own clock's zero (it begins in the
+ * transition before `a`), and its caption's window on its own clock.
+ */
+export interface SceneSpan {
+  key: string;
+  block: string;
+  index: number | null;
+  a: number;
+  b: number;
+  start: number;
+  cap: { a: number; b: number } | null;
+}
+export function sceneSpans(ep: Episode): SceneSpan[] {
   const slots = slotsOf(ep);
   // The opening (title) and the ending (recap) are the post's own, not one of its blocks.
   const first = ep.hook ? 0 : 1;
-  return slots.map((s, i) => ({ key: s.key, block: s.block, index: i >= first && i < first + ep.blocks.length ? i - first : null, a: s.a, b: s.b }));
+  return slots.map((s, i) => ({
+    key: s.key,
+    block: s.block,
+    index: i >= first && i < first + ep.blocks.length ? i - first : null,
+    a: s.a,
+    b: s.b,
+    start: s.start,
+    cap: s.cap ? { a: s.cap.a, b: s.cap.b } : null,
+  }));
 }
 
 const BLOCK_LABEL: Record<string, string> = {
