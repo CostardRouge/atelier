@@ -180,6 +180,9 @@ export default function MosaicSettings({ settings, update, view, setView, state,
         <SliderRow label="Animation" name="animation" value={perf.animationMs} min={0} max={600} step={20} reset={160} format={(v) => `${v} ms`} onChange={(animationMs) => setPerf({ animationMs })} />
         <SelectField<string> label="Tiles in memory" value={String(perf.tileCache)} options={[600, 2000, 4000].map((n) => ({ id: String(n), label: n.toLocaleString() }))} onChange={(v) => setPerf({ tileCache: Number(v) as PerfPrefs['tileCache'] })} />
         <SelectField<string> label="Scenes ahead" value={String(perf.ahead)} options={[1, 2, 3].map((n) => ({ id: String(n), label: String(n) }))} onChange={(v) => setPerf({ ahead: Number(v) as PerfPrefs['ahead'] })} />
+        <FieldRow label="Zoom" hint={<p><b>Frames</b>: a zoom on the stage becomes the part rebuilt, with as many cells on it. <b>Looks</b>: a zoom only enlarges what is there, and <i>Frame this</i> on the stage writes it.</p>}>
+          <Segmented<PerfPrefs['zoom']> size="sm" fill value={perf.zoom} options={[{ id: 'frame', label: 'Frames' }, { id: 'look', label: 'Looks' }]} onChange={(zoom) => setPerf({ zoom })} />
+        </FieldRow>
         <FieldRow label="Motion">
           <Segmented<PerfPrefs['motion']> size="sm" fill value={perf.motion} options={[{ id: 'system', label: 'System' }, { id: 'reduced', label: 'Reduced' }, { id: 'full', label: 'Full' }]} onChange={(motion) => setPerf({ motion })} />
         </FieldRow>

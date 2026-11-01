@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mulberry32 } from '../../shared/lib/prng';
-import { aspectRatio } from '../../shared/mosaic/frame';
+import { aspectRatio, type Rect } from '../../shared/mosaic/frame';
 import { measuredTiles, type MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import type { PerfPrefs } from '../../shared/mosaic/perf';
@@ -27,6 +27,12 @@ interface SceneInputs {
   perf: PerfPrefs;
   /** The cell a `point` propagation starts from (the last clicked), −1 for the centre. */
   origin: number;
+  /**
+   * A zoom that became the crop (F6): the scene it was over and the part of
+   * it in view, so the next build starts from those pixels enlarged. Read
+   * when a build starts; honoured only while that scene is the previous one.
+   */
+  carry?: { scene: MosaicScene; window: Rect } | null;
 }
 
 /** The widest `aspect` frame a room holds, never taller than it, in whole pixels. */
@@ -42,7 +48,7 @@ export function stageIn(room: { width: number; height: number }, aspect: number)
  * abandoned and the previous scene stays on screen meanwhile. The builder
  * is handed back for the player, which shares its caches.
  */
-export function useMosaicScene({ doc, client, room, dpr, pool, perf, origin }: SceneInputs): { state: SceneState; builder: SceneBuilder | null; stageW: number; stageH: number; frameAspect: number } {
+export function useMosaicScene({ doc, client, room, dpr, pool, perf, origin, carry = null }: SceneInputs): { state: SceneState; builder: SceneBuilder | null; stageW: number; stageH: number; frameAspect: number } {
   const [state, setState] = useState<SceneState>({ status: 'idle', why: 'no-target' });
   const latest = useRef<MosaicScene | null>(null);
   const instance = doc.instance ?? null;
@@ -56,6 +62,8 @@ export function useMosaicScene({ doc, client, room, dpr, pool, perf, origin }: S
   useEffect(() => builder?.setTileLimit(perf.tileCache), [builder, perf.tileCache]);
   const originRef = useRef(origin);
   originRef.current = origin;
+  const carryRef = useRef(carry);
+  carryRef.current = carry;
 
   const library = useMemo(() => measuredTiles(doc), [doc.tiles]);
   useEffect(() => builder?.setLibrary(library), [builder, library]);
@@ -114,6 +122,7 @@ export function useMosaicScene({ doc, client, room, dpr, pool, perf, origin }: S
               origin: originRef.current,
               seed: doc.settings.seed,
               previous,
+              previousWindow: carryRef.current && carryRef.current.scene === previous ? carryRef.current.window : null,
               onLot: perf.showAsItComes
                 ? (scene) => {
                     latest.current = scene;

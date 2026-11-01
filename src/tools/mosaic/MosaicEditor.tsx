@@ -22,7 +22,8 @@ import {
 } from '../../shared/mosaic/mosaic-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
-import type { Crop } from '../../shared/mosaic/frame';
+import type { Crop, Rect } from '../../shared/mosaic/frame';
+import { describeZoomKey, zoomKeyAction } from '../../shared/ui/zoom-keys';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
@@ -43,7 +44,8 @@ import { IDLE_STATUS, MosaicPlayer, type PlayerStatus } from './mosaic-player';
 import { MOSAIC_PERF_PREF, motionReduced, useMosaicPerf, workersHere } from './use-mosaic-perf';
 import { pictureCountLine } from './MosaicGallery';
 import { useMosaicCover } from './use-mosaic-cover';
-import { randomTarget, useMosaicScene } from './use-mosaic-scene';
+import { randomTarget, useMosaicScene, type MosaicScene } from './use-mosaic-scene';
+import { useStageZoom } from './use-stage-zoom';
 
 /** Where the editor's save stands, as its bar says it. */
 export type SaveState = 'saved' | 'saving' | 'failed';
@@ -58,6 +60,8 @@ interface MosaicEditorProps {
   onBack: () => void;
   /** Drawn under the bar: another tab edits this mosaic. */
   band?: ReactNode;
+  /** The history's two buttons, beside the save word. */
+  headerExtra?: ReactNode;
 }
 
 /** The tiles a run must still settle: no grid yet, or a failure to try again. */
@@ -97,9 +101,10 @@ function MosaicWorkbench({
   const reduced = motionReduced(perf);
   const reveal = useMemo<Reveal>(() => ({ animation: reduced ? 'none' : perf.cellAnimation, ms: perf.animationMs }), [reduced, perf.cellAnimation, perf.animationMs]);
   const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
-  // The widest 16:9 the room holds, never taller than it.
+  // A zoom that became the crop: what the next build starts from (F6).
+  const [carry, setCarry] = useState<{ scene: MosaicScene; window: Rect } | null>(null);
   // The stage is the widest frame of the mosaic's shape the room holds — the picture's own shape for `original`.
-  const { state, builder, stageW, stageH, frameAspect: aspect } = useMosaicScene({ doc, client, room, dpr, pool, perf, origin });
+  const { state, builder, stageW, stageH, frameAspect: aspect } = useMosaicScene({ doc, client, room, dpr, pool, perf, origin, carry });
   useMosaicCover(doc.id, state);
   const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
   // What the chooser is for: the target, an entry of the chain in place, or one more at its end.
@@ -174,7 +179,24 @@ function MosaicWorkbench({
     player?.stop();
   }, [dialsKey, player]);
 
-  // Space plays and stops (the transport's key); Escape stops.
+  // --- the zoom over the Still stage: a crop under `frame`, a look under `look` (F6) ---
+  const stageRef = useRef<HTMLDivElement>(null);
+  const zoom = useStageZoom({
+    ref: stageRef,
+    enabled: !status.playing && mode === 'single',
+    stageW,
+    stageH,
+    scene: shown,
+    crop: doc.crop,
+    meaning: perf.zoom,
+    onCommit: (crop, carried) => {
+      setCarry(carried);
+      setCrop(crop);
+    },
+  });
+  const cropped = Boolean(doc.crop);
+
+  // Space plays and stops (the transport's key); Escape stops; Z fits the view, then the whole picture; the arrows pan a kept zoom.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -182,15 +204,26 @@ function MosaicWorkbench({
       if (e.key === 'Escape' && status.playing) {
         e.preventDefault();
         stop();
-      } else if (e.key === ' ' && mode !== 'single') {
+        return;
+      }
+      if (e.key === ' ' && mode !== 'single') {
         e.preventDefault();
         if (status.playing) stop();
         else play();
+        return;
       }
+      if (status.playing || mode !== 'single') return;
+      const action = zoomKeyAction(describeZoomKey(e), zoom.zoomed);
+      if (!action) return;
+      e.preventDefault();
+      if (action.kind === 'toggle') {
+        if (zoom.zoomed) zoom.fit();
+        else if (cropped) setCrop(undefined);
+      } else zoom.pan(action.dx, action.dy);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [status.playing, mode, play, stop]);
+  }, [status.playing, mode, play, stop, zoom, cropped, setCrop]);
 
   const fullscreen = useCallback(() => {
     const el = boxRef.current;
@@ -203,7 +236,7 @@ function MosaicWorkbench({
     <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-h-0 min-w-0 flex flex-col gap-3">
         <div ref={boxRef} className="min-h-[200px] flex-1 min-w-0 flex items-start justify-center [&:fullscreen]:items-center [&:fullscreen]:bg-frame">
-          <div style={{ width: stageW || undefined, height: stageH || undefined }}>
+          <div ref={stageRef} className="relative touch-none select-none" style={{ width: stageW || undefined, height: stageH || undefined }}>
             <MosaicStage
               state={state}
               view={view}
@@ -212,6 +245,7 @@ function MosaicWorkbench({
               dpr={dpr}
               reveal={reveal}
               onFps={setFps}
+              zoom={zoom.view}
               playing={status.playing}
               canvasOut={canvasOut}
               onPick={(index, cell) => {
@@ -220,6 +254,23 @@ function MosaicWorkbench({
                 setTarget(state.scene.tiles[index].id);
               }}
             />
+            {!status.playing && mode === 'single' && (zoom.zoomed || cropped) && (
+              <div className="absolute right-2 top-2 flex items-center gap-1 rounded-control bg-frame/75 p-1" role="group" aria-label="Zoom">
+                {zoom.zoomed && (
+                  <span className="font-mono text-2xs text-on-media tabular-nums px-1" role="status">
+                    ×{zoom.view.s.toFixed(zoom.view.s < 10 ? 1 : 0)}
+                  </span>
+                )}
+                {zoom.zoomed && perf.zoom === 'look' && (
+                  <Button size="sm" variant="primary" onClick={zoom.commit} title="What is in view becomes the part rebuilt, with as many cells on it">
+                    Frame this
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" icon={Icons.zoomFit} onClick={() => (zoom.zoomed ? zoom.fit() : setCrop(undefined))} title={zoom.zoomed ? 'Back to the mosaic as built (Z)' : 'Rebuild the whole picture (Z)'}>
+                  {zoom.zoomed ? 'Fit' : 'Whole'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         {chained && doc.instance && (
@@ -306,7 +357,7 @@ function MosaicWorkbench({
  * library, its dials beside it, a click on a cell making its picture the
  * target (M5). The animated modes (M6) follow.
  */
-export default function MosaicEditor({ doc, change, saveState, onBack, band }: MosaicEditorProps) {
+export default function MosaicEditor({ doc, change, saveState, onBack, band, headerExtra }: MosaicEditorProps) {
   useSurface('darkroom');
   const compact = useIsCompact();
   const { connection, client } = useWinnowConnection();
@@ -395,16 +446,19 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
       <PageBar
         back={{ label: 'Mosaics', onClick: onBack, iconOnly: compact }}
         trailing={
-          <span
-            className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}
-            role="status"
-            title={
-              saveState === 'failed'
-                ? 'The browser refused to store this mosaic (a private window, or the disk is full) — your edits are still on screen.'
-                : 'Every change is kept on this device as you go.'
-            }
-          >
-            {SAVE_WORDS[saveState]}
+          <span className="inline-flex items-center gap-2">
+            {headerExtra}
+            <span
+              className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}
+              role="status"
+              title={
+                saveState === 'failed'
+                  ? 'The browser refused to store this mosaic (a private window, or the disk is full) — your edits are still on screen.'
+                  : 'Every change is kept on this device as you go.'
+              }
+            >
+              {SAVE_WORDS[saveState]}
+            </span>
           </span>
         }
       >

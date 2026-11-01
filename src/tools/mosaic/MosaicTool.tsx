@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
+import useHistory from '../../shared/history/use-history';
 import type { MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
 import MosaicEditor, { type SaveState } from './MosaicEditor';
@@ -142,6 +143,16 @@ export default function MosaicTool() {
     navigate(MOSAIC_HOME);
   }, []);
 
+  // Undo and redo over the whole mosaic (the suite's rule): the hook watches the one funnel above; a step put back goes down it like an edit.
+  const history = useHistory<MosaicDoc | null>({
+    value: open,
+    subject: open?.id ?? null,
+    onRestore: (doc) => {
+      if (doc) change(() => doc);
+    },
+    what: 'edit',
+  });
+
   const showGallery = !ref || !open;
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-3">
@@ -151,7 +162,7 @@ export default function MosaicTool() {
         <MosaicGallery openMosaicId={open?.id ?? null} onOpen={handleOpen} />
       ) : (
         <div ref={editorRef} className="contents">
-          <MosaicEditor key={open.id} doc={open} change={change} saveState={saveState} onBack={onBack} />
+          <MosaicEditor key={open.id} doc={open} change={change} saveState={saveState} onBack={onBack} headerExtra={history.control} />
         </div>
       )}
     </div>

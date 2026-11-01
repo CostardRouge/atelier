@@ -18,8 +18,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   matched in lots painted as they land, spreading from the cell you clicked, with a hairline saying how far it has come;
   a Performance section sets this device's workers, lots, propagation and animations. The chain is a band of pictures
   under the stage, ten ahead and refilled as it goes: replace, remove, add or shuffle them, or let it end on your last
-  pick. Each mosaic, the colours of its pictures and a small tile of each are kept in this browser; a `.mosaic.json`
-  file carries it elsewhere.
+  pick. Zooming the still stage frames it: what you see becomes the part rebuilt, with as many cells on it; undo and
+  redo step through every edit. Each mosaic, the colours of its pictures and a small tile of each are kept in this
+  browser; a `.mosaic.json` file carries it elsewhere.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the
   source.

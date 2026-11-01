@@ -5,7 +5,8 @@
 review (lab 2 <https://claude.ai/artifact/Aoe4TKy6uSFKwbawpXE7i8>, seven
 commits F1–F7: the card, the shape as the crop's, the matching in lots with
 `perf.ts` / `match-pool.ts`, the Performance panel, the chain's queue in
-the document and its band `ChainBand.tsx` …)** (the target chosen
+the document and its band `ChainBand.tsx`, the zoom as a crop
+`stage-view.ts` / `use-stage-zoom.ts` and the document's undo …)** (the target chosen
 in an image field, the mosaic's shape and the part of the target rebuilt —
 `frame.ts`, `TargetFrame.tsx`, `TargetChooser.tsx`; M6 `mosaic-player.ts`, `scene-builder.ts`,
 `MosaicTransport.tsx`, the reveal and drift clocks in `chain.ts`; M5

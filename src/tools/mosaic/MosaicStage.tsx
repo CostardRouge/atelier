@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CellAnimation } from '../../shared/mosaic/perf';
+import { IDENTITY_VIEW, isIdentityView, type StageView as ZoomView } from '../../shared/mosaic/stage-view';
 import { drawGrid, drawTarget } from './mosaic-paint';
 import type { MosaicScene } from './scene-builder';
 import type { SceneState } from './use-mosaic-scene';
@@ -30,6 +31,8 @@ interface MosaicStageProps {
   onPick: (pictureIndex: number, cell: number) => void;
   /** The frames a propagation drew per second, once it settled — the panel's measure. */
   onFps?: (fps: number) => void;
+  /** The zoom over the stage while the hand moves, or once a zoom is kept to look (F6); identity draws the mosaic as built. */
+  zoom?: ZoomView;
   /** The player draws the frames: the stage keeps its hands off the canvas. */
   playing?: boolean;
   /** The canvas, for the player to draw into. */
@@ -96,7 +99,7 @@ function drawReveal(ctx: CanvasRenderingContext2D, scene: MosaicScene, reveal: R
  * on a cell makes its picture the target. While a build runs, the previous
  * mosaic stays and the word says what is being done.
  */
-export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, onPick, onFps, playing = false, canvasOut }: MosaicStageProps) {
+export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, onPick, onFps, zoom = IDENTITY_VIEW, playing = false, canvasOut }: MosaicStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const scene = state.status === 'ready' ? state.scene : state.status === 'building' || state.status === 'failed' ? state.previous : null;
@@ -126,6 +129,11 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
       ctx.fillStyle = '#100f0d';
       ctx.fillRect(0, 0, w, h);
       if (!scene) return false;
+      if (!isIdentityView(zoom)) {
+        // Under a zoom the painted mosaic is only enlarged — free — and nothing is drawn over it.
+        ctx.drawImage(scene.canvas, 0, 0, scene.canvas.width, scene.canvas.height, zoom.ox * dpr, zoom.oy * dpr, w * zoom.s, h * zoom.s);
+        return false;
+      }
       // A scene built for another size is stretched until the new one lands.
       ctx.drawImage(scene.canvas, 0, 0, w, h);
       const moving = drawReveal(ctx, scene, reveal, now, stageW / scene.stageW, stageH / scene.stageH, dpr);
@@ -157,7 +165,7 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [scene, tick, view.ghost, view.grid, stageW, stageH, dpr, hover, playing, reveal, onFps]);
+  }, [scene, tick, view.ghost, view.grid, stageW, stageH, dpr, hover, playing, reveal, onFps, zoom]);
 
   const cellAt = (e: React.MouseEvent<HTMLCanvasElement>): number | null => {
     if (!scene) return null;
@@ -185,11 +193,11 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
       <canvas
         ref={canvasRef}
         aria-label="Mosaic"
-        className={`block w-full h-full ${scene && !playing ? 'cursor-crosshair' : ''}`}
-        onMouseMove={(e) => setHover(playing ? null : cellAt(e))}
+        className={`block w-full h-full ${scene && !playing ? (isIdentityView(zoom) ? 'cursor-crosshair' : 'cursor-grab') : ''}`}
+        onMouseMove={(e) => setHover(playing || !isIdentityView(zoom) ? null : cellAt(e))}
         onMouseLeave={() => setHover(null)}
         onClick={(e) => {
-          if (playing) return;
+          if (playing || !isIdentityView(zoom)) return;
           const c = cellAt(e);
           if (c === null || !scene) return;
           const index = scene.matching.ids[c];

@@ -51,6 +51,8 @@ export interface Crop {
 
 export const MIN_CROP_SCALE = 0.1;
 export const WHOLE: Crop = { cx: 0.5, cy: 0.5, scale: 1 };
+/** How far from the whole frame a crop may be and still be it — a pixel of a 500-px stage, which a floored stage size costs. */
+export const WHOLE_TOLERANCE = 2e-3;
 
 export interface Rect {
   x: number;
@@ -77,13 +79,24 @@ export function cropRect(W: number, H: number, aspect: number, crop: Crop = WHOL
   return { x: clamp(cx - w / 2, 0, W - w), y: clamp(cy - h / 2, 0, H - h), w, h };
 }
 
-/** The crop that names `rect` exactly — what is stored once a drag ends (the clamped centre). */
+/**
+ * The crop that names `rect` — what is stored once a drag or a zoom ends:
+ * the scale bounded, and the centre pushed to where a frame of that size
+ * lies inside the picture, so the whole frame of the picture's own shape
+ * reads as `WHOLE` whatever point it was named from.
+ */
 export function cropOfRect(W: number, H: number, aspect: number, rect: Rect): Crop {
+  if (!(W > 0 && H > 0 && aspect > 0)) return { ...WHOLE };
   const maxW = Math.min(W, H * aspect);
+  // A frame within a pixel's share of the largest IS the largest: a stage floored to whole pixels names it so.
+  const raw = maxW > 0 ? rect.w / maxW : 1;
+  const scale = clamp(raw >= 1 - WHOLE_TOLERANCE ? 1 : raw, MIN_CROP_SCALE, 1);
+  const hw = (maxW * scale) / 2 / W;
+  const hh = (maxW * scale) / aspect / 2 / H;
   return {
-    cx: clamp((rect.x + rect.w / 2) / W, 0, 1),
-    cy: clamp((rect.y + rect.h / 2) / H, 0, 1),
-    scale: clamp(maxW > 0 ? rect.w / maxW : 1, MIN_CROP_SCALE, 1),
+    cx: clamp((rect.x + rect.w / 2) / W, hw, 1 - hw),
+    cy: clamp((rect.y + rect.h / 2) / H, hh, 1 - hh),
+    scale,
   };
 }
 
@@ -98,7 +111,7 @@ export function readCrop(raw: unknown): Crop | undefined {
 
 /** Whether a crop is the whole frame — what need not be stored. */
 export function isWhole(crop: Crop | undefined): boolean {
-  return !crop || (Math.abs(crop.cx - 0.5) < 1e-4 && Math.abs(crop.cy - 0.5) < 1e-4 && crop.scale >= 1 - 1e-4);
+  return !crop || (Math.abs(crop.cx - 0.5) < WHOLE_TOLERANCE && Math.abs(crop.cy - 0.5) < WHOLE_TOLERANCE && crop.scale >= 1 - WHOLE_TOLERANCE);
 }
 
 /**

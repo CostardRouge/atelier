@@ -280,6 +280,38 @@ locked. **Known limit**: the × is 20 px, under the 44 px rule — a tile is
 drives**: the shell saves 600 ms after an edit — read the store only after
 *Saved* shows, or the document read is the one before.
 
+## A zoom on the Still stage is a crop; the view is held until the rebuild lands (2026-11-01, F6)
+
+His ask («zoomer sur toute la viewport … ça change le crop, et ça nous permet
+de réadapter en fonction de la taille de cellule»). **Rules**:
+`shared/mosaic/stage-view.ts` (pure) holds the view `{s, ox, oy}` over the
+painted mosaic — zoomed about the hand, clamped to the stage (`viewBounds`:
+out until the frame is the whole picture, in until the crop would be
+`MIN_CROP_SCALE`) — and `cropFromView` maps the window in view through the
+scene's `targetRect` onto the target as a crop; `tools/mosaic/use-stage-zoom.ts`
+reads the hand through the suite's `useZoomGestures` (`wheel: 'any'` — the
+stage has nothing else to do with the wheel; a drag pans only past ×1, at
+the fit it stays a click on a cell) and COMMITS on release — the wheel quiet
+260 ms, the fingers or the drag lifted — under `perf.zoom === 'frame'`, or
+keeps the view under `'look'` where *Frame this* on the stage writes it. The
+view is HELD until the scene rebuilt for the crop lands, and that build
+starts from the same pixels enlarged (`BuildPlan.previousWindow`, the
+`carry` the hook hands `useMosaicScene`), so the reset shows no jump and the
+lots then replace the enlarged cells with crisp ones. `Z` fits a kept view,
+else gives the whole picture; the arrows pan a kept view (`zoom-keys.ts`);
+⌘Z is the document's history — `MosaicTool` now runs the suite's
+`useHistory` over its one funnel, the pair in the bar. **Trap fixed**:
+`cropOfRect` now pushes the centre to where a frame of that size lies inside
+the picture, and a frame within `WHOLE_TOLERANCE` (2 ‰) of the largest IS
+the largest, `isWhole` reading with the same tolerance — the stage is
+floored to whole pixels, so its aspect differs from the picture's by a
+pixel's share, and a zoom-out past the whole used to store `scale: 1` with
+a centre a hair off, which read as *cropped* though nothing was. Driven
+headless: six wheel notches at the corner → the crop's top-left sixth at the
+same 11 × 11 cells, a zoom-out past the whole → `WHOLE`, Ctrl+Z → the crop
+before, a pinch → a smaller crop, *Looks* keeping the crop until *Frame
+this*.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

@@ -63,6 +63,13 @@ export interface BuildPlan {
   onLot?: (scene: MosaicScene) => void;
   /** The scene on the stage until this one: its canvas is the start of the new one, so unmatched cells keep the old picture. */
   previous?: MosaicScene | null;
+  /**
+   * The part of `previous` that was in view when a zoom became this build's
+   * crop (stage units of `previous`): the new canvas starts from those pixels
+   * enlarged, so the stage shows no jump when its view resets and the lots
+   * then replace the enlarged cells with crisp ones.
+   */
+  previousWindow?: Rect | null;
 }
 
 export interface Library {
@@ -213,7 +220,20 @@ export class SceneBuilder {
     const matching: Matching = { ids, dist };
     const byIndex = new Map<number, ImageBitmap | null>();
     const paint: MosaicPaint = { shape, matching, bitmapOf: (i) => byIndex.get(i) ?? null, means, tint: settings.tint };
-    const before = plan?.previous && plan.previous.stageW === stageW && plan.previous.stageH === stageH ? plan.previous.canvas : null;
+    let before = plan?.previous && plan.previous.stageW === stageW && plan.previous.stageH === stageH ? plan.previous.canvas : null;
+    const win = plan?.previousWindow;
+    if (before && win && plan?.previous) {
+      // The zoomed part of the previous stage, enlarged to the whole: what the view showed at the release.
+      const carried = document.createElement('canvas');
+      const cctx = stageCanvas(carried, stageW, stageH, dpr);
+      if (cctx) {
+        const k = plan.previous.dpr;
+        cctx.fillStyle = '#100f0d';
+        cctx.fillRect(0, 0, stageW, stageH);
+        cctx.drawImage(before, win.x * k, win.y * k, win.w * k, win.h * k, 0, 0, stageW, stageH);
+        before = carried;
+      }
+    }
     if (before) ctx.drawImage(before, 0, 0, stageW, stageH);
     else {
       ctx.fillStyle = '#100f0d';
