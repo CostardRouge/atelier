@@ -27,6 +27,7 @@ import { useWall } from './use-wall';
 import { useMapGround } from './use-map-ground';
 import MapGroundControls, { MapGroundChip } from './MapGroundControls';
 import MapCameraSection from './MapCameraSection';
+import HookBadgeSection from './HookBadgeSection';
 import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -649,6 +650,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         );
       case 'hook':
         return (
+          <>
           <InspectorSection id="story-hook" title="Hook" foldable={false} info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports.">
             <HookPanel
               postId={postId}
@@ -660,6 +662,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               onUnreadable={(name) => setSoundError(`This browser cannot read “${name}”. A WAV, MP3 or M4A file usually works.`)}
             />
           </InspectorSection>
+          {script ? (
+            <InspectorSection id="story-hook-badge" title="Badge · the series" foldable={false} info="How every post's hook is drawn: as Trips' badge — its title styles, where it sits, its size and pieces, a style file the three tools share — or as before, typed with a sticker.">
+              <HookBadgeSection script={script} onScript={onScript} />
+            </InspectorSection>
+          ) : null}
+          </>
         );
       case 'sound':
         return (

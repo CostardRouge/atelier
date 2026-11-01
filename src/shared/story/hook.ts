@@ -13,7 +13,8 @@ import type { SoundEvent } from '../audio/sound-event';
 import { clamp, E, font, PAL, rr, text, TYPO, type Ctx } from './motion';
 import { obj } from './objects';
 
-export type HookEntry = 'type' | 'rise' | 'word' | 'fade';
+/** How the first line arrives: typed, risen, word by word, faded — and, as a badge's big text, wiped or slammed. */
+export type HookEntry = 'type' | 'rise' | 'word' | 'fade' | 'wipe' | 'slam';
 export type HookExit = 'fade' | 'erase' | 'fly' | 'cut';
 export type HookPlace = 'top' | 'center' | 'bottom';
 export type HookInk = 'paper' | 'ink' | 'accent';
@@ -41,6 +42,8 @@ export interface Hook {
   ink?: HookInk;
   /** Darkens the picture behind the words, 0–1. */
   scrim?: number;
+  /** The badge's pieces as this post writes them, over the series' (`hook-badge.ts`): its header, place, camera, why now. */
+  pieces?: { header?: string; place?: string; camera?: string; why?: string };
   /** The key clicks, the sticker's impact, the exit's whoosh: a voice name, `file`, or `none`. */
   sounds?: { keys?: HookSound; impact?: HookSound; whoosh?: HookSound };
 }

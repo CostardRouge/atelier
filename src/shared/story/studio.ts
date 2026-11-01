@@ -93,7 +93,17 @@ const BLOCK_LABEL: Record<string, string> = {
   'card-recovery': 'Card recovery',
   'season-recap': 'Season recap',
 };
-const PART_LABEL: Record<string, string> = { caption: 'Caption', hud: 'HUD', hook: 'Hook', 'transfer.nas': 'NAS', 'map.credit': 'Map credit' };
+const PART_LABEL: Record<string, string> = { caption: 'Caption', hud: 'HUD', hook: 'Hook', 'transfer.nas': 'NAS', 'map.credit': 'Map credit',
+  // The hook's badge pieces (`hook-badge.ts`), each an object of its own.
+  'hook.big': 'Big text',
+  'hook.second': 'Second line',
+  'hook.header': 'Header',
+  'hook.place': 'Place',
+  'hook.camera': 'Camera',
+  'hook.why': 'Why now',
+  'hook.band': 'Band',
+  'hook.veil': 'Veil',
+};
 
 /** How the Studio names an object by its key: a scene by its block, a part by its last name. */
 export function objectLabel(key: string): string {

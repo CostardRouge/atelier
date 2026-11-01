@@ -15,6 +15,8 @@ const ENTRIES: readonly SelectOption<HookEntry>[] = [
   { id: 'rise', label: 'Rises' },
   { id: 'word', label: 'Word by word' },
   { id: 'fade', label: 'Fades in' },
+  { id: 'wipe', label: 'Wiped in (badge)' },
+  { id: 'slam', label: 'Slammed in (badge)' },
 ];
 const EXITS: readonly SelectOption<HookExit>[] = [
   { id: 'fade', label: 'Fades out' },
@@ -39,6 +41,8 @@ const SOUNDS: readonly SelectOption<string>[] = [
 ];
 const SOUND_LABEL: Record<HookSoundKind, string> = { keys: 'Key sound', impact: 'Impact', whoosh: 'Exit sound' };
 const LETTERS = 'ABCDE';
+const PIECE_LABEL = { header: 'Header', place: 'Place', camera: 'Camera', why: 'Why now' } as const;
+const PIECE_HINT = { header: 'Le tri d’Australie · EP.04', place: '◆ Perth → Cairns', camera: 'Sony A7C II · DJI Mini 4 Pro', why: 'Il y a un an, jour pour jour' } as const;
 
 /**
  * The post's hook, edited where it plays (`hook.ts`): its words, how they
@@ -200,6 +204,27 @@ export default function HookPanel({
           <FieldRow label="Ink">
             <SelectField label="The hook's ink" value={hook.ink ?? HOOK_DEFAULTS.ink} options={INKS} onChange={(ink) => edit({ ink })} />
           </FieldRow>
+        </div>
+      </details>
+
+      <details className="group">
+        <summary className="cursor-pointer text-xs text-muted select-none">This post’s badge pieces</summary>
+        <div className="flex flex-col gap-2 pt-2">
+          {(['header', 'place', 'camera', 'why'] as const).map((k) => (
+            <FieldRow key={k} label={PIECE_LABEL[k]}>
+              <TextField
+                label={`The badge's ${PIECE_LABEL[k].toLowerCase()}, this post`}
+                value={hook.pieces?.[k] ?? ''}
+                placeholder={PIECE_HINT[k]}
+                onChange={(v) => {
+                  const pieces = { ...(hook.pieces ?? {}), [k]: v || undefined };
+                  for (const key of Object.keys(pieces) as (keyof typeof pieces)[]) if (!pieces[key]) delete pieces[key];
+                  edit({ pieces: Object.keys(pieces).length ? pieces : undefined });
+                }}
+              />
+            </FieldRow>
+          ))}
+          <p className="m-0 text-2xs text-muted leading-snug">Empty, a piece says what the series knows: its name and this post’s number, the map’s first and last stop, how long ago the trip was.</p>
         </div>
       </details>
 

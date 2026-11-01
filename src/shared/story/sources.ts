@@ -8,6 +8,7 @@ import type { WallRules } from './wall-pick';
 import { MAP_GROUND_DEFAULTS, type MapGround } from './map-ground';
 import type { StoryCamera } from './story-camera';
 import { ROUTE_PACE_DEFAULTS, type RoutePace } from './route-pace';
+import type { HookBadge } from './hook-badge';
 import type { TripDoc } from '../roadtrip/trip-types';
 import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
 import { chosenStages, stageLabel, type MapChoice } from './trip-map';
@@ -211,7 +212,7 @@ export function withPostHooks(
  */
 export function withLook(
   script: StoryScript,
-  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null; pace?: Partial<RoutePace> } | null,
+  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null; pace?: Partial<RoutePace>; hook?: HookBadge | null } | null,
 ): StoryScript {
   if (!change) {
     // Only what the Look section sets: the charte and the objects have their own resets.
@@ -222,6 +223,7 @@ export function withLook(
     delete kept.map;
     delete kept.camera;
     delete kept.pace;
+    delete kept.hook;
     const rest: StoryScript = { ...script, look: kept };
     if (!Object.keys(kept).length) delete rest.look;
     return rest;
@@ -235,6 +237,11 @@ export function withLook(
     // « As before » is the absence of a camera: a series that never chose keeps the old path.
     if (change.camera === null || (change.camera.preset ?? 'before') === 'before') delete look.camera;
     else look.camera = change.camera.preset === 'own' ? change.camera : { preset: change.camera.preset };
+  }
+  if (change.hook !== undefined) {
+    // The hook's look is written whole; empty (or null) is Or ciné in the stack, his default.
+    if (change.hook && Object.keys(change.hook).length) look.hook = change.hook;
+    else delete look.hook;
   }
   if (change.pace) {
     const pace: RoutePace = { ...(was.pace ?? {}), ...change.pace };

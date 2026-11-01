@@ -13,6 +13,7 @@ import type { Charte, StyleBook } from './objects';
 import type { MapGround } from './map-ground';
 import type { StoryCamera } from './story-camera';
 import type { RoutePace } from './route-pace';
+import type { HookBadge } from './hook-badge';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -31,6 +32,8 @@ export interface StoryLook {
   camera?: StoryCamera;
   /** How the route is drawn over its scene: by distance or by days, pauses at the stops, a head (`route-pace.ts`). */
   pace?: RoutePace;
+  /** How the hook is drawn: Trips' badge in a title style and a composition, or the typed lines of before (`hook-badge.ts`). */
+  hook?: HookBadge;
 }
 
 export interface BlockSpec {
@@ -56,6 +59,8 @@ export interface Episode {
   cover?: { line: string };
   /** The first seconds' words, over the first block, in place of the title opening (`hook.ts`). */
   hook?: Hook | null;
+  /** The trip's first counted day (ISO), when a counting knows it — what the hook's « why now » reads. */
+  since?: string;
   /** The language it is told in (`locale.ts`); absent = French. */
   lang?: Lang;
   /** The series' look: the wall's grid, the grain and the vignette (`story-script.ts`, `StoryLook`). */

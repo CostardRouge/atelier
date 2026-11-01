@@ -28,6 +28,8 @@ import StoryGallery from './StoryGallery';
  * loading in its fallback and never redraws, and an export must not.
  */
 const FACES = Object.values(STORY_FONTS).flatMap((f) => f.weights.map((w) => `${'italic' in f && f.italic ? 'italic ' : ''}${w} 40px ${f.family}`));
+// The hook's badge paints in Trips' title styles (`hook-badge.ts`): their faces are awaited with the series'.
+const BADGE_FACES = ['400 40px "Instrument Serif"', '400 40px VT323', '600 40px "Space Grotesk"', '700 40px "Space Grotesk"', '400 40px "JetBrains Mono"'];
 
 const BASE = '/storytelling';
 
@@ -86,7 +88,7 @@ export default function StorytellingTool() {
 
   useEffect(() => {
     let alive = true;
-    void Promise.all(FACES.map((f) => document.fonts.load(f)))
+    void Promise.all([...FACES, ...BADGE_FACES].map((f) => document.fonts.load(f)))
       .catch(() => undefined)
       .then(() => alive && setFontsReady(true));
     return () => {

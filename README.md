@@ -3073,6 +3073,17 @@ it and may grow blocks of its own.
   one post; the one selected plays and exports, so each can be exported and
   tested. *Promise* says what the post pays off, beside the hook. The wall
   under a hook shows its picture only. The words are kept in your script.
+  *Badge · the series* draws every hook as Trips' badge: a header (the
+  series' name and the post's number), the first line as the big text, the
+  second popping in, then the place (the map's first and last stop), why now
+  (« il y a un an ») and the camera — in Trips' title styles (Or ciné, Pixel
+  CRT, Rouge plein cadre, Neutral, every dial of Trips' Look tab) or the
+  series' charte, stacked bottom left, centred, split top and bottom or on a
+  band. *This post's badge pieces* rewrites any piece for one post; each piece
+  is an object of the Studio. *Export style…* writes the look as a
+  `.badge.json` that Trips, the Studio and Flight Atlas read too, and *Use a
+  trip's badge…* takes a trip's own. *As before* keeps the typed lines and the
+  sticker.
 - **Look.** The Look section sets the series' wall and texture, the same in
   every post: its columns, square pictures or a number of rows, the gap
   between pictures, their corners, a share of pictures twice as big, the order

@@ -21,6 +21,8 @@ import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
 import { setWall, setWallGrid } from './scenes/Hook';
 import { drawHook, hookTimeline } from './hook';
+import { hookBadgeOf } from './hook-badge';
+import { drawHookBadge } from './scenes/HookBadge';
 import { setLang } from './locale';
 import { applyCharte, beginFrame, obj, setSlot, setStyles } from './objects';
 import { CAPTION, HUD } from './charte';
@@ -145,7 +147,11 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   if (ep.hook) {
     const hook = ep.hook;
     const tl = hookTimeline(hook);
-    if (t <= tl.end) obj(c, 'hook', [540, 960], t, (lt) => drawHook(c, hook, lt));
+    if (t <= tl.end) {
+      // Trips' badge by default (`hook-badge.ts`); the typed lines and the sticker of before on request.
+      if (hookBadgeOf(ep.look?.hook).mode === 'badge') obj(c, 'hook', [540, 960], t, (lt) => drawHookBadge(c, ep, hook, tl, lt));
+      else obj(c, 'hook', [540, 960], t, (lt) => drawHook(c, hook, lt));
+    }
   }
   // The HUD waits for the opening: the title's slot, or the hook's last word.
   const hudFrom = ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0);

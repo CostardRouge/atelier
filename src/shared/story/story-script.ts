@@ -12,6 +12,7 @@
 import { readMapGround } from './map-ground';
 import { readStoryCamera } from './story-camera';
 import { readRoutePace } from './route-pace';
+import { readHookBadge } from './hook-badge';
 import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
@@ -347,7 +348,7 @@ export function parseScript(raw: unknown): ScriptParse {
   };
 }
 
-const HOOK_ENTRIES = ['type', 'rise', 'word', 'fade'];
+const HOOK_ENTRIES = ['type', 'rise', 'word', 'fade', 'wipe', 'slam'];
 const HOOK_EXITS = ['fade', 'erase', 'fly', 'cut'];
 const HOOK_PLACES = ['top', 'center', 'bottom'];
 const HOOK_INKS = ['paper', 'ink', 'accent'];
@@ -377,6 +378,7 @@ function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'ho
           ink: oneOf(h.ink, HOOK_INKS),
           scrim: num(h.scrim, 0, 1),
           sounds: { keys: sound(sounds.keys), impact: sound(sounds.impact), whoosh: sound(sounds.whoosh) },
+          pieces: readHookPieces(h.pieces),
         };
         // Absent fields stay absent: the defaults live in one place (`HOOK_DEFAULTS`).
         for (const k of Object.keys(hook) as (keyof Hook)[]) if (hook[k] === undefined) delete hook[k];
@@ -389,6 +391,17 @@ function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'ho
     ...(hooks.length && active !== undefined ? { hookActive: Math.round(active) } : {}),
     ...(typeof raw.promise === 'string' && raw.promise ? { promise: raw.promise } : {}),
   };
+}
+
+/** A hook's own piece texts, each a short line. */
+function readHookPieces(raw: unknown): Hook['pieces'] {
+  if (!isObject(raw)) return undefined;
+  const out: NonNullable<Hook['pieces']> = {};
+  for (const k of ['header', 'place', 'camera', 'why'] as const) {
+    const v = raw[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 120);
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** The hook a post plays: its active variant, else its first; null without one. */
@@ -493,7 +506,9 @@ function readLook(raw: unknown): StoryLook | undefined {
   const map = readMapGround(raw.map);
   const camera = readStoryCamera(raw.camera);
   const pace = readRoutePace(raw.pace);
+  const hook = readHookBadge(raw.hook);
   const look: StoryLook = {
+    ...(hook ? { hook } : {}),
     ...(pace ? { pace } : {}),
     ...(map ? { map } : {}),
     ...(camera ? { camera } : {}),
@@ -582,6 +597,11 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       (iso) => monthText(iso, lang),
     ),
     hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
+    ...(() => {
+      const f = mine?.facts ?? script?.facts;
+      const since = f?.stages?.[0]?.from ?? f?.tileDays?.[0];
+      return since ? { since } : {};
+    })(),
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
