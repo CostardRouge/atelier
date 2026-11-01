@@ -109,6 +109,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Storytelling: a map's route and stops can no longer drift off the land. They move, grow and turn with their map —
+  dragging the route moves the whole map — and an offset given to them alone before is dropped.
 - Sending exports to a Winnow with an app token no longer ends in « not allowed to do that » after the files arrived:
   an archive is not reconciled, and finals sent by an editor say that linking them needs an admin.
 - Exports keep their sound in browsers that cannot encode AAC (Chromium on Linux, for one): the voice, music, ticks

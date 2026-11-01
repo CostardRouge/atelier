@@ -8,6 +8,7 @@ import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
 import { H, W } from '../../shared/story/charte';
 import { drawEpisode } from '../../shared/story/compose';
+import { geometryKey } from '../../shared/story/objects';
 import { hookScore, hookSoundFor, hookSounds } from '../../shared/story/hook';
 import HookPanel, { type HookFiles } from './HookPanel';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
@@ -299,8 +300,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         if (compactRef.current) setInspectorOpen(true);
         const { script: sc, postId: pid, scope: sp } = studio.current;
         if (!sc) return false;
-        const style = sp === 'series' ? styleIn(sc, pid, hit.key, 'series') : { ...styleIn(sc, pid, hit.key, 'series'), ...styleIn(sc, pid, hit.key, 'post') };
-        dragState.current = { key: hit.key, dx: style.dx ?? 0, dy: style.dy ?? 0 };
+        // A part of a map (its route, its stops) moves the map, never itself (`geometryKey`).
+        const gk = geometryKey(hit.key);
+        const style = sp === 'series' ? styleIn(sc, pid, gk, 'series') : { ...styleIn(sc, pid, gk, 'series'), ...styleIn(sc, pid, gk, 'post') };
+        dragState.current = { key: gk, dx: style.dx ?? 0, dy: style.dy ?? 0 };
         return true;
       },
       onMove: (mx, my) => {
@@ -345,8 +348,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       const { script: sc, postId: pid, scope: sp } = studio.current;
       if (!move || sel?.kind !== 'object' || !sc) return;
       e.preventDefault();
-      const was = sp === 'series' ? styleIn(sc, pid, sel.key, 'series') : { ...styleIn(sc, pid, sel.key, 'series'), ...styleIn(sc, pid, sel.key, 'post') };
-      onScript(withStyle(sc, pid, sel.key, { dx: (was.dx ?? 0) + move[0] || undefined, dy: (was.dy ?? 0) + move[1] || undefined }, sp));
+      const gk = geometryKey(sel.key);
+      const was = sp === 'series' ? styleIn(sc, pid, gk, 'series') : { ...styleIn(sc, pid, gk, 'series'), ...styleIn(sc, pid, gk, 'post') };
+      onScript(withStyle(sc, pid, gk, { dx: (was.dx ?? 0) + move[0] || undefined, dy: (was.dy ?? 0) + move[1] || undefined }, sp));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

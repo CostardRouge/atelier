@@ -6,6 +6,7 @@ import {
   colorOf,
   currentStyle,
   drawnObjects,
+  geometryKey,
   hideObject,
   markText,
   obj,
@@ -110,6 +111,22 @@ describe('drawing an object', () => {
     expect(at).toBe(2);
     expect(calls).toEqual(['save', 'translate 10 0', 'translate 540 1000', 'rotate 1.571', 'scale 2', 'translate -540 -1000', 'restore']);
     expect(c.globalAlpha).toBe(0.5);
+  });
+
+  it('moves a map’s route with the map, about the map’s anchor, never on its own', () => {
+    setStyles({ 'map-holes.map': { dx: 30, scale: 2 }, 'map-holes.route': { dx: 99, opacity: 0.5 } }, null);
+    const { c, calls } = fakeCtx();
+    obj(c, 'map-holes.map', [540, 960], 1, () => {});
+    calls.length = 0;
+    obj(c, 'map-holes.polarsteps', [547, 967], 1, () => {});
+    expect(calls).toEqual(['save', 'translate 30 0', 'translate 540 960', 'scale 2', 'translate -540 -960', 'restore']);
+    calls.length = 0;
+    obj(c, 'map-holes.route', [540, 960], 1, () => {});
+    // Its own offset is ignored; its opacity is its own.
+    expect(calls[1]).toBe('translate 30 0');
+    expect(c.globalAlpha).toBe(0.5);
+    expect(geometryKey('map-camera.stops')).toBe('map-camera.coast');
+    expect(geometryKey('caption')).toBe('caption');
   });
 
   it('lets the post’s settings win over the series’', () => {
