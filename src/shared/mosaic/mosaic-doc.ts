@@ -70,7 +70,23 @@ export interface MosaicSettings {
   speed: number;
   /** The chain's picks and the reveal's origin — a replay and an export draw the same. */
   seed: number;
+  /** What a file is written at (M7): its short side, how its cells are counted, how many steps a film plays. */
+  export: MosaicExport;
 }
+
+/**
+ * An export's settings. `cells: 'pixels'` keeps a cell at `cellPx` OUTPUT pixels — a bigger file has more cells, not
+ * bigger ones (his D2); `'screen'` keeps the stage's cell count, so the file is the stage enlarged.
+ */
+export interface MosaicExport {
+  short: 720 | 1080 | 1440 | 2160;
+  cells: 'pixels' | 'screen';
+  /** The steps a film plays after its opening, for a recipe that does not play once. */
+  steps: number;
+}
+
+export const EXPORT_SHORTS = [720, 1080, 1440, 2160] as const;
+export const DEFAULT_EXPORT: MosaicExport = { short: 1080, cells: 'pixels', steps: 6 };
 
 /** One picture to come in the chain: drawn from the seed, or picked by the person. */
 export interface ChainEntry {
@@ -132,6 +148,7 @@ export const DEFAULT_SETTINGS: MosaicSettings = {
   motion: RECIPE_MOTIONS.mosaics,
   speed: 1,
   seed: 1,
+  export: DEFAULT_EXPORT,
 };
 
 const MODES: readonly MosaicMode[] = ['single', ...RECIPES, 'custom'];
@@ -165,6 +182,17 @@ export function sanitizeSettings(raw: unknown): MosaicSettings {
     motion,
     speed: num(r.speed, 0.4, 2.5, DEFAULT_SETTINGS.speed),
     seed: Math.round(num(r.seed, 1, 2147483647, DEFAULT_SETTINGS.seed)),
+    export: sanitizeExport(r.export),
+  };
+}
+
+/** An export's settings read back, each bounded; additive to v3, so no version is needed. */
+export function sanitizeExport(raw: unknown): MosaicExport {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    short: (EXPORT_SHORTS as readonly unknown[]).includes(r.short) ? (r.short as MosaicExport['short']) : DEFAULT_EXPORT.short,
+    cells: r.cells === 'screen' ? 'screen' : 'pixels',
+    steps: Math.round(num(r.steps, 1, 40, DEFAULT_EXPORT.steps)),
   };
 }
 

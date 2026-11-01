@@ -49,6 +49,8 @@ interface MosaicSettingsProps {
   onChoose: () => void;
   /** On a phone: the one part of the panel its drawer shows. */
   only?: SettingsTab;
+  /** The Export section's body (`MosaicExportPanel`), drawn last. */
+  exporting: ReactNode;
 }
 
 const ASPECT_TITLES: Record<AspectId, string> = {
@@ -80,15 +82,19 @@ const PROPAGATION_LABELS: Record<Propagation, string> = { rows: 'Top down', poin
 const ANIMATION_LABELS: Record<CellAnimation, string> = { appear: 'Appear', fade: 'Fade', flip: 'Flip', none: 'None' };
 const LOT_LABELS: Record<LotSize, string> = { 0: 'A row', 64: '64 cells', 256: '256 cells', 1024: '1 024 cells' };
 
-/** The parts of the panel a phone's bottom bar opens one at a time (`MosaicEditor`). */
+/**
+ * The parts of the panel a phone's bottom bar opens one at a time (`MosaicEditor`): `label` is the bar's cell, short
+ * enough for six of them (the shell's Library first) on a phone; `title` heads the drawer.
+ */
 export const SETTINGS_TABS = [
-  { id: 'target', label: 'Target' },
-  { id: 'cells', label: 'Cells' },
-  { id: 'motion', label: 'Motion' },
-  { id: 'perf', label: 'Performance' },
+  { id: 'target', label: 'Target', title: 'Target' },
+  { id: 'cells', label: 'Cells', title: 'Cells' },
+  { id: 'motion', label: 'Motion', title: 'Motion' },
+  { id: 'export', label: 'Export', title: 'Export' },
+  { id: 'perf', label: 'Device', title: 'Performance' },
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number]['id'];
-const FIRST_OF_TAB: Record<SettingsTab, string> = { target: 'mosaic-target', cells: 'mosaic-cells', motion: 'mosaic-motion', perf: 'mosaic-perf' };
+const FIRST_OF_TAB: Record<SettingsTab, string> = { target: 'mosaic-target', cells: 'mosaic-cells', motion: 'mosaic-motion', perf: 'mosaic-perf', export: 'mosaic-export' };
 
 const DEPART_LABELS: Record<Departure, string> = { dive: 'Dive in', pull: 'Pull back', alternate: 'Dive, then pull back', wave: 'Wave', fade: 'Fade', cut: 'Cut' };
 const ARRIVAL_LABELS: Record<Arrival, string> = { mosaic: 'Mosaic', photo: 'Photo', reveal: 'Reveal' };
@@ -96,7 +102,7 @@ const REVEAL_LABELS: Record<RevealDirection, string> = { toPhoto: 'To the photo'
 const SHARPNESS_LABELS: Record<Sharpness, string> = { early: 'Early', late: 'Late', never: 'Never' };
 const AIM_LABELS: Record<Aim, string> = { queue: 'The chain’s', best: 'Best match', random: 'Any' };
 
-export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose, only }: MosaicSettingsProps) {
+export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose, only, exporting }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   // A part set by hand: the motion bounded, the mode the recipe it still is — or custom.
   const setMotion = (patch: Partial<Motion>) =>
@@ -242,6 +248,7 @@ export default function MosaicSettings({ settings, update, view, setView, state,
         <SwitchRow label="Drift while the mosaic is held" checked={settings.motion.drift} onChange={(drift) => setMotion({ drift })} />
         <p className="m-0 font-mono text-2xs text-muted">{settings.mode === 'single' ? 'played by the modes under the stage' : settings.mode === 'custom' ? 'custom · the recipes are presets of these parts' : `recipe · ${settings.mode}`}</p>
       </>)}
+      {section('export', 'mosaic-export', 'Export', { remember: 'session', defaultOpen: false }, exporting)}
       {section('perf', 'mosaic-perf', 'Performance', { remember: 'local', defaultOpen: false }, <>
         <SelectField<string>
           label="Workers"

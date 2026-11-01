@@ -76,6 +76,11 @@ export const RECIPE_MOTIONS: Record<Recipe, Motion> = {
 /** A recipe plays once, not endlessly. */
 export const ONCE: ReadonlySet<Recipe> = new Set<Recipe>(['dezoom']);
 
+/** Whether a mode plays one step and stops (a pull-back), for a caller holding any mode's name. */
+export function playsOnce(mode: string): boolean {
+  return (ONCE as ReadonlySet<string>).has(mode);
+}
+
 const oneOf = <T>(v: unknown, all: readonly T[], fallback: T): T => ((all as readonly unknown[]).includes(v) ? (v as T) : fallback);
 const bounded = (v: unknown, [lo, hi]: readonly [number, number], fallback: number) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : fallback;
@@ -332,3 +337,15 @@ export const PHASE_WORDS: Record<StepPhase, string> = {
   after: 'the picture',
   back: 'back into its cells',
 };
+
+/**
+ * The parts of a FILM of this motion (M7), ms at `speed`: the opening on the picture already on screen, then
+ * `steps` steps, each with its own departure — one step for a recipe that plays once. What the export's panel says
+ * before anything is rendered, and the player's film walks.
+ */
+export function filmParts(motion: Motion, speed: number, steps: number, once = false): number[] {
+  const count = once ? 1 : Math.max(1, Math.round(steps));
+  const parts = [stepLength(motion, speed, departAt(motion, 0), true)];
+  for (let k = 0; k < count; k++) parts.push(stepLength(motion, speed, departAt(motion, k)));
+  return parts;
+}
