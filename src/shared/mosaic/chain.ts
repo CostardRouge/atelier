@@ -153,3 +153,50 @@ export function stepKind(direction: 'in' | 'out' | 'alternate', i: number): Chai
   if (direction === 'alternate') return i % 2 === 0 ? 'in' : 'out';
   return direction;
 }
+
+/**
+ * The order the REVEAL flips cells in: outward from a seeded origin, a
+ * little jitter so the front is not a perfect circle. Cells row-major.
+ */
+export function revealOrder(cols: number, rows: number, rnd: () => number): Int32Array {
+  const ox = rnd() * cols;
+  const oy = rnd() * rows;
+  const scored: { c: number; d: number }[] = [];
+  for (let c = 0; c < cols * rows; c++) {
+    const i = c % cols;
+    const j = (c - i) / cols;
+    scored.push({ c, d: Math.hypot(i + 0.5 - ox, j + 0.5 - oy) + rnd() * 1.5 });
+  }
+  scored.sort((a, b) => a.d - b.d || a.c - b.c);
+  return Int32Array.from(scored, (s) => s.c);
+}
+
+/** The reveal's phases: the mosaic held, the cells flipped, the picture held. */
+export const REVEAL_MS = { hold: 1100, reveal: 3200, after: 1800 } as const;
+
+/** How many cells are flipped at `t` ms into a reveal step, and whether the step is over. */
+export function revealAt(t: number, speed: number, count: number): { flipped: number; phase: 'hold' | 'reveal' | 'after'; done: boolean } {
+  const k = speedFactor(speed);
+  const hold = REVEAL_MS.hold / k;
+  const reveal = REVEAL_MS.reveal / k;
+  const after = REVEAL_MS.after / k;
+  if (t < hold) return { flipped: 0, phase: 'hold', done: false };
+  if (t < hold + reveal) return { flipped: Math.floor(ease((t - hold) / reveal) * count), phase: 'reveal', done: false };
+  return { flipped: count, phase: 'after', done: t >= hold + reveal + after };
+}
+
+/**
+ * The DRIFT's camera at `t` seconds: a slow Lissajous wander at mid zoom,
+ * where the eye hesitates between the pictures and the picture.
+ */
+export function driftCamera(t: number, W: number, H: number): Camera {
+  const s = 2.1 + 0.6 * Math.sin(t * 0.21);
+  return {
+    s,
+    vx: W / 2 + Math.sin(t * 0.17) * W * 0.22,
+    vy: H / 2 + Math.cos(t * 0.13) * H * 0.22,
+    target: 0,
+    focus: 0,
+    mosaic: true,
+  };
+}

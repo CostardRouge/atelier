@@ -1,7 +1,9 @@
 # Mosaic — a picture made of all the others
 
-**Status: decided (2026-10-31); M1–M3 built the same day, M4 and M5 on
-2026-11-01** (M5 `use-mosaic-scene.ts`, `mosaic-paint.ts`,
+**Status: decided (2026-10-31); M1–M3 built the same day, M4–M6 on
+2026-11-01** (M6 `mosaic-player.ts`, `scene-builder.ts`,
+`MosaicTransport.tsx`, the reveal and drift clocks in `chain.ts`; M5
+`use-mosaic-scene.ts`, `mosaic-paint.ts`,
 `match-client.ts`, `tile-bitmaps.ts`, `MosaicStage.tsx`,
 `MosaicSettings.tsx`, `use-mosaic-cover.ts`; M4 `MosaicPicker.tsx`,
 `mosaic-rows.ts`, `MosaicDoc.instance` and `withPictures`, the editor's
@@ -12,7 +14,7 @@ and `mosaic-store.ts`, the legal notice's line — Q2 answered yes, the tiles
 are kept; M3 the document's store, `mosaic-file.ts`, `MosaicGallery.tsx`,
 `MosaicEditor.tsx`'s frame, `MosaicTool.tsx`, the registry entry as an
 `editor` under `wip` — Q1 by recommendation —, the README and `llms.txt`),
-M6–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
+M7–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
 §8 the questions still his. Lab (French,
 synthetic pictures, six modes playable):
 <https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi>. §1 is fact, read in

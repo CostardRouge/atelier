@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_MS, cameraAt, cellRect, ease, focusAlpha, logZoom, stepKind, stepLength, stepStateAt } from './chain';
+import { mulberry32 } from '../lib/prng';
+import { BASE_MS, cameraAt, cellRect, driftCamera, ease, focusAlpha, logZoom, revealAt, revealOrder, stepKind, stepLength, stepStateAt } from './chain';
 
 describe('stepStateAt', () => {
   it('walks hold → dissolve → zoom at speed ×1', () => {
@@ -96,5 +97,34 @@ describe('stepKind', () => {
   it('alternates in and out, or keeps one direction', () => {
     expect([0, 1, 2, 3].map((i) => stepKind('alternate', i))).toEqual(['in', 'out', 'in', 'out']);
     expect([0, 1].map((i) => stepKind('out', i))).toEqual(['out', 'out']);
+  });
+});
+
+describe('revealOrder, revealAt, driftCamera', () => {
+  it('orders every cell once, outward from a seeded origin, the same for one seed', () => {
+    const a = revealOrder(6, 4, mulberry32(9));
+    const b = revealOrder(6, 4, mulberry32(9));
+    expect(Array.from(a)).toEqual(Array.from(b));
+    expect(new Set(a).size).toBe(24);
+    expect(Array.from(revealOrder(6, 4, mulberry32(10)))).not.toEqual(Array.from(a));
+  });
+
+  it('flips nothing in the hold, everything by the end, and ends after the picture is held', () => {
+    expect(revealAt(0, 1, 100)).toEqual({ flipped: 0, phase: 'hold', done: false });
+    expect(revealAt(1100 + 1600, 1, 100).flipped).toBe(50);
+    expect(revealAt(1100 + 3200, 1, 100)).toEqual({ flipped: 100, phase: 'after', done: false });
+    expect(revealAt(1100 + 3200 + 1800, 1, 100).done).toBe(true);
+    expect(revealAt((1100 + 3200 + 1800) / 2, 2, 100).done).toBe(true);
+  });
+
+  it('drifts inside the mosaic at mid zoom', () => {
+    for (const t of [0, 3, 17, 60]) {
+      const c = driftCamera(t, 960, 540);
+      expect(c.s).toBeGreaterThan(1.4);
+      expect(c.s).toBeLessThan(2.8);
+      expect(c.vx).toBeGreaterThan(960 * 0.2);
+      expect(c.vx).toBeLessThan(960 * 0.8);
+      expect(c.mosaic).toBe(true);
+    }
   });
 });

@@ -3112,9 +3112,9 @@ reloads on every save.
 
 *Work in progress* — the home page and the tool menu say so with a badge. What
 exists: mosaics, their gallery and their file, the door to a Winnow's
-pictures with the measuring of their colours, and the stage in its still
-mode. The animated modes, the exports and keeping a mosaic on a Winnow come
-next (`docs/mosaic.md`).
+pictures with the measuring of their colours, the stage and the animated
+modes. The exports and keeping a mosaic on a Winnow come next
+(`docs/mosaic.md`).
 
 The photo-mosaic screen saver macOS once had, over your own pictures: one
 picture rebuilt out of hundreds of others, each cell a photo whose colours
@@ -3163,6 +3163,20 @@ a small one is matched on the spot, a big one in the background, the
 previous mosaic staying on screen meanwhile. Click a cell to make its
 picture the target, or *Draw a target*. The gallery card's cover is the
 mosaic as the stage last painted it.
+
+**The modes.** Under the stage: *Still* is the mosaic as above. *Pull back*
+plays once what the screen saver did — the picture pulls back and turns out
+to be one cell of another, which then appears whole. *Chain* never ends:
+*Dive in* dissolves the picture into its cells and dives into one until its
+picture fills the screen and becomes the next; *Pull out* is the pull-back
+repeated; *Both* alternates. *Reveal* flips the cells one by one into the
+real picture from a point; *Drift* wanders over the mosaic at mid zoom.
+Each step prepares the next picture while it plays, so a chain of thousands
+never asks you to wait; the picks come from the mosaic's own seed, so Play
+twice shows the same chain. Play and Stop on Space, Escape stops; whatever
+is on screen when a run stops is the target now. *Screen* takes the stage
+to the whole screen — a Mac left open on Atelier is the screen saver.
+*Speed* is in the dials.
 
 ## Telemetry tool
 

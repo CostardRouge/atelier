@@ -170,7 +170,7 @@ export const TOOLS: Tool[] = [
     Component: MosaicTool,
     preload: LOAD.mosaic,
     wip: {
-      note: 'Its mosaics, their gallery, their file, the door to a Winnow’s pictures and the still stage exist; the animated modes and the exports come next.',
+      note: 'Its mosaics, their gallery, their file, the door to a Winnow’s pictures, the stage and the animated modes exist; the exports and keeping a mosaic on a Winnow come next.',
     },
     accepts: [],
   },

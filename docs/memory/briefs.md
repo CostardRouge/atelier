@@ -296,7 +296,8 @@ anything about media sources or document storage:
 - **`docs/mosaic.md`** — the Mosaic instrument (2026-10-31, decided; M1 the
   pure core, M2 the measuring pool and stores, M3 the document, its file,
   gallery and shell built the same day, M4 the picker door and the
-  measuring run and M5 the stage in Single mode on 2026-11-01, M6–M9 next; the rules it fixed in
+  measuring run, M5 the stage in Single mode and M6 the animated modes on
+  2026-11-01, M7–M9 next; the rules it fixed in
   `mosaic.md`): macOS's « Mosaic » screen saver over his Winnow — a picture whose
   every cell is another picture. §1 is fact (`thumb-metrics.ts` measures one
   mean colour on the main thread, the picker's span, the atlas's document

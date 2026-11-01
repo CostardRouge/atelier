@@ -18,6 +18,10 @@ interface MosaicStageProps {
   dpr: number;
   /** A cell was clicked: the picture index it shows. */
   onPick: (pictureIndex: number) => void;
+  /** The player draws the frames: the stage keeps its hands off the canvas. */
+  playing?: boolean;
+  /** The canvas, for the player to draw into. */
+  canvasOut?: (el: HTMLCanvasElement | null) => void;
 }
 
 /**
@@ -26,14 +30,19 @@ interface MosaicStageProps {
  * makes its picture the target. While a build runs, the previous mosaic
  * stays and the word says what is being done.
  */
-export default function MosaicStage({ state, view, stageW, stageH, dpr, onPick }: MosaicStageProps) {
+export default function MosaicStage({ state, view, stageW, stageH, dpr, onPick, playing = false, canvasOut }: MosaicStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const scene = state.status === 'ready' ? state.scene : state.status === 'building' || state.status === 'failed' ? state.previous : null;
 
   useEffect(() => {
+    canvasOut?.(canvasRef.current);
+    return () => canvasOut?.(null);
+  }, [canvasOut]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || playing) return;
     const w = Math.max(1, Math.round(stageW * dpr));
     const h = Math.max(1, Math.round(stageH * dpr));
     if (canvas.width !== w || canvas.height !== h) {
@@ -61,7 +70,7 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, onPick }
       ctx.strokeRect(i * cw + 1, j * ch + 1, cw - 2, ch - 2);
       ctx.restore();
     }
-  }, [scene, view.ghost, view.grid, stageW, stageH, dpr, hover]);
+  }, [scene, view.ghost, view.grid, stageW, stageH, dpr, hover, playing]);
 
   const cellAt = (e: React.MouseEvent<HTMLCanvasElement>): number | null => {
     if (!scene) return null;
@@ -74,8 +83,9 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, onPick }
     return j * cols + i;
   };
 
-  const word =
-    state.status === 'building'
+  const word = playing
+    ? null
+    : state.status === 'building'
       ? { target: 'fetching the picture…', matching: 'matching…', tiles: 'gathering the tiles…', painting: 'painting…' }[state.step]
       : state.status === 'failed'
         ? state.error
@@ -86,10 +96,11 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, onPick }
       <canvas
         ref={canvasRef}
         aria-label="Mosaic"
-        className={`block w-full h-full ${scene ? 'cursor-crosshair' : ''}`}
-        onMouseMove={(e) => setHover(cellAt(e))}
+        className={`block w-full h-full ${scene && !playing ? 'cursor-crosshair' : ''}`}
+        onMouseMove={(e) => setHover(playing ? null : cellAt(e))}
         onMouseLeave={() => setHover(null)}
         onClick={(e) => {
+          if (playing) return;
           const c = cellAt(e);
           if (c === null || !scene) return;
           const index = scene.matching.ids[c];

@@ -117,6 +117,32 @@ cells matched in 6 ms here, a click retargeting (one proxy fetched each),
 Zones + 12 px → 58 × 58 cells matched in 65 ms in the background, the ghost
 changing the pixels, the poster written, no overflow at 390 px.
 
+## The player prepares a step ahead, and a Stop keeps what is seen (2026-11-01, M6)
+
+`mosaic-player.ts` plays the animated modes over `scene-builder.ts` (the
+Single stage's pipeline extracted so the player shares its caches: targets,
+tiles, memoised descriptors, the library in OKLab). **Rules**: the moment a
+step starts, the NEXT step is prepared (its picture picked from the seed,
+its proxy fetched, its scene built — a pull-back's scene is the next
+picture's with the current one FORCED into a cell) while the current one
+plays, and a step that ends first waits on its last frame («waiting for the
+next picture»); every frame is `cameraAt` of the time since the step began
+(nothing accumulates); the player draws into the stage's canvas and the
+stage keeps its hands off while `playing`; a mode or a dial changed under a
+run stops it. **The picture on screen is the target when a run ends**
+(Stop, Escape, Space, a pull-back once done): the editor writes
+`player.current` to the document on the playing → stopped edge, and a
+pull-back says `current = next` from its resolve on, so a Stop during the
+hold keeps the picture seen. Space plays and stops (the transport's key),
+Escape stops; the Screen button is the browser's fullscreen on the stage's
+box (`[&:fullscreen]:` arbitrary variants — Tailwind has no `fullscreen:`).
+**Trap**: React's development double-mount disposes a memoised builder once
+before using it — the tile cache is made lazily (`tileCache()`), never in
+the constructor. Driven headless: Chain dive (frames change, step 2 after
+~8 s, Escape writes the target), Chain pull out (Space, the target is the
+picture seen), Pull back once (ends by itself, the target written), Reveal
+and Drift (frames change), fullscreen granted.
+
 ## The chain is a clock, the picks are seeded (2026-10-31, M1)
 
 `chain.ts` gives a step's phase and camera as a FUNCTION of the time since

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../../app/use-hash-route';
 import {
   cleanMosaicTitle,
@@ -22,6 +22,8 @@ import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
 import MosaicSettings from './MosaicSettings';
 import MosaicStage, { type StageView } from './MosaicStage';
+import MosaicTransport from './MosaicTransport';
+import { MosaicPlayer, type PlayerStatus } from './mosaic-player';
 import { pictureCountLine } from './MosaicGallery';
 import { useMosaicCover } from './use-mosaic-cover';
 import { randomTarget, useMosaicScene } from './use-mosaic-scene';
@@ -68,15 +70,104 @@ function MosaicWorkbench({
   // The widest 16:9 the room holds, never taller than it.
   const stageW = Math.floor(Math.min(room.width, (room.height || Infinity) * (16 / 9)));
   const stageH = Math.floor(stageW * (9 / 16));
-  const state = useMosaicScene({ doc, client, stageW, stageH, dpr });
+  const { state, builder } = useMosaicScene({ doc, client, stageW, stageH, dpr });
   useMosaicCover(doc.id, state);
   const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
+
+  // --- the player: the animated modes over the builder's scenes ---
+  const player = useMemo(() => (builder ? new MosaicPlayer(builder) : null), [builder]);
+  const [status, setStatus] = useState<PlayerStatus>({ playing: false, current: -1, stepIndex: 0, phase: '', waiting: false, error: null });
+  useEffect(() => {
+    if (!player) return;
+    const unsubscribe = player.subscribe(setStatus);
+    return () => {
+      unsubscribe();
+      player.stop();
+    };
+  }, [player]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasOut = useCallback((el: HTMLCanvasElement | null) => {
+    canvasRef.current = el;
+  }, []);
+  useEffect(() => {
+    player?.attach(canvasRef.current, { stageW, stageH, dpr });
+  }, [player, stageW, stageH, dpr, status.playing]);
+
+  const { mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours } = doc.settings;
+  const play = useCallback(() => {
+    if (!player || mode === 'single' || doc.target === undefined || player.playing) return;
+    player.attach(canvasRef.current, { stageW, stageH, dpr });
+    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid });
+  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, view.grid, stageW, stageH, dpr]);
+  const stop = useCallback(() => player?.stop(), [player]);
+  // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now.
+  const wasPlaying = useRef(false);
+  useEffect(() => {
+    if (wasPlaying.current && !status.playing && status.current >= 0 && status.current !== doc.target) setTarget(status.current);
+    wasPlaying.current = status.playing;
+  }, [status.playing, status.current, doc.target, setTarget]);
+  // A mode or a dial changed under a running player: the run stops, the next Play takes them.
+  const dialsKey = `${mode}|${direction}|${cellPx}|${level}|${space}|${tint}|${distinctNeighbours}`;
+  const lastDials = useRef(dialsKey);
+  useEffect(() => {
+    if (lastDials.current === dialsKey) return;
+    lastDials.current = dialsKey;
+    player?.stop();
+  }, [dialsKey, player]);
+
+  // Space plays and stops (the transport's key); Escape stops.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === 'Escape' && status.playing) {
+        e.preventDefault();
+        stop();
+      } else if (e.key === ' ' && mode !== 'single') {
+        e.preventDefault();
+        if (status.playing) stop();
+        else play();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [status.playing, mode, play, stop]);
+
+  const fullscreen = useCallback(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void el.requestFullscreen?.().catch(() => undefined);
+  }, [boxRef]);
+
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
-      <div ref={boxRef} className="min-h-[200px] flex-1 @min-[860px]:flex-none min-w-0 flex items-start justify-center">
-        <div style={{ width: stageW || undefined, height: stageH || undefined }}>
-          <MosaicStage state={state} view={view} stageW={stageW} stageH={stageH} dpr={dpr} onPick={(index) => state.status === 'ready' && setTarget(state.scene.tiles[index].id)} />
+      <div className="min-h-0 min-w-0 flex flex-col gap-3">
+        <div ref={boxRef} className="min-h-[200px] flex-1 min-w-0 flex items-start justify-center [&:fullscreen]:items-center [&:fullscreen]:bg-frame">
+          <div style={{ width: stageW || undefined, height: stageH || undefined }}>
+            <MosaicStage
+              state={state}
+              view={view}
+              stageW={stageW}
+              stageH={stageH}
+              dpr={dpr}
+              playing={status.playing}
+              canvasOut={canvasOut}
+              onPick={(index) => state.status === 'ready' && setTarget(state.scene.tiles[index].id)}
+            />
+          </div>
         </div>
+        <MosaicTransport
+          mode={mode}
+          direction={direction}
+          setMode={(m) => update((s) => ({ ...s, mode: m }))}
+          setDirection={(d) => update((s) => ({ ...s, direction: d }))}
+          status={status}
+          canPlay={Boolean(player) && doc.target !== undefined && state.status !== 'idle'}
+          onPlay={play}
+          onStop={stop}
+          onFullscreen={fullscreen}
+        />
       </div>
       <aside className="min-h-0 overflow-auto" aria-label="Mosaic settings">
         <MosaicSettings settings={doc.settings} update={update} view={view} setView={setView} state={state} />

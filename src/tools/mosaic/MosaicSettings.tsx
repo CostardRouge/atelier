@@ -74,6 +74,18 @@ export default function MosaicSettings({ settings, update, view, setView, state 
         />
         <SliderRow label="Ghost" name="ghost" value={Math.round(view.ghost * 100)} min={0} max={100} step={1} reset={0} format={(v) => `${v} %`} onChange={(v) => setView((x) => ({ ...x, ghost: v / 100 }))} />
         <SwitchRow label="Show the cells" checked={view.grid} onChange={(v) => setView((x) => ({ ...x, grid: v }))} />
+        <SliderRow
+          label="Speed"
+          name="speed"
+          value={Math.round(settings.speed * 10)}
+          min={4}
+          max={25}
+          step={1}
+          reset={10}
+          format={(v) => `×${(v / 10).toFixed(1)}`}
+          onChange={(v) => update((s) => ({ ...s, speed: v / 10 }))}
+          hint={<p>How fast the animated modes move: a dive lasts 3.8 s at ×1.</p>}
+        />
         {scene && (
           <p className="m-0 font-mono text-2xs text-muted tabular-nums">
             {scene.shape.cols} × {scene.shape.rows} cells · matched in {Math.round(scene.matchMs)} ms {scene.on === 'worker' ? 'in the background' : 'here'}
