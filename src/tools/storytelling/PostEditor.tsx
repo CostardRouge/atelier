@@ -23,6 +23,8 @@ import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transpor
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
+import { useMapGround } from './use-map-ground';
+import MapGroundControls, { MapGroundChip } from './MapGroundControls';
 import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -86,6 +88,8 @@ export interface PostSound {
   /** The hook's sounds that are files of the author's own (`HookPanel`). */
   hookFiles?: HookFiles;
 }
+/** The blocks that draw a map — the ground's chip shows over them. */
+const MAP_BLOCKS = new Set(['map-camera', 'map-holes', 'journey-impossible']);
 const NO_SOUND: PostSound = { voice: null, music: null, effects: [] };
 
 const EFFECT_SOURCES: readonly SelectOption<VoiceName | 'file'>[] = [
@@ -176,14 +180,20 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     factsOf(script, postId)?.tiles,
     connections.find((c) => c.id === wallSource) ?? null,
   );
+  const mapStops = tripMap.state === 'ready' && tripMap.map ? tripMap.map.stops : script?.stops;
+  const mapRoad = tripMap.state === 'ready' && tripMap.map ? tripMap.map.road : null;
+  // What the maps are drawn over: the tiles, once fetched for this route (`use-map-ground.ts`).
+  const mapGround = useMapGround(script?.look?.map, mapStops, mapRoad);
+  const groundLayers = mapGround.ground.state === 'ready' ? mapGround.ground.layers : null;
   const mapOpts = useMemo<ComposeOptions>(
     () => ({
       ...(tripMap.state === 'ready' && tripMap.map
         ? { stops: tripMap.map.stops, road: tripMap.map.road }
         : { stops: script?.stops }),
       wall: wall.images,
+      ground: groundLayers,
     }),
-    [tripMap, script, wall.images],
+    [tripMap, script, wall.images, groundLayers],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
@@ -541,6 +551,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         ? await renderBed(fx.score, total, { leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE), clips })
         : null;
       let skipped: string | null = heard && !audio ? 'the browser did not render the sound in time' : null;
+      // The map's tiles, when the series draws over them: every frame of the file has them, or none does.
+      const ground = await mapGround.ready();
+      const frameOpts: ComposeOptions = { ...mapOpts, ground };
       const canvas = document.createElement('canvas');
       canvas.width = W;
       canvas.height = H;
@@ -555,7 +568,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           skipped = reason;
         },
         draw: (sec) => {
-          drawEpisode(ctx, shown, Math.min(sec, total - 0.001), mapOpts);
+          drawEpisode(ctx, shown, Math.min(sec, total - 0.001), frameOpts);
           return canvas;
         },
         onProgress: (p) => {
@@ -588,6 +601,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   };
 
 
+  // While a map is on the stage, its ground can be chosen where it is seen.
+  const mapSpans = useMemo(() => scenes.filter((sc) => MAP_BLOCKS.has(sc.block)).map((sc) => [sc.a, sc.b] as const), [scenes]);
+  const groundChip =
+    script && mapSpans.length && exporting === null ? <MapGroundChip clock={clock} spans={mapSpans} script={script} onScript={onScript} state={mapGround.ground} /> : null;
+
   const archiveFolder = `Storytelling/${script?.series || `Season ${skeleton.season}`}/${episode.number}`;
 
   // --- the Studio's inspector: one panel at a time ----------------------------
@@ -602,6 +620,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           <InspectorSection id="story-look" title="Look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
             <LookPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
+          {script ? (
+            <InspectorSection id="story-map-ground" title="Maps" foldable={false} info="What every map of the series is drawn over: the coastline shipped with Atelier, no land at all, or OpenStreetMap's tiles — fetched only once this device says yes, and credited on the map's frames alone.">
+              <MapGroundControls script={script} onScript={onScript} state={mapGround.ground} />
+            </InspectorSection>
+          ) : null}
           </>
         );
       case 'script':
@@ -963,6 +986,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             drag={drag}
             label={`${episode.number} ${episode.title}`}
           />
+          {groundChip}
         </div>
         <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={transportTrailing} />
         <PanelHost
@@ -1009,6 +1033,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               drag={drag}
               label={`${episode.number} ${episode.title}`}
             />
+            {groundChip}
           </div>
           <StoryTransport
             clock={clock}

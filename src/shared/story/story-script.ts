@@ -9,6 +9,7 @@
  * a script a post still plays, every caption a placeholder, so the shape can
  * be judged and nothing personal ships with the code. (pure)
  */
+import { readMapGround } from './map-ground';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
 import type { Episode, StoryLook } from './episode';
@@ -476,7 +477,9 @@ function readLook(raw: unknown): StoryLook | undefined {
   const objects = readStyleBook(raw.objects);
   const vignette = level(raw.vignette, 0.8);
   const grain = level(raw.grain, 0.2);
+  const map = readMapGround(raw.map);
   const look: StoryLook = {
+    ...(map ? { map } : {}),
     ...(wall ? { wall } : {}),
     ...(charte ? { charte } : {}),
     ...(objects ? { objects } : {}),

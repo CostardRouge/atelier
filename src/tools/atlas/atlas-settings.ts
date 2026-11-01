@@ -24,12 +24,13 @@ import type { SafeMode } from './atlas-safe';
 import { PIECES, sanitizePlace, type FreePlace, type PieceId } from './atlas-place';
 import { DIVE_FROMS, INTRO_DEFAULTS, INTRO_LENGTH, LINE_SIZE, OUTRO_DEFAULTS, PIN_SIZE, STATS_SIZE, TEXT_SIZE, type IntroSettings, type OutroSettings } from './atlas-story';
 import { themeFromPreset, TITLE_STYLE_PRESETS, type StyleTheme, type TitleStyle } from '../../shared/overlay/title-styles';
+import type { TileTone } from '../../shared/map/tile-tone';
 import { CURATED_FONTS, type FontWeight, type LegibilityStyle, type OverlayFontFamily } from '../../shared/overlay/overlay-types';
 
 export type ColourBy = 'single' | 'flight' | 'altitude' | 'speed' | 'date' | 'hour' | 'place';
 export type LandMode = 'off' | 'fill' | 'outline';
 export type GridMode = 'off' | 'lines' | 'dots';
-export type TileTone = 'night' | 'grey' | 'natural' | 'sepia';
+export type { TileTone } from '../../shared/map/tile-tone';
 export type CameraFrame = 'world' | 'all' | 'place' | 'zone' | 'follow' | 'free';
 export type ClockMode = 'auto' | 'off' | 'time' | 'date' | 'datetime' | 'elapsed';
 /** Where a piece of the overlay sits: a corner or the middle of the top or bottom edge. */

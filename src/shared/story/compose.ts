@@ -14,6 +14,7 @@ import { drawCaption } from './caption';
 import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
+import { setGround, type GroundLayer } from './map-ground';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
 import { setWall, setWallGrid } from './scenes/Hook';
@@ -29,6 +30,8 @@ export interface ComposeOptions {
   road?: RoadPoints | null;
   /** The wall's pictures, square, in day order (`wall-cache.ts`); without them its tiles are colours. */
   wall?: readonly (CanvasImageSource | null)[] | null;
+  /** The map ground's rasters, when the series draws its maps over tiles (`map-ground.ts`); without them, the outline. */
+  ground?: readonly GroundLayer[] | null;
   /** Leave the grain and vignette out — a still for a list, say. */
   bare?: boolean;
   /**
@@ -102,6 +105,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   beginFrame();
   setMap(opts.stops ?? null, opts.road ?? null);
   setWall(opts.wall ?? null);
+  setGround(ep.look?.map, opts.ground ?? null);
   setWallGrid(ep.look?.wall, ep.wallGroups);
   setTexture(ep.look);
   const slots = slotsOf(ep);

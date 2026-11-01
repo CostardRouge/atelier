@@ -6,7 +6,7 @@ import { appear, clamp, E, enter, font, K, PAL, rr, text, TYPO, type Ctx } from 
 import { proj, STOPS } from "../geo";
 import { word } from "../locale";
 import { obj } from "../objects";
-import { drawCoast } from "../scenes/MapScene";
+import { drawCoast, drawMapCredit } from "../scenes/MapScene";
 
 export const MAP_DY = -80; // the whole map lifted so Tasmania stays above the caption zone
 
@@ -55,6 +55,7 @@ register("journey-impossible", (c, lt, p) => {
   }, 2.0);
   obj(c, "journey-impossible.to", [B[0], B[1]], lt, (lt) => appear(c, enter(lt, 2.8, 1), () => dot(c, B[0], B[1], `${to} · 09:41`, B[0] < 700), 12), 2.8);
   c.restore();
+  drawMapCredit(c, lt);
   obj(c, "journey-impossible.distance", [260, 1140], lt, (lt) => appear(c, enter(lt, 3.1, 1), () => text(c, `${km} km · 1 minute`, 90, 1150, 30, PAL.dim, { fam: TYPO.mono, w: 400 }), 8), 3.1);
   obj(c, "journey-impossible.flag", [200, 1204], lt, (lt) => appear(c, enter(lt, 3.8, 1), () => {
     const s = word("wrongClock");

@@ -53,6 +53,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   order, picked pictures, stars, edits, people and sharpness. *Correct the wall…* shows what the rules chose and why:
   remove a picture and the next under the same rules takes its place, pin one so it stays whatever the rules, or swap
   it for another of its day. Your corrections are kept in the script, apart from the rules.
+- Storytelling: choose what the series' maps are drawn over — the coastline shipped with Atelier, no land at all, or
+  OpenStreetMap's streets and terrain, greyed, natural, sepia or night like Flight Atlas's ground, and how strongly they
+  show. Set it under Charte & look › Maps or from the chip on the stage while a map is shown. The tiles are fetched only
+  once this device says yes, and their credit appears on the map's frames alone, as an object you can move, size and
+  set in another face.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
   HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
   size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every
