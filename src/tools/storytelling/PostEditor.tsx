@@ -36,6 +36,9 @@ import ObjectPanel from './ObjectPanel';
 import StoryStage, { type StageDrag } from './StoryStage';
 import StoryTransport from './StoryTransport';
 import GuidesMenu, { storyGuides } from './GuidesMenu';
+import StoryShortcuts from './StoryShortcuts';
+import IconButton from '../../shared/ui/IconButton';
+import { Icons } from '../../shared/ui/icons';
 import { useStoryPlayback, type TimedBuffer } from './use-story-playback';
 import { useEditorMode, type Pane } from './use-editor-mode';
 import { useSettled } from './use-settled';
@@ -312,6 +315,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     [onScript],
   );
 
+  // Every key and gesture of the Studio, as a sheet (`StoryShortcuts`).
+  const [keysOpen, setKeysOpen] = useState(false);
   // The keyboard on the selected object: arrows nudge it (⇧ ten pixels), Escape lets it go — unless a field,
   // a slider or a select has the key (`transport-keys.ts`), or a control already took the press.
   useEffect(() => {
@@ -319,6 +324,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const target = describeKeyTarget(e.target);
       if (targetOwnsTyping(target) || target?.role === 'slider') return;
+      if ((e.key === 'h' || e.key === 'H' || e.key === '?') && !e.repeat) {
+        // The same key closes it (Develop's rule): a sheet opened by a letter is closed by it.
+        setKeysOpen((was) => !was);
+        e.preventDefault();
+        return;
+      }
       const sel = selectedRef.current;
       if (e.key === 'Escape' && sel?.kind === 'object') {
         setSelected({ kind: 'panel', id: 'charte' });
@@ -779,6 +790,15 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   };
   const panel = 'border border-line rounded-paper-lg bg-surface shadow-paper-soft';
 
+  const transportTrailing = (
+    <>
+      <GuidesMenu guides={guides} onGuides={setGuides} />
+      <IconButton label="Keys and gestures (H)" size="sm" onClick={() => setKeysOpen(true)}>
+        {Icons.keyboard}
+      </IconButton>
+    </>
+  );
+  const keysSheet = keysOpen ? <StoryShortcuts onClose={() => setKeysOpen(false)} /> : null;
   const postSelect = (
     <SelectField label="Post" value={skeleton.id} options={postOptions} onChange={choose} />
   );
@@ -799,6 +819,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             { id: 'hook', label: 'Hook', rule: true, onSelect: () => openPanel('hook') },
             { id: 'sound', label: 'Sound & effects', onSelect: () => openPanel('sound') },
             { id: 'export', label: 'Export & archive', onSelect: () => openPanel('export') },
+            { id: 'keys', label: 'Keys and gestures', rule: true, onSelect: () => setKeysOpen(true) },
           ]}
         />
         <div className="relative flex-1 min-h-[10rem] flex rounded-paper-lg bg-frame border border-line p-1.5">
@@ -813,7 +834,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             label={`${episode.number} ${episode.title}`}
           />
         </div>
-        <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={<GuidesMenu guides={guides} onGuides={setGuides} />} />
+        <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={transportTrailing} />
         <PanelHost
           asSheet
           compactAs={pane === 'list' ? 'sheet' : 'drawer'}
@@ -823,6 +844,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         >
           <div className="px-1 pb-4 overflow-x-hidden">{body}</div>
         </PanelHost>
+        {keysSheet}
       </section>
     );
   }
@@ -861,7 +883,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           <StoryTransport
             clock={clock}
             disabled={!fontsReady || exporting !== null}
-            trailing={<GuidesMenu guides={guides} onGuides={setGuides} />}
+            trailing={transportTrailing}
           />
           {mode !== 'narrow' ? <div className={`${panel} flex-none max-h-[12.5rem] overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2`}>{timeline}</div> : null}
         </div>
@@ -877,6 +899,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           </div>
         </aside>
       </div>
+      {keysSheet}
     </section>
   );
 }
