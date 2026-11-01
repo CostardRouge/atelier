@@ -81,6 +81,12 @@ export interface AnchoredPopoverProps {
   label?: string;
   /** The panel's own size and padding; the menu's are the default. */
   className?: string;
+  /**
+   * The box the panel is placed in, in viewport coordinates — the screen when
+   * absent or null. The font picker keeps itself to the inspector it opened
+   * from, so it never covers the picture it previews on (`FontPicker.tsx`).
+   */
+  room?: () => AnchorRect | null;
   children: ReactNode;
 }
 
@@ -101,12 +107,13 @@ export function AnchoredPopover({
   role = 'menu',
   label,
   className = 'min-w-[12rem] p-1.5',
+  room,
   children,
 }: AnchoredPopoverProps) {
   const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const latest = useRef({ onClose, anchorRect });
-  latest.current = { onClose, anchorRect };
+  const latest = useRef({ onClose, anchorRect, room });
+  latest.current = { onClose, anchorRect, room };
 
   useEffect(() => {
     const close = (e: PointerEvent) => {
@@ -137,17 +144,18 @@ export function AnchoredPopover({
     const rect = latest.current.anchorRect();
     const el = menuRef.current;
     if (!rect || !el) return;
-    setAnchor(
-      menuAnchor({
-        trigger: rect,
-        // `scrollHeight` stays the menu's natural height once `maxHeight`
-        // clamps it, so re-placing cannot chase its own output.
-        menu: { width: el.offsetWidth, height: el.scrollHeight },
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-        side,
-        align,
-      }),
-    );
+    // The box it is placed in: the caller's, else the screen. `menuAnchor` works from a (0, 0) origin.
+    const box = latest.current.room?.() ?? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const placed = menuAnchor({
+      trigger: { left: rect.left - box.left, right: rect.right - box.left, top: rect.top - box.top, bottom: rect.bottom - box.top },
+      // `scrollHeight` stays the menu's natural height once `maxHeight`
+      // clamps it, so re-placing cannot chase its own output.
+      menu: { width: el.offsetWidth, height: el.scrollHeight },
+      viewport: { width: box.right - box.left, height: box.bottom - box.top },
+      side,
+      align,
+    });
+    setAnchor({ ...placed, left: placed.left + box.left, top: placed.top + box.top });
   }, [side, align]);
 
   // A fixed menu is attached to an anchor that travels: the gallery under it
