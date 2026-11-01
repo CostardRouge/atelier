@@ -53,7 +53,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every
   post of the series or this post alone. A timeline under the stage shows the scenes, the hook, the captions and the
   HUD on one clock: click a bar to select it, drag a scene's end or a caption's edges to time them in this post. Click an
-  object on the stage to select it — it is outlined — and drag it to move it. Twelve faces
+  object on the stage to select it — it is outlined — and drag it to move it.
+- Storytelling: the series' charte — its six colours (or a whole palette: linen, night, kraft, white paper, sea), its
+  faces for titles, text, numbers and hand, and its weights — every block is drawn in it. Twelve faces
   ship with Atelier for it.
 - Storytelling: tell a series in English or French. The counted numbers, the map's days and the words the blocks write
   themselves (next episode, before / after, midnight…) follow the language chosen under Script.

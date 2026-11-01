@@ -2964,6 +2964,12 @@ a canvas by `src/shared/story/` — the series' **charte** (palette, Geist,
 motion), the same for every post. A new post starts as a copy of the one before
 it and may grow blocks of its own.
 
+- **The charte.** *Charte & look* sets the series' six colours (ground, ink,
+  accent, muted, soft, deep — a whole palette in one click: linen, night,
+  kraft, white paper, sea — then any colour alone), its four faces (titles,
+  text, numbers, hand) among the twelve shipped, and the title and light
+  weights. Every block is drawn in them; *Back to the charte « lin »* forgets
+  it all.
 - **The Studio.** A post opens in three columns: the list on the left — the
   series' *Charte & look*, *Script* and *Sources*, the post's *Hook*, *Sound &
   effects* and *Export & archive*, then the post's **scenes** in order, each

@@ -15,6 +15,7 @@ import { assemble, type PostSkeleton, type StoryScript } from '../../shared/stor
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
+import ChartePanel from './ChartePanel';
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
@@ -441,9 +442,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     switch (id) {
       case 'charte':
         return (
-          <InspectorSection id="story-look" title="Charte & look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
+          <>
+          <InspectorSection id="story-charte" title="Charte" foldable={false} info="The series' colours, faces and weights — every post is drawn in them, and an object's colour or font can name one. Kept in your script.">
+            <ChartePanel script={script} onScript={onScript} />
+          </InspectorSection>
+          <InspectorSection id="story-look" title="Look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
             <LookPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
+          </>
         );
       case 'script':
         return (
