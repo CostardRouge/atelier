@@ -4,6 +4,7 @@
  * — and a post may override either; the numbers frozen from them follow the
  * same rule, a post's own over the series'.
  */
+import type { WallRules } from './wall-pick';
 import type { TripDoc } from '../roadtrip/trip-types';
 import { MAX_CHOSEN, type ScriptFacts, type ScriptPost, type ScriptSources, type StoryScript } from './story-script';
 import { chosenStages, stageLabel, type MapChoice } from './trip-map';
@@ -123,9 +124,36 @@ export function withChosenWall(script: StoryScript, chosen: readonly (readonly [
   return withWallSources(script, wall, picks);
 }
 
+/**
+ * The script with the wall chosen by rules (`wall-pick.ts`): `rules` (null =
+ * back to one a day, his pins dropped with them), his `pin`s and removed
+ * pictures (`skip`) as given, the rest of the wall kept. `picks`, when given,
+ * freezes the wall at once.
+ */
+export function withWallRules(
+  script: StoryScript,
+  patch: { rules?: WallRules | null; pin?: readonly number[]; skip?: readonly number[] },
+  picks: readonly WallPick[] | null,
+): StoryScript {
+  const wall: NonNullable<ScriptSources['wall']> = { ...(script.sources?.wall ?? {}) };
+  if (patch.rules === null) {
+    delete wall.rules;
+    delete wall.pin;
+  } else if (patch.rules) wall.rules = patch.rules;
+  if (patch.pin) {
+    if (patch.pin.length) wall.pin = [...patch.pin];
+    else delete wall.pin;
+  }
+  if (patch.skip) {
+    if (patch.skip.length) wall.skip = [...patch.skip];
+    else delete wall.skip;
+  }
+  return withWallSources(script, wall, picks);
+}
+
 function withWallSources(script: StoryScript, wall: NonNullable<ScriptSources['wall']>, picks: readonly WallPick[] | null): StoryScript {
   const sources: ScriptSources = { ...(script.sources ?? {}) };
-  if (wall.skip?.length || Object.keys(wall.pick ?? {}).length || wall.chosen?.length) sources.wall = wall;
+  if (wall.skip?.length || Object.keys(wall.pick ?? {}).length || wall.chosen?.length || wall.rules || wall.pin?.length) sources.wall = wall;
   else delete sources.wall;
   return { ...script, sources, ...(script.facts && picks ? { facts: withTiles(script.facts, picks) } : {}) };
 }

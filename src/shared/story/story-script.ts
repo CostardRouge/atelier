@@ -9,6 +9,7 @@
  * a script a post still plays, every caption a placeholder, so the shape can
  * be judged and nothing personal ships with the code. (pure)
  */
+import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
 import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
@@ -114,7 +115,15 @@ export interface ScriptSources {
    * ticked in the Winnow picker, `[asset id, ISO day]` in day order — the
    * wall then draws from them rather than one cover a day (`chosenPicks`).
    */
-  wall?: { skip?: number[]; pick?: Record<string, number>; chosen?: [number, string][] };
+  wall?: {
+    skip?: number[];
+    pick?: Record<string, number>;
+    chosen?: [number, string][];
+    /** The wall chosen by rules (`wall-pick.ts`) instead of one a day; `skip` is then what he removed. */
+    rules?: WallRules;
+    /** Pictures he pinned on the wall, whatever the rules say. */
+    pin?: number[];
+  };
 }
 
 /**
@@ -444,8 +453,16 @@ function readSources(raw: unknown): ScriptSources | undefined {
           .slice(0, MAX_CHOSEN)
           .map((c): [number, string] => [c[0], c[1]])
       : [];
-    if (skip.length || Object.keys(pick).length || chosen.length)
-      out.wall = { ...(skip.length ? { skip } : {}), ...(Object.keys(pick).length ? { pick } : {}), ...(chosen.length ? { chosen } : {}) };
+    const rules = readWallRules(wall.rules);
+    const pin = Array.isArray(wall.pin) ? [...new Set(wall.pin.filter(id))].slice(0, 2000) : [];
+    if (skip.length || Object.keys(pick).length || chosen.length || rules || pin.length)
+      out.wall = {
+        ...(skip.length ? { skip } : {}),
+        ...(Object.keys(pick).length ? { pick } : {}),
+        ...(chosen.length ? { chosen } : {}),
+        ...(rules ? { rules } : {}),
+        ...(pin.length ? { pin } : {}),
+      };
   }
   return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
 }

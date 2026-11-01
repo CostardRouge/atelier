@@ -2,7 +2,11 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import { WinnowClient } from '../../shared/sources/winnow/client';
-import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withTiles, withWall, withChosenWall, countedStages } from '../../shared/story/sources';
+import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withTiles, withWall, withChosenWall, withWallRules, countedStages } from '../../shared/story/sources';
+import { DEFAULT_WALL_RULES, pickWall } from '../../shared/story/wall-pick';
+import WallRulesPanel from './WallRulesPanel';
+import WallRulesModal from './WallRulesModal';
+import { candidatesKey, keptCandidates, readCandidates } from './wall-candidates';
 import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import WallPicker from './WallPicker';
@@ -21,6 +25,7 @@ const whenCounted = (at: string) =>
   new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const NONE = '';
+const NO_IDS: readonly number[] = [];
 /** Cameras counted one by one at most: a calendar each, the library's busiest first. */
 const MAX_DEVICES = 12;
 
@@ -48,6 +53,7 @@ export default function SourcesPanel({
   const [choosingDays, setChoosingDays] = useState(false);
   const [choosingWall, setChoosingWall] = useState(false);
   const [pickingWall, setPickingWall] = useState(false);
+  const [correctingWall, setCorrectingWall] = useState(false);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
   useEffect(() => {
     let alive = true;
@@ -122,10 +128,18 @@ export default function SourcesPanel({
       ]);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
       const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
-      // The pictures ticked in the picker when there are some, else one cover a day.
-      const picks = sources.wall?.chosen?.length
-        ? chosenPicks(sources.wall.chosen, span, places, sources.wall.skip)
-        : wallPickDays(all, span, places, sources.wall);
+      // By rules when he set some (over the pictures ticked in the picker, else every counted
+      // day's), else the ticked pictures, else one cover a day.
+      const rules = sources.wall?.rules;
+      const ticked = sources.wall?.chosen ?? null;
+      const picks = rules
+        ? pickWall(await readCandidates(client, candidatesKey(connection.id, span, ticked), span, ticked, new AbortController().signal), rules, places, {
+            pins: sources.wall?.pin,
+            removed: sources.wall?.skip,
+          }).picks.map((p) => ({ id: p.id, day: p.day }))
+        : ticked?.length
+          ? chosenPicks(ticked, span, places, sources.wall?.skip)
+          : wallPickDays(all, span, places, sources.wall);
       const stages = countedStages(trip, sources);
       const before = script.facts?.values ?? null;
       onScript(
@@ -157,7 +171,8 @@ export default function SourcesPanel({
     const byId = new Map<number, [number, string]>((chosen ?? []).map((c) => [c[0], c]));
     for (const c of picked) byId.set(c[0], c);
     const pool = thinEvenly([...byId.values()].sort((a, b) => a[1].localeCompare(b[1])), MAX_CHOSEN);
-    onScript(withChosenWall(script, pool, facts ? chosenPicks(pool, countedSpan(trip, sources), places, sources.wall?.skip) : null));
+    // By rules, the next counting re-chooses over the new pool (it has to be read first).
+    onScript(withChosenWall(script, pool, facts && !sources.wall?.rules ? chosenPicks(pool, countedSpan(trip, sources), places, sources.wall?.skip) : null));
   };
   // Back to one cover a day: one calendar of the counted days, the other numbers untouched.
   const oneADay = async () => {
@@ -171,7 +186,11 @@ export default function SourcesPanel({
       setCounting({ state: 'failed', message: err instanceof Error ? err.message : String(err) });
     }
   };
-  const wallLine = chosen
+  const rules = sources.wall?.rules ?? null;
+  const wallKey = trip && connection ? candidatesKey(connection.id, countedSpan(trip, sources), chosen) : null;
+  const wallLine = rules
+    ? `By your rules${chosen ? `, from the ${chosen.length} picture${chosen.length === 1 ? '' : 's'} chosen in ${connection?.id ?? 'Winnow'}` : ''}: ${sources.wall?.pin?.length ?? 0} pinned, ${sources.wall?.skip?.length ?? 0} removed.`
+    : chosen
     ? `${chosen.length} picture${chosen.length === 1 ? '' : 's'} chosen in ${connection?.id ?? 'Winnow'}${chosen.length > places ? `, ${places} on the wall` : ''}.`
     : sources.wall
       ? `One a day, by hand: ${sources.wall.skip?.length ?? 0} hidden, ${Object.keys(sources.wall.pick ?? {}).length} picked.`
@@ -341,7 +360,21 @@ export default function SourcesPanel({
           <Button size="sm" onClick={() => setPickingWall(true)} title="Choose the wall's pictures in the Winnow picker: by camera, type, extension, verdict and stars">
             Choose in Winnow…
           </Button>
-          {chosen ? (
+          {rules ? (
+            <>
+              <Button size="sm" onClick={() => setCorrectingWall(true)} title="See the wall your rules choose: remove a picture, pin one, swap one for another of its day">
+                Correct the wall…
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onScript(withWallRules(script, { rules: null }, null))} title="Your rules and pins are dropped; the next counting takes one cover a day">
+                No rules
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => onScript(withWallRules(script, { rules: DEFAULT_WALL_RULES }, null))} title="Choose the wall by rules: what to leave out, how to spread it, what to prefer">
+              By rules
+            </Button>
+          )}
+          {rules ? null : chosen ? (
             <Button size="sm" variant="ghost" onClick={() => void oneADay()}>
               One a day
             </Button>
@@ -358,6 +391,36 @@ export default function SourcesPanel({
               onAdd={putOnWall}
               onClose={() => setPickingWall(false)}
             />
+          ) : null}
+          {correctingWall && rules && wallKey ? (
+            <WallRulesModal
+              connection={connection}
+              candidatesKey={wallKey}
+              span={countedSpan(trip, sources)}
+              chosen={chosen}
+              rules={rules}
+              places={places}
+              pins={sources.wall?.pin ?? []}
+              removed={sources.wall?.skip ?? []}
+              onCancel={() => setCorrectingWall(false)}
+              onApply={(corrections, picks) => {
+                setCorrectingWall(false);
+                onScript(withWallRules(script, corrections, facts ? picks : null));
+              }}
+            />
+          ) : null}
+          {rules ? (
+            <div className="basis-full">
+              <WallRulesPanel
+                script={script}
+                onScript={onScript}
+                rules={rules}
+                places={places}
+                kept={wallKey ? keptCandidates(wallKey) : null}
+                pins={sources.wall?.pin ?? NO_IDS}
+                removed={sources.wall?.skip ?? NO_IDS}
+              />
+            </div>
           ) : null}
           {choosingWall ? (
             <WallModal
