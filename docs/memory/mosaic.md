@@ -312,6 +312,22 @@ same 11 × 11 cells, a zoom-out past the whole → `WHOLE`, Ctrl+Z → the crop
 before, a pinch → a smaller crop, *Looks* keeping the crop until *Frame
 this*.
 
+## Loading in three bounded depths (2026-11-01, F7)
+
+Lab 2's «charger avec élégance»: the band's thumbnails are the device's
+tiles through object URLs (free, F5); the player prepares `perf.ahead`
+(1–3) scenes past the one playing — `pendings`, a Map by step index, each
+chained on the one before since its picture is where the next starts, a
+played step DELETED so a chain of thousands never holds every scene it
+drew; and as a step starts it WARMS the proxies of the two queued pictures
+past the scenes ahead (`warm`), which only the queue can name — a drawn
+step is unknown until its turn. `SceneBuilder.targetBitmap` shares a fetch
+in flight (`fetching`) and holds eight targets, so the warm and the build
+ask the instance once. Measured headless with 250 ms proxies: one proxy a
+step either way; one scene ahead waited on the next picture three times in
+seven steps, three ahead never. Nothing for the eleventh: it waits to be
+the ninth.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

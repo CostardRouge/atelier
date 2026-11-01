@@ -3222,7 +3222,11 @@ one at the end, the arrow shuffles the drawn ones (your picks stay), and
 *Draw the next ones* switched off lets the chain end at the last picture you
 picked. A picture you pick for a dive is placed in the cell of the current
 mosaic it resembles most. The chain is part of the mosaic: reopened, or
-imported from its file, it plays the same. *Screen* takes the stage
+imported from its file, it plays the same. The band's pictures are the
+tiles this device already keeps, the next scenes are built while the
+current one plays (how many, in *Performance*), and the two pictures past
+them are fetched ahead, so a slow instance shows in the band before it
+shows on the stage. *Screen* takes the stage
 to the whole screen — a Mac left open on Atelier is the screen saver.
 *Speed* is in the dials.
 

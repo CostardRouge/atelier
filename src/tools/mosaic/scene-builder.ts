@@ -94,8 +94,12 @@ export interface StageSize {
 
 export type BuildStep = 'target' | 'matching' | 'tiles' | 'painting';
 
+/** Target bitmaps held: the one on screen, the scenes ahead and the two proxies warmed past them (`mosaic-player.ts`). */
+const TARGETS_HELD = 8;
+
 export class SceneBuilder {
   private targets = new Map<number, ImageBitmap>();
+  private fetching = new Map<number, Promise<ImageBitmap>>();
   private bitmaps: TileBitmaps | null = null;
   private library: Library = { tiles: [], grids: new Uint8Array(0) };
   private descriptorsFor: { grids: Uint8Array; level: Level; space: Space; aspect: number; value: Float32Array } | null = null;
@@ -155,7 +159,11 @@ export class SceneBuilder {
     return value;
   }
 
-  /** A photo's proxy (≤ 2048 px); a clip's poster — its thumbnail. Kept for the last four. */
+  /**
+   * A photo's proxy (≤ 2048 px); a clip's poster — its thumbnail. Kept for
+   * the last `TARGETS_HELD`; a fetch in flight is shared, so a step warmed
+   * ahead and the build that follows it ask the instance once.
+   */
   async targetBitmap(tile: MosaicTile, signal?: AbortSignal): Promise<ImageBitmap> {
     const have = this.targets.get(tile.id);
     if (have) {
@@ -163,12 +171,20 @@ export class SceneBuilder {
       this.targets.set(tile.id, have);
       return have;
     }
+    const inFlight = this.fetching.get(tile.id);
+    if (inFlight) return inFlight;
+    const p = this.fetchTarget(tile, signal).finally(() => this.fetching.delete(tile.id));
+    this.fetching.set(tile.id, p);
+    return p;
+  }
+
+  private async fetchTarget(tile: MosaicTile, signal?: AbortSignal): Promise<ImageBitmap> {
     if (!this.client) throw new Error('No connected instance to fetch the picture from.');
     const url = tile.kind === 'clip' ? this.client.thumbUrl(tile.id) : this.client.proxyUrl(tile.id);
     const file = await this.client.fetchFile(url, `${tile.id}.jpg`, 'image/jpeg', 0, signal ? { signal } : {});
     const bitmap = await createImageBitmap(file);
     this.targets.set(tile.id, bitmap);
-    while (this.targets.size > 4) {
+    while (this.targets.size > TARGETS_HELD) {
       const oldest = this.targets.keys().next().value;
       if (oldest === undefined) break;
       // Dropped, never closed: a scene on screen or a step in play may still draw it.

@@ -161,8 +161,8 @@ function MosaicWorkbench({
   const play = useCallback(() => {
     if (!player || mode === 'single' || doc.target === undefined || player.playing) return;
     player.attach(canvasRef.current, { stageW, stageH, dpr });
-    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool, queue: chained ? queueSource : undefined });
-  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource]);
+    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop, pool, queue: chained ? queueSource : undefined, ahead: perf.ahead });
+  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource, perf.ahead]);
   const stop = useCallback(() => player?.stop(), [player]);
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
   const wasPlaying = useRef(false);

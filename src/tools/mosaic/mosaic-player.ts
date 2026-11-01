@@ -48,6 +48,8 @@ export interface PlayerOptions {
   pool?: MatchPool | null;
   /** The chain's queue in the document (lab 2, R6); without one the player draws every step itself. */
   queue?: QueueSource;
+  /** How many steps are prepared past the one playing (the Performance panel's `ahead`, 1–3). */
+  ahead?: number;
 }
 
 /**
@@ -170,15 +172,31 @@ export class MosaicPlayer {
     // Dézoom: one step out. Chain: endless, the direction's kinds.
     let index = 0;
     let current = opts.from;
-    // A step prepared ahead may be abandoned by a Stop before it is awaited: its abort must not surface as an unhandled rejection.
-    const ahead = (p: Promise<ChainStep | 'end' | null>) => {
-      p.catch(() => undefined);
-      return p;
+    const ahead = Math.max(1, Math.min(3, Math.round(opts.ahead ?? 1)));
+    /**
+     * The steps in preparation, by index — `ahead` of them past the one
+     * playing, each chained on the one before (its picture is where the next
+     * starts). A step abandoned by a Stop before it is awaited must not
+     * surface its abort as an unhandled rejection; a step played is dropped,
+     * or a long chain would hold every scene it ever drew.
+     */
+    const pendings = new Map<number, Promise<ChainStep | 'end' | null>>();
+    const ensure = (upTo: number) => {
+      for (let k = pendings.size ? Math.max(...pendings.keys()) + 1 : 0; k <= upTo; k++) {
+        const kind: ChainKind | null = opts.mode === 'dezoom' ? (k === 0 ? 'out' : null) : stepKind(opts.direction, k);
+        const before = k === 0 ? Promise.resolve<ChainStep | 'end' | null>({ next: opts.from } as ChainStep) : (pendings.get(k - 1) ?? Promise.resolve(null));
+        const p = kind
+          ? before.then((prev) => (prev && prev !== 'end' ? this.prepare(kind, prev.next, k, opts, signal, k === 0 ? opts.crop : undefined) : prev === 'end' ? 'end' : null))
+          : Promise.resolve<ChainStep | 'end' | null>(null);
+        p.catch(() => undefined);
+        pendings.set(k, p);
+      }
     };
-    let pending = ahead(this.prepare(opts.mode === 'dezoom' ? 'out' : stepKind(opts.direction, 0), current, 0, opts, signal, opts.crop));
     for (;;) {
+      ensure(index + ahead);
+      this.warm(index, opts, signal);
       this.say({ waiting: true, phase: 'preparing' });
-      const step = await pending;
+      const step = await pendings.get(index)!;
       if (signal.aborted) return;
       if (step === 'end') {
         this.say({ playing: false, phase: 'done', note: index ? 'The chain ended at the last picked picture.' : 'Nothing queued: pick a picture, or let the chain draw the next ones.' });
@@ -189,11 +207,9 @@ export class MosaicPlayer {
         return;
       }
       this.say({ waiting: false, stepIndex: index, current });
-      // The following step is built while this one plays.
-      const nextKind = opts.mode === 'dezoom' ? null : stepKind(opts.direction, index + 1);
-      pending = nextKind ? ahead(this.prepare(nextKind, step.next, index + 1, opts, signal)) : Promise.resolve(null);
       await this.playStep(step, opts, signal);
       if (signal.aborted) return;
+      pendings.delete(index);
       current = step.next;
       this.remember(current);
       index += 1;
@@ -202,6 +218,23 @@ export class MosaicPlayer {
         this.say({ playing: false, phase: 'done' });
         return;
       }
+    }
+  }
+
+  /**
+   * The proxies of the two queued pictures past the scenes ahead, fetched
+   * while this step plays (lab 2, F7): a build that reaches them finds the
+   * bitmap here. Only what the queue already names — a drawn step is
+   * unknown until its turn — and never a reason to wait or to fail.
+   */
+  private warm(index: number, opts: PlayerOptions, signal: AbortSignal): void {
+    if (!opts.queue || opts.mode === 'dezoom') return;
+    const ahead = Math.max(1, Math.min(3, Math.round(opts.ahead ?? 1)));
+    const tiles = this.builder.tiles;
+    for (let k = index + ahead; k < index + ahead + 2; k++) {
+      const id = opts.queue.next(k);
+      const tile = id === undefined ? undefined : tiles.find((t) => t.id === id);
+      if (tile) void this.builder.targetBitmap(tile, signal).catch(() => undefined);
     }
   }
 
