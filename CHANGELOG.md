@@ -20,8 +20,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   under the stage, ten ahead and refilled as it goes: replace, remove, add or shuffle them, or let it end on your last
   pick. Zooming the still stage frames it: what you see becomes the part rebuilt, with as many cells on it; undo and
   redo step through every edit. The animated modes are recipes of one step — a departure, a trajectory, an arrival —
-  and *Mosaics*, the default, goes from mosaic to mosaic without ever showing the photo; the camera never cuts between
-  steps, and the Performance section measures how long a step takes to be ready. Each mosaic, the colours of its
+  and *Mosaics*, the default, goes from mosaic to mosaic without ever showing the photo; *Wave* lands the next mosaic's
+  cells on this one from the aimed cell outward, *Slideshow* cuts to a new mosaic at a steady beat; the camera never
+  cuts between steps, and the Performance section measures how long a step takes to be ready. Each mosaic, the colours of its
   pictures and a small tile of each are kept in this browser; a `.mosaic.json` file carries it elsewhere.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the

@@ -3210,7 +3210,11 @@ to be one cell of another, which then appears whole. *Chain* never ends:
 *Dive in* dissolves the picture into its cells and dives into one until its
 picture fills the screen and becomes the next; *Pull out* is the pull-back
 repeated; *Both* alternates. *Reveal* flips the cells one by one into the
-real picture from a point; *Drift* wanders over the mosaic at mid zoom.
+real picture from a point; *Drift* wanders over the mosaic at mid zoom,
+then fades to the next. *Wave* lands the next mosaic's cells on this one,
+from the aimed cell outward, with no zoom and no photo: the mosaic turns
+into another without moving. *Slideshow* cuts to a new mosaic every six
+seconds, at a steady beat.
 Each step prepares the next picture while it plays, so a chain of thousands
 never asks you to wait; the picks come from the mosaic's own seed, so Play
 twice shows the same chain. Play and Stop on Space, Escape stops; whatever

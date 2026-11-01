@@ -398,6 +398,22 @@ so). Driven headless: four steps in 24 s with the status words never
 *the picture* / *appears* / *into its cells*, *landing* seen, the target
 moved on; Chain still arrives on the photo and *Both* keeps the chain.
 
+## Wave, Fade, Cut: departures without a camera (2026-11-01, A4)
+
+The three departures that move no camera: `wave` paints the ARRIVED
+mosaic's cells over the departed one in the order of their distance from
+the aimed cell (`waveOrderFrom`, the player; the lots' `point` order
+without the lots), `fade` crosses the arrived mosaic in whole, `cut` takes
+no time (its first frame is already the arrival). Recipes: *Wave* (3 s
+wave, 3 s hold) and *Slideshow* (cut, cadence 6 s — the hold is the
+whole beat), in the transport after Drift. **Rule**: a wave needs the two
+mosaics at the same shape, which a run guarantees (one stage size for its
+whole length — a resize stops the run, `dialsKey`); a wave's cells are
+drawn from the arrived scene's canvas at its own `dpr`, never through the
+tile cache again. Driven headless: a wave's frames change through its 3 s
+(`the next one spreads`), a slideshow's steps come at 6 s each, Drift says
+`fading to the next`.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

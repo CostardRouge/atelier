@@ -13,6 +13,8 @@ const MODES: readonly { id: MosaicMode; label: string; title: string }[] = [
   { id: 'chain', label: 'Chain', title: 'Endless: from picture to picture, diving into a cell or pulling back' },
   { id: 'reveal', label: 'Reveal', title: 'The cells flip one by one to the real picture' },
   { id: 'drift', label: 'Drift', title: 'The camera wanders over the mosaic, then fades to the next' },
+  { id: 'wave', label: 'Wave', title: 'The next mosaic’s cells land on this one, from the aimed cell outward — no zoom, no photo' },
+  { id: 'slideshow', label: 'Slideshow', title: 'A mosaic every six seconds, cut to the next, at a steady beat' },
 ];
 type ChainDepart = Extract<Departure, 'dive' | 'pull' | 'alternate'>;
 const DIRECTIONS: readonly { id: ChainDepart; label: string; title: string }[] = [
