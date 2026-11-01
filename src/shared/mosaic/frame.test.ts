@@ -12,6 +12,7 @@ import {
   isWhole,
   readCrop,
   resampleGrid,
+  resizeFrame,
 } from './frame';
 import { GRID_BYTES } from './measure';
 
@@ -98,5 +99,29 @@ describe('the grids under another cell shape', () => {
     // The border column falls outside the square's window: the crop is all white.
     for (let c = 0; c < 36; c++) expect(sq[c * 3]).toBeCloseTo(255);
     expect(sq[GRID_BYTES]).toBeCloseTo(77);
+  });
+});
+
+describe('resizeFrame', () => {
+  const start = { x: 100, y: 100, w: 200, h: 100 };
+  it('a corner follows the pointer from the opposite corner, keeping the shape', () => {
+    const r = resizeFrame(start, 'se', 400, 150, 2, 20);
+    expect(r).toEqual({ x: 100, y: 100, w: 300, h: 150 });
+    const nw = resizeFrame(start, 'nw', 50, 120, 2, 20);
+    expect(nw.x + nw.w).toBe(300);
+    expect(nw.y + nw.h).toBe(200);
+    expect(nw.w).toBe(250);
+  });
+  it('a side keeps the other axis centred', () => {
+    const e = resizeFrame(start, 'e', 500, 999, 2, 20);
+    expect(e).toEqual({ x: 100, y: 50, w: 400, h: 200 });
+    const n = resizeFrame(start, 'n', 999, 0, 2, 20);
+    expect(n.y + n.h).toBe(200);
+    expect(n.h).toBe(200);
+    expect(n.x + n.w / 2).toBe(200);
+  });
+  it('never goes under the minimum', () => {
+    expect(resizeFrame(start, 'se', 90, 90, 2, 48)).toEqual({ x: 100, y: 100, w: 48, h: 24 });
+    expect(resizeFrame(start, 's', 0, 0, 2, 48).h).toBe(24);
   });
 });

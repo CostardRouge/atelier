@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { cropOfRect, cropRect, type Crop, type Rect } from '../../shared/mosaic/frame';
+import { HANDLES, cropOfRect, cropRect, isWhole, resizeFrame, type Crop, type Handle, type Rect } from '../../shared/mosaic/frame';
 
 interface TargetFrameProps {
   /** The target's picture, once fetched (the scene's proxy); null while it comes. */
@@ -13,33 +13,46 @@ interface TargetFrameProps {
   onCrop: (crop: Crop) => void;
   /** The card itself was pressed (not the frame): choose another picture. */
   onChoose: () => void;
+  /** A run plays: the frame is shown, frozen, and nothing on the card is grabbed. */
+  frozen?: boolean;
 }
 
 /** The card's height at most, so a portrait does not push the dials off the screen. */
 const MAX_H = 240;
+/** A frame is never narrower than this on screen (R1), whatever the picture. */
+const MIN_FRAME_PX = 48;
+/** A grip's zone, under a finger (`touch-targets.md`). */
+const GRIP = 44;
+
+const CURSORS: Record<Handle, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' };
 
 /**
- * The TARGET in the inspector (his ask, 2026-11-01: «un input de type image
- * où on verra la miniature … sur toute la largeur de l'inspecteur»): the
- * picture rebuilt, as wide as the inspector, with the FRAME on it — the
- * part the mosaic rebuilds (`frame.ts`), dimmed around. Drag the frame to
- * move it, its corner to resize it (its shape is the aspect's, always); the
- * crop is written when the drag ends, so the scene rebuilds once. A press
- * outside the frame chooses another picture.
+ * The TARGET in the inspector (his asks, 2026-11-01): the picture rebuilt,
+ * as wide as the inspector, with the FRAME on it — the part the mosaic
+ * rebuilds (`frame.ts`). Three states and not one more: WHOLE (a thin
+ * inset trace, nothing dimmed), CROPPED (the rest dimmed, the frame grabbed
+ * by its inside to move and by its eight grips to resize — 44 px zones
+ * drawn as corner marks, never past the card) and FROZEN while a run plays.
+ * The trace is drawn INSIDE the rectangle so a frame against the picture's
+ * edge keeps it; a frame is never under 48 px on screen. The crop is written
+ * when the drag ends, so the scene rebuilds once. A press outside the frame
+ * chooses another picture.
  */
-export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop, onChoose }: TargetFrameProps) {
+export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop, onChoose, frozen = false }: TargetFrameProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [boxW, setBoxW] = useState(0);
   const [draft, setDraft] = useState<Rect | null>(null);
-  const drag = useRef<{ mode: 'move' | 'size'; x: number; y: number; start: Rect } | null>(null);
+  const drag = useRef<{ mode: 'move' | Handle; x: number; y: number; start: Rect } | null>(null);
 
+  // Measured on the card's own box, after layout, and again when it changes (a scrollbar, a resize).
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setBoxW(el.clientWidth));
+    const measure = () => setBoxW((w) => (w === el.clientWidth ? w : el.clientWidth));
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setBoxW(el.clientWidth);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -47,9 +60,12 @@ export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop,
   const W = bitmap?.width ?? 16;
   const H = bitmap?.height ?? 9;
   const k = boxW > 0 ? Math.min(boxW / W, MAX_H / H) : 0;
-  const dispW = Math.round(W * k);
-  const dispH = Math.round(H * k);
+  const dispW = Math.floor(W * k);
+  const dispH = Math.floor(H * k);
   const rect = draft ?? cropRect(W, H, aspect, crop);
+  const whole = !draft && isWhole(crop) && Math.abs(rect.w * k - dispW) < 1 && Math.abs(rect.h * k - dispH) < 1;
+  /** The minimum frame width in picture pixels — 48 px on this screen. */
+  const minW = k > 0 ? MIN_FRAME_PX / k : 1;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -69,29 +85,22 @@ export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop,
     if (!b || !k) return { x: 0, y: 0 };
     return { x: (e.clientX - b.left) / k, y: (e.clientY - b.top) / k };
   };
+  const settle = (r: Rect) => cropRect(W, H, aspect, cropOfRect(W, H, aspect, r));
 
-  const onDown = (e: ReactPointerEvent<HTMLDivElement>, mode: 'move' | 'size') => {
-    if (!bitmap) return;
+  const onDown = (e: ReactPointerEvent<HTMLElement>, mode: 'move' | Handle) => {
+    if (!bitmap || frozen) return;
     e.preventDefault();
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     const p = toPicture(e);
     drag.current = { mode, x: p.x, y: p.y, start: rect };
   };
-  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onMove = (e: ReactPointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d) return;
     const p = toPicture(e);
-    if (d.mode === 'move') {
-      const next = { ...d.start, x: d.start.x + (p.x - d.x), y: d.start.y + (p.y - d.y) };
-      setDraft(cropRect(W, H, aspect, cropOfRect(W, H, aspect, next)));
-    } else {
-      // The corner follows the pointer; the top-left corner stays, the shape is the aspect's.
-      const w = Math.max(p.x - d.start.x, (p.y - d.start.y) * aspect);
-      const sized = { x: d.start.x, y: d.start.y, w, h: w / aspect };
-      const c = cropOfRect(W, H, aspect, sized);
-      setDraft(cropRect(W, H, aspect, c));
-    }
+    if (d.mode === 'move') setDraft(settle({ ...d.start, x: d.start.x + (p.x - d.x), y: d.start.y + (p.y - d.y) }));
+    else setDraft(settle(resizeFrame(d.start, d.mode, p.x, p.y, aspect, minW)));
   };
   const onUp = () => {
     const d = drag.current;
@@ -101,33 +110,102 @@ export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop,
     setDraft(null);
   };
 
+  if (!bitmap || dispW <= 0) {
+    return (
+      <div ref={boxRef} className="w-full min-w-0">
+        {fallbackUrl ? (
+          <button type="button" onClick={onChoose} className="block w-full overflow-hidden bg-frame" title="Choose another picture">
+            <img src={fallbackUrl} alt="The target" className="block w-full max-h-[240px] object-contain" />
+          </button>
+        ) : (
+          <button type="button" onClick={onChoose} className="w-full aspect-video border border-dashed border-line-strong text-xs text-muted">
+            Choose a picture
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const fx = rect.x * k;
+  const fy = rect.y * k;
+  const fw = rect.w * k;
+  const fh = rect.h * k;
   return (
-    <div ref={boxRef} className="w-full flex justify-center">
-      {bitmap && dispW > 0 ? (
-        <div className="relative select-none touch-none rounded-paper overflow-hidden bg-frame" style={{ width: dispW, height: dispH }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-          <canvas ref={canvasRef} className="block cursor-pointer" style={{ width: dispW, height: dispH }} onClick={onChoose} aria-label="The target — choose another picture" role="button" />
-          <div
-            className="absolute cursor-move outline outline-2 outline-accent"
-            style={{ left: rect.x * k, top: rect.y * k, width: rect.w * k, height: rect.h * k, boxShadow: '0 0 0 9999px rgba(16,15,13,0.55)' }}
-            onPointerDown={(e) => onDown(e, 'move')}
-            aria-label="The part of the picture the mosaic rebuilds — drag to move"
-          >
-            <div
-              className="absolute -right-2 -bottom-2 w-5 h-5 rounded-full bg-accent border-2 border-paper cursor-nwse-resize"
-              onPointerDown={(e) => onDown(e, 'size')}
-              aria-label="Resize the frame"
-            />
-          </div>
+    <div ref={boxRef} className="w-full min-w-0 flex justify-center">
+      <div
+        className="relative select-none touch-none overflow-hidden bg-frame"
+        style={{ width: dispW, height: dispH }}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        data-frame-state={frozen ? 'frozen' : whole ? 'whole' : 'cropped'}
+      >
+        <canvas
+          ref={canvasRef}
+          className={`block ${frozen ? '' : 'cursor-pointer'}`}
+          style={{ width: dispW, height: dispH }}
+          onClick={() => !frozen && onChoose()}
+          aria-label={frozen ? 'The picture on screen' : 'The target — choose another picture'}
+          role="button"
+        />
+        {/* The frame: its trace INSIDE the rectangle (a light line over a dark one, legible on any picture). */}
+        <div
+          className={`absolute ${frozen ? '' : 'cursor-move'}`}
+          style={{
+            left: fx,
+            top: fy,
+            width: fw,
+            height: fh,
+            boxShadow: `inset 0 0 0 2px #f4f0e7, inset 0 0 0 3px rgba(16,15,13,0.75)${whole ? '' : ', 0 0 0 9999px rgba(16,15,13,0.55)'}`,
+            opacity: whole ? 0.55 : 1,
+          }}
+          onPointerDown={(e) => onDown(e, 'move')}
+          aria-label="The part of the picture the mosaic rebuilds — drag to move"
+        >
+          {!frozen &&
+            HANDLES.map((h) => {
+              const atW = h.includes('w');
+              const atE = h.includes('e');
+              const atN = h.includes('n');
+              const atS = h.includes('s');
+              const corner = h.length === 2;
+              // A grip never leaves the frame (it would leave the card) and leaves the middle third to the move.
+              const gw = Math.min(GRIP, fw / 3);
+              const gh = Math.min(GRIP, fh / 3);
+              const style: React.CSSProperties = {
+                position: 'absolute',
+                width: corner || atE || atW ? gw : Math.max(0, fw - 2 * gw),
+                height: corner || atN || atS ? gh : Math.max(0, fh - 2 * gh),
+                left: atW ? 0 : atE ? undefined : gw,
+                right: atE ? 0 : undefined,
+                top: atN ? 0 : atS ? undefined : gh,
+                bottom: atS ? 0 : undefined,
+                cursor: CURSORS[h],
+              };
+              return (
+                <div key={h} style={style} onPointerDown={(e) => onDown(e, h)} aria-label={`Resize the frame (${h})`} data-grip={h}>
+                  {corner && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute w-3 h-3 border-paper"
+                      style={{
+                        left: atW ? 3 : undefined,
+                        right: atE ? 3 : undefined,
+                        top: atN ? 3 : undefined,
+                        bottom: atS ? 3 : undefined,
+                        borderLeftWidth: atW ? 2 : 0,
+                        borderRightWidth: atE ? 2 : 0,
+                        borderTopWidth: atN ? 2 : 0,
+                        borderBottomWidth: atS ? 2 : 0,
+                        filter: 'drop-shadow(0 0 1px rgba(16,15,13,0.9))',
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
         </div>
-      ) : fallbackUrl ? (
-        <button type="button" onClick={onChoose} className="block w-full rounded-paper overflow-hidden bg-frame" title="Choose another picture">
-          <img src={fallbackUrl} alt="The target" className="block w-full max-h-[240px] object-contain" />
-        </button>
-      ) : (
-        <button type="button" onClick={onChoose} className="w-full aspect-video rounded-paper border border-dashed border-line-strong text-xs text-muted">
-          Choose a picture
-        </button>
-      )}
+      </div>
     </div>
   );
 }

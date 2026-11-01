@@ -183,14 +183,14 @@ function MosaicWorkbench({
           onFullscreen={fullscreen}
         />
       </div>
-      <aside className="min-h-0 overflow-auto" aria-label="Mosaic settings">
+      <aside className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden" aria-label="Mosaic settings">
         <MosaicSettings
           settings={doc.settings}
           update={update}
           view={view}
           setView={setView}
           state={state}
-          cropped={Boolean(doc.crop)}
+          cropped={Boolean(doc.crop) && !status.playing}
           onWhole={() => setCrop(undefined)}
           onChoose={() => setChoosing(true)}
           target={
@@ -201,6 +201,7 @@ function MosaicWorkbench({
               crop={doc.crop}
               onCrop={setCrop}
               onChoose={() => setChoosing(true)}
+              frozen={status.playing}
             />
           }
         />

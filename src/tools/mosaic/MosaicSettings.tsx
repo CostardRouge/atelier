@@ -51,7 +51,7 @@ const SPACES: readonly { id: Space; label: string; title: string }[] = [
 export default function MosaicSettings({ settings, update, view, setView, state, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 px-1.5">
       <InspectorSection id="mosaic-target" title="Target" remember="session">
         {target}
         <div className="flex flex-wrap items-center gap-2">
@@ -73,7 +73,7 @@ export default function MosaicSettings({ settings, update, view, setView, state,
             onChange={(id) => update((s) => ({ ...s, aspect: id }))}
           />
         </FieldRow>
-        <p className="m-0 text-xs text-muted">Drag the frame on the picture to choose the part rebuilt; its corner resizes it. The rest is never read.</p>
+        <p className="m-0 text-xs text-muted">Drag the frame to choose the part rebuilt, its sides and corners to resize it. The rest is never read.</p>
       </InspectorSection>
       <InspectorSection id="mosaic-cells" title="Cells" remember="session">
         <SliderRow

@@ -161,3 +161,47 @@ export function cropGrids(grids: ArrayLike<number>, n: number, dstAspect: number
   for (let i = 0; i < n; i++) resampleGrid(grids, i * GRID_BYTES, win, out, i * GRID_BYTES);
   return out;
 }
+
+/** The eight grips of a frame: four corners and four sides. */
+export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export const HANDLES: readonly Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
+/**
+ * `start` resized by dragging `handle` to the pointer at `(px, py)` (picture
+ * pixels), the frame keeping `aspect`: a corner follows the pointer from the
+ * opposite corner, a side follows it from the opposite side and keeps the
+ * other axis centred. Never under `minW` wide. Not clamped to the picture —
+ * `cropOfRect` then `cropRect` do that, once.
+ */
+export function resizeFrame(start: Rect, handle: Handle, px: number, py: number, aspect: number, minW: number): Rect {
+  const right = start.x + start.w;
+  const bottom = start.y + start.h;
+  const minH = minW / aspect;
+  let w = start.w;
+  let h = start.h;
+  let x = start.x;
+  let y = start.y;
+  if (handle.length === 2) {
+    const ax = handle.includes('w') ? right : start.x;
+    const ay = handle.includes('n') ? bottom : start.y;
+    const dx = handle.includes('w') ? ax - px : px - ax;
+    const dy = handle.includes('n') ? ay - py : py - ay;
+    w = Math.max(minW, Math.max(dx, dy * aspect));
+    h = w / aspect;
+    x = handle.includes('w') ? ax - w : ax;
+    y = handle.includes('n') ? ay - h : ay;
+  } else if (handle === 'e' || handle === 'w') {
+    const ax = handle === 'w' ? right : start.x;
+    w = Math.max(minW, handle === 'w' ? ax - px : px - ax);
+    h = w / aspect;
+    x = handle === 'w' ? ax - w : ax;
+    y = start.y + start.h / 2 - h / 2;
+  } else {
+    const ay = handle === 'n' ? bottom : start.y;
+    h = Math.max(minH, handle === 'n' ? ay - py : py - ay);
+    w = h * aspect;
+    y = handle === 'n' ? ay - h : ay;
+    x = start.x + start.w / 2 - w / 2;
+  }
+  return { x, y, w, h };
+}

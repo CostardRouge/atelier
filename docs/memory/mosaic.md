@@ -168,6 +168,26 @@ rebuilds once; a press outside the frame opens the chooser) and
 240, opened on the current target's page) under a *Target* section first in
 the inspector, with *Choose…*, *Whole picture* and the shape.
 
+## The target card: three states, the trace inside, grips that stay in (2026-11-01, F1)
+
+His report on the first card (the trace lost against the picture's edge, a
+round handle past the card, a radius, the frame shown whole-picture, the
+inspector scrolling sideways). **Rules** (`TargetFrame.tsx`): the trace is
+drawn INSIDE the rectangle (an inset light line over a dark one, so it
+reads on any picture and survives the card's `overflow: hidden`); a frame
+is never under 48 px on screen (`resizeFrame`'s `minW`); it is grabbed by
+its inside to move and by eight grips (`HANDLES`, pure arithmetic in
+`frame.ts`) that are 44 px zones shrunk to a third of the frame on a small
+one, so the middle always moves; three states and no more —
+`data-frame-state` whole (a faint trace, nothing dimmed, no *Whole picture*
+button), cropped, frozen (a run plays: nothing grabbed, no grips). The
+card measures ITS OWN box with a `ResizeObserver`. **Trap**: the shared
+`InspectorSection`'s chevron carries `-mr-1.5`; an inspector without
+`px-1.5` on its content scrolls 6 px sideways — the atlas pads, so does
+`MosaicSettings`. Driven headless: `scrollWidth === clientWidth` at 22 rem
+and 390 px, a frame dragged to the corner lands at (0, 0) at 48 px wide,
+Whole/cropped/frozen read off the attribute.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps
