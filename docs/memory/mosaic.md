@@ -143,6 +143,18 @@ the constructor. Driven headless: Chain dive (frames change, step 2 after
 picture seen), Pull back once (ends by itself, the target written), Reveal
 and Drift (frames change), fullscreen granted.
 
+## A bitmap a scene may draw is never `close()`d (2026-11-01)
+
+His report: «The image source is detached». Three evictions CLOSED bitmaps
+a scene still drew: the tiles' LRU (a mosaic of more than 2 000 distinct
+pictures closed the first ones before the paint), the builder's last-four
+targets (a chain closed the playing step's target) and `dispose` (React's
+development double-mount). **Rule**: caches DROP their references and let
+the collector free them; only a bitmap made and used inside one function
+(`cropToTile`, the measure worker) is closed. Checked headless: 2 600
+pictures, 58 × 58 cells (3 364, matched in the background), a chain of six
+steps, no page error.
+
 ## The chain is a clock, the picks are seeded (2026-10-31, M1)
 
 `chain.ts` gives a step's phase and camera as a FUNCTION of the time since

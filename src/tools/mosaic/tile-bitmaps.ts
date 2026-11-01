@@ -78,7 +78,7 @@ export class TileBitmaps {
       while (this.held.size > this.limit) {
         const oldest = this.held.keys().next().value;
         if (oldest === undefined) break;
-        this.held.get(oldest)?.close();
+        // Dropped, never closed: a mosaic being painted may hold more tiles than the cache.
         this.held.delete(oldest);
       }
       return bitmap;
@@ -94,7 +94,6 @@ export class TileBitmaps {
   }
 
   dispose(): void {
-    for (const b of this.held.values()) b.close();
     this.held.clear();
   }
 }

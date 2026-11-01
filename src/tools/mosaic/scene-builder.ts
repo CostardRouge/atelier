@@ -121,7 +121,7 @@ export class SceneBuilder {
     while (this.targets.size > 4) {
       const oldest = this.targets.keys().next().value;
       if (oldest === undefined) break;
-      this.targets.get(oldest)?.close();
+      // Dropped, never closed: a scene on screen or a step in play may still draw it.
       this.targets.delete(oldest);
     }
     return bitmap;
@@ -194,7 +194,7 @@ export class SceneBuilder {
   }
 
   dispose(): void {
-    for (const b of this.targets.values()) b.close();
+    // Not closed: a scene the stage still holds draws from these; the collector frees them.
     this.targets.clear();
     this.bitmaps?.dispose();
     this.bitmaps = null;
