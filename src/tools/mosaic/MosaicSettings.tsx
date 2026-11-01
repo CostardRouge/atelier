@@ -23,6 +23,8 @@ interface MosaicSettingsProps {
   workers: number;
   /** The frames a second the last propagation drew, or null until one did. */
   fps: number | null;
+  /** The chain's own measure: how long the last step took to be ready, how often a turn came before its step was. */
+  chain?: { prepMs: number | null; waits: number; waitMs: number; done: number } | null;
   /** The target's card (`TargetFrame`) and its verbs, drawn first. */
   target: ReactNode;
   /** The target's crop is not the whole frame: *Whole picture* gives it back. */
@@ -60,7 +62,7 @@ const PROPAGATION_LABELS: Record<Propagation, string> = { rows: 'Top down', poin
 const ANIMATION_LABELS: Record<CellAnimation, string> = { appear: 'Appear', fade: 'Fade', flip: 'Flip', none: 'None' };
 const LOT_LABELS: Record<LotSize, string> = { 0: 'A row', 64: '64 cells', 256: '256 cells', 1024: '1 024 cells' };
 
-export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
+export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   return (
     <div className="flex flex-col gap-3 px-1.5">
@@ -190,6 +192,12 @@ export default function MosaicSettings({ settings, update, view, setView, state,
           <p className="m-0 font-mono text-2xs text-muted tabular-nums">
             last matching · {scene.lots} lot{scene.lots === 1 ? '' : 's'} · {Math.round(scene.matchMs / Math.max(1, scene.lots))} ms a lot · {scene.on === 'worker' ? 'in the background' : 'here'}
             {fps !== null ? ` · ${fps} fps while it came in` : ''}
+          </p>
+        )}
+        {chain && chain.prepMs !== null && (
+          <p className="m-0 font-mono text-2xs text-muted tabular-nums" title="How long the last step of the chain took to be ready (its picture fetched, its mosaic matched), and how many steps this run had to hold their picture because the next was not ready">
+            chain · a step ready in {Math.round(chain.prepMs / 100) / 10} s · {chain.done} played
+            {chain.waits ? ` · held ${chain.waits}× for ${Math.round(chain.waitMs / 100) / 10} s` : ' · never held'}
           </p>
         )}
       </InspectorSection>

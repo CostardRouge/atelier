@@ -281,6 +281,7 @@ function MosaicWorkbench({
             queue={chain.queue}
             done={status.done}
             playing={status.playing}
+            waiting={status.waiting && status.stepIndex > 0}
             draw={chain.draw}
             setDraw={(v) => change((d) => withChainDraw(d, v))}
             onReplace={(at) => setChoosing({ for: 'replace', at })}
@@ -312,6 +313,7 @@ function MosaicWorkbench({
           setPerf={setPerf}
           workers={workers}
           fps={fps}
+          chain={status.prepMs !== null ? { prepMs: status.prepMs, waits: status.waits, waitMs: status.waitMs, done: status.done } : null}
           cropped={Boolean(doc.crop) && !status.playing}
           onWhole={() => setCrop(undefined)}
           onChoose={() => setChoosing({ for: 'target' })}

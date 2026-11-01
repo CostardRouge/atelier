@@ -78,9 +78,14 @@ export interface PlayerStatus {
   error: string | null;
   /** Why a run ended by itself, when it did — not an error. */
   note: string | null;
+  /** How long the last step took to be ready (its picture, its scene), ms — the Performance panel's measure. */
+  prepMs: number | null;
+  /** Steps this run that were not ready when their turn came, and the time spent holding for them. */
+  waits: number;
+  waitMs: number;
 }
 
-export const IDLE_STATUS: PlayerStatus = { playing: false, current: -1, stepIndex: 0, done: 0, phase: '', waiting: false, error: null, note: null };
+export const IDLE_STATUS: PlayerStatus = { playing: false, current: -1, stepIndex: 0, done: 0, phase: '', waiting: false, error: null, note: null, prepMs: null, waits: 0, waitMs: 0 };
 
 interface ChainStep {
   kind: ChainKind;
@@ -144,7 +149,7 @@ export class MosaicPlayer {
     this.rnd = mulberry32(opts.seed);
     this.history = [opts.from];
     this.controller = new AbortController();
-    this.say({ playing: true, current: opts.from, stepIndex: 0, done: 0, phase: 'starting', waiting: false, error: null, note: null });
+    this.say({ playing: true, current: opts.from, stepIndex: 0, done: 0, phase: 'starting', waiting: false, error: null, note: null, prepMs: null, waits: 0, waitMs: 0 });
     const signal = this.controller.signal;
     void this.run(opts, signal).catch((e: unknown) => {
       if (signal.aborted) return;
@@ -181,12 +186,17 @@ export class MosaicPlayer {
      * or a long chain would hold every scene it ever drew.
      */
     const pendings = new Map<number, Promise<ChainStep | 'end' | null>>();
+    /** When each step's preparation could begin (the step before it was known), for the measure. */
+    const since = new Map<number, number>();
     const ensure = (upTo: number) => {
       for (let k = pendings.size ? Math.max(...pendings.keys()) + 1 : 0; k <= upTo; k++) {
         const kind: ChainKind | null = opts.mode === 'dezoom' ? (k === 0 ? 'out' : null) : stepKind(opts.direction, k);
         const before = k === 0 ? Promise.resolve<ChainStep | 'end' | null>({ next: opts.from } as ChainStep) : (pendings.get(k - 1) ?? Promise.resolve(null));
         const p = kind
-          ? before.then((prev) => (prev && prev !== 'end' ? this.prepare(kind, prev.next, k, opts, signal, k === 0 ? opts.crop : undefined) : prev === 'end' ? 'end' : null))
+          ? before.then((prev) => {
+              since.set(k, performance.now());
+              return prev && prev !== 'end' ? this.prepare(kind, prev.next, k, opts, signal, k === 0 ? opts.crop : undefined) : prev === 'end' ? 'end' : null;
+            })
           : Promise.resolve<ChainStep | 'end' | null>(null);
         p.catch(() => undefined);
         pendings.set(k, p);
@@ -196,8 +206,16 @@ export class MosaicPlayer {
       ensure(index + ahead);
       this.warm(index, opts, signal);
       this.say({ waiting: true, phase: 'preparing' });
+      const waitedFrom = performance.now();
       const step = await pendings.get(index)!;
       if (signal.aborted) return;
+      // The measure: how long the step took to be ready, and whether its turn came before it was.
+      const ready = performance.now();
+      const waited = ready - waitedFrom;
+      const prepMs = Math.round(ready - (since.get(index) ?? waitedFrom));
+      since.delete(index);
+      if (waited > 80) this.say({ prepMs, waits: this.status.waits + 1, waitMs: this.status.waitMs + Math.round(waited) });
+      else this.say({ prepMs });
       if (step === 'end') {
         this.say({ playing: false, phase: 'done', note: index ? 'The chain ended at the last picked picture.' : 'Nothing queued: pick a picture, or let the chain draw the next ones.' });
         return;

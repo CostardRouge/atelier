@@ -18,6 +18,8 @@ interface ChainBandProps {
   /** Steps played to their end this run — the entries before them are behind. */
   done: number;
   playing: boolean;
+  /** The step holds its last frame because the next picture is not ready: the *next* tile says so. */
+  waiting?: boolean;
   draw: boolean;
   setDraw: (draw: boolean) => void;
   /** The chooser for the entry at `at` (in place), or for one more at the end. */
@@ -87,7 +89,7 @@ function TileThumb({ instance, client, id }: { instance: string; client: WinnowC
  * a run plays the played entries fall away so the current stays at the left,
  * and the entry being prepared is not touched.
  */
-export default function ChainBand({ instance, client, current, queue, done, playing, draw, setDraw, onReplace, onInsert, onRemove, onShuffle }: ChainBandProps) {
+export default function ChainBand({ instance, client, current, queue, done, playing, waiting = false, draw, setDraw, onReplace, onInsert, onRemove, onShuffle }: ChainBandProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const from = playing ? Math.min(done, queue.length) : 0;
   const coming = queue.slice(from);
@@ -100,7 +102,7 @@ export default function ChainBand({ instance, client, current, queue, done, play
     <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft" aria-label="The chain" role="group">
       <div ref={scroller} className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-width:thin]">
         {current !== undefined && (
-          <div data-chain-current className="relative flex-none w-20 h-11 overflow-hidden ring-2 ring-accent rounded-[2px]" title="The picture on screen">
+          <div data-chain-current data-id={current} className="relative flex-none w-20 h-11 overflow-hidden ring-2 ring-accent rounded-[2px]" title="The picture on screen">
             <TileThumb instance={instance} client={client} id={current} />
             <span className="absolute left-1 top-0.5 font-mono text-2xs leading-none text-on-media drop-shadow">now</span>
           </div>
@@ -121,6 +123,11 @@ export default function ChainBand({ instance, client, current, queue, done, play
               >
                 <TileThumb instance={instance} client={client} id={e.id} />
                 <span className="absolute left-1 top-0.5 font-mono text-2xs leading-none text-on-media drop-shadow">{k === 0 ? 'next' : `${at + 1}`}</span>
+                {locked && waiting && (
+                  <span className="absolute inset-x-0 bottom-0 h-[3px] overflow-hidden bg-paper/20" role="progressbar" aria-label="Preparing the next picture" title="Not ready yet — the stage holds its picture until it is">
+                    <span className="block h-full w-1/3 bg-accent animate-[chain-wait_1.1s_ease-in-out_infinite_alternate]" />
+                  </span>
+                )}
               </button>
               {!locked && (
                 <button

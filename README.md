@@ -3226,7 +3226,10 @@ imported from its file, it plays the same. The band's pictures are the
 tiles this device already keeps, the next scenes are built while the
 current one plays (how many, in *Performance*), and the two pictures past
 them are fetched ahead, so a slow instance shows in the band before it
-shows on the stage. *Screen* takes the stage
+shows on the stage: a step whose picture is not ready yet holds the one on
+screen, the *next* tile carries a sliding hairline meanwhile, and the
+Performance section says how long a step takes to be ready and how often
+the chain had to hold. *Screen* takes the stage
 to the whole screen — a Mac left open on Atelier is the screen saver.
 *Speed* is in the dials.
 

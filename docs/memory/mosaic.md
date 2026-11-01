@@ -328,6 +328,29 @@ step either way; one scene ahead waited on the next picture three times in
 seven steps, three ahead never. Nothing for the eleventh: it waits to be
 the ninth.
 
+## Lab 3, the animations: the chain measured first (2026-11-01, A1)
+
+His review of the modes (lab 3 <https://claude.ai/artifact/JpM4MT2LF8qdXGJhzFhgjh>:
+the four animated modes are one step — photo, mosaic, a camera move, the
+next photo — whose parts must become optional; a bug «ça ne passe pas
+directement à l'image suivante du carrousel»). **A1's finding**: the bug
+does NOT reproduce headless — 600 pictures, proxies slowed to 2 s and
+4.5 s, one or three scenes ahead: the player's log shows every step
+prepared from the queue's next entry in order, the band's *now* equal to
+the picture reached, eight steps in 45 s, only the FIRST step ever
+holding (the first proxy). What the stub cannot see is his instance, so the
+chain now MEASURES itself: `PlayerStatus.prepMs` (a step's preparation,
+from the moment its predecessor was known), `waits` / `waitMs` (turns that
+came before their step was ready, past 80 ms), shown in the Performance
+panel as «chain · a step ready in N s · N played · held N× for N s», and
+the band's *next* tile carries a sliding hairline (`chain-wait`,
+`role="progressbar"`) while a later step holds. **Trap for drives**: a
+pixel-colour sampler that names the picture on the canvas is unreliable
+(the stub's colours collide within any tolerance) — read the player's own
+state, never the pixels, to tell which picture is shown. **How to apply**:
+when he reports the chain stalling, read that line on his instance first;
+a step ready in more than the step's length is hypothesis 1 of the lab.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps
