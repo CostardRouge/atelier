@@ -10,7 +10,7 @@
  */
 import { isVoice } from '../audio/voices';
 import type { SoundEvent } from '../audio/sound-event';
-import { clamp, E, PAL, rr, text, TYPO, type Ctx } from './motion';
+import { clamp, E, font, PAL, rr, text, TYPO, type Ctx } from './motion';
 
 export type HookEntry = 'type' | 'rise' | 'word' | 'fade';
 export type HookExit = 'fade' | 'erase' | 'fly' | 'cut';
@@ -123,7 +123,8 @@ export function hookSounds(hook: Hook): { at: number; kind: 'keys' | 'impact' | 
 }
 
 const PLACE_Y: Record<HookPlace, number> = { top: 560, center: 900, bottom: 1240 };
-const INK: Record<HookInk, string> = { paper: PAL.bg, ink: PAL.ink, accent: PAL.acc };
+// Read at draw time: the charte may change the palette (`objects.ts`).
+const INK = (ink: HookInk): string => ({ paper: PAL.bg, ink: PAL.ink, accent: PAL.acc })[ink];
 const SIZE = 92;
 const STICKER_SIZE = 64;
 const LINE_GAP = 40;
@@ -134,7 +135,7 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
   if (!hook.lines.length || t < tl.lines[0].start || t >= tl.end) return;
   const entry = hook.entry ?? HOOK_DEFAULTS.entry;
   const exit = hook.exit ?? HOOK_DEFAULTS.exit;
-  const ink = INK[hook.ink ?? HOOK_DEFAULTS.ink];
+  const ink = INK(hook.ink ?? HOOK_DEFAULTS.ink);
   const out = exit === 'cut' ? 0 : clamp((t - tl.leave) / (tl.end - tl.leave));
   const leaving = t >= tl.leave;
   // The scrim, under the words, as long as they are there.
@@ -181,7 +182,7 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
       // The caret: while typing, and blinking on the last typed line until the next arrives.
       const typing = entry === 'type' && (p < 1 || i === tl.lines.length - 1 || t < tl.lines[i + 1].start);
       if (typing && !leaving && Math.floor(t * 2.2) % 2 === 0) {
-        c.font = `${TYPO.hw} ${size}px ${TYPO.fam}`;
+        c.font = font(size, TYPO.hw, TYPO.fam);
         const full = c.measureText(line.text).width;
         const at = 540 - full / 2 + c.measureText(shown).width + 6;
         c.fillStyle = ink;
@@ -194,10 +195,10 @@ export function drawHook(c: Ctx, hook: Hook, t: number): void {
 
 function fitSize(c: Ctx, s: string, max: number, size: number): number {
   let z = size;
-  c.font = `${TYPO.hw} ${z}px ${TYPO.fam}`;
+  c.font = font(z, TYPO.hw, TYPO.fam);
   while (c.measureText(s).width > max && z > 24) {
     z -= 4;
-    c.font = `${TYPO.hw} ${z}px ${TYPO.fam}`;
+    c.font = font(z, TYPO.hw, TYPO.fam);
   }
   return z;
 }
@@ -208,7 +209,7 @@ function drawSticker(c: Ctx, s: string, cx: number, base: number, p: number, see
   const k = p >= 1 ? 1 : 1 - Math.exp(-6 * p) * Math.cos(9 * p);
   const scale = Math.max(0, k);
   const size = fitSize(c, s, 760, STICKER_SIZE);
-  c.font = `${TYPO.hw} ${size}px ${TYPO.fam}`;
+  c.font = font(size, TYPO.hw, TYPO.fam);
   const w = c.measureText(s).width + 64;
   const h = size + 44;
   c.save();

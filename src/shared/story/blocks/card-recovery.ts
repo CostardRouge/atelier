@@ -1,7 +1,7 @@
 // `card-recovery` — an SD card drawn large, a file row under it that fades to 15 % behind a thin
 // strike line, holds, then comes back to full with a calm accent check. {file}
 import { register } from "./index";
-import { appear, clamp, E, enter, K, PAL, rr, text, TYPO } from "../motion";
+import { appear, clamp, E, enter, font, K, PAL, rr, text, TYPO } from "../motion";
 
 register("card-recovery", (c, lt, p) => {
   const file = String(p.file ?? "DSC08801.ARW");
@@ -66,7 +66,7 @@ register("card-recovery", (c, lt, p) => {
     text(c, file, rx + 96, ry + 12, 34, PAL.ink, { fam: TYPO.mono, w: 400, track: 2 });
     c.restore();
     // the strike line, drawn as the file fades, erased as it comes back
-    c.font = `400 34px ${TYPO.mono}`;
+    c.font = font(34, 400, TYPO.mono);
     c.letterSpacing = "2px";
     const tw = c.measureText(file).width;
     c.letterSpacing = "0px";

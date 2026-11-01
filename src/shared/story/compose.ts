@@ -19,6 +19,8 @@ import { drawHud, drawTexture, setTexture } from './overlays';
 import { setWall, setWallGrid } from './scenes/Hook';
 import { drawHook, hookTimeline } from './hook';
 import { setLang } from './locale';
+import { applyCharte, beginFrame, obj, setSlot, setStyles } from './objects';
+import { CAPTION, HUD } from './charte';
 
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
@@ -50,10 +52,12 @@ function slotLayer(): CanvasRenderingContext2D {
 /** Draw one slot at its local time, a block that throws drawn as a placard. */
 function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
   const fn = BLOCKS[slot.block];
+  setSlot(slot.key);
   c.save();
   try {
     if (!fn) throw new Error(`no block named “${slot.block}”`);
-    fn(c, lt, slot.params ?? {}, ep);
+    // The scene is an object of its own: its settings reach every part it draws (`objects.ts`).
+    obj(c, slot.block, [540, 960], lt, (t) => fn(c, t, slot.params ?? {}, ep));
   } catch (err) {
     c.restore();
     c.save();
@@ -65,11 +69,15 @@ function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
     });
   }
   c.restore();
-  drawCaption(c, slot.cap ?? null, lt, slot.block === 'map-camera' ? 'map' : slot.block);
+  if (slot.cap && lt >= slot.cap.a && lt <= slot.cap.b + CAPTION.fadeOut)
+    obj(c, 'caption', [540, CAPTION.baseline], lt, (t) => drawCaption(c, slot.cap ?? null, t, slot.block === 'map-camera' ? 'map' : slot.block));
 }
 
 export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions = {}): void {
   setLang(ep.lang);
+  applyCharte(ep.look?.charte);
+  setStyles(ep.look?.objects, ep.objects);
+  beginFrame();
   setMap(opts.stops ?? null, opts.road ?? null);
   setWall(opts.wall ?? null);
   setWallGrid(ep.look?.wall, ep.wallGroups);
@@ -91,9 +99,15 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
     c.drawImage(l.canvas, 0, 0);
     c.globalAlpha = 1;
   });
-  if (ep.hook) drawHook(c, ep.hook, t);
+  setSlot('');
+  if (ep.hook) {
+    const hook = ep.hook;
+    const tl = hookTimeline(hook);
+    if (t <= tl.end) obj(c, 'hook', [540, 960], t, (lt) => drawHook(c, hook, lt));
+  }
   // The HUD waits for the opening: the title's slot, or the hook's last word.
-  drawHud(c, t, ep.number, ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0), total);
+  const hudFrom = ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0);
+  if (t >= hudFrom + HUD.delay) obj(c, 'hud', [540, HUD.y], t, (lt) => drawHud(c, lt, ep.number, hudFrom, total));
   if (!opts.bare) drawTexture(c, t);
   c.restore();
 }

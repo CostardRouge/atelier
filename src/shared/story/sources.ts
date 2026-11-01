@@ -180,8 +180,13 @@ export function withPostHooks(
  */
 export function withLook(script: StoryScript, change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null } | null): StoryScript {
   if (!change) {
-    const rest = { ...script };
-    delete rest.look;
+    // Only what the Look section sets: the charte and the objects have their own resets.
+    const kept: StoryLook = { ...(script.look ?? {}) };
+    delete kept.wall;
+    delete kept.vignette;
+    delete kept.grain;
+    const rest: StoryScript = { ...script, look: kept };
+    if (!Object.keys(kept).length) delete rest.look;
     return rest;
   }
   const was = script.look ?? {};

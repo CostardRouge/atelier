@@ -99,3 +99,26 @@ describe('the map in a script', () => {
     expect(parsed.script.topics![1].cells!.li).toBeUndefined();
   });
 });
+
+describe('the Studio’s settings in a script', () => {
+  it('reads the charte and the objects of the series and of a post', () => {
+    const parsed = parseScript({
+      ...script,
+      look: { charte: { palette: { acc: '#ff0000' } }, objects: { caption: { size: 120 } } },
+      posts: { a: { title: 'Premier', objects: { 'counter.number': { dx: 4 } } } },
+    });
+    expect(parsed.ok && parsed.script.look).toEqual({ charte: { palette: { acc: '#ff0000' } }, objects: { caption: { size: 120 } } });
+    expect(parsed.ok && parsed.script.posts.a.objects).toEqual({ 'counter.number': { dx: 4 } });
+    if (parsed.ok) expect(assemble(registry[0], parsed.script, registry).objects).toEqual({ 'counter.number': { dx: 4 } });
+  });
+
+  it('lets a post set a scene’s length and its caption’s window, kept inside the scene', () => {
+    const own: StoryScript = { ...script, posts: { a: { blocks: [{ len: 6, cap: { a: 1, b: 9 } }] } } };
+    const ep = assemble(registry[0], own, registry);
+    expect(ep.blocks[0].len).toBe(6);
+    expect(ep.blocks[0].cap).toMatchObject({ a: 1, b: 6 });
+    expect(ep.blocks[1].len).toBe(5);
+    const parsed = parseScript({ ...script, posts: { a: { blocks: [{ len: 0.1, cap: { a: 3, b: 2 } }] } } });
+    expect(parsed.ok && parsed.script.posts.a.blocks?.[0]).toEqual({ caption: undefined, params: undefined, len: 0.5 });
+  });
+});

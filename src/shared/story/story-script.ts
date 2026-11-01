@@ -15,6 +15,7 @@ import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
 import { readWallGrid, wallGroups, type WallStage } from './wall-grid';
+import { readCharte, readStyleBook, type StyleBook } from './objects';
 import { monthText } from './locale';
 
 export interface SkeletonBlock {
@@ -37,6 +38,10 @@ export interface PostSkeleton {
 export interface ScriptBlock {
   params?: Record<string, unknown>;
   caption?: string;
+  /** The scene's length in this post, seconds, over the skeleton's (the Studio's timeline). */
+  len?: number;
+  /** When its caption speaks, seconds into the scene, over the skeleton's. */
+  cap?: { a: number; b: number };
 }
 
 export interface ScriptPost {
@@ -56,6 +61,8 @@ export interface ScriptPost {
   hookActive?: number;
   /** What the post pays off — kept beside the hook so it never promises more. */
   promise?: string;
+  /** This post's own settings for its objects, over the series' (`objects.ts`). */
+  objects?: StyleBook;
 }
 
 /**
@@ -215,9 +222,16 @@ export function parseScript(raw: unknown): ScriptParse {
     const blocks = Array.isArray(value.blocks)
       ? value.blocks.map((b): ScriptBlock => {
           const block = isObject(b) ? b : {};
+          const len = typeof block.len === 'number' && Number.isFinite(block.len) ? Math.min(60, Math.max(0.5, block.len)) : undefined;
+          const cap =
+            isObject(block.cap) && typeof block.cap.a === 'number' && typeof block.cap.b === 'number' && block.cap.a >= 0 && block.cap.b > block.cap.a
+              ? { a: block.cap.a, b: block.cap.b }
+              : undefined;
           return {
             params: isObject(block.params) ? block.params : undefined,
             caption: typeof block.caption === 'string' ? block.caption : undefined,
+            ...(len !== undefined ? { len } : {}),
+            ...(cap ? { cap } : {}),
           };
         })
       : undefined;
@@ -228,6 +242,7 @@ export function parseScript(raw: unknown): ScriptParse {
       sources: readSources(value.sources),
       facts: readFacts(value.facts),
       ...readHooks(value),
+      ...(readStyleBook(value.objects) ? { objects: readStyleBook(value.objects) } : {}),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -387,10 +402,14 @@ function readLook(raw: unknown): StoryLook | undefined {
   if (!isObject(raw)) return undefined;
   const level = (v: unknown, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(0, v)) : undefined);
   const wall = readWallGrid(raw.wall);
+  const charte = readCharte(raw.charte);
+  const objects = readStyleBook(raw.objects);
   const vignette = level(raw.vignette, 0.8);
   const grain = level(raw.grain, 0.2);
   const look: StoryLook = {
     ...(wall ? { wall } : {}),
+    ...(charte ? { charte } : {}),
+    ...(objects ? { objects } : {}),
     ...(vignette !== undefined ? { vignette } : {}),
     ...(grain !== undefined ? { grain } : {}),
   };
@@ -465,6 +484,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     cover: { line: fillText(mine?.cover ?? '', values, lang) },
     lang,
     ...(script?.look ? { look: script.look } : {}),
+    ...(mine?.objects ? { objects: mine.objects } : {}),
     wallGroups: wallGroups(
       (mine?.facts ?? script?.facts)?.tileDays,
       script?.look?.wall?.group ?? 'none',
@@ -483,11 +503,14 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
           .filter((p) => p.season === skeleton.season)
           .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
       }
+      // The Studio's timeline may set this post's scene length and caption window over the skeleton's.
+      const len = words?.len ?? b.len;
+      const at = words?.cap ?? b.cap;
       return {
         block: b.block,
-        len: b.len,
+        len,
         params: fillParams(given, values, lang) as Record<string, unknown>,
-        cap: b.cap ? { a: b.cap.a, b: b.cap.b, text: fillText(words?.caption ?? placeholderCaption(i), values, lang) } : null,
+        cap: at ? { a: Math.min(at.a, len), b: Math.min(at.b, len), text: fillText(words?.caption ?? placeholderCaption(i), values, lang) } : null,
       };
     }),
   };

@@ -1,7 +1,7 @@
 // `names` — three rows: a wrong name at dim, softly struck through, then the right name rising
 // in ink beside it, with the distance in mono. {pairs: [{wrong, right, km}]}
 import { register } from "./index";
-import { appear, clamp, E, enter, fit, K, PAL, text, TYPO } from "../motion";
+import { appear, clamp, E, enter, font, fit, K, PAL, text, TYPO } from "../motion";
 
 type Pair = { wrong: string; right: string; km: string };
 register("names", (c, lt, p) => {
@@ -11,7 +11,7 @@ register("names", (c, lt, p) => {
     const y = 760 + i * 190, t0 = 0.3 + i * 0.35;
     const wrong = String(pr.wrong), right = String(pr.right), km = String(pr.km ?? "");
     appear(c, enter(lt, t0, 1), () => text(c, wrong, x0, y, wrongSize, PAL.dim, { w: TYPO.lw }), 14);
-    c.font = `${TYPO.lw} ${wrongSize}px ${TYPO.fam}`;
+    c.font = font(wrongSize, TYPO.lw, TYPO.fam);
     const ww = c.measureText(wrong).width;
     // the strike, drawn left to right
     const sp = E(clamp((lt - (t0 + 1.0) * K) / (0.7 * K)));
@@ -27,7 +27,7 @@ register("names", (c, lt, p) => {
       c.restore();
     }
     // the right name, beside it, and the distance at the right edge
-    c.font = `400 24px ${TYPO.mono}`;
+    c.font = font(24, 400, TYPO.mono);
     const kw = km ? c.measureText(km).width : 0;
     const xRight = x0 + ww + 36, room = xr - kw - 30 - xRight;
     const z = fit(c, right, room, rightSize, TYPO.hw, TYPO.fam);

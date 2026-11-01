@@ -2,7 +2,7 @@
 // place a minute later, a thin dotted line between them and a calm flag « horloge fausse ».
 // {from, to, km} — from/to are names from geo's STOPS (both must be on the map).
 import { register } from "./index";
-import { appear, clamp, E, enter, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
+import { appear, clamp, E, enter, font, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
 import { proj, STOPS } from "../geo";
 import { drawCoast } from "../scenes/MapScene";
 
@@ -54,7 +54,7 @@ register("journey-impossible", (c, lt, p) => {
   appear(c, enter(lt, 3.1, 1), () => text(c, `${km} km · 1 minute`, 90, 1150, 30, PAL.dim, { fam: TYPO.mono, w: 400 }), 8);
   appear(c, enter(lt, 3.8, 1), () => {
     const s = "horloge fausse";
-    c.font = `400 26px ${TYPO.mono}`;
+    c.font = font(26, 400, TYPO.mono);
     const w = c.measureText(s).width + 48;
     c.fillStyle = PAL.acc;
     rr(c, 90, 1178, w, 52, 26);

@@ -4,7 +4,7 @@
 // legend at the bottom-left. {gaps: [[fracStart, fracEnd], ...], fill: boolean}
 import { word } from "../locale";
 import { register } from "./index";
-import { appear, clamp, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
+import { appear, clamp, enter, font, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
 import { routeAt, STOPS } from "../geo";
 import { drawCoast, mapLabels } from "../scenes/MapScene";
 import { MAP_DY } from "./journey-impossible";
@@ -82,7 +82,7 @@ const legend = (c: Ctx, lt: number, t0: number, items: { kind: "line" | "dots" |
       }
       c.restore();
       text(c, it.label, x + 44, y, 22, PAL.dim, { fam: TYPO.mono, w: 400 });
-      c.font = `400 22px ${TYPO.mono}`;
+      c.font = font(22, 400, TYPO.mono);
       x += 44 + c.measureText(it.label).width + 44;
     });
   }, 8);
