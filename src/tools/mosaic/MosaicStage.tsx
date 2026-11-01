@@ -57,7 +57,7 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, onPick, 
     if (!scene) return;
     // A scene built for another size is stretched until the new one lands.
     ctx.drawImage(scene.canvas, 0, 0, w, h);
-    if (view.ghost > 0) drawTarget(ctx, scene.target, stageW, stageH, dpr, view.ghost);
+    if (view.ghost > 0) drawTarget(ctx, scene.target, stageW, stageH, dpr, view.ghost, scene.targetRect);
     if (view.grid) drawGrid(ctx, scene.shape, stageW, stageH, dpr);
     if (hover !== null && scene.stageW === stageW) {
       const { cols, cw, ch } = scene.shape;

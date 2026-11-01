@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { coverSource } from '../../shared/mosaic/measure';
 import { putThumb } from './mosaic-store';
 import type { SceneState } from './use-mosaic-scene';
 
@@ -30,7 +31,9 @@ export function useMosaicCover(docId: string, state: SceneState): void {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(scene.canvas, 0, 0, COVER_W, COVER_H);
+      // A square or upright mosaic fills the card's 16:9 by its middle.
+      const src = coverSource(scene.canvas.width, scene.canvas.height, COVER_W, COVER_H);
+      ctx.drawImage(scene.canvas, src.x, src.y, src.w, src.h, 0, 0, COVER_W, COVER_H);
       canvas.toBlob(
         (blob) => {
           if (!alive || !blob) return;

@@ -3,14 +3,17 @@ import { navigate } from '../../app/use-hash-route';
 import {
   cleanMosaicTitle,
   sanitizeSettings,
+  withCrop,
   withMeasures,
   withPictures,
+  withTarget,
   type MosaicDoc,
   type MosaicSettings as Settings,
   type MosaicTile,
 } from '../../shared/mosaic/mosaic-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
+import { aspectRatio, type Crop } from '../../shared/mosaic/frame';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
@@ -23,6 +26,8 @@ import MosaicPicker from './MosaicPicker';
 import MosaicSettings from './MosaicSettings';
 import MosaicStage, { type StageView } from './MosaicStage';
 import MosaicTransport from './MosaicTransport';
+import TargetChooser from './TargetChooser';
+import TargetFrame from './TargetFrame';
 import { MosaicPlayer, type PlayerStatus } from './mosaic-player';
 import { pictureCountLine } from './MosaicGallery';
 import { useMosaicCover } from './use-mosaic-cover';
@@ -59,20 +64,29 @@ function MosaicWorkbench({
   client,
   update,
   setTarget,
+  setCrop,
 }: {
   doc: MosaicDoc;
   client: WinnowClient | null;
   update: (fn: (s: Settings) => Settings) => void;
   setTarget: (id: number) => void;
+  setCrop: (crop: Crop | undefined) => void;
 }) {
   const [boxRef, room] = useElementSize<HTMLDivElement>();
   const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
   // The widest 16:9 the room holds, never taller than it.
-  const stageW = Math.floor(Math.min(room.width, (room.height || Infinity) * (16 / 9)));
-  const stageH = Math.floor(stageW * (9 / 16));
+  // The widest frame of the mosaic's shape the room holds, never taller than it.
+  const aspect = aspectRatio(doc.settings.aspect);
+  const stageW = Math.floor(Math.min(room.width, (room.height || Infinity) * aspect));
+  const stageH = Math.floor(stageW / aspect);
   const { state, builder } = useMosaicScene({ doc, client, stageW, stageH, dpr });
   useMosaicCover(doc.id, state);
   const [view, setView] = useState<StageView>({ grid: false, ghost: 0 });
+  const [choosing, setChoosing] = useState(false);
+  const measured = useMemo(() => doc.tiles.filter((t) => t.grid), [doc.tiles]);
+  // The target's picture for its card: the scene's own once it is this target's.
+  const shown = state.status === 'ready' ? state.scene : state.status === 'idle' ? null : state.previous;
+  const targetBitmap = shown && shown.targetId === doc.target ? shown.target : null;
 
   // --- the player: the animated modes over the builder's scenes ---
   const player = useMemo(() => (builder ? new MosaicPlayer(builder) : null), [builder]);
@@ -97,8 +111,8 @@ function MosaicWorkbench({
   const play = useCallback(() => {
     if (!player || mode === 'single' || doc.target === undefined || player.playing) return;
     player.attach(canvasRef.current, { stageW, stageH, dpr });
-    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid });
-  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, view.grid, stageW, stageH, dpr]);
+    player.start({ mode, direction, speed, seed, settings: { cellPx, level, space, tint, distinctNeighbours }, from: doc.target, grid: view.grid, crop: doc.crop });
+  }, [player, mode, direction, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr]);
   const stop = useCallback(() => player?.stop(), [player]);
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now.
   const wasPlaying = useRef(false);
@@ -107,7 +121,7 @@ function MosaicWorkbench({
     wasPlaying.current = status.playing;
   }, [status.playing, status.current, doc.target, setTarget]);
   // A mode or a dial changed under a running player: the run stops, the next Play takes them.
-  const dialsKey = `${mode}|${direction}|${cellPx}|${level}|${space}|${tint}|${distinctNeighbours}`;
+  const dialsKey = `${mode}|${direction}|${cellPx}|${level}|${space}|${tint}|${distinctNeighbours}|${doc.settings.aspect}`;
   const lastDials = useRef(dialsKey);
   useEffect(() => {
     if (lastDials.current === dialsKey) return;
@@ -170,7 +184,38 @@ function MosaicWorkbench({
         />
       </div>
       <aside className="min-h-0 overflow-auto" aria-label="Mosaic settings">
-        <MosaicSettings settings={doc.settings} update={update} view={view} setView={setView} state={state} />
+        <MosaicSettings
+          settings={doc.settings}
+          update={update}
+          view={view}
+          setView={setView}
+          state={state}
+          cropped={Boolean(doc.crop)}
+          onWhole={() => setCrop(undefined)}
+          onChoose={() => setChoosing(true)}
+          target={
+            <TargetFrame
+              bitmap={targetBitmap}
+              fallbackUrl={client && doc.target !== undefined ? client.thumbUrl(doc.target) : null}
+              aspect={aspect}
+              crop={doc.crop}
+              onCrop={setCrop}
+              onChoose={() => setChoosing(true)}
+            />
+          }
+        />
+        {choosing && client && (
+          <TargetChooser
+            tiles={measured}
+            client={client}
+            current={doc.target}
+            onClose={() => setChoosing(false)}
+            onChoose={(id) => {
+              setChoosing(false);
+              setTarget(id);
+            }}
+          />
+        )}
       </aside>
     </div>
   );
@@ -255,9 +300,11 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
   useEffect(() => {
     if (doc.target !== undefined || !measuredCount) return;
     const id = randomTarget(doc, salt.current++);
-    if (id !== undefined) change((d) => ({ ...d, target: id, updatedAt: Date.now() }));
+    if (id !== undefined) change((d) => withTarget(d, id));
   }, [doc, measuredCount, change]);
-  const setTarget = useCallback((id: number) => change((d) => (d.target === id ? d : { ...d, target: id, updatedAt: Date.now() })), [change]);
+  // A new target drops the crop: a crop belongs to its picture.
+  const setTarget = useCallback((id: number) => change((d) => withTarget(d, id)), [change]);
+  const setCrop = useCallback((crop: Crop | undefined) => change((d) => withCrop(d, crop)), [change]);
 
   const update = useCallback((fn: (s: Settings) => Settings) => change((d) => ({ ...d, settings: sanitizeSettings(fn(d.settings)), updatedAt: Date.now() })), [change]);
 
@@ -355,7 +402,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band }: M
           here with its colours.
         </EmptyState>
       ) : (
-        <MosaicWorkbench doc={doc} client={client} update={update} setTarget={setTarget} />
+        <MosaicWorkbench doc={doc} client={client} update={update} setTarget={setTarget} setCrop={setCrop} />
       )}
     </section>
   );

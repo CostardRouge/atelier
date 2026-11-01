@@ -8,6 +8,7 @@
  * both share its caches and its memoised descriptors.
  */
 
+import { cropGrids, cropRect, type Crop, type Rect } from '../../shared/mosaic/frame';
 import { forceInto, gridShape, type GridShape, type Matching } from '../../shared/mosaic/match';
 import { descriptorsOf, dimsOf, oklabOf, type Level, type Space } from '../../shared/mosaic/measure';
 import type { MosaicTile } from '../../shared/mosaic/mosaic-doc';
@@ -31,6 +32,8 @@ export interface MosaicScene {
   /** The target's own picture, to ghost over the mosaic and to fade into. */
   target: ImageBitmap;
   targetId: number;
+  /** The part of `target` the frame rebuilds, in its pixels — what the ghost, the fades and the reveal draw. */
+  targetRect: Rect;
   /** The cell a picture was FORCED into (a zoom-out's seam), or null. */
   forcedCell: number | null;
   /** Where and how long the matching took. */
@@ -64,7 +67,7 @@ export class SceneBuilder {
   private targets = new Map<number, ImageBitmap>();
   private bitmaps: TileBitmaps | null = null;
   private library: Library = { tiles: [], grids: new Uint8Array(0) };
-  private descriptorsFor: { grids: Uint8Array; level: Level; space: Space; value: Float32Array } | null = null;
+  private descriptorsFor: { grids: Uint8Array; level: Level; space: Space; aspect: number; value: Float32Array } | null = null;
   private labFor: { grids: Uint8Array; value: Float32Array } | null = null;
 
   constructor(
@@ -95,13 +98,17 @@ export class SceneBuilder {
     return this.library.tiles.some((t) => t.id === id);
   }
 
-  /** The library's descriptors at a level and space, memoised on the grids. */
-  descriptors(level: Level, space: Space): Float32Array {
+  /**
+   * The library's descriptors at a level and space, each grid first narrowed
+   * to what a cell of `aspect` shows of its 16:9 tile (`cropGrids`) —
+   * memoised on the grids, the level, the space and the aspect.
+   */
+  descriptors(level: Level, space: Space, aspect: number): Float32Array {
     const { grids, tiles } = this.library;
     const d = this.descriptorsFor;
-    if (d && d.grids === grids && d.level === level && d.space === space) return d.value;
-    const value = descriptorsOf(grids, tiles.length, level, space);
-    this.descriptorsFor = { grids, level, space, value };
+    if (d && d.grids === grids && d.level === level && d.space === space && Math.abs(d.aspect - aspect) < 1e-6) return d.value;
+    const value = descriptorsOf(cropGrids(grids, tiles.length, aspect), tiles.length, level, space);
+    this.descriptorsFor = { grids, level, space, aspect, value };
     return value;
   }
 
@@ -128,14 +135,16 @@ export class SceneBuilder {
   }
 
   /**
-   * The scene of `targetId`. With `force`, that picture (a library index)
-   * takes the cell that resembles it most — the zoom-out's seam.
+   * The scene of `targetId`, its frame the stage's shape, sitting on the
+   * target where `crop` says (the whole frame when absent). With `force`,
+   * that picture (a library index) takes the cell that resembles it most —
+   * the zoom-out's seam.
    */
   async build(
     targetId: number,
     settings: MatchSettings,
     size: StageSize,
-    opts: { signal?: AbortSignal; onStep?: (s: BuildStep) => void; force?: number } = {},
+    opts: { signal?: AbortSignal; onStep?: (s: BuildStep) => void; force?: number; crop?: Crop } = {},
   ): Promise<MosaicScene> {
     const { signal, onStep } = opts;
     const tiles = this.library.tiles;
@@ -149,10 +158,13 @@ export class SceneBuilder {
     onStep?.('matching');
     const { stageW, stageH, dpr } = size;
     const shape = gridShape(stageW, stageH, settings.cellPx);
-    const cells = targetCellsOf(bitmap, shape, stageW, stageH);
+    const aspect = stageW / stageH;
+    const targetRect = cropRect(bitmap.width, bitmap.height, aspect, opts.crop);
+    const cells = targetCellsOf(bitmap, shape, targetRect);
     const count = shape.cols * shape.rows;
     const cellsK = descriptorsOf(cells, count, settings.level, settings.space);
-    const pictures = this.descriptors(settings.level, settings.space);
+    // A cell has the frame's shape: the library is compared on what such a cell shows of each tile.
+    const pictures = this.descriptors(settings.level, settings.space, shape.cw / shape.ch);
     const dims = dimsOf(settings.level);
     const t0 = performance.now();
     let matching: Matching & { on: 'main' | 'worker' } = await matchAnywhere(cellsK, pictures, dims, shape.cols, shape.rows, {
@@ -181,7 +193,7 @@ export class SceneBuilder {
     onStep?.('painting');
     const canvas = document.createElement('canvas');
     paintMosaic(canvas, { shape, matching, bitmapOf: (i) => byIndex.get(i) ?? null, means: cellMeans(cells, count), tint: settings.tint }, stageW, stageH, dpr);
-    return { stageW, stageH, dpr, shape, tiles, matching, canvas, target: bitmap, targetId: targetTile.id, forcedCell, matchMs, on: matching.on };
+    return { stageW, stageH, dpr, shape, tiles, matching, canvas, target: bitmap, targetId: targetTile.id, targetRect, forcedCell, matchMs, on: matching.on };
   }
 
   /** The 6 × 6 grids in OKLab of the whole library — what a zoom-out's next target is picked on. */

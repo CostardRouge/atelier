@@ -3164,6 +3164,17 @@ previous mosaic staying on screen meanwhile. Click a cell to make its
 picture the target, or *Draw a target*. The gallery card's cover is the
 mosaic as the stage last painted it.
 
+**The target and its frame.** The inspector opens on the **target**, as
+wide as it: the picture rebuilt, with a frame on it — the part the mosaic
+rebuilds, the rest dimmed and never read. Drag the frame to move it, its
+corner to resize it; *Whole picture* gives the largest frame back; a press
+on the picture outside the frame, or *Choose…*, opens a grid of the
+mosaic's pictures to pick another target (a new target is framed whole).
+**Shape** sets the rebuilt picture's proportions — 16:9, 3:2, 4:3, square,
+4:5 or 9:16 — and the stage, its cells and the gallery's cover follow; each
+picture is compared on the part a cell of that shape shows of it, and drawn
+so.
+
 **The modes.** Under the stage: *Still* is the mosaic as above. *Pull back*
 plays once what the screen saver did — the picture pulls back and turns out
 to be one cell of another, which then appears whole. *Chain* never ends:

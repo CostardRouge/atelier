@@ -1,8 +1,12 @@
+import type { ReactNode } from 'react';
+import { ASPECTS, type AspectId } from '../../shared/mosaic/frame';
 import { MAX_CELL_PX, MIN_CELL_PX } from '../../shared/mosaic/match';
 import type { Level, Space } from '../../shared/mosaic/measure';
 import { sanitizeSettings, type MosaicSettings as Settings } from '../../shared/mosaic/mosaic-doc';
 import { FieldRow, InspectorSection, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
+import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
+import { Icons } from '../../shared/ui/icons';
 import type { StageView } from './MosaicStage';
 import type { SceneState } from './use-mosaic-scene';
 
@@ -12,7 +16,22 @@ interface MosaicSettingsProps {
   view: StageView;
   setView: (fn: (v: StageView) => StageView) => void;
   state: SceneState;
+  /** The target's card (`TargetFrame`) and its verbs, drawn first. */
+  target: ReactNode;
+  /** The target's crop is not the whole frame: *Whole picture* gives it back. */
+  cropped: boolean;
+  onWhole: () => void;
+  onChoose: () => void;
 }
+
+const ASPECT_TITLES: Record<AspectId, string> = {
+  '16:9': 'Wide, as a screen',
+  '3:2': 'A camera’s frame',
+  '4:3': 'A phone’s photo, or a compact’s',
+  '1:1': 'Square',
+  '4:5': 'A portrait post',
+  '9:16': 'A phone held upright — a story',
+};
 
 const LEVELS: readonly { id: `${Level}`; label: string; title: string }[] = [
   { id: '1', label: 'Mean', title: 'One colour a picture — the fastest, and the tint does the reading' },
@@ -29,10 +48,33 @@ const SPACES: readonly { id: Space; label: string; title: string }[] = [
  * matching compares and how the picture reads, each a setting of the
  * document; the grid and the ghost are this screen's, never saved.
  */
-export default function MosaicSettings({ settings, update, view, setView, state }: MosaicSettingsProps) {
+export default function MosaicSettings({ settings, update, view, setView, state, target, cropped, onWhole, onChoose }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   return (
     <div className="flex flex-col gap-3">
+      <InspectorSection id="mosaic-target" title="Target" remember="session">
+        {target}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="ghost" icon={Icons.image} onClick={onChoose} title="Pick the picture the mosaic rebuilds">
+            Choose…
+          </Button>
+          {cropped && (
+            <Button size="sm" variant="ghost" icon={Icons.zoomFit} onClick={onWhole} title="Rebuild the whole picture, the largest frame of this shape it holds">
+              Whole picture
+            </Button>
+          )}
+        </div>
+        <FieldRow label="Shape">
+          <Segmented<AspectId>
+            size="sm"
+            columns={3}
+            value={settings.aspect}
+            options={ASPECTS.map((id) => ({ id, label: id, title: ASPECT_TITLES[id] }))}
+            onChange={(id) => update((s) => ({ ...s, aspect: id }))}
+          />
+        </FieldRow>
+        <p className="m-0 text-xs text-muted">Drag the frame on the picture to choose the part rebuilt; its corner resizes it. The rest is never read.</p>
+      </InspectorSection>
       <InspectorSection id="mosaic-cells" title="Cells" remember="session">
         <SliderRow
           label="Cell"

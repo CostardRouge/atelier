@@ -26,6 +26,7 @@ import {
 } from '../../shared/mosaic/chain';
 import { pickCell, pickNextTarget } from '../../shared/mosaic/match';
 import { coverSource } from '../../shared/mosaic/measure';
+import type { Crop } from '../../shared/mosaic/frame';
 import type { ChainDirection, MosaicMode } from '../../shared/mosaic/mosaic-doc';
 import { drawGrid, drawTarget } from './mosaic-paint';
 import type { MatchSettings, MosaicScene, SceneBuilder, StageSize } from './scene-builder';
@@ -40,6 +41,8 @@ export interface PlayerOptions {
   from: number;
   /** The cell lines over the mosaic while playing. */
   grid?: boolean;
+  /** The part of `from` the frame rebuilds; the pictures after it are framed whole. */
+  crop?: Crop;
 }
 
 /** What the player says of itself, for the status line. */
@@ -139,7 +142,7 @@ export class MosaicPlayer {
     // Dézoom: one step out. Chain: endless, the direction's kinds.
     let index = 0;
     let current = opts.from;
-    let pending: Promise<ChainStep | null> = this.prepare(opts.mode === 'dezoom' ? 'out' : stepKind(opts.direction, 0), current, opts, signal);
+    let pending: Promise<ChainStep | null> = this.prepare(opts.mode === 'dezoom' ? 'out' : stepKind(opts.direction, 0), current, opts, signal, opts.crop);
     for (;;) {
       this.say({ waiting: true, phase: 'preparing' });
       const step = await pending;
@@ -166,12 +169,12 @@ export class MosaicPlayer {
   }
 
   /** The step that takes the chain from `from`: its next picture chosen, its scene built. */
-  private async prepare(kind: ChainKind, from: number, opts: PlayerOptions, signal: AbortSignal): Promise<ChainStep | null> {
+  private async prepare(kind: ChainKind, from: number, opts: PlayerOptions, signal: AbortSignal, crop?: Crop): Promise<ChainStep | null> {
     const tiles = this.builder.tiles;
     const fromIndex = tiles.findIndex((t) => t.id === from);
     if (fromIndex < 0 || tiles.length < 2) return null;
     if (kind === 'in') {
-      const scene = await this.builder.build(from, opts.settings, this.size, { signal });
+      const scene = await this.builder.build(from, opts.settings, this.size, { signal, crop });
       const cell = pickCell(scene.matching, scene.shape.cols, scene.shape.rows, { target: fromIndex, history: this.historyIndexes(), rnd: this.rnd });
       if (cell < 0) return null;
       const nextIndex = scene.matching.ids[cell];
@@ -262,7 +265,7 @@ export class MosaicPlayer {
         ctx.globalAlpha = 1;
       }
     }
-    if (cam.target > 0) drawTarget(ctx, scene.target, W, H, dpr, cam.target);
+    if (cam.target > 0) drawTarget(ctx, scene.target, W, H, dpr, cam.target, scene.targetRect);
   }
 
   private async runReveal(opts: PlayerOptions, signal: AbortSignal): Promise<void> {
@@ -271,7 +274,7 @@ export class MosaicPlayer {
     const tiles = this.builder.tiles;
     for (;;) {
       this.say({ waiting: true, phase: 'preparing', stepIndex: index, current });
-      const scene = await this.builder.build(current, opts.settings, this.size, { signal });
+      const scene = await this.builder.build(current, opts.settings, this.size, { signal, crop: index === 0 ? opts.crop : undefined });
       if (signal.aborted) return;
       const count = scene.shape.cols * scene.shape.rows;
       const order = revealOrder(scene.shape.cols, scene.shape.rows, this.rnd);
@@ -287,9 +290,9 @@ export class MosaicPlayer {
             const { ctx, W, H, dpr } = c;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.drawImage(scene.canvas, 0, 0, W, H);
-            if (r.flipped >= count) drawTarget(ctx, scene.target, W, H, dpr, 1);
+            if (r.flipped >= count) drawTarget(ctx, scene.target, W, H, dpr, 1, scene.targetRect);
             else if (r.flipped > 0) {
-              const src = coverSource(scene.target.width, scene.target.height, W, H);
+              const src = scene.targetRect;
               const { cols, cw, ch } = scene.shape;
               const kx = W / scene.stageW;
               const ky = H / scene.stageH;
@@ -326,7 +329,7 @@ export class MosaicPlayer {
 
   private async runDrift(opts: PlayerOptions, signal: AbortSignal): Promise<void> {
     this.say({ waiting: true, phase: 'preparing' });
-    const scene = await this.builder.build(opts.from, opts.settings, this.size, { signal });
+    const scene = await this.builder.build(opts.from, opts.settings, this.size, { signal, crop: opts.crop });
     if (signal.aborted) return;
     this.say({ waiting: false, phase: 'drifting' });
     const t0 = performance.now();

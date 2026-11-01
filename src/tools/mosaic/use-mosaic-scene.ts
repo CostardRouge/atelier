@@ -40,6 +40,9 @@ export function useMosaicScene({ doc, client, stageW, stageH, dpr }: SceneInputs
   useEffect(() => builder?.setLibrary(library), [builder, library]);
   const { level, space, cellPx, tint, distinctNeighbours } = doc.settings;
   const target = doc.target;
+  // An equal crop in a new object must not rebuild the scene: keyed on its numbers.
+  const cropKey = doc.crop ? `${doc.crop.cx}|${doc.crop.cy}|${doc.crop.scale}` : '';
+  const crop = useMemo(() => doc.crop, [cropKey]);
 
   useEffect(() => {
     const previous = latest.current;
@@ -64,6 +67,7 @@ export function useMosaicScene({ doc, client, stageW, stageH, dpr }: SceneInputs
     void builder
       .build(target, { cellPx, level, space, tint, distinctNeighbours }, { stageW, stageH, dpr }, {
         signal: controller.signal,
+        crop,
         onStep: (step) => {
           if (alive) setState({ status: 'building', step, previous });
         },
@@ -82,7 +86,7 @@ export function useMosaicScene({ doc, client, stageW, stageH, dpr }: SceneInputs
       alive = false;
       controller.abort();
     };
-  }, [client, builder, library, target, stageW, stageH, dpr, cellPx, level, space, tint, distinctNeighbours]);
+  }, [client, builder, library, target, crop, stageW, stageH, dpr, cellPx, level, space, tint, distinctNeighbours]);
 
   return { state, builder };
 }

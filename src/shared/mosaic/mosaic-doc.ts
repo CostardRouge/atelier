@@ -15,6 +15,7 @@
  * is UNTRUSTED input»).
  */
 
+import { DEFAULT_ASPECT, isAspect, isWhole, readCrop, type AspectId, type Crop } from './frame';
 import { MAX_CELL_PX, MIN_CELL_PX } from './match';
 import { decodeGrid, type Level, type Space } from './measure';
 
@@ -40,6 +41,8 @@ export interface MosaicTile {
 }
 
 export interface MosaicSettings {
+  /** The rebuilt picture's shape — the stage, its cells and every export follow it (`frame.ts`). */
+  aspect: AspectId;
   /** A cell's width in stage pixels (D2). */
   cellPx: number;
   level: Level;
@@ -72,12 +75,18 @@ export interface MosaicDoc {
   tiles: MosaicTile[];
   /** The asset id reconstituted in Single and Dézoom; absent until one is chosen. */
   target?: number;
+  /**
+   * Which part of the target the frame rebuilds (`frame.ts`); absent = the
+   * whole frame, centred. Belongs to `target`: a new target drops it.
+   */
+  crop?: Crop;
   settings: MosaicSettings;
   createdAt: number;
   updatedAt: number;
 }
 
 export const DEFAULT_SETTINGS: MosaicSettings = {
+  aspect: DEFAULT_ASPECT,
   cellPx: 40,
   level: 2,
   space: 'oklab',
@@ -104,6 +113,7 @@ export function sanitizeSettings(raw: unknown): MosaicSettings {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const level = Math.round(num(r.level, 1, 3, DEFAULT_SETTINGS.level)) as Level;
   return {
+    aspect: isAspect(r.aspect) ? r.aspect : DEFAULT_SETTINGS.aspect,
     cellPx: Math.round(num(r.cellPx, MIN_CELL_PX, MAX_CELL_PX, DEFAULT_SETTINGS.cellPx)),
     level,
     space: oneOf<Space>(r.space, ['oklab', 'rgb'], DEFAULT_SETTINGS.space),
@@ -186,6 +196,7 @@ export function readMosaicDoc(raw: unknown, sourceIdFallback: string, now: numbe
   if (version > MOSAIC_DOC_VERSION) return null;
   const tiles = readTiles(r.tiles);
   const target = typeof r.target === 'number' && tiles.some((t) => t.id === r.target) ? r.target : undefined;
+  const crop = target !== undefined ? readCrop(r.crop) : undefined;
   const span = readSpan(r.span);
   const instance = str(r.instance)?.trim().slice(0, 300);
   const createdAt = time(r.createdAt, now);
@@ -198,6 +209,7 @@ export function readMosaicDoc(raw: unknown, sourceIdFallback: string, now: numbe
     ...(span ? { span } : {}),
     tiles,
     ...(target !== undefined ? { target } : {}),
+    ...(crop && !isWhole(crop) ? { crop } : {}),
     settings: sanitizeSettings(r.settings),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
@@ -262,7 +274,30 @@ export function withoutTiles(doc: MosaicDoc, ids: Iterable<number>, now: number 
   const gone = new Set(ids);
   if (!doc.tiles.some((t) => gone.has(t.id))) return doc;
   const out: MosaicDoc = { ...doc, tiles: doc.tiles.filter((t) => !gone.has(t.id)), updatedAt: now };
-  if (out.target !== undefined && gone.has(out.target)) delete out.target;
+  if (out.target !== undefined && gone.has(out.target)) {
+    delete out.target;
+    delete out.crop;
+  }
+  return out;
+}
+
+/** The mosaic aimed at another picture: its crop goes, since a crop belongs to its target. Same object when nothing changes. */
+export function withTarget(doc: MosaicDoc, target: number, now: number = Date.now()): MosaicDoc {
+  if (doc.target === target) return doc;
+  const out: MosaicDoc = { ...doc, target, updatedAt: now };
+  delete out.crop;
+  return out;
+}
+
+/** The part of the target rebuilt; the whole frame is stored as no crop. Same object when nothing changes. */
+export function withCrop(doc: MosaicDoc, crop: Crop | undefined, now: number = Date.now()): MosaicDoc {
+  const next = crop && !isWhole(crop) ? crop : undefined;
+  const cur = doc.crop;
+  if (!next && !cur) return doc;
+  if (next && cur && next.cx === cur.cx && next.cy === cur.cy && next.scale === cur.scale) return doc;
+  const out: MosaicDoc = { ...doc, updatedAt: now };
+  if (next) out.crop = next;
+  else delete out.crop;
   return out;
 }
 

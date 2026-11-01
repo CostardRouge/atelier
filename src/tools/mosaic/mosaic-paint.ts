@@ -5,12 +5,16 @@
  * ghost, the grid). The animated modes (M6) transform that one canvas.
  */
 
+import type { Rect } from '../../shared/mosaic/frame';
 import { cellGridsOf, type GridShape, type Matching } from '../../shared/mosaic/match';
-import { GRID, GRID_CELLS, GRID_BYTES } from '../../shared/mosaic/measure';
-import { coverSource } from '../../shared/mosaic/measure';
+import { GRID, GRID_CELLS, GRID_BYTES, coverSource } from '../../shared/mosaic/measure';
 
-/** The target's cells, each a 6 × 6 grid, read off its bitmap cover-cropped to the stage's shape. */
-export function targetCellsOf(target: ImageBitmap, shape: GridShape, stageW: number, stageH: number): Uint8Array {
+/**
+ * The target's cells, each a 6 × 6 grid, read off the part of its bitmap
+ * the frame rebuilds (`rect`, its pixels — `frame.ts`'s `cropRect`); the
+ * rest of the picture is never read.
+ */
+export function targetCellsOf(target: ImageBitmap, shape: GridShape, rect: Rect): Uint8Array {
   const w = shape.cols * GRID;
   const h = shape.rows * GRID;
   const canvas = document.createElement('canvas');
@@ -18,9 +22,8 @@ export function targetCellsOf(target: ImageBitmap, shape: GridShape, stageW: num
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('no 2d context');
-  const src = coverSource(target.width, target.height, stageW, stageH);
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(target, src.x, src.y, src.w, src.h, 0, 0, w, h);
+  ctx.drawImage(target, rect.x, rect.y, rect.w, rect.h, 0, 0, w, h);
   const { data } = ctx.getImageData(0, 0, w, h);
   return cellGridsOf({ data, width: w, height: h }, shape.cols, shape.rows);
 }
@@ -56,8 +59,9 @@ export interface MosaicPaint {
 
 /**
  * The whole mosaic into `canvas`, sized `stageW × stageH` logical pixels at
- * `dpr`: each cell its tile, then the veil of its own colour. A cell whose
- * tile is missing shows its colour alone.
+ * `dpr`: each cell its tile — cover-cropped to the cell's shape, a 16:9 tile
+ * in a square cell showing its middle —, then the veil of its own colour. A
+ * cell whose tile is missing shows its colour alone.
  */
 export function paintMosaic(canvas: HTMLCanvasElement | OffscreenCanvas, paint: MosaicPaint, stageW: number, stageH: number, dpr: number): void {
   canvas.width = Math.round(stageW * dpr);
@@ -75,7 +79,8 @@ export function paintMosaic(canvas: HTMLCanvasElement | OffscreenCanvas, paint: 
     const bitmap = paint.matching.ids[c] >= 0 ? paint.bitmapOf(paint.matching.ids[c]) : null;
     const o = c * 3;
     if (bitmap) {
-      ctx.drawImage(bitmap, x, y, cw + 0.5, ch + 0.5);
+      const src = coverSource(bitmap.width, bitmap.height, cw, ch);
+      ctx.drawImage(bitmap, src.x, src.y, src.w, src.h, x, y, cw + 0.5, ch + 0.5);
       if (paint.tint > 0) {
         ctx.fillStyle = `rgba(${paint.means[o]},${paint.means[o + 1]},${paint.means[o + 2]},${paint.tint})`;
         ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
@@ -106,10 +111,10 @@ export function drawGrid(ctx: CanvasRenderingContext2D, shape: GridShape, stageW
   ctx.restore();
 }
 
-/** The target drawn to cover the stage, at `alpha`. */
-export function drawTarget(ctx: CanvasRenderingContext2D, target: ImageBitmap, stageW: number, stageH: number, dpr: number, alpha = 1): void {
+/** The target's framed part (`rect`, else a centred cover crop) drawn over the stage, at `alpha`. */
+export function drawTarget(ctx: CanvasRenderingContext2D, target: ImageBitmap, stageW: number, stageH: number, dpr: number, alpha = 1, rect?: Rect): void {
   if (alpha <= 0) return;
-  const src = coverSource(target.width, target.height, stageW, stageH);
+  const src = rect ?? coverSource(target.width, target.height, stageW, stageH);
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.globalAlpha = alpha;

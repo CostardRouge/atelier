@@ -143,6 +143,31 @@ the constructor. Driven headless: Chain dive (frames change, step 2 after
 picture seen), Pull back once (ends by itself, the target written), Reveal
 and Drift (frames change), fullscreen granted.
 
+## The frame: a shape for the mosaic, a part of the target (2026-11-01)
+
+His ask after M6: the target chosen explicitly in an image field as wide as
+the inspector, a shape for the rebuilt picture, and «la zone de la photo
+concernée … que le centre de l'image en carré … tout le reste ignoré».
+**Decisions** (`shared/mosaic/frame.ts`, pure): `settings.aspect` is one of
+six shapes (16:9 … 9:16) — the stage, its cells (the frame's shape) and the
+poster follow; `MosaicDoc.crop` is `{cx, cy, scale}` on the TARGET, scale 1
+the largest frame of the shape the picture holds — aspect-free on purpose,
+so changing the shape keeps the centre and the share; it belongs to its
+target (`withTarget` drops it, the whole frame is stored as none) and the
+chain frames every later picture whole. The target's cells are read off
+`cropRect` only — the rest is never read. **The library follows the cell's
+shape**: a grid was measured on a 16:9 tile, so `cropGrids` resamples each
+6 × 6 grid (area-weighted) to the centre window a square or upright cell
+shows, memoised per aspect in `SceneBuilder.descriptors`, and `paintMosaic`
+cover-crops each tile into its cell (it used to stretch). An upright cell
+draws a ~50 × 90 slice of the tile — coarse at big cells, honest at 40 px.
+**The UI**: `TargetFrame.tsx` (the picture with the frame dimmed around it,
+drag to move, the corner to resize, written on pointer-up so the scene
+rebuilds once; a press outside the frame opens the chooser) and
+`TargetChooser.tsx` (the measured pictures through `WinnowThumb`, paged by
+240, opened on the current target's page) under a *Target* section first in
+the inspector, with *Choose…*, *Whole picture* and the shape.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

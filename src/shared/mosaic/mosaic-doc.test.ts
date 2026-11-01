@@ -10,8 +10,10 @@ import {
   readTiles,
   sanitizeSettings,
   unionSpan,
+  withCrop,
   withMeasures,
   withPictures,
+  withTarget,
   withTiles,
   withoutTiles,
 } from './mosaic-doc';
@@ -21,13 +23,13 @@ const grid = encodeGrid(new Uint8Array(GRID_BYTES).fill(77));
 describe('sanitizeSettings', () => {
   it('gives the defaults for nothing and bounds every number', () => {
     expect(sanitizeSettings(undefined)).toEqual(DEFAULT_SETTINGS);
-    const s = sanitizeSettings({ cellPx: 2, level: 9, space: 'lab', tint: 3, speed: 0.01, seed: -4, mode: 'spiral', direction: 'up', distinctNeighbours: 'yes' });
+    const s = sanitizeSettings({ aspect: '2:1', cellPx: 2, level: 9, space: 'lab', tint: 3, speed: 0.01, seed: -4, mode: 'spiral', direction: 'up', distinctNeighbours: 'yes' });
     expect(s).toEqual({ ...DEFAULT_SETTINGS, cellPx: 12, level: 3, tint: 0.7, speed: 0.4, seed: 1 });
   });
 
   it('keeps a valid setting as given', () => {
-    const s = sanitizeSettings({ cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', direction: 'alternate', speed: 2, seed: 42 });
-    expect(s).toEqual({ cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', direction: 'alternate', speed: 2, seed: 42 });
+    const s = sanitizeSettings({ aspect: '1:1', cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', direction: 'alternate', speed: 2, seed: 42 });
+    expect(s).toEqual({ aspect: '1:1', cellPx: 64, level: 1, space: 'rgb', tint: 0, distinctNeighbours: false, mode: 'chain', direction: 'alternate', speed: 2, seed: 42 });
   });
 });
 
@@ -145,6 +147,21 @@ describe('withTiles / withoutTiles / withMeasures', () => {
     expect(readMosaicDoc(JSON.parse(JSON.stringify(b)), 's')).toEqual(b);
     expect(readMosaicDoc({ ...b, instance: 42 }, 's')!.instance).toBeUndefined();
     expect(unionSpan(undefined, undefined)).toBeUndefined();
+  });
+
+  it('a crop belongs to its target: kept when read with it, dropped by a new target, the whole frame stored as none', () => {
+    const a = { ...withTiles(doc, [{ id: 1, kind: 'photo', grid }, { id: 2, kind: 'photo', grid }], 2), target: 1 };
+    const b = withCrop(a, { cx: 0.5, cy: 0.5, scale: 0.4 }, 3);
+    expect(b.crop).toEqual({ cx: 0.5, cy: 0.5, scale: 0.4 });
+    expect(withCrop(b, { cx: 0.5, cy: 0.5, scale: 0.4 }, 4)).toBe(b);
+    expect(withCrop(b, { cx: 0.5, cy: 0.5, scale: 1 }, 5).crop).toBeUndefined();
+    expect(readMosaicDoc(JSON.parse(JSON.stringify(b)), 's')!.crop).toEqual(b.crop);
+    expect(readMosaicDoc({ ...b, target: undefined }, 's')!.crop).toBeUndefined();
+    const c = withTarget(b, 2, 6);
+    expect(c.target).toBe(2);
+    expect(c.crop).toBeUndefined();
+    expect(withTarget(c, 2, 7)).toBe(c);
+    expect(withoutTiles(b, [1], 8).crop).toBeUndefined();
   });
 
   it('measuredTiles lists the tiles with a grid and packs their bytes', () => {
