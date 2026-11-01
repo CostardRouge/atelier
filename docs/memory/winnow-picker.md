@@ -221,6 +221,10 @@ and a trip or a season of flights is neither one day nor one Winnow session.
   drawn. Day and Folder scopes, the Logbook and a span sorted by stars keep the
   batches. Measured on a stub of 8 983 photos, 1 s a page: a click on November
   draws it in about a second, stable over four runs.
+- **One per burst** (2026-11-01, his ask): a facet (`oneBurst`, remembered with the others) that keeps ONE drawn frame
+  per Winnow pile — a pick, then the most stars, then the pile's cover (`onePerBurst`, pure, tested), applied in `shown`
+  after the other facets, so a burst whose pick a filter hides still shows its next best. The rail's count is the piles
+  drawing more than one frame (`FacetCounts.bursts`).
 - **A span asks the server for only what the rail keeps** (2026-10-13, his
   «quand les filtres … et que l'appareil est sélectionné, il faut que le filtre
   soit appliqué sur les médias venant du drone»): `serverFacets` sends the one

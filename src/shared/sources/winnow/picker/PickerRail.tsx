@@ -221,6 +221,14 @@ export default function PickerRail({
         <Row on={facets.notHeld} count={counts.notHeld} onClick={() => set({ notHeld: !facets.notHeld })}>
           Not {heldLabel}
         </Row>
+        <Row
+          on={facets.oneBurst}
+          count={counts.bursts}
+          onClick={() => set({ oneBurst: !facets.oneBurst })}
+          title="One picture per burst: a pick first, then the most stars, then the burst's cover"
+        >
+          One per burst
+        </Row>
       </section>
 
       {footer}

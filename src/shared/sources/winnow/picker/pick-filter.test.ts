@@ -10,6 +10,7 @@ import {
   hiddenTicked,
   idsFor,
   inverted,
+  onePerBurst,
   openingTicks,
   passes,
   pickItem,
@@ -273,5 +274,33 @@ describe('ticking', () => {
 
   it('counts the ticked rows nothing draws', () => {
     expect(hiddenTicked(new Set([1, 99, 100]), list)).toBe(2);
+  });
+});
+
+describe('one per burst', () => {
+  const list = items([
+    row(1),
+    row(10, { burst_id: 9, burst_cover_id: 10, burst_count: 3 }),
+    row(11, { burst_id: 9, burst_cover_id: 10, burst_count: 3, star: 4 }),
+    row(12, { burst_id: 9, burst_cover_id: 10, burst_count: 3, verdict: 'pick' }),
+    row(20, { burst_id: 19, burst_cover_id: 21, burst_count: 2 }),
+    row(21, { burst_id: 19, burst_cover_id: 21, burst_count: 2 }),
+  ]);
+  const piles = pilesOf(list);
+
+  it("keeps a burst's best frame: a pick, then the most stars, then its cover", () => {
+    expect(onePerBurst(list, piles).map((it) => it.id)).toEqual([1, 12, 21]);
+    const noPick = list.filter((it) => it.id !== 12);
+    expect(onePerBurst(noPick, piles).map((it) => it.id)).toEqual([1, 11, 21]);
+  });
+
+  it('is a facet: shown applies it, counted, remembered, and off by default', () => {
+    const f = { ...SHOW_ALL, oneBurst: true };
+    expect(shown(list, f, 'time', piles).map((it) => it.id)).toEqual([1, 12, 21]);
+    expect(shown(list, SHOW_ALL, 'time', piles)).toHaveLength(6);
+    expect(facetCounts(list).bursts).toBe(2);
+    expect(readFacets({ oneBurst: true }).oneBurst).toBe(true);
+    expect(DEFAULT_FACETS.oneBurst).toBe(false);
+    expect(activeFacets({ ...DEFAULT_FACETS, oneBurst: true })).toBe(1);
   });
 });

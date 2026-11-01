@@ -196,6 +196,8 @@ export interface PickFacets {
   noFinal: boolean;
   /** Only what the host does not hold yet. */
   notHeld: boolean;
+  /** One picture per Winnow burst — its best: a pick, then the most stars, then its cover. */
+  oneBurst: boolean;
 }
 
 export const DEFAULT_FACETS: PickFacets = {
@@ -208,6 +210,7 @@ export const DEFAULT_FACETS: PickFacets = {
   tags: [],
   noFinal: false,
   notHeld: false,
+  oneBurst: false,
 };
 
 /** Every bucket shown, nothing else narrowed — what "show the hidden ones" restores. */
@@ -255,7 +258,8 @@ export function activeFacets(f: PickFacets): number {
     f.devices.length +
     f.tags.length +
     (f.noFinal ? 1 : 0) +
-    (f.notHeld ? 1 : 0)
+    (f.notHeld ? 1 : 0) +
+    (f.oneBurst ? 1 : 0)
   );
 }
 
@@ -283,6 +287,7 @@ export function readFacets(raw: unknown): PickFacets {
     tags: strings(r.tags),
     noFinal: r.noFinal === true,
     notHeld: r.notHeld === true,
+    oneBurst: r.oneBurst === true,
   };
 }
 
@@ -302,6 +307,8 @@ export interface FacetCounts {
   tags: Map<string, number>;
   noFinal: number;
   notHeld: number;
+  /** The bursts the scope draws more than one frame of — what « One per burst » folds. */
+  bursts: number;
 }
 
 /** The scope's numbers, over what the grid could draw (`surfaced`), filters ignored. */
@@ -317,8 +324,11 @@ export function facetCounts(items: readonly PickItem[]): FacetCounts {
     tags: new Map(),
     noFinal: 0,
     notHeld: 0,
+    bursts: 0,
   };
+  const framesOf = new Map<number, number>();
   for (const it of items) {
+    if (it.pileId !== null) framesOf.set(it.pileId, (framesOf.get(it.pileId) ?? 0) + 1);
     out.buckets[it.bucket] += 1;
     for (let k = 1; k <= Math.min(5, it.star); k++) out.starsAtLeast[k] += 1;
     out.kinds.set(it.kind, (out.kinds.get(it.kind) ?? 0) + 1);
@@ -333,7 +343,25 @@ export function facetCounts(items: readonly PickItem[]): FacetCounts {
     if (!it.hasFinal) out.noFinal += 1;
     if (!it.held) out.notHeld += 1;
   }
+  for (const n of framesOf.values()) if (n > 1) out.bursts += 1;
   return out;
+}
+
+/**
+ * One picture per burst: the best of each pile's drawn frames — a pick, then
+ * the most stars, then the pile's cover, then the first listed — the others
+ * left out. Rows outside a pile pass untouched, in their order. (pure)
+ */
+export function onePerBurst(items: readonly PickItem[], piles: ReadonlyMap<number, Pile>): PickItem[] {
+  const best = new Map<number, PickItem>();
+  const better = (a: PickItem, b: PickItem, coverId: number | undefined) =>
+    (a.bucket === 'pick' ? 1 : 0) - (b.bucket === 'pick' ? 1 : 0) || a.star - b.star || (a.id === coverId ? 1 : 0) - (b.id === coverId ? 1 : 0);
+  for (const it of items) {
+    if (it.pileId === null) continue;
+    const was = best.get(it.pileId);
+    if (!was || better(it, was, piles.get(it.pileId)?.coverId) > 0) best.set(it.pileId, it);
+  }
+  return items.filter((it) => it.pileId === null || best.get(it.pileId) === it);
 }
 
 /**
@@ -356,8 +384,9 @@ export type PickSort = 'time' | 'stars';
  * `time` is the order the instance listed them in (capture time, oldest
  * first); `stars` puts the most starred first and keeps that order within.
  */
-export function shown(surfacedItems: readonly PickItem[], f: PickFacets, sort: PickSort): PickItem[] {
-  const out = surfacedItems.filter((it) => passes(it, f));
+export function shown(surfacedItems: readonly PickItem[], f: PickFacets, sort: PickSort, piles?: ReadonlyMap<number, Pile>): PickItem[] {
+  const passing = surfacedItems.filter((it) => passes(it, f));
+  const out = f.oneBurst ? onePerBurst(passing, piles ?? new Map()) : passing;
   if (sort === 'stars') {
     const order = new Map(out.map((it, i) => [it.id, i]));
     out.sort((a, b) => b.star - a.star || order.get(a.id)! - order.get(b.id)!);

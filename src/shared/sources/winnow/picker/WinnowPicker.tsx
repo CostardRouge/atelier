@@ -439,7 +439,7 @@ export default function WinnowPicker({
     for (const b of bodies) if (!devices.has(b)) devices.set(b, 0);
     return { ...counts, devices };
   }, [counts, device, bodies]);
-  const shownItems = useMemo(() => shown(surfacedItems, facets, sort), [surfacedItems, facets, sort]);
+  const shownItems = useMemo(() => shown(surfacedItems, facets, sort, piles), [surfacedItems, facets, sort, piles]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
 
   // --- flight tracks ---------------------------------------------------------
