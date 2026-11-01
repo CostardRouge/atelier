@@ -8,6 +8,7 @@ import type { PlayerStatus } from './mosaic-player';
 /** The modes the transport offers, in order; a recipe not listed here is still played when a document names it. */
 const MODES: readonly { id: MosaicMode; label: string; title: string }[] = [
   { id: 'single', label: 'Still', title: 'The target rebuilt, still' },
+  { id: 'mosaics', label: 'Mosaics', title: 'From mosaic to mosaic: a dive into a cell lands on the next mosaic, the photo never appears' },
   { id: 'dezoom', label: 'Pull back', title: 'The picture pulls back and turns out to be one cell of another — once' },
   { id: 'chain', label: 'Chain', title: 'Endless: from picture to picture, diving into a cell or pulling back' },
   { id: 'reveal', label: 'Reveal', title: 'The cells flip one by one to the real picture' },

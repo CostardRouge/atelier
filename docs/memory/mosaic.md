@@ -382,6 +382,22 @@ sets the band's *now*. **Trap**: `chain.ts` keeps only the shared pieces
 `stepStateAt` / `cameraAt` / `revealAt` are gone with their specs — the
 motion spec asserts the same numbers.
 
+## Mosaics: from mosaic to mosaic, the default (2026-11-01, A3)
+
+His preference («je préfère qu'on navigue de mosaïque en mosaïque … plutôt
+qu'elle se révèle à chaque fois»). **Decision**: the `mosaics` recipe —
+dive 4 s, arrival on the next MOSAIC, no sharpening (the enlarged tile
+holds until the landing, 300 ms, where the next mosaic crosses in), a 2 s
+hold with a drift — is the DEFAULT motion of a new mosaic
+(`DEFAULT_SETTINGS.motion`) and the second word of the transport, right
+after *Still*. The photo is one recipe's choice (Chain, Pull back, Reveal
+keep it), never the step's nature. **How to apply**: an arrival on the
+mosaic needs the next scene ready — the player prepares a step's two
+mosaics together, and a step whose scene is late holds (A1's measure says
+so). Driven headless: four steps in 24 s with the status words never
+*the picture* / *appears* / *into its cells*, *landing* seen, the target
+moved on; Chain still arrives on the photo and *Both* keeps the chain.
+
 ## A bitmap a scene may draw is never `close()`d (2026-11-01)
 
 His report: «The image source is detached». Three evictions CLOSED bitmaps

@@ -137,7 +137,9 @@ describe('sanitizeSettings', () => {
     // A v3 body: the motion as stored, bounded; a recipe's name with no motion gives that recipe.
     expect(sanitizeSettings({ mode: 'wave', motion: { ...RECIPE_MOTIONS.wave, holdMs: 99999 } }).motion).toEqual({ ...RECIPE_MOTIONS.wave, holdMs: 8000 });
     expect(sanitizeSettings({ mode: 'reveal' }).motion).toEqual(RECIPE_MOTIONS.reveal);
-    expect(sanitizeSettings({ mode: 'custom', motion: { depart: 'cut' } }).motion).toEqual({ ...RECIPE_MOTIONS.chain, depart: 'cut' });
+    // A custom motion fills its missing parts from the default recipe (mosaics, lab 3's default).
+    expect(sanitizeSettings({ mode: 'custom', motion: { depart: 'cut' } }).motion).toEqual({ ...RECIPE_MOTIONS.mosaics, depart: 'cut' });
+    expect(sanitizeSettings({}).motion).toEqual(RECIPE_MOTIONS.mosaics);
   });
 });
 

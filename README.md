@@ -3201,7 +3201,10 @@ scenes a chain prepares ahead, and whether motion follows the system. Under
 them, the last matching's measure: its lots, the time a lot took, where it
 ran, the frames per second drawn.
 
-**The modes.** Under the stage: *Still* is the mosaic as above. *Pull back*
+**The modes.** Under the stage: *Still* is the mosaic as above. *Mosaics*,
+the default of a new mosaic, goes from mosaic to mosaic: the camera dives
+into a cell and lands on the next picture's mosaic, held a moment while the
+camera drifts over it, and the photo itself never appears. *Pull back*
 plays once what the screen saver did — the picture pulls back and turns out
 to be one cell of another, which then appears whole. *Chain* never ends:
 *Dive in* dissolves the picture into its cells and dives into one until its

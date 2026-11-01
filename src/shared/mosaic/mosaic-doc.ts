@@ -128,7 +128,8 @@ export const DEFAULT_SETTINGS: MosaicSettings = {
   tint: 0.25,
   distinctNeighbours: true,
   mode: 'single',
-  motion: RECIPE_MOTIONS.chain,
+  // A new mosaic plays from mosaic to mosaic (his preference, lab 3): the photo never appears unless a recipe says so.
+  motion: RECIPE_MOTIONS.mosaics,
   speed: 1,
   seed: 1,
 };
