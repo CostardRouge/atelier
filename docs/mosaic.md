@@ -1,13 +1,15 @@
 # Mosaic — a picture made of all the others
 
-**Status: decided (2026-10-31); M1–M3 built the same day** (M1
+**Status: decided (2026-10-31); M1–M3 built the same day, M4 on 2026-11-01**
+(M4 `MosaicPicker.tsx`, `mosaic-rows.ts`, `MosaicDoc.instance` and
+`withPictures`, the editor's band with the run; M1
 `src/shared/mosaic/`: `measure.ts`, `match.ts`, `chain.ts`, `mosaic-doc.ts`,
 each with its spec; M2 `measure-worker.ts`, `tools/mosaic/measure-pool.ts`
 and `mosaic-store.ts`, the legal notice's line — Q2 answered yes, the tiles
 are kept; M3 the document's store, `mosaic-file.ts`, `MosaicGallery.tsx`,
 `MosaicEditor.tsx`'s frame, `MosaicTool.tsx`, the registry entry as an
 `editor` under `wip` — Q1 by recommendation —, the README and `llms.txt`),
-M4–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
+M5–M9 next. §2 is what he chose; §3–§7 are the design that follows from it;
 §8 the questions still his. Lab (French,
 synthetic pictures, six modes playable):
 <https://claude.ai/artifact/6CZzJywDu19CsJWZR6eSMi>. §1 is fact, read in

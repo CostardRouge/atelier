@@ -295,7 +295,8 @@ anything about media sources or document storage:
   panel or touching `panel-ui.tsx`, `HookPicker.tsx` or the Look tab's host.
 - **`docs/mosaic.md`** — the Mosaic instrument (2026-10-31, decided; M1 the
   pure core, M2 the measuring pool and stores, M3 the document, its file,
-  gallery and shell built the same day, M4–M9 next; the rules it fixed in
+  gallery and shell built the same day, M4 the picker door and the
+  measuring run on 2026-11-01, M5–M9 next; the rules it fixed in
   `mosaic.md`): macOS's « Mosaic » screen saver over his Winnow — a picture whose
   every cell is another picture. §1 is fact (`thumb-metrics.ts` measures one
   mean colour on the main thread, the picker's span, the atlas's document

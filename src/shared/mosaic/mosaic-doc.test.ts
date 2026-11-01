@@ -9,7 +9,9 @@ import {
   readMosaicDoc,
   readTiles,
   sanitizeSettings,
+  unionSpan,
   withMeasures,
+  withPictures,
   withTiles,
   withoutTiles,
 } from './mosaic-doc';
@@ -129,6 +131,20 @@ describe('withTiles / withoutTiles / withMeasures', () => {
     const c = withMeasures(b, new Map([[2, grid]]), [], 5);
     expect(c.tiles[1]).toEqual({ id: 2, kind: 'photo', grid });
     expect(withMeasures(c, new Map(), [1], 6)).toBe(c);
+  });
+
+  it('withPictures sets the instance once, grows the span, and refuses another instance', () => {
+    const a = withPictures(doc, [{ id: 1, kind: 'photo' }], 'winnow.one', { from: '2026-01-05', to: '2026-01-09' }, 2);
+    expect(a.instance).toBe('winnow.one');
+    expect(a.span).toEqual({ from: '2026-01-05', to: '2026-01-09' });
+    const b = withPictures(a, [{ id: 2, kind: 'clip' }], 'winnow.one', { from: '2025-12-30', to: '2026-01-06' }, 3);
+    expect(b.tiles.map((t) => t.id)).toEqual([1, 2]);
+    expect(b.span).toEqual({ from: '2025-12-30', to: '2026-01-09' });
+    expect(withPictures(b, [{ id: 3, kind: 'photo' }], 'winnow.two', undefined, 4)).toBe(b);
+    expect(withPictures(b, [{ id: 2, kind: 'photo' }], 'winnow.one', undefined, 5)).toBe(b);
+    expect(readMosaicDoc(JSON.parse(JSON.stringify(b)), 's')).toEqual(b);
+    expect(readMosaicDoc({ ...b, instance: 42 }, 's')!.instance).toBeUndefined();
+    expect(unionSpan(undefined, undefined)).toBeUndefined();
   });
 
   it('measuredTiles lists the tiles with a grid and packs their bytes', () => {

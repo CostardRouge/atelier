@@ -154,7 +154,7 @@ export async function deleteMosaic(doc: MosaicDoc): Promise<boolean> {
 /** Drop the tiles and measures no mosaic of this device references. */
 export async function pruneToMosaics(): Promise<void> {
   const keep = new Set<string>();
-  for (const m of await listMosaics()) for (const t of m.tiles) keep.add(measureKey(m.sourceId, t.id));
+  for (const m of await listMosaics()) if (m.instance) for (const t of m.tiles) keep.add(measureKey(m.instance, t.id));
   await pruneToKeys(keep);
 }
 

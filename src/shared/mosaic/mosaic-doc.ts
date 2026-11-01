@@ -59,9 +59,15 @@ export interface MosaicDoc {
   id: string;
   version: number;
   title: string;
-  /** The ONE source its pictures come from (`sources/source.ts`), like a trip's. */
+  /** The ONE source the DOCUMENT is kept in (`sources/source.ts`), like a trip's: this device, or an instance (M8). */
   sourceId: string;
-  /** The picker's last span, to grow the library from where it stopped. */
+  /**
+   * The ONE Winnow its pictures come from — the connection's id (its host),
+   * set by the first add and never changed: a tile's id means nothing on
+   * another instance. Absent until a picture is added.
+   */
+  instance?: string;
+  /** The days its pictures span, grown with every add — where the picker reopens. */
   span?: { from: string; to: string };
   tiles: MosaicTile[];
   /** The asset id reconstituted in Single and Dézoom; absent until one is chosen. */
@@ -181,12 +187,14 @@ export function readMosaicDoc(raw: unknown, sourceIdFallback: string, now: numbe
   const tiles = readTiles(r.tiles);
   const target = typeof r.target === 'number' && tiles.some((t) => t.id === r.target) ? r.target : undefined;
   const span = readSpan(r.span);
+  const instance = str(r.instance)?.trim().slice(0, 300);
   const createdAt = time(r.createdAt, now);
   return {
     id,
     version: MOSAIC_DOC_VERSION,
     title: cleanMosaicTitle(str(r.title) ?? '') || 'Mosaic',
     sourceId: str(r.sourceId) || sourceIdFallback,
+    ...(instance ? { instance } : {}),
     ...(span ? { span } : {}),
     tiles,
     ...(target !== undefined ? { target } : {}),
@@ -194,6 +202,33 @@ export function readMosaicDoc(raw: unknown, sourceIdFallback: string, now: numbe
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };
+}
+
+/** The two spans' union; one alone when the other is absent. */
+export function unionSpan(a: { from: string; to: string } | undefined, b: { from: string; to: string } | undefined): { from: string; to: string } | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return { from: a.from < b.from ? a.from : b.from, to: a.to > b.to ? a.to : b.to };
+}
+
+/**
+ * Pictures added from an instance: the tiles appended (`withTiles`), the
+ * instance set when the mosaic had none, its span grown by `span`. Refused
+ * — the same object back — when the mosaic's pictures come from ANOTHER
+ * instance: a tile's id means nothing there.
+ */
+export function withPictures(
+  doc: MosaicDoc,
+  added: readonly MosaicTile[],
+  instance: string,
+  span: { from: string; to: string } | undefined,
+  now: number = Date.now(),
+): MosaicDoc {
+  if (doc.instance && doc.instance !== instance) return doc;
+  const next = withTiles(doc, added, now);
+  const grown = unionSpan(doc.span, span);
+  if (next === doc && doc.instance === instance && grown === doc.span) return doc;
+  return { ...next, instance, ...(grown ? { span: grown } : {}), updatedAt: now };
 }
 
 function readSpan(raw: unknown): { from: string; to: string } | undefined {

@@ -69,6 +69,27 @@ and never a tile; an import makes new ids. Driven headless: new → rename →
 export → import (a second mosaic) → delete → reload → reopen by route; no
 horizontal scroll at 390 px.
 
+## The instance is a field of its own, and an add is references then a run (2026-11-01, M4)
+
+`MosaicDoc.sourceId` is where the DOCUMENT is kept (the galleries' meaning:
+this device, an instance for M8); `MosaicDoc.instance` is the Winnow its
+PICTURES come from — the connection's id, set by the first add
+(`withPictures`), never changed, and the key the tiles and measures are
+filed under. **Why**: a tile's id means nothing on another instance, and a
+mosaic kept on instance A may draw instance B's pictures. **How to apply**:
+`MosaicPicker.tsx` (the shared picker in SPAN scope on `doc.span`, `all`
+ticks, photos and clips — a clip is the still of its poster, `tileOfRow`)
+adds REFERENCES only and the editor starts `runMeasure` right after (and
+on open when grids are missing: a cancelled run or an import resumes by
+itself); a mosaic whose `instance` is not the connected one shows
+«pictures from <host>» in place of the door. The band's one verb is
+*Measure N* / *Measure again* (the skipped ones), its status the count or
+«measuring d / t…»; the Library sidebar is NOT its door (`accepts: []`,
+«0 usable by Mosaic» is expected). Driven headless against the stub: 44
+rows → *Add 44 to the mosaic* → 44 grids on the document, 9 clips, the
+tiles held, a reload refetching nothing, the same span reopened with every
+row «in this mosaic».
+
 ## The chain is a clock, the picks are seeded (2026-10-31, M1)
 
 `chain.ts` gives a step's phase and camera as a FUNCTION of the time since

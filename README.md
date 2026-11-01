@@ -3111,8 +3111,9 @@ reloads on every save.
 ## Mosaic tool
 
 *Work in progress* — the home page and the tool menu say so with a badge. What
-exists: mosaics, their gallery and their file. The door to a Winnow's
-pictures, the stage and the animated modes come next (`docs/mosaic.md`).
+exists: mosaics, their gallery and their file, and the door to a Winnow's
+pictures with the measuring of their colours. The stage and the animated
+modes come next (`docs/mosaic.md`).
 
 The photo-mosaic screen saver macOS once had, over your own pictures: one
 picture rebuilt out of hundreds of others, each cell a photo whose colours
@@ -3133,6 +3134,18 @@ draws, taken from the instance's thumbnail, so a mosaic plays without asking
 the instance again; the tiles and colours of pictures no mosaic uses any more
 are forgotten when the last one is deleted. The gallery says what is kept,
 whether the browser promised to keep it, and offers **Back up everything**.
+
+**Pictures.** *From <instance>* opens the shared Winnow picker on a span of
+days — the mosaic's own, else the last one used there — with photos and clips
+(a clip counts as the still of its poster) and everything but the rejects
+ticked: hundreds or thousands are the point. *Add N to the mosaic* adds
+references only; the colours are measured right after, off the main thread, a
+few pictures at a time, as one task in the masthead with its Cancel — what
+was measured is kept, and a mosaic reopened with pictures still unmeasured
+resumes by itself. A picture whose thumbnail cannot be read is skipped and
+counted; *Measure again* tries it once more. A mosaic's pictures come from
+ONE instance: with another connected, the band says where they come from
+instead of offering the door.
 
 ## Telemetry tool
 
