@@ -17,6 +17,7 @@ import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
 import ChartePanel from './ChartePanel';
 import useHistory from '../../shared/history/use-history';
+import { startTask } from '../../shared/tasks/tasks';
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import { useTripMap } from './use-trip-map';
 import { factsOf, sourcesOf } from '../../shared/story/sources';
@@ -391,6 +392,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     pause();
     const controller = new AbortController();
     abortRef.current = controller;
+    // The shell's task (`shared/tasks`): its pill says the export runs, with a bar and a Cancel, wherever the
+    // author is — on a phone the Export panel is a sheet that may well be closed.
+    const task = startTask({ label: `${episode.number} · video`, progress: 0, detail: 'the sound', cancel: () => controller.abort() });
     setExporting('Preparing the sound…');
     setExportNote(null);
     try {
@@ -422,7 +426,10 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           drawEpisode(ctx, shown, Math.min(sec, total - 0.001), mapOpts);
           return canvas;
         },
-        onProgress: (p) => setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`),
+        onProgress: (p) => {
+          setExporting(p.ratio === null ? 'Finishing the file…' : `Encoding · ${Math.round(p.ratio * 100)} %`);
+          task.update(p.ratio === null ? { progress: null, detail: 'finishing the file' } : { progress: p.ratio, detail: `${Math.round(p.ratio * 100)} %` });
+        },
         signal: controller.signal,
       });
       const name = `${episode.number.toLowerCase().replace(/\W+/g, '')}-${slug(episode.title)}.mp4`;
@@ -437,6 +444,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     } catch (err) {
       setExportNote(controller.signal.aborted ? 'Export cancelled.' : err instanceof Error ? err.message : 'The export failed.');
     } finally {
+      task.done();
       abortRef.current = null;
       setExporting(null);
     }
