@@ -216,6 +216,16 @@ html[data-surface='darkroom'] {
   }
 }
 
+/* The chain band's "next" tile while its picture is not ready: a bar sliding across its foot. */
+@keyframes chain-wait {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
 @keyframes deck-load {
   0% {
     transform: translateX(-110%);

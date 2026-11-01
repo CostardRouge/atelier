@@ -23,6 +23,11 @@ Today it ships twelve tools, converging into a few editors:
   your **script**, a file of your own kept in this browser, never in the app;
   add your voice, a music bed and sound effects of your own, and export a
   vertical MP4 whose ending shows the next post's cover.
+- **Mosaic** *(work in progress)* — rebuild one picture out of hundreds of
+  others from your Winnow, each cell a photo whose colours match, and play
+  them as the screen saver that zoomed from picture to picture. Each
+  **mosaic** is kept on this device with its pictures' colours, in a gallery
+  like the others'.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -3110,6 +3115,160 @@ it and may grow blocks of its own.
 
 Work on a post's blocks happens in the code, with `npm run dev`: the stage
 reloads on every save.
+
+## Mosaic tool
+
+*Work in progress* — the home page and the tool menu say so with a badge. What
+exists: mosaics, their gallery and their file, the door to a Winnow's
+pictures with the measuring of their colours, the stage and the animated
+modes. The exports and keeping a mosaic on a Winnow come next
+(`docs/mosaic.md`).
+
+The photo-mosaic screen saver macOS once had, over your own pictures: one
+picture rebuilt out of hundreds of others, each cell a photo whose colours
+match that spot, then played — the camera dives into a cell until that photo
+fills the screen and becomes the next picture, or pulls back until the photo
+on screen turns out to be one cell of a larger one.
+
+**Mosaics.** `/mosaic` opens a gallery of mosaics, as cards whose cover is the
+mosaic's own poster; the whole card opens it, and its **⋯** renames it, exports
+it as a `.mosaic.json` file and deletes it. A mosaic keeps its title, its list
+of pictures (by reference to one connected Winnow), the **colours measured of
+each** — a 6 × 6 grid of mean colours, 108 bytes a picture, measured once —
+its target picture and every setting; every change is saved as you go, on this
+device. The file carries all of that, so a mosaic imported on another device
+remeasures nothing; importing a file always makes new mosaics. Beside the
+documents, the device keeps a small 160 × 90 tile of each picture a mosaic
+draws, taken from the instance's thumbnail, so a mosaic plays without asking
+the instance again; the tiles and colours of pictures no mosaic uses any more
+are forgotten when the last one is deleted. The gallery says what is kept,
+whether the browser promised to keep it, and offers **Back up everything**.
+
+**Pictures.** *From <instance>* opens the shared Winnow picker on a span of
+days — the mosaic's own, else the last one used there — with photos and clips
+(a clip counts as the still of its poster) and everything but the rejects
+ticked: hundreds or thousands are the point. *Add N to the mosaic* adds
+references only; the colours are measured right after, off the main thread, a
+few pictures at a time, as one task in the masthead with its Cancel — what
+was measured is kept, and a mosaic reopened with pictures still unmeasured
+resumes by itself. A picture whose thumbnail cannot be read is skipped and
+counted; *Measure again* tries it once more. A mosaic's pictures come from
+ONE instance: with another connected, the band says where they come from
+instead of offering the door.
+
+**The stage.** One picture of the library is the **target**, rebuilt out of
+all the others: the stage is cut into cells the shape of the frame, each
+cell's colours are read off the target (its Winnow proxy; a clip's poster)
+and the picture whose measured colours are nearest takes the cell — never
+the same picture as the one to its left or above, unless you allow it. The
+dials beside it: the **cell** width on this screen (a bigger screen gets
+more cells, not bigger ones), what is **compared** (the mean colour, the
+quarters, nine zones), the **distance** (OKLab, which weighs the shadows the
+way the eye does, or RGB), the **tint** — a veil of each cell's own colour
+over its picture, what lets the target read from afar —, a **ghost** of the
+target to check the reading, and the cell lines. The mosaic is painted once;
+a small one is matched on the spot, a big one in the background, the
+previous mosaic staying on screen meanwhile. Click a cell to make its
+picture the target, or *Draw a target*; the ‹ › pair in the bar (or ← →
+on the stage) walks back and forward over the targets visited, each with
+the part of it that was framed. The gallery card's cover is the
+mosaic as the stage last painted it.
+
+**The target and its frame.** The inspector opens on the **target**, as
+wide as it: the picture rebuilt, with a frame on it — the part the mosaic
+rebuilds, the rest dimmed and never read. Drag the frame to move it, its
+sides and corners to resize it (never under 48 px); *Whole picture* gives
+the largest frame back and disappears once it is whole; a press
+on the picture outside the frame, or *Choose…*, opens a grid of the
+mosaic's pictures to pick another target (a new target is framed whole).
+**Shape** is the frame's, never the picture's: *Own* (the picture's own
+proportions, the default), 16:9, 3:2, 4:3, square, 4:5 or 9:16 pose a frame
+of that shape on the picture at the same centre, the stage takes the
+frame's shape in the room it has, and nothing is ever stretched; each
+picture is compared on the part a cell of that shape shows of it, and drawn
+so.
+
+**Zooming is framing.** While nothing plays, whatever the mode, the
+wheel, a pinch or a drag zoom the stage, and with **Auto-frame on zoom**
+(the switch in the Target section, on by default) the moment the hand
+rests what is in view becomes the part rebuilt: the frame on the target's card follows, and the mosaic is rebuilt
+for that part with as many cells as before — a zoom is more detail, never
+bigger cells. Zooming out stops at the whole picture; `Z` returns to it; ↶
+in the bar (⌘Z) takes any edit back, a zoom included. Switched off, a
+zoom only *looks*: *Frame this* on the stage writes it and `Z` drops it.
+
+**As it lands.** A big mosaic is matched in lots, each painted the moment
+its answer lands — from the cell you clicked outward by default, else row
+by row, in a spiral, at random, or all at once — and each cell fades,
+appears or flips into place; a hairline along the stage's bottom edge says
+how far the matching has come while the word says *matching…*. The
+**Performance** section at the inspector's foot is this device's, not the
+mosaic's: how many workers (auto is every core but one), where the colours
+are measured (a pool, one worker, this thread), the size of a lot, the
+propagation, whether each lot is shown as it lands or the whole at once,
+the cell animation and its length, how many tiles stay in memory, how many
+scenes a chain prepares ahead, and whether motion follows the system. Under
+them, the last matching's measure: its lots, the time a lot took, where it
+ran, the frames per second drawn.
+
+**On a phone.** The editor takes the whole screen: one header line holds
+the way back, the title over the picture count, the ‹ › and ↶ ↷ pairs and
+a ⋯ with *Choose the target…*, *Draw a target*, *Add from …*, *Measure*
+and *Full screen* where the browser allows it; under the stage come the
+chain's band and a one-row transport (the mode as a list, Play). The
+settings are the four tabs of the bar floating at the bottom — Target,
+Cells, Motion, Performance — each opening a drawer under the stage, which
+stays in sight: the mosaic keeps the size it was built for and is shown a
+little smaller while a drawer is up, so opening one rebuilds nothing.
+
+**The modes.** Under the stage: *Still* is the mosaic as above. *Mosaics*,
+the default of a new mosaic, goes from mosaic to mosaic: the camera dives
+into a cell and lands on the next picture's mosaic, held a moment while the
+camera drifts over it, and the photo itself never appears. *Pull back*
+plays once what the screen saver did — the picture pulls back and turns out
+to be one cell of another, which then appears whole. *Chain* never ends:
+*Dive in* dissolves the picture into its cells and dives into one until its
+picture fills the screen and becomes the next; *Pull out* is the pull-back
+repeated; *Both* alternates. *Reveal* flips the cells one by one into the
+real picture from a point; *Drift* wanders over the mosaic at mid zoom,
+then fades to the next. *Wave* lands the next mosaic's cells on this one,
+from the aimed cell outward, with no zoom and no photo: the mosaic turns
+into another without moving. *Slideshow* cuts to a new mosaic every six
+seconds, at a steady beat. *Steer* holds each mosaic four seconds: click a
+cell meanwhile and the chain goes there next — a click on any held mosaic
+does that in every mode. Every mode is a recipe of one step, and the
+**Motion** section of the inspector opens its parts: the departure (a dive,
+a pull back, both in turn, a wave, a fade, a cut), the arrival (the next
+mosaic, its photo, or its cells revealed — to the photo, to the mosaic, or
+there and back), when a growing cell sharpens over its tile (early, late,
+never), which cell a dive aims at (the chain's picture, the best match, any
+one), the move and hold lengths, a cadence that beats whatever the parts
+take, and a drift while the mosaic is held. A part set by hand makes the
+mode *Custom*; choosing a mode again puts its recipe back.
+Each step prepares the next picture while it plays, so a chain of thousands
+never asks you to wait; the picks come from the mosaic's own seed, so Play
+twice shows the same chain. Play and Stop on Space, Escape stops; whatever
+is on screen when a run stops is the target now.
+
+**The chain's band.** In *Chain* and *Pull back*, a band under the stage
+shows the chain as a file of pictures: the one on screen first, then the
+ten to come — drawn from the seed in grey, picked by you in white — and the
+band refills itself as the chain advances, so it never runs dry. Press a
+picture to replace it with one of the mosaic's, its × removes it, **+** adds
+one at the end, the arrow shuffles the drawn ones (your picks stay), and
+*Draw the next ones* switched off lets the chain end at the last picture you
+picked. A picture you pick for a dive is placed in the cell of the current
+mosaic it resembles most. The chain is part of the mosaic: reopened, or
+imported from its file, it plays the same. The band's pictures are the
+tiles this device already keeps, the next scenes are built while the
+current one plays (how many, in *Performance*), and the two pictures past
+them are fetched ahead, so a slow instance shows in the band before it
+shows on the stage: a step whose picture is not ready yet holds the one on
+screen, the *next* tile carries a sliding hairline meanwhile, and the
+Performance section says how long a step takes to be ready and how often
+the chain had to hold. *Screen* takes the stage
+to the whole screen — a Mac left open on Atelier is the screen saver.
+*Speed* is in the dials.
 
 ## Telemetry tool
 

@@ -2,7 +2,7 @@
 
 > A local-first suite of browser tools for your captures — photo and video, across devices (DJI, Apple, Sony, …): everything runs in your browser and files never leave your machine — no upload, no account, no server.
 
-Atelier is a thin shell plus self-contained tools that share one asset library: import a folder once and switch tools freely, each tool seeing the subset of files it can use. The editors (Studio, Trips, Develop, Flight Atlas, Storytelling) are the tools in their own right, each with a gallery of its documents; the instruments are standalone pages. Navigation is hash-based, so every tool has its own address. A few optional features can make a request (an OpenStreetMap base map, Nominatim place search, Lensfun lens profiles, a Winnow instance of your own), all off by default; the legal notice lists every one. Visits are counted lightly and cookie-free with the author's own Umami.
+Atelier is a thin shell plus self-contained tools that share one asset library: import a folder once and switch tools freely, each tool seeing the subset of files it can use. The editors (Studio, Trips, Develop, Flight Atlas, Storytelling, Mosaic) are the tools in their own right, each with a gallery of its documents; the instruments are standalone pages. Navigation is hash-based, so every tool has its own address. A few optional features can make a request (an OpenStreetMap base map, Nominatim place search, Lensfun lens profiles, a Winnow instance of your own), all off by default; the legal notice lists every one. Visits are counted lightly and cookie-free with the author's own Umami.
 
 ## Editors
 
@@ -11,6 +11,7 @@ Atelier is a thin shell plus self-contained tools that share one asset library: 
 - [Develop](https://atelier.steeve.website/#/develop): Gather the photographs and clips you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.
 - [Flight Atlas](https://atelier.steeve.website/#/atlas): Draw a set of drone flights on one map and animate them together, with trails, glows and a clock; export it as an MP4 or a PNG.
 - [Storytelling](https://atelier.steeve.website/#/storytelling): Work in progress. Tell a project in short narrated videos: each post plays from its own code with your script, voice and music, then exports as a vertical MP4 that knows the post before and after it.
+- [Mosaic](https://atelier.steeve.website/#/mosaic): Work in progress. Rebuild one picture out of hundreds of others from your Winnow, each cell a photo whose colours match, and play them as the screen saver that zoomed from picture to picture; each mosaic is kept on this device with its pictures' colours.
 
 ## Instruments
 
