@@ -72,6 +72,8 @@ interface MosaicEditorProps {
   band?: ReactNode;
   /** The history's two buttons, beside the save word. */
   headerExtra?: ReactNode;
+  /** The sync pill, for a mosaic kept on an instance (M8). */
+  syncPill?: ReactNode;
 }
 
 /** The tiles a run must still settle: no grid yet, or a failure to try again. */
@@ -478,7 +480,7 @@ function MosaicWorkbench({
  * library, its dials beside it, a click on a cell making its picture the
  * target (M5). The animated modes (M6) follow.
  */
-export default function MosaicEditor({ doc, change, saveState, onBack, band, headerExtra }: MosaicEditorProps) {
+export default function MosaicEditor({ doc, change, saveState, onBack, band, headerExtra, syncPill }: MosaicEditorProps) {
   useSurface('darkroom');
   const compact = useIsCompact();
   const { connection, client } = useWinnowConnection();
@@ -622,6 +624,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         trailing={
           <>
             {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
+            {syncPill}
             {headerExtra}
           </>
         }
@@ -690,6 +693,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         trailing={
           <span className="inline-flex items-center gap-2">
             {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
+            {syncPill}
             {headerExtra}
             <span
               className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}

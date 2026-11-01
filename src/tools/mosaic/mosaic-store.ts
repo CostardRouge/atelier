@@ -18,8 +18,8 @@
  *   pick, said in the legal notice; pruned to what the device's mosaics
  *   reference when one is deleted (M3);
  * - `thumbs` — one poster per mosaic, the gallery card's cover (M3);
- * - `sync` — one record per mosaic kept on an instance (M8), created now so
- *   keeping a mosaic on a Winnow adds no upgrade;
+ * - `sync` — one record per mosaic kept on an instance (M8, `mosaic-remote.ts`),
+ *   created at v1 so keeping a mosaic on a Winnow needed no upgrade;
  * - `kv` — small per-device marks.
  */
 

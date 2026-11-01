@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import useHistory from '../../shared/history/use-history';
 import type { MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import { useDocumentLock, useInertRef, type DocumentLock } from '../../shared/sources/use-document-lock';
+import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
 import MosaicEditor, { type SaveState } from './MosaicEditor';
 import MosaicGallery from './MosaicGallery';
 import { MOSAIC_BASE, MOSAIC_HOME, mosaicFromRef, mosaicPath, mosaicRef, parseMosaicPath } from './mosaic-route';
-import { askPersistence, getMosaic, listMosaics, putMosaic } from './mosaic-store';
+import { MOSAIC_DOC_KIND, pullMosaic, pushOnce } from './mosaic-remote';
+import { askPersistence, deleteMosaic, deleteSyncRecord, getMosaic, getSyncRecord, listMosaics, putMosaic, putSyncRecord } from './mosaic-store';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -16,9 +18,11 @@ const SAVE_DEBOUNCE_MS = 600;
  * opens one in the editor. Only the shell knows about documents and
  * persistence.
  *
- * Edits save LOCAL NOW (a short debounce into `atelier-mosaic`). One tab
+ * Edits save LOCAL NOW (a short debounce into `atelier-mosaic`) and, for a
+ * mosaic kept on a connected instance whose bucket keeps mosaics, REMOTE ON
+ * IDLE through the one shared sync machine (M8, `mosaic-remote.ts`). One tab
  * edits a mosaic at a time (`use-document-lock.tsx`); another shows it read
- * only. Keeping a mosaic on an instance (remote on idle) is M8.
+ * only.
  */
 export default function MosaicTool() {
   const path = useHashRoute();
@@ -69,6 +73,35 @@ export default function MosaicTool() {
   const openRef = useRef<MosaicDoc | null>(null);
   openRef.current = open;
 
+  const syncDriver = useMemo<DocumentSyncDriver<MosaicDoc>>(
+    () => ({
+      getRecord: getSyncRecord,
+      putRecord: putSyncRecord,
+      deleteRecord: deleteSyncRecord,
+      putDoc: putMosaic,
+      deleteDoc: deleteMosaic,
+      push: pushOnce,
+      pull: (remote, id, etag) => pullMosaic(remote, id, etag),
+    }),
+    [],
+  );
+  const sync = useDocumentSync<MosaicDoc>({
+    doc: open,
+    driver: syncDriver,
+    kind: MOSAIC_DOC_KIND,
+    canPush: () => lockRef.current?.canWrite() ?? true,
+    beforeFlush: () => flushRef.current(),
+    onDiscardPending: () => {
+      pending.current = null;
+    },
+    onReplace: (doc) => replaceOpen(doc),
+    onDeleted: () => {
+      setOpen(null);
+      navigate(MOSAIC_HOME);
+    },
+  });
+  const { edited, resume, clear } = sync;
+
   const lock = useDocumentLock<MosaicDoc>({
     kind: 'mosaic',
     id: open?.id ?? null,
@@ -79,13 +112,18 @@ export default function MosaicTool() {
       pending.current = null;
     },
     load: getMosaic,
-    onReload: (doc) => {
-      pending.current = null;
-      setOpen(doc);
+    onReload: (doc, editing) => {
+      replaceOpen(doc);
+      if (editing) void resume(doc).then((r) => r?.replaced && replaceOpen(r.doc));
     },
   });
   lockRef.current = lock;
   const editorRef = useInertRef<HTMLDivElement>(lock.readOnly);
+
+  function replaceOpen(doc: MosaicDoc) {
+    pending.current = null;
+    setOpen(doc);
+  }
 
   const flush = useCallback(async () => {
     const doc = pending.current;
@@ -93,8 +131,11 @@ export default function MosaicTool() {
     if (!doc || !lockRef.current?.canWrite()) return;
     const ok = await putMosaic(doc);
     setSaveState(ok ? 'saved' : 'failed');
-    if (ok) lockRef.current?.saved(doc);
-  }, []);
+    if (ok) {
+      edited(doc);
+      lockRef.current?.saved(doc);
+    }
+  }, [edited]);
   flushRef.current = flush;
 
   // Leaving the tool or the tab: what the debounce holds is written now.
@@ -131,6 +172,29 @@ export default function MosaicTool() {
     [flush],
   );
 
+  // Opening a mosaic kept on an instance: the mirror opens at once, the instance is asked — again at every open from
+  // the gallery (another device may have edited it meanwhile, a 304 when not) and after a move, which changes where
+  // it is kept.
+  const resumedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ref) resumedFor.current = null;
+  }, [ref]);
+  useEffect(() => {
+    if (!open) {
+      resumedFor.current = null;
+      clear();
+      return;
+    }
+    if (!ref) return;
+    if (lock.state !== 'editing' && lock.state !== 'free') return;
+    const key = `${open.id}@${open.sourceId}`;
+    if (resumedFor.current === key) return;
+    resumedFor.current = key;
+    void resume(open).then((r) => {
+      if (r?.replaced) replaceOpen(r.doc);
+    });
+  }, [open, ref, resume, clear, lock.state]);
+
   const handleOpen = useCallback((doc: MosaicDoc) => {
     // The copy in memory may carry edits the debounce had not written yet: kept unless the store's is newer.
     setOpen((cur) => (cur && cur.id === doc.id && cur.updatedAt >= doc.updatedAt ? cur : doc));
@@ -162,7 +226,7 @@ export default function MosaicTool() {
         <MosaicGallery openMosaicId={open?.id ?? null} onOpen={handleOpen} />
       ) : (
         <div ref={editorRef} className="contents">
-          <MosaicEditor key={open.id} doc={open} change={change} saveState={saveState} onBack={onBack} headerExtra={history.control} />
+          <MosaicEditor key={open.id} doc={open} change={change} saveState={saveState} onBack={onBack} headerExtra={history.control} syncPill={sync.pill} />
         </div>
       )}
     </div>

@@ -30,7 +30,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   *Custom*; the camera never cuts between steps, and the Performance section measures how long a step takes to be ready. Each mosaic, the colours of its
   pictures and a small tile of each are kept in this browser; a `.mosaic.json` file carries it elsewhere. Save the mosaic as a PNG
   up to 4K, or its motion as an MP4 film of the steps you choose — the same chain Play shows, more cells for a bigger
-  file or the stage's own.
+  file or the stage's own. Keep a mosaic on your Winnow to open it from any device, its pictures' colours
+  included so nothing is measured again.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the
   source.
