@@ -86,15 +86,29 @@ export function setMap(stops: readonly Stop[] | null | undefined, road: RoadPoin
   });
 }
 
+/**
+ * The route's point at fraction `f` of its length, and the segment it is on.
+ * Found by halving (`ROUTECUM` only grows): a driven line is thousands of
+ * points, and a frame asks hundreds of times (`map-holes` walks the route).
+ */
 export function routeAt(f: number): [number, number, number] {
   const d = f * ROUTELEN;
-  for (let i = 1; i < ROUTE.length; i++)
-    if (d <= ROUTECUM[i]) {
-      const k = (d - ROUTECUM[i - 1]) / (ROUTECUM[i] - ROUTECUM[i - 1]);
-      return [ROUTE[i - 1][0] + (ROUTE[i][0] - ROUTE[i - 1][0]) * k, ROUTE[i - 1][1] + (ROUTE[i][1] - ROUTE[i - 1][1]) * k, i - 1];
-    }
-  const p = ROUTE[ROUTE.length - 1];
-  return [p[0], p[1], ROUTE.length - 2];
+  const n = ROUTE.length;
+  if (d >= ROUTECUM[n - 1]) {
+    const p = ROUTE[n - 1];
+    return [p[0], p[1], n - 2];
+  }
+  let lo = 1;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (ROUTECUM[mid] >= d) hi = mid;
+    else lo = mid + 1;
+  }
+  const i = lo;
+  const span = ROUTECUM[i] - ROUTECUM[i - 1];
+  const k = span > 0 ? (d - ROUTECUM[i - 1]) / span : 0;
+  return [ROUTE[i - 1][0] + (ROUTE[i][0] - ROUTE[i - 1][0]) * k, ROUTE[i - 1][1] + (ROUTE[i][1] - ROUTE[i - 1][1]) * k, i - 1];
 }
 
 let paths: Path2D[] | null = null;

@@ -53,12 +53,13 @@ describe('tripMap', () => {
     expect(map?.stops).toHaveLength(3);
   });
 
-  it('follows the road when the trip has one, simplified to the map’s scale', () => {
+  it('follows the road the trip drives, thinned to the map’s scale', () => {
     const t = trip();
     t.road = makeTripRoad(drive(), t, null, 0);
     const road = tripRoadPoints(t);
     expect(road.length).toBeGreaterThan(2);
-    expect(road.length).toBeLessThan(81);
+    // The line the trip DRIVES (the ribbon, by default), thinned to the map's scale.
+    expect(road.length).toBeLessThan(400);
     expect(road[0]).toEqual([151.21, -33.87]);
     expect(road[road.length - 1]).toEqual([138.6, -34.93]);
   });
@@ -196,7 +197,8 @@ describe('the map a series chooses', () => {
     ];
     const own = tripMap(t, { stops })!;
     expect(own.stops.map((s) => s[0])).toEqual(['Sydney', 'Melbourne']);
-    expect(own.road[0]).toEqual([151.21, -33.87]);
+    // Cut where the driven line passes closest to the first stop.
+    expect(Math.abs(own.road[0][0] - 151.21) + Math.abs(own.road[0][1] + 33.87)).toBeLessThan(0.3);
     const [lon, lat] = own.road[own.road.length - 1];
     expect(Math.abs(lon - 144.96) + Math.abs(lat + 37.81)).toBeLessThan(0.3);
     expect(own.times.length).toBe(own.road.length);

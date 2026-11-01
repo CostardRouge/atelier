@@ -5,7 +5,7 @@
  * maintainer's pick (2026-10-31): stage ends by default, his own ticks later.
  * Nothing here is content of the public code: the trip lives in his browser.
  */
-import { lineKm, roadPieces, simplify, tripRoadFixes, tripRoadLine } from '../roadtrip/road-track';
+import { lineKm, roadDriveOf, roadLine, roadPieces, simplify, tripRoadFixes, tripRoadLine } from '../roadtrip/road-track';
 import type { TripDoc, TripPlace } from '../roadtrip/trip-types';
 import type { Stop } from './geo';
 import { dayText, type Lang } from './locale';
@@ -214,9 +214,48 @@ export function stageEndStops(trip: TripDoc): Stop[] {
   return tripStops(trip);
 }
 
-/** The trip's road as the map draws it: its mode's pieces, simplified to the map's scale, in one line. */
+/** The trip's road as the map draws it: the line the trip DRIVES (its mode, detail and drive style), in one line. */
 export function tripRoadPoints(trip: TripDoc, choice: MapChoice = {}): [number, number][] {
-  return tripRoadFixesForMap(trip, choice).map((f): [number, number] => [f.lon, f.lat]);
+  return drivenFixesForMap(trip, choice).map((f): [number, number] => [f.lon, f.lat]);
+}
+
+/**
+ * The tolerance the DRIVEN line is thinned to for the story map, metres: a
+ * ribbon is already smooth, so a point every few hundred metres of bend keeps
+ * it round at the camera's ×2.3 while a year of road stays a few thousand
+ * points (the map walks the line every frame).
+ */
+export const DRIVEN_DETAIL_M = 250;
+
+/**
+ * The road as Trips' openers drive it (`tripRoadLine`: the ribbon by default,
+ * or the driver, or the fixes, as the trip's Road settings say), its kept
+ * stages' stretch only, thinned to the map's scale — so a change of the
+ * trip's road in Trips or here is the same line on both (his ask, road lab
+ * C1). The flights between pieces are joined, as before.
+ */
+function drivenFixesForMap(trip: TripDoc, choice: MapChoice = {}) {
+  const road = trip.road;
+  if (!road || road.mode === 'crow') return [];
+  const windows = stageWindows(trip, choice);
+  // Every stage kept: the trip's own line, the one the openers drive (cached per road). Some left out: the
+  // kept days' fixes driven alone, so the line starts where they do rather than mid-curve of a dropped stretch.
+  const line = windows ? keptLine(road, windows) : tripRoadLine(road);
+  return line.pieces.flatMap((piece) => (piece.length >= 2 ? simplify(piece, DRIVEN_DETAIL_M) : piece));
+}
+
+const keptLines = new WeakMap<object, Map<string, ReturnType<typeof tripRoadLine>>>();
+function keptLine(road: NonNullable<TripDoc['road']>, windows: [number, number][]) {
+  const key = windows.map((w) => w.join('-')).join(',');
+  let byKey = keptLines.get(road);
+  if (!byKey) keptLines.set(road, (byKey = new Map()));
+  let line = byKey.get(key);
+  if (!line) {
+    const fixes = tripRoadFixes(road).filter((f) => windows.some(([a, b]) => f.t >= a && f.t < b));
+    line = roadLine(fixes, road.mode, road.detail, roadDriveOf(road));
+    byKey.set(key, line);
+  }
+  return line;
 }
 
 /** Unix seconds a kept stage covers, its first day's start to its last day's end. */
@@ -237,7 +276,7 @@ function tripRoadFixesForMap(trip: TripDoc, choice: MapChoice = {}) {
 /** The map of a trip as a series chooses it, or null when it has neither a road nor two named points to draw. */
 export function tripMap(trip: TripDoc, choice: MapChoice = {}): TripMap | null {
   const listed = choice.stops ? ownPoints(choice, trip) : placedPoints(trip, choice);
-  const all = tripRoadFixesForMap(trip, choice);
+  const all = drivenFixesForMap(trip, choice);
   const ends: Stop[] = listed.map((p) => [p.name, p.lon, p.lat, '']);
   const fixes = (choice.route ?? (choice.stops ? 'stops' : 'all')) === 'stops' ? clipToStops(all, ends) : all;
   const road = fixes.map((f): [number, number] => [f.lon, f.lat]);
