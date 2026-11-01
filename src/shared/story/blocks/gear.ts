@@ -3,6 +3,7 @@
 // Three on the first row, the rest on a second; label in Geist, a one-word note in mono.
 import { register } from "./index";
 import { appear, enter, PAL, rr, text, TYPO, type Ctx } from "../motion";
+import { obj } from "../objects";
 
 type Kind = "camera" | "small" | "drone" | "phone" | "compact";
 type Device = { name: string; note?: string; kind: Kind };
@@ -64,11 +65,12 @@ register("gear", (c, lt, p) => {
     row.items.forEach((d, i) => {
       const x = n === 1 ? 540 : n >= 3 ? 210 + i * 330 : 375 + i * 330;
       const t0 = 0.3 + k * 0.22; k++;
-      appear(c, enter(lt, t0, 1.1), () => {
+      // Every device's silhouette is one object, its name another, its note a third: set once, they change together.
+      obj(c, "gear.devices", [x, row.y], lt, (lt) => appear(c, enter(lt, t0, 1.1), () => {
         c.save(); c.translate(x, row.y); (SHAPES[d.kind] ?? SHAPES.camera)(c); c.restore();
-      }, 18);
-      appear(c, enter(lt, t0 + 0.25, 1), () => text(c, d.name, x, row.y + 118, 28, PAL.ink, { align: "center", w: 500 }), 10);
-      if (d.note) appear(c, enter(lt, t0 + 0.55, 1), () => text(c, d.note!, x, row.y + 154, 20, PAL.dim, { align: "center", fam: TYPO.mono, w: 400 }), 8);
+      }, 18), t0);
+      obj(c, "gear.names", [x, row.y + 108], lt, (lt) => appear(c, enter(lt, t0 + 0.25, 1), () => text(c, d.name, x, row.y + 118, 28, PAL.ink, { align: "center", w: 500 }), 10), t0 + 0.25);
+      if (d.note) obj(c, "gear.notes", [x, row.y + 148], lt, (lt) => appear(c, enter(lt, t0 + 0.55, 1), () => text(c, d.note!, x, row.y + 154, 20, PAL.dim, { align: "center", fam: TYPO.mono, w: 400 }), 8), t0 + 0.55);
     });
   });
 });

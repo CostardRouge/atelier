@@ -4,6 +4,8 @@
 import { register } from "./index";
 import { appear, clamp, E, enter, font, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
 import { proj, STOPS } from "../geo";
+import { word } from "../locale";
+import { obj } from "../objects";
 import { drawCoast } from "../scenes/MapScene";
 
 export const MAP_DY = -80; // the whole map lifted so Tasmania stays above the caption zone
@@ -33,32 +35,34 @@ register("journey-impossible", (c, lt, p) => {
   const A = where(from), B = where(to);
   c.save();
   c.translate(0, MAP_DY);
-  drawCoast(c, enter(lt, 0, 0.9), 2.5);
-  appear(c, enter(lt, 0.6, 1), () => dot(c, A[0], A[1], `${from} · 09:40`, A[0] < 700), 12);
+  obj(c, "journey-impossible.map", [540, 960], lt, (lt) => drawCoast(c, enter(lt, 0, 0.9), 2.5), 0);
+  obj(c, "journey-impossible.from", [A[0], A[1]], lt, (lt) => appear(c, enter(lt, 0.6, 1), () => dot(c, A[0], A[1], `${from} · 09:40`, A[0] < 700), 12), 0.6);
   // the line, drawn from A to B
-  const lp = E(clamp((lt - 2.0 * K) / (1.1 * K)));
-  if (lp > 0) {
-    c.save();
-    c.strokeStyle = PAL.acc;
-    c.lineWidth = 2;
-    c.setLineDash([3, 10]);
-    c.lineCap = "round";
-    c.beginPath();
-    c.moveTo(A[0], A[1]);
-    c.lineTo(A[0] + (B[0] - A[0]) * lp, A[1] + (B[1] - A[1]) * lp);
-    c.stroke();
-    c.restore();
-  }
-  appear(c, enter(lt, 2.8, 1), () => dot(c, B[0], B[1], `${to} · 09:41`, B[0] < 700), 12);
+  obj(c, "journey-impossible.line", [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], lt, (lt) => {
+    const lp = E(clamp((lt - 2.0 * K) / (1.1 * K)));
+    if (lp > 0) {
+      c.save();
+      c.strokeStyle = PAL.acc;
+      c.lineWidth = 2;
+      c.setLineDash([3, 10]);
+      c.lineCap = "round";
+      c.beginPath();
+      c.moveTo(A[0], A[1]);
+      c.lineTo(A[0] + (B[0] - A[0]) * lp, A[1] + (B[1] - A[1]) * lp);
+      c.stroke();
+      c.restore();
+    }
+  }, 2.0);
+  obj(c, "journey-impossible.to", [B[0], B[1]], lt, (lt) => appear(c, enter(lt, 2.8, 1), () => dot(c, B[0], B[1], `${to} · 09:41`, B[0] < 700), 12), 2.8);
   c.restore();
-  appear(c, enter(lt, 3.1, 1), () => text(c, `${km} km · 1 minute`, 90, 1150, 30, PAL.dim, { fam: TYPO.mono, w: 400 }), 8);
-  appear(c, enter(lt, 3.8, 1), () => {
-    const s = "horloge fausse";
+  obj(c, "journey-impossible.distance", [260, 1140], lt, (lt) => appear(c, enter(lt, 3.1, 1), () => text(c, `${km} km · 1 minute`, 90, 1150, 30, PAL.dim, { fam: TYPO.mono, w: 400 }), 8), 3.1);
+  obj(c, "journey-impossible.flag", [200, 1204], lt, (lt) => appear(c, enter(lt, 3.8, 1), () => {
+    const s = word("wrongClock");
     c.font = font(26, 400, TYPO.mono);
     const w = c.measureText(s).width + 48;
     c.fillStyle = PAL.acc;
     rr(c, 90, 1178, w, 52, 26);
     c.fill();
     text(c, s, 114, 1213, 26, PAL.bg, { fam: TYPO.mono, w: 400 });
-  }, 10);
+  }, 10), 3.8);
 });

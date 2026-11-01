@@ -4,6 +4,7 @@
 import { word } from "../locale";
 import { register } from "./index";
 import { appear, enter, PAL, rr, text, TYPO, type Ctx } from "../motion";
+import { obj } from "../objects";
 
 const face = (c: Ctx, cx: number, cy: number, r: number, hourDeg: number, minDeg: number) => {
   c.save();
@@ -48,23 +49,25 @@ register("clocks", (c, lt, p) => {
   const off = Number(p.offsetHours ?? 10), pct = p.pctWrong != null ? String(p.pctWrong) : "";
   const h0 = 23, m0 = 40; // the home time; the camera's clock is `off` hours ahead
   const minDeg = (m0 / 60) * 360, hourB = ((h0 + m0 / 60) / 12) * 360;
-  const turn = enter(lt, 1.0, 2.4); // the hour hand of zone A turning forward by the offset
-  const hourA = hourB + turn * (off / 12) * 360;
   const R = 150, cy = 720, xa = 300, xb = 780;
-  appear(c, enter(lt, 0, 1.1), () => {
-    face(c, xa, cy, R, hourA, minDeg);
-    text(c, zoneA, xa, cy + R + 56, 24, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 5 });
-  }, 16);
-  appear(c, enter(lt, 0.25, 1.1), () => {
+  obj(c, "clocks.camera-clock", [xa, cy + 40], lt, (lt) => {
+    const turn = enter(lt, 1.0, 2.4); // the hour hand of zone A turning forward by the offset
+    const hourA = hourB + turn * (off / 12) * 360;
+    appear(c, enter(lt, 0, 1.1), () => {
+      face(c, xa, cy, R, hourA, minDeg);
+      text(c, zoneA, xa, cy + R + 56, 24, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 5 });
+    }, 16);
+  }, 0);
+  obj(c, "clocks.home-clock", [xb, cy + 40], lt, (lt) => appear(c, enter(lt, 0.25, 1.1), () => {
     face(c, xb, cy, R, hourB, minDeg);
     text(c, zoneB, xb, cy + R + 56, 24, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 5 });
-  }, 16);
+  }, 16), 0.25);
   // the two times, once the hand has settled
-  appear(c, enter(lt, 0.6, 1), () => text(c, hhmm(h0, m0), xb, cy + R + 100, 30, PAL.ink, { fam: TYPO.mono, w: 400, align: "center" }), 8);
-  appear(c, enter(lt, 3.0, 1), () => text(c, hhmm(h0 + off, m0), xa, cy + R + 100, 30, PAL.acc, { fam: TYPO.mono, w: 400, align: "center" }), 8);
+  obj(c, "clocks.home-time", [xb, cy + R + 90], lt, (lt) => appear(c, enter(lt, 0.6, 1), () => text(c, hhmm(h0, m0), xb, cy + R + 100, 30, PAL.ink, { fam: TYPO.mono, w: 400, align: "center" }), 8), 0.6);
+  obj(c, "clocks.camera-time", [xa, cy + R + 90], lt, (lt) => appear(c, enter(lt, 3.0, 1), () => text(c, hhmm(h0 + off, m0), xa, cy + R + 100, 30, PAL.acc, { fam: TYPO.mono, w: 400, align: "center" }), 8), 3.0);
   // the day line
   const ly = 1090;
-  appear(c, enter(lt, 1.6, 1), () => {
+  obj(c, "clocks.day-line", [540, ly + 16], lt, (lt) => appear(c, enter(lt, 1.6, 1), () => {
     c.strokeStyle = PAL.dim;
     c.lineWidth = 1.5;
     c.beginPath();
@@ -80,10 +83,10 @@ register("clocks", (c, lt, p) => {
     text(c, word("midnight"), 540, ly + 48, 20, PAL.ink, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
     text(c, word("feb11"), 300, ly + 48, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
     text(c, word("feb12"), 780, ly + 48, 20, PAL.dim, { fam: TYPO.mono, w: 400, align: "center", track: 4 });
-  }, 10);
+  }, 10), 1.6);
   // the morning photos, sliding onto the day before
   const hues = [22, 196, 38, 204];
-  hues.forEach((h, i) => {
+  obj(c, "clocks.photos", [540, ly - 39], lt, (lt) => hues.forEach((h, i) => {
     const a = enter(lt, 2.0 + i * 0.1, 0.9);
     if (a <= 0) return;
     const s = enter(lt, 3.0 + i * 0.12, 1.3);
@@ -94,6 +97,6 @@ register("clocks", (c, lt, p) => {
     rr(c, x, ly - 62, 46, 46, 6);
     c.fill();
     c.restore();
-  });
-  if (pct) appear(c, enter(lt, 4.3, 1), () => text(c, `${pct} %`, 90, 1222, 44, PAL.acc, { w: TYPO.lw }), 10);
+  }), 2.0);
+  if (pct) obj(c, "clocks.share", [160, 1208], lt, (lt) => appear(c, enter(lt, 4.3, 1), () => text(c, `${pct} %`, 90, 1222, 44, PAL.acc, { w: TYPO.lw }), 10), 4.3);
 });
