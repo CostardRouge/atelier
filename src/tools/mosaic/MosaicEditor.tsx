@@ -79,7 +79,7 @@ function unmeasured(doc: MosaicDoc, retryFailed: boolean): MosaicTile[] {
 function MosaicWorkbench({
   doc,
   client,
-  change,
+  change: rawChange,
   update,
   setTarget,
   setCrop,
@@ -140,8 +140,19 @@ function MosaicWorkbench({
   const chain = chainOf(doc);
   // Every animated recipe walks the queue (lab 3): a reveal and a drift move on to the next picture too.
   const chained = mode !== 'single';
+  // The document as it is NOW, written the moment an edit is applied — not at the next render: the player reads the
+  // queue right after a steer writes it, before React has drawn anything.
   const docRef = useRef(doc);
   docRef.current = doc;
+  const change = useCallback(
+    (fn: (d: MosaicDoc) => MosaicDoc) =>
+      rawChange((d) => {
+        const next = fn(d);
+        docRef.current = next;
+        return next;
+      }),
+    [rawChange],
+  );
   const queueSource = useMemo(
     () => ({
       next: (index: number) => chainOf(docRef.current).queue[index]?.id,

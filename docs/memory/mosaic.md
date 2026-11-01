@@ -439,7 +439,14 @@ the picture in that cell becomes the next step's as a pick of the queue
 la plongée n'a pas dépassé la moitié» was refused as a camera re-aim the
 pure clock cannot express; the *Steer* recipe is a 4 s hold on each
 mosaic to give the click its time. `aim: 'click'` was dropped: steering
-works in every recipe. Driven headless: Arrival → Photo under Mosaics
+works in every recipe. **Trap**: the player reads the queue right after a
+steer writes it, before React has rendered — a `docRef` set at render
+time still held the old queue and the re-prepared step took the old
+entry; the workbench's `change` now writes `docRef.current` the moment
+the edit is applied. **Trap for drives**: on the stub's flat colours a
+target's own tile fills its uniform region, so a click there names the
+picture already on screen and steers nowhere by design — a drive clicks
+along a row until a cell holds another picture. Driven headless: Arrival → Photo under Mosaics
 reads Custom and back; a reveal there and back says `back into its
 cells`; aim *Best match* replaces the drawn head; a click on the held
 mosaic makes the next step land on that picture.
