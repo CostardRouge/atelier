@@ -101,7 +101,7 @@ export default function ChainBand({ instance, client, current, queue, done, play
   }, [current, from, playing]);
 
   return (
-    <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft" aria-label="The chain" role="group">
+    <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft" aria-label="The chain" role="group">
       <div ref={scroller} className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-width:thin]">
         {current !== undefined && (
           <div data-chain-current data-id={current} className="relative flex-none w-20 h-11 overflow-hidden ring-2 ring-accent rounded-[2px]" title="The picture on screen">
