@@ -10,7 +10,7 @@ import { colorOf, markText, obj, objectFace, styleOf } from "../objects";
 import { STOPS } from "../geo";
 import { HOOK_DEFAULTS, type Hook, type HookTimeline } from "../hook";
 import { paintShades } from "../../shades/shade-paint";
-import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBand, hookBlockOf, hookLayoutOf, hookThemeOf, pieceLookOf, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
+import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBand, hookBlockOf, hookLayoutOf, hookThemeOf, pieceLookOf, withPostBadge, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
 import type { Episode } from "../episode";
 
 /** The series' facts the pieces read: its name, the post's number, the map's ends, the trip's first day. */
@@ -68,7 +68,8 @@ function elementsFor(c: Ctx, hook: Hook, tl: HookTimeline, look: HookBadge | und
 
 export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline, t: number): void {
   if (!hook.lines.length || t < Math.max(0, tl.lines[0].start - 0.3) || t >= tl.end) return;
-  const look = ep.look?.hook;
+  // The series' badge, with this post's own place and shades over it.
+  const look = withPostBadge(ep.look?.hook, hook);
   const series = hookSeriesOf(ep);
   const exit = hook.exit ?? HOOK_DEFAULTS.exit;
   const out = exit === "cut" ? 0 : clamp((t - tl.leave) / Math.max(0.05, tl.end - tl.leave));

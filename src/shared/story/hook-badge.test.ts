@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf, pieceLookOf, hookBlockOf } from './hook-badge';
+import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf, pieceLookOf, hookBlockOf, withPostBadge, readPostBadge } from './hook-badge';
 import { hookTimeline, type Hook } from './hook';
 
 const hook: Hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
@@ -171,6 +171,23 @@ describe('the cascade', () => {
     const els = hookBadgeElements(hook, tl, { cascade: null }, series);
     expect(of(els, 'place').window!.start).toBeCloseTo(tl.lines[1].done + 0.1, 5);
     expect(readHookBadge({ cascade: null, keepEntry: false })).toEqual({ cascade: null, keepEntry: false });
+  });
+});
+
+describe('a post’s own place and shades', () => {
+  const shade = { id: 's', direction: 'top' as const, reach: 0.4, strength: 0.6, color: '#000000', invert: false, followHook: false };
+  it('wins over the series’, field by field, the rest of the series’ look kept', () => {
+    const series = { look: 'pixel-crt' as const, anchor: 'bottom-left' as const, shades: [] };
+    expect(withPostBadge(series, hook)).toBe(series);
+    const mine = withPostBadge(series, { ...hook, badge: { anchor: 'top-right', shades: [shade] } })!;
+    expect(mine).toMatchObject({ look: 'pixel-crt', anchor: 'top-right' });
+    expect(mine.shades).toHaveLength(1);
+    expect(withPostBadge(series, { ...hook, badge: { shades: [shade] } })!.anchor).toBe('bottom-left');
+  });
+
+  it('keeps only its place and shades when read', () => {
+    expect(readPostBadge({ anchor: 'center', look: 'neutral', size: 0.2 })).toEqual({ anchor: 'center' });
+    expect(readPostBadge({ look: 'neutral' })).toBeUndefined();
   });
 });
 

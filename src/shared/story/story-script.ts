@@ -12,7 +12,7 @@
 import { readMapGround } from './map-ground';
 import { readStoryCamera } from './story-camera';
 import { readRoutePace } from './route-pace';
-import { readHookBadge } from './hook-badge';
+import { readHookBadge, readPostBadge } from './hook-badge';
 import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
@@ -379,6 +379,7 @@ function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'ho
           scrim: num(h.scrim, 0, 1),
           sounds: { keys: sound(sounds.keys), impact: sound(sounds.impact), whoosh: sound(sounds.whoosh) },
           pieces: readHookPieces(h.pieces),
+          badge: readPostBadge(h.badge),
         };
         // Absent fields stay absent: the defaults live in one place (`HOOK_DEFAULTS`).
         for (const k of Object.keys(hook) as (keyof Hook)[]) if (hook[k] === undefined) delete hook[k];

@@ -139,7 +139,7 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
 }
 
 /** The nine anchors as the 3×3 grid Trips places its badge on. */
-function AnchorGrid({ value, onChange }: { value: Anchor; onChange: (a: Anchor) => void }) {
+export function AnchorGrid({ value, onChange }: { value: Anchor; onChange: (a: Anchor) => void }) {
   return (
     <div className="flex items-start gap-3">
       <span className="text-sm text-ink-soft w-16 pt-1">Anchor</span>

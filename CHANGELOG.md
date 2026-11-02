@@ -113,6 +113,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - A new entrance, Flicker: a piece blinks on and off, then stays — shown or not, never half. With Cut (shown at once)
   it makes a raw « tac tac tac » sequence. Offered in Trips' badge pieces and cascade, the Studio's elements and
   Storytelling's hook.
+- Storytelling: a post can keep its own place and shades for the hook's badge, over the series' — its picture is its
+  own — under Hook › This post's badge place and shades.
 - A title style can be exported as a `.badge.json` file and imported back — in Trips' Look tab, the Studio, Flight
   Atlas and Storytelling alike — and Storytelling can take a trip's own badge style.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the

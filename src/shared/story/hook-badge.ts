@@ -571,3 +571,29 @@ export function hookBlockOf(hook: Hook, raw: HookBadge | null | undefined, serie
   return badgeBlockExtent(content, hookLayoutOf(look), 1080 / 1920, set.scales);
 }
 
+/** The series' badge with a post's own place and shades over it (`Hook.badge`). (pure) */
+export function withPostBadge(series: HookBadge | null | undefined, hook: Hook): HookBadge | undefined {
+  const own = hook.badge;
+  if (!own) return series ?? undefined;
+  const out: HookBadge = { ...(series ?? {}) };
+  if (own.anchor) {
+    out.anchor = own.anchor;
+    out.x = own.x;
+    out.y = own.y;
+  }
+  if (own.shades) out.shades = own.shades;
+  return out;
+}
+
+/** A post's own badge fields, kept when well formed. (pure) */
+export function readPostBadge(raw: unknown): Hook['badge'] {
+  const b = readHookBadge(raw);
+  if (!b) return undefined;
+  const out: NonNullable<Hook['badge']> = {};
+  if (b.anchor) out.anchor = b.anchor;
+  if (b.x !== undefined) out.x = b.x;
+  if (b.y !== undefined) out.y = b.y;
+  if (b.shades) out.shades = b.shades;
+  return Object.keys(out).length ? out : undefined;
+}
+
