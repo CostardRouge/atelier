@@ -11,6 +11,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: keep a series on your Winnow (Script › *Keep on …*) so your Mac and your phone open the same one:
+  edits are saved there once you pause, a newer copy from another device is taken when you come back, and a change
+  made on both is never overwritten — *Keep mine* or *Take theirs*. *Series kept on …* opens one in a new browser.
+
 - Storytelling: the script's last ten versions are kept in this browser as you work — Script › *Versions on this
   device*, each with *Restore*. Loading a file or restoring a version keeps the script it replaces first, so a wrong
   file loaded is one click away from undone.

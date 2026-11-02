@@ -8,6 +8,7 @@ import { SelectField, TextField } from '../../shared/ui/Inspector';
 import { POSTS } from './posts';
 import { clearWall } from './wall-cache';
 import ScriptVersions from './ScriptVersions';
+import ScriptKept, { KeptSeriesList } from './ScriptKept';
 import { clearVersions, keepVersion } from './version-store';
 
 /** A file name for the script, from its series. */
@@ -146,6 +147,13 @@ export default function ScriptControls({
           />
         </div>
       ) : null}
+      {script && !compact ? (
+        <div className="flex flex-col gap-1">
+          <p className="m-0 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Kept on</p>
+          <ScriptKept script={script} onScript={onScript} />
+        </div>
+      ) : null}
+      {!compact ? <KeptSeriesList current={script} onScript={onScript} /> : null}
       {!compact ? <ScriptVersions script={script} onScript={onScript} /> : null}
     </div>
   );

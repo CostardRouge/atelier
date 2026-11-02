@@ -3039,6 +3039,15 @@ it and may grow blocks of its own.
   or restoring a version always keeps the script it replaces first, so a
   wrong file loaded is one *Restore* away. *Forget* clears them with the
   script.
+- **The script on your Winnow.** Under Script, *Keep on <your Winnow>* keeps
+  the series there, like a trip: from then on every edit is saved there once
+  you pause, and when the page comes back into view a newer copy saved from
+  another device is taken (the one it replaces stays a version). On a new
+  browser — your phone, the published site — *Series kept on <your Winnow>…*
+  (under Script, or in *Getting started*) opens it as it is. If both devices
+  changed it, nothing is overwritten: *Keep mine* or *Take theirs*. *Keep only
+  here* stops following the copy there. It needs a Winnow that keeps series
+  (its next version).
 - **Sources.** Name where the series' data comes from: a trip of Trips in this
   browser, whose road and towns will draw the map, and a connected Winnow,
   whose counts and pictures will fill the numbers and the wall. They are saved

@@ -232,6 +232,12 @@ export interface ScriptTopic {
 export interface StoryScript {
   kind: typeof SCRIPT_KIND;
   version: 1;
+  /**
+   * The series' identity where it is kept on a Winnow (`script-remote.ts`):
+   * minted the first time it is kept there, so the same series opened on the
+   * Mac and the phone is ONE document. Absent on a script never kept.
+   */
+  id?: string;
   /** The language the series is told in (`locale.ts`): its numbers, its days, the blocks' own words. Absent = French. */
   lang?: Lang;
   /** The series' name, on the season's closing card. */
@@ -271,6 +277,9 @@ function isStop(v: unknown): v is Stop {
 }
 
 /** Read a script file's JSON, keeping what is well formed and saying why when nothing is. */
+/** What a script's id may be: a URL segment a Winnow's document bucket takes. */
+export const SCRIPT_ID = /^[A-Za-z0-9._-]{1,128}$/;
+
 export function parseScript(raw: unknown): ScriptParse {
   if (!isObject(raw)) return { ok: false, reason: 'This file is not a story script: it holds no object.' };
   if (raw.kind !== SCRIPT_KIND) return { ok: false, reason: `This file is not a story script (its kind is not “${SCRIPT_KIND}”).` };
@@ -346,6 +355,7 @@ export function parseScript(raw: unknown): ScriptParse {
     script: {
       kind: SCRIPT_KIND,
       version: 1,
+      ...(typeof raw.id === 'string' && SCRIPT_ID.test(raw.id) ? { id: raw.id } : {}),
       ...(raw.lang === 'en' || raw.lang === 'fr' ? { lang: raw.lang } : {}),
       series: text(raw.series),
       handle: text(raw.handle),
