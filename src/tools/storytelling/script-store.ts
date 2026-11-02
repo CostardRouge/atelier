@@ -1,4 +1,5 @@
 import { parseScript, type StoryScript } from '../../shared/story/story-script';
+import { keepVersion } from './version-store';
 
 /**
  * The one script the tool remembers, on this device: the words of the
@@ -36,12 +37,16 @@ export function onScriptStored(fn: StoredListener): () => void {
 
 function write(script: StoryScript | null): void {
   let ok = true;
+  const json = script ? JSON.stringify(script) : null;
   try {
-    if (script) localStorage.setItem(KEY, JSON.stringify(script));
+    if (json) localStorage.setItem(KEY, json);
     else localStorage.removeItem(KEY);
   } catch {
     ok = false;
   }
+  // Every written state may become a version to go back to (`script-versions.ts`) — kept even when
+  // localStorage refused, since IndexedDB may still take it.
+  if (script && json) void keepVersion(script, 'edits', json);
   for (const fn of listeners) fn(ok);
 }
 

@@ -11,6 +11,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: the script's last ten versions are kept in this browser as you work — Script › *Versions on this
+  device*, each with *Restore*. Loading a file or restoring a version keeps the script it replaces first, so a wrong
+  file loaded is one click away from undone.
+
 - Storytelling: *Before you export* — the Export panel checks the post first and lists what would come out wrong in
   the file: a fact not counted (drawn with its braces), the map's tiles or the wall's pictures missing from this
   device, a face not loaded, words under the buttons of TikTok, Reels or Shorts, a hook shrunk to fit its lines. Each

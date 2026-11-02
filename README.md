@@ -3033,7 +3033,12 @@ it and may grow blocks of its own.
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and
   keeps it in this browser until *Forget*; without one, every post still plays,
-  its captions as placeholders.
+  its captions as placeholders. As you work, the browser keeps the script's
+  last ten **versions** (Script › *Versions on this device*): the newest one
+  follows your edits for three minutes, then a new one opens; loading a file
+  or restoring a version always keeps the script it replaces first, so a
+  wrong file loaded is one *Restore* away. *Forget* clears them with the
+  script.
 - **Sources.** Name where the series' data comes from: a trip of Trips in this
   browser, whose road and towns will draw the map, and a connected Winnow,
   whose counts and pictures will fill the numbers and the wall. They are saved
