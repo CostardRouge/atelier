@@ -889,7 +889,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     );
   };
 
-  const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} />;
+  const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} clock={clock} />;
   const settingsRef = useRef<HTMLDivElement>(null);
   const settingsPane = (
     <div ref={settingsRef}>
