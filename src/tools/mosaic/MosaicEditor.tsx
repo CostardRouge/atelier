@@ -539,16 +539,21 @@ function MosaicWorkbench({
     );
   }
 
+  // Side by side from 860 px of room; under it, ONE column that scrolls as a whole — the stage a height of its own, the
+  // band, the transport, then the settings — never a stage column squeezed under an inspector that overlaps it.
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="min-h-0 min-w-0 flex flex-col gap-3">
-        <div ref={boxRef} className="min-h-[200px] flex-1 min-w-0 flex items-start justify-center [&:fullscreen]:items-center [&:fullscreen]:bg-frame">
+    <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto overflow-x-hidden @min-[860px]:overflow-visible @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="flex-none min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0">
+        <div
+          ref={boxRef}
+          className="flex-none h-[calc(var(--app-h,100dvh)*0.55)] min-h-[200px] min-w-0 flex items-start justify-center @min-[860px]:h-auto @min-[860px]:flex-1 [&:fullscreen]:items-center [&:fullscreen]:bg-frame"
+        >
           {stage}
         </div>
         {band}
         {transport}
       </div>
-      <aside className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden" aria-label="Mosaic settings">
+      <aside className="flex-none min-w-0 overflow-x-hidden @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto" aria-label="Mosaic settings">
         {settings()}
         {chooser}
       </aside>

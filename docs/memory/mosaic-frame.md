@@ -166,3 +166,16 @@ add and mounted again, still open. Driven headless at 390 × 844 and
 the Cells drawer rebuilding once, Mosaics playing with the band and the
 transport in reach, the ⋯'s verbs; the gallery's storage line wraps whole
 figures at 390 px.
+
+## Under 860 px of room the editor is ONE column that scrolls (2026-11-02)
+
+His report, a screenshot at an in-between width (the library docked, or a
+window under ~900 px): the stage, its transport and the Target card drawn
+over one another. **Cause**: under the container query the editor stacked
+its stage column and the inspector in a height-bound flex column; the stage
+column (`min-h-0`) was squeezed to ~120 px while its content kept its size
+and spilled over the inspector. **Rule**: from 860 px of room, side by side
+(the inspector scrolls); under it, one column that scrolls as a WHOLE — the
+stage box a height of its own (`55 %` of `--app-h`, never under 200 px),
+then the band, the transport, the settings, every part `flex-none`. Driven
+headless at eleven widths from 1500 down to 840 and back: nothing overlaps.
