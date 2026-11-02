@@ -146,3 +146,31 @@ describe('the shades under the badge', () => {
   });
 });
 
+describe('the cascade', () => {
+  const tl = hookTimeline(hook);
+  const of = (els: ReturnType<typeof hookBadgeElements>, piece: string) => els.find((e) => e.piece === piece)!.el;
+  const at = (el: ReturnType<typeof of>) => el.window!.start + (el.animation!.in!.delay ?? 0);
+
+  it('is on by default: the pieces arrive a rank apart, top to bottom, the typed lines keeping their own entry', () => {
+    const els = hookBadgeElements(hook, tl, undefined, series);
+    expect(of(els, 'header').animation?.in?.preset).toBe('slide');
+    expect(at(of(els, 'header'))).toBeLessThan(at(of(els, 'place')));
+    expect(at(of(els, 'place'))).toBeLessThan(at(of(els, 'why')));
+    expect(at(of(els, 'why')) - at(of(els, 'place'))).toBeCloseTo(0.14, 5);
+    expect(of(els, 'big').animation?.in?.preset).toBe('typewriter');
+  });
+
+  it('cuts at once or flickers, in the easing chosen, and cascades the typed lines too when they give up their entry', () => {
+    const cut = hookBadgeElements(hook, tl, { cascade: { step: { preset: 'none', duration: 0, easing: 'linear' }, stagger: { each: 0.1, order: 'random', seed: 3 } }, keepEntry: false }, series);
+    expect(cut.every((e) => e.el.animation?.in?.preset === 'none')).toBe(true);
+    const flick = hookBadgeElements(hook, tl, { cascade: { step: { preset: 'flicker', duration: 0.4, easing: 'out-expo' }, stagger: { each: 0.1, order: 'sequence' } } }, series);
+    expect(of(flick, 'place').animation?.in).toMatchObject({ preset: 'flicker', easing: 'out-expo' });
+  });
+
+  it('is off when set to null: each piece on its own moment, as before', () => {
+    const els = hookBadgeElements(hook, tl, { cascade: null }, series);
+    expect(of(els, 'place').window!.start).toBeCloseTo(tl.lines[1].done + 0.1, 5);
+    expect(readHookBadge({ cascade: null, keepEntry: false })).toEqual({ cascade: null, keepEntry: false });
+  });
+});
+

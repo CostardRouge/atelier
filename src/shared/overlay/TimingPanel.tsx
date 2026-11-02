@@ -30,6 +30,7 @@ const PRESETS: { value: AnimPreset; label: string }[] = [
   { value: 'scale', label: 'Scale + fade' },
   { value: 'typewriter', label: 'Typewriter' },
   { value: 'wipe', label: 'Wipe' },
+  { value: 'flicker', label: 'Flicker — blinks, then stays' },
 ];
 
 const DIRECTIONS: { value: AnimDirection; label: string }[] = [

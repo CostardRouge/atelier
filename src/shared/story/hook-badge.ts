@@ -12,7 +12,7 @@
  * clicks and its impact still land on their letters. (pure apart from the
  * canvas calls)
  */
-import { BADGE_RATIOS, badgeBlockExtent, badgeElements, type BadgeLayout, type BadgePieceScales, type BadgePieceStyles } from '../roadtrip/badge-layout';
+import { BADGE_RATIOS, badgeBlockExtent, badgeElements, readCascade, type BadgeCascade, type BadgeLayout, type BadgePieceScales, type BadgePieceStyles } from '../roadtrip/badge-layout';
 import type { BadgeContent, BadgePiece } from '../roadtrip/day-badge';
 import { DEFAULT_TIME_AGO_WORDS, FRENCH_TIME_AGO_WORDS, timeAgoLine } from '../roadtrip/time-ago';
 import type { AnimStep, ElementAnimation } from '../overlay/animation';
@@ -87,6 +87,19 @@ export interface HookBadge {
   y?: number;
   /** Trips' stack of shades under the badge, a shade following it taking its edge or its cell (`shades.ts`). */
   shades?: Shade[];
+  /**
+   * Trips' cascade: one entrance for the pieces, spread by where they sit.
+   * Absent = the default cascade (his pick, hook lab 2); null = each piece on
+   * its own moment, as before.
+   */
+  cascade?: BadgeCascade | null;
+  /** The big text and the second line keep the hook's own entry (typed, their key clicks on the letters) inside the cascade. Default on. */
+  keepEntry?: boolean;
+}
+
+/** His pick for the cascade: rising, top to bottom, 0.14 s apart. */
+export function defaultHookCascade(): BadgeCascade {
+  return { step: { preset: 'slide', duration: 0.5, easing: 'out-cubic', direction: 'up', distanceFrac: 0.03 }, stagger: { each: 0.14, order: 'sequence' } };
 }
 
 export type HookLong = 'wrap' | 'fit';
@@ -119,6 +132,8 @@ export function hookBadgeOf(raw: HookBadge | null | undefined) {
     x: raw?.x ?? null,
     y: raw?.y ?? null,
     shades: raw?.shades ?? null,
+    cascade: raw?.cascade === null ? null : (raw?.cascade ?? defaultHookCascade()),
+    keepEntry: raw?.keepEntry ?? true,
     long: raw?.long ?? HOOK_BADGE_DEFAULTS.long,
     pieces: { ...HOOK_BADGE_DEFAULTS.pieces, ...(raw?.pieces ?? {}) },
     styles: raw?.styles ?? {},
@@ -142,6 +157,12 @@ export function readHookBadge(raw: unknown): HookBadge | undefined {
   if (unit(r.x) !== undefined) out.x = unit(r.x);
   if (unit(r.y) !== undefined) out.y = unit(r.y);
   if (Array.isArray(r.shades)) out.shades = readShades(r.shades);
+  if (r.cascade === null) out.cascade = null;
+  else if (r.cascade !== undefined) {
+    const c = readCascade(r.cascade);
+    if (c) out.cascade = c;
+  }
+  if (typeof r.keepEntry === 'boolean') out.keepEntry = r.keepEntry;
   if (typeof r.pieces === 'object' && r.pieces && !Array.isArray(r.pieces)) {
     const pieces: Partial<Record<HookPieceKey, boolean>> = {};
     for (const { id } of HOOK_PIECES) if (typeof (r.pieces as Record<string, unknown>)[id] === 'boolean') pieces[id] = (r.pieces as Record<string, boolean>)[id];
@@ -442,9 +463,16 @@ export function hookBadgeElements(
   // A typed or wiped piece broken into lines types them one after the other, each its share of the letters.
   const lineLengths = new Map<BadgePiece, number[]>();
   for (const k of SET_IN_COLUMN) lineLengths.set(k, (content[k] ?? '').split('\n').map((l) => l.length));
+  // Under a cascade every piece arrives from one moment, a rank apart (its delay set by `badgeElements`), but the
+  // two lines the hook types keep their own entry while `keepEntry` holds — their key clicks land on their letters.
+  const cascadeFrom = Math.max(0, first.start - 0.25);
+  const kept = (key: BadgePiece) => look.keepEntry && (key === 'headline' || key === 'counter');
   const timed = (els: OverlayElement[]): OverlayElement[] =>
     els.map((el) => {
       const { key, line } = lineOf(el);
+      if (look.cascade && !kept(key) && el.animation?.in) {
+        return { ...el, animation: { in: el.animation.in, out }, window: { start: cascadeFrom, end: tl.end } };
+      }
       const l = life[key] ?? life.caption;
       const lengths = lineLengths.get(key);
       let at = l.at;
@@ -467,12 +495,17 @@ export function hookBadgeElements(
     // The title up, the card down: the same pieces in two blocks, the card's under an empty big text.
     const top: BadgeContent = { ...content, caption: null, timing: null, exif: null };
     const card: BadgeContent = { kicker: null, label: null, headline: '', counter: null, caption: content.caption, timing: content.timing, exif: content.exif };
+    // The card's cascade carries on after the title's: its ranks start where the title's end.
+    const ranks = [top.kicker, top.headline, top.counter].filter(Boolean).length;
+    const cardEls = card.caption || card.timing || card.exif ? badgeElements(card, { anchor: 'bottom-left', x: 0.07, y: 0.86, sizeFrac: look.size }, aspect, styles, null, look.cascade, scales) : [];
     els = [
-      ...badgeElements(top, layout, aspect, styles, null, null, scales),
-      ...(card.caption || card.timing || card.exif ? badgeElements(card, { anchor: 'bottom-left', x: 0.07, y: 0.86, sizeFrac: look.size }, aspect, styles, null, null, scales) : []).filter((el) => el.id !== 'piece:headline'),
+      ...badgeElements(top, layout, aspect, styles, null, look.cascade, scales),
+      ...cardEls
+        .filter((el) => el.id !== 'piece:headline')
+        .map((el) => (look.cascade && el.animation?.in ? { ...el, animation: { ...el.animation, in: { ...el.animation.in, delay: (el.animation.in.delay ?? 0) + ranks * look.cascade.stagger.each } } } : el)),
     ];
   } else {
-    els = badgeElements(content, layout, aspect, styles, null, null, scales);
+    els = badgeElements(content, layout, aspect, styles, null, look.cascade, scales);
   }
   return timed(els).map((el) => {
     const piece = pieceOf(el);

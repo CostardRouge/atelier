@@ -107,6 +107,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   of being covered. A piece's font, colour, case and spacing now reach the badge too.
 - Storytelling: shades under the hook's badge, Trips' own — up to four, each a direction, a reach, a strength and a
   colour; one that follows the badge lands on its edge or sits in its cell of the grid and moves with it.
+- Storytelling: the hook's pieces arrive in a cascade, Trips' own — one entrance for all, a beat apart, in the order
+  you choose (top to bottom, big first, random…) and the curve you choose; on by default, rising top to bottom. Your
+  typed lines keep their own entry and key clicks unless you say otherwise.
+- A new entrance, Flicker: a piece blinks on and off, then stays — shown or not, never half. With Cut (shown at once)
+  it makes a raw « tac tac tac » sequence. Offered in Trips' badge pieces and cascade, the Studio's elements and
+  Storytelling's hook.
 - A title style can be exported as a `.badge.json` file and imported back — in Trips' Look tab, the Studio, Flight
   Atlas and Storytelling alike — and Storytelling can take a trip's own badge style.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the

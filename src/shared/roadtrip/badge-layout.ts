@@ -17,7 +17,7 @@
  * Pure and DOM-free.
  */
 
-import type { AnimDirection, AnimPreset, AnimStep, ElementAnimation } from '../overlay/animation';
+import { ANIM_PRESETS, type AnimDirection, type AnimPreset, type AnimStep, type ElementAnimation } from '../overlay/animation';
 import { isEasingId } from '../motion/easing';
 import { snap } from '../overlay/guides';
 import { normaliseStagger, staggerDelays, type Stagger } from '../overlay/stagger';
@@ -103,7 +103,7 @@ export interface BadgeCascade {
   stagger: Stagger;
 }
 
-const PRESETS: readonly AnimPreset[] = ['none', 'fade', 'slide', 'scale', 'typewriter', 'wipe'];
+const PRESETS: readonly AnimPreset[] = ANIM_PRESETS;
 const DIRECTIONS: readonly AnimDirection[] = ['up', 'down', 'left', 'right'];
 
 function finite(v: unknown): number | undefined {

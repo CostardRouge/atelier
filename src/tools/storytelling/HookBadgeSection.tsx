@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import StylePanel from '../../shared/overlay/StylePanel';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
-import { HOOK_COMPOSITIONS, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookLayoutOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
+import { defaultHookCascade, HOOK_COMPOSITIONS, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookLayoutOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
 import { withLook } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import { SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
@@ -9,6 +9,11 @@ import Segmented from '../../shared/ui/Segmented';
 import { ANCHORS, type Anchor } from '../../shared/overlay/overlay-types';
 import { PAL } from '../../shared/story/charte';
 import ShadesPanel from '../../shared/shades/ShadesPanel';
+import type { BadgeCascade } from '../../shared/roadtrip/badge-layout';
+import type { AnimStep } from '../../shared/overlay/animation';
+import { CURVES, EASING_IDS, type EasingId } from '../../shared/motion/easing';
+import { newStaggerSeed, STAGGER_ORDERS, type StaggerOrder } from '../../shared/overlay/stagger';
+import Button from '../../shared/ui/Button';
 
 /**
  * The hook's look for the whole series (hook lab B3–B4, his picks): Trips'
@@ -118,6 +123,8 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
           <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Shades</p>
           <ShadesPanel shades={[...(b.shades ?? [])]} onChange={(shades) => write({ shades: shades.length ? shades : undefined })} followBadge anchor={hookLayoutOf(b).anchor} />
           <p className="m-0 text-2xs text-muted leading-snug">Trips&apos; shades: one that follows the badge&apos;s edge lands its reach on the block, one that follows its anchor sits in the badge&apos;s cell and moves with it. The veil a post sets under Hook still darkens the whole picture; set it to 0 to keep the shades alone.</p>
+          <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Cascade</p>
+          <CascadeRows cascade={b.cascade} keepEntry={b.keepEntry} onCascade={(cascade) => write({ cascade })} onKeep={(keepEntry) => write({ keepEntry: keepEntry ? undefined : false })} />
           <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Pieces</p>
           <div className="flex flex-col gap-1">
             {HOOK_PIECES.map((p) => (
@@ -148,6 +155,92 @@ function AnchorGrid({ value, onChange }: { value: Anchor; onChange: (a: Anchor) 
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The cascade's entrances: at once, blinking, or Trips' four — each its own step. */
+type Entrance = 'cut' | 'flicker' | 'fade' | 'rise' | 'pop' | 'wipe';
+const ENTRANCES: { id: Entrance; label: string; title: string }[] = [
+  { id: 'cut', label: 'Cut', title: 'Each piece shown at once, on or off, in the order chosen' },
+  { id: 'flicker', label: 'Flicker', title: 'Each piece blinks on and off, then stays' },
+  { id: 'fade', label: 'Fade', title: 'Each piece fades in' },
+  { id: 'rise', label: 'Rise', title: 'Each piece rises into place' },
+  { id: 'pop', label: 'Pop', title: 'Each piece grows into place' },
+  { id: 'wipe', label: 'Wipe', title: 'Each piece wiped in, left to right' },
+];
+const entranceOf = (step: AnimStep): Entrance =>
+  step.preset === 'none' ? 'cut' : step.preset === 'flicker' ? 'flicker' : step.preset === 'slide' ? 'rise' : step.preset === 'scale' ? 'pop' : step.preset === 'wipe' ? 'wipe' : 'fade';
+function stepFor(entrance: Entrance, was: AnimStep): AnimStep {
+  const duration = was.preset === 'none' ? 0.5 : was.duration;
+  const easing = was.easing;
+  switch (entrance) {
+    case 'cut':
+      return { preset: 'none', duration: 0, easing };
+    case 'flicker':
+      return { preset: 'flicker', duration, easing };
+    case 'rise':
+      return { preset: 'slide', duration, easing, direction: 'up', distanceFrac: 0.03 };
+    case 'pop':
+      return { preset: 'scale', duration, easing, scaleFrom: 0.7 };
+    case 'wipe':
+      return { preset: 'wipe', duration, easing };
+    default:
+      return { preset: 'fade', duration, easing };
+  }
+}
+
+/**
+ * Trips' cascade over the hook's pieces (hook lab 2): one entrance for every
+ * piece, a rank apart in the order chosen, in the curve chosen — Cut and
+ * Flicker his own additions, « tac tac tac ». The two typed lines keep the
+ * hook's own entry unless told otherwise.
+ */
+function CascadeRows({ cascade, keepEntry, onCascade, onKeep }: { cascade: BadgeCascade | null; keepEntry: boolean; onCascade: (c: BadgeCascade | null | undefined) => void; onKeep: (on: boolean) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <SwitchRow label="Cascade the pieces" checked={Boolean(cascade)} onChange={(on) => onCascade(on ? undefined : null)} />
+      {cascade ? (
+        <>
+          <Segmented<Entrance>
+            options={ENTRANCES}
+            value={entranceOf(cascade.step)}
+            onChange={(e) => onCascade({ ...cascade, step: stepFor(e, cascade.step) })}
+            size="sm"
+            fill
+            label="How each piece arrives"
+          />
+          <SelectField<StaggerOrder>
+            label="Cascade order"
+            value={cascade.stagger.order}
+            options={STAGGER_ORDERS.map((o) => ({ id: o.id, label: `${o.label} — ${o.hint}` }))}
+            onChange={(order) => onCascade({ ...cascade, stagger: { ...cascade.stagger, order, ...(order === 'random' && cascade.stagger.seed === undefined ? { seed: newStaggerSeed() } : {}) } })}
+          />
+          {cascade.stagger.order === 'random' ? (
+            <Button size="sm" variant="ghost" onClick={() => onCascade({ ...cascade, stagger: { ...cascade.stagger, seed: newStaggerSeed() } })}>
+              Shuffle again
+            </Button>
+          ) : null}
+          <SliderRow label="Each" value={cascade.stagger.each} min={0} max={0.5} step={0.01} reset={0.14} format={(v) => `${v.toFixed(2)} s`} onChange={(each) => onCascade({ ...cascade, stagger: { ...cascade.stagger, each } })} />
+          {cascade.step.preset !== 'none' ? (
+            <>
+              <SliderRow label="Duration" value={cascade.step.duration} min={0.1} max={1.5} step={0.05} reset={0.5} format={(v) => `${v.toFixed(2)} s`} onChange={(duration) => onCascade({ ...cascade, step: { ...cascade.step, duration } })} />
+              <SelectField<EasingId>
+                label="The curve of each entrance"
+                value={cascade.step.easing}
+                options={EASING_IDS.map((id) => ({ id, label: `Easing · ${CURVES[id].label}` }))}
+                onChange={(easing) => onCascade({ ...cascade, step: { ...cascade.step, easing } })}
+              />
+            </>
+          ) : null}
+          <SwitchRow label="Typed lines keep their own entry" checked={keepEntry} onChange={onKeep} />
+          <button type="button" className="self-start text-2xs text-muted underline cursor-pointer" onClick={() => onCascade(defaultHookCascade())}>
+            Back to the default — Rise, top to bottom
+          </button>
+        </>
+      ) : (
+        <p className="m-0 text-2xs text-muted leading-snug">Each piece arrives on its own moment of the hook: the header ahead of the words, the place and why now after them.</p>
+      )}
     </div>
   );
 }

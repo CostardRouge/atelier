@@ -23,9 +23,18 @@ import { easeAt as curveEaseAt, type EasingId } from '../motion/easing';
  * - `slide`    travels in from (or out towards) `direction`, with the fade;
  * - `scale`    grows from / shrinks to `scaleFrom`, with the fade;
  * - `typewriter` reveals character by character;
- * - `wipe`     reveals continuously, left to right.
+ * - `wipe`     reveals continuously, left to right;
+ * - `flicker`  blinks on and off, then stays — shown or not, never half
+ *              (his « tac tac tac », 2026-11-02); the curve decides where
+ *              the blinks fall.
  */
-export type AnimPreset = 'none' | 'fade' | 'slide' | 'scale' | 'typewriter' | 'wipe';
+export type AnimPreset = 'none' | 'fade' | 'slide' | 'scale' | 'typewriter' | 'wipe' | 'flicker';
+
+/** Every entrance, for a reader that keeps a stored one. */
+export const ANIM_PRESETS: readonly AnimPreset[] = ['none', 'fade', 'slide', 'scale', 'typewriter', 'wipe', 'flicker'];
+
+/** How many times a flicker turns on before it stays: on at the 1st, 3rd, 5th seventh, then for good. */
+const FLICKER_SLOTS = 7;
 
 /** Travel direction of a `slide`: where the element goes on the way out, and
  *  where it comes back from on the way in. */
@@ -180,7 +189,7 @@ function stepTransform(step: AnimStep, e: number, phase: 'in' | 'out'): Transfor
   const k = phase === 'in' ? 1 - e : e;
   // An overshooting curve takes `k` below 0: a scale or an offset follows it
   // past its rest, an opacity never gets brighter than 1.
-  const alpha = step.preset === 'none' ? 1 : clamp01(1 - k);
+  const alpha = step.preset === 'none' ? 1 : step.preset === 'flicker' ? flickerAlpha(1 - k) : clamp01(1 - k);
   const t: Transform = { alpha, dx: 0, dy: 0, scale: 1, reveal: 1, revealSteps: false };
 
   if (step.preset === 'slide') {
@@ -211,6 +220,16 @@ function stepTransform(step: AnimStep, e: number, phase: 'in' | 'out'): Transfor
     t.alpha = 1;
   }
   return t;
+}
+
+/**
+ * A flicker at progress `q` toward rest (0 away, 1 there): shown in the odd
+ * slots, so it blinks three times and lands on; binary, never half shown.
+ */
+function flickerAlpha(q: number): number {
+  if (q >= 1) return 1;
+  if (q <= 0) return 0;
+  return Math.floor(q * FLICKER_SLOTS) % 2 === 1 ? 1 : 0;
 }
 
 /**
