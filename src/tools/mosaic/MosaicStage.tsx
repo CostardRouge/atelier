@@ -266,7 +266,7 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
           : null;
 
   return (
-    <div className="relative w-full h-full bg-frame rounded-paper-lg overflow-hidden shadow-paper-soft">
+    <div className="relative w-full h-full bg-frame rounded-control overflow-hidden shadow-paper-soft">
       <canvas
         ref={canvasRef}
         aria-label="Mosaic"

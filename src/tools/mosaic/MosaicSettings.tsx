@@ -3,7 +3,7 @@ import { ASPECTS, type AspectId } from '../../shared/mosaic/frame';
 import { MAX_CELL_PX, MIN_CELL_PX } from '../../shared/mosaic/match';
 import type { Level, Space } from '../../shared/mosaic/measure';
 import { sanitizeSettings, type MosaicSettings as Settings } from '../../shared/mosaic/mosaic-doc';
-import { FieldRow, InspectorSection, SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
+import { FieldRow, FoldHints, InspectorSection, SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
 import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
@@ -123,7 +123,9 @@ export default function MosaicSettings({ settings, update, view, setView, state,
       </InspectorSection>
     );
   };
+  // Every hint behind its ⓘ, opened as a bubble over what follows: the panel stays short, the target card large.
   return (
+    <FoldHints float>
     <div className="flex flex-col gap-3 px-1.5">
       {section('target', 'mosaic-target', 'Target', { remember: 'session' }, <>
         {target}
@@ -137,7 +139,7 @@ export default function MosaicSettings({ settings, update, view, setView, state,
             </Button>
           )}
         </div>
-        <FieldRow label="Shape">
+        <FieldRow label="Shape" hint={<p>The frame’s shape, posed on the picture. Drag the frame to choose the part rebuilt, its sides and corners to resize it; the rest is never read.</p>}>
           <Segmented<AspectId>
             size="sm"
             columns={4}
@@ -164,7 +166,6 @@ export default function MosaicSettings({ settings, update, view, setView, state,
           onChange={(veilFade) => setPerf({ veilFade })}
           hint={<p>With Auto-frame off, the tint that makes the target read from afar fades as you zoom in, gone at ×3.5, so a close look shows each photo’s own colours. Only the view: the mosaic and its exports keep their tint.</p>}
         />
-        <p className="m-0 text-xs text-muted">Drag the frame to choose the part rebuilt, its sides and corners to resize it. The rest is never read.</p>
       </>)}
       {section('cells', 'mosaic-cells', 'Cells', { remember: 'session' }, <>
         <SliderRow
@@ -312,6 +313,7 @@ export default function MosaicSettings({ settings, update, view, setView, state,
         )}
       </>)}
     </div>
+    </FoldHints>
   );
 }
 

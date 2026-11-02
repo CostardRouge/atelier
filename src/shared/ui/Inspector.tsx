@@ -23,7 +23,7 @@
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import InfoDot, { InfoDotButton } from './InfoDot';
 import SliderBar, { type SliderBarProps } from './SliderBar';
 import { Icons } from './icons';
@@ -245,7 +245,7 @@ export function InspectorSection({
  * the dials (2026-09-24). A hint that says a STATE rather than explaining
  * (`hintShown`) stays in the open either way.
  */
-const HintsFolded = createContext(false);
+const HintsFolded = createContext<false | 'inline' | 'float'>(false);
 
 /**
  * Sections whose BODY is locked — what a host sets while a run it started
@@ -270,15 +270,53 @@ function useInert<T extends HTMLElement>(locked: boolean) {
   return ref;
 }
 
-export function FoldHints({ children }: { children: ReactNode }) {
-  return <HintsFolded.Provider value>{children}</HintsFolded.Provider>;
+/**
+ * Rows inside fold their hints behind an ⓘ. `float` opens a hint as a bubble OVER what follows rather than in the
+ * flow — for a panel whose length is the cost (Mosaic's Target, lab 4's follow-up: «l'interface devient longue et
+ * lourde … un pop-over temporaire»); a press elsewhere or Escape closes it.
+ */
+export function FoldHints({ children, float = false }: { children: ReactNode; float?: boolean }) {
+  return <HintsFolded.Provider value={float ? 'float' : 'inline'}>{children}</HintsFolded.Provider>;
+}
+
+/** A row's hint as a bubble under the row, over what follows; closed by a press outside it and its dot, or Escape. */
+function HintBubble({ id, onClose, children }: { id: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t || ref.current?.contains(t) || t.closest(`[aria-controls="${CSS.escape(id)}"]`)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [id, onClose]);
+  return (
+    <div
+      ref={ref}
+      id={id}
+      role="note"
+      className="absolute left-0 right-0 top-full mt-1 z-30 px-3 py-2.5 rounded-control border border-line bg-surface shadow-paper text-xs leading-relaxed text-muted [&>p]:m-0 [&>p+p]:mt-1.5"
+    >
+      {children}
+    </div>
+  );
 }
 
 /** The hint of a row: under the control, or behind a dot the caller draws. */
 function useRowHint(hint: ReactNode, shown: boolean, about: ReactNode) {
-  const folded = useContext(HintsFolded) && !shown && Boolean(hint);
+  const mode = useContext(HintsFolded);
+  const folded = Boolean(mode) && !shown && Boolean(hint);
   const [open, setOpen] = useState(false);
   const id = useId();
+  const close = useCallback(() => setOpen(false), []);
   const dot = folded ? (
     <InfoDotButton
       about={typeof about === 'string' ? about.toLowerCase() : 'this setting'}
@@ -288,7 +326,13 @@ function useRowHint(hint: ReactNode, shown: boolean, about: ReactNode) {
     />
   ) : null;
   const visible = hint && (!folded || open);
-  return { dot, visible, id };
+  /** The hint as the row draws it: a bubble over what follows when folded to float, else a line in the flow. */
+  const note = !visible ? null : folded && mode === 'float' ? (
+    <HintBubble id={id} onClose={close}>
+      {hint}
+    </HintBubble>
+  ) : null;
+  return { dot, visible: visible && !note, note, id };
 }
 
 interface FieldRowProps {
@@ -307,10 +351,10 @@ interface FieldRowProps {
 /** A label at the left, its control at the right, on one line. */
 export function FieldRow({ label, children, hint, hintShown = false, align = 'center', htmlFor }: FieldRowProps) {
   const Label = htmlFor ? 'label' : 'span';
-  const { dot, visible, id } = useRowHint(hint, hintShown, label);
+  const { dot, visible, note, id } = useRowHint(hint, hintShown, label);
   return (
     <div
-      className={`grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 gap-y-1 ${
+      className={`relative grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 gap-y-1 ${
         align === 'start' ? 'items-start' : 'items-center'
       }`}
     >
@@ -326,6 +370,7 @@ export function FieldRow({ label, children, hint, hintShown = false, align = 'ce
           {hint}
         </div>
       )}
+      {note}
     </div>
   );
 }
@@ -359,9 +404,9 @@ interface SliderRowProps extends Omit<SliderBarProps, 'after'> {
  * whatever pill the row carried.
  */
 export function SliderRow({ hint, hintShown = false, trailing, ...bar }: SliderRowProps) {
-  const { dot, visible, id } = useRowHint(hint, hintShown, bar.name ?? bar.label);
+  const { dot, visible, note, id } = useRowHint(hint, hintShown, bar.name ?? bar.label);
   return (
-    <div className="flex flex-col gap-1.5 min-w-0">
+    <div className="relative flex flex-col gap-1.5 min-w-0">
       <SliderBar {...bar} after={dot} />
       {trailing && <div className="flex flex-wrap items-center gap-2 min-w-0">{trailing}</div>}
       {visible && (
@@ -369,6 +414,7 @@ export function SliderRow({ hint, hintShown = false, trailing, ...bar }: SliderR
           {hint}
         </div>
       )}
+      {note}
     </div>
   );
 }
@@ -612,9 +658,9 @@ interface SwitchRowProps {
  * N / E / S / W"): the phrase across the row, the switch at its end.
  */
 export function SwitchRow({ label, name, checked, onChange, hint, hintShown = false }: SwitchRowProps) {
-  const { dot, visible, id } = useRowHint(hint, hintShown, label);
+  const { dot, visible, note, id } = useRowHint(hint, hintShown, label);
   return (
-    <div className="flex flex-col gap-1">
+    <div className="relative flex flex-col gap-1">
       <div className="flex items-center gap-3 pointer-coarse:min-h-11">
         {/* The phrase is the switch too (`docs/touch-targets.md` T3) — not
             its ⓘ, which is a button of its own. */}
@@ -634,6 +680,7 @@ export function SwitchRow({ label, name, checked, onChange, hint, hintShown = fa
           {hint}
         </div>
       )}
+      {note}
     </div>
   );
 }
