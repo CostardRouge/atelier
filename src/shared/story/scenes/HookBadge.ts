@@ -9,7 +9,8 @@ import { PAL } from "../charte";
 import { colorOf, markText, obj, objectFace, styleOf } from "../objects";
 import { STOPS } from "../geo";
 import { HOOK_DEFAULTS, type Hook, type HookTimeline } from "../hook";
-import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBand, hookLayoutOf, hookThemeOf, pieceLookOf, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
+import { paintShades } from "../../shades/shade-paint";
+import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBand, hookBlockOf, hookLayoutOf, hookThemeOf, pieceLookOf, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
 import type { Episode } from "../episode";
 
 /** The series' facts the pieces read: its name, the post's number, the map's ends, the trip's first day. */
@@ -86,6 +87,16 @@ export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline,
   // The whole badge turns and grows about its anchor's point: a piece dragged or sized moves it all (`hook.badge`).
   const at = hookLayoutOf(hookBadgeOf(look));
   const pivot: [number, number] = [at.x * 1080, at.y * 1920];
+  // The shades under the badge, as Trips lays them: a following shade lands on the block where it is drawn —
+  // moved and grown with the badge's Studio geometry (`hook.badge`).
+  const shades = hookBadgeOf(look).shades;
+  if (shades?.length) {
+    const block = hookBlockOf(hook, look, series, measureIn(c, theme, looks), looks);
+    const geo = styleOf("hook.badge");
+    const k = geo.scale ?? 1;
+    const moved = block && { ...block, top: (pivot[1] + (block.top * 1920 - pivot[1]) * k + (geo.dy ?? 0)) / 1920, bottom: (pivot[1] + (block.bottom * 1920 - pivot[1]) * k + (geo.dy ?? 0)) / 1920 };
+    obj(c, "hook.shades", [540, 960], t, () => paintShades(c, 1080, 1920, shades, moved, shown));
+  }
   const band = hookBand(hook, look, series, measureIn(c, theme, looks), looks);
   if (band)
     obj(c, "hook.band", pivot, t, () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf, pieceLookOf } from './hook-badge';
+import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf, pieceLookOf, hookBlockOf } from './hook-badge';
 import { hookTimeline, type Hook } from './hook';
 
 const hook: Hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
@@ -131,4 +131,18 @@ describe('a piece set in the Studio', () => {
 
 /** A size as a share of the 9:16 frame's height. */
 const heightOf = (sizeFrac: number) => sizeFrac * (1080 / 1920);
+
+describe('the shades under the badge', () => {
+  it('keeps a stored stack, and measures the block a following shade lands on from the drawn layout', () => {
+    const read = readHookBadge({ shades: [{ direction: 'bottom', reach: 0.4, strength: 0.7, color: '#000000', followAnchor: true }, { direction: 'nowhere' }] });
+    expect(read?.shades).toHaveLength(1);
+    expect(read?.shades?.[0]).toMatchObject({ direction: 'bottom', followAnchor: true });
+    const tl = hookTimeline(hook);
+    const block = hookBlockOf(hook, { anchor: 'top-left' }, series)!;
+    const els = hookBadgeElements(hook, tl, { anchor: 'top-left' }, series);
+    expect(block.anchor).toBe('top-left');
+    expect(block.top).toBeCloseTo(Math.min(...els.map((e) => e.el.y)), 5);
+    expect(block.bottom).toBeGreaterThan(Math.max(...els.map((e) => e.el.y)));
+  });
+});
 

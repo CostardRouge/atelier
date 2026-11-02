@@ -19,6 +19,7 @@ import type { AnimStep, ElementAnimation } from '../overlay/animation';
 import { ANCHORS, type Anchor, type OverlayElement } from '../overlay/overlay-types';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import { readStyleTheme } from '../overlay/style-file';
+import { readShades, type HookBlock, type Shade } from '../shades/shades';
 import { PAL } from './charte';
 import type { Hook, HookTimeline } from './hook';
 
@@ -84,6 +85,8 @@ export interface HookBadge {
   anchor?: Anchor;
   x?: number;
   y?: number;
+  /** Trips' stack of shades under the badge, a shade following it taking its edge or its cell (`shades.ts`). */
+  shades?: Shade[];
 }
 
 export type HookLong = 'wrap' | 'fit';
@@ -115,6 +118,7 @@ export function hookBadgeOf(raw: HookBadge | null | undefined) {
     anchor: raw?.anchor ?? null,
     x: raw?.x ?? null,
     y: raw?.y ?? null,
+    shades: raw?.shades ?? null,
     long: raw?.long ?? HOOK_BADGE_DEFAULTS.long,
     pieces: { ...HOOK_BADGE_DEFAULTS.pieces, ...(raw?.pieces ?? {}) },
     styles: raw?.styles ?? {},
@@ -137,6 +141,7 @@ export function readHookBadge(raw: unknown): HookBadge | undefined {
   const unit = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined);
   if (unit(r.x) !== undefined) out.x = unit(r.x);
   if (unit(r.y) !== undefined) out.y = unit(r.y);
+  if (Array.isArray(r.shades)) out.shades = readShades(r.shades);
   if (typeof r.pieces === 'object' && r.pieces && !Array.isArray(r.pieces)) {
     const pieces: Partial<Record<HookPieceKey, boolean>> = {};
     for (const { id } of HOOK_PIECES) if (typeof (r.pieces as Record<string, unknown>)[id] === 'boolean') pieces[id] = (r.pieces as Record<string, boolean>)[id];
@@ -518,3 +523,18 @@ export function hookBand(hook: Hook, raw: HookBadge | null | undefined, series: 
   const pad = look.size * (1080 / 1920) * 0.35;
   return { top: e.top - pad, bottom: e.bottom + pad, fill: look.look === 'plein-cadre' ? '#f01d0e' : look.look === 'charte' ? PAL.acc : 'rgba(14,12,10,0.82)' };
 }
+
+/**
+ * Where the badge's title block sits, as fractions of the frame's height, and
+ * its anchor — what a shade following the badge lands on (Trips' `HookBlock`),
+ * measured from the very layout the pieces are drawn with. Null with no big
+ * text. (pure over `measure`)
+ */
+export function hookBlockOf(hook: Hook, raw: HookBadge | null | undefined, series: HookSeries, measure: HookMeasure = roughMeasure, looks: HookPieceLooks = {}): HookBlock | null {
+  const look = hookBadgeOf(raw);
+  const set = hookBadgeSet(hook, look, series, measure, looks);
+  if (!set) return null;
+  const content = look.composition === 'split' ? { ...set.content, caption: null, timing: null, exif: null } : set.content;
+  return badgeBlockExtent(content, hookLayoutOf(look), 1080 / 1920, set.scales);
+}
+

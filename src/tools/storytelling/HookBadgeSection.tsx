@@ -8,6 +8,7 @@ import { SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { ANCHORS, type Anchor } from '../../shared/overlay/overlay-types';
 import { PAL } from '../../shared/story/charte';
+import ShadesPanel from '../../shared/shades/ShadesPanel';
 
 /**
  * The hook's look for the whole series (hook lab B3–B4, his picks): Trips'
@@ -114,6 +115,10 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
             fill
             label="A big text longer than the column"
           />
+          <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Shades</p>
+          <ShadesPanel shades={[...(b.shades ?? [])]} onChange={(shades) => write({ shades: shades.length ? shades : undefined })} followBadge anchor={hookLayoutOf(b).anchor} />
+          <p className="m-0 text-2xs text-muted leading-snug">Trips&apos; shades: one that follows the badge&apos;s edge lands its reach on the block, one that follows its anchor sits in the badge&apos;s cell and moves with it. The veil a post sets under Hook still darkens the whole picture; set it to 0 to keep the shades alone.</p>
+          <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Pieces</p>
           <div className="flex flex-col gap-1">
             {HOOK_PIECES.map((p) => (
               <SwitchRow key={p.id} label={p.label} checked={b.pieces[p.id]} onChange={(on) => write({ pieces: { ...(raw?.pieces ?? {}), [p.id]: on } as Partial<Record<HookPieceKey, boolean>> })} />
