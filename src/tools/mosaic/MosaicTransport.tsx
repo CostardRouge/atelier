@@ -90,7 +90,7 @@ export default function MosaicTransport({ mode, motion, recipe, scene, onStill, 
   );
   if (compact) {
     return (
-      <div className="relative flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+      <div className="relative flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft">
         {stillButton}
         {modeButton}
         {playButton}
@@ -102,7 +102,7 @@ export default function MosaicTransport({ mode, motion, recipe, scene, onStill, 
     );
   }
   return (
-    <div className="relative flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+    <div className="relative flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft">
       {stillButton}
       {modeButton}
       {mode === 'chain' && <Segmented<ChainDepart> size="sm" value={chainDepart} options={DIRECTIONS} onChange={setDepart} />}

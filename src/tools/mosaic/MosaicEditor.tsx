@@ -526,7 +526,7 @@ function MosaicWorkbench({
           ...(canFullscreen ? [{ id: 'screen', label: 'Full screen', onSelect: fullscreen }] : []),
         ])}
         {/* No floor on the stage's height (Develop's rule): the drawer takes its share, and the stage shows smaller. */}
-        <div ref={boxRef} className="relative flex-1 min-h-0 min-w-0 flex items-center justify-center rounded-paper-lg bg-frame overflow-hidden [&:fullscreen]:bg-frame">
+        <div ref={boxRef} className="relative flex-1 min-h-0 min-w-0 flex items-center justify-center rounded-control bg-frame overflow-hidden [&:fullscreen]:bg-frame">
           {stage}
         </div>
         {band}
@@ -843,7 +843,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         {titleField}
       </PageBar>
       {band}
-      <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+      <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft">
         <span className="font-mono text-2xs text-muted tabular-nums" role="status">
           {countLine}
         </span>
