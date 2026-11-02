@@ -76,8 +76,8 @@ out until the frame is the whole picture, in until the crop would be
 `MIN_CROP_SCALE`) — and `cropFromView` maps the window in view through the
 scene's `targetRect` onto the target as a crop; `tools/mosaic/use-stage-zoom.ts`
 reads the hand through the suite's `useZoomGestures` (`wheel: 'any'` — the
-stage has nothing else to do with the wheel; a drag pans only past ×1, at
-the fit it stays a click on a cell) and COMMITS on release — the wheel quiet
+stage has nothing else to do with the wheel; a drag pans whenever there
+is somewhere to go — since lab 4's L3, `mosaic-interaction.md`) and COMMITS on release — the wheel quiet
 260 ms, the fingers or the drag lifted — under `perf.zoom === 'frame'`, or
 keeps the view under `'look'` where *Frame this* on the stage writes it. The
 view is HELD until the scene rebuilt for the crop lands, and that build

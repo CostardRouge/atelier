@@ -42,28 +42,55 @@ export function viewBounds(cropScale: number): { min: number; max: number } {
 }
 
 /**
- * The view clamped: zoomed in, the mosaic covers the stage with no gap at an
- * edge; zoomed out, it sits centred in the stage.
+ * The view clamped so the window in view stays inside `area` (stage units;
+ * the stage itself by default): zoomed in, the mosaic covers the stage with
+ * no gap at an edge; a window larger than the area sits centred on it. Under
+ * Auto-frame the area is the whole PICTURE (`pictureArea`), so a drag slides
+ * the window past the mosaic built — the frame moving on the target — and a
+ * release makes that the crop (lab 4, L3).
  */
-export function clampStageView(view: StageView, stageW: number, stageH: number, bounds: { min: number; max: number }): StageView {
+export function clampStageView(view: StageView, stageW: number, stageH: number, bounds: { min: number; max: number }, area: Rect = { x: 0, y: 0, w: stageW, h: stageH }): StageView {
   const s = Math.min(bounds.max, Math.max(bounds.min, Number.isFinite(view.s) && view.s > 0 ? view.s : 1));
-  const w = stageW * s;
-  const h = stageH * s;
-  const ox = s >= 1 ? Math.min(0, Math.max(stageW - w, view.ox)) : (stageW - w) / 2;
-  const oy = s >= 1 ? Math.min(0, Math.max(stageH - h, view.oy)) : (stageH - h) / 2;
-  return { s, ox, oy };
+  const ww = stageW / s;
+  const wh = stageH / s;
+  const along = (pos: number, size: number, lo: number, span: number) => (size >= span ? lo + (span - size) / 2 : Math.min(lo + span - size, Math.max(lo, pos)));
+  const wx = along(-view.ox / s, ww, area.x, area.w);
+  const wy = along(-view.oy / s, wh, area.y, area.h);
+  // `+ 0` turns a -0 into 0: a view at the corner reads as one.
+  return { s, ox: -wx * s + 0, oy: -wy * s + 0 };
+}
+
+/**
+ * The whole `W × H` picture in stage units, for a stage built on `frameRect`
+ * of it (target pixels): where the window may go under Auto-frame.
+ */
+export function pictureArea(frameRect: Rect, W: number, H: number, stageW: number, stageH: number): Rect {
+  const kx = frameRect.w > 0 ? stageW / frameRect.w : 1;
+  const ky = frameRect.h > 0 ? stageH / frameRect.h : 1;
+  return { x: -frameRect.x * kx, y: -frameRect.y * ky, w: W * kx, h: H * ky };
+}
+
+/** Whether the view has somewhere to go inside `area`: zoomed in, or a window smaller than the area. */
+export function canPanView(view: StageView, stageW: number, stageH: number, area: Rect = { x: 0, y: 0, w: stageW, h: stageH }): boolean {
+  const win = viewWindow(view, stageW, stageH);
+  return area.w - win.w > 0.5 || area.h - win.h > 0.5;
 }
 
 /** The view at `scale`, the stage point `anchor` staying under the hand — then clamped. */
-export function zoomStageView(view: StageView, scale: number, anchor: { x: number; y: number }, stageW: number, stageH: number, bounds: { min: number; max: number }): StageView {
+export function zoomStageView(view: StageView, scale: number, anchor: { x: number; y: number }, stageW: number, stageH: number, bounds: { min: number; max: number }, area?: Rect): StageView {
   const s = Math.min(bounds.max, Math.max(bounds.min, Number.isFinite(scale) && scale > 0 ? scale : view.s));
   const k = s / view.s;
-  return clampStageView({ s, ox: anchor.x - (anchor.x - view.ox) * k, oy: anchor.y - (anchor.y - view.oy) * k }, stageW, stageH, bounds);
+  return clampStageView({ s, ox: anchor.x - (anchor.x - view.ox) * k, oy: anchor.y - (anchor.y - view.oy) * k }, stageW, stageH, bounds, area);
 }
 
 /** The view moved by a stage-pixel delta, then clamped. */
-export function panStageView(view: StageView, dx: number, dy: number, stageW: number, stageH: number, bounds: { min: number; max: number }): StageView {
-  return clampStageView({ s: view.s, ox: view.ox + dx, oy: view.oy + dy }, stageW, stageH, bounds);
+export function panStageView(view: StageView, dx: number, dy: number, stageW: number, stageH: number, bounds: { min: number; max: number }, area?: Rect): StageView {
+  return clampStageView({ s: view.s, ox: view.ox + dx, oy: view.oy + dy }, stageW, stageH, bounds, area);
+}
+
+/** The mosaic point under stage point `p` — through the view, so a click lands on the cell under it at any zoom. */
+export function stagePointToMosaic(view: StageView, p: { x: number; y: number }): { x: number; y: number } {
+  return { x: (p.x - view.ox) / view.s, y: (p.y - view.oy) / view.s };
 }
 
 /** The part of the mosaic in view, in stage units — larger than the stage when zoomed out. */

@@ -210,6 +210,20 @@ export class MosaicPlayer {
     return opts.pool ? { pool: opts.pool, lot: 0, propagation: 'none', origin: -1, seed: opts.seed } : undefined;
   }
 
+  /**
+   * Picture `id`'s own bitmap once this run has built its scene, else null — what the target card shows while it
+   * plays (lab 4, L2). The scene keeps it; nothing here closes it (`mosaic.md`, a bitmap a scene may draw).
+   */
+  async pictureOf(id: number): Promise<ImageBitmap | null> {
+    const scene = this.scenes.get(id);
+    if (!scene) return null;
+    try {
+      return (await scene).target;
+    } catch {
+      return null;
+    }
+  }
+
   /** The mosaic of picture `id`, built once per run and kept for a while; `crop` only for the first. */
   private sceneOf(id: number, opts: PlayerOptions, signal: AbortSignal, crop?: Crop): Promise<MosaicScene> {
     const have = this.scenes.get(id);

@@ -152,6 +152,18 @@ export default function MosaicSettings({ settings, update, view, setView, state,
           onChange={(on) => setPerf({ zoom: on ? 'frame' : 'look' })}
           hint={<p>On, a zoom on the stage becomes the part rebuilt the moment your hand rests, with as many cells on it. Off, a zoom only enlarges what is there, and <i>Frame this</i> on the stage writes it. This device’s choice.</p>}
         />
+        <SwitchRow
+          label="Sharp photos on zoom"
+          checked={perf.sharpZoom}
+          onChange={(sharpZoom) => setPerf({ sharpZoom })}
+          hint={<p>With Auto-frame off, zoomed in, the cells in view load your Winnow’s thumbnail once they outgrow their small tile, then its proxy — only those you see, once each. This device’s choice.</p>}
+        />
+        <SwitchRow
+          label="Veil fades on zoom"
+          checked={perf.veilFade}
+          onChange={(veilFade) => setPerf({ veilFade })}
+          hint={<p>With Auto-frame off, the tint that makes the target read from afar fades as you zoom in, gone at ×3.5, so a close look shows each photo’s own colours. Only the view: the mosaic and its exports keep their tint.</p>}
+        />
         <p className="m-0 text-xs text-muted">Drag the frame to choose the part rebuilt, its sides and corners to resize it. The rest is never read.</p>
       </>)}
       {section('cells', 'mosaic-cells', 'Cells', { remember: 'session' }, <>

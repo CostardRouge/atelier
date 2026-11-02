@@ -3201,7 +3201,9 @@ proportions, the default), 16:9, 3:2, 4:3, square, 4:5 or 9:16 pose a frame
 of that shape on the picture at the same centre, the stage takes the
 frame's shape in the room it has, and nothing is ever stretched; each
 picture is compared on the part a cell of that shape shows of it, and drawn
-so.
+so. While a mode plays, the card follows the picture whose mosaic is on
+screen — whole, with no frame, marked *on screen* and its number — and
+when the run stops that picture is the target, framed again.
 
 **Zooming is framing.** While nothing plays, whatever the mode, the
 wheel, a pinch or a drag zoom the stage, and with **Auto-frame on zoom**
@@ -3211,6 +3213,17 @@ for that part with as many cells as before — a zoom is more detail, never
 bigger cells. Zooming out stops at the whole picture; `Z` returns to it; ↶
 in the bar (⌘Z) takes any edit back, a zoom included. Switched off, a
 zoom only *looks*: *Frame this* on the stage writes it and `Z` drops it.
+Either way a drag moves the view — with Auto-frame it slides the frame
+across the whole picture, the part outside the mosaic showing dimmed, and
+the mosaic is rebuilt where it stops — and a click on a cell, at any zoom,
+makes its picture the target; a cell under the pointer is outlined.
+With Auto-frame off, a close look shows the photographs themselves: the
+cells in view load your Winnow's thumbnail once they outgrow their small
+tile, then its proxy deeper in — only those in view, once each — and the
+veil of the target's colour fades as you zoom in, gone at ×3.5 (*Sharp
+photos on zoom* and *Veil fades on zoom*, both on by default, are this
+device's switches in the Target section; the mosaic and its exports keep
+their tint).
 
 **As it lands.** A big mosaic is matched in lots, each painted the moment
 its answer lands — from the cell you clicked outward by default, else row
@@ -3230,13 +3243,21 @@ ran, the frames per second drawn.
 the way back, the title over the picture count, the ‹ › and ↶ ↷ pairs and
 a ⋯ with *Choose the target…*, *Draw a target*, *Add from …*, *Measure*
 and *Full screen* where the browser allows it; under the stage come the
-chain's band and a one-row transport (the mode as a list, Play). The
+chain's band and a one-row transport (Still, the mode, Play — the mode's
+drawer a sheet from the bottom). The
 settings are the five tabs of the bar floating at the bottom — Target,
 Cells, Motion, Export and Device (the Performance section) — each opening a drawer under the stage, which
 stays in sight: the mosaic keeps the size it was built for and is shown a
 little smaller while a drawer is up, so opening one rebuilds nothing.
 
-**The modes.** Under the stage: *Still* is the mosaic as above. *Mosaics*,
+**The modes.** Under the stage, *Still* holds the mosaic to frame and
+tune it; beside it, one button names the mode Play plays and opens a drawer
+of tiles, each a small preview of its motion painted from the mosaic on the
+stage, in three families — *Travel* (into a cell and out of one: Mosaics,
+Chain, Pull back, Steer), *Transform* (the mosaic turns into another where
+it stands: Reveal, Wave) and *Watch* (Drift, Slideshow); *Custom…* at its
+foot opens the Motion section. Play from Still plays the mode on the
+button. *Mosaics*,
 the default of a new mosaic, goes from mosaic to mosaic: the camera dives
 into a cell and lands on the next picture's mosaic, held a moment while the
 camera drifts over it, and the photo itself never appears. *Pull back*
