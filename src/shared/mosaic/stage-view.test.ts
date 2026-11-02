@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MIN_CROP_SCALE, cropRect } from './frame';
-import { IDENTITY_VIEW, clampStageView, cropFromView, isIdentityView, panStageView, viewBounds, viewOfWindow, viewWindow, zoomStageView } from './stage-view';
+import { IDENTITY_VIEW, canPanView, clampStageView, cropFromView, isIdentityView, panStageView, pictureArea, stagePointToMosaic, viewBounds, viewOfWindow, viewWindow, zoomStageView } from './stage-view';
 
 const W = 960;
 const H = 540;
@@ -71,5 +71,38 @@ describe('the stage view', () => {
     expect(back.s).toBeCloseTo(v.s);
     expect(back.ox).toBeCloseTo(v.ox);
     expect(back.oy).toBeCloseTo(v.oy);
+  });
+});
+
+describe('the view under Auto-frame, inside the whole picture (lab 4, L3)', () => {
+  // A 16:9 stage built on the middle third of a 3000 × 1500 picture's width, its full height.
+  const W = 960;
+  const H = 540;
+  const frame = { x: 1000, y: 0, w: 1000, h: 562.5 };
+  const area = pictureArea(frame, 3000, 1500, W, H);
+  const b = viewBounds(0.4);
+
+  it('names the whole picture in stage units, and says when there is somewhere to go', () => {
+    expect(area.x).toBeCloseTo(-960);
+    expect(area.w).toBeCloseTo(2880);
+    expect(area.h).toBeCloseTo(1440);
+    expect(canPanView(IDENTITY_VIEW, W, H)).toBe(false);
+    expect(canPanView(IDENTITY_VIEW, W, H, area)).toBe(true);
+    expect(canPanView({ s: 2, ox: 0, oy: 0 }, W, H)).toBe(true);
+  });
+
+  it('lets a drag slide the window past the mosaic built, never past the picture', () => {
+    const slid = panStageView(IDENTITY_VIEW, 300, 0, W, H, b, area);
+    expect(slid.ox).toBe(300);
+    const far = panStageView(IDENTITY_VIEW, 5000, 5000, W, H, b, area);
+    expect(far.ox).toBeCloseTo(960);
+    expect(far.oy).toBe(0);
+    // Without the area, the stage bounds hold as before.
+    expect(panStageView(IDENTITY_VIEW, 300, 0, W, H, b).ox).toBe(0);
+  });
+
+  it('maps a click through the view to the mosaic point under it', () => {
+    expect(stagePointToMosaic({ s: 2, ox: -480, oy: -270 }, { x: 480, y: 270 })).toEqual({ x: 480, y: 270 });
+    expect(stagePointToMosaic(IDENTITY_VIEW, { x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
   });
 });

@@ -49,6 +49,11 @@ export class TileBitmaps {
     this.limit = Math.max(100, limit);
   }
 
+  /** The bitmap held for picture `id` right now, or null — no fetch, no reordering (a zoom's cells read it). */
+  peek(id: number): ImageBitmap | null {
+    return this.held.get(id) ?? null;
+  }
+
   /** The bitmap for picture `id`, or null when neither the device nor the instance can give it. */
   get(id: number): Promise<ImageBitmap | null> {
     const have = this.held.get(id);

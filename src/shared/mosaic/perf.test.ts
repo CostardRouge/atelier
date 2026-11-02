@@ -4,9 +4,9 @@ import { DEFAULT_PERF, planLots, sanitizePerf, workersFor } from './perf';
 describe('sanitizePerf', () => {
   it('gives the defaults for nothing and bounds every field', () => {
     expect(sanitizePerf(undefined)).toEqual(DEFAULT_PERF);
-    const p = sanitizePerf({ workers: 99, measure: 'gpu', lot: 7, showAsItComes: 'yes', propagation: 'left', cellAnimation: 'spin', animationMs: -5, tileCache: 1, ahead: 9, zoom: 'x', motion: 'y' });
+    const p = sanitizePerf({ workers: 99, measure: 'gpu', lot: 7, showAsItComes: 'yes', propagation: 'left', cellAnimation: 'spin', animationMs: -5, tileCache: 1, ahead: 9, zoom: 'x', sharpZoom: 'yes', veilFade: 1, motion: 'y' });
     expect(p).toEqual({ ...DEFAULT_PERF, workers: 8, animationMs: 0 });
-    expect(sanitizePerf({ workers: 3, lot: 256, propagation: 'rows', cellAnimation: 'none', tileCache: 600, ahead: 3, zoom: 'look', motion: 'reduced', measure: 'main', showAsItComes: false, animationMs: 400 })).toEqual({
+    expect(sanitizePerf({ workers: 3, lot: 256, propagation: 'rows', cellAnimation: 'none', tileCache: 600, ahead: 3, zoom: 'look', sharpZoom: false, veilFade: false, motion: 'reduced', measure: 'main', showAsItComes: false, animationMs: 400 })).toEqual({
       workers: 3,
       measure: 'main',
       lot: 256,
@@ -17,6 +17,8 @@ describe('sanitizePerf', () => {
       tileCache: 600,
       ahead: 3,
       zoom: 'look',
+      sharpZoom: false,
+      veilFade: false,
       motion: 'reduced',
     });
   });

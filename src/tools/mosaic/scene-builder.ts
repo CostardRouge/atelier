@@ -160,6 +160,11 @@ export class SceneBuilder {
     this.bitmaps?.setLimit(limit);
   }
 
+  /** The tile held for asset `id` right now, or null — what a zoom's cells draw until a sharper picture lands. */
+  tileOf(id: number): ImageBitmap | null {
+    return this.bitmaps?.peek(id) ?? null;
+  }
+
   get tiles(): MosaicTile[] {
     return this.library.tiles;
   }

@@ -24,7 +24,7 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import type { Crop, Rect } from '../../shared/mosaic/frame';
 import { describeZoomKey, zoomKeyAction } from '../../shared/ui/zoom-keys';
-import { motionOf, recipeOf } from '../../shared/mosaic/motion';
+import { motionOf, recipeOf, type Recipe } from '../../shared/mosaic/motion';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
@@ -37,6 +37,7 @@ import { Icons } from '../../shared/ui/icons';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
+import { revealInScroller } from '../../shared/ui/reveal';
 import ChainBand from './ChainBand';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
@@ -44,7 +45,8 @@ import MosaicSettings, { SETTINGS_TABS, type SettingsTab } from './MosaicSetting
 import MosaicExportPanel from './MosaicExportPanel';
 import { useMosaicExport } from './use-mosaic-export';
 import { useMosaicEditorCommands, useMosaicStageCommands } from './use-mosaic-commands';
-import MosaicStage, { type Reveal, type StageView } from './MosaicStage';
+import MosaicStage, { type Reveal, type StageView, type ZoomDetail } from './MosaicStage';
+import { SharpPictures } from './sharp-pictures';
 import MosaicTransport from './MosaicTransport';
 import TargetChooser from './TargetChooser';
 import TargetFrame from './TargetFrame';
@@ -213,6 +215,26 @@ function MosaicWorkbench({
   }, [player, mode, motion, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource, perf.ahead]);
   const stop = useCallback(() => player?.stop(), [player]);
   // Writing it out (M7): the stage's own builder and pool, a player of the film's own, the queue read and never written.
+  // While a run plays, the target card shows the picture whose mosaic is on screen (lab 4, L2): its bitmap from the
+  // player's scene, the instance's thumbnail until that scene is built.
+  const [onScreen, setOnScreen] = useState<{ id: number; bitmap: ImageBitmap | null } | null>(null);
+  useEffect(() => {
+    if (!status.playing || status.current < 0 || !player) {
+      setOnScreen(null);
+      return;
+    }
+    let alive = true;
+    const id = status.current;
+    setOnScreen((cur) => (cur?.id === id ? cur : { id, bitmap: null }));
+    void player.pictureOf(id).then((bitmap) => {
+      if (alive && bitmap) setOnScreen({ id, bitmap });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [status.playing, status.current, player]);
+  /** The picture the target card shows: the one on screen while a run plays, else the target. */
+  const cardId = onScreen ? onScreen.id : doc.target;
   const exporter = useMosaicExport({ doc, builder, pool, stageW, stageH, queue: chained ? queueSource : undefined });
   useMosaicStageCommands({ latest, rendered: doc, state, status, play, stop, canvas: () => canvasRef.current, exporter, update });
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
@@ -230,9 +252,53 @@ function MosaicWorkbench({
     player?.stop();
   }, [dialsKey, player]);
 
+  // Still is the editing state (lab 4, L1): the mode button keeps the recipe Play plays from it, and Play from Still
+  // switches to that recipe, then plays once the render carries it — after the stop above, which a mode change runs.
+  const lastRecipe = useRef<Recipe | 'custom'>(mode === 'single' ? recipeOf(motion) : mode);
+  if (mode !== 'single') lastRecipe.current = mode;
+  const pendingPlay = useRef(false);
+  const playFrom = useCallback(() => {
+    if (mode !== 'single') {
+      play();
+      return;
+    }
+    const r = lastRecipe.current;
+    pendingPlay.current = true;
+    update((s) => ({ ...s, mode: r, motion: r === 'custom' ? s.motion : motionOf(r, s.motion) }));
+  }, [mode, play, update]);
+  useEffect(() => {
+    if (!pendingPlay.current || mode === 'single' || status.playing) return;
+    pendingPlay.current = false;
+    play();
+  }, [mode, play, status.playing]);
+  // Custom opens the Motion section where its parts are: a tab's drawer on a phone, the section unfolded beside.
+  const openMotion = useCallback(() => {
+    if (compact) {
+      setTab('motion');
+      setTabOpen(true);
+      return;
+    }
+    const section = document.querySelector<HTMLElement>('section[data-section="mosaic-motion"]');
+    const fold = section?.querySelector<HTMLElement>('[aria-expanded]');
+    if (fold?.getAttribute('aria-expanded') === 'false') fold.click();
+    revealInScroller(section, { behavior: 'smooth' });
+  }, [compact]);
+
   // --- the zoom over the stage, whatever the mode while nothing plays: a crop with auto-frame, a look without (F6) ---
   // In every mode, not only Still: a stopped stage shows the target's mosaic, and a pinch the stage did not hear was
   // read by the browser, which zoomed the whole page instead.
+  // What a zoom's cells are drawn from (lab 4, L4): the instance's sharper pictures as they grow, the veil fading —
+  // under a zoom that LOOKS only: with Auto-frame the view lives for the gesture and the mosaic is rebuilt at ×1 on
+  // release, so a fetch would be wasted and a fading veil would jump back.
+  const sharpPictures = useMemo(() => (client ? new SharpPictures(client) : null), [client]);
+  useEffect(() => sharpPictures?.open(), [sharpPictures]);
+  const zoomDetail = useMemo<ZoomDetail | null>(
+    () =>
+      sharpPictures && perf.zoom === 'look'
+        ? { pictures: sharpPictures, sharp: perf.sharpZoom, fade: perf.veilFade, sharpOf: (id, level) => sharpPictures.get(id, level), tileOf: (id) => builder?.tileOf(id) ?? null }
+        : null,
+    [sharpPictures, perf.zoom, perf.sharpZoom, perf.veilFade, builder],
+  );
   const stageRef = useRef<HTMLDivElement>(null);
   const zoom = useStageZoom({
     ref: stageRef,
@@ -259,10 +325,10 @@ function MosaicWorkbench({
         stop();
         return;
       }
-      if (e.key === ' ' && mode !== 'single') {
+      if (e.key === ' ') {
         e.preventDefault();
         if (status.playing) stop();
-        else play();
+        else playFrom();
         return;
       }
       if (status.playing) return;
@@ -284,7 +350,7 @@ function MosaicWorkbench({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [status.playing, mode, play, stop, zoom, cropped, setCrop, steps]);
+  }, [status.playing, playFrom, stop, zoom, cropped, setCrop, steps]);
 
   const fullscreen = useCallback(() => {
     const el = boxRef.current;
@@ -330,9 +396,15 @@ function MosaicWorkbench({
         zoom={zoom.view}
         playing={status.playing}
         canvasOut={canvasOut}
+        swallowClick={zoom.justDragged}
+        clickHost={stageRef}
+        detail={zoomDetail ?? undefined}
+        pannable={zoom.pannable}
         onPick={(index, cell) => {
           if (state.status !== 'ready') return;
           setOrigin(cell);
+          // A pick at any zoom (lab 4, L3): the new picture opens whole, the view back to its fit.
+          zoom.fit();
           setTarget(state.scene.tiles[index].id);
         }}
         onSteer={chained ? (cell) => void player?.steer(cell) : undefined}
@@ -379,11 +451,18 @@ function MosaicWorkbench({
     <MosaicTransport
       mode={mode}
       motion={motion}
-      setMode={(m) => update((s) => ({ ...s, mode: m, motion: m === 'single' ? s.motion : motionOf(m, s.motion) }))}
+      recipe={mode === 'single' ? lastRecipe.current : mode}
+      scene={shown}
+      onStill={() => update((s) => ({ ...s, mode: 'single' }))}
+      onPickRecipe={(r) => update((s) => ({ ...s, mode: r, motion: motionOf(r, s.motion) }))}
+      onCustom={() => {
+        update((s) => ({ ...s, mode: 'custom' }));
+        openMotion();
+      }}
       setDepart={(d) => update((s) => ({ ...s, motion: { ...s.motion, depart: d }, mode: recipeOf({ ...s.motion, depart: d }, s.mode) }))}
       status={status}
       canPlay={Boolean(player) && doc.target !== undefined && state.status !== 'idle'}
-      onPlay={play}
+      onPlay={playFrom}
       onStop={stop}
       onFullscreen={fullscreen}
       compact={compact}
@@ -408,8 +487,9 @@ function MosaicWorkbench({
       exporting={<MosaicExportPanel settings={doc.settings} update={update} stageW={stageW} stageH={stageH} exporter={exporter} ready={Boolean(builder) && doc.target !== undefined} />}
       target={
         <TargetFrame
-          bitmap={targetBitmap}
-          fallbackUrl={client && doc.target !== undefined ? client.thumbUrl(doc.target) : null}
+          bitmap={onScreen ? onScreen.bitmap : targetBitmap}
+          fallbackUrl={client && cardId !== undefined ? client.thumbUrl(cardId) : null}
+          showing={onScreen?.id ?? null}
           aspect={aspect}
           crop={doc.crop}
           onCrop={setCrop}

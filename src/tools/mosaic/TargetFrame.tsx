@@ -13,8 +13,13 @@ interface TargetFrameProps {
   onCrop: (crop: Crop) => void;
   /** The card itself was pressed (not the frame): choose another picture. */
   onChoose: () => void;
-  /** A run plays: the frame is shown, frozen, and nothing on the card is grabbed. */
+  /** A run plays: nothing on the card is grabbed. */
   frozen?: boolean;
+  /**
+   * While a run plays, the picture whose mosaic is on screen (lab 4, L2): the card shows it whole — `bitmap` is it —
+   * with no frame (a chain takes each picture whole) and says so.
+   */
+  showing?: number | null;
 }
 
 /** The card's height at most, so a portrait does not push the dials off the screen. */
@@ -38,7 +43,7 @@ const CURSORS: Record<Handle, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew
  * when the drag ends, so the scene rebuilds once. A press outside the frame
  * chooses another picture.
  */
-export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop, onChoose, frozen = false }: TargetFrameProps) {
+export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop, onChoose, frozen = false, showing = null }: TargetFrameProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [boxW, setBoxW] = useState(0);
@@ -138,18 +143,25 @@ export default function TargetFrame({ bitmap, fallbackUrl, aspect, crop, onCrop,
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
-        data-frame-state={frozen ? 'frozen' : whole ? 'whole' : 'cropped'}
+        data-frame-state={showing !== null ? 'playing' : frozen ? 'frozen' : whole ? 'whole' : 'cropped'}
       >
         <canvas
           ref={canvasRef}
           className={`block ${frozen ? '' : 'cursor-pointer'}`}
           style={{ width: dispW, height: dispH }}
           onClick={() => !frozen && onChoose()}
-          aria-label={frozen ? 'The picture on screen' : 'The target — choose another picture'}
-          role="button"
+          aria-label={showing !== null ? `Picture ${showing}, on screen` : frozen ? 'The target' : 'The target — choose another picture'}
+          role={frozen ? 'img' : 'button'}
         />
-        {/* The frame: its trace INSIDE the rectangle (a light line over a dark one, legible on any picture). */}
+        {showing !== null && (
+          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1.5 px-1.5 py-[2px] rounded-[6px] bg-frame/80 text-on-media font-mono text-3xs tracking-[0.08em] uppercase" role="status">
+            <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-accent motion-safe:animate-pulse" />
+            on screen · <span className="tabular-nums normal-case tracking-normal">#{showing}</span>
+          </span>
+        )}
+        {/* The frame: its trace INSIDE the rectangle (a light line over a dark one, legible on any picture); none while a run shows another picture. */}
         <div
+          hidden={showing !== null}
           className={`absolute ${frozen ? '' : 'cursor-move'}`}
           style={{
             left: fx,
