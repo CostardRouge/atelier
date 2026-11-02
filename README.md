@@ -3029,6 +3029,13 @@ it and may grow blocks of its own.
   Shorts — the same choice as the stage's guides), a hook shrunk to keep its
   lines. Each line opens what fixes it — a panel, or the object selected at
   the moment it is in the way. Nothing stops the export: it is your call.
+- **Measured on this device.** Every export (or cancel) leaves one line under
+  Export: how long the video plays and how long it took (× real time), the
+  H.264 profile and the sound's codec (AAC, or Opus where the browser has no
+  AAC encoder), the file's size, the memory the page held at its fullest
+  (Chromium only) and the device — *Copy* to send them. A cancelled export
+  writes no file, and the Archive panel never sends the files of an earlier
+  one. The first real episode's checklist is `docs/storytelling-first-episode.md`.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and

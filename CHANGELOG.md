@@ -11,25 +11,30 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: every export is measured on the device that makes it — how long it took against how long it plays,
+  the video profile and the sound codec, the file's size, the memory at its fullest — and listed under Export with
+  *Copy*.
 - Storytelling: keep a series on your Winnow (Script › *Keep on …*) so your Mac and your phone open the same one:
   edits are saved there once you pause, a newer copy from another device is taken when you come back, and a change
   made on both is never overwritten — *Keep mine* or *Take theirs*. *Series kept on …* opens one in a new browser.
-
 - Storytelling: the script's last ten versions are kept in this browser as you work — Script › *Versions on this
   device*, each with *Restore*. Loading a file or restoring a version keeps the script it replaces first, so a wrong
   file loaded is one click away from undone.
-
 - Storytelling: *Before you export* — the Export panel checks the post first and lists what would come out wrong in
   the file: a fact not counted (drawn with its braces), the map's tiles or the wall's pictures missing from this
   device, a face not loaded, words under the buttons of TikTok, Reels or Shorts, a hook shrunk to fit its lines. Each
   line opens what fixes it.
-
 - Storytelling: start a series with no file — *New series*, then name it under Script. Until the series has its
   Winnow, its trip and a first Count in this browser, the map of subjects lists what is missing, each step with the
   gesture that fixes it, and *Check the connection* tells you when your Winnow does not allow this app's address yet.
 - Storytelling: the hook's big text and second line take your own line breaks — press Return in their field, now a
   text area. Choose how a long one is laid: Wrap (your breaks and the column's), Your breaks only (shrunk so the
   widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.
+
+### Fixed
+
+- Storytelling: starting a new export clears the previous one's files, so Archive can never send a video that no
+  longer matches the post.
 
 ## [1.7.0] - 2026-11-02 — Aureolin
 

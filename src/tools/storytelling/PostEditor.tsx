@@ -55,6 +55,8 @@ import { useSettled } from './use-settled';
 import { useLocalPref } from '../../shared/ui/local-pref';
 import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/overlay/guides';
 import { usePreflight } from './use-preflight';
+import { deviceLabel, measureLine, type ExportMeasure } from '../../shared/story/export-measure';
+import { heapMb, keepMeasure, measuresNow, subscribeMeasures } from './export-measures';
 import PreflightList from './PreflightList';
 import type { PreflightFix } from '../../shared/story/preflight';
 import Segmented from '../../shared/ui/Segmented';
@@ -467,6 +469,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       },
     },
     {
+      id: 'story.exports',
+      title: 'How the exports ran on this device',
+      description: 'The last exports measured in this browser: the post, how long it plays and how long it took, the H.264 profile and the sound codec, the file’s size, the heap at its fullest, the device, and whether it ended, was cancelled or failed.',
+      run: () => ({ exports: measuresNow().map((m) => ({ ...m, line: measureLine(m) })) }),
+    },
+    {
       id: 'story.snapshot',
       title: 'Look at a frame',
       description: 'The post’s frame at a time (default the playhead), drawn as the export draws it, as a JPEG to look at.',
@@ -590,6 +598,29 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     setExporting('Preparing the sound…');
     setExportSince(Date.now());
     setExportNote(null);
+    // The files of a previous export are not this post any more: Archive must never send them after a new one starts.
+    setExported([]);
+    // R7: the export measured where it runs — how long, what it is made of, how much memory at its fullest.
+    const started = performance.now();
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    const measure: ExportMeasure = {
+      at: Date.now(),
+      post: episode.number,
+      seconds: total,
+      wallMs: 0,
+      frames: 0,
+      fps: 30,
+      video: null,
+      audio: null,
+      bytes: null,
+      peakHeapMb: heapMb(),
+      device: deviceLabel(navigator.userAgent, navigator.hardwareConcurrency, nav.deviceMemory),
+      outcome: 'failed',
+    };
+    const sampler = window.setInterval(() => {
+      const h = heapMb();
+      if (h !== null) measure.peakHeapMb = Math.max(measure.peakHeapMb ?? 0, h);
+    }, 400);
     try {
       const clips: SoundClip[] = [];
       if (voice) clips.push({ buffer: voice.buffer, at: voice.at, gain: voice.gain });
@@ -618,6 +649,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         onAudioSkipped: (reason) => {
           skipped = reason;
         },
+        onTracks: (tr) => {
+          measure.video = tr.video;
+          measure.audio = tr.audio === 'aac' || tr.audio === 'opus' ? tr.audio : skipped ? 'skipped' : null;
+          measure.frames = tr.frames;
+          measure.fps = tr.fps;
+        },
         draw: (sec) => {
           drawEpisode(ctx, shown, Math.min(sec, total - 0.001), frameOpts);
           return canvas;
@@ -629,6 +666,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         signal: controller.signal,
       });
       const name = `${episode.number.toLowerCase().replace(/\W+/g, '')}-${slug(episode.title)}.mp4`;
+      measure.bytes = blob.size;
+      measure.wallMs = Math.round(performance.now() - started);
+      measure.outcome = 'done';
       downloadBlob(blob, name);
       // Kept for the visit, so the same files can be sent to a Winnow to archive.
       const cover = await new Promise<Blob | null>((done) => paintCover(episode, 1).toBlob(done, 'image/png'));
@@ -638,8 +678,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       ]);
       setExportNote(skipped ? `Exported without sound: ${skipped.replace(/\.$/, '')}.` : heard ? 'Exported, with its sound.' : 'Exported, silent: no voice or music was added.');
     } catch (err) {
-      setExportNote(controller.signal.aborted ? 'Export cancelled.' : err instanceof Error ? err.message : 'The export failed.');
+      setExportNote(controller.signal.aborted ? 'Export cancelled: no file was written.' : err instanceof Error ? err.message : 'The export failed.');
+      measure.outcome = controller.signal.aborted ? 'cancelled' : 'failed';
+      if (!controller.signal.aborted) measure.error = err instanceof Error ? err.message : String(err);
     } finally {
+      window.clearInterval(sampler);
+      // Measured to the file (or the cancel), the cover's painting after it left out.
+      if (measure.outcome !== 'done') measure.wallMs = Math.round(performance.now() - started);
+      keepMeasure(measure);
       task.done();
       abortRef.current = null;
       setExporting(null);
@@ -848,6 +894,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
                 </Button>
               </div>
               {exporting ? <Readout>{exporting}</Readout> : exportNote ? <Readout muted>{exportNote}</Readout> : null}
+              <ExportMeasures />
             </InspectorSection>
             <InspectorSection id="story-archive" title="Archive" info="Send the exported video and its cover to a Winnow you connected — the one on this computer or your server's — where they are imported into its Incoming, filed under Storytelling. A Winnow on another site is connected with an app token on Sources.">
             {connections.length === 0 ? (
@@ -1159,5 +1206,37 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       </div>
       {keysSheet}
     </section>
+  );
+}
+
+/** The exports measured on this device (R7), newest first, each one line to read or copy. */
+function ExportMeasures() {
+  const list = useSyncExternalStore(subscribeMeasures, measuresNow);
+  const [copied, setCopied] = useState(false);
+  if (!list.length) return null;
+  const lines = list.slice(0, 5).map(measureLine);
+  return (
+    <div className="flex flex-col gap-1 pt-1">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Measured on this device</span>
+        <button
+          type="button"
+          className="text-2xs text-accent cursor-pointer hover:underline"
+          onClick={() => {
+            void navigator.clipboard?.writeText(list.map(measureLine).join('\n')).then(() => setCopied(true));
+            window.setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <ul className="m-0 p-0 list-none flex flex-col gap-0.5">
+        {lines.map((l, i) => (
+          <li key={`${list[i].at}`} className="text-2xs text-ink-soft leading-snug">
+            {l}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
