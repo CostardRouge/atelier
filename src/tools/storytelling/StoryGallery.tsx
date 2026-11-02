@@ -3,6 +3,7 @@ import { assemble, SCRIPT_KIND, type CellState, type StoryScript } from '../../s
 import { channelsOf, coverage, flatten, hasWork, leavesOf, mapRows, nextState, stateOf, withCell, type MapRow } from '../../shared/story/story-map';
 import { paintCover } from './covers';
 import { POSTS } from './posts';
+import StartChecklist from './StartChecklist';
 import ScriptControls, { readScriptFile, saveScriptFile } from './ScriptControls';
 import { pickFile } from '../../shared/sources/file-sources';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
@@ -160,6 +161,8 @@ export default function StoryGallery({
           {loadError ? <p className="m-0 mt-1 text-xs text-danger">{loadError}</p> : null}
         </div>
       </header>
+
+      <StartChecklist script={script} onScript={onScript} onCount={() => onOpen(POSTS[0].id)} />
 
       <div className="flex flex-wrap items-center gap-2">
         {[{ id: '', title: 'All' }, ...rows.map((r) => r.topic)].map((p) => (

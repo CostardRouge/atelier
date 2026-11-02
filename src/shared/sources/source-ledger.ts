@@ -50,7 +50,13 @@ export const CHECKING: SourceHealth = {
 };
 
 /** The health a failed probe leaves behind — the error mapped to a sentence. */
-export function healthFromError(err: unknown, host: string, now = Date.now()): SourceHealth {
+export function healthFromError(
+  err: unknown,
+  host: string,
+  now = Date.now(),
+  /** This app's own address, which the instance must allow (`CORS_ALLOWED_ORIGINS`). */
+  origin: string = typeof location !== 'undefined' ? location.origin : '',
+): SourceHealth {
   const kind = err instanceof WinnowError ? err.kind : null;
   if (kind === 'unauthenticated' || kind === 'forbidden') {
     return {
@@ -67,7 +73,9 @@ export function healthFromError(err: unknown, host: string, now = Date.now()): S
     state: 'unreachable',
     reason:
       kind === 'unreachable'
-        ? `No answer from ${host}. It may be offline, or this browser may not be on its allowed list.`
+        ? `No answer from ${host}. It may be offline, or it does not allow this app's address yet${
+            origin ? `: add ${origin} to CORS_ALLOWED_ORIGINS on the instance, then check again` : ''
+          }.`
         : `${host} answered something this app could not read${
             err instanceof Error && err.message ? `: ${err.message}` : '.'
           }`,

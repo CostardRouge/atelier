@@ -163,6 +163,16 @@ export interface ScriptFacts {
 
 export const SCRIPT_KIND = 'atelier.story-script';
 
+/**
+ * A series started here, with no file (his « commencer dès le départ »,
+ * 2026-11-02): its name and language, every post a skeleton's placeholder
+ * until written. What a loaded script holds — sources, look, words — is
+ * added from the editor. (pure)
+ */
+export function newScript(series: string, lang: 'fr' | 'en' = 'fr'): StoryScript {
+  return { kind: SCRIPT_KIND, version: 1, series: series.trim() || 'My series', lang, posts: {} } as StoryScript;
+}
+
 /** Where a subject stands on one channel. */
 export type CellState = 'idee' | 'encours' | 'pret' | 'publie' | 'non';
 export const CELL_STATES: readonly CellState[] = ['idee', 'encours', 'pret', 'publie', 'non'];
