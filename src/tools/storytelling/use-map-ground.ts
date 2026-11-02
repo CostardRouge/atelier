@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { proj, type RoadPoints, type Stop } from '../../shared/story/geo';
-import { groundBoxes, MAP_GROUND_DEFAULTS, type GroundLayer, type MapGround } from '../../shared/story/map-ground';
+import { groundBoxes, MAP_GROUND_DEFAULTS, seaBand, seaColour, type GroundLayer, type MapGround } from '../../shared/story/map-ground';
 import { loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
 import { toneRaster } from '../../shared/map/tile-tone';
 
@@ -29,7 +29,12 @@ async function fetchLayers(key: string, boxes: ReturnType<typeof groundBoxes>, t
         g.drawImage(raw, 0, 0);
         raw.close();
         toneRaster(g, tone ?? MAP_GROUND_DEFAULTS.tone, w, h);
+        let sea: string | null = null;
         if (fade) {
+          // The open sea's colour, read before the foot fades: what the map is filled with beyond the raster.
+          const [top, foot] = seaBand(h, fade);
+          const band = g.getImageData(0, Math.floor(top), w, Math.max(1, Math.floor(foot) - Math.floor(top)));
+          sea = seaColour(band.data, w, 0, band.height);
           // Its foot fades into the charte's ground rather than stopping on an edge.
           const from = h * (1 - fade);
           const ramp = g.createLinearGradient(0, from, 0, h);
@@ -40,7 +45,7 @@ async function fetchLayers(key: string, boxes: ReturnType<typeof groundBoxes>, t
           g.fillRect(0, from, w, h - from);
           g.globalCompositeOperation = 'source-over';
         }
-        return { image: canvas, box };
+        return { image: canvas, box, ...(sea ? { sea } : {}) };
       }),
     );
     pending.catch(() => kept.delete(key));

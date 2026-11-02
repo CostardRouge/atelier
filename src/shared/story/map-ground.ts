@@ -116,6 +116,44 @@ export function groundBoxes(route: readonly (readonly [number, number])[]): { bo
 export interface GroundLayer {
   image: CanvasImageSource;
   box: GeoBox;
+  /**
+   * The open sea's colour in this raster, toned — what the map is filled
+   * with beyond it, so a camera seeing past its edge (the frame's foot at
+   * ×1, south of 64° S) sees more sea rather than the charte's ground under
+   * a fade (his « bandeau en bas », 2026-11-02). Measured, never assumed: it
+   * is the tone's own.
+   */
+  sea?: string;
+}
+
+/**
+ * The sea's colour of a raster, from a band of its rows that holds open
+ * water: each channel's MEDIAN over the band, so a stray label, a graticule
+ * line or an island does not tint it. Null with nothing opaque in the band.
+ * (pure)
+ */
+export function seaColour(data: Uint8ClampedArray, width: number, fromRow: number, toRow: number): string | null {
+  const r: number[] = [];
+  const g: number[] = [];
+  const b: number[] = [];
+  for (let y = Math.max(0, Math.floor(fromRow)); y < Math.floor(toRow); y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i + 3] < 250) continue;
+      r.push(data[i]);
+      g.push(data[i + 1]);
+      b.push(data[i + 2]);
+    }
+  }
+  if (!r.length) return null;
+  const median = (v: number[]) => v.sort((p, q) => p - q)[v.length >> 1];
+  return `rgb(${median(r)},${median(g)},${median(b)})`;
+}
+
+/** Where a wide raster's open sea is read: a band just above its fade, south of the land (about 55° to 60° S). */
+export function seaBand(height: number, fade: number): [number, number] {
+  const to = height * (1 - fade);
+  return [to - height * 0.06, to];
 }
 
 let GROUND: Required<MapGround> = MAP_GROUND_DEFAULTS;
@@ -140,6 +178,13 @@ export function drawGround(c: Ctx, alpha: number, width: number): void {
     c.save();
     c.globalAlpha *= alpha * GROUND.strength;
     c.imageSmoothingQuality = 'high';
+    // The sea beyond the rasters, at their strength: a camera looking past their edge sees open water,
+    // and the wide raster's fading foot melts into it rather than into the charte's ground.
+    const sea = LAYERS.find((l) => l.sea)?.sea;
+    if (sea) {
+      c.fillStyle = sea;
+      c.fillRect(-4000, -4000, 9080, 9920);
+    }
     const rects = LAYERS.map(({ box }) => {
       const [x0, y0] = proj(box.west, box.north);
       const [x1, y1] = proj(box.east, box.south);
