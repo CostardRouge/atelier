@@ -49,3 +49,28 @@ screen is the target (as before) and the frame returns. **Rejected**: the
 start target kept with an "on screen" thumbnail beside it — two pictures
 for one question (lab 4's §2). Driven headless: a Slideshow run's card read
 #176 → #114 → #148 with no grip, the target 148 after Stop.
+
+## A drag pans, a click picks — at any zoom, in both Auto-frame states (2026-11-02, L3)
+
+His report: with Auto-frame a click worked but a drag never panned (the
+view had become a crop at ×1 on release); without it a drag panned but a
+click did nothing (picks were refused under a kept view). His pick: both at
+once, no window between a click and the target. **Rules**:
+`clampStageView` takes an AREA the window stays in — the mosaic built
+under `look`, the whole PICTURE under `frame` (`pictureArea`, the target in
+stage units through `targetRect`) — so under Auto-frame a drag at ×1 slides
+the frame across the target, the stage drawing the picture dimmed past the
+mosaic built, and the release commits it like a zoom (`cropFromView`, the
+held view, the carry). `useStageZoom.drag` answers `pan` whenever
+`canPanView`; under the machine's slop the press stays a click. A click is
+mapped through the view (`stagePointToMosaic`) and picks at any zoom, the
+view fitting again on the new target; the click a drag's end sends is
+swallowed (`justDragged`, 250 ms); the outline follows the hover at any
+zoom. **Trap**: `ZoomGestureMachine` captures a MOUSE at pointerdown once a
+drag may start, so the browser's click lands on the gestures' box, not the
+canvas — `MosaicStage` listens on `clickHost` (the box; clicks bubble to it
+otherwise) and checks the point is on the canvas. The shared machine was
+left alone (Develop and Trips rely on it). Driven headless: Look — a zoom,
+a drag (target kept), a click while zoomed (target changed); Auto-frame — a
+zoom framed (scale 0.165), a drag slid the crop (cx 0.50 → 0.55, scale
+kept), a click picked another target (crop dropped).

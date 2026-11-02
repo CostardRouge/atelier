@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Crop, Rect } from '../../shared/mosaic/frame';
-import { IDENTITY_VIEW, clampStageView, cropFromView, isIdentityView, panStageView, viewBounds, viewWindow, zoomStageView, type StageView } from '../../shared/mosaic/stage-view';
+import { IDENTITY_VIEW, canPanView, clampStageView, cropFromView, isIdentityView, panStageView, pictureArea, viewBounds, viewWindow, zoomStageView, type StageView } from '../../shared/mosaic/stage-view';
 import { useZoomGestures } from '../../shared/ui/use-zoom-gestures';
 import type { MosaicScene } from './scene-builder';
 
@@ -35,7 +35,14 @@ export interface StageZoom {
   pan: (dx: number, dy: number) => void;
   /** Zoom by a factor about the stage's centre (the ± keys or buttons). */
   zoomBy: (factor: number) => void;
+  /** A drag just ended: the click the browser sends after it is not a click on a cell. */
+  justDragged: () => boolean;
+  /** A drag would move something: the stage's cursor says so. */
+  pannable: boolean;
 }
+
+/** How long after a drag's end its trailing click is swallowed. */
+const AFTER_DRAG_MS = 250;
 
 const sameCrop = (a: Crop | undefined, b: Crop) => {
   const x = a ?? { cx: 0.5, cy: 0.5, scale: 1 };
@@ -49,7 +56,10 @@ const sameCrop = (a: Crop | undefined, b: Crop) => {
  * drag lifted — the part in view becomes the target's CROP (`cropFromView`)
  * under `frame`, and the view is held until the scene rebuilt for that crop
  * lands (its canvas starts from the same pixels enlarged, so nothing jumps);
- * under `look` the view stays and *Frame this* writes it.
+ * under `look` the view stays and *Frame this* writes it. A drag pans in both
+ * (lab 4, L3) — under `frame` across the whole picture, the frame following
+ * on release — and a click under the slop stays the stage's: a pick, at any
+ * zoom, the trailing click of a drag swallowed (`justDragged`).
  */
 export function useStageZoom({ ref, enabled, stageW, stageH, scene, crop, meaning, onCommit }: StageZoomOptions): StageZoom {
   const [view, setView] = useState<StageView>(IDENTITY_VIEW);
@@ -59,6 +69,15 @@ export function useStageZoom({ ref, enabled, stageW, stageH, scene, crop, meanin
   /** The scene the last commit was read from: the view resets once another one is on the stage. */
   const held = useRef<MosaicScene | null>(null);
   const settle = useRef<number | null>(null);
+  const dragEnded = useRef(0);
+  /**
+   * Where the window may go: the mosaic built while a zoom only looks; under Auto-frame the whole picture, so a drag
+   * slides the frame across the target and the release rebuilds there (lab 4, L3).
+   */
+  const area = useCallback(() => {
+    const { scene: s, meaning: m, stageW: W, stageH: H } = live.current;
+    return m === 'frame' && s ? pictureArea(s.targetRect, s.target.width, s.target.height, W, H) : undefined;
+  }, []);
 
   const local = useCallback(
     (p: { x: number; y: number }) => {
@@ -125,20 +144,26 @@ export function useStageZoom({ ref, enabled, stageW, stageH, scene, crop, meanin
       scaleAt: () => live.current.view.s,
       zoomTo: (scale, anchor, by) => {
         const { stageW: W, stageH: H, bounds: b } = live.current;
-        setView((v) => zoomStageView(v, scale, local(anchor), W, H, b));
+        const a = area();
+        setView((v) => zoomStageView(v, scale, local(anchor), W, H, b, a));
         if (by === 'wheel') settleLater();
       },
       panBy: (dx, dy, _at, by) => {
         const { stageW: W, stageH: H, bounds: b } = live.current;
         const el = ref.current;
         const k = el ? W / Math.max(1, el.getBoundingClientRect().width) : 1;
-        setView((v) => panStageView(v, dx * k, dy * k, W, H, b));
+        const a = area();
+        setView((v) => panStageView(v, dx * k, dy * k, W, H, b, a));
         if (by === 'wheel') settleLater();
       },
-      // One pointer pans a zoomed view; at the fit it is a click on a cell, left to the stage.
-      drag: () => (live.current.view.s > 1 ? 'pan' : null),
+      // One pointer pans whenever there is somewhere to go — a zoomed view, or under Auto-frame the picture past the
+      // frame; under the slop it stays a click on a cell, left to the stage.
+      drag: () => (canPanView(live.current.view, live.current.stageW, live.current.stageH, area()) ? 'pan' : null),
       onDragging: (on) => {
-        if (!on) released();
+        if (!on) {
+          dragEnded.current = performance.now();
+          released();
+        }
       },
       onPinch: (on) => {
         if (!on) released();
@@ -152,16 +177,21 @@ export function useStageZoom({ ref, enabled, stageW, stageH, scene, crop, meanin
   }, []);
   const pan = useCallback((dx: number, dy: number) => {
     const { stageW: W, stageH: H, bounds: b } = live.current;
-    setView((v) => panStageView(v, dx, dy, W, H, b));
-  }, []);
+    const a = area();
+    setView((v) => panStageView(v, dx, dy, W, H, b, a));
+  }, [area]);
   const zoomBy = useCallback(
     (factor: number) => {
       const { stageW: W, stageH: H, bounds: b } = live.current;
-      setView((v) => clampStageView(zoomStageView(v, v.s * factor, { x: W / 2, y: H / 2 }, W, H, b), W, H, b));
+      const a = area();
+      setView((v) => clampStageView(zoomStageView(v, v.s * factor, { x: W / 2, y: H / 2 }, W, H, b, a), W, H, b, a));
       if (live.current.meaning === 'frame') settleLater();
     },
-    [settleLater],
+    [settleLater, area],
   );
+  const justDragged = useCallback(() => performance.now() - dragEnded.current < AFTER_DRAG_MS, []);
 
-  return { view, zoomed: !isIdentityView(view), commit, fit, pan, zoomBy };
+  const pannable = Boolean(scene) && canPanView(view, stageW, stageH, meaning === 'frame' && scene ? pictureArea(scene.targetRect, scene.target.width, scene.target.height, stageW, stageH) : undefined);
+
+  return { view, zoomed: !isIdentityView(view), commit, fit, pan, zoomBy, justDragged, pannable };
 }

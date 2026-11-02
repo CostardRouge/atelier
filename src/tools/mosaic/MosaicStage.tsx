@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { CellAnimation } from '../../shared/mosaic/perf';
-import { IDENTITY_VIEW, isIdentityView, type StageView as ZoomView } from '../../shared/mosaic/stage-view';
+import { IDENTITY_VIEW, isIdentityView, pictureArea, stagePointToMosaic, viewWindow, type StageView as ZoomView } from '../../shared/mosaic/stage-view';
 import { drawGrid, drawTarget } from './mosaic-paint';
 import type { MosaicScene } from './scene-builder';
 import type { SceneState } from './use-mosaic-scene';
@@ -39,6 +39,15 @@ interface MosaicStageProps {
   playing?: boolean;
   /** The canvas, for the player to draw into. */
   canvasOut?: (el: HTMLCanvasElement | null) => void;
+  /** A drag just ended: its trailing click is not a pick (lab 4, L3). */
+  swallowClick?: () => boolean;
+  /** A drag would move the view: the cursor is a hand. */
+  pannable?: boolean;
+  /**
+   * The box the zoom's gestures listen on: a pointer they capture (a mouse that may start a drag) sends its click
+   * THERE, not to the canvas, so the stage hears its clicks on it — they bubble to it from the canvas otherwise.
+   */
+  clickHost?: RefObject<HTMLElement | null>;
 }
 
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -101,7 +110,7 @@ function drawReveal(ctx: CanvasRenderingContext2D, scene: MosaicScene, reveal: R
  * on a cell makes its picture the target. While a build runs, the previous
  * mosaic stays and the word says what is being done.
  */
-export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, onPick, onSteer, onFps, zoom = IDENTITY_VIEW, playing = false, canvasOut }: MosaicStageProps) {
+export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, onPick, onSteer, onFps, zoom = IDENTITY_VIEW, playing = false, canvasOut, swallowClick, pannable = false, clickHost }: MosaicStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const scene = state.status === 'ready' ? state.scene : state.status === 'building' || state.status === 'failed' ? state.previous : null;
@@ -132,8 +141,27 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
       ctx.fillRect(0, 0, w, h);
       if (!scene) return false;
       if (!isIdentityView(zoom)) {
-        // Under a zoom the painted mosaic is only enlarged — free — and nothing is drawn over it.
+        // Under a zoom the painted mosaic is only enlarged — free. Past the mosaic built (Auto-frame lets a drag slide
+        // the frame across the target) the picture itself shows, dimmed, where the next build will read.
+        const win = viewWindow(zoom, stageW, stageH);
+        if (win.x < -0.5 || win.y < -0.5 || win.x + win.w > stageW + 0.5 || win.y + win.h > stageH + 0.5) {
+          const a = pictureArea(scene.targetRect, scene.target.width, scene.target.height, stageW, stageH);
+          ctx.globalAlpha = 0.45;
+          ctx.drawImage(scene.target, (zoom.ox + a.x * zoom.s) * dpr, (zoom.oy + a.y * zoom.s) * dpr, a.w * zoom.s * dpr, a.h * zoom.s * dpr);
+          ctx.globalAlpha = 1;
+        }
         ctx.drawImage(scene.canvas, 0, 0, scene.canvas.width, scene.canvas.height, zoom.ox * dpr, zoom.oy * dpr, w * zoom.s, h * zoom.s);
+        if (hover !== null && scene.stageW === stageW) {
+          const { cols, cw, ch } = scene.shape;
+          const i = hover % cols;
+          const j = (hover - i) / cols;
+          ctx.save();
+          ctx.setTransform(dpr * zoom.s, 0, 0, dpr * zoom.s, zoom.ox * dpr, zoom.oy * dpr);
+          ctx.strokeStyle = '#d9442a';
+          ctx.lineWidth = 2 / (dpr * zoom.s);
+          ctx.strokeRect(i * cw + 1 / zoom.s, j * ch + 1 / zoom.s, cw - 2 / zoom.s, ch - 2 / zoom.s);
+          ctx.restore();
+        }
         return false;
       }
       // A scene built for another size is stretched until the new one lands.
@@ -169,16 +197,46 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
     return () => cancelAnimationFrame(raf);
   }, [scene, tick, view.ghost, view.grid, stageW, stageH, dpr, hover, playing, reveal, onFps, zoom]);
 
-  const cellAt = (e: React.MouseEvent<HTMLCanvasElement>): number | null => {
-    if (!scene) return null;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * stageW;
-    const y = ((e.clientY - rect.top) / rect.height) * stageH;
+  /** The cell under the pointer — through the zoom, so it is the one drawn there at any scale; null off the mosaic. */
+  const cellAt = (e: { clientX: number; clientY: number }): number | null => {
+    const canvas = canvasRef.current;
+    if (!scene || !canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const at = { x: ((e.clientX - rect.left) / rect.width) * stageW, y: ((e.clientY - rect.top) / rect.height) * stageH };
+    const { x, y } = playing ? at : stagePointToMosaic(zoom, at);
+    if (x < 0 || y < 0 || x >= stageW || y >= stageH) return null;
     const { cols, rows, cw, ch } = scene.shape;
     const i = Math.min(cols - 1, Math.max(0, Math.floor(x / cw)));
     const j = Math.min(rows - 1, Math.max(0, Math.floor(y / ch)));
     return j * cols + i;
   };
+
+  // A click: steer while a run plays, else pick the cell's picture — at any zoom; the one a drag's end sends is not a
+  // click (lab 4, L3). Heard on the gestures' box when there is one (see `clickHost`), read through a ref.
+  const onClickRef = useRef<(e: MouseEvent) => void>(() => undefined);
+  onClickRef.current = (e: MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const r = canvas.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+    if (playing) {
+      const c = cellAt(e);
+      if (c !== null) onSteer?.(c);
+      return;
+    }
+    if (swallowClick?.()) return;
+    const c = cellAt(e);
+    if (c === null || !scene) return;
+    const index = scene.matching.ids[c];
+    if (index >= 0) onPick(index, c);
+  };
+  useEffect(() => {
+    const host = clickHost?.current ?? canvasRef.current;
+    if (!host) return;
+    const listener = (e: MouseEvent) => onClickRef.current(e);
+    host.addEventListener('click', listener);
+    return () => host.removeEventListener('click', listener);
+  }, [clickHost]);
 
   const word = playing
     ? null
@@ -195,21 +253,9 @@ export default function MosaicStage({ state, view, stageW, stageH, dpr, reveal, 
       <canvas
         ref={canvasRef}
         aria-label="Mosaic"
-        className={`block w-full h-full ${scene && !playing ? (isIdentityView(zoom) ? 'cursor-crosshair' : 'cursor-grab') : playing && onSteer ? 'cursor-crosshair' : ''}`}
-        onMouseMove={(e) => setHover(playing || !isIdentityView(zoom) ? null : cellAt(e))}
+        className={`block w-full h-full ${scene && !playing ? (pannable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer') : playing && onSteer ? 'cursor-crosshair' : ''}`}
+        onMouseMove={(e) => setHover(playing || e.buttons ? null : cellAt(e))}
         onMouseLeave={() => setHover(null)}
-        onClick={(e) => {
-          if (playing) {
-            const c = cellAt(e);
-            if (c !== null) onSteer?.(c);
-            return;
-          }
-          if (!isIdentityView(zoom)) return;
-          const c = cellAt(e);
-          if (c === null || !scene) return;
-          const index = scene.matching.ids[c];
-          if (index >= 0) onPick(index, c);
-        }}
       />
       {word && (
         <span

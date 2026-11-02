@@ -383,9 +383,14 @@ function MosaicWorkbench({
         zoom={zoom.view}
         playing={status.playing}
         canvasOut={canvasOut}
+        swallowClick={zoom.justDragged}
+        clickHost={stageRef}
+        pannable={zoom.pannable}
         onPick={(index, cell) => {
           if (state.status !== 'ready') return;
           setOrigin(cell);
+          // A pick at any zoom (lab 4, L3): the new picture opens whole, the view back to its fit.
+          zoom.fit();
           setTarget(state.scene.tiles[index].id);
         }}
         onSteer={chained ? (cell) => void player?.steer(cell) : undefined}

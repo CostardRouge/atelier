@@ -3213,6 +3213,10 @@ for that part with as many cells as before — a zoom is more detail, never
 bigger cells. Zooming out stops at the whole picture; `Z` returns to it; ↶
 in the bar (⌘Z) takes any edit back, a zoom included. Switched off, a
 zoom only *looks*: *Frame this* on the stage writes it and `Z` drops it.
+Either way a drag moves the view — with Auto-frame it slides the frame
+across the whole picture, the part outside the mosaic showing dimmed, and
+the mosaic is rebuilt where it stops — and a click on a cell, at any zoom,
+makes its picture the target; a cell under the pointer is outlined.
 
 **As it lands.** A big mosaic is matched in lots, each painted the moment
 its answer lands — from the cell you clicked outward by default, else row
