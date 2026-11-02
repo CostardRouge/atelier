@@ -1,10 +1,10 @@
 import { useState, type ChangeEvent } from 'react';
 import { downloadBlob } from '../../shared/media/save';
-import { parseScript, type StoryScript } from '../../shared/story/story-script';
+import { newScript, parseScript, type StoryScript } from '../../shared/story/story-script';
 import Button, { buttonClass } from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import type { Lang } from '../../shared/story/locale';
-import { SelectField } from '../../shared/ui/Inspector';
+import { SelectField, TextField } from '../../shared/ui/Inspector';
 import { POSTS } from './posts';
 import { clearWall } from './wall-cache';
 
@@ -74,6 +74,12 @@ export default function ScriptControls({
       )}
       {error ? <p className="m-0 text-xs text-danger">{error}</p> : null}
       <div className="flex gap-2 flex-wrap">
+        {!script ? (
+          // A series can start here, with no file: its name and language, the rest added as it goes.
+          <Button size="sm" variant="primary" onClick={() => onScript(newScript('My series', 'fr'))} title="Start a series in this browser, with no file: name it, then choose its trip and Winnow under Sources">
+            New series
+          </Button>
+        ) : null}
         {verbs ? (
           <label className={buttonClass('default', 'sm')}>
             {script ? 'Load another…' : 'Load script…'}
@@ -112,6 +118,12 @@ export default function ScriptControls({
             go with it. Save script first to keep them; your own file is not touched.
           </p>
         </ConfirmDialog>
+      ) : null}
+      {script && !compact ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-ink-soft w-16">Name</span>
+          <TextField label="The series' name" value={script.series ?? ''} placeholder="Le tri d’Australie" onChange={(series) => onScript({ ...script, series })} />
+        </div>
       ) : null}
       {script && !compact ? (
         <div className="flex items-center gap-2">

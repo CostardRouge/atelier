@@ -25,10 +25,11 @@ describe('healthFromError', () => {
   });
 
   it('names the two plausible causes when nothing answered', () => {
-    const h = healthFromError(new WinnowError('unreachable', 'offline'), 'w.example');
+    const h = healthFromError(new WinnowError('unreachable', 'offline'), 'w.example', 0, 'https://atelier.steeve.website');
     expect(h.state).toBe('unreachable');
     expect(h.reason).toContain('offline');
-    expect(h.reason).toContain('allowed list');
+    // The address to allow, named exactly: what the instance's CORS list must hold.
+    expect(h.reason).toContain('add https://atelier.steeve.website to CORS_ALLOWED_ORIGINS');
   });
 
   it('carries the message through for anything else', () => {

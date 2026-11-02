@@ -11,6 +11,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: start a series with no file — *New series*, then name it under Script. Until the series has its
+  Winnow, its trip and a first Count in this browser, the map of subjects lists what is missing, each step with the
+  gesture that fixes it, and *Check the connection* tells you when your Winnow does not allow this app's address yet.
 - Storytelling: the hook's big text and second line take your own line breaks — press Return in their field, now a
   text area. Choose how a long one is laid: Wrap (your breaks and the column's), Your breaks only (shrunk so the
   widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.

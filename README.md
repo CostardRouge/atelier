@@ -2972,6 +2972,15 @@ a canvas by `src/shared/story/` — the series' **charte** (palette, Geist,
 motion), the same for every post. A new post starts as a copy of the one before
 it and may grow blocks of its own.
 
+- **Getting started.** A series needs four things IN THIS BROWSER — each browser
+  and each address keeps its own, so what a local Atelier holds is not on
+  atelier.steeve.website: a script (*New series* starts one with no file, or
+  load yours), your Winnow connected (Sources) and chosen, your trip (open it
+  from your Winnow in Trips, or import its `.roadtrip.json`) and chosen, and a
+  first *Count*. The map of subjects lists the four with the gesture that fixes
+  each until they are done; *Check the connection* says when your Winnow does
+  not allow this app's address yet (its `CORS_ALLOWED_ORIGINS`).
+
 - **The charte.** *Charte & look* sets the series' six colours (ground, ink,
   accent, muted, soft, deep — a whole palette in one click: linen, night,
   kraft, white paper, sea — then any colour alone), its four faces (titles,
@@ -2985,7 +2994,7 @@ it and may grow blocks of its own.
   with the **objects** it draws (its caption, its parts) and what sits over
   every scene (the hook, the HUD); the stage in the middle; the inspector on
   the right, showing what is selected. Select an object and set it: shown or
-  hidden, moved across and down, its size, turn and opacity; when it draws
+  hidden, moved across and down, its size, rotation and opacity; when it draws
   text, its font (one of the charte's roles or any of the shipped faces), its
   weight, size, letter spacing, colour (a charte colour or any), case and
   outline; a shadow; a delay. *Every post* keeps the setting for that object in
