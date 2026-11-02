@@ -92,6 +92,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   the letters rather than their glow.
 - Storytelling: the Studio's list folds — the series, the post, each scene and the hook's pieces — and keeps what you
   folded on this device; the scene under the playhead and the selected object's group open themselves.
+- Storytelling: in the Studio's inspector, Turn is now called Rotation, and an object's text settings come before
+  where it sits.
 - Storytelling: choose what the map says at each point, on two lines — the place, the town it is in or near, the
   state or its code, the country, the stage, the day of the trip, the date or the kilometres so far — with a place
   written as in Trips (« Perth, WA »), which points carry their name (all, those passed, the current one, the first

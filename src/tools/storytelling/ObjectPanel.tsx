@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { PAL } from '../../shared/story/charte';
 import { storyFaceChoices, storyRoleChoices } from '../../shared/story/fonts';
 import FontPicker from '../../shared/ui/FontPicker';
@@ -59,15 +60,19 @@ interface ObjectPanelProps {
   sample?: string;
   /** A style being tried while a face list is browsed (the stage draws it), null when it closes. */
   onPreview?: (s: StoryScript | null) => void;
+  /** What the object says and where its words come from (`ObjectContent`), shown first. */
+  content?: ReactNode;
 }
 
 /**
- * One object of the post, set (`objects.ts`): where it sits, its size, turn
- * and opacity, its typography when it draws text, its shadow and delay —
+ * One object of the post, set (`objects.ts`): first what it says and where
+ * its words come from (Studio lab, his « cliquer sur le texte … pouvoir le
+ * changer »), then its typography when it draws text, where it sits, its
+ * size, rotation and opacity, its shadow and delay —
  * for every post of the series or this post alone, the post's winning. A
  * scene also takes its length and its caption's window, this post's own.
  */
-export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope, sample, onPreview }: ObjectPanelProps) {
+export default function ObjectPanel({ script, onScript, postId, objKey, text, scene, scope, onScope: setScope, sample, onPreview, content }: ObjectPanelProps) {
   if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the settings are kept in it.</p>;
   const series = styleIn(script, postId, objKey, 'series');
   const own = styleIn(script, postId, objKey, 'post');
@@ -82,42 +87,16 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
 
   return (
     <div className="flex flex-col gap-2.5">
+      {content ? (
+        <>
+          <p className="m-0 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Content</p>
+          {content}
+        </>
+      ) : null}
       <Segmented options={SCOPES} value={scope} onChange={setScope} size="sm" fill label="Where these settings apply" />
       {scope === 'post' && Object.keys(series).length ? <Readout muted>The series&apos; settings show through; what you set here wins in this post.</Readout> : null}
 
       <SwitchRow label="Shown" checked={!shown.hidden} onChange={(on) => set({ hidden: on ? undefined : true })} />
-
-      <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Place</p>
-      {gk !== objKey ? (
-        <Readout muted>
-          {followsWhat(objKey) === 'badge'
-            ? 'Part of the badge: these move and size it whole.'
-            : 'Drawn on the map, it moves, grows and turns with it: these set the map.'}
-        </Readout>
-      ) : null}
-      <SliderRow label="Across" value={num(geo.dx, 0)} min={-540} max={540} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dx: v || undefined })} />
-      <SliderRow label="Down" value={num(geo.dy, 0)} min={-960} max={960} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dy: v || undefined })} />
-      <SliderRow
-        label="Size"
-        value={Math.round(num(geo.scale, 1) * 100)}
-        min={10}
-        max={300}
-        step={1}
-        reset={100}
-        format={(v) => `${v} %`}
-        onChange={(v) => setGeo({ scale: v === 100 ? undefined : v / 100 })}
-      />
-      <SliderRow label="Turn" value={num(geo.rotate, 0)} min={-180} max={180} step={0.5} reset={0} format={(v) => `${v}°`} onChange={(v) => setGeo({ rotate: v || undefined })} />
-      <SliderRow
-        label="Opacity"
-        value={Math.round(num(shown.opacity, 1) * 100)}
-        min={0}
-        max={100}
-        step={1}
-        reset={100}
-        format={(v) => `${v} %`}
-        onChange={(v) => set({ opacity: v === 100 ? undefined : v / 100 })}
-      />
 
       {text ? (
         <>
@@ -147,6 +126,38 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
           {shown.outline ? <ColorRow label="Outline colour" value={shown.outlineColor} onChange={(outlineColor) => set({ outlineColor })} /> : null}
         </>
       ) : null}
+
+      <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Place</p>
+      {gk !== objKey ? (
+        <Readout muted>
+          {followsWhat(objKey) === 'badge'
+            ? 'Part of the badge: these move and size it whole.'
+            : 'Drawn on the map, it moves, grows and turns with it: these set the map.'}
+        </Readout>
+      ) : null}
+      <SliderRow label="Across" value={num(geo.dx, 0)} min={-540} max={540} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dx: v || undefined })} />
+      <SliderRow label="Down" value={num(geo.dy, 0)} min={-960} max={960} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dy: v || undefined })} />
+      <SliderRow
+        label="Size"
+        value={Math.round(num(geo.scale, 1) * 100)}
+        min={10}
+        max={300}
+        step={1}
+        reset={100}
+        format={(v) => `${v} %`}
+        onChange={(v) => setGeo({ scale: v === 100 ? undefined : v / 100 })}
+      />
+      <SliderRow label="Rotation" value={num(geo.rotate, 0)} min={-180} max={180} step={0.5} reset={0} format={(v) => `${v}°`} onChange={(v) => setGeo({ rotate: v || undefined })} />
+      <SliderRow
+        label="Opacity"
+        value={Math.round(num(shown.opacity, 1) * 100)}
+        min={0}
+        max={100}
+        step={1}
+        reset={100}
+        format={(v) => `${v} %`}
+        onChange={(v) => set({ opacity: v === 100 ? undefined : v / 100 })}
+      />
 
       <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Shadow</p>
       <SliderRow label="Blur" value={num(shown.shadow, 0)} min={0} max={60} step={1} reset={0} format={(v) => (v ? `${v} px` : 'none')} onChange={(v) => set({ shadow: v || undefined })} />
