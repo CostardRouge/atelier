@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import StylePanel from '../../shared/overlay/StylePanel';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
-import { HOOK_COMPOSITIONS, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
+import { HOOK_COMPOSITIONS, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookLayoutOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
 import { withLook } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import { SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
+import { ANCHORS, type Anchor } from '../../shared/overlay/overlay-types';
 import { PAL } from '../../shared/story/charte';
 
 /**
@@ -80,7 +81,16 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
               onChange={takeTrip}
             />
           ) : null}
-          <Segmented<HookComposition> options={HOOK_COMPOSITIONS.map((c) => ({ id: c.id, label: c.label }))} value={b.composition} onChange={(composition) => write({ composition })} size="sm" fill label="Where the badge sits" />
+          <Segmented<HookComposition>
+            options={HOOK_COMPOSITIONS.map((c) => ({ id: c.id, label: c.label }))}
+            value={b.composition}
+            onChange={(composition) => write({ composition, anchor: undefined, x: undefined, y: undefined })}
+            size="sm"
+            fill
+            label="Where the badge sits"
+          />
+          <AnchorGrid value={hookLayoutOf(b).anchor} onChange={(anchor) => write({ anchor, x: undefined, y: undefined })} />
+          <p className="m-0 text-2xs text-muted leading-snug">The grid places the badge{b.composition === 'split' ? '’s title (the card stays at the foot)' : ''}; drag any of its pieces on the stage to move it whole.</p>
           <SliderRow
             label="Numeral"
             value={Math.round(b.size * 1000) / 10}
@@ -115,3 +125,25 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
     </div>
   );
 }
+
+/** The nine anchors as the 3×3 grid Trips places its badge on. */
+function AnchorGrid({ value, onChange }: { value: Anchor; onChange: (a: Anchor) => void }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-sm text-ink-soft w-16 pt-1">Anchor</span>
+      <div className="grid grid-cols-3 gap-1.5 w-[6.5rem]" role="group" aria-label="Anchor">
+        {ANCHORS.map((a) => (
+          <button
+            key={a}
+            type="button"
+            onClick={() => onChange(a)}
+            aria-label={a}
+            aria-pressed={a === value}
+            className={`h-7 rounded-[6px] border cursor-pointer transition-colors ${a === value ? 'border-accent bg-accent' : 'border-line-strong bg-paper hover:border-muted'}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+

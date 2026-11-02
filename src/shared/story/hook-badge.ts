@@ -16,7 +16,7 @@ import { BADGE_RATIOS, badgeBlockExtent, badgeElements, type BadgeLayout, type B
 import type { BadgeContent, BadgePiece } from '../roadtrip/day-badge';
 import { DEFAULT_TIME_AGO_WORDS, FRENCH_TIME_AGO_WORDS, timeAgoLine } from '../roadtrip/time-ago';
 import type { AnimStep, ElementAnimation } from '../overlay/animation';
-import type { OverlayElement } from '../overlay/overlay-types';
+import { ANCHORS, type Anchor, type OverlayElement } from '../overlay/overlay-types';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import { readStyleTheme } from '../overlay/style-file';
 import { PAL } from './charte';
@@ -76,6 +76,14 @@ export interface HookBadge {
   column?: number;
   /** A big text longer than the column: broken at words (shrunk past three lines), or shrunk to one line. */
   long?: HookLong;
+  /**
+   * Where the badge sits on the 3×3 grid and its point there, as Trips' badge
+   * (`BadgeLayout`); absent, the composition's own place. In Top and bottom
+   * it places the title, the card staying at the foot.
+   */
+  anchor?: Anchor;
+  x?: number;
+  y?: number;
 }
 
 export type HookLong = 'wrap' | 'fit';
@@ -104,6 +112,9 @@ export function hookBadgeOf(raw: HookBadge | null | undefined) {
     composition: raw?.composition ?? HOOK_BADGE_DEFAULTS.composition,
     size: raw?.size ?? HOOK_BADGE_DEFAULTS.size,
     column: raw?.column ?? HOOK_BADGE_DEFAULTS.column,
+    anchor: raw?.anchor ?? null,
+    x: raw?.x ?? null,
+    y: raw?.y ?? null,
     long: raw?.long ?? HOOK_BADGE_DEFAULTS.long,
     pieces: { ...HOOK_BADGE_DEFAULTS.pieces, ...(raw?.pieces ?? {}) },
     styles: raw?.styles ?? {},
@@ -122,6 +133,10 @@ export function readHookBadge(raw: unknown): HookBadge | undefined {
   if (typeof r.size === 'number' && Number.isFinite(r.size)) out.size = Math.min(HOOK_SIZE_MAX, Math.max(HOOK_SIZE_MIN, r.size));
   if (typeof r.column === 'number' && Number.isFinite(r.column)) out.column = Math.min(0.95, Math.max(0.3, r.column));
   if (r.long === 'wrap' || r.long === 'fit') out.long = r.long;
+  if (typeof r.anchor === 'string' && (ANCHORS as readonly string[]).includes(r.anchor)) out.anchor = r.anchor as Anchor;
+  const unit = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined);
+  if (unit(r.x) !== undefined) out.x = unit(r.x);
+  if (unit(r.y) !== undefined) out.y = unit(r.y);
   if (typeof r.pieces === 'object' && r.pieces && !Array.isArray(r.pieces)) {
     const pieces: Partial<Record<HookPieceKey, boolean>> = {};
     for (const { id } of HOOK_PIECES) if (typeof (r.pieces as Record<string, unknown>)[id] === 'boolean') pieces[id] = (r.pieces as Record<string, boolean>)[id];
@@ -202,11 +217,31 @@ function lookStyles(look: HookLook): BadgePieceStyles {
   return {};
 }
 
-const LAYOUTS: Record<Exclude<HookComposition, 'split'>, BadgeLayout> = {
+/** Each composition's own place for the title block — what the grid starts from. */
+const LAYOUTS: Record<HookComposition, BadgeLayout> = {
   stack: { anchor: 'bottom-left', x: 0.07, y: 0.8, sizeFrac: 0.1 },
   centre: { anchor: 'center', x: 0.5, y: 0.46, sizeFrac: 0.1 },
+  split: { anchor: 'top-left', x: 0.07, y: 0.1, sizeFrac: 0.1 },
   band: { anchor: 'bottom-left', x: 0.07, y: 0.8, sizeFrac: 0.1 },
 };
+
+/**
+ * The point an anchor puts a block at — Trips' (`LookTab`'s `positionFor`),
+ * a little higher at the foot so the block clears the platform's caption. (pure)
+ */
+export function hookPositionFor(anchor: Anchor): { x: number; y: number } {
+  const x = anchor.endsWith('-left') ? 0.07 : anchor.endsWith('-right') ? 0.93 : 0.5;
+  const y = anchor.startsWith('top-') ? 0.1 : anchor.startsWith('bottom-') ? 0.8 : 0.46;
+  return { x, y };
+}
+
+/** Where the badge's title block sits: the anchor set on the grid, else the composition's place, at the numeral. (pure) */
+export function hookLayoutOf(look: ReturnType<typeof hookBadgeOf>): BadgeLayout {
+  const base = LAYOUTS[look.composition];
+  if (!look.anchor) return { ...base, sizeFrac: look.size };
+  const at = hookPositionFor(look.anchor);
+  return { anchor: look.anchor, x: look.x ?? at.x, y: look.y ?? at.y, sizeFrac: look.size };
+}
 
 /** How the big text arrives, for the hook's entry. */
 function entryStep(entry: Hook['entry'], seconds: number): AnimStep {
@@ -364,18 +399,18 @@ export function hookBadgeElements(
     return (Object.entries(PIECE_OF).find(([, v]) => v === key)?.[0] ?? 'big') as HookPieceKey | 'big';
   };
   // The size is a share of the frame's width — its shorter side, which is what a badge's sizes are of.
-  const sized = (l: BadgeLayout): BadgeLayout => ({ ...l, sizeFrac: look.size });
+  const layout = hookLayoutOf(look);
   let els: OverlayElement[];
   if (look.composition === 'split') {
     // The title up, the card down: the same pieces in two blocks, the card's under an empty big text.
     const top: BadgeContent = { ...content, caption: null, timing: null, exif: null };
     const card: BadgeContent = { kicker: null, label: null, headline: '', counter: null, caption: content.caption, timing: content.timing, exif: content.exif };
     els = [
-      ...badgeElements(top, sized({ anchor: 'top-left', x: 0.07, y: 0.1, sizeFrac: 0 }), aspect, styles, null, null, scales),
-      ...(card.caption || card.timing || card.exif ? badgeElements(card, sized({ anchor: 'bottom-left', x: 0.07, y: 0.86, sizeFrac: 0 }), aspect, styles, null, null, scales) : []).filter((el) => el.id !== 'piece:headline'),
+      ...badgeElements(top, layout, aspect, styles, null, null, scales),
+      ...(card.caption || card.timing || card.exif ? badgeElements(card, { anchor: 'bottom-left', x: 0.07, y: 0.86, sizeFrac: look.size }, aspect, styles, null, null, scales) : []).filter((el) => el.id !== 'piece:headline'),
     ];
   } else {
-    els = badgeElements(content, sized(LAYOUTS[look.composition]), aspect, styles, null, null, scales);
+    els = badgeElements(content, layout, aspect, styles, null, null, scales);
   }
   return timed(els).map((el) => ({ piece: pieceOf(el), el }));
 }
@@ -411,7 +446,7 @@ export function hookBand(hook: Hook, raw: HookBadge | null | undefined, series: 
   if (look.composition !== 'band') return null;
   const set = hookBadgeSet(hook, look, series, measure);
   if (!set) return null;
-  const e = badgeBlockExtent({ ...set.content, caption: null, timing: null, exif: null }, { ...LAYOUTS.band, sizeFrac: look.size }, 1080 / 1920, set.scales);
+  const e = badgeBlockExtent({ ...set.content, caption: null, timing: null, exif: null }, hookLayoutOf(look), 1080 / 1920, set.scales);
   if (!e) return null;
   const pad = look.size * (1080 / 1920) * 0.35;
   return { top: e.top - pad, bottom: e.bottom + pad, fill: look.look === 'plein-cadre' ? '#f01d0e' : look.look === 'charte' ? PAL.acc : 'rgba(14,12,10,0.82)' };

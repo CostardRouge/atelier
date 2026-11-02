@@ -82,6 +82,19 @@ export type Anchor =
   | 'bottom-center'
   | 'bottom-right';
 
+/** The nine anchors, row by row — the 3×3 grid they are. */
+export const ANCHORS: readonly Anchor[] = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'center-left',
+  'center',
+  'center-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+];
+
 export type FontWeight = 400 | 500 | 600 | 700;
 
 /** Curated families. The brand fonts are loaded via FontFace before drawing;

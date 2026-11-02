@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn } from './hook-badge';
+import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf } from './hook-badge';
 import { hookTimeline, type Hook } from './hook';
 
 const hook: Hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
@@ -79,6 +79,24 @@ describe('the big text set in a column', () => {
     expect(last.window!.start + last.animation!.in!.duration).toBeCloseTo(tl.lines[0].done, 5);
     const second = hookBadgeElements(h, tl, { size: 0.12 }, series).find((e) => e.piece === 'second')!.el;
     expect(second.y).toBeGreaterThan(last.y);
+  });
+});
+
+describe('where the badge sits', () => {
+  it('takes the composition’s place until the grid sets an anchor, then that cell’s point at the numeral', () => {
+    expect(hookLayoutOf(hookBadgeOf(undefined))).toMatchObject({ anchor: 'bottom-left', x: 0.07, y: 0.8, sizeFrac: 0.1 });
+    expect(hookLayoutOf(hookBadgeOf({ composition: 'centre', size: 0.2 }))).toMatchObject({ anchor: 'center', sizeFrac: 0.2 });
+    expect(hookLayoutOf(hookBadgeOf({ anchor: 'top-right' }))).toMatchObject({ anchor: 'top-right', x: 0.93, y: 0.1 });
+    expect(hookLayoutOf(hookBadgeOf({ anchor: 'top-right', x: 0.8, y: 0.2 }))).toMatchObject({ x: 0.8, y: 0.2 });
+  });
+
+  it('moves every piece with the anchor, and reads a stored one field by field', () => {
+    const tl = hookTimeline(hook);
+    const els = hookBadgeElements(hook, tl, { anchor: 'top-center' }, series);
+    expect(els.every((e) => e.el.anchor === 'top-center' && e.el.x === 0.5)).toBe(true);
+    expect(Math.min(...els.map((e) => e.el.y))).toBeCloseTo(0.1, 5);
+    expect(readHookBadge({ anchor: 'nowhere', x: 2, y: 0.3 })).toEqual({ x: 1, y: 0.3 });
+    expect(readHookBadge({ anchor: 'bottom-right' })).toEqual({ anchor: 'bottom-right' });
   });
 });
 

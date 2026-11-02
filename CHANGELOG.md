@@ -100,6 +100,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: the hook's big text and second line break at words inside a column you set, and the pieces under them
   make room — a long sentence no longer runs off the frame; past three lines it shrinks (or keep it on one line with
   Shrink to fit). The Numeral sets the whole badge's size, from 4 % to 30 % of the frame's width.
+- Storytelling: place the hook's badge on Trips' 3×3 anchor grid; Stack, Centre, Top and bottom and Band remain as
+  starting places.
 - A title style can be exported as a `.badge.json` file and imported back — in Trips' Look tab, the Studio, Flight
   Atlas and Storytelling alike — and Storytelling can take a trip's own badge style.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
