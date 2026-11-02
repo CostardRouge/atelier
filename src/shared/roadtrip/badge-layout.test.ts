@@ -458,3 +458,32 @@ describe('the cascade', () => {
     expect(read.stagger).toEqual({ each: 0.1, order: 'rows' });
   });
 });
+
+describe('a piece of several lines, and a piece grown inside the stack', () => {
+  const layout: BadgeLayout = { anchor: 'top-left', x: 0.07, y: 0.1, sizeFrac: 0.1 };
+  const aspect = 9 / 16;
+  const y = (els: ReturnType<typeof badgeElements>, id: string) => els.find((e) => e.id === id)!.y;
+
+  it('draws one element a line, each named after its piece, and pushes the pieces under it down', () => {
+    const one = badgeElements({ ...full, headline: 'Un' }, layout, aspect, {}, null);
+    const two = badgeElements({ ...full, headline: 'Un\nDeux' }, layout, aspect, {}, null);
+    expect(two.map((e) => e.id)).toContain('piece:headline:1');
+    expect(pieceFromElementId('piece:headline:1')).toBe('headline');
+    expect(y(two, 'piece:headline:1')).toBeGreaterThan(y(two, 'piece:headline'));
+    // The second line takes its height and a leading: the counter moves down by as much.
+    expect(y(two, 'piece:counter') - y(one, 'piece:counter')).toBeCloseTo(heightFractionOf(0.1, aspect) * 1.12, 5);
+  });
+
+  it('grows a piece by its share, the pieces under it making room instead of being covered', () => {
+    const plain = badgeElements(full, layout, aspect, {}, null);
+    const grown = badgeElements(full, layout, aspect, {}, null, null, { headline: 1.5 });
+    expect(grown.find((e) => e.id === 'piece:headline')!.sizeFrac).toBeCloseTo(0.15, 5);
+    expect(y(grown, 'piece:counter')).toBeGreaterThan(y(plain, 'piece:counter') + heightFractionOf(0.05, aspect) - 1e-9);
+    // What sits above it does not move.
+    expect(y(grown, 'piece:kicker')).toBeCloseTo(y(plain, 'piece:kicker'), 9);
+    const e1 = badgeBlockExtent(full, layout, aspect)!;
+    const e2 = badgeBlockExtent(full, layout, aspect, { headline: 1.5 })!;
+    expect(e2.bottom).toBeGreaterThan(e1.bottom);
+  });
+});
+

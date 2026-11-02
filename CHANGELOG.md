@@ -97,6 +97,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   in Trips' title styles (Or ciné by default, Pixel CRT, Rouge plein cadre, Neutral) or the series' charte, stacked,
   centred, split top and bottom or on a band. Each piece is an object of the Studio, a post can write its own, and the
   typed lines with a sticker remain one choice away.
+- Storytelling: the hook's big text and second line break at words inside a column you set, and the pieces under them
+  make room — a long sentence no longer runs off the frame; past three lines it shrinks (or keep it on one line with
+  Shrink to fit). The Numeral sets the whole badge's size, from 4 % to 30 % of the frame's width.
 - A title style can be exported as a `.badge.json` file and imported back — in Trips' Look tab, the Studio, Flight
   Atlas and Storytelling alike — and Storytelling can take a trip's own badge style.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the

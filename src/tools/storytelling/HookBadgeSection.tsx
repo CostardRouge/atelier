@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import StylePanel from '../../shared/overlay/StylePanel';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
-import { HOOK_COMPOSITIONS, HOOK_PIECES, hookBadgeOf, hookThemeOf, type HookBadge, type HookComposition, type HookPieceKey } from '../../shared/story/hook-badge';
+import { HOOK_COMPOSITIONS, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
 import { withLook } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import { SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
@@ -81,7 +81,29 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
             />
           ) : null}
           <Segmented<HookComposition> options={HOOK_COMPOSITIONS.map((c) => ({ id: c.id, label: c.label }))} value={b.composition} onChange={(composition) => write({ composition })} size="sm" fill label="Where the badge sits" />
-          <SliderRow label="Size" value={Math.round(b.size * 100)} min={5} max={16} step={0.5} reset={10} format={(v) => `${v} %`} onChange={(v) => write({ size: v / 100 })} />
+          <SliderRow
+            label="Numeral"
+            value={Math.round(b.size * 1000) / 10}
+            min={HOOK_SIZE_MIN * 100}
+            max={HOOK_SIZE_MAX * 100}
+            step={0.5}
+            reset={10}
+            format={(v) => `${v} %`}
+            onChange={(v) => write({ size: v / 100 })}
+          />
+          <p className="m-0 text-2xs text-muted leading-snug">The big text&apos;s size, a share of the frame&apos;s width: every other piece keeps its ratio to it, so the whole badge grows at once.</p>
+          <SliderRow label="Column" value={Math.round(b.column * 100)} min={30} max={95} step={1} reset={86} format={(v) => `${v} %`} onChange={(v) => write({ column: v === 86 ? undefined : v / 100 })} />
+          <Segmented<HookLong>
+            options={[
+              { id: 'wrap', label: 'Wrap', title: 'Broken at words inside the column; past three lines it shrinks' },
+              { id: 'fit', label: 'Shrink to fit', title: 'Kept on one line, shrunk to the column' },
+            ]}
+            value={b.long}
+            onChange={(long) => write({ long: long === 'wrap' ? undefined : long })}
+            size="sm"
+            fill
+            label="A big text longer than the column"
+          />
           <div className="flex flex-col gap-1">
             {HOOK_PIECES.map((p) => (
               <SwitchRow key={p.id} label={p.label} checked={b.pieces[p.id]} onChange={(on) => write({ pieces: { ...(raw?.pieces ?? {}), [p.id]: on } as Partial<Record<HookPieceKey, boolean>> })} />

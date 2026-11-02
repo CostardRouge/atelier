@@ -1,13 +1,15 @@
 // The hook as Trips' badge (`hook-badge.ts`): a veil under the words, a band when the composition asks for
 // one, then each piece an object of its own (the Studio picks, moves and fades it), painted by the overlay
 // engine in the series' look.
-import { drawOverlays } from "../../overlay/draw-overlays";
+import { drawOverlays, textElementSize } from "../../overlay/draw-overlays";
+import { createTextElement } from "../../overlay/overlay-types";
+import type { StyleTheme } from "../../overlay/title-styles";
 import { clamp, E, type Ctx } from "../motion";
 import { PAL } from "../charte";
 import { obj } from "../objects";
 import { STOPS } from "../geo";
 import { HOOK_DEFAULTS, type Hook, type HookTimeline } from "../hook";
-import { hookBadgeElements, hookBand, hookThemeOf, type HookBadge, type HookBadgeElement, type HookSeries } from "../hook-badge";
+import { hookBadgeElements, hookBand, hookThemeOf, type HookBadge, type HookBadgeElement, type HookMeasure, type HookSeries } from "../hook-badge";
 import type { Episode } from "../episode";
 
 /** The series' facts the pieces read: its name, the post's number, the map's ends, the trip's first day. */
@@ -24,11 +26,21 @@ export function hookSeriesOf(ep: Episode, today = new Date().toISOString().slice
   };
 }
 
+/** How wide a text runs in the badge's title style, measured on the frame's own canvas. */
+function measureIn(c: Ctx, theme: StyleTheme): HookMeasure {
+  return (text, _piece, sizeFrac) => {
+    const el = createTextElement(text);
+    el.sizeFrac = sizeFrac;
+    return (textElementSize(c, el, 1080, 1920, theme)?.w ?? text.length * sizeFrac * 540) / 1080;
+  };
+}
+
 let built: { key: string; els: HookBadgeElement[] } | null = null;
-function elementsFor(hook: Hook, tl: HookTimeline, look: HookBadge | undefined, series: HookSeries): HookBadgeElement[] {
-  const key = JSON.stringify([hook, look ?? null, series, STOPS.length]);
+function elementsFor(c: Ctx, hook: Hook, tl: HookTimeline, look: HookBadge | undefined, series: HookSeries, theme: StyleTheme): HookBadgeElement[] {
+  // The fonts' arrival changes what a line measures: the key holds whether they are in.
+  const key = JSON.stringify([hook, look ?? null, series, STOPS.length, typeof document !== "undefined" ? document.fonts?.status : ""]);
   if (built?.key === key) return built.els;
-  built = { key, els: hookBadgeElements(hook, tl, look, series) };
+  built = { key, els: hookBadgeElements(hook, tl, look, series, measureIn(c, theme)) };
   return built.els;
 }
 
@@ -48,7 +60,8 @@ export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline,
       c.fillRect(0, 0, 1080, 1920);
       c.restore();
     });
-  const band = hookBand(hook, look, series);
+  const theme = hookThemeOf(look);
+  const band = hookBand(hook, look, series, measureIn(c, theme));
   if (band)
     obj(c, "hook.band", [540, ((band.top + band.bottom) / 2) * 1920], t, () => {
       c.save();
@@ -57,8 +70,10 @@ export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline,
       c.fillRect(0, band.top * 1920, 1080 * shown, (band.bottom - band.top) * 1920);
       c.restore();
     });
-  const theme = hookThemeOf(look);
-  for (const { piece, el } of elementsFor(hook, tl, look, series)) {
-    obj(c, `hook.${piece}`, [el.x * 1080, el.y * 1920], t, () => drawOverlays(c, [el], null, 1080, 1920, { theme, timeSeconds: t }));
+  // One object a piece, its lines drawn together: a hit on any line picks the piece.
+  const byPiece = new Map<string, HookBadgeElement["el"][]>();
+  for (const { piece, el } of elementsFor(c, hook, tl, look, series, theme)) byPiece.set(piece, [...(byPiece.get(piece) ?? []), el]);
+  for (const [piece, els] of byPiece) {
+    obj(c, `hook.${piece}`, [els[0].x * 1080, els[0].y * 1920], t, () => drawOverlays(c, els, null, 1080, 1920, { theme, timeSeconds: t }));
   }
 }

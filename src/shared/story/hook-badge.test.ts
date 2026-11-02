@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge } from './hook-badge';
+import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn } from './hook-badge';
 import { hookTimeline, type Hook } from './hook';
 
 const hook: Hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
@@ -35,8 +35,50 @@ describe('the hook as Trips’ badge', () => {
   });
 
   it('keeps a look field by field, and its tuned theme over the preset', () => {
-    expect(readHookBadge({ look: 'pixel-crt', composition: 'nope', size: 9, pieces: { why: false, x: true } })).toEqual({ look: 'pixel-crt', size: 0.2, pieces: { why: false } });
+    expect(readHookBadge({ look: 'pixel-crt', composition: 'nope', size: 9, pieces: { why: false, x: true } })).toEqual({ look: 'pixel-crt', size: 0.3, pieces: { why: false } });
     expect(hookThemeOf(undefined).presetId).toBe('or-cine');
     expect(hookThemeOf({ look: 'plein-cadre' }).style.uppercase).toBe(true);
   });
 });
+
+describe('the big text set in a column', () => {
+  const long = 'J’ai roulé quatorze mille kilomètres en van sans jamais trier une photo';
+
+  it('breaks a sentence at words so no line runs past the column', () => {
+    const set = setInColumn(long, 'headline', 0.1, 0.86, 'wrap');
+    const lines = set.text.split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.length).toBeLessThanOrEqual(3);
+    for (const l of lines) expect(roughMeasure(l, 'headline', 0.1 * set.scale)).toBeLessThanOrEqual(0.86 + 1e-9);
+    expect(lines.join(' ')).toBe(long);
+  });
+
+  it('shrinks past three lines rather than grow into a paragraph, and keeps one line in fit', () => {
+    const big = setInColumn(long, 'headline', 0.25, 0.86, 'wrap');
+    expect(big.text.split('\n').length).toBeLessThanOrEqual(3);
+    expect(big.scale).toBeLessThan(1);
+    const fit = setInColumn(long, 'headline', 0.1, 0.86, 'fit');
+    expect(fit.text).not.toContain('\n');
+    expect(roughMeasure(fit.text, 'headline', 0.1 * fit.scale)).toBeCloseTo(0.86, 5);
+  });
+
+  it('leaves a short line as it is', () => {
+    expect(setInColumn('100 000 photos.', 'headline', 0.1, 0.86, 'wrap')).toEqual({ text: '100 000 photos.', scale: 1 });
+  });
+
+  it('types a broken big text line after line, and stacks the second line under the last', () => {
+    const h: Hook = { lines: [long, 'Aucune triée.'] };
+    const tl = hookTimeline(h);
+    const els = hookBadgeElements(h, tl, { size: 0.12 }, series).filter((e) => e.piece === 'big').map((e) => e.el);
+    expect(els.length).toBeGreaterThan(1);
+    for (let i = 1; i < els.length; i++) {
+      expect(els[i].window!.start).toBeGreaterThan(els[i - 1].window!.start);
+      expect(els[i].y).toBeGreaterThan(els[i - 1].y);
+    }
+    const last = els[els.length - 1];
+    expect(last.window!.start + last.animation!.in!.duration).toBeCloseTo(tl.lines[0].done, 5);
+    const second = hookBadgeElements(h, tl, { size: 0.12 }, series).find((e) => e.piece === 'second')!.el;
+    expect(second.y).toBeGreaterThan(last.y);
+  });
+});
+
