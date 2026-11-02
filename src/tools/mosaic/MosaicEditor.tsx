@@ -43,6 +43,7 @@ import MosaicPicker from './MosaicPicker';
 import MosaicSettings, { SETTINGS_TABS, type SettingsTab } from './MosaicSettings';
 import MosaicExportPanel from './MosaicExportPanel';
 import { useMosaicExport } from './use-mosaic-export';
+import { useMosaicEditorCommands, useMosaicStageCommands } from './use-mosaic-commands';
 import MosaicStage, { type Reveal, type StageView } from './MosaicStage';
 import MosaicTransport from './MosaicTransport';
 import TargetChooser from './TargetChooser';
@@ -72,6 +73,8 @@ interface MosaicEditorProps {
   band?: ReactNode;
   /** The history's two buttons, beside the save word. */
   headerExtra?: ReactNode;
+  /** The sync pill, for a mosaic kept on an instance (M8). */
+  syncPill?: ReactNode;
 }
 
 /** The tiles a run must still settle: no grid yet, or a failure to try again. */
@@ -95,6 +98,7 @@ function MosaicWorkbench({
   steps,
   compact,
   header,
+  latest,
 }: {
   doc: MosaicDoc;
   client: WinnowClient | null;
@@ -108,6 +112,8 @@ function MosaicWorkbench({
   compact: boolean;
   /** A phone's header, drawn by the editor with this screen's own verbs added to its ⋯. */
   header: (extra: OverflowItem[]) => ReactNode;
+  /** The mosaic as the editor last wrote it — what an agent's command reads before the next render. */
+  latest: { current: MosaicDoc };
 }) {
   const [boxRef, measuredRoom] = useElementSize<HTMLDivElement>();
   // On a phone the settings open one tab at a time in a drawer that takes a share of the column (`PanelHost`).
@@ -208,6 +214,7 @@ function MosaicWorkbench({
   const stop = useCallback(() => player?.stop(), [player]);
   // Writing it out (M7): the stage's own builder and pool, a player of the film's own, the queue read and never written.
   const exporter = useMosaicExport({ doc, builder, pool, stageW, stageH, queue: chained ? queueSource : undefined });
+  useMosaicStageCommands({ latest, rendered: doc, state, status, play, stop, canvas: () => canvasRef.current, exporter, update });
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
   const wasPlaying = useRef(false);
   useEffect(() => {
@@ -478,7 +485,7 @@ function MosaicWorkbench({
  * library, its dials beside it, a click on a cell making its picture the
  * target (M5). The animated modes (M6) follow.
  */
-export default function MosaicEditor({ doc, change, saveState, onBack, band, headerExtra }: MosaicEditorProps) {
+export default function MosaicEditor({ doc, change, saveState, onBack, band, headerExtra, syncPill }: MosaicEditorProps) {
   useSurface('darkroom');
   const compact = useIsCompact();
   const { connection, client } = useWinnowConnection();
@@ -497,10 +504,19 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
   const running = useRef<AbortController | null>(null);
   const docRef = useRef(doc);
   docRef.current = doc;
-  const changeRef = useRef(change);
-  changeRef.current = change;
+  // Every write of this screen through the shell's funnel, the ref written the moment it applies — a measuring run
+  // started right after an add, or an agent's next command, reads the mosaic as it is, not as it last rendered.
+  const act = useCallback(
+    (fn: (d: MosaicDoc) => MosaicDoc) =>
+      change((d) => {
+        const next = fn(d);
+        docRef.current = next;
+        return next;
+      }),
+    [change],
+  );
 
-  const measure = useCallback(
+  const runOnce = useCallback(
     async (retryFailed: boolean) => {
       const cur = docRef.current;
       if (running.current || !client || !connection || !cur.instance || cur.instance !== connection.id) return;
@@ -513,7 +529,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         const perf = MOSAIC_PERF_PREF.get();
         const workers = perf.measure === 'main' ? 0 : perf.measure === 'one' ? 1 : workersHere(perf);
         const result = await runMeasure(client, cur.instance, todo, { signal: controller.signal, onProgress: setProgress, workers });
-        changeRef.current((d) => withMeasures(d, result.grids, result.failed));
+        act((d) => withMeasures(d, result.grids, result.failed));
         if (result.failed.length) setNotice(`${result.failed.length} picture${result.failed.length === 1 ? '' : 's'} could not be read from ${connection.id} — skipped; Measure again tries them once more.`);
         else if (result.cancelled) setNotice('Measuring stopped; what was measured is kept.');
       } catch (e) {
@@ -523,7 +539,22 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         setProgress(null);
       }
     },
-    [client, connection],
+    [client, connection, act],
+  );
+  // One run at a time, its list fixed when it starts: a call while one runs queues ANOTHER after it, which takes what
+  // the first could not see (pictures added meanwhile, a retry asked) and finds nothing to do when there is nothing.
+  // What it answers ends when every run asked so far has — what an agent's `wait` waits for.
+  const runPromise = useRef<Promise<void> | null>(null);
+  const measure = useCallback(
+    (retryFailed: boolean): Promise<void> => {
+      const start = () => runOnce(retryFailed);
+      const run = (runPromise.current ? runPromise.current.then(start) : start()).finally(() => {
+        if (runPromise.current === run) runPromise.current = null;
+      });
+      runPromise.current = run;
+      return run;
+    },
+    [runOnce],
   );
 
   // A mosaic opened with pictures still unmeasured (a cancelled run, an import on another device) resumes by itself.
@@ -537,11 +568,11 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
 
   const onAdd = useCallback(
     (tiles: MosaicTile[], instance: string, span: { from: string; to: string } | undefined) => {
-      change((d) => withPictures(d, tiles, instance, span));
-      // The document above is applied synchronously through the shell's `change`; the run reads it from the ref.
+      act((d) => withPictures(d, tiles, instance, span));
+      // The document above is applied synchronously and written to the ref; the run reads it from there.
       queueMicrotask(() => void measure(false));
     },
-    [change, measure],
+    [act, measure],
   );
 
   // --- the target: the picture rebuilt; the first measured one until a click or a draw says otherwise ---
@@ -553,10 +584,10 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
     if (id !== undefined) change((d) => withTarget(d, id));
   }, [doc, measuredCount, change]);
   // A new target drops the crop: a crop belongs to its picture.
-  const setTarget = useCallback((id: number) => change((d) => withTarget(d, id)), [change]);
-  const setCrop = useCallback((crop: Crop | undefined) => change((d) => withCrop(d, crop)), [change]);
+  const setTarget = useCallback((id: number) => act((d) => withTarget(d, id)), [act]);
+  const setCrop = useCallback((crop: Crop | undefined) => act((d) => withCrop(d, crop)), [act]);
 
-  const update = useCallback((fn: (s: Settings) => Settings) => change((d) => ({ ...d, settings: sanitizeSettings(fn(d.settings)), updatedAt: Date.now() })), [change]);
+  const update = useCallback((fn: (s: Settings) => Settings) => act((d) => ({ ...d, settings: sanitizeSettings(fn(d.settings)), updatedAt: Date.now() })), [act]);
   // Previous and next over the targets visited, as a browser's back and forward.
   const steps = useTargetSteps(doc, change);
 
@@ -564,9 +595,26 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
   const pending = unmeasured(doc, false).length;
   const canMeasure = Boolean(client && connection && doc.instance === connection.id) && !progress;
   const drawTarget = () => {
-    const id = randomTarget(doc, salt.current++);
+    const id = randomTarget(docRef.current, salt.current++);
     if (id !== undefined) setTarget(id);
+    return id;
   };
+  useMosaicEditorCommands({
+    latest: docRef,
+    // The params refuse what is out of bounds; the settings still pass the stored reader's bounds, as a dial's do.
+    change: (fn) =>
+      act((d) => {
+        const next = fn(d);
+        return next.settings === d.settings ? next : { ...next, settings: sanitizeSettings(next.settings) };
+      }),
+    connection,
+    client,
+    add: onAdd,
+    measure,
+    measuring: () => Boolean(running.current),
+    setTarget,
+    drawTarget,
+  });
   const countLine = progress
     ? `measuring ${progress.done.toLocaleString()} / ${progress.total.toLocaleString()}…`
     : `${pictureCountLine(doc)}${failed ? ` · ${failed} skipped` : ''}`;
@@ -622,6 +670,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         trailing={
           <>
             {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
+            {syncPill}
             {headerExtra}
           </>
         }
@@ -661,7 +710,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
             </EmptyState>
           </>
         ) : (
-          <MosaicWorkbench doc={doc} client={client} change={change} update={update} setTarget={setTarget} setCrop={setCrop} steps={steps} compact header={phoneHeader} />
+          <MosaicWorkbench doc={doc} client={client} change={act} update={update} setTarget={setTarget} setCrop={setCrop} steps={steps} compact header={phoneHeader} latest={docRef} />
         )}
         {/* At one place in the tree, outside the branches: an add swaps the empty state for the workbench, and a picker
             drawn inside either would be mounted again, still open. */}
@@ -690,6 +739,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         trailing={
           <span className="inline-flex items-center gap-2">
             {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
+            {syncPill}
             {headerExtra}
             <span
               className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}
@@ -759,7 +809,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
           here with its colours.
         </EmptyState>
       ) : (
-        <MosaicWorkbench doc={doc} client={client} change={change} update={update} setTarget={setTarget} setCrop={setCrop} steps={steps} compact={false} header={() => null} />
+        <MosaicWorkbench doc={doc} client={client} change={act} update={update} setTarget={setTarget} setCrop={setCrop} steps={steps} compact={false} header={() => null} latest={docRef} />
       )}
     </section>
   );

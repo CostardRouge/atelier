@@ -54,16 +54,14 @@ Driven headless against a stub (300 pictures, cancelled at 150: 148 kept,
 the resumed run fetched the other 152 and the two failures; the fallback on
 100 more; the tiles 160 × 90 JPEG ~850 B each).
 
-## The shell is the atlas's, minus the sync until M8 (2026-10-31, M3)
+## The shell is the atlas's (2026-10-31, M3; rev. 2026-11-01, M8)
 
 `tools/mosaic/MosaicTool.tsx` copies `AtlasTool.tsx`'s shape — `/mosaic/home`
 the gallery, `/mosaic/<slug>-<id8>` the editor (`mosaic-route.ts` over the
 trips' `tripRef`), a 600 ms debounced local save, ONE tab editing under the
-Web Lock (`LockedKind` gained `mosaic`) — without `useDocumentSync`: no
-instance lists the kind `mosaic` in its bucket yet, so `MosaicGallery`'s
-`useDocumentGallery` driver carries remote stubs that are never called
-(`documentSourcesFor('mosaic')` yields the device alone) and `deleteMosaic`
-prunes `tiles` and `measures` to what the remaining mosaics reference.
+Web Lock (`LockedKind` gained `mosaic`), and since M8 the shared
+`useDocumentSync` (`mosaic-remote.md`); `deleteMosaic` prunes `tiles` and
+`measures` to what the remaining mosaics reference.
 **Registry**: an `editor` under `wip` (Q1 answered by the brief's
 recommendation — it has documents and a gallery; the badge is what keeps it
 discreet), `accepts: []` since the picker, not the Library, is its door.

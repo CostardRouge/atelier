@@ -3137,8 +3137,8 @@ reloads on every save.
 *Work in progress* — the home page and the tool menu say so with a badge. What
 exists: mosaics, their gallery and their file, the door to a Winnow's
 pictures with the measuring of their colours, the stage, the animated
-modes and the exports. Keeping a mosaic on a Winnow and agent commands come
-next (`docs/mosaic.md`).
+modes, the exports, a mosaic kept on a Winnow and the commands an agent
+drives it with (`docs/mosaic.md`).
 
 The photo-mosaic screen saver macOS once had, over your own pictures: one
 picture rebuilt out of hundreds of others, each cell a photo whose colours
@@ -3159,6 +3159,21 @@ draws, taken from the instance's thumbnail, so a mosaic plays without asking
 the instance again; the tiles and colours of pictures no mosaic uses any more
 are forgotten when the last one is deleted. The gallery says what is kept,
 whether the browser promised to keep it, and offers **Back up everything**.
+
+**Kept on a Winnow.** A mosaic made here lives on this device; its **⋯**
+*Keep on <instance>…* moves it to a connected Winnow whose document bucket
+keeps mosaics, and *Keep on this device only…* brings it back. Kept there, it
+is saved on this device as you go and sent to the instance once you pause,
+like a trip or a roll, with the same dot in the bar saying where it stands
+and what to do on a conflict. What travels is the document — its pictures by
+reference with their measured colours, the target and its frame, the
+settings and the chain — so a mosaic opened on another device measures
+nothing again; that device cuts its small tiles from the instance's
+thumbnails as it draws them, and the poster is drawn once it is opened
+there. The gallery lists it from a summary until it is opened, so a
+library of thousands of pictures costs a few hundred bytes to list. An
+instance whose bucket does not keep mosaics yet is said once in the
+gallery and never written to.
 
 **Pictures.** *From <instance>* opens the shared Winnow picker on a span of
 days — the mosaic's own, else the last one used there — with photos and clips
@@ -3300,6 +3315,19 @@ lasts. It needs a mode under the stage, and a browser that encodes video
 (WebCodecs); the image saves everywhere. Either runs as a task in the
 masthead with its Cancel, and downloads under the mosaic's name, its size
 and the moment.
+
+**For an agent.** Connected through the agent bridge (`#/agents`), an
+agent drives a mosaic with the same gestures: `mosaic.list`, `.create`,
+`.open` and `.keep` (where it is kept) from the gallery; in the editor
+`mosaic.get` (what it holds and how it is set), `.add` (Winnow pictures by
+id, or a day, a span, a folder, a person, narrowed like `winnow.assets` —
+rejects left out as the picker does), `.measure`, `.target`, `.frame`,
+`.set` (the dials and the title), `.motion` (the mode and the step's
+parts), `.stage`, `.play`, `.stop`, `.snapshot` (the stage as a picture)
+and `.export` (the PNG or the film into the downloads), and `.undo` /
+`.redo`. Every write is one step of the mosaic's undo, saved and synced
+like a gesture; a value out of range is refused with its range, never
+clamped.
 
 ## Telemetry tool
 

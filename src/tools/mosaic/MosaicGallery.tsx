@@ -3,11 +3,11 @@ import { downloadBlob } from '../../shared/media/save';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { createMosaicDoc, cleanMosaicTitle, type MosaicDoc } from '../../shared/mosaic/mosaic-doc';
 import { pickFile } from '../../shared/sources/file-sources';
-import { DEFAULT_SOURCE_ID, sourceById } from '../../shared/sources/source';
+import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
+import { sourceLabel } from '../../shared/sources/document-gallery';
 import { uniqueDocName } from '../../shared/sources/doc-name';
 import AbsentSourceNotes from '../../shared/sources/AbsentSourceNotes';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
-import type { RemoteDocRow } from '../../shared/sources/document-gallery';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -20,6 +20,7 @@ import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
+import type { MosaicSummary } from '../../shared/mosaic/mosaic-summary';
 import {
   MOSAIC_FILE_ACCEPT,
   MOSAIC_FILE_EXTENSION,
@@ -29,6 +30,16 @@ import {
   serializeMosaicFile,
   toMosaicFile,
 } from './mosaic-file';
+import {
+  MOSAIC_DOC_KIND,
+  deleteRemoteMosaic,
+  fetchRemoteMosaic,
+  listRemoteMosaics,
+  mirrorMosaic,
+  moveMosaic,
+  pushMosaic,
+  type RemoteMosaicRow,
+} from './mosaic-remote';
 import {
   askPersistence,
   deleteMosaic,
@@ -41,9 +52,6 @@ import {
   tileStorage,
   type StorageState,
 } from './mosaic-store';
-
-/** The kind mosaics will be filed under in an instance's bucket (M8); no instance lists it yet. */
-export const MOSAIC_DOC_KIND = 'mosaic';
 
 interface MosaicGalleryProps {
   openMosaicId: string | null;
@@ -60,17 +68,17 @@ function formatBytes(n: number): string {
   return `${(n / 1_073_741_824).toFixed(1)} GB`;
 }
 
-/** "1 240 pictures · 1 198 measured", or what a library without pictures says. */
-export function pictureCountLine(doc: MosaicDoc): string {
-  const n = doc.tiles.length;
+/** "1 240 pictures · 1 198 measured", or what a library without pictures says — from the summary on a card listed by it. */
+export function pictureCountLine(doc: MosaicDoc, summary?: MosaicSummary): string {
+  const n = summary?.pictures ?? doc.tiles.length;
   if (!n) return 'no pictures yet';
-  const measured = doc.tiles.filter((t) => t.grid).length;
+  const measured = summary?.measured ?? doc.tiles.filter((t) => t.grid).length;
   const head = `${n.toLocaleString()} picture${n === 1 ? '' : 's'}`;
   return measured === n ? head : `${head} · ${measured.toLocaleString()} measured`;
 }
 
 /** The mosaic's poster, kept on this device when it was last drawn here. */
-function MosaicCover({ doc }: { doc: MosaicDoc }) {
+function MosaicCover({ doc, pictures }: { doc: MosaicDoc; pictures: number }) {
   const [blob, setBlob] = useState<Blob | null>(null);
   useEffect(() => {
     let alive = true;
@@ -83,7 +91,7 @@ function MosaicCover({ doc }: { doc: MosaicDoc }) {
   if (!url) {
     return (
       <div className="w-full aspect-video flex items-center justify-center text-muted font-mono text-xs px-4 text-center">
-        {doc.tiles.length ? 'its poster is drawn once opened' : 'no pictures yet'}
+        {pictures ? 'its poster is drawn once opened here' : 'no pictures yet'}
       </div>
     );
   }
@@ -93,43 +101,64 @@ function MosaicCover({ doc }: { doc: MosaicDoc }) {
 function MosaicCard({
   doc,
   isOpen,
+  remoteOnly = false,
+  summary,
+  moveTargets = [],
   busy,
   onOpen,
   onRename,
   onExport,
   onDelete,
+  onMove,
 }: {
   doc: MosaicDoc;
   isOpen: boolean;
+  /** Kept on an instance and not yet on this device: opening it brings it here. */
+  remoteOnly?: boolean;
+  /** A card listed by its summary: the counts come from it, `doc` holds no picture. */
+  summary?: MosaicSummary;
+  /** Where else it may be kept: this device, or an instance that keeps mosaics. */
+  moveTargets?: readonly SourceInfo[];
   busy: string | null;
   onOpen: () => void;
   onRename: (title: string) => void;
   onExport: () => void;
   onDelete: () => void;
+  onMove?: (targetSourceId: string) => void;
 }) {
   const compact = useIsCompact();
-  const [confirming, setConfirming] = useState<'delete' | 'rename' | null>(null);
+  const [confirming, setConfirming] = useState<{ kind: 'delete' } | { kind: 'rename' } | { kind: 'move'; to: SourceInfo } | null>(null);
   const [draft, setDraft] = useState(doc.title);
 
   // The whole card opens the mosaic (the trip, project, roll and atlas cards' rule); the rest is behind the ⋯.
   const items: OverflowItem[] = [
-    { id: 'open', label: isOpen ? 'Resume' : 'Open', onSelect: onOpen },
-    {
-      id: 'rename',
-      label: 'Rename…',
-      onSelect: () => {
-        setDraft(doc.title);
-        setConfirming('rename');
-      },
-    },
-    {
-      id: 'export',
-      label: `Export ${MOSAIC_FILE_EXTENSION}`,
-      title: 'The mosaic on disk, its pictures’ colours included — a backup, and how it reaches another machine',
-      onSelect: onExport,
-    },
-    { id: 'delete', label: 'Delete…', danger: true, onSelect: () => setConfirming('delete') },
+    { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
+    ...(!remoteOnly
+      ? [
+          {
+            id: 'rename',
+            label: 'Rename…',
+            onSelect: () => {
+              setDraft(doc.title);
+              setConfirming({ kind: 'rename' });
+            },
+          },
+          {
+            id: 'export',
+            label: `Export ${MOSAIC_FILE_EXTENSION}`,
+            title: 'The mosaic on disk, its pictures’ colours included — a backup, and how it reaches another machine',
+            onSelect: onExport,
+          },
+          ...moveTargets.map((target) => ({
+            id: `move:${target.id}`,
+            label: target.id === DEFAULT_SOURCE_ID ? 'Keep on this device only…' : `Keep on ${sourceLabel(target.id)}…`,
+            onSelect: () => setConfirming({ kind: 'move', to: target }),
+          })),
+        ]
+      : []),
+    { id: 'delete', label: 'Delete…', danger: true, onSelect: () => setConfirming({ kind: 'delete' }) },
   ];
+  const pictures = summary?.pictures ?? doc.tiles.length;
 
   return (
     <div
@@ -151,10 +180,10 @@ function MosaicCard({
       }}
       className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
-      } ${busy !== null ? 'cursor-default' : ''}`}
+      } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >
       <div className="block w-full bg-frame leading-[0] rounded-t-paper-lg overflow-hidden">
-        <MosaicCover doc={doc} />
+        <MosaicCover doc={doc} pictures={pictures} />
       </div>
       <div className={`flex flex-col ${compact ? 'gap-1.5 p-2.5' : 'gap-[0.55rem] p-[0.9rem_1rem_1rem]'}`}>
         <div className="flex items-center gap-2 min-w-0">
@@ -167,10 +196,11 @@ function MosaicCard({
           {busy === null && <OverflowMenu label={`More actions for ${doc.title}`} items={items} className="-mr-1.5" />}
         </div>
         <p className={`m-0 font-mono tabular-nums text-muted flex flex-wrap items-center gap-x-2 ${compact ? 'text-3xs' : 'text-2xs'}`}>
-          <span className="text-ink-soft">{pictureCountLine(doc)}</span>
+          <span className="text-ink-soft">{pictureCountLine(doc, summary)}</span>
           <span className="text-faint">·</span>
           <span>{formatWhen(doc.updatedAt)}</span>
         </p>
+        {remoteOnly && <p className="m-0 font-mono text-2xs text-faint">on {sourceLabel(doc.sourceId)} · not yet on this device</p>}
         {busy && (
           <p className="m-0 font-mono text-2xs text-muted" role="status">
             {busy}
@@ -178,7 +208,7 @@ function MosaicCard({
         )}
       </div>
 
-      {confirming === 'delete' && (
+      {confirming?.kind === 'delete' && (
         <ConfirmDialog
           title={`Delete “${doc.title}”?`}
           confirmLabel="Delete"
@@ -189,10 +219,13 @@ function MosaicCard({
             onDelete();
           }}
         >
-          <p>Its list of pictures and its settings go with it. The colours and small tiles of pictures no other mosaic uses are forgotten by this device; your pictures stay on your Winnow.</p>
+          <p>
+            Its list of pictures and its settings go with it{doc.sourceId === DEFAULT_SOURCE_ID ? '' : `, here and on ${sourceLabel(doc.sourceId)}`}. The colours and small tiles of
+            pictures no other mosaic uses are forgotten by this device; your pictures stay on your Winnow.
+          </p>
         </ConfirmDialog>
       )}
-      {confirming === 'rename' && (
+      {confirming?.kind === 'rename' && (
         <ConfirmDialog
           title="Rename the mosaic"
           confirmLabel="Rename"
@@ -213,6 +246,25 @@ function MosaicCard({
             onChange={(e) => setDraft(e.target.value)}
             className="w-full h-10 px-3 rounded-control border border-line-strong bg-paper text-ink text-base focus:outline-none focus:border-accent"
           />
+        </ConfirmDialog>
+      )}
+      {confirming?.kind === 'move' && (
+        <ConfirmDialog
+          title={confirming.to.id === DEFAULT_SOURCE_ID ? `Keep “${doc.title}” on this device only?` : `Keep “${doc.title}” on ${sourceLabel(confirming.to.id)}?`}
+          confirmLabel="Move"
+          cancelLabel="Cancel"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const to = confirming.to.id;
+            setConfirming(null);
+            onMove?.(to);
+          }}
+        >
+          <p>
+            {confirming.to.id === DEFAULT_SOURCE_ID
+              ? 'It will be kept in this browser alone, and taken off the instance.'
+              : 'It will reopen from any device connected to that instance, its pictures’ colours included, so nothing is measured again; another device cuts its small tiles from your Winnow as it draws them.'}
+          </p>
         </ConfirmDialog>
       )}
     </div>
@@ -296,31 +348,37 @@ function StorageLine({
  * The Mosaic instrument's front door: mosaics as cards, newest first, over
  * the plumbing the Trips, Studio, Develop and atlas galleries share
  * (`use-document-gallery.ts`). The cover is the mosaic's poster; the whole
- * card opens it; the ⋯ renames, exports the mosaic file and deletes. Under
- * the cards, what the device keeps (the pictures' colours and tiles
- * included), whether the browser promised to keep it, and the backup file.
- * No instance keeps a mosaic yet (M8): every mosaic is on this device.
+ * card opens it; the ⋯ renames, exports the mosaic file, moves it between
+ * this device and an instance that keeps mosaics (M8), and deletes. Mosaics
+ * are grouped by where they are kept; one kept on an instance and not yet
+ * here is listed by its summary and fetched when opened. Under the cards,
+ * what the device keeps (the pictures' colours and tiles included), whether
+ * the browser promised to keep it, and the backup file.
  */
 export default function MosaicGallery({ openMosaicId, onOpen }: MosaicGalleryProps) {
   useSurface('darkroom');
   const [importing, setImporting] = useState(false);
   const [storage, setStorage] = useState<StorageState | null>(null);
   const [tiles, setTiles] = useState<{ count: number; bytes: number } | null>(null);
-  const gallery = useDocumentGallery<MosaicDoc, RemoteDocRow<MosaicDoc>>({
+  const gallery = useDocumentGallery<MosaicDoc, RemoteMosaicRow>({
     kind: MOSAIC_DOC_KIND,
     noun: 'mosaic',
     listLocal: listMosaics,
-    listRemote: async () => [],
+    listRemote: listRemoteMosaics,
     putDoc: putMosaic,
-    pushNew: () => Promise.reject(new Error('A mosaic is kept on this device only for now.')),
+    pushNew: (remote, doc) => pushMosaic(remote, doc, null),
     getRecord: getSyncRecord,
     deleteRecord: deleteSyncRecord,
-    deleteRemote: () => Promise.reject(new Error('A mosaic is kept on this device only for now.')),
+    deleteRemote: deleteRemoteMosaic,
     deleteLocal: deleteMosaic,
-    mirror: () => Promise.reject(new Error('A mosaic is kept on this device only for now.')),
-    move: async () => ({ ok: false, error: 'A mosaic is kept on this device only for now.' }),
+    mirror: mirrorMosaic,
+    fetchRemote: fetchRemoteMosaic,
+    move: moveMosaic,
   });
   const { docs: mosaics, documentSources, refresh, groups, absent, nothingAnywhere, allListed, busy, notice, setNotice, createOn } = gallery;
+
+  // Every mosaic listed, here and on the instances — the cards under the heading, not this device's alone.
+  const listedCount = groups.reduce((n, g) => n + g.items.length + g.remoteOnly.length, 0);
 
   const readStorage = useCallback(() => {
     void storageState().then(setStorage);
@@ -331,7 +389,7 @@ export default function MosaicGallery({ openMosaicId, onOpen }: MosaicGalleryPro
   const namesIn = useCallback(
     (sourceId: string): string[] => {
       const group = groups.find((g) => g.id === sourceId);
-      return group ? group.items.map((m) => m.title) : [];
+      return group ? [...group.items, ...group.remoteOnly.map((r) => r.doc)].map((m) => m.title) : [];
     },
     [groups],
   );
@@ -400,6 +458,11 @@ export default function MosaicGallery({ openMosaicId, onOpen }: MosaicGalleryPro
   handleImportRef.current = handleImport;
 
   async function handleRename(doc: MosaicDoc, title: string) {
+    // A mosaic kept on an instance is renamed in the editor, where its sync runs.
+    if (doc.sourceId !== DEFAULT_SOURCE_ID) {
+      onOpen(doc);
+      return;
+    }
     if (!(await putMosaic({ ...doc, title, updatedAt: Date.now() }))) setNotice('This browser refused to store the new title.');
     refresh();
   }
@@ -421,7 +484,7 @@ export default function MosaicGallery({ openMosaicId, onOpen }: MosaicGalleryPro
           <span className="font-serif text-2xl leading-none" aria-hidden="true">
             Mosaics
           </span>
-          {mosaics !== null && <span className="font-mono text-xs text-muted tabular-nums">{mosaics.length}</span>}
+          {mosaics !== null && <span className="font-mono text-xs text-muted tabular-nums">{listedCount}</span>}
           <span className="flex-1" />
           <Button onClick={startImport} icon={Icons.import} title={`Import mosaics from a ${MOSAIC_FILE_EXTENSION} file`}>
             Import
@@ -458,36 +521,61 @@ export default function MosaicGallery({ openMosaicId, onOpen }: MosaicGalleryPro
         >
           A mosaic rebuilds one picture out of hundreds of others from your Winnow, each cell a photo whose colours match — and plays
           them as the screen saver that zoomed from picture to picture. It keeps its list of pictures, their colours and its settings on
-          this device.
+          this device, or on your Winnow to reopen it from any other.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-6 pb-4">
-          {groups.map(({ id, items }) => {
+          {groups.map(({ id, items, list, remoteOnly }) => {
             const source = sourceById(id);
+            const count = items.length + remoteOnly.length;
+            const moveTargets = documentSources.filter((s) => s.id !== id);
             return (
               <section key={id} aria-label={`Mosaics on ${source?.label ?? id}`}>
                 <p className="m-0 mb-3 font-mono text-2xs tracking-[0.14em] uppercase text-muted">
                   {id === DEFAULT_SOURCE_ID ? 'on this device' : `on ${source?.label ?? id}`}
                   <span className="text-faint"> · </span>
                   <span className="tabular-nums">
-                    {items.length} mosaic{items.length === 1 ? '' : 's'}
+                    {count} mosaic{count === 1 ? '' : 's'}
                   </span>
+                  {!source && <span className="text-faint"> · not connected</span>}
+                  {list?.status === 'loading' && <span className="text-faint"> · checking…</span>}
+                  {list?.status === 'failed' && <span className="text-faint normal-case tracking-normal"> · {list.text}</span>}
                 </p>
-                <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5'}>
-                  {items.map((doc) => (
-                    <MosaicCard
-                      key={doc.id}
-                      doc={doc}
-                      isOpen={doc.id === openMosaicId}
-                      busy={busy[doc.id] ?? null}
-                      onOpen={() => onOpen(doc)}
-                      onRename={(title) => void handleRename(doc, title)}
-                      onExport={() => handleExport(doc)}
-                      onDelete={() => void gallery.remove(doc, null)}
-                    />
-                  ))}
-                  {id === DEFAULT_SOURCE_ID && <NewMosaicTile onCreate={() => void handleCreate()} onDropFile={(file) => void importFromFile(file, DEFAULT_SOURCE_ID)} />}
-                </div>
+                {count === 0 && id !== DEFAULT_SOURCE_ID ? (
+                  <p className="m-0 text-xs text-faint">Nothing kept here yet — a mosaic’s ⋯ keeps it here.</p>
+                ) : (
+                  <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5'}>
+                    {items.map((doc) => (
+                      <MosaicCard
+                        key={doc.id}
+                        doc={doc}
+                        isOpen={doc.id === openMosaicId}
+                        moveTargets={moveTargets}
+                        busy={busy[doc.id] ?? null}
+                        onOpen={() => onOpen(doc)}
+                        onRename={(title) => void handleRename(doc, title)}
+                        onExport={() => handleExport(doc)}
+                        onDelete={() => void gallery.remove(doc, null)}
+                        onMove={(target) => void gallery.moveTo(doc, target)}
+                      />
+                    ))}
+                    {id === DEFAULT_SOURCE_ID && <NewMosaicTile onCreate={() => void handleCreate()} onDropFile={(file) => void importFromFile(file, DEFAULT_SOURCE_ID)} />}
+                    {remoteOnly.map((row) => (
+                      <MosaicCard
+                        key={row.doc.id}
+                        doc={row.doc}
+                        isOpen={false}
+                        remoteOnly
+                        summary={row.summary}
+                        busy={busy[row.doc.id] ?? null}
+                        onOpen={() => void gallery.mirrorRemote(row).then((doc) => doc && onOpen(doc))}
+                        onRename={() => undefined}
+                        onExport={() => undefined}
+                        onDelete={() => void gallery.remove(row.doc, row.etag)}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
