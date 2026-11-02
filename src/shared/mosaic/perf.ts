@@ -48,6 +48,10 @@ export interface PerfPrefs {
   ahead: 1 | 2 | 3;
   /** Whether the stage's zoom writes the crop (`frame`) or only looks (`look`). */
   zoom: 'frame' | 'look';
+  /** A zoom's cells load the instance's thumbnail, then its proxy, as they grow past their tile (lab 4, L4). */
+  sharpZoom: boolean;
+  /** The veil of the target's colour fades as the stage zooms in, gone at ×3.5 (lab 4, L4). */
+  veilFade: boolean;
   /** Follow the system's reduced-motion, or force it on/off. */
   motion: 'system' | 'reduced' | 'full';
 }
@@ -63,6 +67,8 @@ export const DEFAULT_PERF: PerfPrefs = {
   tileCache: 2000,
   ahead: 1,
   zoom: 'frame',
+  sharpZoom: true,
+  veilFade: true,
   motion: 'system',
 };
 
@@ -84,6 +90,8 @@ export function sanitizePerf(raw: unknown): PerfPrefs {
     tileCache: oneOf(r.tileCache, [600, 2000, 4000] as const, DEFAULT_PERF.tileCache),
     ahead: oneOf(r.ahead, [1, 2, 3] as const, DEFAULT_PERF.ahead),
     zoom: oneOf(r.zoom, ['frame', 'look'] as const, DEFAULT_PERF.zoom),
+    sharpZoom: typeof r.sharpZoom === 'boolean' ? r.sharpZoom : DEFAULT_PERF.sharpZoom,
+    veilFade: typeof r.veilFade === 'boolean' ? r.veilFade : DEFAULT_PERF.veilFade,
     motion: oneOf(r.motion, ['system', 'reduced', 'full'] as const, DEFAULT_PERF.motion),
   };
 }

@@ -3217,6 +3217,13 @@ Either way a drag moves the view — with Auto-frame it slides the frame
 across the whole picture, the part outside the mosaic showing dimmed, and
 the mosaic is rebuilt where it stops — and a click on a cell, at any zoom,
 makes its picture the target; a cell under the pointer is outlined.
+With Auto-frame off, a close look shows the photographs themselves: the
+cells in view load your Winnow's thumbnail once they outgrow their small
+tile, then its proxy deeper in — only those in view, once each — and the
+veil of the target's colour fades as you zoom in, gone at ×3.5 (*Sharp
+photos on zoom* and *Veil fades on zoom*, both on by default, are this
+device's switches in the Target section; the mosaic and its exports keep
+their tint).
 
 **As it lands.** A big mosaic is matched in lots, each painted the moment
 its answer lands — from the cell you clicked outward by default, else row

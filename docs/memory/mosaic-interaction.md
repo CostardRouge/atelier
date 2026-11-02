@@ -74,3 +74,30 @@ left alone (Develop and Trips rely on it). Driven headless: Look — a zoom,
 a drag (target kept), a click while zoomed (target changed); Auto-frame — a
 zoom framed (scale 0.165), a drag slid the crop (cx 0.50 → 0.55, scale
 kept), a click picked another target (crop dropped).
+
+## A close look shows the photographs: sharp pictures, the veil fading (2026-11-02, L4)
+
+His ask («ajuster la netteté des photos qu'on voit … sans forcément faire
+le reframe») and his yes to both switches on by default. **Rules**: only
+under a zoom that LOOKS (Auto-frame off) — with Auto-frame the view lives
+for the gesture and the mosaic is rebuilt at ×1, so a fetch would be wasted
+and a fading veil would jump back. The level follows the cell's size in
+DEVICE pixels (`zoom-detail.ts`, pure): the 160 × 90 tile up to 150 px,
+the instance's thumbnail (~400 px) up to 420, the proxy past it (decoded
+≤ 1280 wide) — a bound by itself, the bigger the cells the fewer in view.
+`SharpPictures` fetches only the view's cells, the centre first, four at a
+time, a new view dropping what the old had not started, in two LRUs (220
+thumbs / 24 proxies; 60 / 6 constrained), a clip's thumbnail standing for
+its proxy; `paintZoomCells` draws each visible cell from the sharpest held,
+else its tile (`SceneBuilder.tileOf` → `TileBitmaps.peek`, no fetch), with
+`veilAt` (the tint at ×1, nothing from ×3.5); a cell with nothing held
+keeps the enlarged mosaic. The two switches are device prefs
+(`PerfPrefs.sharpZoom`, `.veilFade`) in Target under Auto-frame. **Trap**:
+a class built in `useMemo` and disposed in an effect's cleanup was DEAD
+after StrictMode's simulated remount (the same instance, cleaned once) —
+`SharpPictures.open()` returns its close and may be opened again. Driven
+headless: 7 thumbnails asked for while zooming to ×10 over 4 cells in view,
+none with the switch off, none with Auto-frame on; the veil changes the
+pixel. **Open**: the cell pass sits ~4 device px off the enlarged mosaic at
+×4.5 in the stub drive; the outline and the click follow the pass, so what
+is seen and clicked agree — cause not found.

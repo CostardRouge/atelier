@@ -45,7 +45,8 @@ import MosaicSettings, { SETTINGS_TABS, type SettingsTab } from './MosaicSetting
 import MosaicExportPanel from './MosaicExportPanel';
 import { useMosaicExport } from './use-mosaic-export';
 import { useMosaicEditorCommands, useMosaicStageCommands } from './use-mosaic-commands';
-import MosaicStage, { type Reveal, type StageView } from './MosaicStage';
+import MosaicStage, { type Reveal, type StageView, type ZoomDetail } from './MosaicStage';
+import { SharpPictures } from './sharp-pictures';
 import MosaicTransport from './MosaicTransport';
 import TargetChooser from './TargetChooser';
 import TargetFrame from './TargetFrame';
@@ -286,6 +287,18 @@ function MosaicWorkbench({
   // --- the zoom over the stage, whatever the mode while nothing plays: a crop with auto-frame, a look without (F6) ---
   // In every mode, not only Still: a stopped stage shows the target's mosaic, and a pinch the stage did not hear was
   // read by the browser, which zoomed the whole page instead.
+  // What a zoom's cells are drawn from (lab 4, L4): the instance's sharper pictures as they grow, the veil fading —
+  // under a zoom that LOOKS only: with Auto-frame the view lives for the gesture and the mosaic is rebuilt at ×1 on
+  // release, so a fetch would be wasted and a fading veil would jump back.
+  const sharpPictures = useMemo(() => (client ? new SharpPictures(client) : null), [client]);
+  useEffect(() => sharpPictures?.open(), [sharpPictures]);
+  const zoomDetail = useMemo<ZoomDetail | null>(
+    () =>
+      sharpPictures && perf.zoom === 'look'
+        ? { pictures: sharpPictures, sharp: perf.sharpZoom, fade: perf.veilFade, sharpOf: (id, level) => sharpPictures.get(id, level), tileOf: (id) => builder?.tileOf(id) ?? null }
+        : null,
+    [sharpPictures, perf.zoom, perf.sharpZoom, perf.veilFade, builder],
+  );
   const stageRef = useRef<HTMLDivElement>(null);
   const zoom = useStageZoom({
     ref: stageRef,
@@ -385,6 +398,7 @@ function MosaicWorkbench({
         canvasOut={canvasOut}
         swallowClick={zoom.justDragged}
         clickHost={stageRef}
+        detail={zoomDetail ?? undefined}
         pannable={zoom.pannable}
         onPick={(index, cell) => {
           if (state.status !== 'ready') return;
