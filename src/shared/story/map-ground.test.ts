@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { proj } from './geo';
-import { groundBoxes, MAP_GROUND_DEFAULTS, readMapGround, unproj } from './map-ground';
+import { groundBoxes, MAP_GROUND_DEFAULTS, readMapGround, seaBand, seaColour, unproj } from './map-ground';
 import { withLook } from './sources';
 import type { StoryScript } from './story-script';
 
@@ -41,3 +41,32 @@ describe('the map ground', () => {
     expect(back.look).toBeUndefined();
   });
 });
+
+describe('the sea beyond the tiles', () => {
+  /** A raster of `w` × `h` filled with one colour, with a few odd pixels and a transparent row. */
+  const raster = (w: number, h: number, rgb: [number, number, number]) => {
+    const d = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < w * h; i++) d.set([...rgb, 255], i * 4);
+    return d;
+  };
+
+  it('reads the open sea’s colour, a label or an island not tinting it', () => {
+    const d = raster(10, 4, [40, 60, 80]);
+    d.set([255, 255, 255, 255], 0); // a label's white
+    d.set([10, 10, 10, 255], 4 * 13); // an island's dark
+    expect(seaColour(d, 10, 0, 4)).toBe('rgb(40,60,80)');
+  });
+
+  it('skips what the fade made transparent, and says nothing with nothing opaque', () => {
+    const d = raster(4, 2, [1, 2, 3]);
+    for (let i = 0; i < 8; i++) d[i * 4 + 3] = 0;
+    expect(seaColour(d, 4, 0, 2)).toBeNull();
+  });
+
+  it('reads the band just above the wide raster’s fade', () => {
+    const [from, to] = seaBand(1000, 0.16);
+    expect(to).toBeCloseTo(840, 6);
+    expect(from).toBeCloseTo(780, 6);
+  });
+});
+

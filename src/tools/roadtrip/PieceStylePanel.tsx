@@ -20,12 +20,13 @@ const CASES: { id: NonNullable<BadgePieceStyle['textCase']>; label: string }[] =
 ];
 
 const PRESETS: { id: AnimPreset; label: string }[] = [
-  { id: 'none', label: 'None' },
+  { id: 'none', label: 'Cut — at once' },
   { id: 'fade', label: 'Fade' },
   { id: 'slide', label: 'Slide' },
   { id: 'scale', label: 'Scale' },
   { id: 'typewriter', label: 'Typewriter' },
   { id: 'wipe', label: 'Wipe' },
+  { id: 'flicker', label: 'Flicker' },
 ];
 
 /** Every curve of the shared registry (`shared/motion/easing.ts`), by its own name. */

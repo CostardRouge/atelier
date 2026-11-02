@@ -4,7 +4,10 @@ import { HOOK_DEFAULTS, hookSoundFor, type Hook, type HookEntry, type HookExit, 
 import { withPostHooks } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button, { buttonClass } from '../../shared/ui/Button';
-import { FieldRow, SelectField, SliderRow, TextAreaField, TextField, type SelectOption } from '../../shared/ui/Inspector';
+import { FieldRow, SelectField, SliderRow, SwitchRow, TextAreaField, TextField, type SelectOption } from '../../shared/ui/Inspector';
+import { hookBadgeOf, hookLayoutOf, withPostBadge } from '../../shared/story/hook-badge';
+import ShadesPanel from '../../shared/shades/ShadesPanel';
+import { AnchorGrid } from './HookBadgeSection';
 
 export type HookSoundKind = 'keys' | 'impact' | 'whoosh';
 /** The author's own files for the hook's sounds, held for the visit like the voice and the music. */
@@ -15,6 +18,8 @@ const ENTRIES: readonly SelectOption<HookEntry>[] = [
   { id: 'rise', label: 'Rises' },
   { id: 'word', label: 'Word by word' },
   { id: 'fade', label: 'Fades in' },
+  { id: 'wipe', label: 'Wiped in (badge)' },
+  { id: 'slam', label: 'Slammed in (badge)' },
 ];
 const EXITS: readonly SelectOption<HookExit>[] = [
   { id: 'fade', label: 'Fades out' },
@@ -39,6 +44,8 @@ const SOUNDS: readonly SelectOption<string>[] = [
 ];
 const SOUND_LABEL: Record<HookSoundKind, string> = { keys: 'Key sound', impact: 'Impact', whoosh: 'Exit sound' };
 const LETTERS = 'ABCDE';
+const PIECE_LABEL = { header: 'Header', place: 'Place', camera: 'Camera', why: 'Why now' } as const;
+const PIECE_HINT = { header: 'Le tri d’Australie · EP.04', place: '◆ Perth → Cairns', camera: 'Sony A7C II · DJI Mini 4 Pro', why: 'Il y a un an, jour pour jour' } as const;
 
 /**
  * The post's hook, edited where it plays (`hook.ts`): its words, how they
@@ -203,6 +210,29 @@ export default function HookPanel({
         </div>
       </details>
 
+      <details className="group">
+        <summary className="cursor-pointer text-xs text-muted select-none">This post’s badge pieces</summary>
+        <div className="flex flex-col gap-2 pt-2">
+          {(['header', 'place', 'camera', 'why'] as const).map((k) => (
+            <FieldRow key={k} label={PIECE_LABEL[k]}>
+              <TextField
+                label={`The badge's ${PIECE_LABEL[k].toLowerCase()}, this post`}
+                value={hook.pieces?.[k] ?? ''}
+                placeholder={PIECE_HINT[k]}
+                onChange={(v) => {
+                  const pieces = { ...(hook.pieces ?? {}), [k]: v || undefined };
+                  for (const key of Object.keys(pieces) as (keyof typeof pieces)[]) if (!pieces[key]) delete pieces[key];
+                  edit({ pieces: Object.keys(pieces).length ? pieces : undefined });
+                }}
+              />
+            </FieldRow>
+          ))}
+          <p className="m-0 text-2xs text-muted leading-snug">Empty, a piece says what the series knows: its name and this post’s number, the map’s first and last stop, how long ago the trip was.</p>
+        </div>
+      </details>
+
+      <PostBadgeRows script={script} hook={hook} edit={edit} />
+
       <FieldRow label="Said" align="start">
         <TextAreaField label="What you say over the hook" value={hook.spoken ?? ''} onChange={(spoken) => edit({ spoken: spoken || undefined })} placeholder="J'ai ramené cent mille photos d'Australie…" />
       </FieldRow>
@@ -212,3 +242,37 @@ export default function HookPanel({
     </div>
   );
 }
+
+/**
+ * This post's own place and shades for the badge, over the series' (hook lab
+ * 2): its picture is its own — a bright sky, a face on the left — so where the
+ * badge sits and what lifts it may be too. Off, the series' hold.
+ */
+function PostBadgeRows({ script, hook, edit }: { script: StoryScript; hook: Hook; edit: (patch: Partial<Hook>) => void }) {
+  const series = hookBadgeOf(script.look?.hook);
+  if (series.mode !== 'badge') return null;
+  const own = hook.badge ?? {};
+  const setOwn = (patch: Partial<NonNullable<Hook['badge']>>) => {
+    const next: NonNullable<Hook['badge']> = { ...own, ...patch };
+    for (const k of Object.keys(next) as (keyof typeof next)[]) if (next[k] === undefined) delete next[k];
+    edit({ badge: Object.keys(next).length ? next : undefined });
+  };
+  const place = hookLayoutOf(hookBadgeOf(withPostBadge(script.look?.hook, hook)));
+  return (
+    <details className="group" open={Boolean(hook.badge)}>
+      <summary className="cursor-pointer text-xs text-muted select-none">This post’s badge place and shades</summary>
+      <div className="flex flex-col gap-2 pt-2">
+        <SwitchRow
+          label="Its own place"
+          checked={Boolean(own.anchor)}
+          onChange={(on) => setOwn(on ? { anchor: hookLayoutOf(series).anchor } : { anchor: undefined, x: undefined, y: undefined })}
+        />
+        {own.anchor ? <AnchorGrid value={place.anchor} onChange={(anchor) => setOwn({ anchor, x: undefined, y: undefined })} /> : null}
+        <SwitchRow label="Its own shades" checked={Boolean(own.shades)} onChange={(on) => setOwn({ shades: on ? [...(series.shades ?? [])] : undefined })} />
+        {own.shades ? <ShadesPanel shades={[...own.shades]} onChange={(shades) => setOwn({ shades })} followBadge anchor={place.anchor} /> : null}
+        <p className="m-0 text-2xs text-muted leading-snug">Off, the series’ place and shades (Badge · the series). The badge moved on the stage for this post alone: set the Studio to This post.</p>
+      </div>
+    </details>
+  );
+}
+

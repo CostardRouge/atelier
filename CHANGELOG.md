@@ -85,6 +85,60 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   show. Set it under Charte & look › Maps or from the chip on the stage while a map is shown. The tiles are fetched only
   once this device says yes, and their credit appears on the map's frames alone, as an object you can move, size and
   set in another face.
+- Storytelling: over OpenStreetMap, a map seen whole no longer shows a band at the foot of the frame — the sea carries
+  on to the edge, in every tone.
+- Storytelling: in the Studio a click selects the object whose letters are nearest, not the biggest one around — the
+  badge's header, second line and place can be picked beside its glowing big text — and the selection's outline hugs
+  the letters rather than their glow.
+- Storytelling: the Studio's list folds — the series, the post, each scene and the hook's pieces — and keeps what you
+  folded on this device; the scene under the playhead and the selected object's group open themselves.
+- Storytelling: in the Studio's inspector, Turn is now called Rotation, and an object's text settings come before
+  where it sits.
+- Storytelling: an object's inspector opens on what it says — type the hook's big text and second line, a scene's
+  caption or the camera right there; for a text the series computes (the badge's header, place and why now) it shows
+  where it comes from and takes this post's own words over it; the HUD and the header take this post's own number;
+  the map's credit says the licence fixes it.
+- Storytelling: the hook's settings — its words, variants, badge, motion and sounds — open when you select the Hook
+  itself, in the list or from any of its pieces, above where it sits; the Hook row under This post leads there too.
+- Storytelling: choose what the map says at each point, on two lines — the place, the town it is in or near, the
+  state or its code, the country, the stage, the day of the trip, the date or the kilometres so far — with a place
+  written as in Trips (« Perth, WA »), which points carry their name (all, those passed, the current one, the first
+  and last, none), and a line said once. Ready-made settings cover the usual ones; a stop of your own list can be
+  renamed by hand. A new series says the town and its state's code.
+- Storytelling: the maps follow the road as Trips drives it — smoothed into a ribbon by default — instead of the
+  recorded points joined corner to corner, so a camera close on the route no longer jerks at every point. The trip's
+  road settings (which points, the detail, how the line is driven) can be tuned under Sources › The map, and they are
+  the trip's own: Trips' openers and the story maps change together.
+- Storytelling: the map's camera can follow the route like Trips' openers do — Calm, Navigation (the map turning so
+  the road runs up the frame) or Documentary, or your own view width, smoothing, look-ahead and wide shots — under
+  Charte & look › Map camera. The posts already made keep their camera until you choose one.
+- Storytelling: draw a map's route by the distance or by the days lived (a week in one town takes its share), pause
+  it at each stop, and mark its tip with a dot or an arrow along the road — under Charte & look › Map camera.
+- Storytelling: a post's hook is drawn as Trips' badge — a header (the series and the post's number), your big text
+  typed or wiped in, your second line popping on its beat, then the place, why now (« il y a un an ») and the camera —
+  in Trips' title styles (Or ciné by default, Pixel CRT, Rouge plein cadre, Neutral) or the series' charte, stacked,
+  centred, split top and bottom or on a band. Each piece is an object of the Studio, a post can write its own, and the
+  typed lines with a sticker remain one choice away.
+- Storytelling: the hook's big text and second line break at words inside a column you set, and the pieces under them
+  make room — a long sentence no longer runs off the frame; past three lines it shrinks (or keep it on one line with
+  Shrink to fit). The Numeral sets the whole badge's size, from 4 % to 30 % of the frame's width.
+- Storytelling: place the hook's badge on Trips' 3×3 anchor grid; Stack, Centre, Top and bottom and Band remain as
+  starting places.
+- Storytelling: in the Studio the hook's badge moves and grows as one block — drag any of its pieces, or set its Size,
+  and the whole badge follows; a piece's Text size is its share of the stack, the pieces under it making room instead
+  of being covered. A piece's font, colour, case and spacing now reach the badge too.
+- Storytelling: shades under the hook's badge, Trips' own — up to four, each a direction, a reach, a strength and a
+  colour; one that follows the badge lands on its edge or sits in its cell of the grid and moves with it.
+- Storytelling: the hook's pieces arrive in a cascade, Trips' own — one entrance for all, a beat apart, in the order
+  you choose (top to bottom, big first, random…) and the curve you choose; on by default, rising top to bottom. Your
+  typed lines keep their own entry and key clicks unless you say otherwise.
+- A new entrance, Flicker: a piece blinks on and off, then stays — shown or not, never half. With Cut (shown at once)
+  it makes a raw « tac tac tac » sequence. Offered in Trips' badge pieces and cascade, the Studio's elements and
+  Storytelling's hook.
+- Storytelling: a post can keep its own place and shades for the hook's badge, over the series' — its picture is its
+  own — under Hook › This post's badge place and shades.
+- A title style can be exported as a `.badge.json` file and imported back — in Trips' Look tab, the Studio, Flight
+  Atlas and Storytelling alike — and Storytelling can take a trip's own badge style.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the
   HUD, the hook, the scenes' parts), the stage, and an inspector to set the selected object: shown or hidden, its place,
   size, turn and opacity, its font, weight, size, spacing, colour, case and outline, a shadow and a delay — for every

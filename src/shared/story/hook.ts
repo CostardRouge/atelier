@@ -12,8 +12,11 @@ import { isVoice } from '../audio/voices';
 import type { SoundEvent } from '../audio/sound-event';
 import { clamp, E, font, PAL, rr, text, TYPO, type Ctx } from './motion';
 import { obj } from './objects';
+import type { Anchor } from '../overlay/overlay-types';
+import type { Shade } from '../shades/shades';
 
-export type HookEntry = 'type' | 'rise' | 'word' | 'fade';
+/** How the first line arrives: typed, risen, word by word, faded — and, as a badge's big text, wiped or slammed. */
+export type HookEntry = 'type' | 'rise' | 'word' | 'fade' | 'wipe' | 'slam';
 export type HookExit = 'fade' | 'erase' | 'fly' | 'cut';
 export type HookPlace = 'top' | 'center' | 'bottom';
 export type HookInk = 'paper' | 'ink' | 'accent';
@@ -41,6 +44,14 @@ export interface Hook {
   ink?: HookInk;
   /** Darkens the picture behind the words, 0–1. */
   scrim?: number;
+  /** The badge's pieces as this post writes them, over the series' (`hook-badge.ts`): its header, place, camera, why now. */
+  pieces?: { header?: string; place?: string; camera?: string; why?: string };
+  /**
+   * This post's own place and shades for the badge, over the series'
+   * (`hook-badge.ts`, `withPostBadge`): its picture is its own, so where the
+   * badge sits and what lifts it may be too. A field absent keeps the series'.
+   */
+  badge?: { anchor?: Anchor; x?: number; y?: number; shades?: Shade[] };
   /** The key clicks, the sticker's impact, the exit's whoosh: a voice name, `file`, or `none`. */
   sounds?: { keys?: HookSound; impact?: HookSound; whoosh?: HookSound };
 }

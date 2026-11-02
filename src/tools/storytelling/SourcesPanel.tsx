@@ -11,7 +11,10 @@ import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import WallPicker from './WallPicker';
 import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
-import { stageLabel, tripFacts, type MapLabel } from '../../shared/story/trip-map';
+import { stageLabel, tripFacts } from '../../shared/story/trip-map';
+import MapNamesSection from './MapNamesSection';
+import MapRoadSection from './MapRoadSection';
+import { useTripVersion } from './trip-changes';
 import MapStopsSection from './MapStopsSection';
 import { wallCells } from '../../shared/story/wall-grid';
 import type { WallProgress } from './wall-cache';
@@ -55,6 +58,8 @@ export default function SourcesPanel({
   const [pickingWall, setPickingWall] = useState(false);
   const [correctingWall, setCorrectingWall] = useState(false);
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
+  // A trip written back from here (its road) is read again.
+  const tripVersion = useTripVersion();
   useEffect(() => {
     let alive = true;
     void import('../../shared/roadtrip/trip-store')
@@ -68,7 +73,7 @@ export default function SourcesPanel({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [tripVersion]);
 
   if (!script) return <p className="m-0 text-xs text-muted leading-relaxed">Load your script first: the sources are kept in it.</p>;
 
@@ -309,20 +314,8 @@ export default function SourcesPanel({
         <div className="flex flex-col gap-1.5">
           <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">The map</p>
           {trip ? <MapStopsSection trip={trip} script={script} onScript={onScript} lang={script.lang} /> : null}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-ink-soft w-16">Says</span>
-            <SelectField<MapLabel>
-              label="What each named point says"
-              value={sources.map?.label ?? 'place'}
-              options={[
-                { id: 'place', label: 'The place' },
-                { id: 'stage', label: 'The stage' },
-                { id: 'place-date', label: 'The place and its day' },
-                { id: 'none', label: 'Nothing — a dot' },
-              ]}
-              onChange={(label) => onScript(withSeriesSources(script, { map: { ...sources.map, label } }))}
-            />
-          </div>
+          {trip ? <MapRoadSection trip={trip} /> : null}
+          <MapNamesSection script={script} onScript={onScript} postId={postId} />
         </div>
       ) : null}
       <div className="flex items-center gap-2 flex-wrap">

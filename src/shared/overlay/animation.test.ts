@@ -172,3 +172,29 @@ describe('phasesFor', () => {
     expect(phasesFor({ start: 0, end: null }, { out: fadeOut }).outStart).toBe(Infinity);
   });
 });
+
+describe('flicker', () => {
+  const anim = { in: { preset: 'flicker' as const, duration: 0.7, easing: 'linear' as const }, out: { preset: 'flicker' as const, duration: 0.7, easing: 'linear' as const } };
+  const win = { start: 0, end: 3 };
+
+  it('is shown or not, never half, blinking before it stays', () => {
+    const seen: number[] = [];
+    for (let t = 0; t < 0.7; t += 0.05) seen.push(transformAt(anim, win, t).alpha);
+    expect(seen.every((a) => a === 0 || a === 1)).toBe(true);
+    // Off, on, off, on… — at least three times on before it rests.
+    const ons = seen.filter((a, i) => a === 1 && seen[i - 1] !== 1).length;
+    expect(ons).toBeGreaterThanOrEqual(3);
+    expect(transformAt(anim, win, 0.75).alpha).toBe(1);
+    expect(transformAt(anim, win, 0.01).alpha).toBe(0);
+  });
+
+  it('blinks out the same way and leaves nothing behind', () => {
+    expect(transformAt(anim, win, 2.29).alpha).toBe(1);
+    const seen: number[] = [];
+    for (let t = 2.3; t < 3; t += 0.05) seen.push(transformAt(anim, win, t).alpha);
+    expect(seen.every((a) => a === 0 || a === 1)).toBe(true);
+    expect(seen.filter((a) => a === 1).length).toBeGreaterThan(0);
+    expect(transformAt(anim, win, 2.999).alpha).toBe(0);
+    expect(transformAt(anim, win, 3).alpha).toBe(0);
+  });
+});

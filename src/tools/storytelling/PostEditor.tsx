@@ -9,10 +9,11 @@ import { downloadBlob } from '../../shared/media/save';
 import { H, W } from '../../shared/story/charte';
 import { drawEpisode } from '../../shared/story/compose';
 import { geometryKey } from '../../shared/story/objects';
+import { mapNamesOf } from '../../shared/story/map-names';
 import { hookScore, hookSoundFor, hookSounds } from '../../shared/story/hook';
 import HookPanel, { type HookFiles } from './HookPanel';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
-import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
+import { activeHook, assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
@@ -25,6 +26,8 @@ import { factsOf, sourcesOf } from '../../shared/story/sources';
 import { useWall } from './use-wall';
 import { useMapGround } from './use-map-ground';
 import MapGroundControls, { MapGroundChip } from './MapGroundControls';
+import MapCameraSection from './MapCameraSection';
+import HookBadgeSection from './HookBadgeSection';
 import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -57,6 +60,9 @@ import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import ObjectContent from './ObjectContent';
+import { objectContent } from '../../shared/story/object-content';
+import { hookSeriesOf } from '../../shared/story/scenes/HookBadge';
 import StudioTree, { PANEL_LABEL, type StudioPanel, type StudioSelection } from './StudioTree';
 import StudioTimeline from './StudioTimeline';
 import { styleIn, withSceneTiming, withStyle, type StyleScope } from '../../shared/story/studio-edit';
@@ -188,12 +194,13 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const mapOpts = useMemo<ComposeOptions>(
     () => ({
       ...(tripMap.state === 'ready' && tripMap.map
-        ? { stops: tripMap.map.stops, road: tripMap.map.road }
+        ? { stops: tripMap.map.stops, road: tripMap.map.road, times: tripMap.map.times }
         : { stops: script?.stops }),
       wall: wall.images,
       ground: groundLayers,
+      named: mapNamesOf(sources.map).which,
     }),
-    [tripMap, script, wall.images, groundLayers],
+    [tripMap, script, wall.images, groundLayers, sources.map],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
@@ -245,8 +252,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   // picture in sight (Develop's rule: what is judged on the picture never goes under a wash).
   const compact = useIsCompact();
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  // The hook's settings live in the Hook OBJECT (Studio lab, O4): asking for the Hook panel — its row under
+  // This post, a piece's « All the hook's settings » — selects that object while the post draws one.
+  const hookTrack = useRef<ObjectTrack | null>(null);
   const select = useCallback((s: StudioSelection) => {
-    setSelected(s);
+    const hook = hookTrack.current;
+    setSelected(s.kind === 'panel' && s.id === 'hook' && hook ? { kind: 'object', id: hook.id, key: hook.key, slot: hook.slot } : s);
     setPane('settings');
   }, []);
   // The editor's own width decides its columns (`frontend.md`: a tool splits on its container, never the viewport).
@@ -263,6 +274,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   });
   const scenes = useMemo(() => sceneSpans(shown), [shown]);
   const [tracks, setTracks] = useState<ObjectTrack[]>([]);
+  hookTrack.current = tracks.find((t) => t.key === 'hook' && t.slot === '') ?? null;
   useEffect(() => {
     // Run the post on a context that draws nothing (`studio.ts`), once the edits settle.
     const id = window.setTimeout(() => setTracks(objectTracks(shown, { stops: mapOpts.stops, road: mapOpts.road })), 120);
@@ -625,6 +637,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               <MapGroundControls script={script} onScript={onScript} state={mapGround.ground} />
             </InspectorSection>
           ) : null}
+          {script ? (
+            <InspectorSection id="story-map-camera" title="Map camera" foldable={false} info="How the camera follows the route on the series' maps: as in the posts already made, or the camera of Trips' openers — calm, navigation or documentary, then your own width, smoothing and look-ahead. Then how the route is drawn: by distance or by the days lived, a pause at each stop, a head at its tip.">
+              <MapCameraSection script={script} onScript={onScript} />
+            </InspectorSection>
+          ) : null}
           </>
         );
       case 'script':
@@ -641,6 +658,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         );
       case 'hook':
         return (
+          <>
           <InspectorSection id="story-hook" title="Hook" foldable={false} info="The first seconds: your words over the post's first picture, in place of its title — typed letter by letter, rising or word by word, a line landing as a sticker, each with its sound. Keep variants to test them; the one selected plays and exports.">
             <HookPanel
               postId={postId}
@@ -652,6 +670,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               onUnreadable={(name) => setSoundError(`This browser cannot read “${name}”. A WAV, MP3 or M4A file usually works.`)}
             />
           </InspectorSection>
+          {script ? (
+            <InspectorSection id="story-hook-badge" title="Badge · the series" foldable={false} info="How every post's hook is drawn: as Trips' badge — its title styles, where it sits, its size and pieces, a style file the three tools share — or as before, typed with a sticker.">
+              <HookBadgeSection script={script} onScript={onScript} />
+            </InspectorSection>
+          ) : null}
+          </>
         );
       case 'sound':
         return (
@@ -846,10 +870,29 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     const scene = scenes.find((s) => s.key === sel.slot && s.block === sel.key);
     const block = scene && scene.index !== null ? episode.blocks[scene.index] : null;
     const words = scene && scene.index !== null ? script?.posts[postId]?.blocks?.[scene.index] : undefined;
+    // What the object says and where its words come from (`object-content.ts`), first in its inspector.
+    const post = script?.posts[postId];
+    const hookIndex = Math.min((post?.hooks?.length ?? 1) - 1, Math.max(0, post?.hookActive ?? 0));
+    const sceneOf = scenes.find((s) => s.key === sel.slot);
+    const said = script
+      ? objectContent(sel.key, {
+          script,
+          postId,
+          hook: activeHook(post),
+          hookIndex,
+          series: hookSeriesOf(episode),
+          sceneIndex: sceneOf?.index ?? null,
+          number: skeleton.number,
+        })
+      : null;
+    // The Hook object: its words, variants, badge, motion and sounds first, then its place (O4).
+    const hookFirst = sel.key === 'hook' && sel.slot === '' ? panelOf('hook') : null;
     return (
+      <>
+      {hookFirst}
       <InspectorSection
         id="story-object"
-        title={objectLabel(sel.key)}
+        title={hookFirst ? 'Hook · place' : objectLabel(sel.key)}
         foldable={false}
         info="Click an object on the stage, in the list or on the timeline; arrows nudge it (⇧ ten pixels), Escape lets it go. Its settings are kept in your script — for every post of the series, or this post alone."
       >
@@ -863,6 +906,16 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           text={track?.text ?? false}
           sample={track?.sample}
           onPreview={setDraft}
+          content={
+            said && script ? (
+              <ObjectContent
+                content={said}
+                script={script}
+                onScript={onScript}
+                onLink={(to) => select({ kind: 'panel', id: to })}
+              />
+            ) : undefined
+          }
           scene={
             scene && scene.index !== null && block
               ? { index: scene.index, len: block.len, cap: block.cap ? { a: block.cap.a, b: block.cap.b } : null, set: { len: words?.len, cap: words?.cap } }
@@ -870,10 +923,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           }
         />
       </InspectorSection>
+      </>
     );
   };
 
-  const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} />;
+  const listPane = <StudioTree scenes={scenes} tracks={tracks} selected={selected} onSelect={select} onSeek={seek} clock={clock} />;
   const settingsRef = useRef<HTMLDivElement>(null);
   const settingsPane = (
     <div ref={settingsRef}>

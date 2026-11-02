@@ -10,10 +10,10 @@ import {
   roadDriveOf,
   roadSourceText,
   type RoadDrive,
-  type RoadDriveStyle,
   type RoadMode,
   type TripRoad,
 } from '../../shared/roadtrip/road-track';
+import { ROAD_DRIVE_LABEL, ROAD_MODE_LABEL, roadMetres } from '../../shared/roadtrip/road-words';
 import { COUNTED_MODES, previewAsk, type CountedMode, type RoadPreview } from '../../shared/roadtrip/road-preview';
 import { roadFixes, roadGaps } from '../../shared/roadtrip/road-points';
 import { addGpxToRoad } from '../../shared/roadtrip/gpx';
@@ -45,21 +45,11 @@ export const ROAD_ABOUT = (
   </>
 );
 
-const MODE_LABEL: Record<RoadMode, string> = {
-  crow: 'Crow flies',
-  stages: 'Between stays',
-  moves: 'Every move',
-  raw: 'Raw',
-};
-
-const DRIVE_LABEL: Record<RoadDriveStyle, { name: string; says: string }> = {
-  fixes: { name: 'Point to point', says: 'every fix' },
-  driver: { name: 'Driver', says: 'aims ahead' },
-  ribbon: { name: 'Ribbon', says: 'smooth, on the road' },
-};
+const MODE_LABEL = ROAD_MODE_LABEL;
+const DRIVE_LABEL = ROAD_DRIVE_LABEL;
 
 const km = (n: number) => `${Math.round(n).toLocaleString('en-GB')} km`;
-const metres = (m: number) => (m >= 1000 ? `${m / 1000} km` : `${m} m`);
+const metres = roadMetres;
 const detailText = (m: number) => (m === 0 ? 'every point' : metres(m));
 const dayOf = (seconds: number) => formatIsoDate(new Date(seconds * 1000).toISOString().slice(0, 10));
 

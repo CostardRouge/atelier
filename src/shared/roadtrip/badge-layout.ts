@@ -17,7 +17,7 @@
  * Pure and DOM-free.
  */
 
-import type { AnimDirection, AnimPreset, AnimStep, ElementAnimation } from '../overlay/animation';
+import { ANIM_PRESETS, type AnimDirection, type AnimPreset, type AnimStep, type ElementAnimation } from '../overlay/animation';
 import { isEasingId } from '../motion/easing';
 import { snap } from '../overlay/guides';
 import { normaliseStagger, staggerDelays, type Stagger } from '../overlay/stagger';
@@ -103,7 +103,7 @@ export interface BadgeCascade {
   stagger: Stagger;
 }
 
-const PRESETS: readonly AnimPreset[] = ['none', 'fade', 'slide', 'scale', 'typewriter', 'wipe'];
+const PRESETS: readonly AnimPreset[] = ANIM_PRESETS;
 const DIRECTIONS: readonly AnimDirection[] = ['up', 'down', 'left', 'right'];
 
 function finite(v: unknown): number | undefined {
@@ -163,6 +163,9 @@ const RATIOS = {
   // with the place for the eye, which is the one thing the badge must not do.
   exif: 0.12,
 } as const;
+
+/** The ratios, for a surface that sets a piece before the layout does (Storytelling's column). */
+export const BADGE_RATIOS: Readonly<Record<BadgePiece, number>> = RATIOS;
 
 /** Space under each piece, again as a multiple of the headline's size. */
 const GAP_AFTER = {
@@ -323,13 +326,38 @@ function plateFor(
   return { runs, unit, inBlock: runs.place === 'badge' };
 }
 
+/**
+ * Each piece's size as a share of the stack, over its ratio — 1 where absent.
+ * A piece set larger grows INSIDE the block: the pieces under it move down
+ * and its gap grows with it, never over its neighbours (Storytelling's hook,
+ * whose pieces are sized one by one in its Studio). Trips sets none.
+ */
+export type BadgePieceScales = Partial<Record<BadgePiece, number>>;
+
+/**
+ * The space between two lines of one piece, as a share of its size. A piece
+ * holds several lines only when its text does (`\n`): Trips' numeral never
+ * does; Storytelling's hook breaks a sentence in a column (`hook-badge.ts`).
+ */
+export const LINE_LEADING = 0.12;
+
+/** A piece's text as the lines it is drawn in. */
+const linesOf = (text: string): string[] => text.split('\n').map((l) => l.trim()).filter(Boolean);
+
+/** A piece's size: the numeral's times its ratio times its own share. */
+function pieceSize(layout: BadgeLayout, key: BadgePiece, scales: BadgePieceScales): number {
+  const s = scales[key];
+  return layout.sizeFrac * RATIOS[key] * (typeof s === 'number' && Number.isFinite(s) && s > 0 ? s : 1);
+}
+
 /** The block's own metrics, shared by the layout and by anything drawn under it. */
 function blockMetrics(
   content: BadgeContent,
   layout: BadgeLayout,
   aspect: number,
+  scales: BadgePieceScales = {},
 ): {
-  pieces: { key: BadgePiece; text: string }[];
+  pieces: { key: BadgePiece; text: string; lines: string[] }[];
   heights: number[];
   gaps: number[];
   top: number;
@@ -337,20 +365,21 @@ function blockMetrics(
   plate: ReturnType<typeof plateFor>;
 } {
   const plate = plateFor(content, layout, aspect);
-  const pieces = ORDER.map((key) => ({ key, text: content[key] }))
-    .filter((p): p is { key: BadgePiece; text: string } => Boolean(p.text))
+  const pieces = ORDER.map((key) => ({ key, text: content[key], lines: linesOf(content[key] ?? '') }))
+    .filter((p): p is { key: BadgePiece; text: string; lines: string[] } => Boolean(p.text) && p.lines.length > 0)
     // A plate placed in a cell of its own is no part of the block.
     .filter((p) => p.key !== 'exif' || !plate || plate.inBlock);
-  const heights = pieces.map((p) =>
-    p.key === 'exif' && plate
-      ? heightFraction(plate.runs.height * plate.unit, aspect)
-      : heightFractionOf(layout.sizeFrac * RATIOS[p.key], aspect),
-  );
-  const gaps = pieces.map((p, i) =>
-    i === pieces.length - 1
-      ? 0
-      : heightFractionOf(layout.sizeFrac * GAP_AFTER[p.key], aspect),
-  );
+  const heights = pieces.map((p) => {
+    if (p.key === 'exif' && plate) return heightFraction(plate.runs.height * plate.unit, aspect);
+    const line = heightFractionOf(pieceSize(layout, p.key, scales), aspect);
+    return line * p.lines.length + line * LINE_LEADING * (p.lines.length - 1);
+  });
+  const gaps = pieces.map((p, i) => {
+    if (i === pieces.length - 1) return 0;
+    // A piece grown past its ratio takes a gap grown as much; one shrunk keeps the gap it had.
+    const s = Math.max(1, (scales[p.key] ?? 1) || 1);
+    return heightFractionOf(layout.sizeFrac * GAP_AFTER[p.key] * s, aspect);
+  });
   const height = heights.reduce((a, b) => a + b, 0) + gaps.reduce((a, b) => a + b, 0);
   const vertical = verticalOf(layout.anchor);
   const top =
@@ -373,8 +402,9 @@ export function badgeBlockExtent(
   content: BadgeContent,
   layout: BadgeLayout,
   aspect: number,
+  scales: BadgePieceScales = {},
 ): { top: number; bottom: number; anchor: Anchor } | null {
-  const { pieces, top, height } = blockMetrics(content, layout, aspect);
+  const { pieces, top, height } = blockMetrics(content, layout, aspect, scales);
   if (!pieces.length) return null;
   // The anchor rides along so a shade can take its place from the badge's
   // cell (`Shade.followAnchor`) with no second argument threaded everywhere.
@@ -396,8 +426,9 @@ export function badgeElements(
   /** Where the exits land — `badgeExitAt`; null for a badge that stays to the cut. */
   durationSeconds: number | null = DEFAULT_BADGE_DURATION,
   cascade: BadgeCascade | null = null,
+  scales: BadgePieceScales = {},
 ): OverlayElement[] {
-  const { pieces, heights, gaps, top, plate } = blockMetrics(content, layout, aspect);
+  const { pieces, heights, gaps, top, plate } = blockMetrics(content, layout, aspect, scales);
   if (!pieces.length) return [];
 
   const horizontal = horizontalOf(layout.anchor);
@@ -441,19 +472,26 @@ export function badgeElements(
     cursor += heights[i] + gaps[i];
     if (piece.key === 'exif' && plate) return plateAt({ x: layout.x, top: at }, delay);
     const style = styleAt(piece.key, delay);
-    const el = createTextElement(casedText(piece.text, style));
-    el.id = pieceElementId(piece.key);
-    el.anchor = lineAnchor;
-    el.x = layout.x;
-    el.y = at;
-    el.sizeFrac = layout.sizeFrac * RATIOS[piece.key];
-    // A counting headline is an odometer: fixed digit cells rolling with the
-    // value behind the text (`overlay/odometer.ts`).
-    if (piece.key === 'headline' && typeof content.headlineValue === 'number' && Number.isFinite(content.headlineValue)) {
-      el.odometer = content.headlineValue;
-    }
-    applyPieceStyle(el, style, durationSeconds);
-    return [el];
+    const size = pieceSize(layout, piece.key, scales);
+    const line = heightFractionOf(size, aspect) * (1 + LINE_LEADING);
+    // One element a line, each named after its piece (`piece:headline`, then
+    // `piece:headline:1`…) as a camera plate's runs are, so a hit on any line
+    // is a hit on the piece.
+    return piece.lines.map((text, j) => {
+      const el = createTextElement(casedText(text, style));
+      el.id = j === 0 ? pieceElementId(piece.key) : `${pieceElementId(piece.key)}:${j}`;
+      el.anchor = lineAnchor;
+      el.x = layout.x;
+      el.y = at + j * line;
+      el.sizeFrac = size;
+      // A counting headline is an odometer: fixed digit cells rolling with the
+      // value behind the text (`overlay/odometer.ts`).
+      if (piece.key === 'headline' && piece.lines.length === 1 && typeof content.headlineValue === 'number' && Number.isFinite(content.headlineValue)) {
+        el.odometer = content.headlineValue;
+      }
+      applyPieceStyle(el, style, durationSeconds);
+      return el;
+    });
   });
 
   // A plate in a cell of its own comes after the block, and arrives after it.

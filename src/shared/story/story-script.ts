@@ -10,6 +10,10 @@
  * be judged and nothing personal ships with the code. (pure)
  */
 import { readMapGround } from './map-ground';
+import { readStoryCamera } from './story-camera';
+import { readRoutePace } from './route-pace';
+import { readHookBadge, readPostBadge } from './hook-badge';
+import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
 import type { Stop } from './geo';
 import type { Episode, StoryLook } from './episode';
@@ -48,6 +52,8 @@ export interface ScriptBlock {
 
 export interface ScriptPost {
   title?: string;
+  /** This post's own number (the HUD's, the badge's header, the next post's card), over the skeleton's `EP.04`. */
+  number?: string;
   cover?: string;
   blocks?: ScriptBlock[];
   /** This post's own sources, over the series' (`sources.ts`). */
@@ -90,7 +96,10 @@ export interface ScriptSources {
    */
   map?: {
     points?: 'ends' | 'starts' | 'places';
+    /** What each point said before the two lines (`names`): read as the matching preset when `names` is absent. */
     label?: 'place' | 'stage' | 'place-date' | 'none';
+    /** What each point says: two lines of fields, a place's writing, which points (`map-names.ts`). */
+    names?: MapNames;
     /**
      * The author's own stops, in the order the map visits them — present, they
      * ARE the map's points (`points` then only says what they were taken from,
@@ -171,8 +180,10 @@ export interface MapStopRef {
   name: string;
   lat: number;
   lon: number;
-  /** Its day (ISO), when it came from the trip — said by « The place and its day ». */
+  /** Its day (ISO), when it came from the trip — said by the day and date fields. */
   day?: string;
+  /** A name typed by hand for it: the map says this, whatever the fields (`map-names.ts`). */
+  own?: string;
 }
 
 /** The most stops a series keeps on its map. */
@@ -239,11 +250,13 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 function isStop(v: unknown): v is Stop {
   return (
     Array.isArray(v) &&
-    v.length === 4 &&
+    v.length >= 4 &&
+    v.length <= 6 &&
     typeof v[0] === 'string' &&
     Number.isFinite(v[1]) &&
     Number.isFinite(v[2]) &&
-    typeof v[3] === 'string'
+    typeof v[3] === 'string' &&
+    v.slice(4).every((x) => typeof x === 'string')
   );
 }
 
@@ -274,6 +287,7 @@ export function parseScript(raw: unknown): ScriptParse {
       : undefined;
     posts[id] = {
       title: typeof value.title === 'string' ? value.title : undefined,
+      ...(typeof value.number === 'string' && value.number.trim() ? { number: value.number.trim().slice(0, 24) } : {}),
       cover: typeof value.cover === 'string' ? value.cover : undefined,
       blocks,
       sources: readSources(value.sources),
@@ -337,7 +351,7 @@ export function parseScript(raw: unknown): ScriptParse {
   };
 }
 
-const HOOK_ENTRIES = ['type', 'rise', 'word', 'fade'];
+const HOOK_ENTRIES = ['type', 'rise', 'word', 'fade', 'wipe', 'slam'];
 const HOOK_EXITS = ['fade', 'erase', 'fly', 'cut'];
 const HOOK_PLACES = ['top', 'center', 'bottom'];
 const HOOK_INKS = ['paper', 'ink', 'accent'];
@@ -367,6 +381,8 @@ function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'ho
           ink: oneOf(h.ink, HOOK_INKS),
           scrim: num(h.scrim, 0, 1),
           sounds: { keys: sound(sounds.keys), impact: sound(sounds.impact), whoosh: sound(sounds.whoosh) },
+          pieces: readHookPieces(h.pieces),
+          badge: readPostBadge(h.badge),
         };
         // Absent fields stay absent: the defaults live in one place (`HOOK_DEFAULTS`).
         for (const k of Object.keys(hook) as (keyof Hook)[]) if (hook[k] === undefined) delete hook[k];
@@ -379,6 +395,17 @@ function readHooks(raw: Record<string, unknown>): Pick<ScriptPost, 'hooks' | 'ho
     ...(hooks.length && active !== undefined ? { hookActive: Math.round(active) } : {}),
     ...(typeof raw.promise === 'string' && raw.promise ? { promise: raw.promise } : {}),
   };
+}
+
+/** A hook's own piece texts, each a short line. */
+function readHookPieces(raw: unknown): Hook['pieces'] {
+  if (!isObject(raw)) return undefined;
+  const out: NonNullable<Hook['pieces']> = {};
+  for (const k of ['header', 'place', 'camera', 'why'] as const) {
+    const v = raw[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 120);
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** The hook a post plays: its active variant, else its first; null without one. */
@@ -416,6 +443,7 @@ function readSources(raw: unknown): ScriptSources | undefined {
             lat: s.lat as number,
             lon: s.lon as number,
             ...(typeof s.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.day) ? { day: s.day } : {}),
+            ...(typeof s.own === 'string' && s.own.trim() ? { own: s.own.trim().slice(0, 80) } : {}),
           }))
       : undefined;
     const took = ['ends', 'starts', 'places'].includes(map.took as string) ? (map.took as 'ends' | 'starts' | 'places') : undefined;
@@ -424,10 +452,12 @@ function readSources(raw: unknown): ScriptSources | undefined {
     const naming = g?.name === 'town' || g?.name === 'first' || g?.name === 'central' ? (g.name as 'town' | 'first' | 'central') : undefined;
     const group = g ? { km: g.km as number, ...(visits ? { visits } : {}), ...(naming ? { name: naming } : {}) } : undefined;
     const route = map.route === 'stops' || map.route === 'all' ? map.route : undefined;
-    if (points || label || stops || group || route)
+    const names = readMapNames(map.names);
+    if (points || label || names || stops || group || route)
       out.map = {
         ...(points ? { points } : {}),
         ...(label ? { label } : {}),
+        ...(names ? { names } : {}),
         ...(stops ? { stops } : {}),
         ...(stops && took ? { took } : {}),
         ...(group ? { group } : {}),
@@ -478,8 +508,14 @@ function readLook(raw: unknown): StoryLook | undefined {
   const vignette = level(raw.vignette, 0.8);
   const grain = level(raw.grain, 0.2);
   const map = readMapGround(raw.map);
+  const camera = readStoryCamera(raw.camera);
+  const pace = readRoutePace(raw.pace);
+  const hook = readHookBadge(raw.hook);
   const look: StoryLook = {
+    ...(hook ? { hook } : {}),
+    ...(pace ? { pace } : {}),
     ...(map ? { map } : {}),
+    ...(camera ? { camera } : {}),
     ...(wall ? { wall } : {}),
     ...(charte ? { charte } : {}),
     ...(objects ? { objects } : {}),
@@ -547,12 +583,13 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
   const next = after && after.season === skeleton.season ? after : undefined;
+  const numberOf = (id: PostSkeleton) => script?.posts[id.id]?.number ?? id.number;
   return {
     id: skeleton.id,
-    number: skeleton.number,
+    number: numberOf(skeleton),
     title: title(skeleton),
     season: skeleton.season,
-    next: next ? { number: next.number, title: title(next) } : null,
+    next: next ? { number: numberOf(next), title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
     cover: { line: fillText(mine?.cover ?? '', values, lang) },
     lang,
@@ -565,6 +602,11 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       (iso) => monthText(iso, lang),
     ),
     hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
+    ...(() => {
+      const f = mine?.facts ?? script?.facts;
+      const since = f?.stages?.[0]?.from ?? f?.tileDays?.[0];
+      return since ? { since } : {};
+    })(),
     blocks: skeleton.blocks.map((b, i) => {
       const words = mine?.blocks?.[i];
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
@@ -574,7 +616,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry
           .filter((p) => p.season === skeleton.season)
-          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
+          .map((p) => ({ number: script?.posts[p.id]?.number ?? p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
       }
       // The Studio's timeline may set this post's scene length and caption window over the skeleton's.
       const len = words?.len ?? b.len;

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { ScriptSources } from '../../shared/story/story-script';
 import type { TripMap } from '../../shared/story/trip-map';
 import type { Lang } from '../../shared/story/locale';
+import { mapNamesOf } from '../../shared/story/map-names';
+import { useTripVersion } from './trip-changes';
 
 export type TripMapState =
   | { state: 'none' }
@@ -20,7 +22,9 @@ export type TripMapState =
 export function useTripMap(sources: ScriptSources, lang?: Lang): TripMapState {
   const [state, setState] = useState<TripMapState>({ state: 'none' });
   const tripId = sources.trip?.id;
-  const key = JSON.stringify({ trip: sources.trip ?? null, map: sources.map ?? null, lang: lang ?? 'fr' });
+  // A trip written back from Storytelling (its road) is a new map too.
+  const version = useTripVersion();
+  const key = JSON.stringify({ trip: sources.trip ?? null, map: sources.map ?? null, lang: lang ?? 'fr', version });
   useEffect(() => {
     if (!tripId) {
       setState({ state: 'none' });
@@ -31,8 +35,11 @@ export function useTripMap(sources: ScriptSources, lang?: Lang): TripMapState {
     const naming = sources.map?.group?.name ?? 'town';
     void Promise.all([import('../../shared/roadtrip/trip-store'), import('../../shared/story/trip-map'), import('../../shared/story/sources'), import('../../shared/roadtrip/load-gazetteer')])
       .then(async ([store, maps, src, gaz]) => {
-        // A group named by its biggest town needs the shipped index: read it (once per tab) before drawing.
-        const towns = sources.map?.group && naming === 'town' ? (await gaz.loadTowns().catch(() => null))?.sorted ?? null : null;
+        // A group named by its biggest town, or a name that says the town, needs the shipped index: read it
+        // (once per tab) before drawing.
+        const names = mapNamesOf(sources.map);
+        const wantsTowns = (sources.map?.group && naming === 'town') || names.line1 === 'town' || names.line2 === 'town';
+        const towns = wantsTowns ? (await gaz.loadTowns().catch(() => null))?.sorted ?? null : null;
         const trip = (await store.listTrips()).find((t) => t.id === tripId) ?? null;
         if (!alive) return;
         if (!trip) {

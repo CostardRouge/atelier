@@ -11,7 +11,8 @@ import { drawCoast, drawMapCredit } from "../scenes/MapScene";
 export const MAP_DY = -80; // the whole map lifted so Tasmania stays above the caption zone
 
 const where = (name: string): [number, number] => {
-  const s = STOPS.find((x) => x[0] === name) ?? STOPS[0];
+  // By what it says, or by the place's own name (a stop saying « Perth, WA » is still « Perth »).
+  const s = STOPS.find((x) => x[0] === name || x[5] === name) ?? STOPS[0];
   return proj(s[1], s[2]);
 };
 

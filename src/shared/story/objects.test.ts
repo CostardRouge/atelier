@@ -127,6 +127,9 @@ describe('drawing an object', () => {
     expect(c.globalAlpha).toBe(0.5);
     expect(geometryKey('map-camera.stops')).toBe('map-camera.coast');
     expect(geometryKey('caption')).toBe('caption');
+    // The hook's pieces are one badge: a piece moved or sized moves or sizes the whole of it.
+    expect(geometryKey('hook.big')).toBe('hook.badge');
+    expect(geometryKey('hook.veil')).toBe('hook.veil');
   });
 
   it('lets the post’s settings win over the series’', () => {

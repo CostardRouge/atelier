@@ -53,12 +53,13 @@ describe('tripMap', () => {
     expect(map?.stops).toHaveLength(3);
   });
 
-  it('follows the road when the trip has one, simplified to the map’s scale', () => {
+  it('follows the road the trip drives, thinned to the map’s scale', () => {
     const t = trip();
     t.road = makeTripRoad(drive(), t, null, 0);
     const road = tripRoadPoints(t);
     expect(road.length).toBeGreaterThan(2);
-    expect(road.length).toBeLessThan(81);
+    // The line the trip DRIVES (the ribbon, by default), thinned to the map's scale.
+    expect(road.length).toBeLessThan(400);
     expect(road[0]).toEqual([151.21, -33.87]);
     expect(road[road.length - 1]).toEqual([138.6, -34.93]);
   });
@@ -179,7 +180,9 @@ describe('the map a series chooses', () => {
     const t = trip();
     t.stages[1].name = 'La côte est';
     expect(tripStops(t, { points: 'starts', label: 'stage' }).map((s) => s[0])).toEqual(['La côte est', 'Melbourne → Adélaïde']);
-    expect(tripStops(t, { label: 'place-date' })[0][0]).toMatch(/^Sydney · 03 sept/);
+    // The place and its day: two lines since 2026-11-01 (`map-names.ts`).
+    expect(tripStops(t, { label: 'place-date' })[0][0]).toBe('Sydney');
+    expect(tripStops(t, { label: 'place-date' })[0][4]).toMatch(/^03 sept/);
     expect(tripStops(t, { label: 'none' }).every((s) => s[0] === '')).toBe(true);
   });
 
@@ -194,7 +197,8 @@ describe('the map a series chooses', () => {
     ];
     const own = tripMap(t, { stops })!;
     expect(own.stops.map((s) => s[0])).toEqual(['Sydney', 'Melbourne']);
-    expect(own.road[0]).toEqual([151.21, -33.87]);
+    // Cut where the driven line passes closest to the first stop.
+    expect(Math.abs(own.road[0][0] - 151.21) + Math.abs(own.road[0][1] + 33.87)).toBeLessThan(0.3);
     const [lon, lat] = own.road[own.road.length - 1];
     expect(Math.abs(lon - 144.96) + Math.abs(lat + 37.81)).toBeLessThan(0.3);
     expect(own.times.length).toBe(own.road.length);
@@ -206,8 +210,8 @@ describe('the map a series chooses', () => {
   it('names its own stops as asked, a stop knowing no stage', () => {
     const stops = [{ name: 'Perth', lat: -31.95, lon: 115.86, day: '2025-09-03' }, { name: 'Albany', lat: -35.02, lon: 117.88 }];
     expect(ownStops({ stops }).map((s) => s[0])).toEqual(['Perth', 'Albany']);
-    expect(ownStops({ stops, label: 'place-date' })[0][0]).toMatch(/^Perth · 03 sept/);
-    expect(ownStops({ stops, label: 'place-date' })[1][0]).toBe('Albany');
+    expect(ownStops({ stops, label: 'place-date' })[0][4]).toMatch(/^03 sept/);
+    expect(ownStops({ stops, label: 'place-date' })[1]).toEqual(['Albany', 117.88, -35.02, '', '', 'Albany']);
     expect(ownStops({ stops, label: 'none' }).every((s) => s[0] === '')).toBe(true);
   });
 

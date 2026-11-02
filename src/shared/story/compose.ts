@@ -15,10 +15,14 @@ import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
 import { setGround, type GroundLayer } from './map-ground';
+import type { NamedWhich } from './map-names';
+import { setStoryCamera } from './story-camera';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
 import { setWall, setWallGrid } from './scenes/Hook';
 import { drawHook, hookTimeline } from './hook';
+import { hookBadgeOf } from './hook-badge';
+import { drawHookBadge } from './scenes/HookBadge';
 import { setLang } from './locale';
 import { applyCharte, beginFrame, obj, setSlot, setStyles } from './objects';
 import { CAPTION, HUD } from './charte';
@@ -26,6 +30,10 @@ import { CAPTION, HUD } from './charte';
 export interface ComposeOptions {
   /** The trip the maps draw (the script's), or null for the placeholder line. */
   stops?: readonly Stop[] | null;
+  /** When each road point was recorded (`TripMap.times`, aligned with `road`) — what the pace by days reads. */
+  times?: readonly number[] | null;
+  /** Which stops carry their name (`map-names.ts`); all of them when absent. */
+  named?: NamedWhich;
   /** The road the route follows, from a trip (`trip-map.ts`); without it the stops are joined in a line. */
   road?: RoadPoints | null;
   /** The wall's pictures, square, in day order (`wall-cache.ts`); without them its tiles are colours. */
@@ -103,9 +111,10 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   applyCharte(ep.look?.charte);
   setStyles(ep.look?.objects, ep.objects);
   beginFrame();
-  setMap(opts.stops ?? null, opts.road ?? null);
+  setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all', { times: opts.times ?? null, pace: ep.look?.pace ?? null });
   setWall(opts.wall ?? null);
   setGround(ep.look?.map, opts.ground ?? null);
+  setStoryCamera(ep.look?.camera);
   setWallGrid(ep.look?.wall, ep.wallGroups);
   setTexture(ep.look);
   const slots = slotsOf(ep);
@@ -138,7 +147,11 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   if (ep.hook) {
     const hook = ep.hook;
     const tl = hookTimeline(hook);
-    if (t <= tl.end) obj(c, 'hook', [540, 960], t, (lt) => drawHook(c, hook, lt));
+    if (t <= tl.end) {
+      // Trips' badge by default (`hook-badge.ts`); the typed lines and the sticker of before on request.
+      if (hookBadgeOf(ep.look?.hook).mode === 'badge') obj(c, 'hook', [540, 960], t, (lt) => drawHookBadge(c, ep, hook, tl, lt));
+      else obj(c, 'hook', [540, 960], t, (lt) => drawHook(c, hook, lt));
+    }
   }
   // The HUD waits for the opening: the title's slot, or the hook's last word.
   const hudFrom = ep.hook ? hookTimeline(ep.hook).end : (slots[1]?.a ?? 0);
