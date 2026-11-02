@@ -147,11 +147,11 @@ export default function HookPanel({
         </Button>
       </div>
 
-      <FieldRow label="Line 1">
-        <TextField label="Hook, first line" value={lines[0]} onChange={(v) => setLine(0, v)} placeholder="100 000 photos." />
+      <FieldRow label="Line 1" align="start">
+        <TextAreaField label="Hook, first line" value={lines[0]} onChange={(v) => setLine(0, v)} placeholder="100 000 photos." rows={2} />
       </FieldRow>
-      <FieldRow label="Line 2">
-        <TextField label="Hook, second line" value={lines[1]} onChange={(v) => setLine(1, v)} placeholder="Aucune triée." />
+      <FieldRow label="Line 2" align="start">
+        <TextAreaField label="Hook, second line" value={lines[1]} onChange={(v) => setLine(1, v)} placeholder="Aucune triée." rows={2} />
       </FieldRow>
       <FieldRow label="Sticker">
         <SelectField

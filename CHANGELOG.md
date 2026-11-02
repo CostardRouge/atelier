@@ -9,6 +9,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- Storytelling: the hook's big text and second line take your own line breaks — press Return in their field, now a
+  text area. Choose how a long one is laid: Wrap (your breaks and the column's), Your breaks only (shrunk so the
+  widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.
+
 ## [1.7.0] - 2026-11-02 — Aureolin
 
 ### Added

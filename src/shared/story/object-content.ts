@@ -109,6 +109,8 @@ export function objectContent(key: string, ctx: ContentContext): ObjectContent |
         label: line ? 'The second line' : 'The big text',
         value: hook.lines[line] ?? '',
         placeholder: line ? 'A second line, or none' : 'The hook’s first words',
+        // Return starts a new line in the badge (`setInColumn` keeps his breaks).
+        multiline: true,
         write: (sc, v) =>
           withHook(sc, postId, hookIndex, (h) => {
             const lines = [...h.lines];
