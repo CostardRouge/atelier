@@ -34,7 +34,7 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   included so nothing is measured again. An agent connected through the bridge can make, fill, tune,
   play, look at and export a mosaic with the same gestures, each one undoable. The modes are one button opening a drawer of
   animated tiles in three families (Travel, Transform, Watch); Still sits beside it and Play plays the mode on the
-  button.
+  button. While a mode plays, the Target card shows the picture whose mosaic is on screen.
 - Connect a Winnow from another site with an app token: Atelier running on your computer can now reach your Winnow on
   its server. Paste a token minted on the instance's Users › App tokens; it stays in this browser until you forget the
   source.

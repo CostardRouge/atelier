@@ -214,6 +214,26 @@ function MosaicWorkbench({
   }, [player, mode, motion, speed, seed, cellPx, level, space, tint, distinctNeighbours, doc.target, doc.crop, view.grid, stageW, stageH, dpr, pool, chained, queueSource, perf.ahead]);
   const stop = useCallback(() => player?.stop(), [player]);
   // Writing it out (M7): the stage's own builder and pool, a player of the film's own, the queue read and never written.
+  // While a run plays, the target card shows the picture whose mosaic is on screen (lab 4, L2): its bitmap from the
+  // player's scene, the instance's thumbnail until that scene is built.
+  const [onScreen, setOnScreen] = useState<{ id: number; bitmap: ImageBitmap | null } | null>(null);
+  useEffect(() => {
+    if (!status.playing || status.current < 0 || !player) {
+      setOnScreen(null);
+      return;
+    }
+    let alive = true;
+    const id = status.current;
+    setOnScreen((cur) => (cur?.id === id ? cur : { id, bitmap: null }));
+    void player.pictureOf(id).then((bitmap) => {
+      if (alive && bitmap) setOnScreen({ id, bitmap });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [status.playing, status.current, player]);
+  /** The picture the target card shows: the one on screen while a run plays, else the target. */
+  const cardId = onScreen ? onScreen.id : doc.target;
   const exporter = useMosaicExport({ doc, builder, pool, stageW, stageH, queue: chained ? queueSource : undefined });
   useMosaicStageCommands({ latest, rendered: doc, state, status, play, stop, canvas: () => canvasRef.current, exporter, update });
   // When a run ends — Stop, Escape, a pull-back once done — the picture on screen is the target now, and the steps played leave the queue.
@@ -448,8 +468,9 @@ function MosaicWorkbench({
       exporting={<MosaicExportPanel settings={doc.settings} update={update} stageW={stageW} stageH={stageH} exporter={exporter} ready={Boolean(builder) && doc.target !== undefined} />}
       target={
         <TargetFrame
-          bitmap={targetBitmap}
-          fallbackUrl={client && doc.target !== undefined ? client.thumbUrl(doc.target) : null}
+          bitmap={onScreen ? onScreen.bitmap : targetBitmap}
+          fallbackUrl={client && cardId !== undefined ? client.thumbUrl(cardId) : null}
+          showing={onScreen?.id ?? null}
           aspect={aspect}
           crop={doc.crop}
           onCrop={setCrop}

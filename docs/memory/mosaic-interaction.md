@@ -33,3 +33,19 @@ was cached half painted (a black ring in Wave's and Slideshow's tiles) —
 repaint on it. Driven headless: three families of 4 + 2 + 2, a pick, Custom
 unfolding Motion, Still then Play playing Mosaics, the sheet at 390 px with
 no overflow.
+
+## The target card shows the picture on screen while a run plays (2026-11-02, L2)
+
+His ask («que la section target … se mette à jour … qu'elle montre
+véritablement l'image qu'on essayait de montrer»). **Decision**: while
+`status.playing`, `TargetFrame` gets `showing` = `status.current` — the
+player moves it only when the ARRIVED mosaic is on screen (`f.arrived`), so
+during a dive the card still shows the departed picture — and its bitmap
+from `MosaicPlayer.pictureOf(id)` (the run's scene's `target`, never
+closed), the instance's thumbnail until that scene exists. The card draws
+it whole, no frame (a chain takes each picture whole), no grips, a chip
+*on screen · #id*, `data-frame-state="playing"`; at Stop the picture on
+screen is the target (as before) and the frame returns. **Rejected**: the
+start target kept with an "on screen" thumbnail beside it — two pictures
+for one question (lab 4's §2). Driven headless: a Slideshow run's card read
+#176 → #114 → #148 with no grip, the target 148 after Stop.

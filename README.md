@@ -3201,7 +3201,9 @@ proportions, the default), 16:9, 3:2, 4:3, square, 4:5 or 9:16 pose a frame
 of that shape on the picture at the same centre, the stage takes the
 frame's shape in the room it has, and nothing is ever stretched; each
 picture is compared on the part a cell of that shape shows of it, and drawn
-so.
+so. While a mode plays, the card follows the picture whose mosaic is on
+screen — whole, with no frame, marked *on screen* and its number — and
+when the run stops that picture is the target, framed again.
 
 **Zooming is framing.** While nothing plays, whatever the mode, the
 wheel, a pinch or a drag zoom the stage, and with **Auto-frame on zoom**
