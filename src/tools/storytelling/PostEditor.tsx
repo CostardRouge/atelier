@@ -53,7 +53,10 @@ import { useStoryPlayback, type TimedBuffer } from './use-story-playback';
 import { useEditorMode, type Pane } from './use-editor-mode';
 import { useSettled } from './use-settled';
 import { useLocalPref } from '../../shared/ui/local-pref';
-import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
+import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/overlay/guides';
+import { usePreflight } from './use-preflight';
+import PreflightList from './PreflightList';
+import type { PreflightFix } from '../../shared/story/preflight';
 import Segmented from '../../shared/ui/Segmented';
 import PanelHost from '../../shared/ui/PanelHost';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
@@ -496,6 +499,42 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     return new Map(POSTS.map((p) => [p.id, paintCover(assemble(p, settled, POSTS), 0.12).toDataURL('image/png')]));
   }, [fontsReady, settled, showCovers]);
 
+  // The pre-export check (`preflight.ts`), while the Export panel is open: what would come out wrong, each with its fix.
+  const hasWall = episode.blocks.some((b) => b.block === 'wall');
+  const counted = factsOf(script, postId)?.tiles?.length ?? 0;
+  const here = wall.images.filter(Boolean).length;
+  const wallLoading = wall.progress !== null && wall.progress.done < wall.progress.total;
+  const wallCheck = useMemo(() => (hasWall ? { counted, here, loading: wallLoading } : null), [hasWall, counted, here, wallLoading]);
+  const groundAsked = script?.look?.map?.ground ?? 'outline';
+  const groundState = mapGround.ground.state;
+  const groundMessage = mapGround.ground.state === 'failed' ? mapGround.ground.message : undefined;
+  const groundCheck = useMemo(() => ({ asked: groundAsked, state: groundState, message: groundMessage }), [groundAsked, groundState, groundMessage]);
+  // The platform whose buttons the words must clear: the stage's guide when one is on, Reels otherwise.
+  const zone = findSafeZone(guides.safeZone) ?? findSafeZone('reels');
+  const checks = usePreflight({
+    on: showCovers && exporting === null,
+    episode: shown,
+    script: settled,
+    postId,
+    opts: mapOpts,
+    tracks,
+    scenes,
+    ground: groundCheck,
+    wall: wallCheck,
+    zone,
+    fontsReady,
+  });
+  const onFix = (fix: PreflightFix) => {
+    if (fix.kind === 'panel') {
+      select({ kind: 'panel', id: fix.id });
+      return;
+    }
+    const track = tracks.find((t) => t.key === fix.key && t.slot === fix.slot);
+    if (track) setSelected({ kind: 'object', id: track.id, key: track.key, slot: track.slot });
+    setPane('settings');
+    if (fix.at >= 0) seek(fix.at);
+  };
+
   const choose = (id: string) => {
     pause();
     onOpen(id);
@@ -784,6 +823,15 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       case 'export':
         return (
           <>
+            <InspectorSection id="story-preflight" title="Before you export" foldable={false} info="What would come out wrong in the file, checked on the post as it stands: facts not counted, tiles or pictures not on this device, faces not loaded, words under the platform's buttons, a hook shrunk to fit. Each line opens what fixes it; nothing stops the export.">
+              <SelectField
+                label="Published on"
+                value={zone?.id ?? 'reels'}
+                options={SAFE_ZONE_PRESETS.filter((p) => p.aspect < 1).map((p) => ({ id: p.id, label: p.label }))}
+                onChange={(id) => setGuides({ ...guides, safeZone: id, safeZoneOrientation: 'auto' })}
+              />
+              <PreflightList issues={checks} onFix={onFix} />
+            </InspectorSection>
             <InspectorSection id="story-export" title="Export" foldable={false} info="An H.264 video at 1080 × 1920, 30 frames a second, written in this browser; and the cover as a PNG.">
             <div className="flex gap-2 flex-wrap">
                 {exporting ? (

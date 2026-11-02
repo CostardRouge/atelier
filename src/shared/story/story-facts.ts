@@ -11,7 +11,8 @@ import { numberText, type Lang } from './locale';
 
 export type FactValues = Readonly<Record<string, number>>;
 
-const PLACEHOLDER = /\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}/g;
+/** A fact cited in a text, `{media.total}` (also what the pre-export check finds left unfilled). */
+export const PLACEHOLDER = /\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}/g;
 const ALONE = /^\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}$/;
 
 /** A number the way the series writes it, in its language (`locale.ts`): « 98 412 », « 98,412 ». */

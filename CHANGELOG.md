@@ -11,6 +11,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: *Before you export* — the Export panel checks the post first and lists what would come out wrong in
+  the file: a fact not counted (drawn with its braces), the map's tiles or the wall's pictures missing from this
+  device, a face not loaded, words under the buttons of TikTok, Reels or Shorts, a hook shrunk to fit its lines. Each
+  line opens what fixes it.
+
 - Storytelling: start a series with no file — *New series*, then name it under Script. Until the series has its
   Winnow, its trip and a first Count in this browser, the map of subjects lists what is missing, each step with the
   gesture that fixes it, and *Check the connection* tells you when your Winnow does not allow this app's address yet.

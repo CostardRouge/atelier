@@ -3021,6 +3021,14 @@ it and may grow blocks of its own.
   the stage over the screen, and the bottom bar — *Objects* opens the list as
   a sheet, the selected object's settings and the *Timeline* open as drawers
   that leave the picture in sight.
+- **Before you export.** *Export & archive* first checks the post as it
+  stands and lists what would come out wrong in the file: a fact not counted
+  (`{media.total}` would be drawn with its braces), the map's tiles or the
+  wall's pictures not on this device, a face the browser did not load, words
+  that run under the buttons of the platform you publish on (TikTok, Reels or
+  Shorts — the same choice as the stage's guides), a hook shrunk to keep its
+  lines. Each line opens what fixes it — a panel, or the object selected at
+  the moment it is in the way. Nothing stops the export: it is your call.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and

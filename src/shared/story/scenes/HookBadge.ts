@@ -10,7 +10,7 @@ import { colorOf, markText, obj, objectFace, styleOf } from "../objects";
 import { STOPS } from "../geo";
 import { HOOK_DEFAULTS, type Hook, type HookTimeline } from "../hook";
 import { paintShades } from "../../shades/shade-paint";
-import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBand, hookBlockOf, hookLayoutOf, hookThemeOf, pieceLookOf, withPostBadge, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
+import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBadgeSet, hookBand, hookBlockOf, hookLayoutOf, hookThemeOf, pieceLookOf, withPostBadge, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
 import type { Episode } from "../episode";
 
 /** The series' facts the pieces read: its name, the post's number, the map's ends, the trip's first day. */
@@ -117,4 +117,25 @@ export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline,
       drawOverlays(c, els, null, 1080, 1920, { theme, timeSeconds: t });
     });
   }
+}
+
+/**
+ * How far the badge shrank the hook's big text and its second line to keep
+ * them within the series' lines (1 = not at all), measured as the frame
+ * measures them — what the pre-export check reports (`preflight.ts`). Null
+ * when the post has no badge. Reads the Studio's styles in force: call it
+ * after a frame of the post was drawn.
+ */
+export function hookFit(c: Ctx, ep: Episode): { big: number; second: number | null } | null {
+  const hook = ep.hook;
+  if (!hook?.lines.length) return null;
+  const look = withPostBadge(ep.look?.hook, hook);
+  const set0 = hookBadgeOf(look);
+  if (set0.mode !== "badge") return null;
+  const looks = looksNow();
+  const set = hookBadgeSet(hook, set0, hookSeriesOf(ep), measureIn(c, hookThemeOf(look), looks), looks);
+  if (!set) return null;
+  const big = (set.scales.headline ?? 1) / (looks.big?.share ?? 1);
+  const second = set.content.counter ? (set.scales.counter ?? 1) / (looks.second?.share ?? 1) : null;
+  return { big, second };
 }
