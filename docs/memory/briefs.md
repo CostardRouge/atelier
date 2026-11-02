@@ -7,6 +7,12 @@ current when its brief changes status; add one when a new brief is written.
 Not memory files, but read them before starting new work, or before touching
 anything about media sources or document storage:
 
+- **`docs/storytelling-first-episode.md`** — Storytelling's R6 (2026-11-02): the
+  checklist for EP.00 on his Mac (Winnow's new `story` kind and CORS, the
+  script kept, the trip, Count, the sound, *Before you export*, the export and
+  its measured line, the phone, the second device) and what to send back.
+  OPEN until he runs it; update it with what breaks.
+
 - **`docs/audit-2026-10-02.md`** — the project audit (2026-10-02): the
   inventory (Phase 0), every finding with its location, impact, fix, effort,
   risk and verification (Phase 1, domains A–I plus Develop's own), the
