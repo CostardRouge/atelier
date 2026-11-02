@@ -2,7 +2,7 @@ import { PAL } from '../../shared/story/charte';
 import { storyFaceChoices, storyRoleChoices } from '../../shared/story/fonts';
 import FontPicker from '../../shared/ui/FontPicker';
 import type { FontChoice } from '../../shared/ui/font-picker';
-import { geometryKey, PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
+import { followsWhat, geometryKey, PALETTE_KEYS, PALETTE_LABEL, type ObjectStyle } from '../../shared/story/objects';
 import { styleIn, withSceneTiming, withStyle, withoutStyle, type StyleScope } from '../../shared/story/studio-edit';
 import type { StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
@@ -88,7 +88,13 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
       <SwitchRow label="Shown" checked={!shown.hidden} onChange={(on) => set({ hidden: on ? undefined : true })} />
 
       <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Place</p>
-      {gk !== objKey ? <Readout muted>Drawn on the map, it moves, grows and turns with it: these set the map.</Readout> : null}
+      {gk !== objKey ? (
+        <Readout muted>
+          {followsWhat(objKey) === 'badge'
+            ? 'Part of the badge: these move and size it whole.'
+            : 'Drawn on the map, it moves, grows and turns with it: these set the map.'}
+        </Readout>
+      ) : null}
       <SliderRow label="Across" value={num(geo.dx, 0)} min={-540} max={540} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dx: v || undefined })} />
       <SliderRow label="Down" value={num(geo.dy, 0)} min={-960} max={960} step={1} reset={0} format={(v) => `${Math.round(v)} px`} onChange={(v) => setGeo({ dy: v || undefined })} />
       <SliderRow
@@ -130,6 +136,7 @@ export default function ObjectPanel({ script, onScript, postId, objKey, text, sc
           <FieldRow label="Weight">
             <SelectField label="Weight" value={shown.weight ? String(shown.weight) : ''} options={WEIGHTS} onChange={(id) => set({ weight: id ? Number(id) : undefined })} />
           </FieldRow>
+          {followsWhat(objKey) === 'badge' ? <Readout muted>Text size is its share of the badge: the others make room.</Readout> : null}
           <SliderRow label="Text size" value={num(shown.size, 100)} min={20} max={300} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => set({ size: v === 100 ? undefined : v })} />
           <SliderRow label="Spacing" value={num(shown.tracking, 0)} min={-5} max={40} step={0.5} reset={0} format={(v) => `${v} px`} onChange={(v) => set({ tracking: v || undefined })} />
           <ColorRow label="Colour" value={shown.color} onChange={(color) => set({ color })} />

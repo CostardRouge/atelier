@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf } from './hook-badge';
+import { hookBadgeContent, hookBadgeElements, hookBadgeOf, hookThemeOf, readHookBadge, roughMeasure, setInColumn, hookLayoutOf, pieceLookOf } from './hook-badge';
 import { hookTimeline, type Hook } from './hook';
 
 const hook: Hook = { lines: ['100 000 photos.', 'Aucune triée.'] };
@@ -99,4 +99,36 @@ describe('where the badge sits', () => {
     expect(readHookBadge({ anchor: 'bottom-right' })).toEqual({ anchor: 'bottom-right' });
   });
 });
+
+describe('a piece set in the Studio', () => {
+  const tl = hookTimeline(hook);
+  const yOf = (els: ReturnType<typeof hookBadgeElements>, piece: string) => els.find((e) => e.piece === piece)!.el.y;
+
+  it('reads an object’s Text size as its share of the stack, the pieces under it making room', () => {
+    const plain = hookBadgeElements(hook, tl, undefined, series);
+    const grown = hookBadgeElements(hook, tl, undefined, series, undefined, { big: { share: 1.6 } });
+    const big = grown.find((e) => e.piece === 'big')!.el;
+    expect(big.sizeFrac).toBeCloseTo(0.16, 5);
+    // A bottom-anchored stack grows upward: the header rises, the second line keeps clear of the big text.
+    expect(yOf(grown, 'header')).toBeLessThan(yOf(plain, 'header'));
+    expect(yOf(grown, 'second') - big.y).toBeGreaterThan(heightOf(0.16));
+  });
+
+  it('wears its face, ink, case and spacing, pinned against the theme', () => {
+    const els = hookBadgeElements(hook, tl, undefined, series, undefined, { second: { face: { family: 'Fraunces', weight: 900, italic: false }, color: '#ff0000', textCase: 'upper', trackingPx: 4 } });
+    const second = els.find((e) => e.piece === 'second')!.el;
+    expect(second).toMatchObject({ fontFamily: 'Fraunces', weight: 900, color: '#ff0000', text: 'AUCUNE TRIÉE.' });
+    expect(second.styleOverrides).toEqual(expect.arrayContaining(['fontFamily', 'color', 'uppercase', 'letterSpacing']));
+    expect(second.letterSpacingEm).toBeGreaterThan(0);
+  });
+
+  it('maps the Studio’s settings, and nothing when none is set', () => {
+    expect(pieceLookOf({}, null, null)).toBeNull();
+    expect(pieceLookOf({ size: 100 }, null, null)).toBeNull();
+    expect(pieceLookOf({ size: 150, textCase: 'as', tracking: 2 }, null, '#123456')).toEqual({ share: 1.5, color: '#123456', trackingPx: 2 });
+  });
+});
+
+/** A size as a share of the 9:16 frame's height. */
+const heightOf = (sizeFrac: number) => sizeFrac * (1080 / 1920);
 

@@ -6,10 +6,10 @@ import { createTextElement } from "../../overlay/overlay-types";
 import type { StyleTheme } from "../../overlay/title-styles";
 import { clamp, E, type Ctx } from "../motion";
 import { PAL } from "../charte";
-import { obj } from "../objects";
+import { colorOf, markText, obj, objectFace, styleOf } from "../objects";
 import { STOPS } from "../geo";
 import { HOOK_DEFAULTS, type Hook, type HookTimeline } from "../hook";
-import { hookBadgeElements, hookBand, hookThemeOf, type HookBadge, type HookBadgeElement, type HookMeasure, type HookSeries } from "../hook-badge";
+import { HOOK_PIECES, hookBadgeElements, hookBadgeOf, hookBand, hookLayoutOf, hookThemeOf, pieceLookOf, type HookBadge, type HookBadgeElement, type HookMeasure, type HookPieceKey, type HookPieceLooks, type HookSeries } from "../hook-badge";
 import type { Episode } from "../episode";
 
 /** The series' facts the pieces read: its name, the post's number, the map's ends, the trip's first day. */
@@ -26,21 +26,42 @@ export function hookSeriesOf(ep: Episode, today = new Date().toISOString().slice
   };
 }
 
-/** How wide a text runs in the badge's title style, measured on the frame's own canvas. */
-function measureIn(c: Ctx, theme: StyleTheme): HookMeasure {
-  return (text, _piece, sizeFrac) => {
+/** Each piece's Studio settings, as the badge wears them (`HookPieceLook`). */
+function looksNow(): HookPieceLooks {
+  const out: HookPieceLooks = {};
+  for (const key of ["big", ...HOOK_PIECES.map((p) => p.id)] as (HookPieceKey | "big")[]) {
+    const st = styleOf(`hook.${key}`);
+    const look = pieceLookOf(st, objectFace(st.font, st.weight), st.color ? colorOf(st.color, "") || null : null);
+    if (look) out[key] = look;
+  }
+  return out;
+}
+
+/** The hook's name for a piece of Trips' badge, for the measure. */
+const HOOK_OF: Record<string, HookPieceKey | "big"> = { kicker: "header", headline: "big", counter: "second", caption: "place", timing: "why", exif: "camera" };
+
+/** How wide a text runs in the badge's title style — the piece's own face if its object sets one — measured on the frame's canvas. */
+function measureIn(c: Ctx, theme: StyleTheme, looks: HookPieceLooks): HookMeasure {
+  return (text, piece, sizeFrac) => {
     const el = createTextElement(text);
     el.sizeFrac = sizeFrac;
+    const face = looks[HOOK_OF[piece] ?? "big"]?.face;
+    if (face) {
+      el.fontFamily = face.family as typeof el.fontFamily;
+      el.weight = face.weight as typeof el.weight;
+      el.italic = face.italic;
+      el.styleOverrides = ["fontFamily", "weight", "italic"];
+    }
     return (textElementSize(c, el, 1080, 1920, theme)?.w ?? text.length * sizeFrac * 540) / 1080;
   };
 }
 
 let built: { key: string; els: HookBadgeElement[] } | null = null;
-function elementsFor(c: Ctx, hook: Hook, tl: HookTimeline, look: HookBadge | undefined, series: HookSeries, theme: StyleTheme): HookBadgeElement[] {
+function elementsFor(c: Ctx, hook: Hook, tl: HookTimeline, look: HookBadge | undefined, series: HookSeries, theme: StyleTheme, looks: HookPieceLooks): HookBadgeElement[] {
   // The fonts' arrival changes what a line measures: the key holds whether they are in.
-  const key = JSON.stringify([hook, look ?? null, series, STOPS.length, typeof document !== "undefined" ? document.fonts?.status : ""]);
+  const key = JSON.stringify([hook, look ?? null, series, looks, STOPS.length, typeof document !== "undefined" ? document.fonts?.status : ""]);
   if (built?.key === key) return built.els;
-  built = { key, els: hookBadgeElements(hook, tl, look, series, measureIn(c, theme)) };
+  built = { key, els: hookBadgeElements(hook, tl, look, series, measureIn(c, theme, looks), looks) };
   return built.els;
 }
 
@@ -61,9 +82,13 @@ export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline,
       c.restore();
     });
   const theme = hookThemeOf(look);
-  const band = hookBand(hook, look, series, measureIn(c, theme));
+  const looks = looksNow();
+  // The whole badge turns and grows about its anchor's point: a piece dragged or sized moves it all (`hook.badge`).
+  const at = hookLayoutOf(hookBadgeOf(look));
+  const pivot: [number, number] = [at.x * 1080, at.y * 1920];
+  const band = hookBand(hook, look, series, measureIn(c, theme, looks), looks);
   if (band)
-    obj(c, "hook.band", [540, ((band.top + band.bottom) / 2) * 1920], t, () => {
+    obj(c, "hook.band", pivot, t, () => {
       c.save();
       c.globalAlpha *= shown;
       c.fillStyle = band.fill;
@@ -72,8 +97,12 @@ export function drawHookBadge(c: Ctx, ep: Episode, hook: Hook, tl: HookTimeline,
     });
   // One object a piece, its lines drawn together: a hit on any line picks the piece.
   const byPiece = new Map<string, HookBadgeElement["el"][]>();
-  for (const { piece, el } of elementsFor(c, hook, tl, look, series, theme)) byPiece.set(piece, [...(byPiece.get(piece) ?? []), el]);
+  for (const { piece, el } of elementsFor(c, hook, tl, look, series, theme, looks)) byPiece.set(piece, [...(byPiece.get(piece) ?? []), el]);
   for (const [piece, els] of byPiece) {
-    obj(c, `hook.${piece}`, [els[0].x * 1080, els[0].y * 1920], t, () => drawOverlays(c, els, null, 1080, 1920, { theme, timeSeconds: t }));
+    obj(c, `hook.${piece}`, pivot, t, () => {
+      // Its words are text the Studio sets (font, size as a share of the stack, ink, case, spacing).
+      markText(els.map((e) => e.text ?? "").join(" "));
+      drawOverlays(c, els, null, 1080, 1920, { theme, timeSeconds: t });
+    });
   }
 }

@@ -194,11 +194,24 @@ const FOLLOWS: Readonly<Record<string, string>> = {
   'journey-impossible.from': 'journey-impossible.map',
   'journey-impossible.line': 'journey-impossible.map',
   'journey-impossible.to': 'journey-impossible.map',
+  // The hook's badge is ONE block (hook lab 2, his « la taille écrase les autres éléments »): a piece
+  // dragged moves the whole badge, its Size grows the whole badge; a piece's Text size is its share of
+  // the stack instead (`hook-badge.ts`, `HookPieceLook`).
+  'hook.big': 'hook.badge',
+  'hook.header': 'hook.badge',
+  'hook.second': 'hook.badge',
+  'hook.place': 'hook.badge',
+  'hook.camera': 'hook.badge',
+  'hook.why': 'hook.badge',
+  'hook.band': 'hook.badge',
 };
 /** The object whose place, size and turn this one takes: itself, or the map it is drawn on. (pure) */
 export const geometryKey = (key: string): string => FOLLOWS[key] ?? key;
 /** Whether an object moves with another (`geometryKey`). (pure) */
 export const followsMap = (key: string): boolean => key in FOLLOWS;
+/** What a follower's Place rows set, in words: the map it is drawn on, or the badge it is part of. (pure) */
+export const followsWhat = (key: string): 'map' | 'badge' | null =>
+  !(key in FOLLOWS) ? null : FOLLOWS[key] === 'hook.badge' ? 'badge' : 'map';
 
 /** One object met while a frame was drawn: its instance (`slot:key`), its key, whether it set text. */
 export interface DrawnObject {
@@ -320,6 +333,22 @@ function withAlpha(hex: string, a: number): string {
 const BASE_SANS = TYPO.fam;
 const BASE_MONO = TYPO.mono;
 const familyOf = (id: StoryFontId) => STORY_FONTS[id];
+
+/**
+ * The face an object's Font names — a role of the charte (`@title`…) or a face
+ * — as one family name, the weight it ships nearest the one asked, and its
+ * slant: what an engine that is not `motion.ts`'s (the overlay engine drawing
+ * the hook's badge) sets the text in. Null when the object names none. (pure
+ * over the charte set)
+ */
+export function objectFace(ref: string | undefined, weight: number | undefined): { family: string; weight: number; italic: boolean } | null {
+  if (!ref) return null;
+  const id = ref.startsWith('@') ? ROLES[ref.slice(1) as FontRole] : (ref as StoryFontId);
+  if (!id || !isStoryFont(id)) return null;
+  const f = familyOf(id);
+  const family = f.family.split(',')[0].trim().replace(/^["']|["']$/g, '');
+  return { family, weight: nearestWeight(f, weight ?? 400), italic: 'italic' in f && Boolean(f.italic) };
+}
 
 /**
  * The CSS font for text drawn at `size`, weight `w`, in `fam` — as the

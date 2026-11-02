@@ -102,6 +102,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   Shrink to fit). The Numeral sets the whole badge's size, from 4 % to 30 % of the frame's width.
 - Storytelling: place the hook's badge on Trips' 3×3 anchor grid; Stack, Centre, Top and bottom and Band remain as
   starting places.
+- Storytelling: in the Studio the hook's badge moves and grows as one block — drag any of its pieces, or set its Size,
+  and the whole badge follows; a piece's Text size is its share of the stack, the pieces under it making room instead
+  of being covered. A piece's font, colour, case and spacing now reach the badge too.
 - A title style can be exported as a `.badge.json` file and imported back — in Trips' Look tab, the Studio, Flight
   Atlas and Storytelling alike — and Storytelling can take a trip's own badge style.
 - Storytelling: the Studio — a post opens with the list of its scenes and of the objects each draws (captions, the

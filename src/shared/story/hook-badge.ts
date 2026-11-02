@@ -266,6 +266,65 @@ function exitStep(exit: Hook['exit'], seconds: number): AnimStep | null {
   return { preset: 'fade', duration: seconds, easing: 'in' };
 }
 
+/**
+ * A piece of the badge as its Studio object sets it (`objects.ts`): its share
+ * of the stack (the object's Text size — the pieces under it make room, never
+ * covered), its face, ink, case and spacing. Its place, size and turn are the
+ * whole badge's (`hook.badge`, `geometryKey`).
+ */
+export interface HookPieceLook {
+  share?: number;
+  face?: { family: string; weight: number; italic: boolean };
+  color?: string;
+  textCase?: 'upper' | 'lower';
+  /** Letter spacing in the frame's pixels, as the Studio sets it. */
+  trackingPx?: number;
+}
+export type HookPieceLooks = Partial<Record<HookPieceKey | 'big', HookPieceLook>>;
+
+/** A piece's Studio settings as the badge reads them; nothing set, nothing returned. (pure) */
+export function pieceLookOf(style: { size?: number; font?: string; weight?: number; color?: string; textCase?: string; tracking?: number }, face: HookPieceLook['face'] | null, color: string | null): HookPieceLook | null {
+  const look: HookPieceLook = {};
+  if (typeof style.size === 'number' && style.size !== 100) look.share = Math.min(4, Math.max(0.2, style.size / 100));
+  if (face) look.face = face;
+  if (color) look.color = color;
+  if (style.textCase === 'upper' || style.textCase === 'lower') look.textCase = style.textCase;
+  if (typeof style.tracking === 'number' && style.tracking) look.trackingPx = style.tracking;
+  return Object.keys(look).length ? look : null;
+}
+
+/** The hook's name for a piece of Trips' badge. */
+const HOOK_KEY_OF = (piece: BadgePiece): HookPieceKey | 'big' =>
+  (Object.entries(PIECE_OF).find(([, v]) => v === piece)?.[0] ?? 'big') as HookPieceKey | 'big';
+
+/** Write a piece's look onto its element, pinning each key against the theme. */
+function wearLook(el: OverlayElement, look: HookPieceLook | undefined): OverlayElement {
+  if (!look) return el;
+  const pinned = new Set(el.styleOverrides ?? []);
+  const out: OverlayElement = { ...el };
+  if (look.face) {
+    out.fontFamily = look.face.family as OverlayElement['fontFamily'];
+    out.weight = look.face.weight as OverlayElement['weight'];
+    out.italic = look.face.italic;
+    pinned.add('fontFamily').add('weight').add('italic');
+  }
+  if (look.color) {
+    out.color = look.color;
+    pinned.add('color');
+  }
+  if (look.textCase) {
+    out.text = look.textCase === 'upper' ? (out.text ?? '').toLocaleUpperCase() : (out.text ?? '').toLocaleLowerCase();
+    out.uppercase = false;
+    pinned.add('uppercase');
+  }
+  if (look.trackingPx) {
+    out.letterSpacingEm = look.trackingPx / Math.max(1, out.sizeFrac * 1080);
+    pinned.add('letterSpacing');
+  }
+  out.styleOverrides = [...pinned] as OverlayElement['styleOverrides'];
+  return out;
+}
+
 /** One piece of the badge as drawn: its overlay element and which piece of the hook it is. */
 export interface HookBadgeElement {
   piece: HookPieceKey | 'big';
@@ -350,9 +409,10 @@ export function hookBadgeElements(
   raw: HookBadge | null | undefined,
   series: HookSeries,
   measure: HookMeasure = roughMeasure,
+  looks: HookPieceLooks = {},
 ): HookBadgeElement[] {
   const look = hookBadgeOf(raw);
-  const set = hookBadgeSet(hook, look, series, measure);
+  const set = hookBadgeSet(hook, look, series, measure, looks);
   if (!set) return [];
   const { content, scales } = set;
   const aspect = 1080 / 1920;
@@ -394,10 +454,7 @@ export function hookBadgeElements(
       const animation: ElementAnimation = { in: step, out };
       return { ...el, animation, window: { start: at, end: tl.end } };
     });
-  const pieceOf = (el: OverlayElement): HookPieceKey | 'big' => {
-    const { key } = lineOf(el);
-    return (Object.entries(PIECE_OF).find(([, v]) => v === key)?.[0] ?? 'big') as HookPieceKey | 'big';
-  };
+  const pieceOf = (el: OverlayElement): HookPieceKey | 'big' => HOOK_KEY_OF(lineOf(el).key);
   // The size is a share of the frame's width — its shorter side, which is what a badge's sizes are of.
   const layout = hookLayoutOf(look);
   let els: OverlayElement[];
@@ -412,7 +469,10 @@ export function hookBadgeElements(
   } else {
     els = badgeElements(content, layout, aspect, styles, null, null, scales);
   }
-  return timed(els).map((el) => ({ piece: pieceOf(el), el }));
+  return timed(els).map((el) => {
+    const piece = pieceOf(el);
+    return { piece, el: wearLook(el, looks[piece]) };
+  });
 }
 
 /**
@@ -426,25 +486,32 @@ export function hookBadgeSet(
   look: ReturnType<typeof hookBadgeOf>,
   series: HookSeries,
   measure: HookMeasure = roughMeasure,
+  looks: HookPieceLooks = {},
 ): { content: BadgeContent; scales: BadgePieceScales } | null {
   const content = hookBadgeContent(hook, look, series);
   if (!content.headline) return null;
   const scales: BadgePieceScales = {};
+  // Each piece's share of the stack, as its Studio object sets it.
+  for (const key of Object.keys(PIECE_OF).map((k) => PIECE_OF[k as HookPieceKey | 'big'])) {
+    const share = looks[HOOK_KEY_OF(key)]?.share;
+    if (share && share !== 1) scales[key] = share;
+  }
   for (const key of SET_IN_COLUMN) {
     const text = content[key];
     if (!text) continue;
-    const set = setInColumn(text, key, look.size * BADGE_RATIOS[key], look.column, look.long, measure);
+    const share = scales[key] ?? 1;
+    const set = setInColumn(text, key, look.size * BADGE_RATIOS[key] * share, look.column, look.long, measure);
     content[key] = set.text;
-    if (set.scale !== 1) scales[key] = set.scale;
+    if (set.scale !== 1) scales[key] = share * set.scale;
   }
   return { content, scales };
 }
 
 /** The band behind a `band` composition: its top and bottom as shares of the height, and its fill. (pure) */
-export function hookBand(hook: Hook, raw: HookBadge | null | undefined, series: HookSeries, measure: HookMeasure = roughMeasure): { top: number; bottom: number; fill: string } | null {
+export function hookBand(hook: Hook, raw: HookBadge | null | undefined, series: HookSeries, measure: HookMeasure = roughMeasure, looks: HookPieceLooks = {}): { top: number; bottom: number; fill: string } | null {
   const look = hookBadgeOf(raw);
   if (look.composition !== 'band') return null;
-  const set = hookBadgeSet(hook, look, series, measure);
+  const set = hookBadgeSet(hook, look, series, measure, looks);
   if (!set) return null;
   const e = badgeBlockExtent({ ...set.content, caption: null, timing: null, exif: null }, hookLayoutOf(look), 1080 / 1920, set.scales);
   if (!e) return null;
