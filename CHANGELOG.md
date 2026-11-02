@@ -9,6 +9,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-02 — Aureolin
+
 ### Added
 
 - Mosaic, a new editor (work in progress): one picture rebuilt out of hundreds of others from your Winnow, each cell a
