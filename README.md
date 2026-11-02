@@ -3230,13 +3230,21 @@ ran, the frames per second drawn.
 the way back, the title over the picture count, the ‹ › and ↶ ↷ pairs and
 a ⋯ with *Choose the target…*, *Draw a target*, *Add from …*, *Measure*
 and *Full screen* where the browser allows it; under the stage come the
-chain's band and a one-row transport (the mode as a list, Play). The
+chain's band and a one-row transport (Still, the mode, Play — the mode's
+drawer a sheet from the bottom). The
 settings are the five tabs of the bar floating at the bottom — Target,
 Cells, Motion, Export and Device (the Performance section) — each opening a drawer under the stage, which
 stays in sight: the mosaic keeps the size it was built for and is shown a
 little smaller while a drawer is up, so opening one rebuilds nothing.
 
-**The modes.** Under the stage: *Still* is the mosaic as above. *Mosaics*,
+**The modes.** Under the stage, *Still* holds the mosaic to frame and
+tune it; beside it, one button names the mode Play plays and opens a drawer
+of tiles, each a small preview of its motion painted from the mosaic on the
+stage, in three families — *Travel* (into a cell and out of one: Mosaics,
+Chain, Pull back, Steer), *Transform* (the mosaic turns into another where
+it stands: Reveal, Wave) and *Watch* (Drift, Slideshow); *Custom…* at its
+foot opens the Motion section. Play from Still plays the mode on the
+button. *Mosaics*,
 the default of a new mosaic, goes from mosaic to mosaic: the camera dives
 into a cell and lands on the next picture's mosaic, held a moment while the
 camera drifts over it, and the photo itself never appears. *Pull back*

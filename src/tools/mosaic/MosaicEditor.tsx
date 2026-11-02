@@ -24,7 +24,7 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import type { Crop, Rect } from '../../shared/mosaic/frame';
 import { describeZoomKey, zoomKeyAction } from '../../shared/ui/zoom-keys';
-import { motionOf, recipeOf } from '../../shared/mosaic/motion';
+import { motionOf, recipeOf, type Recipe } from '../../shared/mosaic/motion';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
@@ -37,6 +37,7 @@ import { Icons } from '../../shared/ui/icons';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
+import { revealInScroller } from '../../shared/ui/reveal';
 import ChainBand from './ChainBand';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
@@ -230,6 +231,38 @@ function MosaicWorkbench({
     player?.stop();
   }, [dialsKey, player]);
 
+  // Still is the editing state (lab 4, L1): the mode button keeps the recipe Play plays from it, and Play from Still
+  // switches to that recipe, then plays once the render carries it — after the stop above, which a mode change runs.
+  const lastRecipe = useRef<Recipe | 'custom'>(mode === 'single' ? recipeOf(motion) : mode);
+  if (mode !== 'single') lastRecipe.current = mode;
+  const pendingPlay = useRef(false);
+  const playFrom = useCallback(() => {
+    if (mode !== 'single') {
+      play();
+      return;
+    }
+    const r = lastRecipe.current;
+    pendingPlay.current = true;
+    update((s) => ({ ...s, mode: r, motion: r === 'custom' ? s.motion : motionOf(r, s.motion) }));
+  }, [mode, play, update]);
+  useEffect(() => {
+    if (!pendingPlay.current || mode === 'single' || status.playing) return;
+    pendingPlay.current = false;
+    play();
+  }, [mode, play, status.playing]);
+  // Custom opens the Motion section where its parts are: a tab's drawer on a phone, the section unfolded beside.
+  const openMotion = useCallback(() => {
+    if (compact) {
+      setTab('motion');
+      setTabOpen(true);
+      return;
+    }
+    const section = document.querySelector<HTMLElement>('section[data-section="mosaic-motion"]');
+    const fold = section?.querySelector<HTMLElement>('[aria-expanded]');
+    if (fold?.getAttribute('aria-expanded') === 'false') fold.click();
+    revealInScroller(section, { behavior: 'smooth' });
+  }, [compact]);
+
   // --- the zoom over the stage, whatever the mode while nothing plays: a crop with auto-frame, a look without (F6) ---
   // In every mode, not only Still: a stopped stage shows the target's mosaic, and a pinch the stage did not hear was
   // read by the browser, which zoomed the whole page instead.
@@ -259,10 +292,10 @@ function MosaicWorkbench({
         stop();
         return;
       }
-      if (e.key === ' ' && mode !== 'single') {
+      if (e.key === ' ') {
         e.preventDefault();
         if (status.playing) stop();
-        else play();
+        else playFrom();
         return;
       }
       if (status.playing) return;
@@ -284,7 +317,7 @@ function MosaicWorkbench({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [status.playing, mode, play, stop, zoom, cropped, setCrop, steps]);
+  }, [status.playing, playFrom, stop, zoom, cropped, setCrop, steps]);
 
   const fullscreen = useCallback(() => {
     const el = boxRef.current;
@@ -379,11 +412,18 @@ function MosaicWorkbench({
     <MosaicTransport
       mode={mode}
       motion={motion}
-      setMode={(m) => update((s) => ({ ...s, mode: m, motion: m === 'single' ? s.motion : motionOf(m, s.motion) }))}
+      recipe={mode === 'single' ? lastRecipe.current : mode}
+      scene={shown}
+      onStill={() => update((s) => ({ ...s, mode: 'single' }))}
+      onPickRecipe={(r) => update((s) => ({ ...s, mode: r, motion: motionOf(r, s.motion) }))}
+      onCustom={() => {
+        update((s) => ({ ...s, mode: 'custom' }));
+        openMotion();
+      }}
       setDepart={(d) => update((s) => ({ ...s, motion: { ...s.motion, depart: d }, mode: recipeOf({ ...s.motion, depart: d }, s.mode) }))}
       status={status}
       canPlay={Boolean(player) && doc.target !== undefined && state.status !== 'idle'}
-      onPlay={play}
+      onPlay={playFrom}
       onStop={stop}
       onFullscreen={fullscreen}
       compact={compact}
