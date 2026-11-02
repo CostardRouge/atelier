@@ -52,6 +52,8 @@ export interface ScriptBlock {
 
 export interface ScriptPost {
   title?: string;
+  /** This post's own number (the HUD's, the badge's header, the next post's card), over the skeleton's `EP.04`. */
+  number?: string;
   cover?: string;
   blocks?: ScriptBlock[];
   /** This post's own sources, over the series' (`sources.ts`). */
@@ -285,6 +287,7 @@ export function parseScript(raw: unknown): ScriptParse {
       : undefined;
     posts[id] = {
       title: typeof value.title === 'string' ? value.title : undefined,
+      ...(typeof value.number === 'string' && value.number.trim() ? { number: value.number.trim().slice(0, 24) } : {}),
       cover: typeof value.cover === 'string' ? value.cover : undefined,
       blocks,
       sources: readSources(value.sources),
@@ -580,12 +583,13 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
   const at = registry.findIndex((p) => p.id === skeleton.id);
   const after = at >= 0 ? registry[at + 1] : undefined;
   const next = after && after.season === skeleton.season ? after : undefined;
+  const numberOf = (id: PostSkeleton) => script?.posts[id.id]?.number ?? id.number;
   return {
     id: skeleton.id,
-    number: skeleton.number,
+    number: numberOf(skeleton),
     title: title(skeleton),
     season: skeleton.season,
-    next: next ? { number: next.number, title: title(next) } : null,
+    next: next ? { number: numberOf(next), title: title(next) } : null,
     closing: { series: script?.series ?? '', handle: script?.handle ?? '', ask: script?.ask ?? '' },
     cover: { line: fillText(mine?.cover ?? '', values, lang) },
     lang,
@@ -612,7 +616,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry
           .filter((p) => p.season === skeleton.season)
-          .map((p) => ({ number: p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
+          .map((p) => ({ number: script?.posts[p.id]?.number ?? p.number, title: title(p), line: fillText(script?.posts[p.id]?.cover ?? '', values, lang) }));
       }
       // The Studio's timeline may set this post's scene length and caption window over the skeleton's.
       const len = words?.len ?? b.len;

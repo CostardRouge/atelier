@@ -13,7 +13,7 @@ import { mapNamesOf } from '../../shared/story/map-names';
 import { hookScore, hookSoundFor, hookSounds } from '../../shared/story/hook';
 import HookPanel, { type HookFiles } from './HookPanel';
 import { totalSeconds, type Episode } from '../../shared/story/episode';
-import { assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
+import { activeHook, assemble, type PostSkeleton, type StoryScript } from '../../shared/story/story-script';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import SourcesPanel from './SourcesPanel';
 import LookPanel from './LookPanel';
@@ -60,6 +60,9 @@ import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import ObjectContent from './ObjectContent';
+import { objectContent } from '../../shared/story/object-content';
+import { hookSeriesOf } from '../../shared/story/scenes/HookBadge';
 import StudioTree, { PANEL_LABEL, type StudioPanel, type StudioSelection } from './StudioTree';
 import StudioTimeline from './StudioTimeline';
 import { styleIn, withSceneTiming, withStyle, type StyleScope } from '../../shared/story/studio-edit';
@@ -862,6 +865,21 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     const scene = scenes.find((s) => s.key === sel.slot && s.block === sel.key);
     const block = scene && scene.index !== null ? episode.blocks[scene.index] : null;
     const words = scene && scene.index !== null ? script?.posts[postId]?.blocks?.[scene.index] : undefined;
+    // What the object says and where its words come from (`object-content.ts`), first in its inspector.
+    const post = script?.posts[postId];
+    const hookIndex = Math.min((post?.hooks?.length ?? 1) - 1, Math.max(0, post?.hookActive ?? 0));
+    const sceneOf = scenes.find((s) => s.key === sel.slot);
+    const said = script
+      ? objectContent(sel.key, {
+          script,
+          postId,
+          hook: activeHook(post),
+          hookIndex,
+          series: hookSeriesOf(episode),
+          sceneIndex: sceneOf?.index ?? null,
+          number: skeleton.number,
+        })
+      : null;
     return (
       <InspectorSection
         id="story-object"
@@ -879,6 +897,16 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           text={track?.text ?? false}
           sample={track?.sample}
           onPreview={setDraft}
+          content={
+            said && script ? (
+              <ObjectContent
+                content={said}
+                script={script}
+                onScript={onScript}
+                onLink={(to) => select({ kind: 'panel', id: to })}
+              />
+            ) : undefined
+          }
           scene={
             scene && scene.index !== null && block
               ? { index: scene.index, len: block.len, cap: block.cap ? { a: block.cap.a, b: block.cap.b } : null, set: { len: words?.len, cap: words?.cap } }
