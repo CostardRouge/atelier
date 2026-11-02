@@ -12,7 +12,7 @@
  * clicks and its impact still land on their letters. (pure apart from the
  * canvas calls)
  */
-import { BADGE_RATIOS, badgeBlockExtent, badgeElements, readCascade, type BadgeCascade, type BadgeLayout, type BadgePieceScales, type BadgePieceStyles } from '../roadtrip/badge-layout';
+import { BADGE_RATIOS, LINE_LEADING, badgeBlockExtent, badgeElements, readCascade, type BadgeCascade, type BadgeLayout, type BadgePieceScales, type BadgePieceStyles } from '../roadtrip/badge-layout';
 import type { BadgeContent, BadgePiece } from '../roadtrip/day-badge';
 import { DEFAULT_TIME_AGO_WORDS, FRENCH_TIME_AGO_WORDS, timeAgoLine } from '../roadtrip/time-ago';
 import type { AnimStep, ElementAnimation } from '../overlay/animation';
@@ -75,8 +75,12 @@ export interface HookBadge {
   theme?: StyleTheme;
   /** How wide the big text may run before it breaks, a share of the frame's width. */
   column?: number;
-  /** A big text longer than the column: broken at words (shrunk past three lines), or shrunk to one line. */
+  /** A big text longer than the column: broken at words (and at his own breaks), his breaks only, or one line shrunk to fit. */
   long?: HookLong;
+  /** How many lines a broken text may take before it shrinks (`wrap`), 1–6; default 3. */
+  maxLines?: number;
+  /** The space between two lines of one piece, a share of its size (−0.2 tight … 0.8 airy); default Trips' 0.12. */
+  leading?: number;
   /**
    * Where the badge sits on the 3×3 grid and its point there, as Trips' badge
    * (`BadgeLayout`); absent, the composition's own place. In Top and bottom
@@ -102,9 +106,11 @@ export function defaultHookCascade(): BadgeCascade {
   return { step: { preset: 'slide', duration: 0.5, easing: 'out-cubic', direction: 'up', distanceFrac: 0.03 }, stagger: { each: 0.14, order: 'sequence' } };
 }
 
-export type HookLong = 'wrap' | 'fit';
+export type HookLong = 'wrap' | 'manual' | 'fit';
 /** Past this many lines a wrapped piece shrinks rather than grow into a paragraph. */
 export const HOOK_MAX_LINES = 3;
+/** The most lines a broken piece may be given. */
+export const HOOK_LINES_MAX = 6;
 
 /** His picks: Or ciné, the stack, every piece but the camera (which only the script can name). */
 export const HOOK_BADGE_DEFAULTS = {
@@ -135,6 +141,8 @@ export function hookBadgeOf(raw: HookBadge | null | undefined) {
     cascade: raw?.cascade === null ? null : (raw?.cascade ?? defaultHookCascade()),
     keepEntry: raw?.keepEntry ?? true,
     long: raw?.long ?? HOOK_BADGE_DEFAULTS.long,
+    maxLines: raw?.maxLines ?? HOOK_MAX_LINES,
+    leading: raw?.leading ?? LINE_LEADING,
     pieces: { ...HOOK_BADGE_DEFAULTS.pieces, ...(raw?.pieces ?? {}) },
     styles: raw?.styles ?? {},
     theme: raw?.theme ?? null,
@@ -151,7 +159,9 @@ export function readHookBadge(raw: unknown): HookBadge | undefined {
   if (typeof r.composition === 'string' && HOOK_COMPOSITIONS.some((c) => c.id === r.composition)) out.composition = r.composition as HookComposition;
   if (typeof r.size === 'number' && Number.isFinite(r.size)) out.size = Math.min(HOOK_SIZE_MAX, Math.max(HOOK_SIZE_MIN, r.size));
   if (typeof r.column === 'number' && Number.isFinite(r.column)) out.column = Math.min(0.95, Math.max(0.3, r.column));
-  if (r.long === 'wrap' || r.long === 'fit') out.long = r.long;
+  if (r.long === 'wrap' || r.long === 'manual' || r.long === 'fit') out.long = r.long;
+  if (typeof r.maxLines === 'number' && Number.isFinite(r.maxLines)) out.maxLines = Math.round(Math.min(HOOK_LINES_MAX, Math.max(1, r.maxLines)));
+  if (typeof r.leading === 'number' && Number.isFinite(r.leading)) out.leading = Math.min(0.8, Math.max(-0.2, r.leading));
   if (typeof r.anchor === 'string' && (ANCHORS as readonly string[]).includes(r.anchor)) out.anchor = r.anchor as Anchor;
   const unit = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined);
   if (unit(r.x) !== undefined) out.x = unit(r.x);
@@ -264,9 +274,9 @@ export function hookPositionFor(anchor: Anchor): { x: number; y: number } {
 /** Where the badge's title block sits: the anchor set on the grid, else the composition's place, at the numeral. (pure) */
 export function hookLayoutOf(look: ReturnType<typeof hookBadgeOf>): BadgeLayout {
   const base = LAYOUTS[look.composition];
-  if (!look.anchor) return { ...base, sizeFrac: look.size };
+  if (!look.anchor) return { ...base, sizeFrac: look.size, leading: look.leading };
   const at = hookPositionFor(look.anchor);
-  return { anchor: look.anchor, x: look.x ?? at.x, y: look.y ?? at.y, sizeFrac: look.size };
+  return { anchor: look.anchor, x: look.x ?? at.x, y: look.y ?? at.y, sizeFrac: look.size, leading: look.leading };
 }
 
 /** How the big text arrives, for the hook's entry. */
@@ -367,10 +377,18 @@ export type HookMeasure = (text: string, piece: BadgePiece, sizeFrac: number) =>
 export const roughMeasure: HookMeasure = (text, _piece, sizeFrac) => text.length * sizeFrac * 0.5;
 
 /**
- * A piece's text set in the column: broken at words (`\n`), and its share of
- * the stack (1 = its ratio) — shrunk past `HOOK_MAX_LINES`, or, in `fit`, to
- * hold one line. A single word wider than the column shrinks too: nothing
- * runs off the frame. (pure)
+ * A piece's text set in the column, as lines (`\n`), and its share of the
+ * stack (1 = its ratio). The author's own line breaks are kept in every mode
+ * but `fit` (his « je ne peux pas revenir à la ligne », 2026-11-02):
+ *
+ * - `wrap` — each of his lines broken at words inside the column; past
+ *   `maxLines` the piece shrinks a step at a time;
+ * - `manual` — his lines only, never broken; the piece shrinks so the widest
+ *   fits the column;
+ * - `fit` — one line, shrunk to the column.
+ *
+ * A single word wider than the column shrinks too: nothing runs off the
+ * frame. (pure)
  */
 export function setInColumn(
   text: string,
@@ -379,33 +397,42 @@ export function setInColumn(
   column: number,
   mode: HookLong,
   measure: HookMeasure = roughMeasure,
+  maxLines: number = HOOK_MAX_LINES,
 ): { text: string; scale: number } {
-  const words = text.trim().split(/\s+/).filter(Boolean);
+  const paragraphs = text.split('\n').map((l) => l.trim().split(/\s+/).filter(Boolean)).filter((w) => w.length);
+  const words = paragraphs.flat();
   if (!words.length || !(sizeFrac > 0) || !(column > 0)) return { text, scale: 1 };
-  const fits = (t: string, scale: number) => measure(t, piece, sizeFrac * scale) <= column;
-  const widest = (scale: number) => Math.max(...words.map((w) => measure(w, piece, sizeFrac * scale)));
+  const width = (t: string, scale: number) => measure(t, piece, sizeFrac * scale);
   if (mode === 'fit') {
-    const w = measure(words.join(' '), piece, sizeFrac);
+    const w = width(words.join(' '), 1);
     return { text: words.join(' '), scale: w > column ? column / w : 1 };
   }
-  const wrap = (scale: number): string[] => {
-    const lines: string[] = [];
-    let cur = '';
-    for (const w of words) {
-      const next = cur ? `${cur} ${w}` : w;
-      if (cur && !fits(next, scale)) {
-        lines.push(cur);
-        cur = w;
-      } else cur = next;
-    }
-    if (cur) lines.push(cur);
-    return lines;
-  };
+  if (mode === 'manual') {
+    const lines = paragraphs.map((p) => p.join(' '));
+    const w = Math.max(...lines.map((l) => width(l, 1)));
+    return { text: lines.join('\n'), scale: w > column ? column / w : 1 };
+  }
+  const wrap = (scale: number): string[] =>
+    paragraphs.flatMap((para) => {
+      const lines: string[] = [];
+      let cur = '';
+      for (const w of para) {
+        const next = cur ? `${cur} ${w}` : w;
+        if (cur && width(next, scale) > column) {
+          lines.push(cur);
+          cur = w;
+        } else cur = next;
+      }
+      if (cur) lines.push(cur);
+      return lines;
+    });
   // A word wider than the column sets the largest share there is.
-  let scale = Math.min(1, column / Math.max(1e-6, widest(1)));
+  let scale = Math.min(1, column / Math.max(1e-6, Math.max(...words.map((w) => width(w, 1)))));
   let lines = wrap(scale);
-  // Past three lines the piece shrinks a step at a time: a hook, never a paragraph.
-  while (lines.length > HOOK_MAX_LINES && scale > 0.12) {
+  // Past the line limit the piece shrinks a step at a time: a hook, never a paragraph. His own breaks
+  // alone may outnumber it — then they stand, the piece as large as the column lets them.
+  const limit = Math.max(maxLines, paragraphs.length);
+  while (lines.length > limit && scale > 0.12) {
     scale *= 0.92;
     lines = wrap(scale);
   }
@@ -497,7 +524,7 @@ export function hookBadgeElements(
     const card: BadgeContent = { kicker: null, label: null, headline: '', counter: null, caption: content.caption, timing: content.timing, exif: content.exif };
     // The card's cascade carries on after the title's: its ranks start where the title's end.
     const ranks = [top.kicker, top.headline, top.counter].filter(Boolean).length;
-    const cardEls = card.caption || card.timing || card.exif ? badgeElements(card, { anchor: 'bottom-left', x: 0.07, y: 0.86, sizeFrac: look.size }, aspect, styles, null, look.cascade, scales) : [];
+    const cardEls = card.caption || card.timing || card.exif ? badgeElements(card, { anchor: 'bottom-left', x: 0.07, y: 0.86, sizeFrac: look.size, leading: look.leading }, aspect, styles, null, look.cascade, scales) : [];
     els = [
       ...badgeElements(top, layout, aspect, styles, null, look.cascade, scales),
       ...cardEls
@@ -538,7 +565,7 @@ export function hookBadgeSet(
     const text = content[key];
     if (!text) continue;
     const share = scales[key] ?? 1;
-    const set = setInColumn(text, key, look.size * BADGE_RATIOS[key] * share, look.column, look.long, measure);
+    const set = setInColumn(text, key, look.size * BADGE_RATIOS[key] * share, look.column, look.long, measure, look.maxLines);
     content[key] = set.text;
     if (set.scale !== 1) scales[key] = share * set.scale;
   }

@@ -44,6 +44,8 @@ export interface BadgeLayout {
   y: number;
   /** The HEADLINE's size, as a fraction of the frame's shorter side. */
   sizeFrac: number;
+  /** The space between two lines of one piece, a share of its size; absent = `LINE_LEADING`. */
+  leading?: number;
 }
 
 /**
@@ -372,7 +374,7 @@ function blockMetrics(
   const heights = pieces.map((p) => {
     if (p.key === 'exif' && plate) return heightFraction(plate.runs.height * plate.unit, aspect);
     const line = heightFractionOf(pieceSize(layout, p.key, scales), aspect);
-    return line * p.lines.length + line * LINE_LEADING * (p.lines.length - 1);
+    return line * p.lines.length + line * (layout.leading ?? LINE_LEADING) * (p.lines.length - 1);
   });
   const gaps = pieces.map((p, i) => {
     if (i === pieces.length - 1) return 0;
@@ -473,7 +475,7 @@ export function badgeElements(
     if (piece.key === 'exif' && plate) return plateAt({ x: layout.x, top: at }, delay);
     const style = styleAt(piece.key, delay);
     const size = pieceSize(layout, piece.key, scales);
-    const line = heightFractionOf(size, aspect) * (1 + LINE_LEADING);
+    const line = heightFractionOf(size, aspect) * (1 + (layout.leading ?? LINE_LEADING));
     // One element a line, each named after its piece (`piece:headline`, then
     // `piece:headline:1`…) as a camera plate's runs are, so a hit on any line
     // is a hit on the piece.

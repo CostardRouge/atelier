@@ -191,3 +191,38 @@ describe('a post’s own place and shades', () => {
   });
 });
 
+describe('his own line breaks', () => {
+  it('keeps them when wrapping, and breaks a long line of his inside the column', () => {
+    const set = setInColumn('100 000 photos.\nAucune triée, aucune retouche, rien du tout', 'headline', 0.1, 0.86, 'wrap');
+    const lines = set.text.split('\n');
+    expect(lines[0]).toBe('100 000 photos.');
+    expect(lines.length).toBeGreaterThan(2);
+    for (const l of lines) expect(roughMeasure(l, 'headline', 0.1 * set.scale)).toBeLessThanOrEqual(0.86 + 1e-9);
+  });
+
+  it('keeps only his breaks in manual, shrinking so the widest fits, and none in one line', () => {
+    const manual = setInColumn('Un\nune ligne bien plus longue que la colonne permise', 'headline', 0.1, 0.86, 'manual');
+    expect(manual.text).toBe('Un\nune ligne bien plus longue que la colonne permise');
+    expect(roughMeasure('une ligne bien plus longue que la colonne permise', 'headline', 0.1 * manual.scale)).toBeCloseTo(0.86, 5);
+    expect(setInColumn('Un\ndeux', 'headline', 0.1, 0.86, 'fit').text).toBe('Un deux');
+  });
+
+  it('lets his breaks outnumber the line limit, and the limit be set', () => {
+    expect(setInColumn('a\nb\nc\nd\ne', 'headline', 0.1, 0.86, 'wrap').text.split('\n')).toHaveLength(5);
+    const long = 'J’ai roulé quatorze mille kilomètres en van sans jamais trier une photo';
+    expect(setInColumn(long, 'headline', 0.2, 0.86, 'wrap', roughMeasure, 5).text.split('\n').length).toBeLessThanOrEqual(5);
+    expect(setInColumn(long, 'headline', 0.2, 0.86, 'wrap', roughMeasure, 1).text.split('\n')).toHaveLength(1);
+  });
+
+  it('spaces the lines as set, and reads the settings field by field', () => {
+    const h: Hook = { lines: ['Un\ndeux', 'Aucune.'] };
+    const tl = hookTimeline(h);
+    const gap = (leading?: number) => {
+      const big = hookBadgeElements(h, tl, { long: 'manual', leading }, series).filter((e) => e.piece === 'big').map((e) => e.el.y);
+      return big[1] - big[0];
+    };
+    expect(gap(0.6)).toBeGreaterThan(gap(0));
+    expect(readHookBadge({ long: 'manual', maxLines: 9, leading: 2 })).toEqual({ long: 'manual', maxLines: 6, leading: 0.8 });
+  });
+});
+

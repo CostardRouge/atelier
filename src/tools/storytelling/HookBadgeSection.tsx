@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import StylePanel from '../../shared/overlay/StylePanel';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
-import { defaultHookCascade, HOOK_COMPOSITIONS, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookLayoutOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
+import { defaultHookCascade, HOOK_COMPOSITIONS, HOOK_LINES_MAX, HOOK_MAX_LINES, HOOK_PIECES, HOOK_SIZE_MAX, HOOK_SIZE_MIN, hookBadgeOf, hookLayoutOf, hookThemeOf, type HookBadge, type HookComposition, type HookLong, type HookPieceKey } from '../../shared/story/hook-badge';
 import { withLook } from '../../shared/story/sources';
 import type { StoryScript } from '../../shared/story/story-script';
 import { SelectField, SliderRow, SwitchRow } from '../../shared/ui/Inspector';
@@ -111,15 +111,32 @@ export default function HookBadgeSection({ script, onScript }: { script: StorySc
           <SliderRow label="Column" value={Math.round(b.column * 100)} min={30} max={95} step={1} reset={86} format={(v) => `${v} %`} onChange={(v) => write({ column: v === 86 ? undefined : v / 100 })} />
           <Segmented<HookLong>
             options={[
-              { id: 'wrap', label: 'Wrap', title: 'Broken at words inside the column; past three lines it shrinks' },
-              { id: 'fit', label: 'Shrink to fit', title: 'Kept on one line, shrunk to the column' },
+              { id: 'wrap', label: 'Wrap', title: 'Broken at words inside the column, and wherever you pressed Return' },
+              { id: 'manual', label: 'Your breaks', title: 'Only where you pressed Return; shrunk so the widest line fits the column' },
+              { id: 'fit', label: 'One line', title: 'Kept on one line, shrunk to the column' },
             ]}
             value={b.long}
             onChange={(long) => write({ long: long === 'wrap' ? undefined : long })}
             size="sm"
             fill
-            label="A big text longer than the column"
+            label="How a long big text is laid"
           />
+          {b.long === 'wrap' ? (
+            <SliderRow label="Lines" value={b.maxLines} min={1} max={HOOK_LINES_MAX} step={1} reset={HOOK_MAX_LINES} format={(v) => `${v} at most`} onChange={(v) => write({ maxLines: v === HOOK_MAX_LINES ? undefined : v })} />
+          ) : null}
+          {b.long !== 'fit' ? (
+            <SliderRow
+              label="Line spacing"
+              value={Math.round((1 + b.leading) * 100)}
+              min={80}
+              max={180}
+              step={1}
+              reset={112}
+              format={(v) => `${v} %`}
+              onChange={(v) => write({ leading: v === 112 ? undefined : v / 100 - 1 })}
+            />
+          ) : null}
+          <p className="m-0 text-2xs text-muted leading-snug">Press Return in the big text to start a new line: Wrap keeps your breaks and adds its own, Your breaks keeps only yours.</p>
           <p className="m-0 mt-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Shades</p>
           <ShadesPanel shades={[...(b.shades ?? [])]} onChange={(shades) => write({ shades: shades.length ? shades : undefined })} followBadge anchor={hookLayoutOf(b).anchor} />
           <p className="m-0 text-2xs text-muted leading-snug">Trips&apos; shades: one that follows the badge&apos;s edge lands its reach on the block, one that follows its anchor sits in the badge&apos;s cell and moves with it. The veil a post sets under Hook still darkens the whole picture; set it to 0 to keep the shades alone.</p>
