@@ -154,10 +154,11 @@ export function objectContent(key: string, ctx: ContentContext): ObjectContent |
     };
   }
 
-  if (key === 'hook' || key === 'hook.veil' || key === 'hook.band') {
+  // The hook itself shows its whole panel above its place (the Studio's Hook object): nothing to add here.
+  if (key === 'hook.veil' || key === 'hook.band') {
     return {
       says: null,
-      from: key === 'hook.veil' ? 'A darkening of the picture behind the words; its strength is the hook’s Veil.' : key === 'hook.band' ? 'The band behind the badge, from its composition.' : 'The hook: its words, its badge, its motion and its sounds.',
+      from: key === 'hook.veil' ? 'A darkening of the picture behind the words; its strength is the hook’s Veil.' : 'The band behind the badge, from its composition.',
       kind: 'no text',
       link: { to: 'hook', label: 'All the hook’s settings' },
     };

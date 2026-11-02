@@ -159,7 +159,8 @@ function StudioTree({
       {groupButton('g:post', 'This post', postOpen)}
       {postOpen
         ? POST_PANELS.map(([id, label]) => (
-            <button key={id} type="button" className={rowClass(sameSel(selected, { kind: 'panel', id }))} onClick={() => onSelect({ kind: 'panel', id })}>
+            // The Hook row selects the Hook object while the post draws one (its settings live there).
+            <button key={id} type="button" className={rowClass(sameSel(selected, { kind: 'panel', id }) || (id === 'hook' && selKey === 'hook' && selSlot === ''))} onClick={() => onSelect({ kind: 'panel', id })}>
               {label}
             </button>
           ))

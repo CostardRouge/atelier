@@ -98,6 +98,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   caption or the camera right there; for a text the series computes (the badge's header, place and why now) it shows
   where it comes from and takes this post's own words over it; the HUD and the header take this post's own number;
   the map's credit says the licence fixes it.
+- Storytelling: the hook's settings — its words, variants, badge, motion and sounds — open when you select the Hook
+  itself, in the list or from any of its pieces, above where it sits; the Hook row under This post leads there too.
 - Storytelling: choose what the map says at each point, on two lines — the place, the town it is in or near, the
   state or its code, the country, the stage, the day of the trip, the date or the kilometres so far — with a place
   written as in Trips (« Perth, WA »), which points carry their name (all, those passed, the current one, the first

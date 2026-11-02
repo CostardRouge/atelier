@@ -252,8 +252,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   // picture in sight (Develop's rule: what is judged on the picture never goes under a wash).
   const compact = useIsCompact();
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  // The hook's settings live in the Hook OBJECT (Studio lab, O4): asking for the Hook panel — its row under
+  // This post, a piece's « All the hook's settings » — selects that object while the post draws one.
+  const hookTrack = useRef<ObjectTrack | null>(null);
   const select = useCallback((s: StudioSelection) => {
-    setSelected(s);
+    const hook = hookTrack.current;
+    setSelected(s.kind === 'panel' && s.id === 'hook' && hook ? { kind: 'object', id: hook.id, key: hook.key, slot: hook.slot } : s);
     setPane('settings');
   }, []);
   // The editor's own width decides its columns (`frontend.md`: a tool splits on its container, never the viewport).
@@ -270,6 +274,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   });
   const scenes = useMemo(() => sceneSpans(shown), [shown]);
   const [tracks, setTracks] = useState<ObjectTrack[]>([]);
+  hookTrack.current = tracks.find((t) => t.key === 'hook' && t.slot === '') ?? null;
   useEffect(() => {
     // Run the post on a context that draws nothing (`studio.ts`), once the edits settle.
     const id = window.setTimeout(() => setTracks(objectTracks(shown, { stops: mapOpts.stops, road: mapOpts.road })), 120);
@@ -880,10 +885,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           number: skeleton.number,
         })
       : null;
+    // The Hook object: its words, variants, badge, motion and sounds first, then its place (O4).
+    const hookFirst = sel.key === 'hook' && sel.slot === '' ? panelOf('hook') : null;
     return (
+      <>
+      {hookFirst}
       <InspectorSection
         id="story-object"
-        title={objectLabel(sel.key)}
+        title={hookFirst ? 'Hook · place' : objectLabel(sel.key)}
         foldable={false}
         info="Click an object on the stage, in the list or on the timeline; arrows nudge it (⇧ ten pixels), Escape lets it go. Its settings are kept in your script — for every post of the series, or this post alone."
       >
@@ -914,6 +923,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           }
         />
       </InspectorSection>
+      </>
     );
   };
 
