@@ -23,8 +23,14 @@ const apply = (m: M, x: number, y: number): [number, number] => [m[0] * x + m[2]
 
 /** How finely a position is told apart, in frame pixels: a change under it is not a change. */
 export const RECORD_GRID = 2;
-const r = (v: number) => Math.round(v / RECORD_GRID) * RECORD_GRID;
-const a2 = (v: number) => Math.round(v * 100) / 100;
+/**
+ * A value brought to a ten-thousandth first: two engines (Node 22 here, 26 in CI) may compute a sine or a power
+ * a few ulps apart, and a coordinate sitting exactly on a grid line (a picture at 539.999… or 540.000…) then
+ * rounded both ways — measured: the living wall's first frame differed in CI. Snapped, both land alike.
+ */
+const snap = (v: number) => Math.round(v * 1e4) / 1e4;
+const r = (v: number) => Math.round(snap(v) / RECORD_GRID) * RECORD_GRID;
+const a2 = (v: number) => Math.round(snap(v) * 100) / 100;
 
 export interface Recording {
   ctx: CanvasRenderingContext2D;
@@ -97,7 +103,9 @@ export class RecordingPath2D {
   }
 }
 
-const colour = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, '').toLowerCase() : 'paint');
+/** A colour as written, its numbers to a thousandth: an `hsla(…)` built from a computed alpha carries every ulp. */
+const colour = (v: unknown) =>
+  typeof v === 'string' ? v.replace(/\s+/g, '').toLowerCase().replace(/-?\d+\.\d+/g, (n) => String(Math.round(Number(n) * 1000) / 1000)) : 'paint';
 
 export function recordingContext(width = 1080, height = 1920): Recording {
   const ops: string[] = [];
