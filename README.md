@@ -3137,6 +3137,19 @@ it and may grow blocks of its own.
   the grain and the vignette. *Count* chooses one picture per
   place of the wall; after changing the grid, *Count again* gives each place
   its own. *Back to the charte's look* forgets it all.
+- **The living wall.** Under Look, *Motion* sets the wall moving, lane by
+  lane — its rows or its columns: *Marquee* (every row slides), *Metro*
+  (neighbours go opposite ways), *Waterfall* (columns falling), *Shuffle
+  board* (two pictures swap places), *Flip board* (each picture turns over to
+  the next), *Calm* (a slow drift), or still. Each lane is a chip a click
+  turns to the next mode, so a wall can mix them (« Your own »); *Speed* sets
+  them all. *Smart* holds the first picture while the camera lands on it,
+  moves a stage's band as one, slows while your voice speaks, steps on your
+  music's beats (found on this device, from your file) and settles on whole
+  pictures as the number arrives. *More pictures* lets a turning lane bring in
+  pictures from off the frame — counting then keeps up to three a place, still
+  spread over every day. *For* sets it for every post or this post alone. The
+  export draws exactly what plays; the cover stays still.
 - **Language.** *Language* (in the Script section) says whether the series is
   told in English or French: its counted numbers (98,412 or 98 412), the days
   on the map (Sep 3 or 03 sept.) and the few words the blocks write themselves

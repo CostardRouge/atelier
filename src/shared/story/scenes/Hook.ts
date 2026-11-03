@@ -6,6 +6,7 @@ import { word, numberText } from "../locale";
 import { appear, clamp, E, enter, fit, font, K, PAL, rng, text, TYPO, type Ctx } from "../motion";
 import { pictureFor, wallGrid, wallLayout, type WallGrid, type WallGroup, type WallRect } from "../wall-grid";
 import { obj } from "../objects";
+import { motionDraws, moves, wallMotionOf, QUEUE_LAPS, type WallCues, type WallMotion } from "../wall-motion";
 
 const R = rng(11);
 type Tile = { warm: boolean; l: number; s: number; h0: number; delay: number };
@@ -39,6 +40,29 @@ export function setWallGrid(grid: Partial<WallGrid> | null | undefined, groups?:
   GROUPS = groups?.length ? groups : null;
 }
 
+/**
+ * The wall's MOTION (`wall-motion.ts`), set per frame by `compose.ts` with the
+ * post's cues (the voice's spans, the music's beats) on the post's clock and
+ * the wall scene's start, which turns them into the scene's own clock. Null
+ * = the still wall of before (the cover is always still).
+ */
+let MOTION: WallMotion | null = null;
+let CUES: WallCues = {};
+let SCENE_START = 0;
+export function setWallMotion(motion: Partial<WallMotion> | null | undefined, cues?: WallCues | null) {
+  const m = motion ? wallMotionOf(motion) : null;
+  MOTION = m && moves(m) ? m : null;
+  CUES = cues ?? {};
+}
+/** Where the wall scene starts on the post's clock (`compose.ts`, per slot). */
+export function setWallScene(start: number) {
+  SCENE_START = start;
+}
+const sceneCues = (): WallCues => ({
+  speech: CUES.speech?.map(([a, b]) => [a - SCENE_START, b - SCENE_START] as const),
+  beats: CUES.beats?.map((b) => b - SCENE_START),
+});
+
 /** A band's name on its first picture: a paper chip, mono capitals, sized to the cell. */
 function drawBandLabel(c: Ctx, label: string, x: number, y: number, cellH: number) {
   const size = Math.max(16, Math.min(36, cellH * 0.22));
@@ -70,39 +94,59 @@ function drawPicture(c: Ctx, img: CanvasImageSource, x: number, y: number, w: nu
   c.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
 }
 
-export function drawTiles(c: Ctx, alphaOf: (rect: WallRect, i: number) => number) {
+export function drawTiles(c: Ctx, alphaOf: (rect: WallRect, i: number) => number, lt?: number) {
   const g = wallGrid(GRID);
   const groups = g.group !== 'none' ? GROUPS : null;
-  const { rects, cellH } = wallLayout(g, groups?.map((x) => x.n));
+  const layout = wallLayout(g, groups?.map((x) => x.n));
+  const { rects, cellH } = layout;
   const inset = g.gap / 2;
   const total = groups ? groups.reduce((n, x) => n + x.n, 0) : 0;
   const heads: [string, number, number, number][] = [];
+  // The living wall: each place drawn where its lane has taken it, the queue's next pictures as it turns.
+  const motion = MOTION && lt !== undefined ? MOTION : null;
+  const draws = motion ? motionDraws(rects, layout, motion, lt!, sceneCues()) : null;
+  const queue = motion?.queue ? QUEUE_LAPS : 1;
   rects.forEach((rect, i) => {
     const a = alphaOf(rect, i);
     if (a <= 0) return;
-    const x = rect.x + inset,
-      y = rect.y + inset,
-      w = rect.w - g.gap,
-      h = rect.h - g.gap;
-    if (w <= 0 || h <= 0) return;
-    // A grouped wall's place names its picture among the counted ones; those map onto what is loaded.
-    const at = rect.pic !== undefined && total ? pictureFor(rect.pic, total, WALL.length) : pictureFor(i, rects.length, WALL.length);
-    const img = at >= 0 ? WALL[at] : null;
-    c.save();
-    if (g.radius > 0) {
-      c.beginPath();
-      c.roundRect(x, y, w, h, Math.min(g.radius, w / 2, h / 2));
-      c.clip();
+    for (const d of draws ? draws[i] : [null]) {
+      const src = d?.shows ?? i;
+      const lap = d ? ((d.lap % queue) + queue) % queue : 0;
+      const x = rect.x + inset + (d?.dx ?? 0),
+        y = rect.y + inset + (d?.dy ?? 0),
+        w = rect.w - g.gap,
+        h = rect.h - g.gap;
+      if (w <= 0 || h <= 0) continue;
+      // A grouped wall's place names its picture among the counted ones; those map onto what is loaded. A queue
+      // INTERLEAVES them: at rest every place shows one picture in `queue` across the whole trip, in day order, and
+      // each turn of its lane the next one — so a still moment of a moving wall still spans every day.
+      const srcRect = rects[src];
+      const at =
+        srcRect.pic !== undefined && total
+          ? pictureFor(srcRect.pic * queue + lap, total * queue, WALL.length)
+          : pictureFor(src * queue + lap, rects.length * queue, WALL.length);
+      const img = at >= 0 ? WALL[at] : null;
+      c.save();
+      if (d && (d.sx !== 1 || d.sy !== 1)) {
+        c.translate(x + w / 2, y + h / 2);
+        c.scale(d.sx, d.sy);
+        c.translate(-(x + w / 2), -(y + h / 2));
+      }
+      if (g.radius > 0) {
+        c.beginPath();
+        c.roundRect(x, y, w, h, Math.min(g.radius, w / 2, h / 2));
+        c.clip();
+      }
+      if (img) {
+        c.globalAlpha *= Math.min(1, a);
+        drawPicture(c, img, x, y, w, h);
+      } else {
+        c.fillStyle = tileColor(TILES[(src + lap * 7) % TILES.length], a);
+        c.fillRect(x, y, w, h);
+      }
+      c.restore();
+      if (groups && g.labels && rect.head && rect.band !== undefined && groups[rect.band] && (!d || d === draws![i][0])) heads.push([groups[rect.band].label, x, y, a]);
     }
-    if (img) {
-      c.globalAlpha *= Math.min(1, a);
-      drawPicture(c, img, x, y, w, h);
-    } else {
-      c.fillStyle = tileColor(TILES[i % TILES.length], a);
-      c.fillRect(x, y, w, h);
-    }
-    c.restore();
-    if (groups && g.labels && rect.head && rect.band !== undefined && groups[rect.band]) heads.push([groups[rect.band].label, x, y, a]);
   });
   // The names after every picture, so no neighbour paints over a long one.
   for (const [label, x, y, a] of heads) {
@@ -114,7 +158,7 @@ export function drawTiles(c: Ctx, alphaOf: (rect: WallRect, i: number) => number
 }
 
 /** the wall at camera progress p (0 = the centre picture filling most of the frame, 1 = the whole wall at its zoom) */
-export function drawWall(c: Ctx, p: number, centre: number) {
+export function drawWall(c: Ctx, p: number, centre: number, lt?: number) {
   const g = wallGrid(GRID);
   const { cellW } = wallLayout(g);
   // The camera starts with the centre picture 648 px wide — ×6 on the default's 108 px cell.
@@ -124,7 +168,7 @@ export function drawWall(c: Ctx, p: number, centre: number) {
   c.translate(540, 960);
   c.scale(s, s);
   c.translate(-540, -960);
-  drawTiles(c, (rect) => (rect.centre ? centre : clamp((p - 0.15 - rect.d * 0.02) * 2.2)));
+  drawTiles(c, (rect) => (rect.centre ? centre : clamp((p - 0.15 - rect.d * 0.02) * 2.2)), lt);
   c.restore();
 }
 
@@ -134,7 +178,7 @@ export function drawHook(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
   const quiet = _p.quiet === true;
   obj(c, "wall.pictures", [540, 960], lt, (lt) => {
     const p = E(clamp((lt - 0.6 * K) / (2.4 * K)));
-    drawWall(c, p, quiet ? 1 : enter(lt, 0, 0.8));
+    drawWall(c, p, quiet ? 1 : enter(lt, 0, 0.8), lt);
   }, quiet ? undefined : 0);
   if (quiet) return;
   // the number, after the image has settled

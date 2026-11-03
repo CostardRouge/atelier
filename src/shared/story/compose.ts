@@ -19,7 +19,8 @@ import type { NamedWhich } from './map-names';
 import { setStoryCamera } from './story-camera';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
-import { setWall, setWallGrid } from './scenes/Hook';
+import { setWall, setWallGrid, setWallMotion, setWallScene } from './scenes/Hook';
+import type { WallCues } from './wall-motion';
 import { drawHook, hookTimeline } from './hook';
 import { hookBadgeOf } from './hook-badge';
 import { drawHookBadge } from './scenes/HookBadge';
@@ -61,6 +62,8 @@ export interface ComposeOptions {
    * pixel as before.
    */
   scale?: number;
+  /** When the voice speaks and the music's beats, on the post's clock — what smart motion follows (`wall-motion.ts`). */
+  cues?: WallCues | null;
 }
 
 let layer: HTMLCanvasElement | null = null;
@@ -86,6 +89,7 @@ function slotLayer(scale: number): CanvasRenderingContext2D {
 function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
   const fn = BLOCKS[slot.block];
   setSlot(slot.key);
+  setWallScene(slot.start);
   c.save();
   try {
     if (!fn) throw new Error(`no block named “${slot.block}”`);
@@ -116,6 +120,8 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);
   setWallGrid(ep.look?.wall, ep.wallGroups);
+  // The wall's motion: the series', this post's over it; the voice's spans and the music's beats as its cues.
+  setWallMotion(ep.look?.wallMotion || ep.wallMotion ? { ...(ep.look?.wallMotion ?? {}), ...(ep.wallMotion ?? {}) } : null, opts.cues);
   setTexture(ep.look);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;

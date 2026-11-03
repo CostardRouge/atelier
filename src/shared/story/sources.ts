@@ -224,6 +224,7 @@ export function withLook(
     delete kept.camera;
     delete kept.pace;
     delete kept.hook;
+    delete kept.wallMotion;
     const rest: StoryScript = { ...script, look: kept };
     if (!Object.keys(kept).length) delete rest.look;
     return rest;

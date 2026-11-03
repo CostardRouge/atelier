@@ -17,6 +17,7 @@ import MapRoadSection from './MapRoadSection';
 import { useTripVersion } from './trip-changes';
 import MapStopsSection from './MapStopsSection';
 import { wallCells } from '../../shared/story/wall-grid';
+import { wallCapacity } from '../../shared/story/wall-motion';
 import type { WallProgress } from './wall-cache';
 import { MAX_CHOSEN, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
@@ -132,7 +133,7 @@ export default function SourcesPanel({
           .catch(() => null),
       ]);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
-      const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
+      const places = wallCapacity(wallCells(script.look?.wall), script.look?.wallMotion, MAX_TILES);
       // By rules when he set some (over the pictures ticked in the picker, else every counted
       // day's), else the ticked pictures, else one cover a day.
       const rules = sources.wall?.rules;
@@ -169,7 +170,7 @@ export default function SourcesPanel({
   }
 
   const chosen = sources.wall?.chosen ?? null;
-  const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
+  const places = wallCapacity(wallCells(script.look?.wall), script.look?.wallMotion, MAX_TILES);
   // The pictures ticked in the picker join the wall's pool; with a counting, the wall changes at once.
   const putOnWall = (picked: [number, string][]) => {
     if (!trip) return;

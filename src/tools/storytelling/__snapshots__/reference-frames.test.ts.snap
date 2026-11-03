@@ -200,3 +200,12 @@ exports[`reference frames > FIN draws as it did 1`] = `
   "21.20s 9 ops 902200d6 | Sample series / @sample / Follow for the next one / FIN",
 ]
 `;
+
+exports[`reference frames > the living wall (Metro, smart) draws as it did, and settles aligned 1`] = `
+[
+  "0.80s 232 ops 091e97c3",
+  "1.30s 254 ops 204be584",
+  "1.80s 254 ops 69eb8e6c",
+  "2.60s 240 ops b59edc0d",
+]
+`;

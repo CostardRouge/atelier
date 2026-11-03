@@ -68,6 +68,18 @@ describe('reference frames', () => {
     });
   }
 
+  it('the living wall (Metro, smart) draws as it did, and settles aligned', () => {
+    const post = POSTS[0];
+    const ep = assemble(post, { ...SAMPLE, look: { wallMotion: { preset: 'metro' } } }, POSTS);
+    const wall = slotsOf(ep).find((s) => s.block === 'wall')!;
+    const frames = [0.8, 1.3, 1.8, 2.6].map((lt) => {
+      const rec = recordingContext();
+      drawEpisode(rec.ctx, ep, wall.start + lt, { dry: true, cues: { beats: [wall.start + 1.2, wall.start + 1.6], speech: [[wall.start + 1.0, wall.start + 1.4]] } });
+      return `${lt.toFixed(2)}s ${rec.ops.length} ops ${fingerprint(rec.ops)}`;
+    });
+    expect(frames).toMatchSnapshot();
+  });
+
   it('the same frame records the same, and a part moved is seen', () => {
     const post = POSTS[0];
     const draw = (dx: number) => {

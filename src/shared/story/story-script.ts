@@ -20,6 +20,7 @@ import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
+import { readWallMotion, type WallMotion } from './wall-motion';
 import { readWallGrid, wallGroups, type WallStage } from './wall-grid';
 import { readCharte, readStyleBook, type StyleBook } from './objects';
 import { monthText } from './locale';
@@ -71,6 +72,8 @@ export interface ScriptPost {
   promise?: string;
   /** This post's own settings for its objects, over the series' (`objects.ts`). */
   objects?: StyleBook;
+  /** This post's own wall motion, over the series' (`wall-motion.ts`). */
+  wallMotion?: Partial<WallMotion>;
 }
 
 /**
@@ -313,6 +316,7 @@ export function parseScript(raw: unknown): ScriptParse {
       facts: readFacts(value.facts),
       ...readHooks(value),
       ...(readStyleBook(value.objects) ? { objects: readStyleBook(value.objects) } : {}),
+      ...(readWallMotion(value.wallMotion) ? { wallMotion: readWallMotion(value.wallMotion) } : {}),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -531,7 +535,9 @@ function readLook(raw: unknown): StoryLook | undefined {
   const camera = readStoryCamera(raw.camera);
   const pace = readRoutePace(raw.pace);
   const hook = readHookBadge(raw.hook);
+  const wallMotion = readWallMotion(raw.wallMotion);
   const look: StoryLook = {
+    ...(wallMotion ? { wallMotion } : {}),
     ...(hook ? { hook } : {}),
     ...(pace ? { pace } : {}),
     ...(map ? { map } : {}),
@@ -615,6 +621,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     lang,
     ...(script?.look ? { look: script.look } : {}),
     ...(mine?.objects ? { objects: mine.objects } : {}),
+    ...(mine?.wallMotion ? { wallMotion: mine.wallMotion } : {}),
     wallGroups: wallGroups(
       (mine?.facts ?? script?.facts)?.tileDays,
       script?.look?.wall?.group ?? 'none',

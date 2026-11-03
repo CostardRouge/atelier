@@ -11,6 +11,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: the living wall — Look › *Motion* sets the wall's rows or columns moving: Marquee, Metro, Waterfall,
+  Shuffle board, Flip board, Calm, or each lane its own mode with a click. *Smart* holds the first picture while the
+  camera lands, moves a stage's band as one, slows under your voice, steps on your music's beats and ends aligned;
+  *More pictures* brings in pictures from off the frame as a lane turns. For the series or one post.
 - Storytelling: every export is measured on the device that makes it — how long it took against how long it plays,
   the video profile and the sound codec, the file's size, the memory at its fullest — and listed under Export with
   *Copy*.
