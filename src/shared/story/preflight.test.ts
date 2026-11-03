@@ -113,3 +113,12 @@ describe('facesUsed', () => {
     expect(faceSpecs('instrumentItalic')).toEqual(['italic 400 40px "Instrument Serif"']);
   });
 });
+
+describe('placeholder captions', () => {
+  it('a caption still a placeholder would ship: stop, with the caption to type', async () => {
+    const { placeholderCaptions } = await import('./preflight');
+    const issues = placeholderCaptions(ep({ blocks: [{ block: 'wall', len: 4, cap: { a: 0, b: 1, text: '⟨ caption 1 ⟩' } }, { block: 'map-camera', len: 4, cap: { a: 0, b: 1, text: 'Real words' } }] }), [{ slot: 's0', at: 1 }]);
+    expect(issues.map((i) => [i.id, i.level])).toEqual([['placeholder:0', 'stop']]);
+    expect(issues[0].fix).toMatchObject({ kind: 'object', key: 'caption', slot: 's0' });
+  });
+});

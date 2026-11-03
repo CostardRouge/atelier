@@ -624,6 +624,8 @@ export const MAX_TILES = 400;
 
 /** What a caption reads when no script is loaded. */
 export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} ⟩`;
+/** Whether a caption is still the placeholder — what the pre-export check refuses to let ship unsaid. */
+export const isPlaceholderCaption = (text: string): boolean => /^⟨ caption \d+ ⟩$/.test(text.trim());
 
 /**
  * Join a post's skeleton and the script into the episode the composer draws.
@@ -672,6 +674,9 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
       // Under a hook the first block is its picture: a wall says nothing of its own there.
       if (hook && i === 0 && b.block === 'wall') given.quiet = true;
+      // The wall's number says what was COUNTED when the script names none (measured on a new series: it drew the
+      // block's neutral 100 000 over a trip of 60 media).
+      if (b.block === 'wall' && given.count === undefined && values && typeof values['media.total'] === 'number') given.count = values['media.total'];
       // A season's recap the script does not spell out lists the season's own posts, from the series.
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry

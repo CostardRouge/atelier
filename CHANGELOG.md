@@ -50,6 +50,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Storytelling: the wall's number says what was counted when your script names none, instead of 100 000.
+- Storytelling: *Before you export* now flags a scene whose caption is still a placeholder (« ⟨ caption 2 ⟩ »), with a
+  link to type it.
+- Storytelling: the before/after's BEFORE label stays on the original's side while the developed picture wipes in.
 - Storytelling: starting a new export clears the previous one's files, so Archive can never send a video that no
   longer matches the post.
 

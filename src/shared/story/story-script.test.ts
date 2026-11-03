@@ -122,3 +122,14 @@ describe('the Studio’s settings in a script', () => {
     expect(parsed.ok && parsed.script.posts.a.blocks?.[0]).toEqual({ caption: undefined, params: undefined, len: 0.5 });
   });
 });
+
+describe('the wall says what was counted', () => {
+  it('its number is media.total when the script names none, and the script wins when it does', async () => {
+    const { assemble, newScript } = await import('./story-script');
+    const skel = { id: 'ep00', number: 'EP.00', season: 1, blocks: [{ block: 'wall', len: 4 }] };
+    const counted = { ...newScript('S'), facts: { at: '2025-01-01T00:00:00Z', values: { 'media.total': 60 } } };
+    expect(assemble(skel, counted, [skel]).blocks[0].params?.count).toBe(60);
+    const own = { ...counted, posts: { ep00: { blocks: [{ params: { count: 98412 } }] } } };
+    expect(assemble(skel, own, [skel]).blocks[0].params?.count).toBe(98412);
+  });
+});

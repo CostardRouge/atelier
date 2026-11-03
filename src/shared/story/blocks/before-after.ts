@@ -27,7 +27,8 @@ register("before-after", (c, lt, p) => {
     const x = 90, y = 520, w = 900, h = 720;
     obj(c, "before-after.before", [540, y + h / 2], lt, (lt) => appear(c, enter(lt, 0.2, 1), () => {
       c.save(); c.beginPath(); c.roundRect(x, y, w, h, 18); c.clip(); drawCovered(c, pair.before, x, y, w, h); c.restore();
-      chip(c, word("before"), x + 24, y + 24);
+      // BEFORE on the side the original keeps longest (the wipe comes from the left), AFTER where the final lands.
+      chip(c, word("before"), x + w - 24, y + 24, true);
     }, 16), 0.2);
     obj(c, "before-after.after", [540, y + h / 2], lt, (lt) => {
       const wv = wipe(lt);
@@ -35,7 +36,7 @@ register("before-after", (c, lt, p) => {
       const edge = x + w * wv;
       c.save(); c.beginPath(); c.roundRect(x, y, w, h, 18); c.clip(); c.beginPath(); c.rect(x, y, edge - x, h); c.clip(); drawCovered(c, pair.after, x, y, w, h); c.restore();
       c.save(); c.globalAlpha *= 1 - E(clamp((lt - 3.6 * K) / (0.8 * K))); c.fillStyle = PAL.acc; c.fillRect(edge - 2, y, 4, h); c.restore();
-      if (wv > 0.6) { c.save(); c.globalAlpha *= clamp((wv - 0.6) / 0.4); chip(c, word("after"), x + w - 24, y + 24, true); c.restore(); }
+      if (wv > 0.6) { c.save(); c.globalAlpha *= clamp((wv - 0.6) / 0.4); chip(c, word("after"), x + 24, y + 24); c.restore(); }
     }, 2.0);
     if (label) obj(c, "before-after.label", [540, 1290], lt, (lt) => appear(c, enter(lt, 3.4, 1), () => text(c, label, 90, 1300, 32, PAL.dim, { w: TYPO.lw }), 8), 3.4);
     return;

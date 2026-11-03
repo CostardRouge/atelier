@@ -12,6 +12,7 @@
 import type { SafeZonePreset } from '../overlay/guides';
 import type { Episode } from './episode';
 import { PLACEHOLDER } from './story-facts';
+import { isPlaceholderCaption } from './story-script';
 import { DEFAULT_ROLES, FONT_ROLES, isStoryFont, STORY_FONTS, type FontRole, type StoryFontId } from './fonts';
 import type { StyleBook } from './objects';
 
@@ -92,6 +93,23 @@ export function uncountedFacts(ep: Episode, scenes: PreflightInput['scenes'] = [
     detail: `It would be drawn with its braces in ${where}. Count the sources, or type the number in the script.`,
     fix,
   }));
+}
+
+/** The scenes whose caption is still the placeholder: « ⟨ caption 2 ⟩ » would be in the file. (pure) */
+export function placeholderCaptions(ep: Episode, scenes: PreflightInput['scenes'] = []): PreflightIssue[] {
+  return ep.blocks.flatMap((b, i): PreflightIssue[] => {
+    if (!b.cap?.text || !isPlaceholderCaption(b.cap.text)) return [];
+    const scene = scenes[i] ?? null;
+    return [
+      {
+        id: `placeholder:${i}`,
+        level: 'stop',
+        title: `Scene ${i + 1} has no caption yet`,
+        detail: `« ${b.cap.text.trim()} » would be drawn in the file. Type its words, or empty the caption's window.`,
+        ...(scene ? { fix: { kind: 'object' as const, key: 'caption', slot: scene.slot, at: scene.at, label: 'Type it' } } : {}),
+      },
+    ];
+  });
 }
 
 /** The map's tiles the series asks for and this device has not got: the export would draw the land without them. (pure) */
@@ -240,6 +258,7 @@ export function preflight(input: PreflightInput): PreflightIssue[] {
   const hasMap = input.episode.blocks.some((b) => b.block === 'map-camera' || b.block === 'map-holes' || b.block === 'journey-impossible');
   const all = [
     ...uncountedFacts(input.episode, input.scenes),
+    ...placeholderCaptions(input.episode, input.scenes),
     faceIssue(input.missingFaces),
     groundIssue(input.ground, hasMap),
     wallIssue(input.wall),

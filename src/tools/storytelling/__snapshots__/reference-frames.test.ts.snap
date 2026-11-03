@@ -203,9 +203,9 @@ exports[`reference frames > FIN draws as it did 1`] = `
 
 exports[`reference frames > a developed picture in the before/after: the original, then the final wiped in 1`] = `
 [
-  "1.00s 1 images ea811ea0",
-  "2.60s 2 images b9ea4be8",
-  "3.40s 2 images 87a47a2a",
+  "1.00s 1 images 18dad930",
+  "2.60s 2 images 1520ea70",
+  "3.40s 2 images af491ae6",
 ]
 `;
 
