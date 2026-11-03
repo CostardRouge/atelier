@@ -10,7 +10,7 @@
  */
 import { BLOCKS } from './blocks';
 import './blocks/all';
-import { drawCaption } from './caption';
+import { drawCaption, setCaptionLook } from './caption';
 import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
@@ -123,6 +123,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   // The wall's motion: the series', this post's over it; the voice's spans and the music's beats as its cues.
   setWallMotion(ep.look?.wallMotion || ep.wallMotion ? { ...(ep.look?.wallMotion ?? {}), ...(ep.wallMotion ?? {}) } : null, opts.cues);
   setTexture(ep.look);
+  setCaptionLook(ep.look?.captions);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
   const scale = opts.scale ?? 1;

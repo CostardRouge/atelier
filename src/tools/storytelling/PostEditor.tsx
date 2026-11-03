@@ -56,6 +56,7 @@ import { useLocalPref } from '../../shared/ui/local-pref';
 import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/overlay/guides';
 import { usePreflight } from './use-preflight';
 import { soundCues } from './sound-cues';
+import CaptionLookSection from './CaptionLookSection';
 import { deviceLabel, measureLine, type ExportMeasure } from '../../shared/story/export-measure';
 import { heapMb, keepMeasure, measuresNow, subscribeMeasures } from './export-measures';
 import PreflightList from './PreflightList';
@@ -725,6 +726,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             <LookPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
           {script ? (
+            <InspectorSection id="story-captions" title="Captions" foldable={false} info="How every caption of the series is laid, like the hook: how wide a line runs, how many lines before a long one shrinks — or lets it grow upward as before —, and whose buttons the words stay clear of, wherever you move them.">
+              <CaptionLookSection script={script} onScript={onScript} />
+            </InspectorSection>
+          ) : null}
+          {script ? (
             <InspectorSection id="story-map-ground" title="Maps" foldable={false} info="What every map of the series is drawn over: the coastline shipped with Atelier, no land at all, or OpenStreetMap's tiles — fetched only once this device says yes, and credited on the map's frames alone.">
               <MapGroundControls script={script} onScript={onScript} state={mapGround.ground} />
             </InspectorSection>
@@ -1026,6 +1032,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           }
         />
       </InspectorSection>
+      {sel.key === 'caption' && script ? (
+        <InspectorSection id="story-captions-object" title="Captions · the series" foldable={false} info="How every caption is laid: its column, its line limit, the platforms' buttons as an edge.">
+          <CaptionLookSection script={script} onScript={onScript} />
+        </InspectorSection>
+      ) : null}
       </>
     );
   };

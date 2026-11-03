@@ -1,28 +1,18 @@
 // Captions « leve »: each line rises and fades in, staggered; words not yet said sit at 38 %.
 import { CAPTION, type Cap } from "./charte";
 import { clamp, E, font, K, PAL, text, TYPO, type Ctx } from "./motion";
+import { captionLook, layCaption, type CaptionLook } from "./caption-layout";
+import { styleOf } from "./objects";
 
-type Word = { word: string; i: number; ww: number };
-function wrapWords(c: Ctx, words: string[], max: number) {
-  const lines: Word[][] = [[]];
-  let w = 0;
-  const sp = c.measureText(" ").width;
-  words.forEach((word, i) => {
-    const ww = c.measureText(word).width;
-    if (lines[lines.length - 1].length && w + sp + ww > max) {
-      lines.push([]);
-      w = 0;
-    }
-    const L = lines[lines.length - 1];
-    L.push({ word, i, ww });
-    w += (L.length > 1 ? sp : 0) + ww;
-  });
-  return lines;
+/** The series' caption layout (`caption-layout.ts`), set per frame by `compose.ts`; absent = the defaults. */
+let LOOK: CaptionLook = captionLook();
+export function setCaptionLook(given: Partial<CaptionLook> | null | undefined) {
+  LOOK = captionLook(given);
 }
 
 export function drawCaption(c: Ctx, cap: Cap, lt: number, sceneId = "") {
   if (!cap) return;
-  const words = cap.text.split(" "),
+  const words = cap.text.split(/\s+/).filter(Boolean),
     n = words.length,
     span = cap.b - cap.a;
   const inA = clamp((lt - cap.a) / CAPTION.fadeIn),
@@ -44,11 +34,18 @@ export function drawCaption(c: Ctx, cap: Cap, lt: number, sceneId = "") {
     c.restore();
   }
   const fpos = ((lt - cap.a) / span) * n; // fractional index of the word being said
-  const size = CAPTION.size;
+  // Laid like the hook (`caption-layout.ts`): the series' column, its line limit, the platforms' buttons as an
+  // edge — the Studio's move counted, so a caption dragged down stops above the band.
+  const measure = (w: string, z: number) => {
+    c.font = font(z, TYPO.hw, TYPO.fam);
+    return c.measureText(w).width;
+  };
+  const laid = layCaption(cap.text, measure, LOOK, { x: CAPTION.x, baseline: CAPTION.baseline, size: CAPTION.size, lineHeight: CAPTION.lineHeight }, styleOf("caption").dy ?? 0);
+  const size = laid.size;
   c.font = font(size, TYPO.hw, TYPO.fam);
-  const lines = wrapWords(c, words, CAPTION.wrap),
-    lh = size * CAPTION.lineHeight,
-    top = CAPTION.baseline - (lines.length - 1) * lh;
+  const lines = laid.lines,
+    lh = laid.lineHeight,
+    top = laid.top;
   const space = c.measureText(" ").width;
   lines.forEach((L, li) => {
     const lp = E(clamp((lt - cap.a - li * CAPTION.stagger) / (CAPTION.lineDur * K)));

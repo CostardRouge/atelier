@@ -15,6 +15,7 @@ import type { StoryCamera } from './story-camera';
 import type { RoutePace } from './route-pace';
 import type { HookBadge } from './hook-badge';
 import type { WallMotion } from './wall-motion';
+import type { CaptionLook } from './caption-layout';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -37,6 +38,8 @@ export interface StoryLook {
   hook?: HookBadge;
   /** How the wall moves, lane by lane (`wall-motion.ts`); absent = still. */
   wallMotion?: Partial<WallMotion>;
+  /** How captions are laid: their column, their line limit, the platforms' edge (`caption-layout.ts`). */
+  captions?: Partial<CaptionLook>;
 }
 
 export interface BlockSpec {

@@ -11,6 +11,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: captions are laid like the hook — a column you set, a line limit past which a long caption shrinks
+  (or grows upward, as before), and the buttons of the short-video apps as an edge the words never cross, even when
+  the caption is dragged.
 - Storytelling: every block's own words are typed where they are drawn — select a counter's number, the gear's names,
   the folders' path, the clocks, the transfer, the names, the season's posts, the opening's title or the closing card
   and its Content section shows each of its words in a field, written into this post's script.

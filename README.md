@@ -3031,6 +3031,13 @@ it and may grow blocks of its own.
   and note; the clocks' places and hours; the transfer's card and files.
   Typed in a scene, they are this post's; emptied, the block draws its own
   again.
+- **Captions laid like the hook.** *Captions* (under Charte & look, and in a
+  caption's own inspector) sets every caption of the series: how wide a line
+  runs (*Column*), what a long one does — *Shrink to fit* its *Lines* (three
+  by default; it never goes under 60 % of its size) or *Grow upward* as it
+  used to — and whose buttons it stays clear of: every short-video app,
+  Reels, TikTok, Shorts, or none. The edge holds wherever you drag the
+  caption: dragged too low, its last line stops above the platform's band.
 - **Before you export.** *Export & archive* first checks the post as it
   stands and lists what would come out wrong in the file: a fact not counted
   (`{media.total}` would be drawn with its braces), the map's tiles or the

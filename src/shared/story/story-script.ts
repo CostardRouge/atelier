@@ -21,6 +21,7 @@ import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
 import { readWallMotion, type WallMotion } from './wall-motion';
+import { readCaptionLook } from './caption-layout';
 import { readWallGrid, wallGroups, type WallStage } from './wall-grid';
 import { readCharte, readStyleBook, type StyleBook } from './objects';
 import { monthText } from './locale';
@@ -536,7 +537,9 @@ function readLook(raw: unknown): StoryLook | undefined {
   const pace = readRoutePace(raw.pace);
   const hook = readHookBadge(raw.hook);
   const wallMotion = readWallMotion(raw.wallMotion);
+  const captions = readCaptionLook(raw.captions);
   const look: StoryLook = {
+    ...(captions ? { captions } : {}),
     ...(wallMotion ? { wallMotion } : {}),
     ...(hook ? { hook } : {}),
     ...(pace ? { pace } : {}),
