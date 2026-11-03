@@ -1,3 +1,4 @@
+import { rowDay } from '../../shared/sources/winnow/picker/span';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -10,7 +11,7 @@ import { candidatesKey, keptCandidates, readCandidates } from './wall-candidates
 import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import WallPicker from './WallPicker';
-import { counts, factChanges, factsFromCalendars, factText, gearFacts, devicePictures, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, devicePictures, editPairs, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts } from '../../shared/story/trip-map';
 import MapNamesSection from './MapNamesSection';
 import MapRoadSection from './MapRoadSection';
@@ -19,7 +20,7 @@ import MapStopsSection from './MapStopsSection';
 import { wallCells } from '../../shared/story/wall-grid';
 import { wallCapacity } from '../../shared/story/wall-motion';
 import type { WallProgress } from './wall-cache';
-import { MAX_CHOSEN, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
+import { MAX_CHOSEN, MAX_EDITS, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import { SelectField } from '../../shared/ui/Inspector';
 
@@ -132,6 +133,11 @@ export default function SourcesPanel({
           .then((days) => geoFacts(days, span))
           .catch(() => null),
       ]);
+      // The pictures he developed on those days: Gallery finals whose original Winnow knows (before/after).
+      const edits = await client
+        .allAssets({ dateFrom: span.from, dateTo: span.to, half: 'final' }, 2000)
+        .then((rows) => editPairs(rows.map((r) => ({ id: r.id, original_asset_id: r.original_asset_id, day: rowDay(r) })), span, MAX_EDITS))
+        .catch(() => [] as [number, number][]);
       const gear = gearFacts(gearCals.map(([name, cal]) => [name, sumOf(cal)] as const));
       const devicePics = devicePictures(gearCals, span);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
@@ -161,6 +167,7 @@ export default function SourcesPanel({
               ...(stages.length ? { stages } : {}),
               ...(geo?.holes.length ? { holes: geo.holes } : {}),
               ...(Object.keys(devicePics).length ? { devicePics } : {}),
+              ...(edits.length ? { edits } : {}),
             },
             picks,
           ),

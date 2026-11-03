@@ -11,7 +11,7 @@
 import { BLOCKS } from './blocks';
 import './blocks/all';
 import { drawCaption, setCaptionLook } from './caption';
-import { setStoryPictures } from './story-pictures';
+import { setStoryPictures, setStoryPrints } from './story-pictures';
 import { setOpenerScene, setOpenerTrip } from './opener-scene';
 import type { TripDoc } from '../roadtrip/trip-types';
 import { H, W } from './charte';
@@ -69,6 +69,8 @@ export interface ComposeOptions {
   cues?: WallCues | null;
   /** Pictures kept on this device by Winnow id — a camera's own picture for the gear block (`story-pictures.ts`). */
   pictures?: ReadonlyMap<number, CanvasImageSource> | null;
+  /** Large pictures by Winnow id — a developed picture's original and final (`story-pictures.ts`). */
+  prints?: ReadonlyMap<number, CanvasImageSource> | null;
   /** The series' trip on this device and its first counted day — what a map scene drawn as Trips' opener plays (`opener-scene.ts`). */
   trip?: TripDoc | null;
   tripFrom?: string | null;
@@ -127,6 +129,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all', { times: opts.times ?? null, pace: ep.look?.pace ?? null });
   setWall(opts.wall ?? null);
   setStoryPictures(opts.pictures, ep.devicePics, opts.wall);
+  setStoryPrints(opts.prints, ep.edits);
   setOpenerTrip(opts.trip, opts.tripFrom);
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);

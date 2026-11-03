@@ -38,3 +38,31 @@ describe('story pictures', () => {
     setStoryPictures(null, null, null);
   });
 });
+
+describe('developed pictures (before/after)', () => {
+  it('pairs each original with its latest final over the counted days, spread over the trip', async () => {
+    const { editPairs } = await import('./story-facts');
+    const span = { from: '2025-01-01', to: '2025-01-31' };
+    const finals = [
+      { id: 10, original_asset_id: 1, day: '2025-01-02' },
+      { id: 11, original_asset_id: 1, day: '2025-01-02' },
+      { id: 20, original_asset_id: 2, day: '2025-01-09' },
+      { id: 30, original_asset_id: null, day: '2025-01-10' },
+      { id: 40, original_asset_id: 4, day: '2025-03-01' },
+    ];
+    expect(editPairs(finals, span, 6)).toEqual([[1, 11], [2, 20]]);
+    expect(editPairs(finals, span, 1)).toHaveLength(1);
+  });
+  it('a pair draws only when both pictures are here, and the facts keep it', async () => {
+    const { setStoryPrints, editPicture } = await import('./story-pictures');
+    const a = img(1), b = img(2);
+    setStoryPrints(new Map([[1, a]]), [[1, 11]]);
+    expect(editPicture(0)).toBeNull();
+    setStoryPrints(new Map([[1, a], [11, b]]), [[1, 11]]);
+    expect(editPicture(0)).toEqual({ before: a, after: b });
+    expect(editPicture(3)).toEqual({ before: a, after: b });
+    setStoryPrints(null, null);
+    const parsed = parseScript({ kind: 'atelier.story-script', version: 1, posts: {}, facts: { at: '2025-01-01T00:00:00Z', values: {}, edits: [[1, 11], [2], [0, 3]] } });
+    expect(parsed.ok && parsed.script.facts?.edits).toEqual([[1, 11]]);
+  });
+});

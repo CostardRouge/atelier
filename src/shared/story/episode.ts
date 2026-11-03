@@ -77,6 +77,8 @@ export interface Episode {
   wallMotion?: Partial<WallMotion>;
   /** A picture each camera took, by `deviceKey` (`ScriptFacts.devicePics`). */
   devicePics?: Record<string, number>;
+  /** Developed pictures as `[original, final]` ids (`ScriptFacts.edits`). */
+  edits?: [number, number][];
   /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
   wallGroups?: WallGroup[] | null;
 }

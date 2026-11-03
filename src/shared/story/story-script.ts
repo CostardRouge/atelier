@@ -169,6 +169,13 @@ export interface ScriptFacts {
    * the gear block shows beside its name (`story-pictures.ts`).
    */
   devicePics?: Record<string, number>;
+  /**
+   * Pictures he DEVELOPED over the counted days, as `[original, final]`
+   * Winnow asset ids — a Gallery final and the original it was edited from
+   * (Winnow's lineage, `original_asset_id`) — what the before/after block
+   * shows (`story-pictures.ts`). At most `MAX_EDITS`, spread over the trip.
+   */
+  edits?: [number, number][];
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -597,11 +604,20 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
       for (const [k, v] of Object.entries(raw.devicePics)) if (/^gear\.[a-z0-9]+$/.test(k) && Number.isInteger(v) && (v as number) > 0) pics[k] = v as number;
       return Object.keys(pics).length ? { devicePics: pics } : {};
     })(),
+    ...(() => {
+      const edits = Array.isArray(raw.edits)
+        ? raw.edits.filter((e): e is [number, number] => Array.isArray(e) && e.length === 2 && e.every((n) => Number.isInteger(n) && (n as number) > 0)).slice(0, MAX_EDITS)
+        : [];
+      return edits.length ? { edits: edits.map((e): [number, number] => [e[0], e[1]]) } : {};
+    })(),
   };
 }
 
 /** The pictures ticked in the picker a script keeps at most; more are thinned evenly over their days (`withChosenWall`). */
 export const MAX_CHOSEN = 2000;
+
+/** The developed pictures counting keeps for the before/after block. */
+export const MAX_EDITS = 6;
 
 /** No wall shows more pictures than this; a script asking for more is cut. */
 export const MAX_TILES = 400;
@@ -638,6 +654,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     ...(mine?.objects ? { objects: mine.objects } : {}),
     ...(mine?.wallMotion ? { wallMotion: mine.wallMotion } : {}),
     ...((mine?.facts ?? script?.facts)?.devicePics ? { devicePics: (mine?.facts ?? script?.facts)!.devicePics } : {}),
+    ...((mine?.facts ?? script?.facts)?.edits ? { edits: (mine?.facts ?? script?.facts)!.edits } : {}),
     wallGroups: wallGroups(
       (mine?.facts ?? script?.facts)?.tileDays,
       script?.look?.wall?.group ?? 'none',

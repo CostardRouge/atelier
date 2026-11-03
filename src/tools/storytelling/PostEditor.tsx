@@ -56,6 +56,7 @@ import { useLocalPref } from '../../shared/ui/local-pref';
 import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/overlay/guides';
 import { usePreflight } from './use-preflight';
 import { soundCues } from './sound-cues';
+import { usePrints } from './use-prints';
 import CaptionLookSection from './CaptionLookSection';
 import { isStoryOpener, STORY_OPENERS } from '../../shared/story/opener-scene';
 import { withBlockParam } from '../../shared/story/block-words';
@@ -202,6 +203,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const loaded = useWall(wallSource, wallIds, connections.find((c) => c.id === wallSource) ?? null);
   const tileCount = tileIds?.length ?? 0;
   const wall = useMemo(() => ({ images: loaded.images.slice(0, tileCount), progress: loaded.progress }), [loaded, tileCount]);
+  // A developed picture's original and final, drawn large by the before/after block (`usePrints`).
+  const editIds = useMemo(() => (countedFacts?.edits ?? []).flat(), [countedFacts?.edits]);
+  const prints = usePrints(wallSource, editIds, connections.find((c) => c.id === wallSource) ?? null);
   const pictures = useMemo(() => {
     const byId = new Map<number, CanvasImageSource>();
     (wallIds ?? []).forEach((id, i) => {
@@ -228,11 +232,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         : { stops: script?.stops }),
       wall: wall.images,
       pictures,
+      prints,
       ...(tripMap.state === 'ready' ? { trip: tripMap.trip, tripFrom: tripMap.span.from } : {}),
       ground: groundLayers,
       named: mapNamesOf(sources.map).which,
     }),
-    [tripMap, script, wall.images, pictures, groundLayers, sources.map, cues],
+    [tripMap, script, wall.images, pictures, prints, groundLayers, sources.map, cues],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];

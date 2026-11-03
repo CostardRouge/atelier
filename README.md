@@ -3038,7 +3038,12 @@ it and may grow blocks of its own.
   false` in the block keeps the silhouettes), the app's grid and a burst's
   frames show the wall's pictures, and the folders of pictures show one of
   them as their icon. They are the pictures this browser already keeps for
-  the wall: nothing more is fetched while you play or export.
+  the wall: nothing more is fetched while you play or export. The
+  before/after block shows a picture you DEVELOPED: Count finds, over the
+  trip's days, your Gallery finals whose original your Winnow knows, and the
+  block shows the original, then wipes the final in (*Which developed
+  picture* in its Content picks one; with none, its words as before). A
+  larger copy of those few pictures is kept in this browser.
 - **Trips' openers as map scenes.** Select a map scene (in the list, or its
   scene on the timeline): *Map scene · drawn as* draws it as the series' map,
   as Trips' *Itinerary* (the trip's places joined, in the charte's ink) or as

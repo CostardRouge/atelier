@@ -99,6 +99,22 @@ describe('reference frames', () => {
     expect([`${rec.ops.length} ops ${fingerprint(rec.ops)}`, ...images]).toMatchSnapshot();
   });
 
+  it('a developed picture in the before/after: the original, then the final wiped in', () => {
+    const post = POSTS.find((p) => p.blocks.some((b) => b.block === 'before-after'))!;
+    const script: StoryScript = { ...SAMPLE, facts: { at: '2025-01-01T00:00:00Z', values: {}, edits: [[1, 2]] } };
+    const ep = assemble(post, script, POSTS);
+    const slot = slotsOf(ep).find((s) => s.block === 'before-after')!;
+    const pic = (w: number) => ({ width: w, height: 800 }) as unknown as CanvasImageSource;
+    const frames = [1.0, 2.6, 3.4].map((lt) => {
+      const rec = recordingContext();
+      drawEpisode(rec.ctx, ep, slot.start + lt, { dry: true, prints: new Map([[1, pic(1200)], [2, pic(1201)]]) });
+      return `${lt.toFixed(2)}s ${rec.ops.filter((o) => o.startsWith('image')).length} images ${fingerprint(rec.ops)}`;
+    });
+    expect(frames[0]).toMatch(/ 1 images /);
+    expect(frames[2]).toMatch(/ 2 images /);
+    expect(frames).toMatchSnapshot();
+  });
+
   it('the same frame records the same, and a part moved is seen', () => {
     const post = POSTS[0];
     const draw = (dx: number) => {

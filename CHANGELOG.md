@@ -11,6 +11,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
+  days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
   you choose, with its caption kept — or as the series' map, as before.
 - Storytelling: your own pictures inside the blocks — each device of the gear block shows a picture it took on the

@@ -173,6 +173,23 @@ export function devicePictures(cals: readonly (readonly [string, WinnowCalendar]
 }
 
 /**
+ * The pictures he developed over the counted days, as `[original, final]`:
+ * every Gallery final whose original Winnow knows (`original_asset_id`),
+ * one a original (its latest final), spread evenly over the trip in day
+ * order, at most `max`. (pure)
+ */
+export function editPairs(finals: readonly { id: number; original_asset_id?: number | null; day: string | null }[], span: Span, max: number): [number, number][] {
+  const byOriginal = new Map<number, { id: number; day: string }>();
+  for (const f of finals) {
+    if (!f.original_asset_id || !f.day || !counts(f.day, span)) continue;
+    const was = byOriginal.get(f.original_asset_id);
+    if (!was || f.id > was.id) byOriginal.set(f.original_asset_id, { id: f.id, day: f.day });
+  }
+  const pairs = [...byOriginal].sort((a, b) => a[1].day.localeCompare(b[1].day) || a[0] - b[0]).map(([orig, f]): [number, number] => [orig, f.id]);
+  return thinEvenly(pairs, max);
+}
+
+/**
  * Where the trip's days were placed, from Winnow's positions by day: how
  * many days with media had a position and how many had none, and the HOLES —
  * runs of days with media but no position, as `[first, last]` dates. Days

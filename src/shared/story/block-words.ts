@@ -35,6 +35,7 @@ export const BLOCK_WORDS: Record<string, readonly WordField[]> = {
     { param: 'before', label: 'Before, a line each', kind: 'lines', on: ['before'] },
     { param: 'after', label: 'After, a line each', kind: 'lines', on: ['after'] },
     t('label', 'The label', ['label']),
+    n('edit', 'Which developed picture (1 = the first)', ['before', 'after']),
   ],
   bursts: [n('n', 'Frames in the burst', ['count', 'frames'])],
   'card-recovery': [t('file', 'The file', ['file', 'card'])],

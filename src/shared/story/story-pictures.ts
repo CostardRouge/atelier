@@ -12,6 +12,23 @@ import { deviceKey } from './story-facts';
 let BY_ID: ReadonlyMap<number, CanvasImageSource> = new Map();
 let DEVICES: Readonly<Record<string, number>> = {};
 let WALL: readonly (CanvasImageSource | null)[] = [];
+let PRINTS: ReadonlyMap<number, CanvasImageSource> = new Map();
+let EDITS: readonly (readonly [number, number])[] = [];
+
+/** Large pictures by Winnow id (`wall-cache.ts`'s prints) and the developed pairs `[original, final]` they show. */
+export function setStoryPrints(prints: ReadonlyMap<number, CanvasImageSource> | null | undefined, edits: readonly (readonly [number, number])[] | null | undefined): void {
+  PRINTS = prints ?? new Map();
+  EDITS = edits ?? [];
+}
+
+/** The `k`-th developed picture (0-based, wrapping), its original and its final, when both are here. */
+export function editPicture(k: number): { before: CanvasImageSource; after: CanvasImageSource } | null {
+  if (!EDITS.length) return null;
+  const [orig, fin] = EDITS[((k % EDITS.length) + EDITS.length) % EDITS.length];
+  const before = PRINTS.get(orig);
+  const after = PRINTS.get(fin);
+  return before && after ? { before, after } : null;
+}
 
 /** The frame's pictures: by Winnow id, the cameras' choices, and the wall's in day order. */
 export function setStoryPictures(byId: ReadonlyMap<number, CanvasImageSource> | null | undefined, devices: Readonly<Record<string, number>> | null | undefined, wall: readonly (CanvasImageSource | null)[] | null | undefined): void {
