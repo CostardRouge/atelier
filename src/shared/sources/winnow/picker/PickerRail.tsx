@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { LibraryHalf } from '../client';
+import type { LibraryHalf, WinnowClient } from '../client';
+import PickerSubject, { type DescribeState, type SubjectLists } from './PickerSubject';
 import Segmented from '../../../ui/Segmented';
 import { Icons } from '../../../ui/icons';
 import {
@@ -36,7 +37,8 @@ const HALVES: { id: HalfKey; label: string; title: string }[] = [
 
 /**
  * The picker's filters, in one column (his pick, face B of the brief):
- * the library half, Winnow's verdict, a star floor, the type, the flight log
+ * the library half, the SUBJECT (people, words, a place — sent to the server,
+ * `PickerSubject`), Winnow's verdict, a star floor, the type, the flight log
  * (shown when the scope holds a clip), the extension,
  * the body, the tags, and two states. Every count is the SCOPE's — a facet
  * ticked elsewhere never moves it (`facetCounts`).
@@ -53,6 +55,9 @@ export default function PickerRail({
   onHalf,
   heldLabel,
   footer,
+  client,
+  subject,
+  describe,
 }: {
   counts: FacetCounts;
   facets: PickFacets;
@@ -62,6 +67,11 @@ export default function PickerRail({
   heldLabel: string;
   /** What closes the rail on a phone, where it covers the grid. */
   footer?: ReactNode;
+  /** The instance, for the people's faces; with its people and place names once read (`PickerSubject`). */
+  client: WinnowClient;
+  subject: SubjectLists;
+  /** Where a description's ranking stands — asked, ranked, or refused by an instance with no index. */
+  describe: DescribeState;
 }) {
   const set = (patch: Partial<PickFacets>) => onFacets({ ...facets, ...patch });
   const active = activeFacets(facets);
@@ -97,6 +107,8 @@ export default function PickerRail({
           options={HALVES.map((h) => ({ id: h.id, label: h.label, title: h.title }))}
         />
       </section>
+
+      <PickerSubject client={client} lists={subject} facets={facets} onFacets={onFacets} describe={describe} />
 
       <section>
         <p className={legend}>Winnow verdict</p>

@@ -23,7 +23,8 @@
  *   and is COUNTED, never added in silence.
  */
 
-import type { WinnowAssetRow } from '../client';
+import type { AssetQuery, WinnowAssetRow } from '../client';
+import { nameParams, type NameAsk, type NameKind } from '../winnow-names';
 import { cullingFromRow, type Culling } from '../culling';
 
 // --- one row, read once ------------------------------------------------------
@@ -198,7 +199,37 @@ export interface PickFacets {
   notHeld: boolean;
   /** One picture per Winnow burst — its best: a pick, then the most stars, then its cover. */
   oneBurst: boolean;
+  /**
+   * The SUBJECT (2026-11-02, his ask for Mosaic: «que des photos d'un sujet précis»): who is in the frame (Winnow's
+   * people, by id), words in the file's path or the text read in it, and where (Winnow's own place names). These
+   * narrow every scope ON THE SERVER — a row carries no person, and a day filtered here would lose nothing but a
+   * span would be cut by its parts' caps before it is — so a change re-asks the scope, as the half does.
+   */
+  people: number[];
+  /** With several people: only frames where they are ALL in (Winnow's `person_mode=all`). */
+  together: boolean;
+  /** The words typed; '' asks nothing. What they ask depends on `wordsIn`. */
+  words: string;
+  /**
+   * Where the words look (his ask of 2026-11-03: «chien, perroquet, sunset … les bons résultats»): `describe` — the
+   * DEFAULT — ranks the library by Winnow's image index (`/api/search`, CLIP) and keeps the scope's rows among the
+   * closest, in that order; `text` asks the server for the words in the file's path and the text its OCR read (`q`).
+   */
+  wordsIn: WordsIn;
+  /** Winnow's place names ticked, per kind (`winnow-names.ts`): a country, a region, a city, a point of interest. */
+  places: NameAsk;
 }
+
+export type WordsIn = 'describe' | 'text';
+/** How many of the library's closest matches a description asks for — Winnow's own ceiling. */
+export const RANKED = 200;
+
+/** The kinds of place the rail offers — the names Winnow's reverse geocoding gave, finest last. */
+export const PLACE_KINDS = ['country', 'region', 'city', 'place'] as const satisfies readonly NameKind[];
+export type PlaceKind = (typeof PLACE_KINDS)[number];
+
+/** What the subject sends: the people, together, the words, the names — the `AssetQuery` fields they are. */
+export type SubjectQuery = Pick<AssetQuery, 'people' | 'together' | 'words' | 'names'>;
 
 export const DEFAULT_FACETS: PickFacets = {
   buckets: ['pick', 'star', 'unrated', 'skip'],
@@ -211,6 +242,11 @@ export const DEFAULT_FACETS: PickFacets = {
   noFinal: false,
   notHeld: false,
   oneBurst: false,
+  people: [],
+  together: false,
+  words: '',
+  wordsIn: 'describe',
+  places: {},
 };
 
 /** Every bucket shown, nothing else narrowed — what "show the hidden ones" restores. */
@@ -247,9 +283,38 @@ export function serverFacets(f: PickFacets): { mediaType?: MediaKind; device?: s
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((v) => b.includes(v));
 
+/** The subject's narrowing as the client sends it with every scope (`AssetQuery`), or nothing. */
+export function subjectQuery(f: PickFacets): SubjectQuery {
+  const names = nameParams(f.places);
+  return {
+    ...(f.people.length ? { people: f.people, ...(f.people.length > 1 && f.together ? { together: true } : {}) } : {}),
+    ...(f.wordsIn === 'text' && f.words.trim() ? { words: f.words.trim() } : {}),
+    ...(Object.keys(names).length ? { names } : {}),
+  };
+}
+
+/** The description the image index is asked to rank by, or '' — the words only when they DESCRIBE. */
+export function describedText(f: PickFacets): string {
+  return f.wordsIn === 'describe' ? f.words.trim() : '';
+}
+
+/**
+ * The shown rows among a ranking — id → distance, the index's answer — in the ranking's order, closest first: a
+ * description ORDERS, it does not merely keep, so the best match of a month is the first tile whatever the day.
+ */
+export function rankedShown(items: readonly PickItem[], ranking: ReadonlyMap<number, number>): PickItem[] {
+  return items.filter((it) => ranking.has(it.id)).sort((a, b) => ranking.get(a.id)! - ranking.get(b.id)!);
+}
+
+/** Whether the subject narrows at all — what the picker says beside its count. */
+export function subjectActive(f: PickFacets): number {
+  return (f.people.length ? 1 : 0) + (f.words.trim() ? 1 : 0) + PLACE_KINDS.filter((k) => f.places[k]?.length).length;
+}
+
 /** How many facets narrow the list beyond the default — the number on the phone's Filters button. */
 export function activeFacets(f: PickFacets): number {
   return (
+    subjectActive(f) +
     (sameSet(f.buckets, DEFAULT_FACETS.buckets) ? 0 : 1) +
     (f.minStar > 0 ? 1 : 0) +
     f.kinds.length +
@@ -288,7 +353,26 @@ export function readFacets(raw: unknown): PickFacets {
     noFinal: r.noFinal === true,
     notHeld: r.notHeld === true,
     oneBurst: r.oneBurst === true,
+    people: Array.isArray(r.people) ? r.people.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0).slice(0, 20) : [],
+    together: r.together === true,
+    words: typeof r.words === 'string' ? r.words.slice(0, 200) : '',
+    wordsIn: r.wordsIn === 'text' ? 'text' : 'describe',
+    places: readPlaces(r.places),
   };
+}
+
+/** Stored place names back, per kind, each a short list of strings. */
+function readPlaces(raw: unknown): NameAsk {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const r = raw as Record<string, unknown>;
+  const out: NameAsk = {};
+  for (const kind of PLACE_KINDS) {
+    const v = r[kind];
+    if (!Array.isArray(v)) continue;
+    const names = v.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length < 200).slice(0, 20);
+    if (names.length) out[kind] = names;
+  }
+  return out;
 }
 
 // --- counts -----------------------------------------------------------------

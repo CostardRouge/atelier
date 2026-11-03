@@ -4,6 +4,8 @@ import {
   activeFacets,
   bucketOf,
   DEFAULT_FACETS,
+  describedText,
+  rankedShown,
   drawn,
   facetCounts,
   facetValues,
@@ -17,6 +19,7 @@ import {
   pilesOf,
   rangeTicked,
   readFacets,
+  subjectQuery,
   serverFacets,
   SHOW_ALL,
   shown,
@@ -302,5 +305,42 @@ describe('one per burst', () => {
     expect(readFacets({ oneBurst: true }).oneBurst).toBe(true);
     expect(DEFAULT_FACETS.oneBurst).toBe(false);
     expect(activeFacets({ ...DEFAULT_FACETS, oneBurst: true })).toBe(1);
+  });
+});
+
+describe('the subject — who, which words, where (2026-11-02)', () => {
+  it('is nothing by default and sends only what is set, together only with several people', () => {
+    expect(subjectQuery(DEFAULT_FACETS)).toEqual({});
+    expect(subjectQuery({ ...DEFAULT_FACETS, people: [7], together: true })).toEqual({ people: [7] });
+    expect(subjectQuery({ ...DEFAULT_FACETS, people: [7, 9], together: true })).toEqual({ people: [7, 9], together: true });
+    // The words DESCRIBE by default — the image index ranks, the server is not asked for them.
+    expect(subjectQuery({ ...DEFAULT_FACETS, words: '  menu ' })).toEqual({});
+    expect(describedText({ ...DEFAULT_FACETS, words: '  a parrot ' })).toBe('a parrot');
+    expect(subjectQuery({ ...DEFAULT_FACETS, words: '  menu ', wordsIn: 'text' })).toEqual({ words: 'menu' });
+    expect(describedText({ ...DEFAULT_FACETS, words: 'menu', wordsIn: 'text' })).toBe('');
+    expect(subjectQuery({ ...DEFAULT_FACETS, places: { city: ['Paris', 'Lyon'], country: [] } })).toEqual({ names: { place_city: 'Paris,Lyon' } });
+  });
+
+  it('counts in the rail’s number and reads back bounded', () => {
+    expect(activeFacets({ ...DEFAULT_FACETS, people: [1], words: 'x', places: { city: ['Paris'], place: ['Louvre'] } })).toBe(4);
+    const got = readFacets({ people: [3, -1, 'x', 2.5], together: true, words: 'a'.repeat(300), places: { city: ['Paris', 9], nope: ['x'] } });
+    expect(got.people).toEqual([3]);
+    expect(got.together).toBe(true);
+    expect(got.words.length).toBe(200);
+    expect(got.places).toEqual({ city: ['Paris'] });
+    expect(readFacets({ places: 'Paris' }).places).toEqual({});
+    expect(readFacets({ wordsIn: 'text' }).wordsIn).toBe('text');
+    expect(readFacets({ wordsIn: 'nope' }).wordsIn).toBe('describe');
+  });
+
+  it('a ranking keeps the shown rows it names, closest first, whatever the day', () => {
+    const items = [pickItem(row(1), false), pickItem(row(2), false), pickItem(row(3), false)];
+    const ranking = new Map([
+      [3, 0.21],
+      [1, 0.4],
+      [9, 0.1],
+    ]);
+    expect(rankedShown(items, ranking).map((it) => it.id)).toEqual([3, 1]);
+    expect(rankedShown(items, new Map())).toEqual([]);
   });
 });

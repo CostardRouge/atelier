@@ -3555,7 +3555,19 @@ it stopped) or by folder, every tile with Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
 flight log, extension, body, tags, no final yet, not in the library), tick verbs over what
 is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
-to look at a tile large. Nothing is ticked when it opens — an add downloads —
+to look at a tile large. The rail's **Subject** narrows any scope by what is
+in the frame, asked of the instance itself: the **people** its face analysis
+grouped (several at once, or *All of them in the frame*), **words** —
+*Describe* what is in the picture (*a dog*, *a parrot*, *a sunset over the
+sea*) and the image index Winnow keeps ranks its library, the scope's rows
+among the closest coming first; or *In text*, the words in the file's path
+and in the text Winnow read in the picture — and a **place** by Winnow's own
+names (country, region, city, point of interest). The ⋯ panel's third view is
+a **Map**: every row with a position as a dot where it was taken, on the
+shipped coastline (map tiles the usual opt-in); hold ⇧ and drag, or switch
+*Draw a box* on and drag with a finger, and every picture inside the box is
+ticked; a click on a dot ticks or unticks it; rows with no position are
+counted beside the map. Nothing is ticked when it opens — an add downloads —
 and the files come as **proxies**, or as **originals** with their weight shown
 first, or — **Logs only** — as each DJI clip's `.srt` flight log alone, a few
 hundred kilobytes of text instead of a video (what Flight Atlas reads; a clip
