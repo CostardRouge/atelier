@@ -3039,6 +3039,14 @@ it and may grow blocks of its own.
   frames show the wall's pictures, and the folders of pictures show one of
   them as their icon. They are the pictures this browser already keeps for
   the wall: nothing more is fetched while you play or export.
+- **Trips' openers as map scenes.** Select a map scene (in the list, or its
+  scene on the timeline): *Map scene · drawn as* draws it as the series' map,
+  as Trips' *Itinerary* (the trip's places joined, in the charte's ink) or as
+  *Virée* (a little 3D vehicle driving the trip's road from place to place),
+  on the series' trip — its legs, road, vehicles and look — and *Leg* says
+  which leg the scene tells. The opener plays at its own pace, sped up only to
+  end within the scene; the caption stays. Without the trip in this browser
+  the series' map is drawn.
 - **Captions laid like the hook.** *Captions* (under Charte & look, and in a
   caption's own inspector) sets every caption of the series: how wide a line
   runs (*Column*), what a long one does — *Shrink to fit* its *Lines* (three

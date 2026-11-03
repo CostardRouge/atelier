@@ -12,6 +12,8 @@ import { BLOCKS } from './blocks';
 import './blocks/all';
 import { drawCaption, setCaptionLook } from './caption';
 import { setStoryPictures } from './story-pictures';
+import { setOpenerScene, setOpenerTrip } from './opener-scene';
+import type { TripDoc } from '../roadtrip/trip-types';
 import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
@@ -67,6 +69,9 @@ export interface ComposeOptions {
   cues?: WallCues | null;
   /** Pictures kept on this device by Winnow id — a camera's own picture for the gear block (`story-pictures.ts`). */
   pictures?: ReadonlyMap<number, CanvasImageSource> | null;
+  /** The series' trip on this device and its first counted day — what a map scene drawn as Trips' opener plays (`opener-scene.ts`). */
+  trip?: TripDoc | null;
+  tripFrom?: string | null;
 }
 
 let layer: HTMLCanvasElement | null = null;
@@ -93,6 +98,7 @@ function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
   const fn = BLOCKS[slot.block];
   setSlot(slot.key);
   setWallScene(slot.start);
+  setOpenerScene(slot.b - slot.start);
   c.save();
   try {
     if (!fn) throw new Error(`no block named “${slot.block}”`);
@@ -121,6 +127,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all', { times: opts.times ?? null, pace: ep.look?.pace ?? null });
   setWall(opts.wall ?? null);
   setStoryPictures(opts.pictures, ep.devicePics, opts.wall);
+  setOpenerTrip(opts.trip, opts.tripFrom);
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);
   setWallGrid(ep.look?.wall, ep.wallGroups);

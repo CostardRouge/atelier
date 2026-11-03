@@ -32,7 +32,7 @@ import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
-import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
 import RunLockNotice from '../../shared/ui/RunLockNotice';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { imageResult } from '../../shared/commands/image-result';
@@ -57,6 +57,8 @@ import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/ov
 import { usePreflight } from './use-preflight';
 import { soundCues } from './sound-cues';
 import CaptionLookSection from './CaptionLookSection';
+import { isStoryOpener, STORY_OPENERS } from '../../shared/story/opener-scene';
+import { withBlockParam } from '../../shared/story/block-words';
 import { deviceLabel, measureLine, type ExportMeasure } from '../../shared/story/export-measure';
 import { heapMb, keepMeasure, measuresNow, subscribeMeasures } from './export-measures';
 import PreflightList from './PreflightList';
@@ -226,6 +228,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         : { stops: script?.stops }),
       wall: wall.images,
       pictures,
+      ...(tripMap.state === 'ready' ? { trip: tripMap.trip, tripFrom: tripMap.span.from } : {}),
       ground: groundLayers,
       named: mapNamesOf(sources.map).which,
     }),
@@ -1048,6 +1051,27 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           }
         />
       </InspectorSection>
+      {script && scene && scene.index !== null && scene.block === 'map-camera' ? (
+        <InspectorSection id="story-map-opener" title="Map scene · drawn as" foldable={false} info="This map scene drawn as the series' map, or as one of Trips' openers on the series' trip — the Itinerary or Virée's 3D drive, with the trip's legs, road, vehicles and look. Without the trip on this device it draws the series' map.">
+          <SelectField<string>
+            label="How this map scene is drawn"
+            value={isStoryOpener(words?.params?.opener) ? String(words?.params?.opener) : 'story'}
+            options={STORY_OPENERS.map((o) => ({ id: o.id, label: o.label }))}
+            onChange={(v) => onScript(withBlockParam(script, postId, scene.index!, 'opener', v === 'story' ? undefined : v))}
+          />
+          {isStoryOpener(words?.params?.opener) && tripMap.state === 'ready' && (tripMap.trip.stages?.length ?? 0) > 1 ? (
+            <FieldRow label="Leg">
+              <SelectField<string>
+                label="The leg of the trip this scene tells"
+                value={typeof words?.params?.openerLeg === 'string' ? words.params.openerLeg : ''}
+                options={[{ id: '', label: 'The series’ first' }, ...(tripMap.trip.stages ?? []).map((st, i) => ({ id: st.id, label: st.name || `Leg ${i + 1}` }))]}
+                onChange={(v) => onScript(withBlockParam(script, postId, scene.index!, 'openerLeg', v || undefined))}
+              />
+            </FieldRow>
+          ) : null}
+          {isStoryOpener(words?.params?.opener) && tripMap.state !== 'ready' ? <Readout muted>Choose the series' trip under Sources, on this device: until then the series' map is drawn.</Readout> : null}
+        </InspectorSection>
+      ) : null}
       {sel.key === 'caption' && script ? (
         <InspectorSection id="story-captions-object" title="Captions · the series" foldable={false} info="How every caption is laid: its column, its line limit, the platforms' buttons as an edge.">
           <CaptionLookSection script={script} onScript={onScript} />

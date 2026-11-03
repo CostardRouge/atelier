@@ -6,6 +6,7 @@ import { drawGround, groundCredit } from "../map-ground";
 import { frameScale, storyCamera, storyCameraTrack, type StoryCameraValues } from "../story-camera";
 import type { CameraTrack } from "../../roadtrip/hooks/drive-plan";
 import { obj } from "../objects";
+import { isStoryOpener, paintStoryOpener, storyOpenerReady } from "../opener-scene";
 
 /** the map's ground — the coastline at dim, the tiles, or nothing (`map-ground.ts`) — for every map-based block (alpha and width in map units) */
 export function drawCoast(c: Ctx, alpha: number, width: number) {
@@ -147,6 +148,16 @@ function trackFor(cam: StoryCameraValues, seconds: number, progress: (t: number)
 }
 
 export function drawMap(c: Ctx, lt: number, _p: Record<string, unknown> = {}) {
+  // Drawn as one of Trips' openers on the series' trip (`opener-scene.ts`); the series' map when it cannot run here.
+  if (isStoryOpener(_p.opener)) {
+    const id = _p.opener;
+    const options = (_p.openerOptions ?? undefined) as Record<string, unknown> | undefined;
+    const leg = typeof _p.openerLeg === "string" ? _p.openerLeg : null;
+    if (storyOpenerReady(id, options, leg)) {
+      obj(c, "map-camera.opener", [540, 960], lt, (lt) => void paintStoryOpener(c, lt, id, options, leg));
+      return;
+    }
+  }
   // {still: true}: no camera — the whole map at ×1, the full route tracing calmly over ~4.4 s.
   const still = _p.still === true;
   const rp = still ? clamp((lt - 0.4) / (4.4 * K)) : clamp((lt - 0.3) / (3.6 * K)),

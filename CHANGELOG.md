@@ -11,6 +11,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
+  you choose, with its caption kept — or as the series' map, as before.
 - Storytelling: your own pictures inside the blocks — each device of the gear block shows a picture it took on the
   trip, and the app's grid, a burst's frames and the folders of pictures draw the wall's pictures instead of colour
   tiles, once counted.
