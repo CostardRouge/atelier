@@ -50,6 +50,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Storytelling: two places close on the map (Parramatta and Sydney) no longer write their names over each other — a
+  name moves above its dot or to its other side, and is left out only when there is no room.
 - Storytelling: the wall's number says what was counted when your script names none, instead of 100 000.
 - Storytelling: *Before you export* now flags a scene whose caption is still a placeholder (« ⟨ caption 2 ⟩ »), with a
   link to type it.

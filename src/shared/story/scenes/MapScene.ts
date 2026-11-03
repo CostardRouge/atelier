@@ -1,11 +1,12 @@
 // Carte « camera »: zoomed ×2.3 following the route head (sine in-out), then the camera
 // pulls back to the whole map over the last 1.4 s. Coast dim, route accent, stops as reached.
-import { clamp, E, enter, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
+import { clamp, E, enter, font, K, PAL, sineInOut, text, TYPO, type Ctx } from "../motion";
 import { HEAD, NAMED, PACE_VERSION, paced, ROUTE, ROUTELEN, routeAt, STOP_REACH, STOP_XY, STOPS } from "../geo";
 import { drawGround, groundCredit } from "../map-ground";
 import { frameScale, storyCamera, storyCameraTrack, type StoryCameraValues } from "../story-camera";
 import type { CameraTrack } from "../../roadtrip/hooks/drive-plan";
 import { obj } from "../objects";
+import { placeLabel, type LabelBox } from "../label-place";
 import { isStoryOpener, paintStoryOpener, storyOpenerReady } from "../opener-scene";
 
 /** the map's ground — the coastline at dim, the tiles, or nothing (`map-ground.ts`) — for every map-based block (alpha and width in map units) */
@@ -90,6 +91,8 @@ export function drawRoute(c: Ctx, frac: number, width: number) {
  */
 export function mapLabels(c: Ctx, frac: number, size: number, tail = 0, spread = false, skip: string[] = [], upright = 0) {
   const n = STOPS.length;
+  // The names placed in this frame, so none writes over another (`label-place.ts`).
+  const placed: LabelBox[] = [];
   STOPS.forEach((st, i) => {
     const reach = STOP_REACH[i] ?? 1;
     // Reached: the dot (and, under « those passed », the name) arrives as the route gets there.
@@ -125,10 +128,23 @@ export function mapLabels(c: Ctx, frac: number, size: number, tail = 0, spread =
         c.rotate(upright);
         c.translate(-x, -y);
       }
-      const tx = x + (right ? 20 : -20);
-      const align = right ? "left" : "right";
-      text(c, st[0], tx, y + dy, size, PAL.ink, { fam: TYPO.mono, w: 400, align });
-      if (st[4]) text(c, st[4], tx, y + dy + size * 0.95, size * 0.72, PAL.dim, { fam: TYPO.mono, w: 400, align });
+      // Its places in order — the usual one, above the dot, the other side — the first clear of the names already
+      // placed; none clear, the name is left out and the dot stays.
+      c.font = font(size, 400, TYPO.mono);
+      const w1 = c.measureText(st[0] || "").width;
+      c.font = font(size * 0.72, 400, TYPO.mono);
+      const wl = Math.max(w1, st[4] ? c.measureText(st[4]).width : 0);
+      const hl = size * (st[4] ? 1.75 : 1.05);
+      const boxAt = (side: boolean, ly: number): LabelBox => ({ x: side ? x + 20 : x - 20 - wl, y: ly - size * 0.8, w: wl, h: hl });
+      const spots: [boolean, number][] = [[right, y + dy], [right, y - size * (st[4] ? 2 : 1.2)], [!right, y + dy]];
+      const spot = placeLabel(spots.map(([side, ly]) => boxAt(side, ly)), placed);
+      if (spot) {
+        const [side, ly] = spots[spot.at];
+        const tx = x + (side ? 20 : -20);
+        const align = side ? "left" : "right";
+        text(c, st[0], tx, ly, size, PAL.ink, { fam: TYPO.mono, w: 400, align });
+        if (st[4]) text(c, st[4], tx, ly + size * 0.95, size * 0.72, PAL.dim, { fam: TYPO.mono, w: 400, align });
+      }
     }
     c.restore();
   });
