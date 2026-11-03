@@ -261,7 +261,22 @@ describe('WinnowClient requests', () => {
     expect(url.pathname).toBe('/api/search');
     expect(Object.fromEntries(url.searchParams)).toEqual({ q: 'a koala in a tree', limit: '30', source: 'gallery' });
     expect(on).toMatchObject({ enabled: true, indexed: 90, library: 100, items: [{ id: 4, distance: 0.21 }] });
-    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed', indexed: null, library: null, model: null, items: [] });
+    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed on this Winnow', indexed: null, library: null, model: null, items: [] });
+  });
+
+  it('says WHY the index cannot rank — ML off, the feature off, the ML container failing — and keeps other errors errors', async () => {
+    const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    const fetchImpl = vi
+      .fn<FetchLike>()
+      .mockResolvedValueOnce(ok({ items: [], enabled: false, model: 'ViT-B-32__openai' }))
+      .mockResolvedValueOnce(json(404, { error: 'The "search" feature is disabled on this instance' }))
+      .mockResolvedValueOnce(json(502, { error: 'embedding failed', detail: 'connect ECONNREFUSED' }))
+      .mockResolvedValueOnce(json(401, { error: 'unauthenticated' }));
+    const c = client(fetchImpl);
+    expect((await c.search('dog')).reason).toMatch(/ML or CLIP is off/);
+    expect(await c.search('dog')).toMatchObject({ enabled: false, reason: expect.stringMatching(/Search feature is off/) });
+    expect((await c.search('dog')).reason).toBe('its ML container could not read the words — embedding failed');
+    await expect(c.search('dog')).rejects.toMatchObject({ kind: 'unauthenticated' });
   });
 
   it('sends words to the listing as Winnow’s q', async () => {

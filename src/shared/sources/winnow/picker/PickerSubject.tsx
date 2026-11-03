@@ -122,7 +122,7 @@ export default function PickerSubject({
             {describe.state === 'asking'
               ? 'Asking the image index…'
               : describe.state === 'off'
-                ? 'No image index on this Winnow'
+                ? `Winnow cannot rank by a description: ${describe.reason ?? 'no image index'}`
                 : describe.state === 'empty'
                   ? 'Nothing indexed for search yet'
                   : `The library’s ${describe.ranked >= RANKED ? `${RANKED} ` : ''}closest, any day — the ${describe.scopeWord} is set aside${

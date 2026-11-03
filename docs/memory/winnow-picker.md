@@ -378,6 +378,19 @@ multilingual model (XLM-RoBERTa, NLLB) is his call in Winnow, after a re-index. 
 the library with it. The root fix — ranking WITHIN a scope (Winnow's `/api/search` reading `filterFromSearchParams`
 into its CTE) — is a Winnow change, his call.
 
+**WHY the index refuses is said, never «no index» (2026-11-03, his next report: the picker said «No image index on
+this Winnow», Winnow's own Search page «Unexpected token '<', "<!DOCTYPE"», the URL a Cloudflare-branded 502).**
+Winnow's route answers several refusals, and they were all one message: `enabled: false` with no reason = ML or CLIP
+off (`ML_ENABLED`, `ML_CLIP_ENABLED`); `reason: 'pgvector not installed'`; a 404 = its `search` feature switched off
+(`featureOff`); a **502 = `embedText` failed** — the APP container (`winnow_app`) posting `clip.textual` to the
+immich-machine-learning `/predict`, reached only once `indexed > 0`. Cloudflare in front of his instance swaps
+Winnow's 502 JSON for an HTML page, so the detail is lost and the status is the only witness. **How to apply**:
+`client.search` turns a 404 / 502 into `enabled: false` with the remedy (`searchRefusal`) and keeps every other
+failure an error; the rail and the grid both print the reason. The pictures' half of the index is made by the WORKER
+(visual CLIP, faces, OCR all working there) and the words' half by the APP, so a working index with a failing
+search points at the app → ML text call (its logs, `ML_BASE_URL` from the app, the ML image's textual model) — his
+to check on the Optiplex; Atelier cannot see past Cloudflare's page.
+
 ## The MAP view, a box that ticks (2026-11-02)
 
 His ask: «une vue par carte … dessiner une box sur la carte et toutes les photos qui sont à l'intérieur …
