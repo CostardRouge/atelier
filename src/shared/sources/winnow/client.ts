@@ -718,6 +718,18 @@ function filterParams(f: FilterQuery): Record<string, string | undefined> {
   return { media_type: f.mediaType, ext: f.ext, device: f.device, kind: f.half };
 }
 
+/** The SUBJECT of a listing — who, which words, which names — in Winnow's query names; the calendar and the list alike. */
+export type SubjectFilter = Pick<AssetQuery, 'people' | 'together' | 'words' | 'names'>;
+
+function subjectParams(q: SubjectFilter): Record<string, string | undefined> {
+  return {
+    ...q.names,
+    person: q.people?.length ? q.people.join(',') : undefined,
+    person_mode: q.people?.length && q.together ? 'all' : undefined,
+    q: q.words,
+  };
+}
+
 /** What `/api/search` answers: ranked rows, or why there are none. */
 export interface WinnowSearch {
   enabled: boolean;
@@ -1058,13 +1070,13 @@ export class WinnowClient {
   async calendar(
     from: string,
     to: string,
-    filter: FilterQuery = {},
+    filter: FilterQuery & SubjectFilter = {},
     signal?: AbortSignal,
   ): Promise<WinnowCalendar> {
     const raw = await this.json<{
       days?: WinnowCalendarDay[];
       bounds?: { min: string | null; max: string | null } | null;
-    }>(this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter) }), signal);
+    }>(this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter), ...subjectParams(filter) }), signal);
     // A filter that matches nothing still answers with a bounds OBJECT whose
     // fields are null. Collapse it to null here, once, rather than making
     // every reader defend against a half-empty span.
@@ -1180,15 +1192,12 @@ export class WinnowClient {
         ids: query.ids?.length ? query.ids.join(',') : undefined,
         burst_id: query.burstId,
         ...filterParams(query),
-        ...query.names,
-        person: query.people?.length ? query.people.join(',') : undefined,
-        person_mode: query.people?.length && query.together ? 'all' : undefined,
+        ...subjectParams(query),
         has_faces: query.hasFaces === undefined ? undefined : String(query.hasFaces),
         face_count: query.faceCount?.length ? query.faceCount.join(',') : undefined,
         has_text: query.hasText === undefined ? undefined : String(query.hasText),
         verdict: query.verdict,
         star_min: query.minStars,
-        q: query.words,
         cursor: query.cursor,
         limit: query.limit ?? 200,
         collapse: query.bursts === 'frames' ? 'pairs' : 1,

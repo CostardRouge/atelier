@@ -27,8 +27,8 @@ export interface PickerHost {
     half?: LibraryHalf | null;
     scope?: 'day' | 'span';
     span?: DaySpan | null;
-    /** Open on the Logbook rather than the device's own choice of view. */
-    view?: 'grid' | 'book';
+    /** Open on the Logbook or the Map rather than the device's own choice of view. */
+    view?: 'grid' | 'book' | 'map';
     /** Read the drawn clips' flight logs at once, to draw their tracks. */
     tracks?: boolean;
   };

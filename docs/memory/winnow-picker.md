@@ -339,6 +339,53 @@ so a long span is not cut by `SPAN_CAP` before the host's rows. The rail's
 counts then describe the narrowed scope (an atlas picker says `0 photos`
 nowhere: a status line drops the photo count when there are clips and none).
 
+## The SUBJECT goes to the server with every scope (2026-11-02, rev. 2026-11-03)
+
+His ask, from the Mosaic and Storytelling doors: «des filtres qui nous permettent de choisir la personne ou des
+mots-clés … soit un lieu». **Decision.** A *Subject* section in the rail (`PickerSubject.tsx`, right under
+Library): the instance's **people** (`/api/people`, the cover face from `faceThumbUrl`, the initial when the crop
+fails; hidden people left out; past 8 entries a search field and the busiest 10, ticked first; two or more ticked
+offer *All of them in the frame* = `person_mode=all`), **words** and a **place** by Winnow's own names
+(`winnow-names.ts`'s kinds, a `Segmented` Country · Region · City · Place over one list; `instanceNames` keeps the
+lists ten minutes). Unlike the rail's other facets, these narrow ON THE SERVER with every scope (`subjectQuery` →
+`AssetQuery.people/together/words/names`, `client.calendar` sends them too so a span's parts are planned on the
+narrowed counts): a row carries no person, and a span's parts would be cut by their caps before a client filter
+saw them. **How to apply**: the subject is part of `scopeKey` (a change re-asks the scope) but NOT of `placeKey`
+(ticks survive, as a Device click's do); its counts are the LIBRARY's (Winnow's lists), never the scope's, and
+the rail's number and *Reset* include it; remembered per instance with the other facets (`readFacets` bounds
+each list). An instance from before faces answers 404 → no People section, nothing said.
+
+**The WORDS field has two ways, Describe the default (2026-11-03, his correction: «je pensais plutôt à la
+recherche sémantique par IA … si tu cherches chien, perroquet, sunset, il faut que ça renvoie les bons
+résultats»).** `PickFacets.wordsIn`: *Describe* asks Winnow's image index (`client.search`, `/api/search`, the
+CLIP ranking the agent command already used) for the library's `RANKED` = 200 closest matches — once per text and
+half, never per scope, `/api/search` knows no day — and `rankedShown` keeps the scope's rows among them IN THAT
+ORDER, closest first, with no day headings and no virtual grid while it stands (a description orders, it does not
+merely keep); a status line under the field says `kept of ranked`, the coverage when `indexed < library`, and an
+instance with no index (`enabled: false`) is said in the grid with the way out (*In text*). *In text* is the
+server's `q` (path + OCR text, every word as a part of a word), sent with the scope like the rest of the subject.
+Winnow's tags are the rail's own *Tags* facet already, so no third way. Rejected: ranking by a description on the
+server per scope — the endpoint has only `source` (the half); a loose description of a big library can leave a
+day with few of the 200, said in the empty state rather than widened in silence.
+
+## The MAP view, a box that ticks (2026-11-02)
+
+His ask: «une vue par carte … dessiner une box sur la carte et toutes les photos qui sont à l'intérieur …
+sélectionnées», Winnow's own gesture. **Decision.** The ⋯ panel's third view (`GridView` 'map', per device like
+the others, `PickerHost.start.view` may open on it): `PickerMap.tsx` over the pure `map-pick.ts` (`hasPosition`
+refuses a (0, 0) fix; `mapPoints`, `unplaced`, `boxOf` — null for a click —, `insideBox`, the GeoJSON of both).
+MapLibre dynamically imported as everywhere, `TRACK_MAP_STYLE`, the shipped coastline, tiles the suite's opt-in
+(`sessionTiles`, off at every first open, the land hidden under them), `boxZoom: false` because ⇧-drag is OURS.
+The dots are a circle layer styled by `ticked` (accent) and `held` (hollow, 0.2); a click on a dot toggles it
+(never a held one); ⇧ + drag, or any drag while *Draw a box* is on (a finger's way: it disables `dragPan` and sets
+`touch-action: none` itself, `frontend.md`), draws the box live and on release ticks every unheld point inside —
+ADDS to the ticks, never replaces, the chip says `N ticked in the box` with its ×; Escape clears the box (the
+listener is on `window` in capture and stops the key, so the dialog stays). The points are the rail's SHOWN rows
+(every facet and the subject apply), refitted once per `scopeKey` (`openingBounds`, max zoom 11), `Fit` by hand;
+rows with no position are counted in the chip, never hidden in silence. Driven headless only (`drive-s3.cjs`,
+`drive-s-phone.cjs` in the session's scratch): 78 of 90 stub rows placed, a ⇧-box over one town ticked 26, a
+finger's box 8 on a 390 px phone, a dot click toggled one, the pref remembered `map`.
+
 ## Moved from the MEMORY.md index (2026-10-22)
 
 The index outgrew its ~200-line budget, so its long entries were moved here verbatim on 2026-10-22; the index keeps a one-line pointer to this section. Fold an entry into the matching section above when you next touch it.

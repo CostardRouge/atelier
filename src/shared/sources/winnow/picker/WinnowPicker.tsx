@@ -26,7 +26,10 @@ import useDialogKeys from '../../../ui/use-dialog-keys';
 import { revealInScroller } from '../../../ui/reveal';
 import { useInViewport } from '../../../lib/use-in-viewport';
 import PickerLogbook from './PickerLogbook';
+import PickerMap from './PickerMap';
 import PickerRail from './PickerRail';
+import type { DescribeState, SubjectLists } from './PickerSubject';
+import { instanceNames } from '../winnow-names';
 import { readFlightLog } from './flight-logs';
 import { logFailureOf, type LogFailure } from './log-failures';
 import type { FlightTrack } from './flight-track';
@@ -36,6 +39,9 @@ import { nextParts, partOf, type PartState } from './span-queue';
 import PickerTile, { type PileBadge } from './PickerTile';
 import {
   activeFacets,
+  describedText,
+  RANKED,
+  rankedShown,
   BUCKETS,
   DEFAULT_FACETS,
   drawn,
@@ -48,6 +54,7 @@ import {
   pickItem,
   pilesOf,
   serverFacets,
+  subjectQuery,
   rangeTicked,
   shown,
   SHOW_ALL,
@@ -132,8 +139,9 @@ type TileSize = 's' | 'm' | 'l';
 const readTiles = (raw: string | null): TileSize => (raw === 's' || raw === 'l' ? raw : 'm');
 const tilesPref = localPref<TileSize>('atelier.winnow.picker.tiles', readTiles, (v) => (v === 'm' ? null : v));
 const railPref = localPref<boolean>('atelier.winnow.picker.rail', (raw) => raw !== 'folded', (v) => (v ? null : 'folded'));
-type GridView = 'grid' | 'book';
-const viewPref = localPref<GridView>('atelier.winnow.picker.view', (raw) => (raw === 'book' ? 'book' : 'grid'), (v) => (v === 'grid' ? null : v));
+type GridView = 'grid' | 'book' | 'map';
+const readView = (raw: string | null): GridView => (raw === 'book' || raw === 'map' ? raw : 'grid');
+const viewPref = localPref<GridView>('atelier.winnow.picker.view', readView, (v) => (v === 'grid' ? null : v));
 /**
  * Rows pinned in pixels: an `auto` row in a scrolling tile grid is clipped
  * to a sliver (`frontend.md`). Whole strings, so Tailwind sees each class.
@@ -202,10 +210,14 @@ export default function WinnowPicker({
   const asked = scope === 'span' ? serverFacets(facets) : {};
   const mediaType = host.narrow?.mediaType ?? asked.mediaType;
   const device = asked.device;
+  // The SUBJECT — people, words, a place — goes to the server with EVERY scope (`PickerSubject`): a row carries no
+  // person, and a span's parts would be cut by their caps before a filter here saw them.
+  const subject = useMemo(() => subjectQuery(facets), [facets]);
+  const subjectKey = JSON.stringify(subject);
 
   // What names the scope being listed: every reset keys on it, never on the
   // rows, which a span receives part by part.
-  const scopeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${mediaType}|${device}|${generation}`;
+  const scopeKey = `${scope}|${day}|${span.from}|${span.to}|${sessionId}|${half}|${mediaType}|${device}|${subjectKey}|${generation}`;
   // The same WITHOUT what the rail narrows a span by: a facet click re-asks
   // the server, but a ticked row it hides stays ticked, as in a day or a
   // folder — the ticks reset on a new PLACE only.
@@ -228,7 +240,7 @@ export default function WinnowPicker({
     const controller = new AbortController();
     const { signal } = controller;
     let cancelled = false;
-    const filter = { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}), ...(device ? { device } : {}) };
+    const filter = { ...(half ? { half } : {}), ...(mediaType ? { mediaType } : {}), ...(device ? { device } : {}), ...subject };
     const narrowing = { ...filter, bursts: framesListed ? ('frames' as const) : ('fold' as const) };
     const fail = (err: unknown) => {
       if (cancelled) return;
@@ -272,7 +284,8 @@ export default function WinnowPicker({
       for (const c of asks.values()) c.abort();
       asks.clear();
     };
-  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, device, generation, framesListed]);
+    // `subject` is read through its key: the object is rebuilt with the facets, the ask only when it changes.
+  }, [client, connection.id, scope, day, span.from, span.to, sessionId, half, mediaType, device, subjectKey, generation, framesListed]);
 
   // A span's parts, asked for by the queue: wanted first, two at a time, the
   // rest in order; a part nobody looks at any more gives its slot up.
@@ -416,31 +429,68 @@ export default function WinnowPicker({
   const surfacedItems = useMemo(() => surfaced(items, piles, unfolded), [items, piles, unfolded]);
   // Counted with every pile folded, so unfolding one never moves a number.
   const counts = useMemo(() => facetCounts(surfaced(items, piles, new Set())), [items, piles]);
-  // A span narrowed to some bodies on the server holds no row of the others,
-  // so the rail lists the instance's bodies beside them (at zero) — ticking
-  // another one asks for it, unticking them all asks for everything again.
-  const [bodies, setBodies] = useState<string[] | null>(null);
+  // The instance's own lists, read once a sitting (`instanceNames` keeps them ten minutes): its people and its place
+  // names for the rail's Subject, and its bodies — a span narrowed to some bodies on the server holds no row of the
+  // others, so the rail lists them beside (at zero): ticking another asks for it, unticking them all asks for everything.
+  const [subjectLists, setSubjectLists] = useState<SubjectLists>({ people: null, names: null });
   useEffect(() => {
-    if (scope !== 'span' || bodies) return;
     let cancelled = false;
-    const controller = new AbortController();
-    client
-      .facets(controller.signal)
-      .then((f) => !cancelled && setBodies(f.devices.map((d) => String(d.value))))
-      .catch(() => !cancelled && setBodies([]));
+    void instanceNames(client).then(
+      (names) => !cancelled && setSubjectLists((cur) => ({ ...cur, names })),
+      () => !cancelled && setSubjectLists((cur) => ({ ...cur, names: { media_types: [], extensions: [], devices: [], lenses: [], place_countries: [], place_regions: [], place_cities: [], place_pois: [] } })),
+    );
+    // An instance from before Winnow's faces answers 404: no People section, nothing said.
+    void client.people().then(
+      (people) => !cancelled && setSubjectLists((cur) => ({ ...cur, people })),
+      () => !cancelled && setSubjectLists((cur) => ({ ...cur, people: [] })),
+    );
     return () => {
       cancelled = true;
-      controller.abort();
     };
-  }, [scope, bodies, client]);
+  }, [client]);
+  const bodies = useMemo(() => subjectLists.names?.devices.map((d) => String(d.value)) ?? null, [subjectLists.names]);
   const railCounts = useMemo(() => {
     if (!device || !bodies?.length) return counts;
     const devices = new Map(counts.devices);
     for (const b of bodies) if (!devices.has(b)) devices.set(b, 0);
     return { ...counts, devices };
   }, [counts, device, bodies]);
-  const shownItems = useMemo(() => shown(surfacedItems, facets, sort, piles), [surfacedItems, facets, sort, piles]);
+  // A DESCRIPTION (his ask of 2026-11-03, the Words field's default): Winnow's image index ranks the whole library —
+  // the half asked, never the scope, `/api/search` knows no day — and the scope's rows among the closest `RANKED`
+  // are kept in THAT order. One ask per description and half; a scope change re-reads nothing.
+  const describing = describedText(facets);
+  const rankKey = describing ? `${half ?? 'all'}|${describing}` : '';
+  const [ranking, setRanking] = useState<{ key: string; ids: Map<number, number>; enabled: boolean; reason: string | null; indexed: number | null; library: number | null } | null>(null);
+  useEffect(() => {
+    if (!rankKey) return;
+    const ctl = new AbortController();
+    void client.search(describing, { limit: RANKED, ...(half ? { half } : {}) }, ctl.signal).then(
+      (found) =>
+        !ctl.signal.aborted &&
+        setRanking({ key: rankKey, ids: new Map(found.items.map((r) => [r.id, r.distance])), enabled: found.enabled, reason: found.reason, indexed: found.indexed, library: found.library }),
+      (err: unknown) => !ctl.signal.aborted && setRanking({ key: rankKey, ids: new Map(), enabled: false, reason: err instanceof Error ? err.message : String(err), indexed: null, library: null }),
+    );
+    return () => ctl.abort();
+  }, [client, rankKey, describing, half]);
+  const ranked = rankKey && ranking?.key === rankKey ? ranking : null;
+  const shownItems = useMemo(() => {
+    const base = shown(surfacedItems, facets, sort, piles);
+    if (!rankKey) return base;
+    return ranked ? rankedShown(base, ranked.ids) : [];
+  }, [surfacedItems, facets, sort, piles, rankKey, ranked]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
+  const describe = useMemo<DescribeState>(
+    () => ({
+      text: describing,
+      state: !rankKey ? 'idle' : !ranked ? 'asking' : ranked.enabled ? 'ready' : 'off',
+      ranked: ranked?.ids.size ?? 0,
+      kept: rankKey && ranked ? shownItems.length : 0,
+      indexed: ranked?.indexed ?? null,
+      library: ranked?.library ?? null,
+      reason: ranked?.reason ?? null,
+    }),
+    [describing, rankKey, ranked, shownItems.length],
+  );
 
   // --- flight tracks ---------------------------------------------------------
   // Read on request (each log is a download, however small), for the clips
@@ -724,7 +774,8 @@ export default function WinnowPicker({
     return spanPresets(today, own);
   }, [host.anchor, today]);
   // Several days in one grid read under day headings, in the list's own order.
-  const grouped = scope !== 'day' && sort === 'time';
+  // A description's order is the match's, closest first: no day headings while it stands.
+  const grouped = scope !== 'day' && sort === 'time' && !rankKey;
   // A span's grid is VIRTUAL: every day the calendar counted has its section at
   // its real height from the first moment, so the scrollbar knows the year and
   // a month click lands at once; only the sections near the view mount tiles.
@@ -1051,6 +1102,9 @@ export default function WinnowPicker({
               half={half}
               onHalf={setHalf}
               heldLabel={host.heldLabel}
+              client={client}
+              subject={subjectLists}
+              describe={describe}
               footer={
                 <div className="hidden max-[820px]:block sticky bottom-0 pt-2 bg-surface">
                   <Button variant="primary" size="lg" className="w-full" onClick={() => setRailOpen(false)}>
@@ -1101,10 +1155,11 @@ export default function WinnowPicker({
                     id: 'view',
                     label: 'View',
                     value: view,
-                    onPick: (v) => pickView(v === 'book' ? 'book' : 'grid'),
+                    onPick: (v) => pickView(readView(v)),
                     options: [
                       { id: 'grid', icon: Icons.grid, label: 'Grid of thumbnails' },
                       { id: 'book', icon: Icons.rows, label: 'Logbook — one line each, with the flight' },
+                      { id: 'map', icon: Icons.map, label: 'Map — where each was taken; drag a box to tick what is inside' },
                     ],
                   },
                   {
@@ -1172,9 +1227,19 @@ export default function WinnowPicker({
                 <LoadingState label={`Asking ${connection.id}…`} />
               ) : scope === 'session' && sessionId === null ? (
                 <p className="m-0 text-sm text-muted">Choose a folder above — its pictures are listed, nothing is downloaded until you add them.</p>
+              ) : rankKey && describe.state === 'asking' ? (
+                <LoadingState label={`Asking ${connection.id}’s image index for “${describing}”…`} />
+              ) : rankKey && describe.state === 'off' ? (
+                <p className="m-0 text-sm text-muted">
+                  {connection.id} cannot rank by a description{describe.reason ? ` — ${describe.reason}` : ' — it keeps no image index'}. Switch the words to <i>In text</i> to look in the files’ names and the text read in them.
+                </p>
               ) : shownItems.length === 0 && !(virtual && !loaded) ? (
                 <p className="m-0 text-sm text-muted">
-                  {counts.total ? 'Nothing passes these filters. ' : ''}
+                  {rankKey
+                    ? `None of the ${describe.ranked} closest matches for “${describing}” is in this scope — widen the span, or say it differently. `
+                    : counts.total
+                      ? 'Nothing passes these filters. '
+                      : ''}
                   {counts.total > 0 && (
                     <button
                       type="button"
@@ -1187,6 +1252,40 @@ export default function WinnowPicker({
                 </p>
               ) : (
                 (() => {
+                  if (view === 'map') {
+                    return (
+                      <PickerMap
+                        items={shownItems}
+                        ticked={ticked}
+                        onTick={(ids, on) =>
+                          setTicked((cur) => {
+                            const next = new Set(cur);
+                            for (const id of ids) {
+                              if (on) next.add(id);
+                              else next.delete(id);
+                            }
+                            return next;
+                          })
+                        }
+                        onToggle={(id) => {
+                          const it = shownItems.find((x) => x.id === id);
+                          if (it && !it.held) {
+                            setTicked((cur) => {
+                              const next = new Set(cur);
+                              if (next.has(id)) next.delete(id);
+                              else next.add(id);
+                              return next;
+                            });
+                            setAnchorId(id);
+                            setFocusId(id);
+                          }
+                        }}
+                        fitKey={scopeKey}
+                        heldLabel={host.heldLabel}
+                        loaded={loaded}
+                      />
+                    );
+                  }
                   const more = limit < shownItems.length && (
                     <MoreTiles key={limit} as={view === 'book' ? 'div' : 'li'} onVisible={() => setLimit((n) => n + BATCH)} />
                   );

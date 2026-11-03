@@ -17,6 +17,14 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: the hook's big text and second line take your own line breaks — press Return in their field, now a
   text area. Choose how a long one is laid: Wrap (your breaks and the column's), Your breaks only (shrunk so the
   widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.
+- Winnow picker (Develop, Mosaic, Storytelling, the Library, Flight Atlas): a **Subject** section in its filters —
+  choose the **people** in the frame (one, several, or all of them together), **describe** what is in the picture
+  (*a dog*, *a parrot*, *sunset over the sea*: the image index your Winnow keeps ranks its pictures, closest first)
+  or look for words in the file's name and the text read in it, and pick a **place** by your Winnow's own names
+  (country, region, city, point of interest). Remembered per instance, like the other filters.
+- Winnow picker: a **Map** view beside Grid and Logbook — each picture a dot where it was taken; hold ⇧ and drag, or
+  switch *Draw a box* on and drag with a finger, and every picture inside the box is ticked; a dot ticks on a click.
+  Pictures with no position are counted beside the map. The map background stays the usual opt-in.
 
 ## [1.7.0] - 2026-11-02 — Aureolin
 
