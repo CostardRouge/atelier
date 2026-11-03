@@ -4,8 +4,11 @@ import {
   activeFacets,
   bucketOf,
   DEFAULT_FACETS,
+  describedRows,
   describedText,
+  describePeopleAside,
   rankedShown,
+  readsEnglishOnly,
   drawn,
   facetCounts,
   facetValues,
@@ -331,6 +334,27 @@ describe('the subject — who, which words, where (2026-11-02)', () => {
     expect(readFacets({ places: 'Paris' }).places).toEqual({});
     expect(readFacets({ wordsIn: 'text' }).wordsIn).toBe('text');
     expect(readFacets({ wordsIn: 'nope' }).wordsIn).toBe('describe');
+  });
+
+  it('a description lists the index’s rows, kept to the places ticked; people are set aside, and said', () => {
+    const ranked = [
+      { ...row(1, { place_city: 'Paris' } as Partial<WinnowAssetRow>), distance: 0.2 },
+      { ...row(2, { place_city: 'Lyon' } as Partial<WinnowAssetRow>), distance: 0.3 },
+      { ...row(3), distance: 0.4 },
+    ];
+    expect(describedRows(ranked, { ...DEFAULT_FACETS, words: 'dog' }).map((r) => r.id)).toEqual([1, 2, 3]);
+    expect(describedRows(ranked, { ...DEFAULT_FACETS, words: 'dog', places: { city: ['Lyon'] } }).map((r) => r.id)).toEqual([2]);
+    expect(describePeopleAside({ ...DEFAULT_FACETS, words: 'dog', people: [4] })).toBe(true);
+    expect(describePeopleAside({ ...DEFAULT_FACETS, words: 'dog', wordsIn: 'text', people: [4] })).toBe(false);
+    expect(describePeopleAside({ ...DEFAULT_FACETS, people: [4] })).toBe(false);
+  });
+
+  it('knows an English-only index from a multilingual one', () => {
+    expect(readsEnglishOnly('ViT-B-32__openai')).toBe(true);
+    expect(readsEnglishOnly('ViT-H-14-378-quickgelu__dfn5b')).toBe(true);
+    expect(readsEnglishOnly('XLM-Roberta-Large-Vit-B-32')).toBe(false);
+    expect(readsEnglishOnly('nllb-clip-base-siglip__v1')).toBe(false);
+    expect(readsEnglishOnly(null)).toBe(false);
   });
 
   it('a ranking keeps the shown rows it names, closest first, whatever the day', () => {

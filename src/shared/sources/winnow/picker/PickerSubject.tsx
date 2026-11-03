@@ -12,20 +12,28 @@ export interface SubjectLists {
   names: WinnowFacets | null;
 }
 
-/** Where a DESCRIPTION's ranking stands (`WinnowPicker`): nothing asked, asked, ranked, or refused by an instance with no image index. */
+/**
+ * Where a DESCRIPTION's ranking stands (`WinnowPicker`): nothing asked, asked, ranked, refused by an instance with no
+ * index, or an index with nothing in it yet.
+ */
 export interface DescribeState {
   text: string;
-  state: 'idle' | 'asking' | 'ready' | 'off';
-  /** How many of the library's closest matches came back, and how many of them this scope shows. */
+  state: 'idle' | 'asking' | 'ready' | 'off' | 'empty';
+  /** How many of the library's closest matches came back. */
   ranked: number;
-  kept: number;
   indexed: number | null;
   library: number | null;
   reason: string | null;
+  /** The index's model reads English only (`readsEnglishOnly`): «dog», not «chien». */
+  englishOnly: boolean;
+  /** People are ticked, and cannot narrow a description. */
+  peopleAside: boolean;
+  /** What the description sets aside: the day, the span or the folder open. */
+  scopeWord: string;
 }
 
 const WORDS_IN: { id: WordsIn; label: string; title: string }[] = [
-  { id: 'describe', label: 'Describe', title: 'What is in the picture — a dog, a parrot, a sunset over the sea — ranked by the image index Winnow keeps of its library (closest first, no day headings)' },
+  { id: 'describe', label: 'Describe', title: 'What is in the picture — a dog, a parrot, a sunset over the sea — the closest in the whole library by the image index Winnow keeps, whatever day is open' },
   { id: 'text', label: 'In text', title: 'Words in the file’s path or in the text Winnow read in the picture — every word, as a part of a word' },
 ];
 
@@ -115,12 +123,20 @@ export default function PickerSubject({
               ? 'Asking the image index…'
               : describe.state === 'off'
                 ? 'No image index on this Winnow'
-                : describe.ranked === 0
-                  ? 'Nothing in the index matches'
-                  : `${describe.kept} of the ${describe.ranked} closest${describe.ranked >= RANKED ? ` (the index’s ${RANKED})` : ''} are in this scope, closest first${
-                    describe.indexed !== null && describe.library !== null && describe.indexed < describe.library ? ` · ${describe.indexed} of ${describe.library} indexed` : ''
-                  }`}
+                : describe.state === 'empty'
+                  ? 'Nothing indexed for search yet'
+                  : `The library’s ${describe.ranked >= RANKED ? `${RANKED} ` : ''}closest, any day — the ${describe.scopeWord} is set aside${
+                      describe.indexed !== null && describe.library !== null && describe.indexed < describe.library ? ` · ${describe.indexed} of ${describe.library} indexed` : ''
+                    }`}
           </p>
+        )}
+        {describe.state !== 'idle' && describe.englishOnly && (
+          <p className="m-0 mt-0.5 px-1.5 font-mono text-3xs text-warn" title="Your Winnow’s image index was built with an English-only CLIP model: «dog» finds dogs, «chien» barely. A multilingual model (Winnow’s ML_CLIP_MODEL) reads other languages, after a re-index.">
+            The index reads English — «dog», not «chien»
+          </p>
+        )}
+        {describe.peopleAside && (
+          <p className="m-0 mt-0.5 px-1.5 font-mono text-3xs text-muted">People set aside: a description cannot be narrowed by who is in it</p>
         )}
       </div>
 

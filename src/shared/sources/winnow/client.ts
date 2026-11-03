@@ -736,6 +736,8 @@ export interface WinnowSearch {
   reason: string | null;
   indexed: number | null;
   library: number | null;
+  /** The CLIP model the index was built with (`ML_CLIP_MODEL`, e.g. `ViT-B-32__openai`) — what language it reads. */
+  model: string | null;
   items: (WinnowAssetRow & { distance: number })[];
 }
 
@@ -1255,6 +1257,7 @@ export class WinnowClient {
       reason?: string;
       indexed?: number;
       library?: number;
+      model?: string;
     }>(
       this.url('/api/search', {
         q: text,
@@ -1268,6 +1271,7 @@ export class WinnowClient {
       reason: raw.reason ?? null,
       indexed: raw.indexed ?? null,
       library: raw.library ?? null,
+      model: raw.model ?? null,
       items: raw.items ?? [],
     };
   }

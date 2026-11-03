@@ -39,9 +39,12 @@ import { nextParts, partOf, type PartState } from './span-queue';
 import PickerTile, { type PileBadge } from './PickerTile';
 import {
   activeFacets,
+  describedRows,
   describedText,
+  describePeopleAside,
   RANKED,
   rankedShown,
+  readsEnglishOnly,
   BUCKETS,
   DEFAULT_FACETS,
   drawn,
@@ -419,10 +422,45 @@ export default function WinnowPicker({
     });
   }, [connection.id, scope, day, span, half, sessionId, facets, sort]);
 
+  // --- a DESCRIPTION is a scope of its own ------------------------------------
+  // His ask of 2026-11-03 (the Words field's default), fixed the same day after «la recherche par mot clé ml ne
+  // fonctionne pas»: Winnow's `/api/search` ranks the WHOLE library (the half at most, never a day) and answers its
+  // 200 closest, so keeping only those inside the open day or span left a real library with nothing. The ranking IS
+  // the list while it stands — the day, span or folder set aside and said so, the rail's facets and place ticks
+  // still narrowing it. One ask per description and half.
+  const describing = describedText(facets);
+  const rankKey = describing ? `${half ?? 'all'}|${describing}` : '';
+  const [ranking, setRanking] = useState<{
+    key: string;
+    rows: (WinnowAssetRow & { distance: number })[];
+    enabled: boolean;
+    reason: string | null;
+    indexed: number | null;
+    library: number | null;
+    model: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!rankKey) return;
+    const ctl = new AbortController();
+    void client.search(describing, { limit: RANKED, ...(half ? { half } : {}) }, ctl.signal).then(
+      (found) =>
+        !ctl.signal.aborted &&
+        setRanking({ key: rankKey, rows: found.items, enabled: found.enabled, reason: found.reason, indexed: found.indexed, library: found.library, model: found.model }),
+      (err: unknown) =>
+        !ctl.signal.aborted &&
+        setRanking({ key: rankKey, rows: [], enabled: false, reason: err instanceof Error ? err.message : String(err), indexed: null, library: null, model: null }),
+    );
+    return () => ctl.abort();
+  }, [client, rankKey, describing, half]);
+  const ranked = rankKey && ranking?.key === rankKey ? ranking : null;
+  const rankedRows = useMemo(() => (ranked?.enabled ? describedRows(ranked.rows, facets) : null), [ranked, facets]);
+  const distances = useMemo(() => new Map((ranked?.rows ?? []).map((r) => [r.id, r.distance])), [ranked]);
+
   // --- what the grid holds ---------------------------------------------------
   const items = useMemo<PickItem[]>(
-    () => (listed ?? []).filter((r) => !host.accepts || host.accepts(r)).map((r) => pickItem(r, host.held(r))),
-    [listed, host],
+    () =>
+      ((rankKey ? rankedRows : listed) ?? []).filter((r) => !host.accepts || host.accepts(r)).map((r) => pickItem(r, host.held(r))),
+    [rankKey, rankedRows, listed, host],
   );
   const piles = useMemo(() => pilesOf(items), [items]);
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(new Set());
@@ -455,41 +493,24 @@ export default function WinnowPicker({
     for (const b of bodies) if (!devices.has(b)) devices.set(b, 0);
     return { ...counts, devices };
   }, [counts, device, bodies]);
-  // A DESCRIPTION (his ask of 2026-11-03, the Words field's default): Winnow's image index ranks the whole library —
-  // the half asked, never the scope, `/api/search` knows no day — and the scope's rows among the closest `RANKED`
-  // are kept in THAT order. One ask per description and half; a scope change re-reads nothing.
-  const describing = describedText(facets);
-  const rankKey = describing ? `${half ?? 'all'}|${describing}` : '';
-  const [ranking, setRanking] = useState<{ key: string; ids: Map<number, number>; enabled: boolean; reason: string | null; indexed: number | null; library: number | null } | null>(null);
-  useEffect(() => {
-    if (!rankKey) return;
-    const ctl = new AbortController();
-    void client.search(describing, { limit: RANKED, ...(half ? { half } : {}) }, ctl.signal).then(
-      (found) =>
-        !ctl.signal.aborted &&
-        setRanking({ key: rankKey, ids: new Map(found.items.map((r) => [r.id, r.distance])), enabled: found.enabled, reason: found.reason, indexed: found.indexed, library: found.library }),
-      (err: unknown) => !ctl.signal.aborted && setRanking({ key: rankKey, ids: new Map(), enabled: false, reason: err instanceof Error ? err.message : String(err), indexed: null, library: null }),
-    );
-    return () => ctl.abort();
-  }, [client, rankKey, describing, half]);
-  const ranked = rankKey && ranking?.key === rankKey ? ranking : null;
   const shownItems = useMemo(() => {
     const base = shown(surfacedItems, facets, sort, piles);
-    if (!rankKey) return base;
-    return ranked ? rankedShown(base, ranked.ids) : [];
-  }, [surfacedItems, facets, sort, piles, rankKey, ranked]);
+    return rankKey ? rankedShown(base, distances) : base;
+  }, [surfacedItems, facets, sort, piles, rankKey, distances]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
   const describe = useMemo<DescribeState>(
     () => ({
       text: describing,
-      state: !rankKey ? 'idle' : !ranked ? 'asking' : ranked.enabled ? 'ready' : 'off',
-      ranked: ranked?.ids.size ?? 0,
-      kept: rankKey && ranked ? shownItems.length : 0,
+      state: !rankKey ? 'idle' : !ranked ? 'asking' : !ranked.enabled ? 'off' : ranked.indexed === 0 ? 'empty' : 'ready',
+      ranked: ranked?.rows.length ?? 0,
       indexed: ranked?.indexed ?? null,
       library: ranked?.library ?? null,
       reason: ranked?.reason ?? null,
+      englishOnly: readsEnglishOnly(ranked?.model),
+      peopleAside: describePeopleAside(facets),
+      scopeWord: scope === 'span' ? 'span' : scope === 'session' ? 'folder' : 'day',
     }),
-    [describing, rankKey, ranked, shownItems.length],
+    [describing, rankKey, ranked, facets, scope],
   );
 
   // --- flight tracks ---------------------------------------------------------
@@ -1125,8 +1146,10 @@ export default function WinnowPicker({
                   Filters{active ? ` · ${active}` : ''}
                 </Button>
               </span>
-              <span className="font-mono text-2xs text-muted tabular-nums">
-                {shownItems.length} shown of {counts.total}
+              <span className="font-mono text-2xs text-muted tabular-nums min-w-0 truncate">
+                {rankKey && describe.state === 'ready'
+                  ? `${shownItems.length} shown · the closest to “${describing}”, any day`
+                  : `${shownItems.length} shown of ${counts.total}`}
               </span>
               <span className="flex-1" />
               {counts.logs.with > 0 && (
@@ -1223,23 +1246,23 @@ export default function WinnowPicker({
               </div>
             )}
             <div ref={gridBox} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${virtual ? '[overflow-anchor:none]' : ''}`}>
-              {asking ? (
-                <LoadingState label={`Asking ${connection.id}…`} />
-              ) : scope === 'session' && sessionId === null ? (
-                <p className="m-0 text-sm text-muted">Choose a folder above — its pictures are listed, nothing is downloaded until you add them.</p>
-              ) : rankKey && describe.state === 'asking' ? (
+              {rankKey && describe.state === 'asking' ? (
                 <LoadingState label={`Asking ${connection.id}’s image index for “${describing}”…`} />
               ) : rankKey && describe.state === 'off' ? (
                 <p className="m-0 text-sm text-muted">
                   {connection.id} cannot rank by a description{describe.reason ? ` — ${describe.reason}` : ' — it keeps no image index'}. Switch the words to <i>In text</i> to look in the files’ names and the text read in them.
                 </p>
+              ) : rankKey && describe.state === 'empty' ? (
+                <p className="m-0 text-sm text-muted">
+                  Nothing on {connection.id} is indexed for search yet — its <i>Index for search</i> job reads each picture once. Switch the words to <i>In text</i> meanwhile.
+                </p>
+              ) : !rankKey && asking ? (
+                <LoadingState label={`Asking ${connection.id}…`} />
+              ) : !rankKey && scope === 'session' && sessionId === null ? (
+                <p className="m-0 text-sm text-muted">Choose a folder above — its pictures are listed, nothing is downloaded until you add them.</p>
               ) : shownItems.length === 0 && !(virtual && !loaded) ? (
                 <p className="m-0 text-sm text-muted">
-                  {rankKey
-                    ? `None of the ${describe.ranked} closest matches for “${describing}” is in this scope — widen the span, or say it differently. `
-                    : counts.total
-                      ? 'Nothing passes these filters. '
-                      : ''}
+                  {counts.total ? 'Nothing passes these filters. ' : rankKey ? `Nothing ranked for “${describing}”. ` : ''}
                   {counts.total > 0 && (
                     <button
                       type="button"
@@ -1280,7 +1303,7 @@ export default function WinnowPicker({
                             setFocusId(id);
                           }
                         }}
-                        fitKey={scopeKey}
+                        fitKey={rankKey ? `describe|${rankKey}` : scopeKey}
                         heldLabel={host.heldLabel}
                         loaded={loaded}
                       />

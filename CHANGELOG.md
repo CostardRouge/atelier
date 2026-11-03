@@ -49,7 +49,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.
 - Winnow picker (Develop, Mosaic, Storytelling, the Library, Flight Atlas): a **Subject** section in its filters —
   choose the **people** in the frame (one, several, or all of them together), **describe** what is in the picture
-  (*a dog*, *a parrot*, *sunset over the sea*: the image index your Winnow keeps ranks its pictures, closest first)
+  (*a dog*, *a parrot*, *sunset over the sea*: the image index your Winnow keeps lists its closest pictures across
+  the whole library, whatever day is open — in English, unless your Winnow's index reads other languages)
   or look for words in the file's name and the text read in it, and pick a **place** by your Winnow's own names
   (country, region, city, point of interest). Remembered per instance, like the other filters.
 - Winnow picker: a **Map** view beside Grid and Logbook — each picture a dot where it was taken; hold ⇧ and drag, or

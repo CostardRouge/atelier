@@ -358,15 +358,25 @@ each list). An instance from before faces answers 404 → no People section, not
 **The WORDS field has two ways, Describe the default (2026-11-03, his correction: «je pensais plutôt à la
 recherche sémantique par IA … si tu cherches chien, perroquet, sunset, il faut que ça renvoie les bons
 résultats»).** `PickFacets.wordsIn`: *Describe* asks Winnow's image index (`client.search`, `/api/search`, the
-CLIP ranking the agent command already used) for the library's `RANKED` = 200 closest matches — once per text and
-half, never per scope, `/api/search` knows no day — and `rankedShown` keeps the scope's rows among them IN THAT
-ORDER, closest first, with no day headings and no virtual grid while it stands (a description orders, it does not
-merely keep); a status line under the field says `kept of ranked`, the coverage when `indexed < library`, and an
-instance with no index (`enabled: false`) is said in the grid with the way out (*In text*). *In text* is the
-server's `q` (path + OCR text, every word as a part of a word), sent with the scope like the rest of the subject.
-Winnow's tags are the rail's own *Tags* facet already, so no third way. Rejected: ranking by a description on the
-server per scope — the endpoint has only `source` (the half); a loose description of a big library can leave a
-day with few of the 200, said in the empty state rather than widened in silence.
+CLIP ranking the agent command already used) for the library's `RANKED` = 200 closest matches, once per text and
+half. *In text* is the server's `q` (path + OCR text, every word as a part of a word), sent with the scope like
+the rest of the subject. Winnow's tags are the rail's own *Tags* facet already, so no third way.
+
+**A description is a SCOPE of its own, never intersected with the day (rev. 2026-11-03, his report «la recherche
+par mot clé ml ne fonctionne pas»).** The first build kept only the ranked rows inside the open day or span: on a
+real library the 200 closest are spread over years, so a day kept none. Read in Winnow's `src/app/api/search/
+route.ts`: it ranks the WHOLE library (`source` = the half is its only narrowing, `MAX_LIMIT` 200, no date, no
+filter). **How to apply**: while a description stands the ranked rows ARE the grid's rows (`describedRows`), the
+day/span/folder set aside and said so (the rail's line, the count line «the closest to “…”, any day»); the rail's
+facets still apply, the place ticks on the row's own names (a ranked row is `a.*`, `passesNames`); people CANNOT
+narrow it — a row does not say who is in it — so a person ticked is said set aside (`describePeopleAside`). The
+answer's `model` says what language the index reads: Winnow's default `ML_CLIP_MODEL` is `ViT-B-32__openai`,
+English only («dog» finds dogs, «chien» barely), shown as a warning under the field (`readsEnglishOnly`); a
+multilingual model (XLM-RoBERTa, NLLB) is his call in Winnow, after a re-index. `indexed: 0` is its own state
+(nothing indexed yet). **The stub hid the bug**: one day of 90 rows makes «the scope» and «the library» the same —
+`stub.cjs {spread: true}` puts every tenth row a year earlier and honours `date_from/date_to`; test a scope against
+the library with it. The root fix — ranking WITHIN a scope (Winnow's `/api/search` reading `filterFromSearchParams`
+into its CTE) — is a Winnow change, his call.
 
 ## The MAP view, a box that ticks (2026-11-02)
 
