@@ -55,6 +55,7 @@ import { useSettled } from './use-settled';
 import { useLocalPref } from '../../shared/ui/local-pref';
 import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/overlay/guides';
 import { usePreflight } from './use-preflight';
+import { soundCues } from './sound-cues';
 import { deviceLabel, measureLine, type ExportMeasure } from '../../shared/story/export-measure';
 import { heapMb, keepMeasure, measuresNow, subscribeMeasures } from './export-measures';
 import PreflightList from './PreflightList';
@@ -196,8 +197,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   // What the maps are drawn over: the tiles, once fetched for this route (`use-map-ground.ts`).
   const mapGround = useMapGround(script?.look?.map, mapStops, mapRoad);
   const groundLayers = mapGround.ground.state === 'ready' ? mapGround.ground.layers : null;
+  // The voice's spans and the music's beats, which the living wall's smart motion follows (`wall-motion.ts`).
+  const postSound = sounds[postId];
+  const voiceCue = postSound?.voice ?? null;
+  const musicCue = postSound?.music ?? null;
+  const cues = useMemo(() => soundCues(voiceCue, musicCue, 600), [voiceCue, musicCue]);
   const mapOpts = useMemo<ComposeOptions>(
     () => ({
+      cues,
       ...(tripMap.state === 'ready' && tripMap.map
         ? { stops: tripMap.map.stops, road: tripMap.map.road, times: tripMap.map.times }
         : { stops: script?.stops }),
@@ -205,7 +212,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       ground: groundLayers,
       named: mapNamesOf(sources.map).which,
     }),
-    [tripMap, script, wall.images, groundLayers, sources.map],
+    [tripMap, script, wall.images, groundLayers, sources.map, cues],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
