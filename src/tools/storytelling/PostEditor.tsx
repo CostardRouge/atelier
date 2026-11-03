@@ -985,6 +985,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           series: hookSeriesOf(episode),
           sceneIndex: sceneOf?.index ?? null,
           number: skeleton.number,
+          params: sceneOf && sceneOf.index !== null ? episode.blocks[sceneOf.index]?.params : undefined,
         })
       : null;
     // The Hook object: its words, variants, badge, motion and sounds first, then its place (O4).

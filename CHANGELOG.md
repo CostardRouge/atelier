@@ -11,6 +11,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: every block's own words are typed where they are drawn — select a counter's number, the gear's names,
+  the folders' path, the clocks, the transfer, the names, the season's posts, the opening's title or the closing card
+  and its Content section shows each of its words in a field, written into this post's script.
 - Storytelling: the living wall — Look › *Motion* sets the wall's rows or columns moving: Marquee, Metro, Waterfall,
   Shuffle board, Flip board, Calm, or each lane its own mode with a click. *Smart* holds the first picture while the
   camera lands, moves a stage's band as one, slows under your voice, steps on your music's beats and ends aligned;

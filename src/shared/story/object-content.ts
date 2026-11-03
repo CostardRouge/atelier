@@ -14,6 +14,8 @@ import { hookBadgeContent, hookBadgeOf, withPostBadge, type HookSeries } from '.
 import type { Hook } from './hook';
 import { withPostHooks } from './sources';
 import type { ScriptBlock, StoryScript } from './story-script';
+import { partOf, withBlockParam, wordsOf, wordText, wordValue } from './block-words';
+import { PLACEHOLDER } from './story-facts';
 
 /** Where the rest of an object's settings are, as the Studio names its panels. */
 export type ContentLink = 'hook' | 'script' | 'sources';
@@ -36,6 +38,8 @@ export interface ObjectContent {
   /** How it is made: typed for this post, computed from the series, counted from a source, fixed by a licence, or no words. */
   kind: 'this post' | 'computed' | 'counted' | 'licence' | 'no text';
   field?: ContentField;
+  /** More fields after the first: a block's words (`block-words.ts`) — a counter's number, unit and label. */
+  fields?: ContentField[];
   link?: { to: ContentLink; label: string };
 }
 
@@ -51,6 +55,8 @@ export interface ContentContext {
   sceneIndex: number | null;
   /** This post's number as the series gives it (`EP.04`). */
   number: string;
+  /** The scene's params as the post draws them (facts filled), for what a field says when the post sets nothing. */
+  params?: Record<string, unknown>;
 }
 
 const LETTERS = 'ABCDE';
@@ -185,6 +191,65 @@ export function objectContent(key: string, ctx: ContentContext): ObjectContent |
       from: ownNumber ? "This post's own number." : "This post's number in the series; the hook's header shows it too.",
       kind: ownNumber ? 'this post' : 'computed',
       field: numberField,
+    };
+  }
+
+  // The opening's title is this post's; its line under is the post's number.
+  if (key === 'intro.title') {
+    return {
+      says: null,
+      from: "This post's title, in the script; the map of subjects and the next post's ending show it too.",
+      kind: 'this post',
+      field: {
+        label: 'The title',
+        value: script.posts[postId]?.title ?? '',
+        placeholder: 'The post’s title',
+        write: (sc, v) => ({ ...sc, posts: { ...sc.posts, [postId]: { ...(sc.posts[postId] ?? {}), title: v || undefined } } }),
+      },
+    };
+  }
+  if (key === 'intro.eyebrow') return { says: ownNumber ?? ctx.number, from: "This post's number and its season.", kind: ownNumber ? 'this post' : 'computed', field: numberField };
+  // The season's closing card: the series' own words, the same on every post that closes.
+  if (key === 'recap-carte.series' || key === 'recap-carte.handle' || key === 'recap-carte.ask') {
+    const which = key.slice('recap-carte.'.length) as 'series' | 'handle' | 'ask';
+    const label = { series: "The series' name", handle: 'The account', ask: 'What it asks' }[which];
+    return {
+      says: null,
+      from: "The series' closing card, the same for every post that ends a season.",
+      kind: 'this post',
+      field: { label, value: script[which] ?? '', placeholder: which === 'ask' ? 'Save it for what comes next' : which === 'handle' ? '@you' : 'Your series', write: (sc, v) => ({ ...sc, [which]: v || undefined }) },
+    };
+  }
+  if (key === 'recap.title' || key === 'recap.number' || key === 'recap.cover' || key === 'recap.eyebrow') {
+    return { says: null, from: "The next post's own title, number and cover: change them in that post.", kind: 'computed' };
+  }
+
+  // A block's own words (`block-words.ts`): this post's params of that scene, each in its field.
+  const words = wordsOf(key);
+  if (words.length && ctx.sceneIndex !== null) {
+    const index = ctx.sceneIndex;
+    const own = script.posts[postId]?.blocks?.[index]?.params ?? {};
+    const drawn = ctx.params ?? {};
+    const fields = words.map((f): ContentField => {
+      const mine = own[f.param];
+      const shown = wordText(f, drawn[f.param]);
+      return {
+        label: f.label,
+        value: wordText(f, mine),
+        placeholder: f.example ?? (shown ? shown.split('\n')[0] : 'As the block draws it'),
+        multiline: f.kind === 'lines' || f.kind === 'rows',
+        write: (sc, v) => withBlockParam(sc, postId, index, f.param, wordValue(f, v)),
+      };
+    });
+    const counted = words.some((f) => typeof own[f.param] === 'string' && new RegExp(PLACEHOLDER.source).test(own[f.param] as string));
+    const { part } = partOf(key);
+    return {
+      says: null,
+      from: `${part ? 'This part' : 'This scene'}'s words in this post's script${counted ? '; a {fact} in them is counted in Sources' : ''}. Empty: as the block draws them.`,
+      kind: counted ? 'counted' : 'this post',
+      field: fields[0],
+      ...(fields.length > 1 ? { fields: fields.slice(1) } : {}),
+      ...(counted ? { link: { to: 'sources' as const, label: 'Count again in Sources' } } : {}),
     };
   }
 

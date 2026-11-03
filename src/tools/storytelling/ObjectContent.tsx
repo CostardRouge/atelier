@@ -27,16 +27,21 @@ export default function ObjectContent({
   onLink: (to: ContentLink) => void;
 }) {
   const f = content.field;
+  const all = [...(f ? [f] : []), ...(content.fields ?? [])];
   return (
     <div className="flex flex-col gap-1.5">
       {content.says ? <Readout>{content.says}</Readout> : null}
-      {f ? (
-        f.multiline ? (
-          <TextAreaField label={f.label} value={f.value} placeholder={f.placeholder} onChange={(v) => onScript(f.write(script, v))} rows={3} />
-        ) : (
-          <TextField label={f.label} value={f.value} placeholder={f.placeholder} onChange={(v) => onScript(f.write(script, v))} />
-        )
-      ) : null}
+      {all.map((x) => (
+        <div key={x.label} className="flex flex-col gap-0.5">
+          {/* Several fields, or rows typed by convention: each says what it is. */}
+          {all.length > 1 || x.multiline ? <span className="text-2xs text-muted">{x.label}</span> : null}
+          {x.multiline ? (
+            <TextAreaField label={x.label} value={x.value} placeholder={x.placeholder} onChange={(v) => onScript(x.write(script, v))} rows={3} />
+          ) : (
+            <TextField label={x.label} value={x.value} placeholder={x.placeholder} onChange={(v) => onScript(x.write(script, v))} />
+          )}
+        </div>
+      ))}
       <p className="m-0 flex items-start gap-1.5 text-2xs text-muted leading-snug">
         <span className="shrink-0 font-mono text-3xs rounded-full border border-line px-1.5 text-ink-soft">{KIND_LABEL[content.kind]}</span>
         <span>

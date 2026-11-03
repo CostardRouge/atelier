@@ -3021,6 +3021,16 @@ it and may grow blocks of its own.
   the stage over the screen, and the bottom bar — *Objects* opens the list as
   a sheet, the selected object's settings and the *Timeline* open as drawers
   that leave the picture in sight.
+- **Words where they are drawn.** Select any object that draws words and its
+  inspector opens on *Content*: what it says, where the words come from, and
+  the field to type them — the hook's lines, a caption, the post's number and
+  title, the closing card's name, account and ask, and every block's own
+  words: a counter's number (or a counted `{fact}`), unit, label and line
+  under; the gear's devices, the wrong and right names, the season's posts
+  (one a line, their fields separated by « · »); the folders' path, columns
+  and note; the clocks' places and hours; the transfer's card and files.
+  Typed in a scene, they are this post's; emptied, the block draws its own
+  again.
 - **Before you export.** *Export & archive* first checks the post as it
   stands and lists what would come out wrong in the file: a fact not counted
   (`{media.total}` would be drawn with its braces), the map's tiles or the
