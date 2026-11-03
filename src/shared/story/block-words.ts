@@ -96,7 +96,7 @@ export function wordValue(f: WordField, text: string): unknown {
   if (!text.trim()) return undefined;
   if (f.kind === 'number') {
     const v = text.trim();
-    const num = Number(v.replace(/[\s  ]/g, '').replace(',', '.'));
+    const num = Number(v.replace(/[\s\u202f\u00a0]/g, '').replace(',', '.'));
     return v.startsWith('{') || !Number.isFinite(num) ? v : num;
   }
   if (f.kind === 'lines') return text.split('\n').map((l) => l.trim()).filter(Boolean);
