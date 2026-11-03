@@ -54,3 +54,20 @@ describe('what an object says', () => {
     expect(objectContent('wall.pictures', ctx())).toBeNull();
   });
 });
+
+describe('a block’s words (R3)', () => {
+  it('a counter part offers its fields, typed into this post’s params', async () => {
+    const { newScript } = await import('./story-script');
+    const { objectContent } = await import('./object-content');
+    const script = newScript('S');
+    const ctx = { script, postId: 'ep01', hook: null, hookIndex: 0, series: null, sceneIndex: 1, number: 'EP.01', params: { to: 98412, label: 'photos' } };
+    const c = objectContent('counter.number', ctx)!;
+    expect([c.field!.label, ...(c.fields ?? []).map((f) => f.label)]).toEqual(['The number', 'Counting from', 'Its unit']);
+    expect(c.field!.placeholder).toBe('98412');
+    const next = c.field!.write(script, '{media.total}');
+    expect(next.posts.ep01.blocks?.[1].params).toEqual({ to: '{media.total}' });
+    expect(objectContent('counter.number', { ...ctx, script: next })!.kind).toBe('counted');
+    expect(objectContent('recap-carte.ask', ctx)!.field!.write(script, 'Follow').ask).toBe('Follow');
+    expect(objectContent('intro.title', ctx)!.field!.write(script, 'The arrival').posts.ep01.title).toBe('The arrival');
+  });
+});

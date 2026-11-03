@@ -7,6 +7,7 @@ import { WinnowClient } from '../../shared/sources/winnow/client';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
+import { KeptSeriesList } from './ScriptKept';
 import { SelectField } from '../../shared/ui/Inspector';
 
 /**
@@ -53,9 +54,13 @@ export default function StartChecklist({ script, onScript, onCount }: { script: 
     switch (step.id) {
       case 'script':
         return (
-          <Button size="sm" variant="primary" onClick={() => onScript(newScript('My series', 'fr'))}>
-            New series
-          </Button>
+          <div className="flex flex-col items-end gap-1.5">
+            <Button size="sm" variant="primary" onClick={() => onScript(newScript('My series', 'fr'))}>
+              New series
+            </Button>
+            {/* A series already kept on a connected Winnow opens here as it is — the phone's way in. */}
+            <KeptSeriesList current={script} onScript={onScript} />
+          </div>
         );
       case 'winnow':
         if (!script) return null;

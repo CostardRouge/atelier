@@ -16,6 +16,7 @@ import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route'
 import { assemble, type StoryScript } from '../../shared/story/story-script';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { STORY_FONTS } from '../../shared/story/fonts';
+import { useScriptSync } from './use-script-sync';
 import PostEditor, { type PostSound } from './PostEditor';
 import { POSTS } from './posts';
 import { useDocumentLock, useInertRef } from '../../shared/sources/use-document-lock';
@@ -72,6 +73,19 @@ export default function StorytellingTool() {
     storeScriptSoon(next);
   }, []);
   useEffect(() => () => flushScript(), []);
+
+  // The series kept on a Winnow follows its copy there (`use-script-sync.ts`): taken when it moved on
+  // another device and this one is clean, pushed once the edits here pause. A copy taken is a reload of
+  // the editor (its history starts from it), like another tab's write.
+  const canWrite = useCallback(() => lockRef.current.canWrite(), []);
+  const takeKept = useCallback(
+    (next: StoryScript) => {
+      onScript(next);
+      setGeneration((g) => g + 1);
+    },
+    [onScript],
+  );
+  useScriptSync(script, takeKept, canWrite);
 
   // Whether the browser keeps the script: when it refuses (storage full or blocked), say so — the work lives in
   // this tab only, and Save script is how to keep it (Studio's « Storage unavailable »). A kept write tells the

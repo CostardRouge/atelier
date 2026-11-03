@@ -1,3 +1,4 @@
+import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { useEffect, useState } from 'react';
 import type { ScriptSources } from '../../shared/story/story-script';
 import type { TripMap } from '../../shared/story/trip-map';
@@ -9,7 +10,7 @@ export type TripMapState =
   | { state: 'none' }
   | { state: 'reading' }
   | { state: 'missing' }
-  | { state: 'ready'; map: TripMap | null; span: { from: string; to: string } };
+  | { state: 'ready'; map: TripMap | null; span: { from: string; to: string }; trip: TripDoc };
 
 /**
  * The story map of the trip the series names (`sources.trip`), read from this
@@ -46,7 +47,7 @@ export function useTripMap(sources: ScriptSources, lang?: Lang): TripMapState {
           setState({ state: 'missing' });
           return;
         }
-        setState({ state: 'ready', map: maps.tripMap(trip, { ...src.mapChoiceOf(sources), lang, towns }), span: src.countedSpan(trip, sources) });
+        setState({ state: 'ready', map: maps.tripMap(trip, { ...src.mapChoiceOf(sources), lang, towns }), span: src.countedSpan(trip, sources), trip });
       })
       .catch(() => {
         if (alive) setState({ state: 'missing' });

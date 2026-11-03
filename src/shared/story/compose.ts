@@ -10,7 +10,10 @@
  */
 import { BLOCKS } from './blocks';
 import './blocks/all';
-import { drawCaption } from './caption';
+import { drawCaption, setCaptionLook } from './caption';
+import { setStoryPictures, setStoryPrints } from './story-pictures';
+import { setOpenerScene, setOpenerTrip } from './opener-scene';
+import type { TripDoc } from '../roadtrip/trip-types';
 import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
@@ -19,7 +22,8 @@ import type { NamedWhich } from './map-names';
 import { setStoryCamera } from './story-camera';
 import { PAL, text, TYPO, type Ctx } from './motion';
 import { drawHud, drawTexture, setTexture } from './overlays';
-import { setWall, setWallGrid } from './scenes/Hook';
+import { setWall, setWallGrid, setWallMotion, setWallScene } from './scenes/Hook';
+import type { WallCues } from './wall-motion';
 import { drawHook, hookTimeline } from './hook';
 import { hookBadgeOf } from './hook-badge';
 import { drawHookBadge } from './scenes/HookBadge';
@@ -61,6 +65,15 @@ export interface ComposeOptions {
    * pixel as before.
    */
   scale?: number;
+  /** When the voice speaks and the music's beats, on the post's clock — what smart motion follows (`wall-motion.ts`). */
+  cues?: WallCues | null;
+  /** Pictures kept on this device by Winnow id — a camera's own picture for the gear block (`story-pictures.ts`). */
+  pictures?: ReadonlyMap<number, CanvasImageSource> | null;
+  /** Large pictures by Winnow id — a developed picture's original and final (`story-pictures.ts`). */
+  prints?: ReadonlyMap<number, CanvasImageSource> | null;
+  /** The series' trip on this device and its first counted day — what a map scene drawn as Trips' opener plays (`opener-scene.ts`). */
+  trip?: TripDoc | null;
+  tripFrom?: string | null;
 }
 
 let layer: HTMLCanvasElement | null = null;
@@ -86,6 +99,8 @@ function slotLayer(scale: number): CanvasRenderingContext2D {
 function drawSlot(c: Ctx, ep: Episode, slot: Slot, lt: number): void {
   const fn = BLOCKS[slot.block];
   setSlot(slot.key);
+  setWallScene(slot.start);
+  setOpenerScene(slot.b - slot.start);
   c.save();
   try {
     if (!fn) throw new Error(`no block named “${slot.block}”`);
@@ -113,10 +128,16 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   beginFrame();
   setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all', { times: opts.times ?? null, pace: ep.look?.pace ?? null });
   setWall(opts.wall ?? null);
+  setStoryPictures(opts.pictures, ep.devicePics, opts.wall);
+  setStoryPrints(opts.prints, ep.edits);
+  setOpenerTrip(opts.trip, opts.tripFrom);
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);
   setWallGrid(ep.look?.wall, ep.wallGroups);
+  // The wall's motion: the series', this post's over it; the voice's spans and the music's beats as its cues.
+  setWallMotion(ep.look?.wallMotion || ep.wallMotion ? { ...(ep.look?.wallMotion ?? {}), ...(ep.wallMotion ?? {}) } : null, opts.cues);
   setTexture(ep.look);
+  setCaptionLook(ep.look?.captions);
   const slots = slotsOf(ep);
   const total = slots[slots.length - 1].b;
   const scale = opts.scale ?? 1;

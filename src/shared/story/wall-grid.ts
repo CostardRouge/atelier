@@ -94,6 +94,10 @@ export interface WallRect {
   pic?: number;
   band?: number;
   head?: boolean;
+  /** Its cell (top-left for a big one), and 2 for a big picture — what the wall's motion moves by lane (`wall-motion.ts`). */
+  row: number;
+  col: number;
+  span: number;
 }
 
 /** A group of the wall's pictures, consecutive in day order: its name and how many pictures it holds. */
@@ -161,6 +165,11 @@ export interface WallLayout {
   rects: WallRect[];
   cellW: number;
   cellH: number;
+  /** The grid's top-left corner and its size in cells: where a moving lane wraps. */
+  x0: number;
+  y0: number;
+  cols: number;
+  rows: number;
 }
 
 const layouts = new Map<string, WallLayout>();
@@ -232,6 +241,9 @@ export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly n
       centre: span === 1 && c === ci && r === ri,
       c,
       r,
+      row: r,
+      col: c,
+      span,
     };
   });
   const byRows = (a: { c: number; r: number }, b: { c: number; r: number }) => a.r - b.r || a.c - b.c;
@@ -272,10 +284,17 @@ export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly n
           band: b,
           head: (heads.get(b) ?? rects.find((x) => bandOf[x.r] === b)) === q,
           pic: startOf[b] + pictureFor(j, counts.get(b) ?? 1, groups[b]),
+          row: q.row,
+          col: q.col,
+          span: q.span,
         };
       }),
       cellW,
       cellH,
+      x0,
+      y0,
+      cols: C,
+      rows: R,
     };
     if (layouts.size > 32) layouts.clear();
     layouts.set(key, layout);
@@ -291,7 +310,15 @@ export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly n
       [rects[i], rects[j]] = [rects[j], rects[i]];
     }
   } else rects.sort(byRows);
-  const layout: WallLayout = { rects: rects.map((q) => ({ x: q.x, y: q.y, w: q.w, h: q.h, d: q.d, centre: q.centre })), cellW, cellH };
+  const layout: WallLayout = {
+    rects: rects.map((q) => ({ x: q.x, y: q.y, w: q.w, h: q.h, d: q.d, centre: q.centre, row: q.row, col: q.col, span: q.span })),
+    cellW,
+    cellH,
+    x0,
+    y0,
+    cols: C,
+    rows: R,
+  };
   if (layouts.size > 32) layouts.clear();
   layouts.set(key, layout);
   return layout;

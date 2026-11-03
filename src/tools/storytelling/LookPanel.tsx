@@ -3,6 +3,8 @@ import { factsOf, withLook } from '../../shared/story/sources';
 import { MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import { wallCells, wallGrid, WALL_DEFAULTS, WALL_LIMITS, type WallGrid, type WallGroupBy, type WallOrder } from '../../shared/story/wall-grid';
 import Button from '../../shared/ui/Button';
+import WallMotionSection from './WallMotionSection';
+import { wallCapacity } from '../../shared/story/wall-motion';
 import { FieldRow, Readout, SelectField, SliderRow, SwitchRow, type SelectOption } from '../../shared/ui/Inspector';
 
 const GROUPS: readonly SelectOption<WallGroupBy>[] = [
@@ -47,7 +49,8 @@ export default function LookPanel({ postId, script, onScript }: LookPanelProps) 
       : g.group === 'stage' && !facts.stages?.length
         ? 'Count again with a trip under Sources to know its stages.'
         : null;
-  const wants = Math.min(cells, MAX_TILES);
+  // The pictures counting keeps: one a place, or up to three a place for a moving wall's queue (`wall-motion.ts`).
+  const wants = wallCapacity(cells, look.wallMotion, MAX_TILES);
   const px = (v: number) => `${Math.round(v)} px`;
   const pct = (v: number) => `${Math.round(v)} %`;
   return (
@@ -94,9 +97,10 @@ export default function LookPanel({ postId, script, onScript }: LookPanelProps) 
         />
       </FieldRow>
       <Readout muted>
-        {`${cells} places on the wall.`}
+        {`${cells} places on the wall${wants > cells ? `, ${wants} pictures for its queue` : ''}.`}
         {tiles && tiles !== wants ? ` The last count chose ${tiles} pictures: Count again under Sources to give each place its own.` : ''}
       </Readout>
+      <WallMotionSection script={script} postId={postId} onScript={onScript} />
       <SliderRow
         label="Vignette"
         value={Math.round((look.vignette ?? TEXTURE.vignette) * 100)}

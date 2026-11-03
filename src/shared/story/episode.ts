@@ -14,6 +14,8 @@ import type { MapGround } from './map-ground';
 import type { StoryCamera } from './story-camera';
 import type { RoutePace } from './route-pace';
 import type { HookBadge } from './hook-badge';
+import type { WallMotion } from './wall-motion';
+import type { CaptionLook } from './caption-layout';
 
 /** The series' look, one for every post: the wall's grid and the texture's grain and vignette, each over its default. */
 export interface StoryLook {
@@ -34,6 +36,10 @@ export interface StoryLook {
   pace?: RoutePace;
   /** How the hook is drawn: Trips' badge in a title style and a composition, or the typed lines of before (`hook-badge.ts`). */
   hook?: HookBadge;
+  /** How the wall moves, lane by lane (`wall-motion.ts`); absent = still. */
+  wallMotion?: Partial<WallMotion>;
+  /** How captions are laid: their column, their line limit, the platforms' edge (`caption-layout.ts`). */
+  captions?: Partial<CaptionLook>;
 }
 
 export interface BlockSpec {
@@ -67,6 +73,12 @@ export interface Episode {
   look?: StoryLook;
   /** This post's own settings for its objects, over the series' `look.objects` (`objects.ts`). */
   objects?: StyleBook;
+  /** This post's own wall motion, over the series' `look.wallMotion`. */
+  wallMotion?: Partial<WallMotion>;
+  /** A picture each camera took, by `deviceKey` (`ScriptFacts.devicePics`). */
+  devicePics?: Record<string, number>;
+  /** Developed pictures as `[original, final]` ids (`ScriptFacts.edits`). */
+  edits?: [number, number][];
   /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
   wallGroups?: WallGroup[] | null;
 }

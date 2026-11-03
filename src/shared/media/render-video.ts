@@ -75,6 +75,12 @@ export interface EncodeFramesOptions {
   audio?: AudioBuffer | null;
   /** Told why `audio` did not make it into the file, when it did not. */
   onAudioSkipped?: (reason: string) => void;
+  /**
+   * Told what the file is made of once its tracks are chosen: the video codec
+   * string the encoder took and the audio track's codec (null for none) — what
+   * a tool that measures its exports reports (Storytelling's R7).
+   */
+  onTracks?: (tracks: { video: string; audio: string | null; frames: number; fps: number; width: number; height: number }) => void;
   /** This clip's grade carries film GRAIN — see `ExportOptions.grained`. */
   grained?: boolean;
   onProgress?: (p: ExportProgress) => void;
@@ -198,6 +204,7 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
 
   try {
     encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
+    opts.onTracks?.({ video: codec, audio: audio?.codec ?? null, frames: plan.length, fps, width: w, height: h });
 
     const gop = Math.max(1, fps * 2); // keyframe every ~2s
     let done = 0;

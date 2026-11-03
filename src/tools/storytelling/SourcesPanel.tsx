@@ -1,3 +1,4 @@
+import { rowDay } from '../../shared/sources/winnow/picker/span';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
@@ -10,15 +11,16 @@ import { candidatesKey, keptCandidates, readCandidates } from './wall-candidates
 import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import WallPicker from './WallPicker';
-import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, devicePictures, editPairs, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts } from '../../shared/story/trip-map';
 import MapNamesSection from './MapNamesSection';
 import MapRoadSection from './MapRoadSection';
 import { useTripVersion } from './trip-changes';
 import MapStopsSection from './MapStopsSection';
 import { wallCells } from '../../shared/story/wall-grid';
+import { wallCapacity } from '../../shared/story/wall-motion';
 import type { WallProgress } from './wall-cache';
-import { MAX_CHOSEN, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
+import { MAX_CHOSEN, MAX_EDITS, MAX_TILES, type StoryScript } from '../../shared/story/story-script';
 import Button from '../../shared/ui/Button';
 import { SelectField } from '../../shared/ui/Inspector';
 
@@ -120,19 +122,26 @@ export default function SourcesPanel({
       const sumOf = (cal: typeof all) => cal.days.filter((d) => counts(d.date, span)).reduce((n, d) => n + d.count, 0);
       // The cameras (the library's busiest twelve, each counted over the trip's days) and the
       // positions by day. Either may be missing on an older instance: the totals stand without them.
-      const [gear, geo] = await Promise.all([
+      // Each camera's calendar gives its count AND a picture it took (its busiest day's cover, G2).
+      const [gearCals, geo] = await Promise.all([
         client
           .facets()
-          .then((f) => Promise.all(f.devices.slice(0, MAX_DEVICES).map(async (d) => [String(d.value), sumOf(await client.calendar(span.from, span.to, { device: String(d.value) }))] as const)))
-          .then(gearFacts)
-          .catch(() => ({})),
+          .then((f) => Promise.all(f.devices.slice(0, MAX_DEVICES).map(async (d) => [String(d.value), await client.calendar(span.from, span.to, { device: String(d.value) })] as const)))
+          .catch(() => [] as (readonly [string, Awaited<ReturnType<typeof client.calendar>>])[]),
         client
           .geoDays(span)
           .then((days) => geoFacts(days, span))
           .catch(() => null),
       ]);
+      // The pictures he developed on those days: Gallery finals whose original Winnow knows (before/after).
+      const edits = await client
+        .allAssets({ dateFrom: span.from, dateTo: span.to, half: 'final' }, 2000)
+        .then((rows) => editPairs(rows.map((r) => ({ id: r.id, original_asset_id: r.original_asset_id, day: rowDay(r) })), span, MAX_EDITS))
+        .catch(() => [] as [number, number][]);
+      const gear = gearFacts(gearCals.map(([name, cal]) => [name, sumOf(cal)] as const));
+      const devicePics = devicePictures(gearCals, span);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
-      const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
+      const places = wallCapacity(wallCells(script.look?.wall), script.look?.wallMotion, MAX_TILES);
       // By rules when he set some (over the pictures ticked in the picker, else every counted
       // day's), else the ticked pictures, else one cover a day.
       const rules = sources.wall?.rules;
@@ -157,6 +166,8 @@ export default function SourcesPanel({
               values,
               ...(stages.length ? { stages } : {}),
               ...(geo?.holes.length ? { holes: geo.holes } : {}),
+              ...(Object.keys(devicePics).length ? { devicePics } : {}),
+              ...(edits.length ? { edits } : {}),
             },
             picks,
           ),
@@ -169,7 +180,7 @@ export default function SourcesPanel({
   }
 
   const chosen = sources.wall?.chosen ?? null;
-  const places = Math.min(MAX_TILES, wallCells(script.look?.wall));
+  const places = wallCapacity(wallCells(script.look?.wall), script.look?.wallMotion, MAX_TILES);
   // The pictures ticked in the picker join the wall's pool; with a counting, the wall changes at once.
   const putOnWall = (picked: [number, string][]) => {
     if (!trip) return;

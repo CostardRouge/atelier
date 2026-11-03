@@ -7,6 +7,9 @@ import type { Lang } from '../../shared/story/locale';
 import { SelectField, TextField } from '../../shared/ui/Inspector';
 import { POSTS } from './posts';
 import { clearWall } from './wall-cache';
+import ScriptVersions from './ScriptVersions';
+import ScriptKept, { KeptSeriesList } from './ScriptKept';
+import { clearVersions, keepVersion } from './version-store';
 
 /** A file name for the script, from its series. */
 export function scriptFileName(script: StoryScript): string {
@@ -59,7 +62,11 @@ export default function ScriptControls({
     if (!file) return;
     const read = await readScriptFile(file);
     setError(read.ok ? null : read.reason);
-    if (read.ok) onScript(read.script);
+    if (!read.ok) return;
+    // The script a file replaces is kept as a version first: a wrong file loaded is one Restore away.
+    if (script) void keepVersion(script, 'replaced');
+    onScript(read.script);
+    void keepVersion(read.script, 'loaded');
   };
   const save = () => {
     if (script) saveScriptFile(script);
@@ -110,12 +117,13 @@ export default function ScriptControls({
           onConfirm={() => {
             setForgetting(false);
             void clearWall();
+            void clearVersions();
             onScript(null);
           }}
         >
           <p className="m-0">
-            What changed here since you loaded it — the Studio&apos;s settings, the map&apos;s states — and the wall&apos;s pictures
-            go with it. Save script first to keep them; your own file is not touched.
+            What changed here since you loaded it — the Studio&apos;s settings, the map&apos;s states —, its versions and the
+            wall&apos;s pictures go with it. Save script first to keep them; your own file is not touched.
           </p>
         </ConfirmDialog>
       ) : null}
@@ -139,6 +147,14 @@ export default function ScriptControls({
           />
         </div>
       ) : null}
+      {script && !compact ? (
+        <div className="flex flex-col gap-1">
+          <p className="m-0 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Kept on</p>
+          <ScriptKept script={script} onScript={onScript} />
+        </div>
+      ) : null}
+      {!compact ? <KeptSeriesList current={script} onScript={onScript} /> : null}
+      {!compact ? <ScriptVersions script={script} onScript={onScript} /> : null}
     </div>
   );
 }

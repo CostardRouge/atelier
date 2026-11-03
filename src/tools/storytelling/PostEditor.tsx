@@ -32,7 +32,7 @@ import type { ComposeOptions } from '../../shared/story/compose';
 import { gapsOf, withGaps } from '../../shared/story/trip-map';
 import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/sources/winnow/store';
 import Button, { buttonClass } from '../../shared/ui/Button';
-import { InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, Readout, SelectField, SliderRow, type SelectOption } from '../../shared/ui/Inspector';
 import RunLockNotice from '../../shared/ui/RunLockNotice';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { imageResult } from '../../shared/commands/image-result';
@@ -53,7 +53,17 @@ import { useStoryPlayback, type TimedBuffer } from './use-story-playback';
 import { useEditorMode, type Pane } from './use-editor-mode';
 import { useSettled } from './use-settled';
 import { useLocalPref } from '../../shared/ui/local-pref';
-import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
+import { DEFAULT_GUIDES, findSafeZone, SAFE_ZONE_PRESETS } from '../../shared/overlay/guides';
+import { usePreflight } from './use-preflight';
+import { soundCues } from './sound-cues';
+import { usePrints } from './use-prints';
+import CaptionLookSection from './CaptionLookSection';
+import { isStoryOpener, STORY_OPENERS } from '../../shared/story/opener-scene';
+import { withBlockParam } from '../../shared/story/block-words';
+import { deviceLabel, measureLine, type ExportMeasure } from '../../shared/story/export-measure';
+import { heapMb, keepMeasure, measuresNow, subscribeMeasures } from './export-measures';
+import PreflightList from './PreflightList';
+import type { PreflightFix } from '../../shared/story/preflight';
 import Segmented from '../../shared/ui/Segmented';
 import PanelHost from '../../shared/ui/PanelHost';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
@@ -181,26 +191,53 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const tripMap = useTripMap(sources, script?.lang);
   // The wall's pictures: the ones the last counting chose, kept on this device (`wall-cache.ts`).
   const wallSource = sources.winnow?.source;
-  const wall = useWall(
-    wallSource,
-    factsOf(script, postId)?.tiles,
-    connections.find((c) => c.id === wallSource) ?? null,
-  );
+  // The wall's pictures, then a picture each camera took (G2, `story-pictures.ts`) — one load, one cache.
+  const countedFacts = factsOf(script, postId);
+  const tileIds = countedFacts?.tiles;
+  const devicePics = countedFacts?.devicePics;
+  const wallIds = useMemo(() => {
+    const tiles = tileIds ?? [];
+    const extra = [...new Set(Object.values(devicePics ?? {}))].filter((id) => !tiles.includes(id));
+    return tiles.length || extra.length ? [...tiles, ...extra] : undefined;
+  }, [tileIds, devicePics]);
+  const loaded = useWall(wallSource, wallIds, connections.find((c) => c.id === wallSource) ?? null);
+  const tileCount = tileIds?.length ?? 0;
+  const wall = useMemo(() => ({ images: loaded.images.slice(0, tileCount), progress: loaded.progress }), [loaded, tileCount]);
+  // A developed picture's original and final, drawn large by the before/after block (`usePrints`).
+  const editIds = useMemo(() => (countedFacts?.edits ?? []).flat(), [countedFacts?.edits]);
+  const prints = usePrints(wallSource, editIds, connections.find((c) => c.id === wallSource) ?? null);
+  const pictures = useMemo(() => {
+    const byId = new Map<number, CanvasImageSource>();
+    (wallIds ?? []).forEach((id, i) => {
+      const img = loaded.images[i];
+      if (img) byId.set(id, img);
+    });
+    return byId;
+  }, [wallIds, loaded.images]);
   const mapStops = tripMap.state === 'ready' && tripMap.map ? tripMap.map.stops : script?.stops;
   const mapRoad = tripMap.state === 'ready' && tripMap.map ? tripMap.map.road : null;
   // What the maps are drawn over: the tiles, once fetched for this route (`use-map-ground.ts`).
   const mapGround = useMapGround(script?.look?.map, mapStops, mapRoad);
   const groundLayers = mapGround.ground.state === 'ready' ? mapGround.ground.layers : null;
+  // The voice's spans and the music's beats, which the living wall's smart motion follows (`wall-motion.ts`).
+  const postSound = sounds[postId];
+  const voiceCue = postSound?.voice ?? null;
+  const musicCue = postSound?.music ?? null;
+  const cues = useMemo(() => soundCues(voiceCue, musicCue, 600), [voiceCue, musicCue]);
   const mapOpts = useMemo<ComposeOptions>(
     () => ({
+      cues,
       ...(tripMap.state === 'ready' && tripMap.map
         ? { stops: tripMap.map.stops, road: tripMap.map.road, times: tripMap.map.times }
         : { stops: script?.stops }),
       wall: wall.images,
+      pictures,
+      prints,
+      ...(tripMap.state === 'ready' ? { trip: tripMap.trip, tripFrom: tripMap.span.from } : {}),
       ground: groundLayers,
       named: mapNamesOf(sources.map).which,
     }),
-    [tripMap, script, wall.images, groundLayers, sources.map],
+    [tripMap, script, wall.images, pictures, prints, groundLayers, sources.map, cues],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];
@@ -464,6 +501,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       },
     },
     {
+      id: 'story.exports',
+      title: 'How the exports ran on this device',
+      description: 'The last exports measured in this browser: the post, how long it plays and how long it took, the H.264 profile and the sound codec, the file’s size, the heap at its fullest, the device, and whether it ended, was cancelled or failed.',
+      run: () => ({ exports: measuresNow().map((m) => ({ ...m, line: measureLine(m) })) }),
+    },
+    {
       id: 'story.snapshot',
       title: 'Look at a frame',
       description: 'The post’s frame at a time (default the playhead), drawn as the export draws it, as a JPEG to look at.',
@@ -495,6 +538,42 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     // while this panel is up would be the whole series drawn per step.
     return new Map(POSTS.map((p) => [p.id, paintCover(assemble(p, settled, POSTS), 0.12).toDataURL('image/png')]));
   }, [fontsReady, settled, showCovers]);
+
+  // The pre-export check (`preflight.ts`), while the Export panel is open: what would come out wrong, each with its fix.
+  const hasWall = episode.blocks.some((b) => b.block === 'wall');
+  const counted = factsOf(script, postId)?.tiles?.length ?? 0;
+  const here = wall.images.filter(Boolean).length;
+  const wallLoading = wall.progress !== null && wall.progress.done < wall.progress.total;
+  const wallCheck = useMemo(() => (hasWall ? { counted, here, loading: wallLoading } : null), [hasWall, counted, here, wallLoading]);
+  const groundAsked = script?.look?.map?.ground ?? 'outline';
+  const groundState = mapGround.ground.state;
+  const groundMessage = mapGround.ground.state === 'failed' ? mapGround.ground.message : undefined;
+  const groundCheck = useMemo(() => ({ asked: groundAsked, state: groundState, message: groundMessage }), [groundAsked, groundState, groundMessage]);
+  // The platform whose buttons the words must clear: the stage's guide when one is on, Reels otherwise.
+  const zone = findSafeZone(guides.safeZone) ?? findSafeZone('reels');
+  const checks = usePreflight({
+    on: showCovers && exporting === null,
+    episode: shown,
+    script: settled,
+    postId,
+    opts: mapOpts,
+    tracks,
+    scenes,
+    ground: groundCheck,
+    wall: wallCheck,
+    zone,
+    fontsReady,
+  });
+  const onFix = (fix: PreflightFix) => {
+    if (fix.kind === 'panel') {
+      select({ kind: 'panel', id: fix.id });
+      return;
+    }
+    const track = tracks.find((t) => t.key === fix.key && t.slot === fix.slot);
+    if (track) setSelected({ kind: 'object', id: track.id, key: track.key, slot: track.slot });
+    setPane('settings');
+    if (fix.at >= 0) seek(fix.at);
+  };
 
   const choose = (id: string) => {
     pause();
@@ -551,6 +630,29 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
     setExporting('Preparing the sound…');
     setExportSince(Date.now());
     setExportNote(null);
+    // The files of a previous export are not this post any more: Archive must never send them after a new one starts.
+    setExported([]);
+    // R7: the export measured where it runs — how long, what it is made of, how much memory at its fullest.
+    const started = performance.now();
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    const measure: ExportMeasure = {
+      at: Date.now(),
+      post: episode.number,
+      seconds: total,
+      wallMs: 0,
+      frames: 0,
+      fps: 30,
+      video: null,
+      audio: null,
+      bytes: null,
+      peakHeapMb: heapMb(),
+      device: deviceLabel(navigator.userAgent, navigator.hardwareConcurrency, nav.deviceMemory),
+      outcome: 'failed',
+    };
+    const sampler = window.setInterval(() => {
+      const h = heapMb();
+      if (h !== null) measure.peakHeapMb = Math.max(measure.peakHeapMb ?? 0, h);
+    }, 400);
     try {
       const clips: SoundClip[] = [];
       if (voice) clips.push({ buffer: voice.buffer, at: voice.at, gain: voice.gain });
@@ -579,6 +681,12 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         onAudioSkipped: (reason) => {
           skipped = reason;
         },
+        onTracks: (tr) => {
+          measure.video = tr.video;
+          measure.audio = tr.audio === 'aac' || tr.audio === 'opus' ? tr.audio : skipped ? 'skipped' : null;
+          measure.frames = tr.frames;
+          measure.fps = tr.fps;
+        },
         draw: (sec) => {
           drawEpisode(ctx, shown, Math.min(sec, total - 0.001), frameOpts);
           return canvas;
@@ -590,6 +698,9 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         signal: controller.signal,
       });
       const name = `${episode.number.toLowerCase().replace(/\W+/g, '')}-${slug(episode.title)}.mp4`;
+      measure.bytes = blob.size;
+      measure.wallMs = Math.round(performance.now() - started);
+      measure.outcome = 'done';
       downloadBlob(blob, name);
       // Kept for the visit, so the same files can be sent to a Winnow to archive.
       const cover = await new Promise<Blob | null>((done) => paintCover(episode, 1).toBlob(done, 'image/png'));
@@ -599,8 +710,14 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       ]);
       setExportNote(skipped ? `Exported without sound: ${skipped.replace(/\.$/, '')}.` : heard ? 'Exported, with its sound.' : 'Exported, silent: no voice or music was added.');
     } catch (err) {
-      setExportNote(controller.signal.aborted ? 'Export cancelled.' : err instanceof Error ? err.message : 'The export failed.');
+      setExportNote(controller.signal.aborted ? 'Export cancelled: no file was written.' : err instanceof Error ? err.message : 'The export failed.');
+      measure.outcome = controller.signal.aborted ? 'cancelled' : 'failed';
+      if (!controller.signal.aborted) measure.error = err instanceof Error ? err.message : String(err);
     } finally {
+      window.clearInterval(sampler);
+      // Measured to the file (or the cancel), the cover's painting after it left out.
+      if (measure.outcome !== 'done') measure.wallMs = Math.round(performance.now() - started);
+      keepMeasure(measure);
       task.done();
       abortRef.current = null;
       setExporting(null);
@@ -632,6 +749,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           <InspectorSection id="story-look" title="Look" foldable={false} info="The series' look, the same in every post: the wall's columns, rows, gap, corners and bigger pictures, the order the days are laid in and how close the camera ends — then the grain and the vignette over everything.">
             <LookPanel postId={postId} script={script} onScript={onScript} />
           </InspectorSection>
+          {script ? (
+            <InspectorSection id="story-captions" title="Captions" foldable={false} info="How every caption of the series is laid, like the hook: how wide a line runs, how many lines before a long one shrinks — or lets it grow upward as before —, and whose buttons the words stay clear of, wherever you move them.">
+              <CaptionLookSection script={script} onScript={onScript} />
+            </InspectorSection>
+          ) : null}
           {script ? (
             <InspectorSection id="story-map-ground" title="Maps" foldable={false} info="What every map of the series is drawn over: the coastline shipped with Atelier, no land at all, or OpenStreetMap's tiles — fetched only once this device says yes, and credited on the map's frames alone.">
               <MapGroundControls script={script} onScript={onScript} state={mapGround.ground} />
@@ -784,6 +906,15 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       case 'export':
         return (
           <>
+            <InspectorSection id="story-preflight" title="Before you export" foldable={false} info="What would come out wrong in the file, checked on the post as it stands: facts not counted, tiles or pictures not on this device, faces not loaded, words under the platform's buttons, a hook shrunk to fit. Each line opens what fixes it; nothing stops the export.">
+              <SelectField
+                label="Published on"
+                value={zone?.id ?? 'reels'}
+                options={SAFE_ZONE_PRESETS.filter((p) => p.aspect < 1).map((p) => ({ id: p.id, label: p.label }))}
+                onChange={(id) => setGuides({ ...guides, safeZone: id, safeZoneOrientation: 'auto' })}
+              />
+              <PreflightList issues={checks} onFix={onFix} />
+            </InspectorSection>
             <InspectorSection id="story-export" title="Export" foldable={false} info="An H.264 video at 1080 × 1920, 30 frames a second, written in this browser; and the cover as a PNG.">
             <div className="flex gap-2 flex-wrap">
                 {exporting ? (
@@ -800,6 +931,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
                 </Button>
               </div>
               {exporting ? <Readout>{exporting}</Readout> : exportNote ? <Readout muted>{exportNote}</Readout> : null}
+              <ExportMeasures />
             </InspectorSection>
             <InspectorSection id="story-archive" title="Archive" info="Send the exported video and its cover to a Winnow you connected — the one on this computer or your server's — where they are imported into its Incoming, filed under Storytelling. A Winnow on another site is connected with an app token on Sources.">
             {connections.length === 0 ? (
@@ -883,6 +1015,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           series: hookSeriesOf(episode),
           sceneIndex: sceneOf?.index ?? null,
           number: skeleton.number,
+          params: sceneOf && sceneOf.index !== null ? episode.blocks[sceneOf.index]?.params : undefined,
         })
       : null;
     // The Hook object: its words, variants, badge, motion and sounds first, then its place (O4).
@@ -923,6 +1056,32 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
           }
         />
       </InspectorSection>
+      {script && scene && scene.index !== null && scene.block === 'map-camera' ? (
+        <InspectorSection id="story-map-opener" title="Map scene · drawn as" foldable={false} info="This map scene drawn as the series' map, or as one of Trips' openers on the series' trip — the Itinerary or Virée's 3D drive, with the trip's legs, road, vehicles and look. Without the trip on this device it draws the series' map.">
+          <SelectField<string>
+            label="How this map scene is drawn"
+            value={isStoryOpener(words?.params?.opener) ? String(words?.params?.opener) : 'story'}
+            options={STORY_OPENERS.map((o) => ({ id: o.id, label: o.label }))}
+            onChange={(v) => onScript(withBlockParam(script, postId, scene.index!, 'opener', v === 'story' ? undefined : v))}
+          />
+          {isStoryOpener(words?.params?.opener) && tripMap.state === 'ready' && (tripMap.trip.stages?.length ?? 0) > 1 ? (
+            <FieldRow label="Leg">
+              <SelectField<string>
+                label="The leg of the trip this scene tells"
+                value={typeof words?.params?.openerLeg === 'string' ? words.params.openerLeg : ''}
+                options={[{ id: '', label: 'The series’ first' }, ...(tripMap.trip.stages ?? []).map((st, i) => ({ id: st.id, label: st.name || `Leg ${i + 1}` }))]}
+                onChange={(v) => onScript(withBlockParam(script, postId, scene.index!, 'openerLeg', v || undefined))}
+              />
+            </FieldRow>
+          ) : null}
+          {isStoryOpener(words?.params?.opener) && tripMap.state !== 'ready' ? <Readout muted>Choose the series' trip under Sources, on this device: until then the series' map is drawn.</Readout> : null}
+        </InspectorSection>
+      ) : null}
+      {sel.key === 'caption' && script ? (
+        <InspectorSection id="story-captions-object" title="Captions · the series" foldable={false} info="How every caption is laid: its column, its line limit, the platforms' buttons as an edge.">
+          <CaptionLookSection script={script} onScript={onScript} />
+        </InspectorSection>
+      ) : null}
       </>
     );
   };
@@ -1111,5 +1270,37 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       </div>
       {keysSheet}
     </section>
+  );
+}
+
+/** The exports measured on this device (R7), newest first, each one line to read or copy. */
+function ExportMeasures() {
+  const list = useSyncExternalStore(subscribeMeasures, measuresNow);
+  const [copied, setCopied] = useState(false);
+  if (!list.length) return null;
+  const lines = list.slice(0, 5).map(measureLine);
+  return (
+    <div className="flex flex-col gap-1 pt-1">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 font-mono text-3xs uppercase tracking-[0.12em] text-muted">Measured on this device</span>
+        <button
+          type="button"
+          className="text-2xs text-accent cursor-pointer hover:underline"
+          onClick={() => {
+            void navigator.clipboard?.writeText(list.map(measureLine).join('\n')).then(() => setCopied(true));
+            window.setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <ul className="m-0 p-0 list-none flex flex-col gap-0.5">
+        {lines.map((l, i) => (
+          <li key={`${list[i].at}`} className="text-2xs text-ink-soft leading-snug">
+            {l}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -20,6 +20,8 @@ import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
 import type { Hook } from './hook';
 import type { Lang } from './locale';
+import { readWallMotion, type WallMotion } from './wall-motion';
+import { readCaptionLook } from './caption-layout';
 import { readWallGrid, wallGroups, type WallStage } from './wall-grid';
 import { readCharte, readStyleBook, type StyleBook } from './objects';
 import { monthText } from './locale';
@@ -71,6 +73,8 @@ export interface ScriptPost {
   promise?: string;
   /** This post's own settings for its objects, over the series' (`objects.ts`). */
   objects?: StyleBook;
+  /** This post's own wall motion, over the series' (`wall-motion.ts`). */
+  wallMotion?: Partial<WallMotion>;
 }
 
 /**
@@ -159,6 +163,19 @@ export interface ScriptFacts {
   stages?: WallStage[];
   /** Runs of days with media but no position, `[first, last]` ISO dates — the map's holes (`geoFacts`). */
   holes?: [string, string][];
+  /**
+   * A picture each camera took over the counted days, a Winnow asset id by
+   * `deviceKey` — the cover of its busiest day, chosen when counted — what
+   * the gear block shows beside its name (`story-pictures.ts`).
+   */
+  devicePics?: Record<string, number>;
+  /**
+   * Pictures he DEVELOPED over the counted days, as `[original, final]`
+   * Winnow asset ids — a Gallery final and the original it was edited from
+   * (Winnow's lineage, `original_asset_id`) — what the before/after block
+   * shows (`story-pictures.ts`). At most `MAX_EDITS`, spread over the trip.
+   */
+  edits?: [number, number][];
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -232,6 +249,12 @@ export interface ScriptTopic {
 export interface StoryScript {
   kind: typeof SCRIPT_KIND;
   version: 1;
+  /**
+   * The series' identity where it is kept on a Winnow (`script-remote.ts`):
+   * minted the first time it is kept there, so the same series opened on the
+   * Mac and the phone is ONE document. Absent on a script never kept.
+   */
+  id?: string;
   /** The language the series is told in (`locale.ts`): its numbers, its days, the blocks' own words. Absent = French. */
   lang?: Lang;
   /** The series' name, on the season's closing card. */
@@ -271,6 +294,9 @@ function isStop(v: unknown): v is Stop {
 }
 
 /** Read a script file's JSON, keeping what is well formed and saying why when nothing is. */
+/** What a script's id may be: a URL segment a Winnow's document bucket takes. */
+export const SCRIPT_ID = /^[A-Za-z0-9._-]{1,128}$/;
+
 export function parseScript(raw: unknown): ScriptParse {
   if (!isObject(raw)) return { ok: false, reason: 'This file is not a story script: it holds no object.' };
   if (raw.kind !== SCRIPT_KIND) return { ok: false, reason: `This file is not a story script (its kind is not “${SCRIPT_KIND}”).` };
@@ -304,6 +330,7 @@ export function parseScript(raw: unknown): ScriptParse {
       facts: readFacts(value.facts),
       ...readHooks(value),
       ...(readStyleBook(value.objects) ? { objects: readStyleBook(value.objects) } : {}),
+      ...(readWallMotion(value.wallMotion) ? { wallMotion: readWallMotion(value.wallMotion) } : {}),
     };
   }
   const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
@@ -346,6 +373,7 @@ export function parseScript(raw: unknown): ScriptParse {
     script: {
       kind: SCRIPT_KIND,
       version: 1,
+      ...(typeof raw.id === 'string' && SCRIPT_ID.test(raw.id) ? { id: raw.id } : {}),
       ...(raw.lang === 'en' || raw.lang === 'fr' ? { lang: raw.lang } : {}),
       series: text(raw.series),
       handle: text(raw.handle),
@@ -521,7 +549,11 @@ function readLook(raw: unknown): StoryLook | undefined {
   const camera = readStoryCamera(raw.camera);
   const pace = readRoutePace(raw.pace);
   const hook = readHookBadge(raw.hook);
+  const wallMotion = readWallMotion(raw.wallMotion);
+  const captions = readCaptionLook(raw.captions);
   const look: StoryLook = {
+    ...(captions ? { captions } : {}),
+    ...(wallMotion ? { wallMotion } : {}),
     ...(hook ? { hook } : {}),
     ...(pace ? { pace } : {}),
     ...(map ? { map } : {}),
@@ -566,17 +598,34 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
     ...(tileDays ? { tileDays } : {}),
     ...(stages?.length ? { stages } : {}),
     ...(holes?.length ? { holes: holes.map((h): [string, string] => [h[0], h[1]]) } : {}),
+    ...(() => {
+      if (!isObject(raw.devicePics)) return {};
+      const pics: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw.devicePics)) if (/^gear\.[a-z0-9]+$/.test(k) && Number.isInteger(v) && (v as number) > 0) pics[k] = v as number;
+      return Object.keys(pics).length ? { devicePics: pics } : {};
+    })(),
+    ...(() => {
+      const edits = Array.isArray(raw.edits)
+        ? raw.edits.filter((e): e is [number, number] => Array.isArray(e) && e.length === 2 && e.every((n) => Number.isInteger(n) && (n as number) > 0)).slice(0, MAX_EDITS)
+        : [];
+      return edits.length ? { edits: edits.map((e): [number, number] => [e[0], e[1]]) } : {};
+    })(),
   };
 }
 
 /** The pictures ticked in the picker a script keeps at most; more are thinned evenly over their days (`withChosenWall`). */
 export const MAX_CHOSEN = 2000;
 
+/** The developed pictures counting keeps for the before/after block. */
+export const MAX_EDITS = 6;
+
 /** No wall shows more pictures than this; a script asking for more is cut. */
 export const MAX_TILES = 400;
 
 /** What a caption reads when no script is loaded. */
 export const placeholderCaption = (i: number): string => `⟨ caption ${i + 1} ⟩`;
+/** Whether a caption is still the placeholder — what the pre-export check refuses to let ship unsaid. */
+export const isPlaceholderCaption = (text: string): boolean => /^⟨ caption \d+ ⟩$/.test(text.trim());
 
 /**
  * Join a post's skeleton and the script into the episode the composer draws.
@@ -605,6 +654,9 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     lang,
     ...(script?.look ? { look: script.look } : {}),
     ...(mine?.objects ? { objects: mine.objects } : {}),
+    ...(mine?.wallMotion ? { wallMotion: mine.wallMotion } : {}),
+    ...((mine?.facts ?? script?.facts)?.devicePics ? { devicePics: (mine?.facts ?? script?.facts)!.devicePics } : {}),
+    ...((mine?.facts ?? script?.facts)?.edits ? { edits: (mine?.facts ?? script?.facts)!.edits } : {}),
     wallGroups: wallGroups(
       (mine?.facts ?? script?.facts)?.tileDays,
       script?.look?.wall?.group ?? 'none',
@@ -622,6 +674,9 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       const given = { ...(b.params ?? {}), ...(words?.params ?? {}) };
       // Under a hook the first block is its picture: a wall says nothing of its own there.
       if (hook && i === 0 && b.block === 'wall') given.quiet = true;
+      // The wall's number says what was COUNTED when the script names none (measured on a new series: it drew the
+      // block's neutral 100 000 over a trip of 60 media).
+      if (b.block === 'wall' && given.count === undefined && values && typeof values['media.total'] === 'number') given.count = values['media.total'];
       // A season's recap the script does not spell out lists the season's own posts, from the series.
       if (b.block === 'season-recap' && !Array.isArray(given.episodes)) {
         given.episodes = registry

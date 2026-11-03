@@ -11,7 +11,8 @@ import { numberText, type Lang } from './locale';
 
 export type FactValues = Readonly<Record<string, number>>;
 
-const PLACEHOLDER = /\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}/g;
+/** A fact cited in a text, `{media.total}` (also what the pre-export check finds left unfilled). */
+export const PLACEHOLDER = /\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}/g;
 const ALONE = /^\{([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*)\}$/;
 
 /** A number the way the series writes it, in its language (`locale.ts`): « 98 412 », « 98,412 ». */
@@ -148,6 +149,44 @@ export function gearFacts(counts: readonly (readonly [string, number])[]): Recor
   const out: Record<string, number> = {};
   for (const [name, n] of counts) if (n > 0) out[deviceKey(name)] = (out[deviceKey(name)] ?? 0) + n;
   return out;
+}
+
+/**
+ * A picture each camera took over the counted days (strategy G2): the cover
+ * of its BUSIEST day — the day it was used most, so the picture is one of
+ * its own and typical — by `deviceKey`, from the per-camera calendars
+ * counting already fetches. A camera with no counted day has none. (pure)
+ */
+export function devicePictures(cals: readonly (readonly [string, WinnowCalendar])[], span: Span): Record<string, number> {
+  const out: Record<string, number> = {};
+  const best: Record<string, number> = {};
+  for (const [name, cal] of cals)
+    for (const d of cal.days) {
+      if (!counts(d.date, span) || !(d.count > 0) || !(d.cover_id > 0)) continue;
+      const k = deviceKey(name);
+      if (d.count > (best[k] ?? 0)) {
+        best[k] = d.count;
+        out[k] = d.cover_id;
+      }
+    }
+  return out;
+}
+
+/**
+ * The pictures he developed over the counted days, as `[original, final]`:
+ * every Gallery final whose original Winnow knows (`original_asset_id`),
+ * one a original (its latest final), spread evenly over the trip in day
+ * order, at most `max`. (pure)
+ */
+export function editPairs(finals: readonly { id: number; original_asset_id?: number | null; day: string | null }[], span: Span, max: number): [number, number][] {
+  const byOriginal = new Map<number, { id: number; day: string }>();
+  for (const f of finals) {
+    if (!f.original_asset_id || !f.day || !counts(f.day, span)) continue;
+    const was = byOriginal.get(f.original_asset_id);
+    if (!was || f.id > was.id) byOriginal.set(f.original_asset_id, { id: f.id, day: f.day });
+  }
+  const pairs = [...byOriginal].sort((a, b) => a[1].day.localeCompare(b[1].day) || a[0] - b[0]).map(([orig, f]): [number, number] => [orig, f.id]);
+  return thinEvenly(pairs, max);
 }
 
 /**

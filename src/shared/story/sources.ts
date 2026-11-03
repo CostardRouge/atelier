@@ -4,6 +4,7 @@
  * — and a post may override either; the numbers frozen from them follow the
  * same rule, a post's own over the series'.
  */
+import { CAPTION_LOOK_DEFAULTS, type CaptionLook } from './caption-layout';
 import type { WallRules } from './wall-pick';
 import { MAP_GROUND_DEFAULTS, type MapGround } from './map-ground';
 import type { StoryCamera } from './story-camera';
@@ -212,7 +213,7 @@ export function withPostHooks(
  */
 export function withLook(
   script: StoryScript,
-  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null; pace?: Partial<RoutePace>; hook?: HookBadge | null } | null,
+  change: { wall?: Partial<WallGrid>; vignette?: number | null; grain?: number | null; map?: Partial<MapGround>; camera?: StoryCamera | null; pace?: Partial<RoutePace>; hook?: HookBadge | null; captions?: Partial<CaptionLook> | null } | null,
 ): StoryScript {
   if (!change) {
     // Only what the Look section sets: the charte and the objects have their own resets.
@@ -224,6 +225,8 @@ export function withLook(
     delete kept.camera;
     delete kept.pace;
     delete kept.hook;
+    delete kept.wallMotion;
+    delete kept.captions;
     const rest: StoryScript = { ...script, look: kept };
     if (!Object.keys(kept).length) delete rest.look;
     return rest;
@@ -248,6 +251,12 @@ export function withLook(
     for (const k of Object.keys(pace) as (keyof RoutePace)[]) if (pace[k] === undefined || pace[k] === ROUTE_PACE_DEFAULTS[k]) delete pace[k];
     if (Object.keys(pace).length) look.pace = pace;
     else delete look.pace;
+  }
+  if (change.captions !== undefined) {
+    const captions: Partial<CaptionLook> = change.captions === null ? {} : { ...(was.captions ?? {}), ...change.captions };
+    for (const k of Object.keys(captions) as (keyof CaptionLook)[]) if (captions[k] === undefined || captions[k] === CAPTION_LOOK_DEFAULTS[k]) delete captions[k];
+    if (Object.keys(captions).length) look.captions = captions;
+    else delete look.captions;
   }
   if (change.map) {
     // A field set back to its default is dropped, so a script keeps only what was chosen.

@@ -4,7 +4,7 @@ import { H, W } from './charte';
 import type { Episode } from './episode';
 import { fit, PAL, text, TYPO, type Ctx } from './motion';
 import { drawTexture, setTexture } from './overlays';
-import { drawWall, setWallGrid } from './scenes/Hook';
+import { drawWall, setWallGrid, setWallMotion } from './scenes/Hook';
 import { applyCharte, beginFrame, setSlot, setStyles } from './objects';
 
 export const COVER = { bandTop: 760, bandBottom: 1200, wallScrim: 0.5 };
@@ -16,6 +16,8 @@ export function drawCover(c: Ctx, ep: Episode): void {
   beginFrame();
   setSlot('cover');
   setWallGrid(ep.look?.wall, ep.wallGroups);
+  // A cover is a still: the wall as laid, never mid-slide.
+  setWallMotion(null);
   setTexture(ep.look);
   c.save();
   c.fillStyle = PAL.bg;

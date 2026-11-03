@@ -11,6 +11,36 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
+  days and their originals on your Winnow, and the block wipes from the original to the final.
+- Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
+  you choose, with its caption kept — or as the series' map, as before.
+- Storytelling: your own pictures inside the blocks — each device of the gear block shows a picture it took on the
+  trip, and the app's grid, a burst's frames and the folders of pictures draw the wall's pictures instead of colour
+  tiles, once counted.
+- Storytelling: captions are laid like the hook — a column you set, a line limit past which a long caption shrinks
+  (or grows upward, as before), and the buttons of the short-video apps as an edge the words never cross, even when
+  the caption is dragged.
+- Storytelling: every block's own words are typed where they are drawn — select a counter's number, the gear's names,
+  the folders' path, the clocks, the transfer, the names, the season's posts, the opening's title or the closing card
+  and its Content section shows each of its words in a field, written into this post's script.
+- Storytelling: the living wall — Look › *Motion* sets the wall's rows or columns moving: Marquee, Metro, Waterfall,
+  Shuffle board, Flip board, Calm, or each lane its own mode with a click. *Smart* holds the first picture while the
+  camera lands, moves a stage's band as one, slows under your voice, steps on your music's beats and ends aligned;
+  *More pictures* brings in pictures from off the frame as a lane turns. For the series or one post.
+- Storytelling: every export is measured on the device that makes it — how long it took against how long it plays,
+  the video profile and the sound codec, the file's size, the memory at its fullest — and listed under Export with
+  *Copy*.
+- Storytelling: keep a series on your Winnow (Script › *Keep on …*) so your Mac and your phone open the same one:
+  edits are saved there once you pause, a newer copy from another device is taken when you come back, and a change
+  made on both is never overwritten — *Keep mine* or *Take theirs*. *Series kept on …* opens one in a new browser.
+- Storytelling: the script's last ten versions are kept in this browser as you work — Script › *Versions on this
+  device*, each with *Restore*. Loading a file or restoring a version keeps the script it replaces first, so a wrong
+  file loaded is one click away from undone.
+- Storytelling: *Before you export* — the Export panel checks the post first and lists what would come out wrong in
+  the file: a fact not counted (drawn with its braces), the map's tiles or the wall's pictures missing from this
+  device, a face not loaded, words under the buttons of TikTok, Reels or Shorts, a hook shrunk to fit its lines. Each
+  line opens what fixes it.
 - Storytelling: start a series with no file — *New series*, then name it under Script. Until the series has its
   Winnow, its trip and a first Count in this browser, the map of subjects lists what is missing, each step with the
   gesture that fixes it, and *Check the connection* tells you when your Winnow does not allow this app's address yet.
@@ -25,6 +55,17 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Winnow picker: a **Map** view beside Grid and Logbook — each picture a dot where it was taken; hold ⇧ and drag, or
   switch *Draw a box* on and drag with a finger, and every picture inside the box is ticked; a dot ticks on a click.
   Pictures with no position are counted beside the map. The map background stays the usual opt-in.
+
+### Fixed
+
+- Storytelling: two places close on the map (Parramatta and Sydney) no longer write their names over each other — a
+  name moves above its dot or to its other side, and is left out only when there is no room.
+- Storytelling: the wall's number says what was counted when your script names none, instead of 100 000.
+- Storytelling: *Before you export* now flags a scene whose caption is still a placeholder (« ⟨ caption 2 ⟩ »), with a
+  link to type it.
+- Storytelling: the before/after's BEFORE label stays on the original's side while the developed picture wipes in.
+- Storytelling: starting a new export clears the previous one's files, so Archive can never send a video that no
+  longer matches the post.
 
 ## [1.7.0] - 2026-11-02 — Aureolin
 

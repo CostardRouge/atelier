@@ -111,3 +111,49 @@ export async function loadWall(
   await Promise.all(Array.from({ length: Math.min(6, ids.length) }, worker));
   return out;
 }
+
+/** Pixels on the long side of a PRINT: a picture drawn large in a block (before/after), not a wall's tile. */
+export const PRINT_PX = 1080;
+const printKey = (source: string, id: number) => `${source}:${id}:print`;
+
+/** A proxy brought down to `PRINT_PX` on its long side, its shape kept, as a JPEG to keep. */
+async function printOf(blob: Blob): Promise<Blob> {
+  const bmp = await createImageBitmap(blob);
+  const k = Math.min(1, PRINT_PX / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * k));
+  const h = Math.max(1, Math.round(bmp.height * k));
+  const canvas = new OffscreenCanvas(w, h);
+  canvas.getContext('2d')!.drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  return canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+}
+
+/**
+ * Pictures drawn LARGE in a block — the before and after of a developed
+ * picture (`story-pictures.ts`) — from Winnow's proxy, kept on this device
+ * beside the wall's squares (cleared with them by Forget), in the order of
+ * `ids`; null where one cannot be had.
+ */
+export async function loadPrints(source: string, ids: readonly number[], connection: WinnowConnection | null, signal: AbortSignal): Promise<(ImageBitmap | null)[]> {
+  const client = connection ? new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth }) : null;
+  return Promise.all(
+    ids.map(async (id) => {
+      let blob: Blob | undefined;
+      try {
+        blob = await withStore<Blob | undefined>('readonly', (s) => s.get(printKey(source, id)));
+      } catch {
+        blob = undefined;
+      }
+      if (!blob && client && !signal.aborted) {
+        try {
+          blob = await printOf(await client.fetchFile(client.proxyUrl(id), `${id}.jpg`, 'image/jpeg', 0, { signal }));
+          const kept = blob;
+          await withStore('readwrite', (s) => s.put(kept, printKey(source, id))).catch(() => undefined);
+        } catch {
+          blob = undefined;
+        }
+      }
+      return blob ? createImageBitmap(blob).catch(() => null) : null;
+    }),
+  );
+}

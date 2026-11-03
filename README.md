@@ -3021,11 +3021,78 @@ it and may grow blocks of its own.
   the stage over the screen, and the bottom bar — *Objects* opens the list as
   a sheet, the selected object's settings and the *Timeline* open as drawers
   that leave the picture in sight.
+- **Words where they are drawn.** Select any object that draws words and its
+  inspector opens on *Content*: what it says, where the words come from, and
+  the field to type them — the hook's lines, a caption, the post's number and
+  title, the closing card's name, account and ask, and every block's own
+  words: a counter's number (or a counted `{fact}`), unit, label and line
+  under; the gear's devices, the wrong and right names, the season's posts
+  (one a line, their fields separated by « · »); the folders' path, columns
+  and note; the clocks' places and hours; the transfer's card and files.
+  Typed in a scene, they are this post's; emptied, the block draws its own
+  again.
+- **Your pictures inside the blocks.** Once counted, the blocks draw your own
+  pictures where they drew colour tiles: the gear block shows, for each
+  device, a picture it took (the cover of its busiest day of the trip, chosen
+  when you Count — its silhouette becomes a badge in the corner; `photos:
+  false` in the block keeps the silhouettes), the app's grid and a burst's
+  frames show the wall's pictures, and the folders of pictures show one of
+  them as their icon. They are the pictures this browser already keeps for
+  the wall: nothing more is fetched while you play or export. The
+  before/after block shows a picture you DEVELOPED: Count finds, over the
+  trip's days, your Gallery finals whose original your Winnow knows, and the
+  block shows the original, then wipes the final in (*Which developed
+  picture* in its Content picks one; with none, its words as before). A
+  larger copy of those few pictures is kept in this browser.
+- **Trips' openers as map scenes.** Select a map scene (in the list, or its
+  scene on the timeline): *Map scene · drawn as* draws it as the series' map,
+  as Trips' *Itinerary* (the trip's places joined, in the charte's ink) or as
+  *Virée* (a little 3D vehicle driving the trip's road from place to place),
+  on the series' trip — its legs, road, vehicles and look — and *Leg* says
+  which leg the scene tells. The opener plays at its own pace, sped up only to
+  end within the scene; the caption stays. Without the trip in this browser
+  the series' map is drawn.
+- **Captions laid like the hook.** *Captions* (under Charte & look, and in a
+  caption's own inspector) sets every caption of the series: how wide a line
+  runs (*Column*), what a long one does — *Shrink to fit* its *Lines* (three
+  by default; it never goes under 60 % of its size) or *Grow upward* as it
+  used to — and whose buttons it stays clear of: every short-video app,
+  Reels, TikTok, Shorts, or none. The edge holds wherever you drag the
+  caption: dragged too low, its last line stops above the platform's band.
+- **Before you export.** *Export & archive* first checks the post as it
+  stands and lists what would come out wrong in the file: a fact not counted
+  (`{media.total}` would be drawn with its braces), the map's tiles or the
+  wall's pictures not on this device, a face the browser did not load, words
+  that run under the buttons of the platform you publish on (TikTok, Reels or
+  Shorts — the same choice as the stage's guides), a hook shrunk to keep its
+  lines. Each line opens what fixes it — a panel, or the object selected at
+  the moment it is in the way. Nothing stops the export: it is your call.
+- **Measured on this device.** Every export (or cancel) leaves one line under
+  Export: how long the video plays and how long it took (× real time), the
+  H.264 profile and the sound's codec (AAC, or Opus where the browser has no
+  AAC encoder), the file's size, the memory the page held at its fullest
+  (Chromium only) and the device — *Copy* to send them. A cancelled export
+  writes no file, and the Archive panel never sends the files of an earlier
+  one. The first real episode's checklist is `docs/storytelling-first-episode.md`.
 - **The script is yours, not the app's.** The words said, the numbers, the
   places and the trip the maps draw are in a `.story.json` file you keep (its
   `kind` is `atelier.story-script`, version 1). *Load script…* reads it and
   keeps it in this browser until *Forget*; without one, every post still plays,
-  its captions as placeholders.
+  its captions as placeholders. As you work, the browser keeps the script's
+  last ten **versions** (Script › *Versions on this device*): the newest one
+  follows your edits for three minutes, then a new one opens; loading a file
+  or restoring a version always keeps the script it replaces first, so a
+  wrong file loaded is one *Restore* away. *Forget* clears them with the
+  script.
+- **The script on your Winnow.** Under Script, *Keep on <your Winnow>* keeps
+  the series there, like a trip: from then on every edit is saved there once
+  you pause, and when the page comes back into view a newer copy saved from
+  another device is taken (the one it replaces stays a version). On a new
+  browser — your phone, the published site — *Series kept on <your Winnow>…*
+  (under Script, or in *Getting started*) opens it as it is. If both devices
+  changed it, nothing is overwritten: *Keep mine* or *Take theirs*. *Keep only
+  here* stops following the copy there. It needs a Winnow that keeps series
+  (its next version).
 - **Sources.** Name where the series' data comes from: a trip of Trips in this
   browser, whose road and towns will draw the map, and a connected Winnow,
   whose counts and pictures will fill the numbers and the wall. They are saved
@@ -3108,6 +3175,19 @@ it and may grow blocks of its own.
   the grain and the vignette. *Count* chooses one picture per
   place of the wall; after changing the grid, *Count again* gives each place
   its own. *Back to the charte's look* forgets it all.
+- **The living wall.** Under Look, *Motion* sets the wall moving, lane by
+  lane — its rows or its columns: *Marquee* (every row slides), *Metro*
+  (neighbours go opposite ways), *Waterfall* (columns falling), *Shuffle
+  board* (two pictures swap places), *Flip board* (each picture turns over to
+  the next), *Calm* (a slow drift), or still. Each lane is a chip a click
+  turns to the next mode, so a wall can mix them (« Your own »); *Speed* sets
+  them all. *Smart* holds the first picture while the camera lands on it,
+  moves a stage's band as one, slows while your voice speaks, steps on your
+  music's beats (found on this device, from your file) and settles on whole
+  pictures as the number arrives. *More pictures* lets a turning lane bring in
+  pictures from off the frame — counting then keeps up to three a place, still
+  spread over every day. *For* sets it for every post or this post alone. The
+  export draws exactly what plays; the cover stays still.
 - **Language.** *Language* (in the Script section) says whether the series is
   told in English or French: its counted numbers (98,412 or 98 412), the days
   on the map (Sep 3 or 03 sept.) and the few words the blocks write themselves

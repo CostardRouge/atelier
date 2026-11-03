@@ -1,0 +1,226 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reference frames > EP.00 draws as it did 1`] = `
+[
+  "0.30s 12 ops dd19df92 | Sample series · EP.00 / Sample series · EP.00 / Sample series · EP.00 / Sample series · EP.00 / Ten thousand / Ten thousand / Ten thousand /…",
+  "0.50s 12 ops d0abe1ae | Sample series · EP.00 / Sample series · EP.00 / Sample series · EP.00 / Sample series · EP.00 / Ten thousand / Ten thousand / Ten thousand /…",
+  "1.20s 236 ops d62a91f6 | Caption / 1 / of / post / 0, / long / enough / to / wrap / on / two / lines / Sample series · EP.00 / Sample series · EP.00 / Sample series …",
+  "2.20s 240 ops cfd2d8de | Caption / 1 / of / post / 0, / long / enough / to / wrap / on / two / lines / Sample series · EP.00 / Sample series · EP.00 / Sample series …",
+  "4.20s 43 ops 7f6b9986 | Caption / 2 / of / post / 0, / long / enough / to / wrap / on / two / Sample series · EP.00 / Sample series · EP.00 / Sample series · EP.00 …",
+  "4.90s 44 ops 3b469966 | Caption / 2 / of / post / 0, / long / enough / to / wrap / on / two / lines / Sample series · EP.00 / Sample series · EP.00 / Sample series …",
+  "7.00s 23 ops c7f78e01 | Caption / 2 / of / post / 0, / long / enough / to / wrap / on / two / lines",
+  "9.40s 41 ops 496820ce | 2024 / › / 2025 / › / 2026 / › / Photos / Caption / 3 / of / post / 0, / long / enough / to / wrap / on / two / EP.00",
+  "10.10s 55 ops d1c18142 | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / Photos › 2026 / Caption / 3 / of / post / 0, / long / enough / to / wrap / on /…",
+  "12.40s 99 ops 0ee21c3a | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / 2026-03 / › / 2026-04 / › / 2026-05 / › / SONY A7 V / 3 412 photos / DJI MINI /…",
+  "15.00s 6 ops a26a73bc | NEXT EPISODE / Post 1 / EP.00",
+  "15.70s 8 ops 8031fc2b | NEXT EPISODE / Post 1 / EP.01 / EP.00",
+  "17.40s 8 ops ac53efb6 | NEXT EPISODE / Post 1 / EP.01 / EP.00",
+  "19.40s 8 ops 7407b5f5 | NEXT EPISODE / Post 1 / EP.01 / EP.00",
+]
+`;
+
+exports[`reference frames > EP.01 draws as it did 1`] = `
+[
+  "0.30s 2 ops 9300c047 | ",
+  "0.50s 2 ops 965fc725 | ",
+  "1.20s 4 ops fc33a478 | Post 1",
+  "1.80s 5 ops 90356c9e | Post 1 / EP.01 · SEASON 1",
+  "3.40s 12 ops 432fc349 | Caption / 1 / of / post / 1, / long / enough / to / wrap / on / two",
+  "4.10s 13 ops 2d3a8900 | Caption / 1 / of / post / 1, / long / enough / to / wrap / on / two / lines",
+  "5.85s 13 ops f2d282ea | Caption / 1 / of / post / 1, / long / enough / to / wrap / on / two / lines",
+  "7.90s 34 ops bac28798 | CARD / Caption / 2 / of / post / 1, / long / enough / to / wrap / on / two / EP.01",
+  "8.60s 41 ops 01683e24 | CARD / DSC01000.ARW / DSC01046.ARW / DSC01091.ARW / DSC01137.ARW / 629 / 1,000 / Caption / 2 / of / post / 1, / long / enough / to / wrap / …",
+  "10.85s 41 ops eb9275ba | CARD / DSC01640.ARW / DSC01686.ARW / DSC01731.ARW / DSC01777.ARW / 996 / 1,000 / Caption / 2 / of / post / 1, / long / enough / to / wrap / …",
+  "13.40s 16 ops 179027f1 | 23,402 / Caption / 3 / of / post / 1, / long / enough / to / wrap / on / two / EP.01",
+  "14.10s 17 ops d0818de8 | 88,149 / Caption / 3 / of / post / 1, / long / enough / to / wrap / on / two / lines / EP.01",
+  "15.85s 17 ops bb430707 | 99,888 / Caption / 3 / of / post / 1, / long / enough / to / wrap / on / two / lines / EP.01",
+  "17.90s 41 ops 89f38575 | 2024 / › / 2025 / › / 2026 / › / Photos / Caption / 4 / of / post / 1, / long / enough / to / wrap / on / two / EP.01",
+  "18.60s 55 ops 2e339410 | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / Photos › 2026 / Caption / 4 / of / post / 1, / long / enough / to / wrap / on /…",
+  "20.60s 98 ops a9d762c3 | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / 2026-03 / › / 2026-04 / › / 2026-05 / › / SONY A7 V / 3 412 photos / DJI MINI /…",
+  "22.90s 6 ops 029a38cc | NEXT EPISODE / Post 2 / EP.01",
+  "23.60s 8 ops 9265d2fe | NEXT EPISODE / Post 2 / EP.02 / EP.01",
+  "25.30s 8 ops d64509b6 | NEXT EPISODE / Post 2 / EP.02 / EP.01",
+  "27.30s 8 ops 8cfa051e | NEXT EPISODE / Post 2 / EP.02 / EP.01",
+]
+`;
+
+exports[`reference frames > EP.02 draws as it did 1`] = `
+[
+  "0.30s 31 ops 4461b18c | 2024 / › / 2025 / › / Photos / Sample series · EP.02 / Sample series · EP.02 / Sample series · EP.02 / Sample series · EP.02 / Ten thousand …",
+  "0.50s 37 ops 487aa8d8 | 2024 / › / 2025 / › / 2026 / › / Photos / Sample series · EP.02 / Sample series · EP.02 / Sample series · EP.02 / Sample series · EP.02 / Te…",
+  "1.20s 54 ops d7f0d1f6 | 2024 / › / 2025 / › / 2026 / › / Photos › 2026 / Caption / 1 / of / post / 2, / long / enough / to / wrap / on / two / lines / Sample series…",
+  "2.50s 89 ops b48b8635 | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / 2026-03 / › / 2026-04 / › / 2026-05 / › / Photos › 2026 › 2026-02 / Caption / 1…",
+  "4.80s 38 ops 0b968408 | Caption / 2 / of / post / 2, / long / enough / to / wrap / on / two / Sample series · EP.02 / Sample series · EP.02 / Sample series · EP.02 …",
+  "5.50s 39 ops 1c53fc45 | Caption / 2 / of / post / 2, / long / enough / to / wrap / on / two / lines / Sample series · EP.02 / Sample series · EP.02 / Sample series …",
+  "7.50s 18 ops 979d59a7 | Caption / 2 / of / post / 2, / long / enough / to / wrap / on / two / lines",
+  "9.80s 41 ops 240c2f16 | 2024 / › / 2025 / › / 2026 / › / Photos / Caption / 3 / of / post / 2, / long / enough / to / wrap / on / two / EP.02",
+  "10.50s 55 ops fcd2c025 | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / Photos › 2026 / Caption / 3 / of / post / 2, / long / enough / to / wrap / on /…",
+  "12.75s 99 ops 3b7e6aff | 2024 / › / 2025 / › / 2026 / › / 2026-01 / › / 2026-02 / › / 2026-03 / › / 2026-04 / › / 2026-05 / › / SONY A7 V / 3 412 photos / DJI MINI /…",
+  "15.30s 17 ops 469cfc8b | BEFORE /  / Caption / 4 / of / post / 2, / long / enough / to / wrap / on / two / EP.02",
+  "16.00s 18 ops 3a45eca4 | BEFORE /  / Caption / 4 / of / post / 2, / long / enough / to / wrap / on / two / lines / EP.02",
+  "17.75s 20 ops 9b3f6478 | AFTER /  / Caption / 4 / of / post / 2, / long / enough / to / wrap / on / two / lines / EP.02",
+  "19.80s 6 ops 3d314f1e | NEXT EPISODE / Post 3 / EP.02",
+  "20.50s 8 ops 088053e5 | NEXT EPISODE / Post 3 / EP.03 / EP.02",
+  "22.20s 8 ops 4c9ccb3c | NEXT EPISODE / Post 3 / EP.03 / EP.02",
+  "24.20s 8 ops 23e0b351 | NEXT EPISODE / Post 3 / EP.03 / EP.02",
+]
+`;
+
+exports[`reference frames > EP.03 draws as it did 1`] = `
+[
+  "0.30s 2 ops 9300c047 | ",
+  "0.50s 2 ops 965fc725 | ",
+  "1.20s 4 ops d0035042 | Post 3",
+  "1.80s 5 ops 8aa0d752 | Post 3 / EP.03 · SEASON 1",
+  "3.40s 47 ops b3117c0c | SYDNEY / PARIS / 23:40 / Caption / 1 / of / post / 3, / long / enough / to / wrap / on / two",
+  "4.10s 48 ops 19a2666e | SYDNEY / PARIS / 23:40 / Caption / 1 / of / post / 3, / long / enough / to / wrap / on / two / lines",
+  "6.60s 61 ops d51a0615 | SYDNEY / PARIS / 23:40 / 09:40 / MIDNIGHT / FEB 11 / FEB 12 / Caption / 1 / of / post / 3, / long / enough / to / wrap / on / two / lines / …",
+  "9.40s 21 ops ca166432 |  · 09:40 / Caption / 2 / of / post / 3, / long / enough / to / wrap / on / two / EP.03",
+  "10.10s 22 ops b1b8d02d |  · 09:40 / Caption / 2 / of / post / 3, / long / enough / to / wrap / on / two / lines / EP.03",
+  "12.35s 28 ops 82b3cd18 |  · 09:40 /  · 09:41 /  km · 1 minute / Caption / 2 / of / post / 3, / long / enough / to / wrap / on / two / lines / EP.03",
+  "14.90s 20 ops 5a683ef3 | Caption / 3 / of / post / 3, / long / enough / to / wrap / on / two / EP.03",
+  "15.60s 21 ops 8bc23f43 | Caption / 3 / of / post / 3, / long / enough / to / wrap / on / two / lines / EP.03",
+  "17.60s 21 ops ffb89986 | Caption / 3 / of / post / 3, / long / enough / to / wrap / on / two / lines / EP.03",
+  "19.90s 17 ops 11ea2e22 | BEFORE /  / Caption / 4 / of / post / 3, / long / enough / to / wrap / on / two / EP.03",
+  "20.60s 18 ops ba963239 | BEFORE /  / Caption / 4 / of / post / 3, / long / enough / to / wrap / on / two / lines / EP.03",
+  "22.35s 20 ops ab51152f | AFTER /  / Caption / 4 / of / post / 3, / long / enough / to / wrap / on / two / lines / EP.03",
+  "24.40s 6 ops 265e5229 | NEXT EPISODE / Post 4 / EP.03",
+  "25.10s 8 ops c0b7a7ea | NEXT EPISODE / Post 4 / EP.04 / EP.03",
+  "26.80s 8 ops 0aea41b9 | NEXT EPISODE / Post 4 / EP.04 / EP.03",
+  "28.80s 8 ops 48ab667c | NEXT EPISODE / Post 4 / EP.04 / EP.03",
+]
+`;
+
+exports[`reference frames > EP.04 draws as it did 1`] = `
+[
+  "0.30s 19 ops f4abbc88 | Sample series · EP.04 / Sample series · EP.04 / Sample series · EP.04 / Sample series · EP.04 / Ten thousand / Ten thousand / Ten thousand /…",
+  "0.50s 19 ops dc6dc9ee | Sample series · EP.04 / Sample series · EP.04 / Sample series · EP.04 / Sample series · EP.04 / Ten thousand / Ten thousand / Ten thousand /…",
+  "1.20s 36 ops 1eb6020a | Caption / 1 / of / post / 4, / long / enough / to / wrap / on / two / lines / Sample series · EP.04 / Sample series · EP.04 / Sample series …",
+  "3.00s 49 ops 622aa6a9 | camera / days without a position / Caption / 1 / of / post / 4, / long / enough / to / wrap / on / two / lines / Sample series · EP.04 / Sam…",
+  "5.80s 21 ops 4a36ac2a | Caption / 2 / of / post / 4, / long / enough / to / wrap / on / two",
+  "6.50s 22 ops 149145a3 | Caption / 2 / of / post / 4, / long / enough / to / wrap / on / two / lines",
+  "9.00s 35 ops 76ec31d4 | camera / days without a position / Caption / 2 / of / post / 4, / long / enough / to / wrap / on / two / lines / EP.04",
+  "11.80s 15 ops e278a9b6 | Caption / 3 / of / post / 4, / long / enough / to / wrap / on / two / EP.04",
+  "12.50s 16 ops 8b0160a2 | Caption / 3 / of / post / 4, / long / enough / to / wrap / on / two / lines / EP.04",
+  "14.50s 16 ops 134de298 | Caption / 3 / of / post / 4, / long / enough / to / wrap / on / two / lines / EP.04",
+  "16.80s 16 ops c4d9f9c6 | 23,402 / Caption / 4 / of / post / 4, / long / enough / to / wrap / on / two / EP.04",
+  "17.50s 17 ops 712477be | 88,149 / Caption / 4 / of / post / 4, / long / enough / to / wrap / on / two / lines / EP.04",
+  "19.25s 17 ops 295ab1b0 | 99,888 / Caption / 4 / of / post / 4, / long / enough / to / wrap / on / two / lines / EP.04",
+  "21.30s 6 ops f0093439 | NEXT EPISODE / Post 5 / EP.04",
+  "22.00s 8 ops 91b869fa | NEXT EPISODE / Post 5 / EP.05 / EP.04",
+  "23.70s 8 ops 7ab942a1 | NEXT EPISODE / Post 5 / EP.05 / EP.04",
+  "25.70s 8 ops 085b2333 | NEXT EPISODE / Post 5 / EP.05 / EP.04",
+]
+`;
+
+exports[`reference frames > EP.05 draws as it did 1`] = `
+[
+  "0.30s 2 ops 9300c047 | ",
+  "0.50s 2 ops 965fc725 | ",
+  "1.20s 4 ops 9b0b379c | Post 5",
+  "1.80s 5 ops b00eed5e | Post 5 / EP.05 · SEASON 1",
+  "3.40s 93 ops d9f32494 | Caption / 1 / of / post / 5, / long / enough / to / wrap / on / two",
+  "4.10s 222 ops dd7bc991 | Caption / 1 / of / post / 5, / long / enough / to / wrap / on / two / lines",
+  "5.85s 225 ops 6cf12f04 | 100,000 / photos / Caption / 1 / of / post / 5, / long / enough / to / wrap / on / two / lines",
+  "7.90s 20 ops 042683e3 | Caption / 2 / of / post / 5, / long / enough / to / wrap / on / two / EP.05",
+  "8.60s 21 ops 0ebaab6d | Caption / 2 / of / post / 5, / long / enough / to / wrap / on / two / lines / EP.05",
+  "10.85s 21 ops 95d37a33 | Caption / 2 / of / post / 5, / long / enough / to / wrap / on / two / lines / EP.05",
+  "13.40s 43 ops 55ea7971 | Caption / 3 / of / post / 5, / long / enough / to / wrap / on / two / EP.05",
+  "14.10s 52 ops 4bb6b1c8 | Caption / 3 / of / post / 5, / long / enough / to / wrap / on / two / lines / EP.05",
+  "16.10s 52 ops 95fef118 | Caption / 3 / of / post / 5, / long / enough / to / wrap / on / two / lines / EP.05",
+  "18.40s 20 ops 91963aff | Caption / 4 / of / post / 5, / long / enough / to / wrap / on / two / EP.05",
+  "19.10s 21 ops 8deca31d | Caption / 4 / of / post / 5, / long / enough / to / wrap / on / two / lines / EP.05",
+  "21.10s 21 ops 6c6097d0 | Caption / 4 / of / post / 5, / long / enough / to / wrap / on / two / lines / EP.05",
+  "23.40s 6 ops 6bbb3076 | NEXT EPISODE / Post 6 / EP.05",
+  "24.10s 8 ops 183af19c | NEXT EPISODE / Post 6 / EP.06 / EP.05",
+  "25.80s 8 ops 8f237c30 | NEXT EPISODE / Post 6 / EP.06 / EP.05",
+  "27.80s 8 ops 934a2cda | NEXT EPISODE / Post 6 / EP.06 / EP.05",
+]
+`;
+
+exports[`reference frames > EP.06 draws as it did 1`] = `
+[
+  "0.30s 12 ops 3f4e3351 | 0 / Sample series · EP.06 / Sample series · EP.06 / Sample series · EP.06 / Sample series · EP.06 / Ten thousand / Ten thousand / Ten thousa…",
+  "0.50s 12 ops 7661f7f0 | 0 / Sample series · EP.06 / Sample series · EP.06 / Sample series · EP.06 / Sample series · EP.06 / Ten thousand / Ten thousand / Ten thousa…",
+  "1.20s 28 ops dcf44085 | 79,802 / Caption / 1 / of / post / 6, / long / enough / to / wrap / on / two / lines / Sample series · EP.06 / Sample series · EP.06 / Sampl…",
+  "2.50s 32 ops bf7fcd6e | 99,369 / Caption / 1 / of / post / 6, / long / enough / to / wrap / on / two / lines / Sample series · EP.06 / Sample series · EP.06 / Sampl…",
+  "4.80s 38 ops 32317b64 | Caption / 2 / of / post / 6, / long / enough / to / wrap / on / two / Sample series · EP.06 / Sample series · EP.06 / Sample series · EP.06 …",
+  "5.50s 39 ops 7dfee2f1 | Caption / 2 / of / post / 6, / long / enough / to / wrap / on / two / lines / Sample series · EP.06 / Sample series · EP.06 / Sample series …",
+  "7.50s 18 ops 85c1655b | Caption / 2 / of / post / 6, / long / enough / to / wrap / on / two / lines",
+  "9.80s 25 ops 23d79080 | Caption / 3 / of / post / 6, / long / enough / to / wrap / on / two / EP.06",
+  "10.50s 26 ops 20ba7e7a | Caption / 3 / of / post / 6, / long / enough / to / wrap / on / two / lines / EP.06",
+  "12.75s 26 ops 817ff94e | Caption / 3 / of / post / 6, / long / enough / to / wrap / on / two / lines / EP.06",
+  "15.30s 17 ops 54415adb | BEFORE /  / Caption / 4 / of / post / 6, / long / enough / to / wrap / on / two / EP.06",
+  "16.00s 18 ops b8ae00a4 | BEFORE /  / Caption / 4 / of / post / 6, / long / enough / to / wrap / on / two / lines / EP.06",
+  "17.75s 20 ops 8b984848 | AFTER /  / Caption / 4 / of / post / 6, / long / enough / to / wrap / on / two / lines / EP.06",
+  "19.80s 6 ops d102dece | NEXT EPISODE / Post 7 / EP.06",
+  "20.50s 8 ops 0d9dfa99 | NEXT EPISODE / Post 7 / EP.07 / EP.06",
+  "22.20s 8 ops 33d60568 | NEXT EPISODE / Post 7 / EP.07 / EP.06",
+  "24.20s 8 ops 98ca958d | NEXT EPISODE / Post 7 / EP.07 / EP.06",
+]
+`;
+
+exports[`reference frames > EP.07 draws as it did 1`] = `
+[
+  "0.30s 2 ops 9300c047 | ",
+  "0.50s 2 ops 965fc725 | ",
+  "1.20s 4 ops a895c386 | Post 7",
+  "1.80s 5 ops 53afa43a | Post 7 / EP.07 · SEASON 1",
+  "3.40s 25 ops 7709b543 | 128 GB / Caption / 1 / of / post / 7, / long / enough / to / wrap / on / two",
+  "4.10s 28 ops cec6baab | 128 GB / DSC08801.ARW / Caption / 1 / of / post / 7, / long / enough / to / wrap / on / two / lines",
+  "6.35s 32 ops f398e1ac | 128 GB / DSC08801.ARW / Caption / 1 / of / post / 7, / long / enough / to / wrap / on / two / lines / EP.07",
+  "8.90s 16 ops 36421c8e | 23,402 / Caption / 2 / of / post / 7, / long / enough / to / wrap / on / two / EP.07",
+  "9.60s 17 ops 2f11b6db | 88,149 / Caption / 2 / of / post / 7, / long / enough / to / wrap / on / two / lines / EP.07",
+  "11.10s 17 ops c94b75bb | 99,783 / Caption / 2 / of / post / 7, / long / enough / to / wrap / on / two / lines / EP.07",
+  "12.90s 17 ops 95b5f39b | BEFORE /  / Caption / 3 / of / post / 7, / long / enough / to / wrap / on / two / EP.07",
+  "13.60s 18 ops a96154fe | BEFORE /  / Caption / 3 / of / post / 7, / long / enough / to / wrap / on / two / lines / EP.07",
+  "15.35s 20 ops d12efa72 | AFTER /  / Caption / 3 / of / post / 7, / long / enough / to / wrap / on / two / lines / EP.07",
+  "17.40s 6 ops f10c159e | NEXT EPISODE / Post 8 / EP.07",
+  "18.10s 8 ops 3a37d536 | NEXT EPISODE / Post 8 / FIN / EP.07",
+  "19.80s 8 ops a0e78d34 | NEXT EPISODE / Post 8 / FIN / EP.07",
+  "21.80s 8 ops f5defb3e | NEXT EPISODE / Post 8 / FIN / EP.07",
+]
+`;
+
+exports[`reference frames > FIN draws as it did 1`] = `
+[
+  "0.30s 20 ops 05bb1aa1 | Sample series · FIN / Sample series · FIN / Sample series · FIN / Sample series · FIN / Ten thousand / Ten thousand / Ten thousand / Ten tho…",
+  "0.50s 20 ops 25bb5f6e | Sample series · FIN / Sample series · FIN / Sample series · FIN / Sample series · FIN / Ten thousand / Ten thousand / Ten thousand / Ten tho…",
+  "1.20s 37 ops 56dc66f0 | Caption / 1 / of / post / 8, / long / enough / to / wrap / on / two / lines / Sample series · FIN / Sample series · FIN / Sample series · FI…",
+  "3.00s 41 ops b1409a72 | Caption / 1 / of / post / 8, / long / enough / to / wrap / on / two / lines / Sample series · FIN / Sample series · FIN / Sample series · FI…",
+  "5.80s 24 ops 745f0b2a | EP.00 / Post 0 /  / EP.01 / Post 1 /  / EP.02 / Post 2 /  / Caption / 2 / of / post / 8, / long / enough / to / wrap / on / two",
+  "6.50s 41 ops 746a2e8b | EP.00 / Post 0 /  / EP.01 / Post 1 /  / EP.02 / Post 2 /  / EP.03 / Post 3 /  / EP.04 / Post 4 /  / EP.05 / Post 5 /  / EP.06 / Post 6 /  / …",
+  "9.50s 51 ops c14cce3e | EP.00 / Post 0 /  / EP.01 / Post 1 /  / EP.02 / Post 2 /  / EP.03 / Post 3 /  / EP.04 / Post 4 /  / EP.05 / Post 5 /  / EP.06 / Post 6 /  / …",
+  "12.80s 16 ops 352a7f4d | 23,402 / Caption / 3 / of / post / 8, / long / enough / to / wrap / on / two / FIN",
+  "13.50s 17 ops 2173f2f3 | 88,149 / Caption / 3 / of / post / 8, / long / enough / to / wrap / on / two / lines / FIN",
+  "15.00s 17 ops df40c89c | 99,783 / Caption / 3 / of / post / 8, / long / enough / to / wrap / on / two / lines / FIN",
+  "16.80s 7 ops 801eee08 | Sample series / FIN",
+  "17.50s 8 ops 4cc3eba0 | Sample series / @sample / FIN",
+  "19.20s 9 ops 71f938b6 | Sample series / @sample / Follow for the next one / FIN",
+  "21.20s 9 ops 902200d6 | Sample series / @sample / Follow for the next one / FIN",
+]
+`;
+
+exports[`reference frames > a developed picture in the before/after: the original, then the final wiped in 1`] = `
+[
+  "1.00s 1 images 18dad930",
+  "2.60s 2 images 1520ea70",
+  "3.40s 2 images af491ae6",
+]
+`;
+
+exports[`reference frames > his own pictures in the blocks (gear, the app’s grid) draw as they did 1`] = `
+[
+  "27 ops 359253ae",
+  "image 260,634 230x160 a1",
+]
+`;
+
+exports[`reference frames > the living wall (Metro, smart) draws as it did, and settles aligned 1`] = `
+[
+  "0.80s 232 ops 7936e85f",
+  "1.30s 254 ops 2aec10ce",
+  "1.80s 254 ops dc60349a",
+  "2.60s 240 ops ded36ff3",
+]
+`;
