@@ -3559,8 +3559,10 @@ to look at a tile large. The rail's **Subject** narrows any scope by what is
 in the frame, asked of the instance itself: the **people** its face analysis
 grouped (several at once, or *All of them in the frame*), **words** —
 *Describe* what is in the picture (*a dog*, *a parrot*, *a sunset over the
-sea*) and the image index Winnow keeps ranks its library, the scope's rows
-among the closest coming first; or *In text*, the words in the file's path
+sea*) and the image index Winnow keeps lists the library's closest, whatever
+day is open (its ranking knows no day; the rail's filters and a place still
+narrow it, a person cannot; Winnow's default index reads **English** — *dog*,
+not *chien* — and the field says so); or *In text*, the words in the file's path
 and in the text Winnow read in the picture — and a **place** by Winnow's own
 names (country, region, city, point of interest). The ⋯ panel's third view is
 a **Map**: every row with a position as a dot where it was taken, on the

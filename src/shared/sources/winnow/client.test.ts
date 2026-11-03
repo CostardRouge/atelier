@@ -261,7 +261,7 @@ describe('WinnowClient requests', () => {
     expect(url.pathname).toBe('/api/search');
     expect(Object.fromEntries(url.searchParams)).toEqual({ q: 'a koala in a tree', limit: '30', source: 'gallery' });
     expect(on).toMatchObject({ enabled: true, indexed: 90, library: 100, items: [{ id: 4, distance: 0.21 }] });
-    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed', indexed: null, library: null, items: [] });
+    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed', indexed: null, library: null, model: null, items: [] });
   });
 
   it('sends words to the listing as Winnow’s q', async () => {

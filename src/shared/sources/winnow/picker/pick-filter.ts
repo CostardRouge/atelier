@@ -24,7 +24,7 @@
  */
 
 import type { AssetQuery, WinnowAssetRow } from '../client';
-import { nameParams, type NameAsk, type NameKind } from '../winnow-names';
+import { nameParams, passesNames, type NameAsk, type NameKind } from '../winnow-names';
 import { cullingFromRow, type Culling } from '../culling';
 
 // --- one row, read once ------------------------------------------------------
@@ -212,8 +212,9 @@ export interface PickFacets {
   words: string;
   /**
    * Where the words look (his ask of 2026-11-03: «chien, perroquet, sunset … les bons résultats»): `describe` — the
-   * DEFAULT — ranks the library by Winnow's image index (`/api/search`, CLIP) and keeps the scope's rows among the
-   * closest, in that order; `text` asks the server for the words in the file's path and the text its OCR read (`q`).
+   * DEFAULT — is a SCOPE of its own: the library's closest matches by Winnow's image index (`/api/search`, CLIP),
+   * whatever day is open, in that order (the index ranks the whole library and knows no day); `text` asks the
+   * server for the words in the file's path and the text its OCR read (`q`), within the scope.
    */
   wordsIn: WordsIn;
   /** Winnow's place names ticked, per kind (`winnow-names.ts`): a country, a region, a city, a point of interest. */
@@ -300,10 +301,35 @@ export function describedText(f: PickFacets): string {
 
 /**
  * The shown rows among a ranking — id → distance, the index's answer — in the ranking's order, closest first: a
- * description ORDERS, it does not merely keep, so the best match of a month is the first tile whatever the day.
+ * description ORDERS, it does not merely keep, so the best match is the first tile whatever the rail's sort.
  */
 export function rankedShown(items: readonly PickItem[], ranking: ReadonlyMap<number, number>): PickItem[] {
   return items.filter((it) => ranking.has(it.id)).sort((a, b) => ranking.get(a.id)! - ranking.get(b.id)!);
+}
+
+/**
+ * The rows a description lists: the index's answer, kept to the place names ticked — a ranked row is a whole asset
+ * row and carries its names (`passesNames`). Not the people: a row does not say who is in it, so a person cannot
+ * narrow a description here (`describePeopleAside`).
+ */
+export function describedRows<R extends WinnowAssetRow>(ranked: readonly R[], f: PickFacets): R[] {
+  const names = PLACE_KINDS.some((k) => f.places[k]?.length) ? f.places : undefined;
+  return names ? ranked.filter((r) => passesNames(r, names)) : [...ranked];
+}
+
+/** Whether people are ticked while a description lists — said, since they cannot narrow it. */
+export function describePeopleAside(f: PickFacets): boolean {
+  return describedText(f) !== '' && f.people.length > 0;
+}
+
+/**
+ * Whether the index's CLIP model reads English only — OpenAI's and LAION's do, so «chien» ranks far worse than
+ * «dog»; the multilingual ones Winnow's ML container can serve (XLM-RoBERTa, NLLB) read other languages. Unknown → no.
+ */
+export function readsEnglishOnly(model: string | null | undefined): boolean {
+  if (!model) return false;
+  if (/xlm|nllb|multilingual|m-?clip/i.test(model)) return false;
+  return /openai|laion|datacomp|ViT-/i.test(model);
 }
 
 /** Whether the subject narrows at all — what the picker says beside its count. */
