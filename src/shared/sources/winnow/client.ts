@@ -1251,7 +1251,35 @@ export class WinnowClient {
     opts: { half?: 'incoming' | 'final'; limit?: number } = {},
     signal?: AbortSignal,
   ): Promise<WinnowSearch> {
-    const raw = await this.json<{
+    let raw: {
+      items?: (WinnowAssetRow & { distance: number })[];
+      enabled?: boolean;
+      reason?: string;
+      indexed?: number;
+      library?: number;
+      model?: string;
+    };
+    try {
+      raw = await this.searchRaw(text, opts, signal);
+    } catch (err) {
+      // Two refusals of the ROUTE are answers about the index, said as such (Winnow's `api/search/route.ts`): a 404 is
+      // its `search` feature switched off, a 502 its ML container failing to read the words.
+      const reason = err instanceof WinnowError ? searchRefusal(err) : null;
+      if (!reason) throw err;
+      return { enabled: false, reason, indexed: null, library: null, model: null, items: [] };
+    }
+    return {
+      enabled: raw.enabled !== false,
+      reason: raw.enabled === false ? (raw.reason ? `${raw.reason} on this Winnow` : 'its ML or CLIP is off (ML_ENABLED, ML_CLIP_ENABLED)') : (raw.reason ?? null),
+      indexed: raw.indexed ?? null,
+      library: raw.library ?? null,
+      model: raw.model ?? null,
+      items: raw.items ?? [],
+    };
+  }
+
+  private searchRaw(text: string, opts: { half?: 'incoming' | 'final'; limit?: number }, signal?: AbortSignal) {
+    return this.json<{
       items?: (WinnowAssetRow & { distance: number })[];
       enabled?: boolean;
       reason?: string;
@@ -1266,14 +1294,6 @@ export class WinnowClient {
       }),
       signal,
     );
-    return {
-      enabled: raw.enabled !== false,
-      reason: raw.reason ?? null,
-      indexed: raw.indexed ?? null,
-      library: raw.library ?? null,
-      model: raw.model ?? null,
-      items: raw.items ?? [],
-    };
   }
 
   /** The faces detected in one medium, best first, with who each one is. */
@@ -1658,6 +1678,20 @@ export interface AppFileRow {
  * trace never reaches a sentence in the UI, and clamped — the body is a
  * remote's text, and it is being pasted into a message a person reads.
  */
+/**
+ * What a refused `/api/search` says about the INDEX, in the person's words, or null when the refusal is about
+ * something else (signed out, unreachable) and stays an error. Read against Winnow's route: `featureOff('search')`
+ * answers 404, a failed embedding of the words 502 with its detail.
+ */
+export function searchRefusal(err: WinnowError): string | null {
+  if (err.status === 404) return 'its Search feature is off — turn it on in Winnow’s settings, Features';
+  if (err.status === 502) {
+    const said = err.message.includes(' — ') ? err.message.slice(err.message.indexOf(' — ')).replace(/\.$/, '') : '';
+    return `its ML container could not read the words${said}`;
+  }
+  return null;
+}
+
 async function refusalReason(res: Response): Promise<string> {
   try {
     const text = (await res.text()).trim();
