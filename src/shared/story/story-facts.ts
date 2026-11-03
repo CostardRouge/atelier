@@ -152,6 +152,27 @@ export function gearFacts(counts: readonly (readonly [string, number])[]): Recor
 }
 
 /**
+ * A picture each camera took over the counted days (strategy G2): the cover
+ * of its BUSIEST day — the day it was used most, so the picture is one of
+ * its own and typical — by `deviceKey`, from the per-camera calendars
+ * counting already fetches. A camera with no counted day has none. (pure)
+ */
+export function devicePictures(cals: readonly (readonly [string, WinnowCalendar])[], span: Span): Record<string, number> {
+  const out: Record<string, number> = {};
+  const best: Record<string, number> = {};
+  for (const [name, cal] of cals)
+    for (const d of cal.days) {
+      if (!counts(d.date, span) || !(d.count > 0) || !(d.cover_id > 0)) continue;
+      const k = deviceKey(name);
+      if (d.count > (best[k] ?? 0)) {
+        best[k] = d.count;
+        out[k] = d.cover_id;
+      }
+    }
+  return out;
+}
+
+/**
  * Where the trip's days were placed, from Winnow's positions by day: how
  * many days with media had a position and how many had none, and the HOLES —
  * runs of days with media but no position, as `[first, last]` dates. Days

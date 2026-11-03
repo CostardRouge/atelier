@@ -201,6 +201,13 @@ exports[`reference frames > FIN draws as it did 1`] = `
 ]
 `;
 
+exports[`reference frames > his own pictures in the blocks (gear, the app’s grid) draw as they did 1`] = `
+[
+  "27 ops 359253ae",
+  "image 260,634 230x160 a1",
+]
+`;
+
 exports[`reference frames > the living wall (Metro, smart) draws as it did, and settles aligned 1`] = `
 [
   "0.80s 232 ops 091e97c3",

@@ -4,6 +4,7 @@
 import { word, numberText } from "../locale";
 import { appear, enter, K, PAL, rr, text, TYPO, type Ctx } from "../motion";
 import { obj } from "../objects";
+import { drawCovered, wallPicture } from "../story-pictures";
 
 /** a Finder folder, drawn calmly: no scale pop */
 export function folder(c: Ctx, cx: number, cy: number, w: number, open = 0) {
@@ -141,7 +142,11 @@ export function drawFolders(c: Ctx, lt: number, _p: Record<string, unknown> = {}
         c.fill();
         c.restore();
       }
-      folder(c, rx + 22, ry + 20, 38, 0);
+      // A folder of pictures (the column that counts them) shows one of his own when this device keeps the wall's.
+      const thumb = col.counts ? wallPicture(i, col.items.length) : null;
+      if (thumb) {
+        c.save(); rr(c, rx + 1, ry - 1, 42, 42, 8); c.clip(); drawCovered(c, thumb, rx + 1, ry - 1, 42, 42); c.restore();
+      } else folder(c, rx + 22, ry + 20, 38, 0);
       text(c, name, rx + 54, ry + 31, 27, PAL.ink, { fam: TYPO.sys, w: 400 });
       if (col.counts) text(c, col.counts[i] + " " + word("photos"), rx + 54, ry + 66, 22, PAL.dim, { fam: TYPO.mono, w: 400 });
       else if (c.measureText(name).width < cw - 100) text(c, "›", x0 + (ci + 1) * cw - 28, ry + 31, 28, PAL.dim, { fam: TYPO.sys, w: 400 }); // no chevron under a long name

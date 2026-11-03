@@ -163,6 +163,12 @@ export interface ScriptFacts {
   stages?: WallStage[];
   /** Runs of days with media but no position, `[first, last]` ISO dates — the map's holes (`geoFacts`). */
   holes?: [string, string][];
+  /**
+   * A picture each camera took over the counted days, a Winnow asset id by
+   * `deviceKey` — the cover of its busiest day, chosen when counted — what
+   * the gear block shows beside its name (`story-pictures.ts`).
+   */
+  devicePics?: Record<string, number>;
 }
 
 export const SCRIPT_KIND = 'atelier.story-script';
@@ -585,6 +591,12 @@ function readFacts(raw: unknown): ScriptFacts | undefined {
     ...(tileDays ? { tileDays } : {}),
     ...(stages?.length ? { stages } : {}),
     ...(holes?.length ? { holes: holes.map((h): [string, string] => [h[0], h[1]]) } : {}),
+    ...(() => {
+      if (!isObject(raw.devicePics)) return {};
+      const pics: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw.devicePics)) if (/^gear\.[a-z0-9]+$/.test(k) && Number.isInteger(v) && (v as number) > 0) pics[k] = v as number;
+      return Object.keys(pics).length ? { devicePics: pics } : {};
+    })(),
   };
 }
 
@@ -625,6 +637,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
     ...(script?.look ? { look: script.look } : {}),
     ...(mine?.objects ? { objects: mine.objects } : {}),
     ...(mine?.wallMotion ? { wallMotion: mine.wallMotion } : {}),
+    ...((mine?.facts ?? script?.facts)?.devicePics ? { devicePics: (mine?.facts ?? script?.facts)!.devicePics } : {}),
     wallGroups: wallGroups(
       (mine?.facts ?? script?.facts)?.tileDays,
       script?.look?.wall?.group ?? 'none',

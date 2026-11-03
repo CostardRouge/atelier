@@ -80,6 +80,25 @@ describe('reference frames', () => {
     expect(frames).toMatchSnapshot();
   });
 
+  it('his own pictures in the blocks (gear, the app’s grid) draw as they did', () => {
+    const post = POSTS.find((p) => p.blocks.some((b) => b.block === 'gear'))!;
+    const gear = post.blocks.findIndex((b) => b.block === 'gear');
+    const script: StoryScript = {
+      ...SAMPLE,
+      facts: { at: '2025-01-01T00:00:00Z', values: {}, devicePics: { 'gear.camera': 7 } },
+      posts: { ...SAMPLE.posts, [post.id]: { ...SAMPLE.posts[post.id], blocks: post.blocks.map((_, k) => (k === gear ? { params: { devices: [{ name: 'Camera', kind: 'camera' }, { name: 'Drone', kind: 'drone' }] } } : {})) } },
+    };
+    const ep = assemble(post, script, POSTS);
+    const slot = slotsOf(ep).find((s) => s.block === 'gear')!;
+    const picture = { width: 400, height: 300 } as unknown as CanvasImageSource;
+    const rec = recordingContext();
+    drawEpisode(rec.ctx, ep, slot.start + 2.5, { dry: true, pictures: new Map([[7, picture]]), wall: [picture] });
+    const images = rec.ops.filter((o) => o.startsWith('image'));
+    // The camera's picture in its card; the drone, with none, keeps its silhouette.
+    expect(images.length).toBe(1);
+    expect([`${rec.ops.length} ops ${fingerprint(rec.ops)}`, ...images]).toMatchSnapshot();
+  });
+
   it('the same frame records the same, and a part moved is seen', () => {
     const post = POSTS[0];
     const draw = (dx: number) => {

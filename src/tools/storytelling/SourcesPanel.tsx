@@ -10,7 +10,7 @@ import { candidatesKey, keptCandidates, readCandidates } from './wall-candidates
 import DaysModal from './DaysModal';
 import WallModal from './WallModal';
 import WallPicker from './WallPicker';
-import { counts, factChanges, factsFromCalendars, factText, gearFacts, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
+import { counts, factChanges, factsFromCalendars, factText, gearFacts, devicePictures, geoFacts, spanDays, wallPickDays, chosenPicks, thinEvenly } from '../../shared/story/story-facts';
 import { stageLabel, tripFacts } from '../../shared/story/trip-map';
 import MapNamesSection from './MapNamesSection';
 import MapRoadSection from './MapRoadSection';
@@ -121,17 +121,19 @@ export default function SourcesPanel({
       const sumOf = (cal: typeof all) => cal.days.filter((d) => counts(d.date, span)).reduce((n, d) => n + d.count, 0);
       // The cameras (the library's busiest twelve, each counted over the trip's days) and the
       // positions by day. Either may be missing on an older instance: the totals stand without them.
-      const [gear, geo] = await Promise.all([
+      // Each camera's calendar gives its count AND a picture it took (its busiest day's cover, G2).
+      const [gearCals, geo] = await Promise.all([
         client
           .facets()
-          .then((f) => Promise.all(f.devices.slice(0, MAX_DEVICES).map(async (d) => [String(d.value), sumOf(await client.calendar(span.from, span.to, { device: String(d.value) }))] as const)))
-          .then(gearFacts)
-          .catch(() => ({})),
+          .then((f) => Promise.all(f.devices.slice(0, MAX_DEVICES).map(async (d) => [String(d.value), await client.calendar(span.from, span.to, { device: String(d.value) })] as const)))
+          .catch(() => [] as (readonly [string, Awaited<ReturnType<typeof client.calendar>>])[]),
         client
           .geoDays(span)
           .then((days) => geoFacts(days, span))
           .catch(() => null),
       ]);
+      const gear = gearFacts(gearCals.map(([name, cal]) => [name, sumOf(cal)] as const));
+      const devicePics = devicePictures(gearCals, span);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
       const places = wallCapacity(wallCells(script.look?.wall), script.look?.wallMotion, MAX_TILES);
       // By rules when he set some (over the pictures ticked in the picker, else every counted
@@ -158,6 +160,7 @@ export default function SourcesPanel({
               values,
               ...(stages.length ? { stages } : {}),
               ...(geo?.holes.length ? { holes: geo.holes } : {}),
+              ...(Object.keys(devicePics).length ? { devicePics } : {}),
             },
             picks,
           ),

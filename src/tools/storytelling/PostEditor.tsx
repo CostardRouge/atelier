@@ -188,11 +188,26 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
   const tripMap = useTripMap(sources, script?.lang);
   // The wall's pictures: the ones the last counting chose, kept on this device (`wall-cache.ts`).
   const wallSource = sources.winnow?.source;
-  const wall = useWall(
-    wallSource,
-    factsOf(script, postId)?.tiles,
-    connections.find((c) => c.id === wallSource) ?? null,
-  );
+  // The wall's pictures, then a picture each camera took (G2, `story-pictures.ts`) — one load, one cache.
+  const countedFacts = factsOf(script, postId);
+  const tileIds = countedFacts?.tiles;
+  const devicePics = countedFacts?.devicePics;
+  const wallIds = useMemo(() => {
+    const tiles = tileIds ?? [];
+    const extra = [...new Set(Object.values(devicePics ?? {}))].filter((id) => !tiles.includes(id));
+    return tiles.length || extra.length ? [...tiles, ...extra] : undefined;
+  }, [tileIds, devicePics]);
+  const loaded = useWall(wallSource, wallIds, connections.find((c) => c.id === wallSource) ?? null);
+  const tileCount = tileIds?.length ?? 0;
+  const wall = useMemo(() => ({ images: loaded.images.slice(0, tileCount), progress: loaded.progress }), [loaded, tileCount]);
+  const pictures = useMemo(() => {
+    const byId = new Map<number, CanvasImageSource>();
+    (wallIds ?? []).forEach((id, i) => {
+      const img = loaded.images[i];
+      if (img) byId.set(id, img);
+    });
+    return byId;
+  }, [wallIds, loaded.images]);
   const mapStops = tripMap.state === 'ready' && tripMap.map ? tripMap.map.stops : script?.stops;
   const mapRoad = tripMap.state === 'ready' && tripMap.map ? tripMap.map.road : null;
   // What the maps are drawn over: the tiles, once fetched for this route (`use-map-ground.ts`).
@@ -210,10 +225,11 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         ? { stops: tripMap.map.stops, road: tripMap.map.road, times: tripMap.map.times }
         : { stops: script?.stops }),
       wall: wall.images,
+      pictures,
       ground: groundLayers,
       named: mapNamesOf(sources.map).which,
     }),
-    [tripMap, script, wall.images, groundLayers, sources.map, cues],
+    [tripMap, script, wall.images, pictures, groundLayers, sources.map, cues],
   );
 
   const skeleton = POSTS.find((p) => p.id === postId) ?? POSTS[0];

@@ -5,6 +5,7 @@
 import { register } from "./index";
 import { appear, enter, PAL, rng, rr, text, TYPO } from "../motion";
 import { obj } from "../objects";
+import { drawCovered, wallPicture } from "../story-pictures";
 
 const win = (c: CanvasRenderingContext2D, lt: number, x: number, y: number, w: number, h: number, title: string) => {
   appear(c, enter(lt, 0, 1), () => {
@@ -29,7 +30,11 @@ register("app", (c, lt, p) => {
       const a = enter(lt, 0.3 + i * 0.05, 0.9); if (a <= 0) continue;
       const warm = R() < 0.6, hue = warm ? 14 + R() * 34 : 188 + R() * 26;
       c.save(); c.globalAlpha = a;
-      c.fillStyle = `hsl(${hue} ${25 + R() * 30}% ${50 + R() * 25}%)`; rr(c, cx + 4, cy + 4, cell - 8, cell - 8, 8); c.fill();
+      const fill = `hsl(${hue} ${25 + R() * 30}% ${50 + R() * 25}%)`;
+      // His own pictures in his app's grid when this device keeps the wall's (`story-pictures.ts`), in day order.
+      const pic = wallPicture(i, n);
+      if (pic) { c.save(); rr(c, cx + 4, cy + 4, cell - 8, cell - 8, 8); c.clip(); drawCovered(c, pic, cx + 4, cy + 4, cell - 8, cell - 8); c.restore(); }
+      else { c.fillStyle = fill; rr(c, cx + 4, cy + 4, cell - 8, cell - 8, 8); c.fill(); }
       const m = marks[i]; const mk = enter(lt, 2.2 + i * 0.07, 0.6);
       if (m && m !== " " && mk > 0) { c.globalAlpha = a * mk; c.fillStyle = m === "✓" ? PAL.acc : PAL.bg; c.beginPath(); c.arc(cx + cell - 24, cy + 24, 14, 0, 7); c.fill(); text(c, m, cx + cell - 24, cy + 31, 20, m === "✓" ? PAL.bg : PAL.dim, { fam: TYPO.mono, w: 700, align: "center" }); }
       if (picks.includes(i)) { const pk = enter(lt, 2.0 + i * 0.05, 0.8); c.globalAlpha = a * pk; c.strokeStyle = PAL.acc; c.lineWidth = 4; rr(c, cx + 2, cy + 2, cell - 4, cell - 4, 10); c.stroke(); }

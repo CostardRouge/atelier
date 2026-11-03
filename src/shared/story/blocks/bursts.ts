@@ -4,6 +4,7 @@
 import { register } from "./index";
 import { appear, clamp, E, enter, K, PAL, rng, rr, text, TYPO } from "../motion";
 import { obj } from "../objects";
+import { drawCovered, wallPicture } from "../story-pictures";
 
 register("bursts", (c, lt, p) => {
   const n = Math.max(2, Number(p.n ?? 9));
@@ -22,6 +23,13 @@ register("bursts", (c, lt, p) => {
     c.rotate((v.dr * Math.PI) / 180 * (w / big));
     rr(c, -w / 2, -w / 2, w, w, w * 0.06);
     c.clip();
+    // A burst of his: one of the wall's pictures, each frame a few pixels off the one before.
+    const pic = wallPicture(0, 1);
+    if (pic) {
+      drawCovered(c, pic, -w / 2, -w / 2, w, w, { x: v.dx / 400, y: v.dy / 400 });
+      c.restore();
+      return;
+    }
     const g = c.createLinearGradient(0, -w / 2, 0, w / 2);
     g.addColorStop(0, `hsl(196 34% ${66 + v.dl}%)`);
     g.addColorStop(0.55, `hsl(200 30% ${58 + v.dl}%)`);

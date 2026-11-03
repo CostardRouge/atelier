@@ -75,6 +75,8 @@ export interface Episode {
   objects?: StyleBook;
   /** This post's own wall motion, over the series' `look.wallMotion`. */
   wallMotion?: Partial<WallMotion>;
+  /** A picture each camera took, by `deviceKey` (`ScriptFacts.devicePics`). */
+  devicePics?: Record<string, number>;
   /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
   wallGroups?: WallGroup[] | null;
 }

@@ -11,6 +11,7 @@
 import { BLOCKS } from './blocks';
 import './blocks/all';
 import { drawCaption, setCaptionLook } from './caption';
+import { setStoryPictures } from './story-pictures';
 import { H, W } from './charte';
 import { slotAlpha, slotsOf, type Episode, type Slot } from './episode';
 import { setMap, type RoadPoints, type Stop } from './geo';
@@ -64,6 +65,8 @@ export interface ComposeOptions {
   scale?: number;
   /** When the voice speaks and the music's beats, on the post's clock — what smart motion follows (`wall-motion.ts`). */
   cues?: WallCues | null;
+  /** Pictures kept on this device by Winnow id — a camera's own picture for the gear block (`story-pictures.ts`). */
+  pictures?: ReadonlyMap<number, CanvasImageSource> | null;
 }
 
 let layer: HTMLCanvasElement | null = null;
@@ -117,6 +120,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   beginFrame();
   setMap(opts.stops ?? null, opts.road ?? null, opts.named ?? 'all', { times: opts.times ?? null, pace: ep.look?.pace ?? null });
   setWall(opts.wall ?? null);
+  setStoryPictures(opts.pictures, ep.devicePics, opts.wall);
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);
   setWallGrid(ep.look?.wall, ep.wallGroups);

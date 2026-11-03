@@ -11,6 +11,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Storytelling: your own pictures inside the blocks — each device of the gear block shows a picture it took on the
+  trip, and the app's grid, a burst's frames and the folders of pictures draw the wall's pictures instead of colour
+  tiles, once counted.
 - Storytelling: captions are laid like the hook — a column you set, a line limit past which a long caption shrinks
   (or grows upward, as before), and the buttons of the short-video apps as an edge the words never cross, even when
   the caption is dragged.

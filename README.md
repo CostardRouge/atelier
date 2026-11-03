@@ -3031,6 +3031,14 @@ it and may grow blocks of its own.
   and note; the clocks' places and hours; the transfer's card and files.
   Typed in a scene, they are this post's; emptied, the block draws its own
   again.
+- **Your pictures inside the blocks.** Once counted, the blocks draw your own
+  pictures where they drew colour tiles: the gear block shows, for each
+  device, a picture it took (the cover of its busiest day of the trip, chosen
+  when you Count — its silhouette becomes a badge in the corner; `photos:
+  false` in the block keeps the silhouettes), the app's grid and a burst's
+  frames show the wall's pictures, and the folders of pictures show one of
+  them as their icon. They are the pictures this browser already keeps for
+  the wall: nothing more is fetched while you play or export.
 - **Captions laid like the hook.** *Captions* (under Charte & look, and in a
   caption's own inspector) sets every caption of the series: how wide a line
   runs (*Column*), what a long one does — *Shrink to fit* its *Lines* (three

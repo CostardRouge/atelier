@@ -4,9 +4,10 @@
 import { register } from "./index";
 import { appear, enter, PAL, rr, text, TYPO, type Ctx } from "../motion";
 import { obj } from "../objects";
+import { devicePicture, drawCovered } from "../story-pictures";
 
 type Kind = "camera" | "small" | "drone" | "phone" | "compact";
-type Device = { name: string; note?: string; kind: Kind };
+type Device = { name: string; note?: string; kind: Kind; photo?: number };
 
 const lens = (c: Ctx, x: number, y: number, r: number) => {
   c.fillStyle = PAL.bg; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
@@ -66,7 +67,16 @@ register("gear", (c, lt, p) => {
       const x = n === 1 ? 540 : n >= 3 ? 210 + i * 330 : 375 + i * 330;
       const t0 = 0.3 + k * 0.22; k++;
       // Every device's silhouette is one object, its name another, its note a third: set once, they change together.
+      // A picture this camera took (counted from Winnow, `story-pictures.ts`), its silhouette as a badge in the
+      // corner; without one, or with `photos: false`, the silhouette alone as before.
+      const pic = p.photos === false ? null : devicePicture(d.name, d.photo);
       obj(c, "gear.devices", [x, row.y], lt, (lt) => appear(c, enter(lt, t0, 1.1), () => {
+        if (pic) {
+          const w = 230, h = 160;
+          c.save(); rr(c, x - w / 2, row.y - h / 2 - 6, w, h, 14); c.clip(); drawCovered(c, pic, x - w / 2, row.y - h / 2 - 6, w, h); c.restore();
+          c.save(); c.translate(x + w / 2 - 34, row.y + h / 2 - 40); c.fillStyle = PAL.bg; c.beginPath(); c.arc(0, 0, 30, 0, 7); c.fill(); c.scale(0.3, 0.3); (SHAPES[d.kind] ?? SHAPES.camera)(c); c.restore();
+          return;
+        }
         c.save(); c.translate(x, row.y); (SHAPES[d.kind] ?? SHAPES.camera)(c); c.restore();
       }, 18), t0);
       obj(c, "gear.names", [x, row.y + 108], lt, (lt) => appear(c, enter(lt, t0 + 0.25, 1), () => text(c, d.name, x, row.y + 118, 28, PAL.ink, { align: "center", w: 500 }), 10), t0 + 0.25);
