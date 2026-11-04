@@ -7,6 +7,14 @@ current when its brief changes status; add one when a new brief is written.
 Not memory files, but read them before starting new work, or before touching
 anything about media sources or document storage:
 
+- **`docs/recap.md`** — the Recap instrument (2026-11-04): a template as a
+  recipe over five axes (selection rule, layout, background, overlays,
+  motion), the device rule, videos in a layout (in turn by default), the
+  Sheets for a month in a carousel (an output is a list of pages from V1),
+  the proposed V1/V2/V3 and the bricks to reuse. Canvas lab 1:
+  https://claude.ai/artifact/9jwFzpczK7jSA6QteE4KzM. OPEN: his review of the
+  lab, then the plan in commits.
+
 - **`docs/storytelling-first-episode.md`** — Storytelling's R6 (2026-11-02): the
   checklist for EP.00 on his Mac (Winnow's new `story` kind and CORS, the
   script kept, the trip, Count, the sound, *Before you export*, the export and
