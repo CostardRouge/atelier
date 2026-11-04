@@ -3507,6 +3507,16 @@ its sound under it), the **stills** (each page as a PNG), and the **carousel**
 say). A recap is a `.recap.json` file too — a backup, and how it reaches another
 machine — and can be kept on a Winnow whose bucket lists the `recap` kind.
 
+**For an agent.** Through the agent bridge (`#/agents`), an agent drives a
+recap with the same gestures: `recap.list`, `.create` (a template and the day
+or period it is about), `.open` and `.keep` from the gallery; in the editor
+`recap.get` (every slot with what it shows, every setting), `.fill` (from the
+connected Winnow), `.pin`, `.empty`, `.swap` and `.caption` on a slot, `.set`
+(any setting, deep-merged; an unknown key or a value out of range is refused,
+never clamped), `.snapshot` (a page as a picture), `.export` (the video, the
+stills or the carousel into the downloads), and `.undo` / `.redo`. Every write
+is one step of the recap's undo, saved and synced like a gesture.
+
 ## Telemetry tool
 
 When a DJI drone records, the memory card holds both the video (`.mp4`) and a

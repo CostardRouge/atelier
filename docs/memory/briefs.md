@@ -12,8 +12,8 @@ anything about media sources or document storage:
   motion), the device rule, videos in a layout (in turn by default), the
   Sheets for a month in a carousel (an output is a list of pages from V1),
   the proposed V1/V2/V3 and the bricks to reuse. Canvas lab 1:
-  https://claude.ai/artifact/9jwFzpczK7jSA6QteE4KzM. OPEN: his review of the
-  lab, then the plan in commits.
+  https://claude.ai/artifact/9jwFzpczK7jSA6QteE4KzM. V1 BUILT 2026-11-04 (his
+  «C'est parti» + `/goal`, the canvas's V1 validated); V2/V3 open.
 
 - **`docs/storytelling-first-episode.md`** — Storytelling's R6 (2026-11-02): the
   checklist for EP.00 on his Mac (Winnow's new `story` kind and CORS, the

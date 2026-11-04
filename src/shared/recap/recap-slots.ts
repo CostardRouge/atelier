@@ -209,7 +209,8 @@ function textVars(doc: RecapDoc, count: number, days: number, slots: readonly Re
     month: monthName(month),
     year: month.slice(0, 4),
     week: String(isoWeek(a)),
-    date: dayMonth(a),
+    // A single picture's date is the picture's own day; every other template's, the day it is about.
+    date: dayMonth(doc.template === 'single' ? (slots[0]?.picture?.day ?? a) : a),
     from: shortDate(doc.template === 'week' ? a : (doc.range?.from ?? a)),
     to: shortDate(end),
     count: count.toLocaleString('en-GB').replace(/,/g, ' '),

@@ -18,7 +18,8 @@
 import { developOrNull, type DevelopSettings } from '../develop/develop';
 import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
-import { agoKey, monthStart, parseAgo, weekStartOf } from './recap-days';
+import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
+import { addDays } from '../roadtrip/trip-days';
 
 export const RECAP_DOC_VERSION = 1;
 export const MAX_RECAP_TITLE = 120;
@@ -690,3 +691,18 @@ export function withAnchor(doc: RecapDoc, anchor: IsoDate, now: number = Date.no
 export const winnowKey = (instance: string, asset: number): string => `w:${instance}:${asset}`;
 /** A picture's key, for a local file: what finds the same file again when it is added once more. */
 export const localKey = (name: string, size: number, lastModified: number): string => `l:${name}:${size}:${lastModified}`;
+
+/** "October 2026", "4 Nov 2026", "26 Oct 2026 → 1 Nov 2026" — what a recap is about. */
+export function aboutLine(doc: Pick<RecapDoc, 'template' | 'anchor' | 'range'>): string {
+  if (doc.template === 'month') return `${monthName(doc.anchor)} ${doc.anchor.slice(0, 4)}`;
+  if (doc.template === 'week') return `${shortDate(doc.anchor)} → ${shortDate(addDays(doc.anchor, 6) ?? doc.anchor)}`;
+  if (doc.template === 'onThisDay') return shortDate(doc.anchor);
+  return doc.range ? `${shortDate(doc.range.from)} → ${shortDate(doc.range.to)}` : 'every picture';
+}
+
+/** The title a new recap takes before it is made unique: a month by its name, the others by template and day. */
+export function defaultTitle(doc: Pick<RecapDoc, 'template' | 'anchor' | 'range'>): string {
+  if (doc.template === 'month') return aboutLine(doc);
+  if (doc.template === 'week') return `Week ${isoWeek(doc.anchor)}, ${doc.anchor.slice(0, 4)}`;
+  return `${RECIPES[doc.template].label} · ${aboutLine(doc)}`;
+}

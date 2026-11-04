@@ -78,4 +78,11 @@ describe('recap slots', () => {
     expect(rankPictures(list).map((p) => p.key)).toEqual(['p', 'c', 'b', 'a']);
     expect(spreadPick([pic('x', '2026-01-02'), pic('y', '2026-01-01')], 5).map((p) => p.key)).toEqual(['y', 'x']);
   });
+
+  it('dates a single picture by its own day', () => {
+    let doc = createRecapDoc('single', 'local', { anchor: '2026-11-04', now: 1 });
+    doc = withRecap(doc, { range: { from: '2026-10-01', to: '2026-10-31' } });
+    doc = withPictures(doc, [pic('a', '2026-10-12', { stars: 5 })]);
+    expect(resolveRecap(doc).vars.date).toBe('12 October');
+  });
 });

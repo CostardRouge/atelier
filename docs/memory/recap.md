@@ -33,3 +33,7 @@ Develop's own sheet opens on the print (or the local file in hand): Done writes 
 ## Traps met building it (2026-11-04)
 
 ESLint here has no `react-hooks` plugin: an `eslint-disable … react-hooks/exhaustive-deps` line is itself an error. A raw `<input type="range">` fails the lint unless it is a playhead (`data-playhead`); a setting is a `SliderRow`. `node .github/release.mjs check` fails in a SHALLOW clone on the backfilled 0.1.0–0.3.0 sections (their commits are not in the fetched history) — not a broken changelog.
+
+## An agent drives a recap with the gestures (2026-11-04, R3)
+
+`recap.list/create/open/keep/undo/redo` (shell, Mosaic's) and `recap.get/fill/pin/empty/swap/caption/set/snapshot/export` (editor, `use-recap-commands.ts`) — every write through the editor's funnel, one undo step. `recap.set` takes a deep-merged settings object (`SETTABLE`): `applySettings` reads the merge back through `readRecapDoc` and REFUSES any leaf the reading changed, by name and with its range — the registry's "refused, never clamped" applied to an object without a second schema. `recap.create` titles like the gallery (`defaultTitle`: «October 2026», «Week 44, 2026», «On this day · 4 Nov 2026») and anchors a period on its first day. Driven headless over all six templates (`window.atelier.run`), with local pictures only: the Winnow fill is unit-tested on a fake client (`recap-fill.test.ts`), never run against his instance.

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { useObjectUrl } from '../../shared/media/use-object-url';
-import { RECIPES, TEMPLATES, cleanRecapTitle, createRecapDoc, withRecap, type RecapDoc, type RecapTemplate } from '../../shared/recap/recap-doc';
-import { monthName, shortDate } from '../../shared/recap/recap-days';
+import { RECIPES, TEMPLATES, aboutLine, cleanRecapTitle, createRecapDoc, defaultTitle, withRecap, type RecapDoc, type RecapTemplate } from '../../shared/recap/recap-doc';
 import { RECAP_FILE_ACCEPT, RECAP_FILE_EXTENSION, backupFileName, parseRecapFile, recapFileName, serializeRecapFile, toRecapFile } from '../../shared/recap/recap-file';
 import type { RecapSummary } from '../../shared/recap/recap-summary';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -32,14 +31,6 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   if (n < 1024 * 1024 * 1024) return `${(n / 1_048_576).toFixed(n < 10 * 1_048_576 ? 1 : 0)} MB`;
   return `${(n / 1_073_741_824).toFixed(1)} GB`;
-}
-
-/** "October 2026", "4 Nov 2026", "Week of 26 Oct 2026" — what a recap is about, on its card. */
-export function aboutLine(doc: RecapDoc): string {
-  if (doc.template === 'month') return `${monthName(doc.anchor)} ${doc.anchor.slice(0, 4)}`;
-  if (doc.template === 'week') return `Week of ${shortDate(doc.anchor)}`;
-  if (doc.template === 'onThisDay') return shortDate(doc.anchor);
-  return doc.range ? `${shortDate(doc.range.from)} → ${shortDate(doc.range.to)}` : 'every picture';
 }
 
 function RecapCover({ doc }: { doc: RecapDoc }) {
@@ -284,8 +275,7 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
       setNotice(null);
       let doc = createRecapDoc(choice.template, choice.sourceId, { anchor: choice.anchor });
       if (choice.range) doc = withRecap(doc, { range: choice.range });
-      const base = choice.template === 'month' ? `${monthName(doc.anchor)} ${doc.anchor.slice(0, 4)}` : `${RECIPES[choice.template].label} · ${aboutLine(doc)}`;
-      doc = { ...doc, title: uniqueDocName(base, namesIn(choice.sourceId)) };
+      doc = { ...doc, title: uniqueDocName(defaultTitle(doc), namesIn(choice.sourceId)) };
       if (await createOn(doc, 'created')) onOpen(doc);
     },
     [setNotice, namesIn, createOn, onOpen],
@@ -307,7 +297,7 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
         createdAt: fresh.createdAt,
         updatedAt: fresh.updatedAt,
       };
-      const title = doc.template === 'month' ? `${monthName(anchor)} ${anchor.slice(0, 4)}` : doc.template === 'week' ? `${RECIPES.week.label} · ${aboutLine(copy)}` : `${doc.title} copy`;
+      const title = doc.template === 'month' || doc.template === 'week' ? defaultTitle(copy) : `${doc.title} copy`;
       copy.title = uniqueDocName(title, namesIn(DEFAULT_SOURCE_ID));
       if (await createOn(copy, 'created')) onOpen(copy);
     },

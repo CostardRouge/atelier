@@ -215,8 +215,29 @@ function drawCell(
     g.globalAlpha = 1;
   }
 
+  if (!pic && doc.template === 'week') {
+    // A day of the week with no picture keeps its number and its name, as the bands around it do.
+    if (doc.cells.empty === 'hidden' && !opts.editing) return;
+    g.globalAlpha = look.alpha || (opts.editing ? 1 : 0);
+    if (doc.cells.empty === 'dashed' || opts.editing) {
+      g.save();
+      g.setLineDash([Math.max(3, W * 0.01), Math.max(3, W * 0.008)]);
+      g.strokeStyle = light ? 'rgba(27,24,19,0.35)' : 'rgba(244,240,231,0.4)';
+      g.lineWidth = Math.max(1, W * 0.0015);
+      g.strokeRect(box.x + 2, box.y + 2, box.w - 4, box.h - 4);
+      g.restore();
+    }
+    if (doc.cells.empty !== 'hidden') {
+      const size = Math.min(box.w * 0.42, W * 0.05);
+      const cx = box.x + box.w / 2;
+      if (doc.cells.number) text(g, part.number, cx, box.y + box.h - H * 0.16, size, MONO, ink, { align: 'center' });
+      if (part.label) text(g, part.label.toUpperCase(), cx, box.y + box.h - H * 0.16 + size * 0.9, size * 0.42, FACES.sans, ink, { align: 'center', spacing: 0.12 });
+    }
+    g.globalAlpha = 1;
+    return;
+  }
   if (!pic) {
-    if (part.words === 'beside' || doc.template === 'month' || doc.template === 'week') {
+    if (part.words === 'beside' || doc.template === 'month') {
       const empty = doc.cells.empty;
       if (empty === 'hidden' && !opts.editing) return;
       g.globalAlpha = look.alpha || (opts.editing ? 1 : 0);

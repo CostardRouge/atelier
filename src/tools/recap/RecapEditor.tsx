@@ -25,6 +25,7 @@ import { fillFromWinnow } from './recap-fill';
 import { pictureOfFile, pictureOfRow, printOf } from './recap-media';
 import { getValue, putThumb, setValue } from './recap-store';
 import { useRecapPictures } from './use-recap-pictures';
+import { useRecapCommands } from './use-recap-commands';
 import { useRecapClips } from './use-recap-clips';
 import { useRecapSound } from './use-recap-sound';
 import SoundSection from './SoundSection';
@@ -73,6 +74,8 @@ interface Props {
   onBack: () => void;
   headerExtra?: ReactNode;
   syncPill?: ReactNode;
+  /** The recap as the shell holds it NOW — an agent's command reads it right after a write. */
+  latest?: () => RecapDoc | null;
 }
 
 /**
@@ -83,7 +86,7 @@ interface Props {
  * Winnow (a fill by the rule, or picked by hand) and from local files; each
  * one is developed with Develop's own sheet, under one look for the recap.
  */
-export default function RecapEditor({ doc, change, saveState, onBack, headerExtra, syncPill }: Props) {
+export default function RecapEditor({ doc, change, saveState, onBack, headerExtra, syncPill, latest }: Props) {
   useSurface('darkroom');
   const compact = useIsCompact();
   const { connection, client } = useWinnowConnection();
@@ -243,21 +246,24 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   }, [selection, layout, playing]);
 
   // ---- bringing pictures in ------------------------------------------------------------
-  const fill = useCallback(async () => {
-    if (!client || !instance) return;
+  const fill = useCallback(async (): Promise<string> => {
+    if (!client || !instance) return 'no Winnow is connected';
     setFilling(true);
     setNotice(null);
+    let said: string;
     try {
       const pics = await fillFromWinnow(doc, client, instance);
       const before = doc.pictures.length;
       change((d) => withPictures(d, pics));
       const added = new Set(pics.map((p) => p.key)).size;
-      setNotice(added ? `${added.toLocaleString()} picture${added === 1 ? '' : 's'} read from ${instance}${before ? ' (the ones already here kept)' : ''} — each cell shows the best of its day.` : `${instance} holds no picture on these days.`);
+      said = added ? `${added.toLocaleString()} picture${added === 1 ? '' : 's'} read from ${instance}${before ? ' (the ones already here kept)' : ''} — each cell shows the best of its day.` : `${instance} holds no picture on these days.`;
     } catch (err) {
-      setNotice(err instanceof Error ? `${instance} did not answer: ${err.message}` : `${instance} did not answer.`);
+      said = err instanceof Error ? `${instance} did not answer: ${err.message}` : `${instance} did not answer.`;
     } finally {
       setFilling(false);
     }
+    setNotice(said);
+    return said;
   }, [client, instance, doc, change]);
 
   // A new recap with a Winnow at hand fills itself once: the rule knows which days to read.
@@ -284,6 +290,19 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     const undated = pics.filter((p) => !p.day).length;
     setNotice(`${pics.length} file${pics.length === 1 ? '' : 's'} added${undated ? ` · ${undated} without a date stay out of the days` : ''} — read here, never uploaded.`);
   }, [files, change]);
+
+  useRecapCommands({
+    latest: () => latest?.() ?? doc,
+    change,
+    resolved,
+    layout,
+    film,
+    sources,
+    aliases,
+    clipSlides,
+    fill,
+    canFill: () => (client && instance ? true : 'no Winnow is connected — connect one on #/sources'),
+  });
 
   const pickerHost = useMemo<PickerHost | null>(() => {
     if (!instance) return null;

@@ -94,3 +94,12 @@ describe('recap document', () => {
     expect(localKey('a.jpg', 10, 5)).toBe('l:a.jpg:10:5');
   });
 });
+
+describe('recap titles', () => {
+  it('names a recap by what it is about', async () => {
+    const { defaultTitle } = await import('./recap-doc');
+    expect(defaultTitle(createRecapDoc('month', 'local', { anchor: '2026-10-14', now: 1 }))).toBe('October 2026');
+    expect(defaultTitle(createRecapDoc('week', 'local', { anchor: '2026-10-29', now: 1 }))).toBe('Week 44, 2026');
+    expect(defaultTitle(createRecapDoc('onThisDay', 'local', { anchor: '2026-11-04', now: 1 }))).toBe('On this day · 4 Nov 2026');
+  });
+});

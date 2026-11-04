@@ -1,9 +1,10 @@
 # Recap — a new instrument for recaps of captures (brief, 2026-11-04)
 
-Status: **catalogue drawn, awaiting his review** — canvas lab 1:
+Status: **V1 built (2026-11-04)** — canvas lab 1, validated by him:
 https://claude.ai/artifact/9jwFzpczK7jSA6QteE4KzM (catalogue, six V1 templates,
-the Sheets carousel, the V2/V3 templates, the editor with its inspector). No
-code yet; the development plan in commits comes after his review of the lab.
+the Sheets carousel, the V2/V3 templates, the editor with its inspector). The
+V1 is in `src/shared/recap/` and `src/tools/recap/` (`docs/memory/recap.md`);
+V2 and V3 below are open.
 
 ## What he asked (2026-11-04)
 
