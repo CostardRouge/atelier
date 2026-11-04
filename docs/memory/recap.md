@@ -13,3 +13,23 @@ Read before touching `src/shared/recap/` or `src/tools/recap/` — the instrumen
 ## One layout in page pixels, one clock, one painter (2026-11-04, R1)
 
 `layoutRecap` places every part in the page's own pixels (1080 wide, the format's height; Reel insets keep 12 % top, 16 % bottom free for Instagram's buttons); `planFilm` times every entrance, clip turn and the film's length; `paintRecap` draws a page at a moment through `PaintSources` (sync — a picture not in hand is a placeholder, never a wait). The stage and every export call the same three, so the preview IS the file (Mosaic's and Storytelling's rule). `hitTest` reads the same boxes for a click. A dump's pages follow `dumpPages`: a cover, then oneTwo · full · four · two · three, four or fewer left ending on ONE fitted page, never past 20 slides. Clips play `turn` (one at a time after everything is on, ≤ 5 s each, ringed in the accent) by default; `clipSlideNumbers` numbers the carousel slide each clip gets after the recap's own pages — the cell's `▶ 4`. A sound marked `fit` stretches the film to a whole number of its loops, unless that would more than double it. Checked in node through Storytelling's recording context (`recap-paint.test.ts`).
+
+## A picture is KEPT as a print; a clip whole (2026-11-04, R2)
+
+`atelier-recap` keeps, per picture KEY (shared by every recap of the device), the PRINT a slot draws — a JPEG ≤ 2048 px: a Winnow photo cut from its proxy, a Winnow clip's poster from its thumbnail, a local photo through `decodePhoto` (HEIF, JXL, a RAW's render), a local clip's poster from a frame at 0.6 s — and the CLIPS a recap plays whole (Winnow's proxy or the local file). **Why**: a local `File` does not survive a reload (`architecture.md`), and a recap must reopen and export without its files; a print is made only for a picture a slot SHOWS, never for the pool. Pruned to what the device's recaps name when one is deleted; said in the legal notice and `local-first.md` (seventh case). The sound file is kept per recap (`sounds`), never in the document.
+
+## The rule fills once; the stage drives the inspector (2026-11-04, R2)
+
+A new recap with a Winnow connected FILLS ITSELF once (`recap-fill.ts`: one `allAssets` window per run of days, rejects left out, references only). A click on the stage selects a cell, a text or the background and the inspector jumps to its tab (Pictures, Text, Background); a drag swaps two cells' pictures (both pinned after) or moves the heading (`headingOffset`). Paused, the stage RESTS at the page's `allOn` (everything on, an edit seen at once); Play starts the film at 0 unless the author scrubbed. The catalogue's cards are the real painter over colour fields (`sample-recap.ts` — no photograph in a public repo) and play their entrance on hover.
+
+## Develop per picture, one look per recap (2026-11-04, R2)
+
+Develop's own sheet opens on the print (or the local file in hand): Done writes the picture's `develop` and the recap's `look` (the stack's layers). The stage and the exports grade each print through `makeFrameGrader(stack.composeWith(develop))` once per look + develop (`use-recap-pictures.ts`), the Trips/Studio rule that what was done to a photograph is part of it. Clips are drawn ungraded in V1.
+
+## Exports paint on their own clip elements (2026-11-04, R2)
+
+`recap-export.ts`: the film is `encodeFrames` over the painter, every clip and the looping background SEEKED to the exact frame before it is drawn (the stage's elements are left alone, Mosaic's rule); the sound is the kept file looped by `renderBed` clips with the AAC lead, the FILM's fades baked after (not each loop's). Stills: each page at its `allOn`. Carousel: the pages, then one MP4 per clip (≤ 30 s, cover-fit), named by the slide numbers the cells' badges print. A recap kept on a Winnow needs its bucket to list the `recap` kind — his change in Winnow, as `mosaic` was.
+
+## Traps met building it (2026-11-04)
+
+ESLint here has no `react-hooks` plugin: an `eslint-disable … react-hooks/exhaustive-deps` line is itself an error. A raw `<input type="range">` fails the lint unless it is a playhead (`data-playhead`); a setting is a `SliderRow`. `node .github/release.mjs check` fails in a SHALLOW clone on the backfilled 0.1.0–0.3.0 sections (their commits are not in the fetched history) — not a broken changelog.

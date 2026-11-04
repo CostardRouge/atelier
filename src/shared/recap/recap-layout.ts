@@ -191,6 +191,14 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
   const gridBottom = y + rows * cellH + (rows - 1) * rowGap;
   const cta = ctaPart(doc, resolved, W, Math.round(gridBottom + W * 0.05));
   if (cta) parts.push(cta);
+  // The block — heading to the last row — sits at the page's OPTICAL centre, a little above the middle of the room
+  // the format leaves free, rather than hanging from the top with half the page empty under it.
+  const blockBottom = cta ? cta.box.y + cta.box.h : gridBottom;
+  const spare = H - bottom - blockBottom;
+  if (spare > 0) {
+    const shift = Math.round(spare * 0.42);
+    for (const p of parts) p.box = { ...p.box, y: p.box.y + shift };
+  }
   return { width: W, height: H, parts, bleed: false };
 }
 

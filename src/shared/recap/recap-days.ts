@@ -172,3 +172,16 @@ export function captureMinute(text: string | null | undefined): number | null {
   if (!m) return null;
   return Number(m[1]) * 60 + Number(m[2]) + Number(m[3] ?? 0) / 60;
 }
+
+/**
+ * A day hidden in a camera's file name, when nothing else says it: DJI's
+ * `DJI_20251104184207_0001`, a phone's `IMG_20251104_184207`, `PXL_20251104…`.
+ */
+export function dayFromName(name: string): { day: string; minute: number | null } | null {
+  const m = /(20\d{2})(\d{2})(\d{2})[_-]?(\d{2})?(\d{2})?/.exec(name);
+  if (!m) return null;
+  const day = captureDay(`${m[1]}-${m[2]}-${m[3]}`);
+  if (!day) return null;
+  const minute = m[4] && m[5] && Number(m[4]) < 24 && Number(m[5]) < 60 ? Number(m[4]) * 60 + Number(m[5]) : null;
+  return { day, minute };
+}

@@ -11,6 +11,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Recap, a new editor that turns your pictures into recaps to post: a month as a calendar of its days, the same day
+  a year, a month and a week ago, a week, a grid, a single picture or a photo dump over a carousel. It fills itself
+  from your Winnow's days (or your files), lets you pin, swap or empty any day, filter by device, develop each picture
+  with Develop's sheet under one look, set it over a looping video with a sound, and exports a Reel, PNGs or a whole
+  carousel whose clips get slides of their own.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

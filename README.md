@@ -28,6 +28,12 @@ Today it ships twelve tools, converging into a few editors:
   them as the screen saver that zoomed from picture to picture. Each
   **mosaic** is kept on this device with its pictures' colours, in a gallery
   like the others'.
+- **Recap** *(work in progress)* — turn your pictures into recaps to post: a
+  month as a calendar of its days, the same day a year, a month and a week ago,
+  a week, a grid, a single picture or a photo dump over a carousel. The recap
+  fills itself from your Winnow (or your files), each picture can be developed
+  with Develop's own sheet, and it exports as a Reel with its sound, as PNGs, or
+  as a whole carousel.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -3438,6 +3444,68 @@ and `.export` (the PNG or the film into the downloads), and `.undo` /
 `.redo`. Every write is one step of the mosaic's undo, saved and synced
 like a gesture; a value out of range is refused with its range, never
 clamped.
+
+## Recap tool
+
+*Work in progress* — the home page and the tool menu say so with a badge. What
+exists: the six templates below, their gallery and their file, the editor, the
+exports and keeping a recap on a Winnow (`docs/recap.md`). More templates (a
+year, one second a day, the sheets of a whole month) come next.
+
+**Templates.** `/recap` opens on a **catalogue**: each card is the template drawn
+by the real painter over colour fields, and plays its entrance when you hover
+or focus it. A click asks what the recap is about — which month, which week,
+which day, which period — and makes it:
+
+- **Month calendar** — one picture a day for a month, under its weekdays (the
+  trend: a calendar over a looping video);
+- **On this day** — the same day a year, a month and a week ago and today (the
+  steps back are yours to choose, up to ten years);
+- **Week** — seven bands, one picture a day;
+- **Bento grid** — the best of a period, in four, nine, a bento or one and two;
+- **Single picture** — one picture with its day and its camera's line;
+- **Photo dump** — the best of a period over a carousel: a cover, then pages
+  whose density changes, never past Instagram's twenty slides.
+
+**The rule fills, you correct.** Every place of a template is a **slot** — a day,
+a step back, a place of the grid — and the rule fills it from the recap's pool:
+Winnow's pick first, then its stars, then a photo over a clip, then the one
+nearest the middle of the day. Click a cell on the stage and the inspector shows
+that day's pictures: a tap pins one there, *Empty* leaves it empty, *Give it back
+to the rule* undoes both. Drag a picture onto another cell to swap them; drag
+the heading to move it. The **filter** keeps only some devices — *your iPhone,
+your Sony, your drone*, named once per device — or only photos or only clips.
+
+**Pictures.** With a Winnow connected, a new recap **fills itself** from the
+days it is about (references only: a picture is fetched when a cell shows it);
+*Pick…* opens the shared Winnow picker, and *Add files…* reads photos and clips
+from this device — never uploaded. The copy a cell draws (a JPEG of at most
+2048 px) is kept on this device, so a recap reopens and exports without its
+files; the legal notice says so. **Develop…** on a picture opens Develop's own
+sheet: its correction is the picture's, the look the whole recap's.
+
+**The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
+to action, with words counted for you: `{month}`, `{count}`, `{days}`,
+`{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says: the day's number,
+how many shots that day, the camera's line, the device, a word per day, a clip's
+badge, today ringed; how an empty day reads), *Background* (paper, ink, a
+colour, a blurred picture of the recap, or a **looping video** with its in and
+out points and its speed, under a veil), *Motion* (the heading's entrance; the
+cells in order, at random, as a wave, by columns or as a spiral, each fading,
+sliding, popping, dropping, developing like a Polaroid or flickering; clips
+playing in turn, zoomed, together or as posters) and *Export*.
+
+**Sound.** One file of yours, looped under the film, with its volume and fades;
+the film can last whole loops so the music ends on its own seam. Heard in the
+video export only — a still or a carousel takes its music in the app you post
+from.
+
+**Exports.** Everything is painted by the stage's own painter, so the file is
+what you saw: the **video** (an MP4 of the recap playing, its clips in step and
+its sound under it), the **stills** (each page as a PNG), and the **carousel**
+(the pages, then one MP4 slide per clip, numbered as the cells' `▶ n` badges
+say). A recap is a `.recap.json` file too — a backup, and how it reaches another
+machine — and can be kept on a Winnow whose bucket lists the `recap` kind.
 
 ## Telemetry tool
 
