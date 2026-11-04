@@ -181,4 +181,5 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 | `docs/memory/mosaic-export.md` | what a mosaic WRITES — the PNG and the MP4 film, `export-size.ts`, `MosaicPlayer.film`, the Export tab |
 | `docs/memory/mosaic-interaction.md` | how the person PLAYS with the Mosaic editor — the transport and its mode drawer, the target card while a run plays, the stage's gestures, what a zoom draws (lab 4) |
 | `docs/memory/mosaic-remote.md` | how a mosaic LEAVES its tab — kept on a Winnow (`mosaic-remote.ts`, its summary, the sync, the gallery's driver) and driven by an agent (`mosaic.*` commands) |
+| `docs/memory/recap.md` | `src/shared/recap/`, `src/tools/recap/` — the Recap instrument: its templates as recipes, the slots and the rule, the layout, the film plan, the painter, its store and exports |
 | `docs/memory/briefs.md` | starting new work: the long-form briefs, audits and plans under `docs/`, their status and when to read each |

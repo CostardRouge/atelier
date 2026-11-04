@@ -1,0 +1,15 @@
+# Recap
+
+Read before touching `src/shared/recap/` or `src/tools/recap/` — the instrument that turns captures into social recaps (the month calendar, on this day, a week, a grid, a single picture, a photo dump). Brief: `docs/recap.md`; canvas lab 1: https://claude.ai/artifact/9jwFzpczK7jSA6QteE4KzM.
+
+## A template is a recipe over five axes (2026-11-04, R1)
+
+**Decision.** `RecapDoc` (`recap-doc.ts`) holds a `template` and every axis as its own field: the selection rule (`anchor`, `rungs`, `range`, `filter`), the layout (`format`, `grid`, `count`), the background, what a cell says (`cells`), the motion, the sound and one `look`. `RECIPES` is the only place a template differs: it seeds the fields; nothing downstream switches on a template except `recap-layout.ts` (where the slots sit) and `recap-slots.ts` (which slots exist). **Why**: his brief — a catalogue whose every template can be re-dressed in the inspector, and a new template without a new editor. **How to apply**: a new template is a recipe, a slot list and a page layout; a new setting is a field read by `readRecapDoc` with its clamp.
+
+## Slots, filled by the rule, corrected by hand (2026-11-04, R1)
+
+`resolveRecap` names a template's SLOTS — a day (`2026-10-14`), a step back (`ago:1y`), a place (`n:3`) — and fills each from the pool through the filter: Winnow's pick, then its stars, then a photo over a clip (unless clips are asked), then the picture nearest 13:00. `picks` pins a picture on a slot and wins; `cleared` empties one; a picture pinned elsewhere is never the rule's choice again (the same picture twice reads as a mistake). Grid/single/dump spread `spreadPick` over the period: ranked pictures first, the rest evenly spaced in time. Days are capture-wall-clock `YYYY-MM-DD` (`captureDay`), never instants: a month back of 31 March is 28 February (`dayAgo`). Storytelling's wall rule, applied again.
+
+## One layout in page pixels, one clock, one painter (2026-11-04, R1)
+
+`layoutRecap` places every part in the page's own pixels (1080 wide, the format's height; Reel insets keep 12 % top, 16 % bottom free for Instagram's buttons); `planFilm` times every entrance, clip turn and the film's length; `paintRecap` draws a page at a moment through `PaintSources` (sync — a picture not in hand is a placeholder, never a wait). The stage and every export call the same three, so the preview IS the file (Mosaic's and Storytelling's rule). `hitTest` reads the same boxes for a click. A dump's pages follow `dumpPages`: a cover, then oneTwo · full · four · two · three, four or fewer left ending on ONE fitted page, never past 20 slides. Clips play `turn` (one at a time after everything is on, ≤ 5 s each, ringed in the accent) by default; `clipSlideNumbers` numbers the carousel slide each clip gets after the recap's own pages — the cell's `▶ 4`. A sound marked `fit` stretches the film to a whole number of its loops, unless that would more than double it. Checked in node through Storytelling's recording context (`recap-paint.test.ts`).
