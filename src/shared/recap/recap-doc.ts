@@ -93,6 +93,11 @@ export interface RecapPicture {
   picked?: boolean;
   /** Its own correction (the Develop sheet), null as shot. */
   develop?: DevelopSettings | null;
+  /**
+   * Kept for the recap but never a slot's: a clip added as the looping
+   * background, which must not land on the day it was shot.
+   */
+  loose?: boolean;
 }
 
 export interface RecapText {
@@ -401,6 +406,7 @@ export function readPicture(raw: unknown): RecapPicture | null {
     if (v) out[k] = v;
   }
   if (r.picked === true) out.picked = true;
+  if (r.loose === true) out.loose = true;
   const develop = developOrNull(r.develop);
   if (develop) out.develop = develop;
   return out;

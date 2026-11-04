@@ -381,7 +381,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const addBackgroundClip = useCallback(async () => {
     const [f] = await pickFiles('video/*', false);
     if (!f) return;
-    const p = await pictureOfFile(f);
+    // Kept for the recap as its background only: never a cell's, whatever day it was shot.
+    const p = { ...(await pictureOfFile(f)), loose: true };
     setFiles((m) => new Map(m).set(p.key, f));
     change((d) => withRecap(withPictures(d, [p]), { background: { ...d.background, kind: 'video', video: p.key } }));
   }, [change]);
@@ -503,7 +504,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const status = [
     pictures.loading > 0 ? `${pictures.loading} picture${pictures.loading === 1 ? '' : 's'} on the way` : null,
     `${resolved.slots.filter((s) => s.picture).length}/${resolved.slots.length} places filled`,
-    `${doc.pictures.length.toLocaleString()} in the pool`,
+    `${doc.pictures.filter((p) => !p.loose).length.toLocaleString()} in the pool`,
   ]
     .filter(Boolean)
     .join(' · ');

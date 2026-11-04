@@ -55,11 +55,12 @@ export function deviceLabel(model: string | undefined, aliases: DeviceAliases = 
 /** Every device of the pool, the most used first. */
 export function poolDevices(pictures: readonly RecapPicture[]): { device: string; count: number }[] {
   const counts = new Map<string, number>();
-  for (const p of pictures) if (p.device) counts.set(p.device, (counts.get(p.device) ?? 0) + 1);
+  for (const p of pictures) if (p.device && !p.loose) counts.set(p.device, (counts.get(p.device) ?? 0) + 1);
   return [...counts].map(([device, count]) => ({ device, count })).sort((a, b) => b.count - a.count || a.device.localeCompare(b.device));
 }
 
 export function passesFilter(p: RecapPicture, filter: RecapDoc['filter']): boolean {
+  if (p.loose) return false;
   if (filter.kinds !== 'all' && p.kind !== filter.kinds) return false;
   if (filter.devices.length && (!p.device || !filter.devices.includes(p.device))) return false;
   return true;

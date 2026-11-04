@@ -41,6 +41,9 @@ describe('recap slots', () => {
     doc = withRecap(doc, { filter: { devices: ['ILCE-7M4'], kinds: 'all' } });
     expect(resolveRecap(doc).slots[1].picture?.key).toBe('a');
     expect(poolDevices(doc.pictures).map((d) => d.device)).toEqual(['FC8482', 'ILCE-7M4']);
+    // A clip kept as the background only is never a day's picture, whatever its day.
+    doc = withPictures(doc, [pic('sky', '2026-10-03', { kind: 'video', loose: true, stars: 5 })]);
+    expect(resolveRecap(doc).slots[2].picture).toBeNull();
   });
 
   it('reads the steps back of on this day', () => {
