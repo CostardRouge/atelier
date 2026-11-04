@@ -387,9 +387,21 @@ immich-machine-learning `/predict`, reached only once `indexed > 0`. Cloudflare 
 Winnow's 502 JSON for an HTML page, so the detail is lost and the status is the only witness. **How to apply**:
 `client.search` turns a 404 / 502 into `enabled: false` with the remedy (`searchRefusal`) and keeps every other
 failure an error; the rail and the grid both print the reason. The pictures' half of the index is made by the WORKER
-(visual CLIP, faces, OCR all working there) and the words' half by the APP, so a working index with a failing
-search points at the app → ML text call (its logs, `ML_BASE_URL` from the app, the ML image's textual model) — his
-to check on the Optiplex; Atelier cannot see past Cloudflare's page.
+and the words' half by the APP, both through `ML_BASE_URL`; Atelier cannot see past Cloudflare's page, so the
+diagnosis is on the Optiplex.
+
+**What it WAS on his Optiplex (fixed 2026-11-03 by a Claude session on the machine, from a hand-off prompt).** The
+`immich_machine_learning` container had been `unhealthy` since a restart on 2026-10-27: gunicorn 25 printed
+`Listening at … 3003` and never booted its worker — about one start in two hung on gunicorn's CONTROL SOCKET — so
+connections queued unanswered, and Traefik dropped the unhealthy container's route (`404 page not found`, plain
+text, is Traefik's, never immich's JSON). The whole ML was down (faces, OCR, CLIP), not only search. Fixed in his
+Portainer stacks: `GUNICORN_CMD_ARGS="--no-control-socket"` on the ML service (three restarts in a row healthy in
+4 s), and Winnow's `ML_BASE_URL` from `https://immich-ml-optiplex.steeve.website` (through Traefik, public) to
+`http://immich_machine_learning:3003` on the shared `edge` network. The first suspect — OpenVINO hanging on the
+iGPU (`release-openvino`, `/dev/dri`, an empty `dmesg`) — was WRONG; the control socket was. **How to apply**: when
+a search or any Winnow ML job fails, test from inside `winnow-app` (container names have HYPHENS there, unlike the
+repo's compose): `/ping` → `pong` and `/predict` with `clip.textual`, each with a timeout — a hang means a worker
+that never booted, a plain-text 404 means Traefik; his containers are Portainer stacks, not a compose folder.
 
 ## The MAP view, a box that ticks (2026-11-02)
 
