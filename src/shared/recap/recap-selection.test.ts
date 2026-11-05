@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { carouselReport } from './recap-carousel';
-import { flowKeys, replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from './recap-selection';
+import { flowKeys, replaceCandidates, withMovedFlow, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from './recap-selection';
 import { resolveRecap } from './recap-slots';
 
 const pic = (i: number, extra: Partial<RecapPicture> = {}): RecapPicture => ({
@@ -89,6 +89,17 @@ describe('removing a picture from a carousel', () => {
     expect(flowKeys(r3)).toEqual([k[3], by, k[2], k[0], k[4], k[5]]);
     const removed = withRemoved(swapped, r2, k[4], 4);
     expect(flowKeys(resolveRecap(withRestored(removed, resolveRecap(removed), k[4], 5)))).toEqual([k[3], k[1], k[2], k[0], k[4], k[5]]);
+  });
+
+  it('moves a picture between two others, the rest keeping their order', () => {
+    const doc = dump(Array.from({ length: 20 }, (_, i) => pic(i)));
+    const r = resolveRecap(doc);
+    const k = flowKeys(r);
+    expect(flowKeys(resolveRecap(withMovedFlow(doc, r, k[0], k[3], 2)))).toEqual([k[1], k[2], k[0], k[3], k[4], k[5]]);
+    expect(flowKeys(resolveRecap(withMovedFlow(doc, r, k[4], k[1], 2)))).toEqual([k[0], k[4], k[1], k[2], k[3], k[5]]);
+    expect(flowKeys(resolveRecap(withMovedFlow(doc, r, k[1], null, 2)))).toEqual([k[0], k[2], k[3], k[4], k[5], k[1]]);
+    // Dropped where it already is: nothing changes, nothing freezes.
+    expect(withMovedFlow(doc, r, k[1], k[2], 2)).toBe(doc);
   });
 });
 

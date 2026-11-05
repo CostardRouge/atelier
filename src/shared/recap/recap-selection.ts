@@ -64,6 +64,21 @@ export function withSwappedFlow(doc: RecapDoc, resolved: ResolvedRecap, a: strin
   return withRecap(doc, { carousel: { ...doc.carousel, chosen } }, now);
 }
 
+/**
+ * A picture of the carousel MOVED between two others (a drag dropped on a
+ * tile's edge): it leaves its place and lands before `before` — or last when
+ * `before` is null; the others keep their order. The selection freezes.
+ */
+export function withMovedFlow(doc: RecapDoc, resolved: ResolvedRecap, key: string, before: string | null, now: number = Date.now()): RecapDoc {
+  const was = doc.carousel.chosen ?? flowKeys(resolved);
+  if (!was.includes(key) || key === before) return doc;
+  const rest = was.filter((k) => k !== key);
+  const at = before === null ? -1 : rest.indexOf(before);
+  const chosen = at < 0 ? [...rest, key] : [...rest.slice(0, at), key, ...rest.slice(at)];
+  if (chosen.every((k, i) => k === was[i])) return doc;
+  return withRecap(doc, { carousel: { ...doc.carousel, chosen } }, now);
+}
+
 /** «Let the rule choose again»: the selection unfrozen, the bench emptied. */
 export function withRuleAgain(doc: RecapDoc, now: number = Date.now()): RecapDoc {
   return withRecap(doc, { carousel: { ...doc.carousel, chosen: null, left: [] } }, now);

@@ -3528,7 +3528,9 @@ holds one fewer, nothing comes in — and ⇄ **replaces** it with one you choos
 among the next best (nearest in time, never a look-alike of what stays); your
 first correction freezes the selection until *Let the rule choose again*.
 Drag a picture onto another in that list (by its ⠿ grip on a touch screen), or
-on the stage, and the two **swap** places — the order is yours from then on. The
+on the stage, and the two **swap** places; in the list, drop it on a picture's
+left or right edge (a red bar shows where) to **insert** it before or after
+instead — the order is yours from then on. The
 rule draws from your Winnow **picks** when they fill the carousel (or always,
 or never), and leaves out screenshots, all but the best of a **burst** (its ×n
 lets you choose the frame) and **look-alikes** — the same conditions as

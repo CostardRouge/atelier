@@ -12,7 +12,7 @@ import {
   type SlideTitles,
 } from '../../shared/recap/recap-carousel';
 import { withRecap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
-import { replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from '../../shared/recap/recap-selection';
+import { replaceCandidates, withMovedFlow, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from '../../shared/recap/recap-selection';
 import { leaves } from '../../shared/sources/winnow/picture-rules';
 import PictureRulesFields from '../../shared/ui/PictureRulesFields';
 import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera } from '../../shared/recap/recap-sheet';
@@ -55,21 +55,29 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
   const [aim, setAim] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   // A drag in the tray: the picture held, where the pointer is, the tile under it — let go, the two trade places.
-  const [drag, setDrag] = useState<{ key: string; x: number; y: number; moved: boolean; over: string | null; id: number } | null>(null);
+  // Over a tile: its left edge inserts before it, its right edge after it, its middle swaps the two.
+  const [drag, setDrag] = useState<{ key: string; x: number; y: number; moved: boolean; over: string | null; zone: 'before' | 'swap' | 'after'; id: number } | null>(null);
   const startDrag = (key: string) => (e: React.PointerEvent) => {
     if (e.button > 0 || (e.target as HTMLElement).closest('button:not([data-grip])')) return;
     // A finger drags by the grip only, so a touch on a picture still scrolls the inspector.
     if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-grip]')) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ key, x: e.clientX, y: e.clientY, moved: false, over: null, id: e.pointerId });
+    setDrag({ key, x: e.clientX, y: e.clientY, moved: false, over: null, zone: 'swap', id: e.pointerId });
   };
   const moveDrag = (e: React.PointerEvent) => {
     setDrag((d) => {
       if (!d || d.id !== e.pointerId) return d;
       const moved = d.moved || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6;
-      const under = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-tray-key]')?.dataset.trayKey ?? null;
-      return { ...d, x: e.clientX, y: e.clientY, moved, over: moved && under !== d.key ? under : null };
+      const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-tray-key]') ?? null;
+      const under = el?.dataset.trayKey ?? null;
+      let zone: 'before' | 'swap' | 'after' = 'swap';
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const u = (e.clientX - r.left) / Math.max(1, r.width);
+        zone = u < 0.28 ? 'before' : u > 0.72 ? 'after' : 'swap';
+      }
+      return { ...d, x: e.clientX, y: e.clientY, moved, over: moved && under !== d.key ? under : null, zone };
     });
   };
   const endDrag = (e: React.PointerEvent) => {
@@ -78,7 +86,11 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
     if (!d || d.id !== e.pointerId || !d.moved || !d.over) return;
     const a = d.key;
     const b = d.over;
-    change((x) => withSwappedFlow(x, resolved, a, b));
+    if (d.zone === 'swap') return change((x) => withSwappedFlow(x, resolved, a, b));
+    // Inserted before the tile, or after it (before the one that follows it, else last).
+    const keys = flow.map((x) => x.picture!.key);
+    const before = d.zone === 'before' ? b : (keys.filter((k) => k !== a)[keys.filter((k) => k !== a).indexOf(b) + 1] ?? null);
+    change((x) => withMovedFlow(x, resolved, a, before));
   };
   const byKey = useMemo(() => new Map(doc.pictures.map((p) => [p.key, p])), [doc.pictures]);
   const left = c.left.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
@@ -152,8 +164,8 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
         {shows && flow.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className={legend} title="Drag a picture onto another to swap them">
-                {frozen ? 'Your selection' : 'Chosen by the rule'} · {flow.length} · drag to swap
+              <span className={legend} title="Drag a picture onto another to swap them, or onto its edge to put it before or after it">
+                {frozen ? 'Your selection' : 'Chosen by the rule'} · {flow.length}
               </span>
               {frozen && (
                 <button
@@ -169,13 +181,13 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
                 </button>
               )}
             </div>
-            <div role="list" aria-label="The pictures in the carousel — drag one onto another to swap them" className="grid grid-cols-4 gap-1.5">
+            <div role="list" aria-label="The pictures in the carousel — drag one onto another to swap them, onto its edge to put it before or after" className="grid grid-cols-4 gap-1.5">
               {flow.map((s) => {
                 const pic = s.picture!;
                 const burst = bursts.get(pic.key);
                 const n = burst ? (members.get(burst)?.length ?? 1) : 1;
                 const held = drag?.moved && drag.key === pic.key;
-                const under = drag?.over === pic.key;
+                const under = drag?.over === pic.key ? drag.zone : null;
                 return (
                   <div
                     key={s.id}
@@ -185,13 +197,17 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
                     onPointerMove={moveDrag}
                     onPointerUp={endDrag}
                     onPointerCancel={() => setDrag(null)}
-                    className={`relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame select-none cursor-grab active:cursor-grabbing ${held ? 'opacity-35' : ''} ${under ? 'outline outline-2 outline-dashed outline-accent outline-offset-1' : aim === pic.key ? 'outline outline-2 outline-dashed outline-accent' : ''}`}
+                    className={`relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame select-none cursor-grab active:cursor-grabbing ${held ? 'opacity-35' : ''} ${under === 'swap' ? 'outline outline-2 outline-dashed outline-accent outline-offset-1' : aim === pic.key ? 'outline outline-2 outline-dashed outline-accent' : ''}`}
                   >
                     {tile(pic)}
+                    {(under === 'before' || under === 'after') && (
+                      // Where the picture will land: a bar at the tile's edge.
+                      <span aria-hidden="true" className={`absolute top-0 bottom-0 w-1 rounded-full bg-accent shadow-[0_0_0_2px_var(--color-surface)] ${under === 'before' ? 'left-0' : 'right-0'}`} />
+                    )}
                     <span
                       data-grip
                       aria-hidden="true"
-                      title="Drag onto another picture to swap them"
+                      title="Drag onto another picture to swap them, onto its edge to put it before or after"
                       className="absolute right-1 bottom-1 w-6 h-6 pointer-coarse:w-9 pointer-coarse:h-9 inline-flex items-center justify-center rounded-full bg-[rgba(16,15,13,0.72)] text-on-media text-xs touch-none cursor-grab"
                     >
                       ⠿
