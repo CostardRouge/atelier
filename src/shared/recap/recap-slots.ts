@@ -121,7 +121,7 @@ function daySlots(doc: RecapDoc): { id: string; day: IsoDate | null; label: stri
 export function placeCount(doc: RecapDoc): number {
   if (doc.template === 'single') return 1;
   if (doc.template === 'grid') return GRID_SHAPES[doc.grid].count;
-  if (doc.template === 'dump') return Math.min(doc.count, MAX_SLIDES * 4);
+  if (doc.template === 'dump' || doc.template === 'sheets') return Math.min(doc.count, MAX_SLIDES * 4);
   return 0;
 }
 
@@ -247,7 +247,8 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
  * as on any slot (`h:0`, `h:1`…).
  */
 function highlightSlots(doc: RecapDoc, inScope: readonly RecapPicture[], own: readonly RecapSlot[], byKey: ReadonlyMap<string, RecapPicture>, cleared: ReadonlySet<string>, pinnedKeys: ReadonlySet<string>): RecapSlot[] {
-  if (doc.template === 'dump' || doc.carousel.after !== 'highlights') return [];
+  // A dump and a sheet ARE their highlights.
+  if (doc.template === 'dump' || doc.template === 'sheets' || doc.carousel.after !== 'highlights') return [];
   const shown = new Set(own.flatMap((s) => (s.picture ? [s.picture.key] : [])));
   const candidates = inScope.filter((p) => !shown.has(p.key) && !pinnedKeys.has(p.key));
   const pool = carouselPool(candidates, doc.carousel, rankPictures);

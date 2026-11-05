@@ -15,6 +15,7 @@ import { isoWeek, monthLead, weekdayHeaders } from './recap-days';
 import { FORMATS, MAX_SLIDES, type RecapDoc } from './recap-doc';
 import { fillText, ownSlots, rankPictures, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { SLIDE_LAYOUT_COUNT, type SlideLayout } from './recap-carousel';
+import { arrangeSheet, sheetSlides, type SheetArea, type SheetDecor, type SheetItem } from './recap-sheet';
 import { textStyleOf } from './recap-text';
 
 export interface Box {
@@ -58,6 +59,10 @@ export interface CellPart {
   label?: string;
   /** Where its words go: over the picture, or in a column beside it (on this day). */
   words: 'inside' | 'beside' | 'bottom';
+  /** Radians: a sheet's collage print, turned. */
+  rot?: number;
+  /** Drawn as a print, a white border round it (a sheet's collage). */
+  print?: boolean;
   /** The anchor day — ringed when `cells.today`. */
   today?: boolean;
 }
@@ -72,6 +77,8 @@ export interface RecapPage {
   parts: Part[];
   /** True on a page whose pictures cover the page (a week's bands, a single picture). */
   bleed: boolean;
+  /** A slice of the Sheets: what it draws behind its pictures, in the page's own pixels (`recap-sheet.ts`). */
+  sheet?: { index: number; decor: SheetDecor };
 }
 
 export interface RecapLayout {
@@ -492,7 +499,54 @@ export function carouselSlides(doc: RecapDoc, resolved: ResolvedRecap, layout: R
         return [{ key: `clip:${s.id}`, kind: 'clip' as const, slot: s.id }];
       })
     : [];
-  return inOrder([...pages, ...clips], doc.carousel.order).slice(0, MAX_SLIDES);
+  return (doc.template === 'sheets' ? [...pages, ...clips] : inOrder([...pages, ...clips], doc.carousel.order)).slice(0, MAX_SLIDES);
+}
+
+/**
+ * The Sheets: the period laid on one sheet `slides` pages wide
+ * (`arrangeSheet`), then cut into its slides — a picture across a cut is a
+ * cell on both, each showing its half (the painter clips to the page). The
+ * cover keeps the first slide's left for the title.
+ */
+function sheetPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage[] {
+  const slots = resolved.slots.filter((s) => s.picture);
+  const slides = sheetSlides(slots.length, doc.sheet.slides);
+  const { top, bottom } = insets(doc.format, H);
+  const m = Math.round(W * 0.06);
+  const days = slots.flatMap((s) => (s.picture?.day ? [Date.parse(`${s.picture.day}T00:00:00Z`)] : []));
+  const lo = Math.min(...days, Infinity);
+  const hi = Math.max(...days, -Infinity);
+  const items: SheetItem[] = slots.map((s) => {
+    const p = s.picture!;
+    const t = p.day ? Date.parse(`${p.day}T00:00:00Z`) + (p.minute ?? 720) * 60000 : lo;
+    return { id: s.id, aspect: p.width && p.height ? p.width / p.height : 1, faces: p.faces ?? 0, when: hi > lo ? Math.min(1, Math.max(0, (t - lo) / (hi - lo + 86_400_000))) : 0.5 };
+  });
+  const area: SheetArea = {
+    slides,
+    W,
+    H,
+    x0: Math.round(W * 0.58),
+    x1: slides * W - m,
+    y0: Math.max(top, Math.round(H * 0.09)),
+    y1: H - Math.max(bottom, Math.round(H * 0.09)),
+    gap: Math.max(4, Math.round(doc.cells.gap * W)),
+    rows: doc.format === 'story' ? 3 : 2,
+  };
+  const laid = arrangeSheet(items, area, doc.sheet.arrangement);
+  const collage = doc.sheet.arrangement === 'collage';
+  const head = headingParts(doc, resolved, W, Math.round(H * 0.4), 'left', m, Math.round(W * 0.46));
+  const cta = ctaPart(doc, resolved, W, H - Math.max(bottom, m) - Math.round(W * 0.06));
+  return Array.from({ length: slides }, (_, i) => {
+    const left = i * W;
+    const cells: Part[] = [];
+    laid.boxes.forEach((b, k) => {
+      if (b.x >= left + W || b.x + b.w <= left) return;
+      cells.push({ kind: 'cell', id: b.id, box: { x: b.x - left, y: b.y, w: b.w, h: b.h }, col: k, row: 0, index: k, number: String(k + 1), words: 'inside', ...(b.rot ? { rot: b.rot } : {}), ...(collage ? { print: true } : {}) });
+    });
+    const decor: SheetDecor = laid.decor ? { ...laid.decor, x0: laid.decor.x0 - left } : null;
+    const parts: Part[] = [...cells, ...(i === 0 ? head.parts : []), ...(i === 0 && cta ? [cta] : [])];
+    return { key: `s:${i}`, width: W, height: H, parts, bleed: false, sheet: { index: i, decor } };
+  });
 }
 
 /**
@@ -502,6 +556,11 @@ export function carouselSlides(doc: RecapDoc, resolved: ResolvedRecap, layout: R
 export function layoutRecap(doc: RecapDoc, resolved: ResolvedRecap, today: string | null = null): RecapLayout {
   const { width: W, height: H } = FORMATS[doc.format];
   let pages: RecapPage[];
+  if (doc.template === 'sheets') {
+    // One sheet: its slides keep their order, a slice moved elsewhere would break the picture across its cut.
+    const sheet = { pages: sheetPages(doc, resolved, W, H) };
+    return sheet;
+  }
   if (doc.template === 'dump') {
     const ids = resolved.slots.map((s) => s.id);
     pages = [coverPage(doc, resolved, ids[0], W, H), ...flowPages(doc, resolved, ids.slice(1), 1, W, H)];

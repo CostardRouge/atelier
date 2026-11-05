@@ -21,6 +21,7 @@ import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type 
 import { readFrame, type Frame } from './recap-frame';
 import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { readCarousel, type RecapCarousel } from './recap-carousel';
+import { readSheet, type RecapSheet } from './recap-sheet';
 import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
@@ -37,8 +38,8 @@ export const MAX_SLIDES = 20;
 export const MIN_LENGTH = 3;
 export const MAX_LENGTH = 90;
 
-export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump';
-export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump'];
+export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump' | 'sheets';
+export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump', 'sheets'];
 
 export type RecapFormat = 'story' | 'portrait' | 'square';
 export const FORMATS: Record<RecapFormat, { width: number; height: number; label: string; ratio: string }> = {
@@ -109,6 +110,8 @@ export interface RecapPicture {
    * background, which must not land on the day it was shot.
    */
   loose?: boolean;
+  /** Faces Winnow found in it — a sheet never cuts a picture that has one. */
+  faces?: number;
   /** Seconds into its day, when the capture says them — what tells the frames of a burst apart (`recap-carousel.ts`). */
   second?: number;
   /** Winnow's burst pile it belongs to, when Winnow made one. */
@@ -225,8 +228,10 @@ export interface RecapDoc {
   /** The period a grid, a single picture or a dump draws from; null = every picture of the pool. */
   range: { from: IsoDate; to: IsoDate } | null;
   grid: GridShape;
-  /** How many pictures a dump spreads over its pages. */
+  /** How many pictures a dump spreads over its pages, or a sheet along its length. */
   count: number;
+  /** How the Sheets lay their period out (`recap-sheet.ts`). */
+  sheet: RecapSheet;
   filter: { devices: string[]; kinds: KindFilter };
   pictures: RecapPicture[];
   /** A picture pinned on a slot by hand — the rule's choice everywhere else. */
@@ -320,6 +325,8 @@ interface Recipe {
   cells: Partial<RecapCells>;
   motion: Partial<RecapMotion>;
   font: RecapFont;
+  /** How many pictures it starts with, when it spreads a period (12 otherwise). */
+  count?: number;
 }
 
 export const RECIPES: Record<RecapTemplate, Recipe> = {
@@ -388,6 +395,18 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     cells: { number: false, gap: 0.012, shadow: 0.35 },
     motion: { order: 'inOrder', entrance: 'fade', stagger: 0.12 },
     font: 'serif',
+  },
+  sheets: {
+    label: 'The Sheets',
+    rule: 'A period as one long sheet, cut into slides',
+    format: 'portrait',
+    heading: '{month}',
+    subheading: '{count} shots · swipe →',
+    background: 'ink',
+    cells: { number: false, gap: 0.01, shadow: 0.3 },
+    motion: { order: 'inOrder', entrance: 'fade', stagger: 0.06 },
+    font: 'serif',
+    count: 20,
   },
 };
 
@@ -458,6 +477,7 @@ export function readPicture(raw: unknown): RecapPicture | null {
   optNum('height', 1, 100000);
   optNum('duration', 0, 360000);
   optNum('stars', 0, 5);
+  optNum('faces', 0, 1000);
   optNum('motion', 1, Number.MAX_SAFE_INTEGER);
   optNum('liveStill', 1, Number.MAX_SAFE_INTEGER);
   for (const k of ['device', 'lens', 'shutter'] as const) {
@@ -618,7 +638,8 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     rungs: rungs.length ? rungs : [...DEFAULT_RUNGS],
     range: readRange(r.range),
     grid: oneOf(r.grid, Object.keys(GRID_SHAPES) as GridShape[], 'bento'),
-    count: Math.round(num(r.count, 1, 60, 12)),
+    count: Math.round(num(r.count, 1, 60, recipe.count ?? 12)),
+    sheet: readSheet(r.sheet),
     filter: {
       devices: Array.isArray(filterRaw.devices)
         ? [...new Set(filterRaw.devices.flatMap((d) => (typeof d === 'string' && d.trim() ? [d.trim().slice(0, 120)] : [])))].slice(0, 20)
