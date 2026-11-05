@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { useAvcEncodeSupport } from '../../shared/media/use-encode-support';
-import { FORMATS, MAX_SLIDES, type RecapDoc } from '../../shared/recap/recap-doc';
+import { FORMATS, MAX_LENGTH, MAX_SLIDES, MIN_LENGTH, withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { slugOf } from '../../shared/recap/recap-file';
 import type { RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
@@ -9,7 +9,9 @@ import type { PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { startTask } from '../../shared/tasks/tasks';
 import Button from '../../shared/ui/Button';
-import { InspectorSection } from '../../shared/ui/Inspector';
+import { InspectorSection, SliderRow } from '../../shared/ui/Inspector';
+import Segmented from '../../shared/ui/Segmented';
+import type { Change } from './RecapPanels';
 import { Icons } from '../../shared/ui/icons';
 import { exportClipSlide, exportFilm, exportPages } from './recap-export';
 
@@ -34,7 +36,47 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * then one MP4 per clip, numbered as the cells' badges say). The shell's
  * task pill carries the progress and the Cancel wherever the author is.
  */
-export default function RecapExportPanel({ ctx }: { ctx: ExportContext }) {
+const LENGTHS = [7, 15, 30] as const;
+
+/**
+ * The film's length: its own (*Auto* — the entrances, the clips' turns and the
+ * hold), the socials' usual 7, 15 or 30 s, or any. Longer holds longer; shorter
+ * plays the whole film faster; set, it wins over the sound's whole loops.
+ */
+function LengthSection({ doc, natural, change }: { doc: RecapDoc; natural: number; change: Change }) {
+  const value = doc.length;
+  const mode = value === null ? 'auto' : (LENGTHS as readonly number[]).includes(value) ? String(value) : 'other';
+  const set = (length: number | null) => change((d) => withRecap(d, { length }));
+  return (
+    <InspectorSection id="recap-length" title="Length" foldable={false}>
+      <div className="flex flex-col gap-2">
+        <Segmented
+          size="sm"
+          fill
+          label="The video's length"
+          value={mode}
+          onChange={(m) => set(m === 'auto' ? null : m === 'other' ? Math.round(value ?? natural) : Number(m))}
+          options={[
+            { id: 'auto', label: `Auto · ${natural.toFixed(1)} s`, title: 'Its own length: the entrances, the clips’ turns and the hold' },
+            ...LENGTHS.map((n) => ({ id: String(n), label: `${n} s` })),
+            { id: 'other', label: 'Other' },
+          ]}
+        />
+        {mode === 'other' && value !== null && (
+          <SliderRow label="Length" value={value} min={MIN_LENGTH} max={MAX_LENGTH} step={0.5} format={(v) => `${v} s`} onChange={(v) => set(v)} />
+        )}
+        {value !== null && (
+          <p className="m-0 text-2xs text-muted">
+            {value > natural ? 'Everything stays on longer.' : value < natural ? 'The whole film plays faster to fit.' : 'Its own length.'}
+            {doc.sound?.fit ? ' The sound is cut to it, with its fade.' : ''}
+          </p>
+        )}
+      </div>
+    </InspectorSection>
+  );
+}
+
+export default function RecapExportPanel({ ctx, natural, change }: { ctx: ExportContext; natural: number; change: Change }) {
   const { doc, film, layout, resolved, clipSlides } = ctx;
   const canEncode = useAvcEncodeSupport();
   const [busy, setBusy] = useState<string | null>(null);
@@ -106,6 +148,7 @@ export default function RecapExportPanel({ ctx }: { ctx: ExportContext }) {
 
   return (
     <>
+      <LengthSection doc={doc} natural={natural} change={change} />
       <InspectorSection id="recap-export" title="Export" foldable={false}>
         <div className="flex flex-col gap-3">
           <p className="m-0 font-mono text-2xs text-muted tabular-nums">

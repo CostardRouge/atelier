@@ -28,6 +28,9 @@ export const MAX_RECAP_TEXT = 160;
 export const MAX_RECAP_PICTURES = 6000;
 /** An Instagram carousel's ceiling: every page and every clip slide counts. */
 export const MAX_SLIDES = 20;
+/** A film's length the author may set, in seconds. */
+export const MIN_LENGTH = 3;
+export const MAX_LENGTH = 90;
 
 export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump';
 export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump'];
@@ -218,6 +221,12 @@ export interface RecapDoc {
   look: SavedGrade | null;
   /** The clips follow as slides of their own on a carousel (and the badges count them). */
   clipSlides: boolean;
+  /**
+   * The film's length, in seconds, when the author set one (7, 15, 30 or any);
+   * null = the recap's own length (its entrances, clips and hold). Set, it wins
+   * over a sound's whole loops: the sound is cut, with its fade.
+   */
+  length: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -581,6 +590,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     sound: readSound(r.sound),
     look: gradeOrNull(r.look),
     clipSlides: bool(r.clipSlides, true),
+    length: typeof r.length === 'number' && Number.isFinite(r.length) ? Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Math.round(r.length * 10) / 10)) : null,
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };

@@ -88,4 +88,20 @@ describe('recap motion', () => {
     const [a, b] = [plan.cells.get('2026-10-01')!, plan.cells.get('2026-10-30')!];
     expect(b.at - a.at).toBeCloseTo(d.motion.stagger);
   });
+
+  it('plays at the length the author set: longer holds, shorter plays faster', () => {
+    const r = resolveRecap(doc);
+    const lay = layoutRecap(doc, r);
+    const own = planFilm(doc, lay).total;
+    const long = planFilm(withRecap(doc, { length: 30 }), lay);
+    expect(long.total).toBe(30);
+    expect(long.pages[0].allOn).toBeCloseTo(planFilm(doc, lay).pages[0].allOn);
+    const short = planFilm(withRecap(doc, { length: 3 }), lay);
+    expect(short.total).toBe(3);
+    expect(short.pages[0].allOn).toBeLessThan(3);
+    expect(short.pages[0].allOn / planFilm(doc, lay).pages[0].allOn).toBeCloseTo(3 / own);
+    // Set, the length wins over the sound's whole loops.
+    const sounded = withRecap(doc, { length: 7, sound: { name: 's', gain: 1, fade: 1, fit: true, seconds: 4 } });
+    expect(planFilm(sounded, lay).total).toBe(7);
+  });
 });

@@ -5,7 +5,7 @@ import { useLutStack } from '../../shared/lut/use-lut-stack';
 import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
 import { clipSlideNumbers, layoutRecap, pageOfSlot } from '../../shared/recap/recap-layout';
-import { filledOf, pageAt, planFilm } from '../../shared/recap/recap-motion';
+import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { PAINT_FONTS, paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -143,15 +143,16 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const soundRef = useRef(sound);
   soundRef.current = sound;
   const slotKeys = useMemo(() => new Map(resolved.slots.flatMap((s) => (s.picture ? [[s.id, s.picture.key] as [string, string]] : []))), [resolved]);
-  const film = useMemo(
-    () =>
-      planFilm(doc, layout, (slot) => {
-        const pic = resolved.slots.find((s) => s.id === slot)?.picture;
-        if (!pic || pic.kind !== 'video') return null;
-        return clips.lengths.get(pic.key) ?? pic.duration ?? null;
-      }, filledOf(resolved)),
-    [doc, layout, resolved, clips.lengths],
+  const clipLength = useCallback(
+    (slot: string) => {
+      const pic = resolved.slots.find((s) => s.id === slot)?.picture;
+      if (!pic || pic.kind !== 'video') return null;
+      return clips.lengths.get(pic.key) ?? pic.duration ?? null;
+    },
+    [resolved, clips.lengths],
   );
+  const film = useMemo(() => planFilm(doc, layout, clipLength, filledOf(resolved)), [doc, layout, resolved, clipLength]);
+  const natural = useMemo(() => naturalLength(doc, layout, clipLength, filledOf(resolved)), [doc, layout, resolved, clipLength]);
   const [page, setPage] = useState(0);
   const pageCount = layout.pages.length;
   const restT = (p: number) => (film.pages[p]?.allOn ?? 0) + 0.05;
@@ -445,7 +446,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'motion':
         return <MotionSection doc={doc} change={change} />;
       case 'export':
-        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files }} />;
+        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files }} natural={natural} change={change} />;
     }
   };
 

@@ -152,7 +152,7 @@ function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean,
  * asks for it, to a whole number of the sound's loops so the music ends on
  * its own seam.
  */
-export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true): FilmPlan {
+function planPages(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength, filled: Filled): FilmPlan {
   const pages: PagePlan[] = [];
   let t = 0;
   layout.pages.forEach((page, i) => {
@@ -160,7 +160,53 @@ export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLen
     pages.push(plan);
     t += plan.length;
   });
-  let total = Math.max(0.5, t);
+  return { pages, total: Math.max(0.5, t) };
+}
+
+const scaleSpan = (s: Span, k: number): Span => ({ at: s.at * k, dur: s.dur * k });
+
+/** The whole plan run `k` times as fast (k < 1 is faster): every entrance, turn and page shortened alike. */
+function scalePlan(plan: FilmPlan, k: number): FilmPlan {
+  return {
+    total: plan.total * k,
+    pages: plan.pages.map((p) => ({
+      start: p.start * k,
+      length: p.length * k,
+      heading: p.heading && scaleSpan(p.heading, k),
+      subheading: p.subheading && scaleSpan(p.subheading, k),
+      cta: p.cta && scaleSpan(p.cta, k),
+      cells: new Map([...p.cells].map(([id, s]) => [id, scaleSpan(s, k)])),
+      clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ from: w.from * k, to: w.to * k }))])),
+      allOn: p.allOn * k,
+    })),
+  };
+}
+
+/**
+ * The whole film: its pages one after the other (a dump's pages are a
+ * slideshow; every other template is one page). Its length is the author's
+ * when set (`doc.length`): longer, every page HOLDS longer; shorter, the whole
+ * film plays faster, entrances and turns alike. Else, when the sound asks for
+ * it, it is stretched to a whole number of the sound's loops so the music ends
+ * on its own seam.
+ */
+export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true): FilmPlan {
+  const natural = planPages(doc, layout, clipLength, filled);
+  if (doc.length !== null && doc.length > 0) {
+    const want = doc.length;
+    if (natural.total > want) return { ...scalePlan(natural, want / natural.total), total: want };
+    if (natural.total < want) {
+      const n = Math.max(1, natural.pages.length);
+      const longer = planPages({ ...doc, motion: { ...doc.motion, hold: doc.motion.hold + (want - natural.total) / n } }, layout, clipLength, filled);
+      // A clip's turn may not stretch with the hold: what is left lands on the last page.
+      const last = longer.pages[longer.pages.length - 1];
+      if (last) last.length += want - longer.total;
+      return { pages: longer.pages, total: want };
+    }
+    return natural;
+  }
+  const { pages } = natural;
+  let total = natural.total;
   const s = doc.sound;
   if (s && s.fit && s.seconds >= 0.5) {
     const turns = Math.max(1, Math.round(total / s.seconds));
@@ -175,6 +221,11 @@ export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLen
     }
   }
   return { pages, total };
+}
+
+/** The film's own length, before any length the author set — what the Export tab offers as *Auto*. */
+export function naturalLength(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true): number {
+  return planFilm({ ...doc, length: null }, layout, clipLength, filled).total;
 }
 
 /** The page on screen at film time `t`. */

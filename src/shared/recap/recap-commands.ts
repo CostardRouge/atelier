@@ -31,6 +31,7 @@ export const SETTABLE: Record<string, string> = {
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed}',
   background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160}',
   clipSlides: 'true: each clip gets a carousel slide of its own and its cell says which',
+  length: 'the film’s length in seconds, 3–90, or null for the recap’s own (entrances, clips, hold); set, it wins over the sound’s whole loops',
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
