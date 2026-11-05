@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode, SelectHTMLAttributes } from 'react';
 import { WEEKDAYS, formatIsoDate, weekdayIndex } from '../roadtrip/trip-days';
 import { monthSpan, shiftMonth } from '../sources/winnow/month';
 import { Icons } from './icons';
@@ -75,10 +75,29 @@ export function yearsOffered(month: string, today: string, bounds: DaySpanLike |
   return out;
 }
 
+// The browser's own arrow sat against the right edge: drawn here instead, as far in from the right as the text is from the left.
 const selectClass = {
-  compact: 'h-6 px-1 text-2xs',
-  roomy: 'h-9 pointer-coarse:h-11 px-2 text-sm max-[820px]:text-base',
+  compact: 'h-6 pl-1.5 pr-5 text-2xs',
+  roomy: 'h-9 pointer-coarse:h-11 pl-2.5 pr-8 text-sm max-[820px]:text-base',
 };
+const chevronClass = {
+  compact: 'right-1.5 [&>svg]:w-2.5 [&>svg]:h-2.5',
+  roomy: 'right-2.5 [&>svg]:w-3.5 [&>svg]:h-3.5',
+};
+
+/** A native list, its arrow drawn by us with the same margin on both sides. */
+function Picker({ scale, className, children, ...rest }: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> & { scale: CalendarSize }) {
+  return (
+    <span className={`relative inline-flex min-w-0 ${className ?? ''}`}>
+      <select {...rest} className={`${selectClass[scale]} w-full appearance-none min-w-0 rounded-md border border-line bg-paper text-ink font-mono cursor-pointer focus:outline-none focus:border-accent`}>
+        {children}
+      </select>
+      <span aria-hidden="true" className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted ${chevronClass[scale]}`}>
+        {Icons.down}
+      </span>
+    </span>
+  );
+}
 const arrowClass = {
   compact: 'w-6 h-6',
   roomy: 'w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11',
@@ -121,14 +140,13 @@ export function MonthHeader({
     onMonth(k);
   };
   const arrow = `${arrowClass[size]} shrink-0 grid place-items-center rounded-lg border border-line bg-paper text-ink-soft cursor-pointer hover:border-line-strong disabled:opacity-30 disabled:cursor-default`;
-  const sel = `${selectClass[size]} min-w-0 rounded-md border border-line bg-paper text-ink font-mono cursor-pointer focus:outline-none focus:border-accent`;
   return (
     <div className="flex items-center gap-1" title={title}>
       <button type="button" onClick={() => go(shiftMonth(month, -1))} disabled={!canPrev} aria-label="The month before" className={arrow}>
         <span className={size === 'compact' ? '[&>svg]:w-3 [&>svg]:h-3' : ''}>{Icons.back}</span>
       </button>
       <span className="flex-1 min-w-0 flex items-center justify-center gap-1">
-        <select aria-label="Month" value={m} onChange={(e) => go(`${y}-${e.target.value}`)} className={`${sel} flex-1 max-w-[9.5rem]`}>
+        <Picker scale={size} aria-label="Month" value={m} onChange={(e) => go(`${y}-${e.target.value}`)} className="flex-1 max-w-[9.5rem]">
           {MONTH_NAMES.map((name, i) => {
             const key = `${y}-${String(i + 1).padStart(2, '0')}`;
             const out = Boolean((minKey && key < minKey) || (maxKey && key > maxKey));
@@ -138,14 +156,14 @@ export function MonthHeader({
               </option>
             );
           })}
-        </select>
-        <select aria-label="Year" value={y} onChange={(e) => go(`${e.target.value}-${m}`)} className={`${sel} w-auto`}>
+        </Picker>
+        <Picker scale={size} aria-label="Year" value={y} onChange={(e) => go(`${e.target.value}-${m}`)}>
           {years.map((yr) => (
             <option key={yr} value={String(yr)}>
               {yr}
             </option>
           ))}
-        </select>
+        </Picker>
       </span>
       <button type="button" onClick={() => go(shiftMonth(month, 1))} disabled={!canNext} aria-label="The month after" className={arrow}>
         <span className={size === 'compact' ? '[&>svg]:w-3 [&>svg]:h-3' : ''}>{Icons.forward}</span>
