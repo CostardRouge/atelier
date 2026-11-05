@@ -608,6 +608,10 @@ export function paintRecap(
   const page = layout.pages[Math.min(opts.page, layout.pages.length - 1)];
   const plan = film.pages[Math.min(opts.page, film.pages.length - 1)];
   if (!page || !plan) return;
+  // Every picture and video frame is scaled here — a 4K original down, a print up: the canvas's best filter, never
+  // its default «low» (aliasing that shimmers in motion, softness up close).
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
   const k = width / page.width;
   const t = opts.t;
   g.save();

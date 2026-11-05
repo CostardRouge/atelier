@@ -18,7 +18,7 @@ export interface PicturesState {
 }
 
 /** A graded copy: the grader's canvas is its own and reused, so the picture is copied out of it. */
-function gradedCopy(stack: LutStack, pic: RecapPicture, bmp: ImageBitmap): Drawable | null {
+export function gradedCopy(stack: LutStack, pic: RecapPicture, bmp: ImageBitmap): Drawable | null {
   const lut = stack.composeWith(pic.develop ?? null);
   if (!lut) return null;
   try {

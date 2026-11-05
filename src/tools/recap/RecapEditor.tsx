@@ -30,8 +30,9 @@ import { STORY_FONTS, type StoryFontId } from '../../shared/story/fonts';
 import RecapStage, { sameSelection, type Selection } from './RecapStage';
 import { fillFromWinnow } from './recap-fill';
 import { pictureOfFile, pictureOfRow, printOf } from './recap-media';
-import { getValue, putThumb, setValue } from './recap-store';
-import { useRecapPictures } from './use-recap-pictures';
+import { getClip, getValue, putThumb, setValue } from './recap-store';
+import { gradedCopy, useRecapPictures } from './use-recap-pictures';
+import { decodePhoto } from '../../shared/media/photo-frame';
 import { useRecapCommands } from './use-recap-commands';
 import { useRecapClips } from './use-recap-clips';
 import { useRecapSound } from './use-recap-sound';
@@ -508,14 +509,35 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const fetchOriginal = useCallback(
     async (key: string, signal: AbortSignal): Promise<Blob | null> => {
       const pic = doc.pictures.find((p) => p.key === key);
-      if (!pic || pic.origin !== 'winnow' || pic.asset === undefined || !client || pic.instance !== instance) return null;
+      if (!pic) return null;
+      // A local clip IS its original: the file in hand, else the whole file kept here when it was added.
+      if (pic.origin === 'local') return files.get(key) ?? (await getClip(key));
+      if (pic.asset === undefined || !client || pic.instance !== instance) return null;
       return client.fetchFile(client.originalUrl(pic.asset), pic.name, '', 0, { signal });
     },
-    [doc.pictures, client, instance],
+    [doc.pictures, client, instance, files],
   );
-  const winnowClips = useMemo(
-    () => clipKeys.some((k) => doc.pictures.find((p) => p.key === k)?.origin === 'winnow'),
-    [clipKeys, doc.pictures],
+  /** A picture's original, decoded and dressed like its print (its develop, the look) — for an export that asks. */
+  const stillOriginal = useCallback(
+    async (key: string, signal: AbortSignal): Promise<Drawable | null> => {
+      const pic = doc.pictures.find((p) => p.key === key);
+      if (!pic || pic.kind !== 'photo') return null;
+      const file = pic.origin === 'winnow' ? (pic.asset !== undefined && client && pic.instance === instance ? await client.fetchFile(client.originalUrl(pic.asset), pic.name, '', 0, { signal }) : null) : (files.get(key) ?? null);
+      if (!file) return null;
+      // At most 4096 on its long side: four times a page's width is past any zoom a cell takes.
+      const bmp = await decodePhoto(file, { maxEdge: 4096 });
+      const graded = gradedCopy(stack, pic, bmp);
+      if (graded) {
+        bmp.close();
+        return graded;
+      }
+      return { image: bmp, width: bmp.width, height: bmp.height };
+    },
+    [doc.pictures, client, instance, files, stack],
+  );
+  const originals = useMemo(
+    () => resolved.slots.some((s) => s.picture && (s.picture.origin === 'winnow' || files.has(s.picture.key))) || doc.pictures.some((p) => clipKeys.includes(p.key) && (p.origin === 'winnow' || files.has(p.key))),
+    [resolved, doc.pictures, clipKeys, files],
   );
   const [choosingClip, setChoosingClip] = useState(false);
   const clipCount = useMemo(() => {
@@ -606,7 +628,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'motion':
         return <MotionSection doc={doc} change={change} />;
       case 'export':
-        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, winnowClips }} natural={natural} change={change} />;
+        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }} natural={natural} change={change} />;
     }
   };
 

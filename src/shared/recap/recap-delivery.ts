@@ -16,6 +16,8 @@
  * Pure and DOM-free.
  */
 
+import { framedDraw, type Frame } from './recap-frame';
+
 export type Quality = 'standard' | 'high' | 'max';
 export const QUALITIES: readonly Quality[] = ['standard', 'high', 'max'];
 export const QUALITY_LABEL: Record<Quality, string> = { standard: 'Standard', high: 'High', max: 'Maximum' };
@@ -24,17 +26,22 @@ export const QUALITY_LABEL: Record<Quality, string> = { standard: 'Standard', hi
 export const QUALITY_MBPS: Record<Quality, number> = { standard: 8, high: 16, max: 28 };
 
 export type DeliveryFps = 30 | 60;
-export type ClipSource = 'proxy' | 'original';
+export type MediaSource = 'proxy' | 'original';
 
 export interface RecapDelivery {
   quality: Quality;
   fps: DeliveryFps;
   passes: 1 | 2;
-  /** A Winnow clip painted from its proxy (light, fast) or its original (sharp, fetched for the export). */
-  clips: ClipSource;
+  /**
+   * What the film is painted from: the light copies the stage uses (Winnow's
+   * proxies, the kept prints), or the ORIGINALS — every clip, the looping
+   * background first, and every picture a print would have to blow up
+   * (`needsOriginal`) — fetched for that export only.
+   */
+  media: MediaSource;
 }
 
-export const DEFAULT_DELIVERY: RecapDelivery = { quality: 'high', fps: 30, passes: 1, clips: 'proxy' };
+export const DEFAULT_DELIVERY: RecapDelivery = { quality: 'high', fps: 30, passes: 1, media: 'proxy' };
 
 export function readDelivery(raw: unknown): RecapDelivery {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -42,7 +49,8 @@ export function readDelivery(raw: unknown): RecapDelivery {
     quality: QUALITIES.includes(r.quality as Quality) ? (r.quality as Quality) : DEFAULT_DELIVERY.quality,
     fps: r.fps === 60 ? 60 : 30,
     passes: r.passes === 2 ? 2 : 1,
-    clips: r.clips === 'original' ? 'original' : 'proxy',
+    // `clips` was its first name, the morning it was made.
+    media: r.media === 'original' || r.clips === 'original' ? 'original' : 'proxy',
   };
 }
 
@@ -59,6 +67,18 @@ export function deliveryBitrate(d: Pick<RecapDelivery, 'quality' | 'fps'>, w: nu
 /** The file's rough size in bytes: the video at its target and an audio track at ~160 kb/s. */
 export function deliverySize(d: Pick<RecapDelivery, 'quality' | 'fps'>, w: number, h: number, seconds: number, sound: boolean): number {
   return Math.round(((deliveryBitrate(d, w, h) + (sound ? 160_000 : 0)) * seconds) / 8);
+}
+
+/**
+ * True when a still `srcW × srcH` would be BLOWN UP filling `box` under
+ * `frame` — the page's pixels more than the source's by over 5 % — so its
+ * original is worth fetching. A month's small cells never are; a full-page
+ * picture from a landscape print, or a zoomed one, is.
+ */
+export function needsOriginal(srcW: number, srcH: number, box: { x: number; y: number; w: number; h: number }, frame?: Frame): boolean {
+  if (!(srcW > 0) || !(srcH > 0)) return false;
+  const d = framedDraw(srcW, srcH, box, frame);
+  return d.w / d.win.sw > 1.05;
 }
 
 /** «12 MB», «850 kB» — a size as a person reads it. */

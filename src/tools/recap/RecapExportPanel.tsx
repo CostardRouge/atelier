@@ -5,7 +5,7 @@ import { FORMATS, MAX_LENGTH, MAX_SLIDES, MIN_LENGTH, withRecap, type RecapDoc }
 import { slugOf } from '../../shared/recap/recap-file';
 import type { RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
-import type { PaintSources } from '../../shared/recap/recap-paint';
+import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { startTask } from '../../shared/tasks/tasks';
 import Button from '../../shared/ui/Button';
@@ -28,8 +28,10 @@ export interface ExportContext {
   files: ReadonlyMap<string, File>;
   /** A Winnow clip's original, fetched for one export (`recap-export.ts`); null when it has none here. */
   original: (key: string, signal: AbortSignal) => Promise<Blob | null>;
-  /** The film plays a clip from a Winnow: the proxy-or-original choice applies. */
-  winnowClips: boolean;
+  /** A picture's original as a graded still, for one export; null when it has none here. */
+  stillOriginal: (key: string, signal: AbortSignal) => Promise<Drawable | null>;
+  /** Some of what the film draws has an original within reach (a Winnow, a file in hand): the choice applies. */
+  originals: boolean;
 }
 
 /** The constant-quality mode the second pass needs, asked of this browser once. */
@@ -56,7 +58,7 @@ function useTwoPassSupport(): boolean | null {
  * two (measured: `media/two-pass.ts`, where the encoder allows it), and a
  * Winnow clip's proxy or its original — the file's size said beside it.
  */
-function QualitySection({ doc, change, seconds, winnowClips }: { doc: RecapDoc; change: Change; seconds: number; winnowClips: boolean }) {
+function QualitySection({ doc, change, seconds, originals }: { doc: RecapDoc; change: Change; seconds: number; originals: boolean }) {
   const d = doc.delivery;
   const twoPass = useTwoPassSupport();
   const set = (patch: Partial<RecapDelivery>) => change((x) => withRecap(x, { delivery: { ...x.delivery, ...patch } }));
@@ -100,16 +102,16 @@ function QualitySection({ doc, change, seconds, winnowClips }: { doc: RecapDoc; 
             },
           ]}
         />
-        {winnowClips && (
+        {originals && (
           <Segmented
             size="sm"
             fill
-            label="Clips from"
-            value={d.clips}
-            onChange={(clips) => set({ clips: clips === 'original' ? 'original' : 'proxy' })}
+            label="Painted from"
+            value={d.media}
+            onChange={(media) => set({ media: media === 'original' ? 'original' : 'proxy' })}
             options={[
-              { id: 'proxy', label: 'Proxies', title: 'Winnow’s light copies — fast, softer when a clip fills the page' },
-              { id: 'original', label: 'Originals', title: 'Each Winnow clip’s original, fetched for this export — sharpest, heavier' },
+              { id: 'proxy', label: 'Light copies', title: 'What the stage shows: Winnow’s proxies and the prints kept here — fast, softer where a clip or a picture fills the page' },
+              { id: 'original', label: 'Originals', title: 'Every clip — the background first — and every picture a print would blow up, from its original, fetched for this export: sharpest, heavier' },
             ]}
           />
         )}
@@ -122,7 +124,7 @@ function QualitySection({ doc, change, seconds, winnowClips }: { doc: RecapDoc; 
   );
 }
 
-const STAGE_WORDS: Record<FilmProgress['stage'], string> = { clips: 'Opening the clips', sound: 'Mixing the sound', encoding: 'Encoding', finishing: 'Finishing the file' };
+const STAGE_WORDS: Record<FilmProgress['stage'], string> = { clips: 'Opening the clips', pictures: 'Fetching the originals', sound: 'Mixing the sound', encoding: 'Encoding', finishing: 'Finishing the file' };
 
 /** The export's own bar, beside its button: what it is doing, how far, its speed and what is left. */
 function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: number; onCancel: () => void }) {
@@ -141,8 +143,8 @@ function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: numbe
   const what =
     p.stage === 'encoding'
       ? `${passes > 1 ? (p.pass === 1 ? 'Measuring · pass 1 of 2' : 'Encoding · pass 2 of 2') : 'Encoding'}${p.frame !== undefined && p.frames ? ` · frame ${p.frame} / ${p.frames}` : ''}`
-      : p.stage === 'clips' && p.of
-        ? `${STAGE_WORDS.clips} · ${Math.min(p.of, (p.done ?? 0) + 1)} / ${p.of}`
+      : (p.stage === 'clips' || p.stage === 'pictures') && p.of
+        ? `${STAGE_WORDS[p.stage]} · ${Math.min(p.of, (p.done ?? 0) + 1)} / ${p.of}`
         : STAGE_WORDS[p.stage];
   return (
     <div className="flex flex-col gap-1" role="status" aria-live="polite">
@@ -235,7 +237,7 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
   const base = slugOf(doc.title) || 'recap';
   const { width: W, height: H, ratio } = FORMATS[doc.format];
   const filled = resolved.slots.filter((s) => s.picture).length;
-  const input = () => ({ doc, resolved, layout, film, stills: ctx.sources.still, aliases: ctx.aliases, clipSlides, original: ctx.original });
+  const input = () => ({ doc, resolved, layout, film, stills: ctx.sources.still, aliases: ctx.aliases, clipSlides, original: ctx.original, stillOriginal: ctx.stillOriginal });
   const report = (task: ReturnType<typeof startTask>) => (p: FilmProgress) => {
     setProgress((cur) => (cur ? { ...cur, p } : cur));
     task.update({ progress: p.ratio, detail: p.ratio === null ? STAGE_WORDS[p.stage].toLowerCase() : `${Math.round(p.ratio * 100)} %` });
@@ -269,14 +271,15 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
       const bits = [r.silent ? `exported without sound: ${r.silent}` : doc.sound ? 'exported with its sound' : 'exported, silent: no sound was added'];
       bits.push(`${sizeText(r.blob.size)}, ${doc.delivery.fps} fps`);
       if (r.onePass) bits.push(`one pass: ${r.onePass}`);
+      if (r.prints) bits.push(`${r.prints} picture${r.prints === 1 ? '' : 's'} from ${r.prints === 1 ? 'its' : 'their'} print, the original out of reach`);
       if (r.proxies) bits.push(`${r.proxies} clip${r.proxies === 1 ? '' : 's'} from ${r.proxies === 1 ? 'its' : 'their'} prox${r.proxies === 1 ? 'y' : 'ies'}, the original out of reach`);
       if (r.missingClips) bits.push(`${r.missingClips} clip${r.missingClips === 1 ? '' : 's'} not on this device showed as a still`);
       return `${bits.join(' · ')}.`.replace(/^./, (c) => c.toUpperCase());
     });
 
   const exportStills = () =>
-    run('stills', async () => {
-      const pages = await exportPages(input());
+    run('stills', async (signal) => {
+      const pages = await exportPages(input(), signal);
       for (let i = 0; i < pages.length; i++) {
         downloadBlob(pages[i], pages.length > 1 ? `${base}-${pad(i + 1)}.png` : `${base}.png`);
         if (i < pages.length - 1) await wait(350);
@@ -286,7 +289,7 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
 
   const exportCarousel = () =>
     run('carousel', async (signal, task) => {
-      const pages = await exportPages(input());
+      const pages = await exportPages(input(), signal);
       for (let i = 0; i < pages.length; i++) {
         downloadBlob(pages[i], `${base}-${pad(i + 1)}.png`);
         await wait(350);
@@ -308,7 +311,7 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
   return (
     <>
       <LengthSection doc={doc} natural={natural} change={change} />
-      <QualitySection doc={doc} change={change} seconds={film.total} winnowClips={ctx.winnowClips} />
+      <QualitySection doc={doc} change={change} seconds={film.total} originals={ctx.originals} />
       <InspectorSection id="recap-export" title="Export" foldable={false}>
         <div className="flex flex-col gap-3">
           <p className="m-0 font-mono text-2xs text-muted tabular-nums">

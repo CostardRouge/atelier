@@ -17,7 +17,7 @@ import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/re
 import { drawCover, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { getClip, getSound } from './recap-store';
-import { deliveryBitrate } from '../../shared/recap/recap-delivery';
+import { deliveryBitrate, needsOriginal } from '../../shared/recap/recap-delivery';
 
 export interface ExportInput {
   doc: RecapDoc;
@@ -34,14 +34,71 @@ export interface ExportInput {
    * when the clip is not a Winnow one or cannot be had: its proxy then.
    */
   original?: (key: string, signal: AbortSignal) => Promise<Blob | null>;
+  /**
+   * A picture's ORIGINAL as a still, decoded and wearing its develop and the
+   * look like the stage's print — for a picture the print would blow up.
+   */
+  stillOriginal?: (key: string, signal: AbortSignal) => Promise<Drawable | null>;
+}
+
+/** The photos a print would blow up on a page, by key — what «Originals» fetches in full (`needsOriginal`). */
+export function blownUp(input: ExportInput): string[] {
+  const out = new Set<string>();
+  for (const page of input.layout.pages) {
+    for (const part of page.parts) {
+      if (part.kind !== 'cell') continue;
+      const pic = input.resolved.slots.find((s) => s.id === part.id)?.picture;
+      if (!pic || pic.kind !== 'photo' || out.has(pic.key)) continue;
+      const still = input.stills(pic.key);
+      if (still && needsOriginal(still.width, still.height, part.box, pic.frame)) out.add(pic.key);
+    }
+  }
+  return [...out];
+}
+
+/**
+ * The stills an export paints when it asks for originals: each blown-up
+ * picture's original where it can be had, the print otherwise. Says how
+ * many stayed on their print.
+ */
+async function originalStills(input: ExportInput, signal: AbortSignal, onEach?: (done: number, of: number) => void): Promise<{ still: PaintSources['still']; kept: number }> {
+  if (input.doc.delivery.media !== 'original' || !input.stillOriginal) return { still: input.stills, kept: 0 };
+  const keys = blownUp(input);
+  const got = new Map<string, Drawable>();
+  let kept = 0;
+  for (const [i, k] of keys.entries()) {
+    onEach?.(i, keys.length);
+    const d = await input.stillOriginal(k, signal).catch((err) => {
+      if (signal.aborted) throw err;
+      return null;
+    });
+    if (d) got.set(k, d);
+    else kept += 1;
+  }
+  return { still: (key) => got.get(key) ?? input.stills(key), kept };
+}
+
+/** A clip opened for an export: its original when asked and readable, else the copy kept here. */
+async function openForExport(input: ExportInput, key: string, signal: AbortSignal): Promise<{ clip: ExportClip | null; proxy: boolean }> {
+  if (input.doc.delivery.media === 'original' && input.original) {
+    const original = await input.original(key, signal).catch((err) => {
+      if (signal.aborted) throw err;
+      return null;
+    });
+    const c = original ? await openClip(key, original) : null;
+    // An original out of reach, or one this browser cannot read (a codec it lacks): its proxy, rather than a still.
+    if (c) return { clip: c, proxy: false };
+    return { clip: await openClip(key), proxy: true };
+  }
+  return { clip: await openClip(key), proxy: false };
 }
 
 /** Where an export is, said to the person: what it is doing, how far, and the frame it is on. */
 export interface FilmProgress {
-  stage: 'clips' | 'sound' | 'encoding' | 'finishing';
+  stage: 'clips' | 'pictures' | 'sound' | 'encoding' | 'finishing';
   /** 0..1 of the whole run where it can be told; null when not. */
   ratio: number | null;
-  /** Clips fetched or opened, of how many (stage `clips`). */
+  /** Clips or pictures fetched or opened, of how many (stages `clips`, `pictures`). */
   done?: number;
   of?: number;
   frame?: number;
@@ -146,6 +203,8 @@ export interface FilmResult {
   onePass: string | null;
   /** Clips painted from their proxy where the original was asked. */
   proxies: number;
+  /** Pictures that stayed on their print where the original was asked and needed. */
+  prints: number;
   /** Why the file is silent when a sound was set; null when it carries it, or none was asked. */
   silent: string | null;
   missingClips: number;
@@ -160,31 +219,22 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
   const clips = new Map<string, ExportClip>();
   let missingClips = 0;
   let proxies = 0;
-  for (const [i, k] of keys.entries()) {
+  // The background first: it fills the page, so it is the one that shows its source the most.
+  const bgFirst = [...keys].sort((a, b) => Number(b === doc.background.video) - Number(a === doc.background.video));
+  for (const [i, k] of bgFirst.entries()) {
     onProgress({ stage: 'clips', ratio: null, done: i, of: keys.length });
-    let original: Blob | null = null;
-    if (d.clips === 'original' && input.original) {
-      original = await input.original(k, signal).catch((err) => {
-        if (signal.aborted) throw err;
-        return null;
-      });
-      if (!original) proxies += 1;
-    }
-    let c = await openClip(k, original);
-    // An original this browser cannot read (a codec it lacks): its proxy, rather than a still.
-    if (!c && original) {
-      proxies += 1;
-      c = await openClip(k);
-    }
+    const { clip: c, proxy } = await openForExport(input, k, signal);
+    if (proxy) proxies += 1;
     if (c) clips.set(k, c);
     else missingClips += 1;
   }
   if (signal.aborted) throw new DOMException('Export cancelled', 'AbortError');
+  const stills = await originalStills(input, signal, (done, of) => onProgress({ stage: 'pictures', ratio: null, done, of }));
   const slotKey = new Map(input.resolved.slots.flatMap((s) => (s.picture ? [[s.id, s.picture.key] as [string, string]] : [])));
   const bgKey = doc.background.kind === 'video' ? doc.background.video : undefined;
   const bg = bgKey ? clips.get(bgKey) : undefined;
   const sources: PaintSources = {
-    still: input.stills,
+    still: stills.still,
     clip: (key) => {
       const c = clips.get(key);
       return c ? frame(c) : null;
@@ -237,15 +287,16 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
         onProgress(p.phase === 'finalizing' ? { stage: 'finishing', ratio: null } : { stage: 'encoding', ratio: p.ratio, frame: p.frame, frames: p.frames, pass: p.pass, passes: p.passes }),
       signal,
     });
-    return { blob, silent, missingClips, onePass, proxies };
+    return { blob, silent, missingClips, onePass, proxies, prints: stills.kept };
   } finally {
     for (const c of clips.values()) closeClip(c);
   }
 }
 
 /** Each page, everything on, as a PNG — the post's stills or a carousel's slides. */
-export async function exportPages(input: ExportInput): Promise<Blob[]> {
+export async function exportPages(input: ExportInput, signal: AbortSignal = new AbortController().signal): Promise<Blob[]> {
   const { doc, film, layout } = input;
+  const stills = await originalStills(input, signal);
   const { width: W, height: H } = FORMATS[doc.format];
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -256,7 +307,7 @@ export async function exportPages(input: ExportInput): Promise<Blob[]> {
     const plan = film.pages[i];
     g.setTransform(1, 0, 0, 1, 0, 0);
     // Past every entrance and before any clip's turn: the page as it rests.
-    paintRecap(g, W, doc, input.resolved, layout, film, { still: input.stills }, { t: (plan?.allOn ?? 0) + 0.01, page: i, aliases: input.aliases, clipSlides: input.clipSlides });
+    paintRecap(g, W, doc, input.resolved, layout, film, { still: stills.still }, { t: (plan?.allOn ?? 0) + 0.01, page: i, aliases: input.aliases, clipSlides: input.clipSlides });
     const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
     if (blob) out.push(blob);
   }
@@ -268,7 +319,7 @@ export const CLIP_SLIDE_MAX = 30;
 
 /** One clip as a slide of its own, covering the format — the slide a cell's `▶ n` points at. */
 export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal): Promise<Blob | null> {
-  const c = await openClip(key);
+  const { clip: c } = await openForExport(input, key, signal);
   if (!c) return null;
   const { width: W, height: H } = FORMATS[input.doc.format];
   try {
@@ -287,6 +338,8 @@ export async function exportClipSlide(input: ExportInput, key: string, onProgres
       passes: d.passes,
       draw: async (t) => {
         await seek(c, t);
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
         g.fillStyle = '#141210';
         g.fillRect(0, 0, W, H);
         drawCover(g, frame(c), { x: 0, y: 0, w: W, h: H });

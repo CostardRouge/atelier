@@ -24,7 +24,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   handles or dragged whole. A cell's words never pass its edge: you choose which camera settings it says (for the
   whole recap or one picture) and whether they stand on one line, stacked, or packed to fit. The video export has
   its quality (Standard, High, Maximum), 30 or 60 frames a second, two passes where the browser allows it, and your
-  Winnow clips' originals instead of their light copies, with the file's size said ahead and a progress bar that
+  originals instead of the light copies — every clip, the background first, and every picture that would otherwise be
+  enlarged — and every picture and frame scaled with the browser's best filter, with the file's size said ahead and a progress bar that
   tells what it is doing, how fast and how long is left. *Keep as my style* makes a recap's look the starting point
   of every new recap of its template.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
