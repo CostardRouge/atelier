@@ -16,7 +16,9 @@ import type { RecapLayout } from '../../shared/recap/recap-layout';
 import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/recap-motion';
 import { drawCover, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
-import { getClip, getSound } from './recap-store';
+import { getClip, getSound, putClip } from './recap-store';
+import { transcodeWith } from '../../shared/media/transcode';
+import { cellWindow, coverScale, loopWindow, shiftedLoop, transcodeArgs, transcodeKey, type TranscodeWindow } from '../../shared/recap/recap-transcode';
 import { deliveryBitrate, needsOriginal } from '../../shared/recap/recap-delivery';
 
 export interface ExportInput {
@@ -78,24 +80,57 @@ async function originalStills(input: ExportInput, signal: AbortSignal, onEach?: 
   return { still: (key) => got.get(key) ?? input.stills(key), kept };
 }
 
-/** A clip opened for an export: its original when asked and readable, else the copy kept here. */
-async function openForExport(input: ExportInput, key: string, signal: AbortSignal): Promise<{ clip: ExportClip | null; proxy: boolean }> {
-  if (input.doc.delivery.media === 'original' && input.original) {
-    const original = await input.original(key, signal).catch((err) => {
-      if (signal.aborted) throw err;
-      return null;
-    });
-    const c = original ? await openClip(key, original) : null;
-    // An original out of reach, or one this browser cannot read (a codec it lacks): its proxy, rather than a still.
-    if (c) return { clip: c, proxy: false };
-    return { clip: await openClip(key), proxy: true };
+/** What opening a clip for an export came to. */
+interface Opened {
+  clip: ExportClip | null;
+  /** On its light copy where the original was asked. */
+  proxy: boolean;
+  /** Converted by ffmpeg (now or kept from before): its window of the original, which its times start at. */
+  converted: TranscodeWindow | null;
+  /** The original could not be played and converting is off: what to say. */
+  unplayable: boolean;
+}
+
+/**
+ * A clip opened for an export: its original when asked and readable; else,
+ * when converting is on, the original converted — the background's loop
+ * window, a cell's first seconds, at the size the page shows it — kept on the
+ * device for the next export; else the copy kept here.
+ */
+async function openForExport(input: ExportInput, key: string, signal: AbortSignal, onConvert?: (ratio: number | null) => void): Promise<Opened> {
+  const d = input.doc.delivery;
+  if (d.media !== 'original' || !input.original) return { clip: await openClip(key), proxy: false, converted: null, unplayable: false };
+  const original = await input.original(key, signal).catch((err) => {
+    if (signal.aborted) throw err;
+    return null;
+  });
+  const c = original ? await openClip(key, original) : null;
+  if (c) return { clip: c, proxy: false, converted: null, unplayable: false };
+  if (original && d.convert) {
+    const bg = input.doc.background;
+    const isBg = bg.kind === 'video' && bg.video === key;
+    const win = isBg ? loopWindow(bg) : cellWindow();
+    const { width: W, height: H } = FORMATS[input.doc.format];
+    const zoom = isBg ? (bg.frame?.zoom ?? 1) : (input.doc.pictures.find((p) => p.key === key)?.frame?.zoom ?? 1);
+    const tkey = transcodeKey(key, win, W, H, zoom);
+    let blob = await getClip(tkey);
+    if (!blob) {
+      const pic = input.doc.pictures.find((p) => p.key === key);
+      const file = original instanceof File ? original : new File([original], pic?.name ?? 'clip.mov');
+      onConvert?.(0);
+      blob = await transcodeWith(file, (i, o) => transcodeArgs(i, o, win, coverScale(W, H, zoom)), onConvert, signal);
+      await putClip(tkey, blob);
+    }
+    const converted = await openClip(tkey, blob);
+    if (converted) return { clip: converted, proxy: false, converted: win, unplayable: false };
   }
-  return { clip: await openClip(key), proxy: false };
+  // An original out of reach, or one this browser cannot read and not converted: its proxy, rather than a still.
+  return { clip: await openClip(key), proxy: true, converted: null, unplayable: Boolean(original) && !d.convert };
 }
 
 /** Where an export is, said to the person: what it is doing, how far, and the frame it is on. */
 export interface FilmProgress {
-  stage: 'clips' | 'pictures' | 'sound' | 'encoding' | 'finishing';
+  stage: 'clips' | 'converting' | 'pictures' | 'sound' | 'encoding' | 'finishing';
   /** 0..1 of the whole run where it can be told; null when not. */
   ratio: number | null;
   /** Clips or pictures fetched or opened, of how many (stages `clips`, `pictures`). */
@@ -205,6 +240,10 @@ export interface FilmResult {
   proxies: number;
   /** Pictures that stayed on their print where the original was asked and needed. */
   prints: number;
+  /** Originals converted by ffmpeg (or reused from a conversion kept here). */
+  converted: number;
+  /** Originals this browser cannot play, left on their light copy because converting is off. */
+  unplayable: number;
   /** Why the file is silent when a sound was set; null when it carries it, or none was asked. */
   silent: string | null;
   missingClips: number;
@@ -221,11 +260,20 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
   let proxies = 0;
   // The background first: it fills the page, so it is the one that shows its source the most.
   const bgFirst = [...keys].sort((a, b) => Number(b === doc.background.video) - Number(a === doc.background.video));
+  let converted = 0;
+  let unplayable = 0;
+  // The background's loop as it reads on its clip — moved back by a converted clip's window.
+  let bgLoop = doc.background;
   for (const [i, k] of bgFirst.entries()) {
     onProgress({ stage: 'clips', ratio: null, done: i, of: keys.length });
-    const { clip: c, proxy } = await openForExport(input, k, signal);
-    if (proxy) proxies += 1;
-    if (c) clips.set(k, c);
+    const o = await openForExport(input, k, signal, (ratio) => onProgress({ stage: 'converting', ratio, done: i, of: keys.length }));
+    if (o.proxy) proxies += 1;
+    if (o.unplayable) unplayable += 1;
+    if (o.converted) {
+      converted += 1;
+      if (k === doc.background.video) bgLoop = shiftedLoop(doc.background, o.converted);
+    }
+    if (o.clip) clips.set(k, o.clip);
     else missingClips += 1;
   }
   if (signal.aborted) throw new DOMException('Export cancelled', 'AbortError');
@@ -277,7 +325,7 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
           const at = clipTime(windows, c.length, t);
           if (at !== null) waits.push(seek(c, at));
         }
-        if (bg) waits.push(seek(bg, loopTime(doc.background, bg.length, t)));
+        if (bg) waits.push(seek(bg, loopTime(bgLoop, bg.length, t)));
         await Promise.all(waits);
         g.setTransform(1, 0, 0, 1, 0, 0);
         paintRecap(g, W, doc, input.resolved, input.layout, film, sources, { t, page, aliases: input.aliases, clipSlides: input.clipSlides });
@@ -287,7 +335,7 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
         onProgress(p.phase === 'finalizing' ? { stage: 'finishing', ratio: null } : { stage: 'encoding', ratio: p.ratio, frame: p.frame, frames: p.frames, pass: p.pass, passes: p.passes }),
       signal,
     });
-    return { blob, silent, missingClips, onePass, proxies, prints: stills.kept };
+    return { blob, silent, missingClips, onePass, proxies, prints: stills.kept, converted, unplayable };
   } finally {
     for (const c of clips.values()) closeClip(c);
   }
@@ -319,7 +367,7 @@ export const CLIP_SLIDE_MAX = 30;
 
 /** One clip as a slide of its own, covering the format — the slide a cell's `▶ n` points at. */
 export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal): Promise<Blob | null> {
-  const { clip: c } = await openForExport(input, key, signal);
+  const { clip: c } = await openForExport(input, key, signal, onProgress);
   if (!c) return null;
   const { width: W, height: H } = FORMATS[input.doc.format];
   try {

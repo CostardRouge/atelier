@@ -27,7 +27,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   originals instead of the light copies — every clip, the background first, and every picture that would otherwise be
   enlarged — and every picture and frame scaled with the browser's best filter, with the file's size said ahead and a progress bar that
   tells what it is doing, how fast and how long is left. *Keep as my style* makes a recap's look the starting point
-  of every new recap of its template.
+  of every new recap of its template. An original your browser cannot play — an iPhone HEVC `.MOV` behind a recap —
+  can be converted for the video by ffmpeg, in your browser: only the part the film shows, at the size it is shown,
+  kept on the device for the next export.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
@@ -76,6 +78,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- *Transcode to H.264* — converting a clip your browser cannot play — failed before it started: ffmpeg could not be
+  loaded. It loads again.
 - Storytelling: two places close on the map (Parramatta and Sydney) no longer write their names over each other — a
   name moves above its dot or to its other side, and is left out only when there is no room.
 - Storytelling: the wall's number says what was counted when your script names none, instead of 100 000.

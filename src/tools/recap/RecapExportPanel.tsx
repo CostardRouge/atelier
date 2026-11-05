@@ -9,7 +9,7 @@ import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { startTask } from '../../shared/tasks/tasks';
 import Button from '../../shared/ui/Button';
-import { InspectorSection, SliderRow } from '../../shared/ui/Inspector';
+import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 import { Icons } from '../../shared/ui/icons';
@@ -115,6 +115,17 @@ function QualitySection({ doc, change, seconds, originals }: { doc: RecapDoc; ch
             ]}
           />
         )}
+        {originals && d.media === 'original' && (
+          <ToggleField
+            checked={d.convert}
+            onChange={(convert) => set({ convert })}
+            label="Convert what this browser cannot play"
+          >
+            <span title="An original this browser cannot play — an iPhone HEVC .MOV — converted here by ffmpeg, only the part the film shows, at the size it is shown, and kept on this device for the next export. The first time, ffmpeg (about 31 MB) is fetched from unpkg.com; nothing of yours leaves.">
+              Convert what this browser cannot play
+            </span>
+          </ToggleField>
+        )}
         <p className="m-0 font-mono text-2xs text-muted tabular-nums">
           ≈ {(deliveryBitrate(d, W, H) / 1e6).toFixed(1)} Mb/s · about {sizeText(deliverySize(d, W, H, seconds, Boolean(doc.sound)))}
           {d.passes === 2 && twoPass === false ? ' · one pass here' : ''}
@@ -124,7 +135,7 @@ function QualitySection({ doc, change, seconds, originals }: { doc: RecapDoc; ch
   );
 }
 
-const STAGE_WORDS: Record<FilmProgress['stage'], string> = { clips: 'Opening the clips', pictures: 'Fetching the originals', sound: 'Mixing the sound', encoding: 'Encoding', finishing: 'Finishing the file' };
+const STAGE_WORDS: Record<FilmProgress['stage'], string> = { clips: 'Opening the clips', converting: 'Converting an original', pictures: 'Fetching the originals', sound: 'Mixing the sound', encoding: 'Encoding', finishing: 'Finishing the file' };
 
 /** The export's own bar, beside its button: what it is doing, how far, its speed and what is left. */
 function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: number; onCancel: () => void }) {
@@ -134,16 +145,20 @@ function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: numbe
     return () => window.clearInterval(id);
   }, []);
   const elapsed = (now - started) / 1000;
+  // What is left and the speed are the STAGE's: a conversion before the encode must not skew its estimate.
+  const stage = useRef({ name: p.stage, at: started });
+  if (stage.current.name !== p.stage) stage.current = { name: p.stage, at: performance.now() };
+  const inStage = (now - stage.current.at) / 1000;
   const ratio = p.ratio;
-  const left = ratio && ratio > 0.02 && ratio < 1 ? (elapsed / ratio) * (1 - ratio) : null;
+  const left = ratio && ratio > 0.02 && ratio < 1 && inStage > 1 ? (inStage / ratio) * (1 - ratio) : null;
   const passes = p.passes ?? 1;
   const painted = p.frame !== undefined && p.frames ? (((p.pass ?? 1) - 1) * p.frames + p.frame) : null;
-  const speed = painted && elapsed > 1 ? painted / elapsed : null;
+  const speed = painted && inStage > 1 ? painted / inStage : null;
   const time = (s: number) => (s < 60 ? `${Math.ceil(s)} s` : `${Math.floor(s / 60)} min ${String(Math.ceil(s % 60)).padStart(2, '0')}`);
   const what =
     p.stage === 'encoding'
       ? `${passes > 1 ? (p.pass === 1 ? 'Measuring · pass 1 of 2' : 'Encoding · pass 2 of 2') : 'Encoding'}${p.frame !== undefined && p.frames ? ` · frame ${p.frame} / ${p.frames}` : ''}`
-      : (p.stage === 'clips' || p.stage === 'pictures') && p.of
+      : (p.stage === 'clips' || p.stage === 'pictures' || p.stage === 'converting') && p.of
         ? `${STAGE_WORDS[p.stage]} · ${Math.min(p.of, (p.done ?? 0) + 1)} / ${p.of}`
         : STAGE_WORDS[p.stage];
   return (
@@ -272,7 +287,9 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
       bits.push(`${sizeText(r.blob.size)}, ${doc.delivery.fps} fps`);
       if (r.onePass) bits.push(`one pass: ${r.onePass}`);
       if (r.prints) bits.push(`${r.prints} picture${r.prints === 1 ? '' : 's'} from ${r.prints === 1 ? 'its' : 'their'} print, the original out of reach`);
-      if (r.proxies) bits.push(`${r.proxies} clip${r.proxies === 1 ? '' : 's'} from ${r.proxies === 1 ? 'its' : 'their'} prox${r.proxies === 1 ? 'y' : 'ies'}, the original out of reach`);
+      if (r.converted) bits.push(`${r.converted} original${r.converted === 1 ? '' : 's'} converted by ffmpeg`);
+      if (r.unplayable) bits.push(`${r.unplayable} original${r.unplayable === 1 ? '' : 's'} this browser cannot play — turn on «Convert what this browser cannot play»`);
+      if (r.proxies - r.unplayable > 0) bits.push(`${r.proxies - r.unplayable} clip${r.proxies - r.unplayable === 1 ? '' : 's'} from ${r.proxies - r.unplayable === 1 ? 'its' : 'their'} prox${r.proxies - r.unplayable === 1 ? 'y' : 'ies'}, the original out of reach`);
       if (r.missingClips) bits.push(`${r.missingClips} clip${r.missingClips === 1 ? '' : 's'} not on this device showed as a still`);
       return `${bits.join(' · ')}.`.replace(/^./, (c) => c.toUpperCase());
     });

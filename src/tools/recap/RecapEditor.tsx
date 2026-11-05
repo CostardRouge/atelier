@@ -614,6 +614,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               change={change}
               clip={bgClip}
               clipLength={bgClip ? (clips.lengths.get(bgClip.key) ?? bgClip.duration ?? 0) : 0}
+              clipUnplayable={Boolean(bgClip && clips.missing.includes(bgClip.key))}
               clipCount={clipCount}
               onOpenClips={() => setChoosingClip(true)}
               thumbClient={instance ? client : null}

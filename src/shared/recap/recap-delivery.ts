@@ -39,9 +39,16 @@ export interface RecapDelivery {
    * (`needsOriginal`) — fetched for that export only.
    */
   media: MediaSource;
+  /**
+   * An original this browser cannot play (an iPhone HEVC `.MOV`) converted by
+   * the suite's ffmpeg.wasm — only what the film shows (`recap-transcode.ts`).
+   * His ask, switched on here: the core (~31 MB, unpkg) is fetched the first
+   * time, as the legal notice says.
+   */
+  convert: boolean;
 }
 
-export const DEFAULT_DELIVERY: RecapDelivery = { quality: 'high', fps: 30, passes: 1, media: 'proxy' };
+export const DEFAULT_DELIVERY: RecapDelivery = { quality: 'high', fps: 30, passes: 1, media: 'proxy', convert: false };
 
 export function readDelivery(raw: unknown): RecapDelivery {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -51,6 +58,7 @@ export function readDelivery(raw: unknown): RecapDelivery {
     passes: r.passes === 2 ? 2 : 1,
     // `clips` was its first name, the morning it was made.
     media: r.media === 'original' || r.clips === 'original' ? 'original' : 'proxy',
+    convert: r.convert === true,
   };
 }
 

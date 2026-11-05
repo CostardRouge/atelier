@@ -10,9 +10,9 @@ describe('how a recap’s video is delivered', () => {
   });
 
   it('reads what it stored, and its first name for the media', () => {
-    expect(readDelivery({ quality: 'max', fps: 60, passes: 2, media: 'original' })).toEqual({ quality: 'max', fps: 60, passes: 2, media: 'original' });
+    expect(readDelivery({ quality: 'max', fps: 60, passes: 2, media: 'original', convert: true })).toEqual({ quality: 'max', fps: 60, passes: 2, media: 'original', convert: true });
     expect(readDelivery({ clips: 'original' }).media).toBe('original');
-    expect(readDelivery('nope')).toEqual({ quality: 'high', fps: 30, passes: 1, media: 'proxy' });
+    expect(readDelivery('nope')).toEqual({ quality: 'high', fps: 30, passes: 1, media: 'proxy', convert: false });
   });
 
   it('fetches an original only where its print would be blown up', () => {

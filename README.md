@@ -3527,7 +3527,12 @@ that lands on its size; only where the browser's encoder has a constant-quality
 mode, greyed otherwise), and whether the film is painted from the light copies
 the stage uses or from the **originals** — every clip, the looping background
 first, and every picture a copy would have to enlarge (a full-page photograph,
-a zoomed cell) — fetched for that export only. The tab says the file's rough
+a zoomed cell) — fetched for that export only. An original your browser cannot
+play (an iPhone HEVC `.MOV`) can be **converted** by the suite's ffmpeg, in your
+browser: only the part the film shows — the background's loop — at the size it
+is shown, kept on this device for the next export (*Convert what this browser
+cannot play*; ffmpeg's ~31 MB is fetched the first time, as for *Transcode to
+H.264*). The tab says the file's rough
 size before you press; while it runs a bar under the button says what it is
 doing (opening the clips, the sound, each pass and frame), its speed and the
 time left.

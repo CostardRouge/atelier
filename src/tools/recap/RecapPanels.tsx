@@ -529,6 +529,7 @@ export function BackgroundSection({
   change,
   clip,
   clipLength,
+  clipUnplayable,
   clipCount,
   onOpenClips,
   thumbClient,
@@ -542,6 +543,8 @@ export function BackgroundSection({
   /** The looping clip as it stands, its length once read, and how many the drawer offers. */
   clip: RecapPicture | null;
   clipLength: number;
+  /** The chosen clip cannot be played here (an HEVC `.MOV` with no light copy). */
+  clipUnplayable: boolean;
   clipCount: number;
   onOpenClips: () => void;
   thumbClient: WinnowClient | null;
@@ -586,6 +589,11 @@ export function BackgroundSection({
               </span>
             </button>
             {clip && clipLength > 0 && <LoopTrimmer clipKey={clip.key} length={clipLength} bg={bg} onLoop={(loop) => set(loop)} />}
+            {clip && clipUnplayable && (
+              <p className="m-0 text-2xs text-warn">
+                This browser cannot play this clip, so the stage shows none. The video export can convert it: Export · Painted from Originals · Convert what this browser cannot play.
+              </p>
+            )}
             <SliderRow label="Speed" value={bg.speed} min={0.25} max={2} step={0.05} reset={1} format={(v) => `${v.toFixed(2)}×`} onChange={(speed) => set({ speed })} />
           </div>
         )}
