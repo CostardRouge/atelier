@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { burstsOf, carouselPool, readCarousel } from './recap-carousel';
 import { carouselSlides, clipSlideNumbers, flowLayouts, layoutRecap } from './recap-layout';
-import { holdingPick, rankPictures, resolveRecap } from './recap-slots';
+import { holdingPick, resolveRecap } from './recap-slots';
+import { readPictureRules } from '../sources/winnow/picture-rules';
 
 const pic = (key: string, day: string, extra: Partial<RecapPicture> = {}): RecapPicture => ({ key, origin: 'local', name: key, kind: 'photo', day, device: 'ILCE-7M4', ...extra });
 
@@ -30,12 +31,12 @@ describe('a carousel’s pictures', () => {
 
   it('keeps one frame per burst, the best or the one picked, and nothing left out', () => {
     const list = [pic('a1', '2026-10-02', { second: 100 }), pic('a2', '2026-10-02', { second: 101, stars: 4 }), pic('b', '2026-10-05')];
-    const base = { left: [], bursts: true, burstPick: {} };
-    expect(carouselPool(list, base, rankPictures).map((p) => p.key)).toEqual(['a2', 'b']);
+    const base = { left: [], rules: readPictureRules(null), burstPick: {}, picksOnly: false };
+    expect(carouselPool(list, base).map((p) => p.key)).toEqual(['a2', 'b']);
     const id = burstsOf(list).get('a1')!;
-    expect(carouselPool(list, { ...base, burstPick: { [id]: 'a1' } }, rankPictures).map((p) => p.key)).toEqual(['a1', 'b']);
-    expect(carouselPool(list, { ...base, left: ['b'] }, rankPictures).map((p) => p.key)).toEqual(['a2']);
-    expect(carouselPool(list, { ...base, bursts: false }, rankPictures)).toHaveLength(3);
+    expect(carouselPool(list, { ...base, burstPick: { [id]: 'a1' } }).map((p) => p.key)).toEqual(['a1', 'b']);
+    expect(carouselPool(list, { ...base, left: ['b'] }).map((p) => p.key)).toEqual(['a2']);
+    expect(carouselPool(list, { ...base, rules: { leave: { burst: false }, prefer: [] } })).toHaveLength(3);
   });
 
   it('reads untrusted settings; weeks only for a month', () => {

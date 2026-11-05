@@ -16,7 +16,7 @@ import { addDays, enumerateDays, type IsoDate } from '../roadtrip/trip-days';
 import { mulberry32 } from '../lib/prng';
 import { agoLabel, dayAgo, isoWeek, monthDays, monthName, parseAgo, shortDate, weekDays, dayMonth } from './recap-days';
 import { GRID_SHAPES, MAX_SLIDES, type RecapDoc, type RecapPicture } from './recap-doc';
-import { carouselPool } from './recap-carousel';
+import { carouselPool, rankByRules } from './recap-carousel';
 
 export interface RecapSlot {
   /** What a pick, a caption or a clearing names: a day (`2026-10-14`), a step back (`ago:1y`), a place (`n:3`). */
@@ -139,11 +139,11 @@ export function templateDays(doc: RecapDoc): IsoDate[] {
  * of a month does not hold ten shots of its first afternoon. Returned in
  * time order.
  */
-export function spreadPick(list: readonly RecapPicture[], n: number): RecapPicture[] {
+export function spreadPick(list: readonly RecapPicture[], n: number, rank: (l: readonly RecapPicture[]) => RecapPicture[] = (l) => rankPictures(l)): RecapPicture[] {
   if (n <= 0 || !list.length) return [];
   if (list.length <= n) return byTime(list);
   const ranked = list.filter((p) => p.picked || (p.stars ?? 0) >= 3);
-  const chosen = new Set<RecapPicture>(rankPictures(ranked).slice(0, n));
+  const chosen = new Set<RecapPicture>(rank(ranked).slice(0, n));
   const rest = byTime(list.filter((p) => !chosen.has(p)));
   const need = n - chosen.size;
   for (let i = 0; i < need && rest.length; i++) {
@@ -158,8 +158,8 @@ export function spreadPick(list: readonly RecapPicture[], n: number): RecapPictu
  * the nearest one in time still free — so leaving one out changes one place,
  * not the whole selection's spacing.
  */
-export function holdingPick(whole: readonly RecapPicture[], pool: readonly RecapPicture[], n: number): RecapPicture[] {
-  const base = spreadPick(whole, n);
+export function holdingPick(whole: readonly RecapPicture[], pool: readonly RecapPicture[], n: number, rank: (l: readonly RecapPicture[]) => RecapPicture[] = (l) => rankPictures(l)): RecapPicture[] {
+  const base = spreadPick(whole, n, rank);
   const inPool = new Set(pool.map((p) => p.key));
   const used = new Set(base.filter((p) => inPool.has(p.key)).map((p) => p.key));
   const timeline = byTime(pool);
@@ -178,8 +178,13 @@ export function holdingPick(whole: readonly RecapPicture[], pool: readonly Recap
     }
   }
   // Fewer than asked when the bench emptied what was spread: the rest of the pool, best first.
-  for (const q of rankPictures(pool)) if (out.length < n && !used.has(q.key) && !out.includes(q)) out.push(q);
+  for (const q of rank(pool)) if (out.length < n && !used.has(q.key) && !out.includes(q)) out.push(q);
   return byTime(out);
+}
+
+/** A frozen selection's pictures, those still in the pool, in time order. */
+function frozenPictures(keys: readonly string[], byKey: ReadonlyMap<string, RecapPicture>): RecapPicture[] {
+  return byTime(keys.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : [])));
 }
 
 export function resolveRecap(doc: RecapDoc): ResolvedRecap {
@@ -219,21 +224,29 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
     });
   } else {
     inScope = doc.range ? pool.filter((p) => p.day !== null && p.day >= doc.range!.from && p.day <= doc.range!.to) : pool;
-    const n = placeCount(doc);
-    // A dump IS highlights: what was left out stays out, one frame per burst.
-    const free = carouselPool(inScope, doc.carousel, rankPictures).filter((p) => !pinnedKeys.has(p.key));
-    const whole = carouselPool(inScope, { ...doc.carousel, left: [] }, rankPictures).filter((p) => !pinnedKeys.has(p.key));
-    const auto = holdingPick(whole, free, n);
+    const carousel = doc.template === 'dump' || doc.template === 'sheets';
     const ranked = rankPictures(inScope, preferClips);
-    let next = 0;
-    slots = Array.from({ length: n }, (_, i) => {
-      const id = `n:${i}`;
-      const pinKey = doc.picks[id];
-      const pinned = pinKey ? (byKey.get(pinKey) ?? null) : null;
-      const isCleared = cleared.has(id);
-      const picture = isCleared ? null : (pinned ?? auto[next++] ?? null);
-      return { id, day: picture?.day ?? null, label: `Picture ${i + 1}`, picture, pinned: Boolean(pinned) && !isCleared, cleared: isCleared, candidates: ranked };
-    });
+    const frozen = carousel ? doc.carousel.chosen : null;
+    if (frozen) {
+      // His selection, frozen by a correction (removal lab): exactly these, in time order — none added, none taken.
+      slots = frozenPictures(frozen, byKey).map((picture, i) => ({ id: `n:${i}`, day: picture.day, label: `Picture ${i + 1}`, picture, pinned: false, cleared: false, candidates: ranked, flow: true }));
+    } else {
+      const n = placeCount(doc);
+      // A dump and a sheet ARE highlights: the shared conditions, picks only when they fill the places.
+      const rank = rankByRules(doc.carousel.rules.prefer);
+      const free = carouselPool(inScope, doc.carousel, n).filter((p) => !pinnedKeys.has(p.key));
+      const whole = carouselPool(inScope, { ...doc.carousel, left: [] }, n).filter((p) => !pinnedKeys.has(p.key));
+      const auto = holdingPick(whole, free, n, rank);
+      let next = 0;
+      slots = Array.from({ length: n }, (_, i) => {
+        const id = `n:${i}`;
+        const pinKey = doc.picks[id];
+        const pinned = pinKey ? (byKey.get(pinKey) ?? null) : null;
+        const isCleared = cleared.has(id);
+        const picture = isCleared ? null : (pinned ?? auto[next++] ?? null);
+        return { id, day: picture?.day ?? null, label: `Picture ${i + 1}`, picture, pinned: Boolean(pinned) && !isCleared, cleared: isCleared, candidates: ranked, ...(carousel ? { flow: true } : {}) };
+      });
+    }
   }
   slots = [...slots, ...highlightSlots(doc, inScope, slots, byKey, cleared, pinnedKeys)];
   const dayCount = new Set(inScope.map((p) => p.day).filter(Boolean)).size;
@@ -249,11 +262,16 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
 function highlightSlots(doc: RecapDoc, inScope: readonly RecapPicture[], own: readonly RecapSlot[], byKey: ReadonlyMap<string, RecapPicture>, cleared: ReadonlySet<string>, pinnedKeys: ReadonlySet<string>): RecapSlot[] {
   // A dump and a sheet ARE their highlights.
   if (doc.template === 'dump' || doc.template === 'sheets' || doc.carousel.after !== 'highlights') return [];
+  const ranked0 = rankPictures(inScope);
+  if (doc.carousel.chosen) {
+    // His selection, frozen by a correction: exactly these.
+    return frozenPictures(doc.carousel.chosen, byKey).map((picture, i) => ({ id: `h:${i}`, day: picture.day, label: `Highlight ${i + 1}`, picture, pinned: false, cleared: false, candidates: ranked0, flow: true }));
+  }
   const shown = new Set(own.flatMap((s) => (s.picture ? [s.picture.key] : [])));
   const candidates = inScope.filter((p) => !shown.has(p.key) && !pinnedKeys.has(p.key));
-  const pool = carouselPool(candidates, doc.carousel, rankPictures);
   const n = Math.min(doc.carousel.highlights, MAX_SLIDES * 4);
-  const auto = holdingPick(carouselPool(candidates, { ...doc.carousel, left: [] }, rankPictures), pool, n);
+  const pool = carouselPool(candidates, doc.carousel, n);
+  const auto = holdingPick(carouselPool(candidates, { ...doc.carousel, left: [] }, n), pool, n, rankByRules(doc.carousel.rules.prefer));
   const ranked = rankPictures(pool);
   let next = 0;
   return Array.from({ length: n }, (_, i) => {

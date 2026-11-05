@@ -112,6 +112,11 @@ export interface RecapPicture {
   loose?: boolean;
   /** Faces Winnow found in it — a sheet never cuts a picture that has one. */
   faces?: number;
+  /** Winnow's facts the shared conditions read (`picture-rules.ts`): edited in its Gallery, its sharpness, its image fingerprint (a 64-bit integer as digits), its folder. */
+  edited?: boolean;
+  sharp?: number;
+  phash?: string;
+  folder?: number;
   /** Seconds into its day, when the capture says them — what tells the frames of a burst apart (`recap-carousel.ts`). */
   second?: number;
   /** Winnow's burst pile it belongs to, when Winnow made one. */
@@ -478,6 +483,10 @@ export function readPicture(raw: unknown): RecapPicture | null {
   optNum('duration', 0, 360000);
   optNum('stars', 0, 5);
   optNum('faces', 0, 1000);
+  optNum('sharp', -1e9, 1e9);
+  optNum('folder', 0, Number.MAX_SAFE_INTEGER);
+  if (r.edited === true) out.edited = true;
+  if (typeof r.phash === 'string' && /^\d{1,20}$/.test(r.phash)) out.phash = r.phash;
   optNum('motion', 1, Number.MAX_SAFE_INTEGER);
   optNum('liveStill', 1, Number.MAX_SAFE_INTEGER);
   for (const k of ['device', 'lens', 'shutter'] as const) {

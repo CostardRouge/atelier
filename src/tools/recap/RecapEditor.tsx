@@ -610,6 +610,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
                 onDevelop={setDeveloping}
                 onFrameStage={() => startFraming({ kind: 'cell', id: slot.id })}
                 onPickFor={connection && client ? () => setPicking(true) : null}
+                resolved={resolved}
               />
             ) : (
               <p className="m-0 px-1 text-xs text-muted">Click a cell on the stage to choose its picture, develop it or empty it. Drag a picture onto another cell to swap them.</p>

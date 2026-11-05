@@ -17,6 +17,7 @@
  */
 
 import type { RecapPicture, RecapTemplate } from './recap-doc';
+import { looksAlike, leaves, phashOf, rankBy, readPictureRules, type PictureFacts, type PictureRules } from '../sources/winnow/picture-rules';
 
 /** A flow slide's arrangement — the photo dump's patterns, plus six. */
 export type SlideLayout = 'full' | 'two' | 'oneTwo' | 'three' | 'four' | 'six';
@@ -32,9 +33,17 @@ export interface RecapCarousel {
   after: AfterFirst;
   /** How many highlights follow, when `after` is `highlights`. */
   highlights: number;
-  /** One picture per burst. */
-  bursts: boolean;
-  /** Pictures left out of the highlights (and a dump), by key — the bench. */
+  /** What the rule leaves out and prefers — the conditions shared with Storytelling's wall (`picture-rules.ts`). */
+  rules: PictureRules;
+  /** Draw from Winnow's picks only; null = on by itself when the picks fill the places (removal lab, his yes). */
+  picksOnly: boolean | null;
+  /**
+   * The selection FROZEN by his first correction (✕, ⇄, a pin, ↺), by key, in
+   * time order: the rule no longer reshuffles it until «Let the rule choose
+   * again» (null). A removed picture is gone, never refilled.
+   */
+  chosen: string[] | null;
+  /** Pictures removed from the carousel, by key — the bench, each back with ↺. */
   left: string[];
   /** A burst's frame picked by hand, by burst id. */
   burstPick: Record<string, string>;
@@ -49,7 +58,7 @@ export interface RecapCarousel {
 export const MAX_HIGHLIGHTS = 60;
 
 export function defaultCarousel(template: RecapTemplate): RecapCarousel {
-  return { after: template === 'month' ? 'highlights' : 'none', highlights: 8, bursts: true, left: [], burstPick: {}, layouts: {}, order: null, titles: 'first' };
+  return { after: template === 'month' ? 'highlights' : 'none', highlights: 8, rules: readPictureRules(null), picksOnly: null, chosen: null, left: [], burstPick: {}, layouts: {}, order: null, titles: 'first' };
 }
 
 const strings = (v: unknown, max: number): string[] => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 400))].slice(0, max) : []);
@@ -68,7 +77,14 @@ export function readCarousel(raw: unknown, template: RecapTemplate): RecapCarous
   return {
     after,
     highlights: Math.min(MAX_HIGHLIGHTS, Math.max(1, n)),
-    bursts: typeof r.bursts === 'boolean' ? r.bursts : base.bursts,
+    // `bursts: false` was the burst switch's first form, the morning it was made.
+    rules: (() => {
+      const rules = readPictureRules(r.rules);
+      if (r.bursts === false && !r.rules) rules.leave.burst = false;
+      return rules;
+    })(),
+    picksOnly: typeof r.picksOnly === 'boolean' ? r.picksOnly : null,
+    chosen: Array.isArray(r.chosen) ? strings(r.chosen, 400) : null,
     left: strings(r.left, 4000),
     burstPick: record(r.burstPick, (x): x is string => typeof x === 'string' && x.length <= 400),
     layouts: record(r.layouts, (x): x is SlideLayout => SLIDE_LAYOUTS.includes(x as SlideLayout)),
@@ -134,20 +150,84 @@ export function burstMembers(list: readonly RecapPicture[], bursts: ReadonlyMap<
   return out;
 }
 
+/** A picture as the shared conditions read it. A local picture is a «screen» only as a PNG: a file may carry no EXIF and still be a photograph. */
+export function factsOf(p: RecapPicture): PictureFacts & { key: string } {
+  const day = p.day ? Date.parse(`${p.day}T00:00:00Z`) / 1000 : 0;
+  return {
+    key: p.key,
+    pick: Boolean(p.picked),
+    reject: false,
+    stars: p.stars ?? 0,
+    edited: Boolean(p.edited),
+    faces: p.faces ?? 0,
+    sharp: p.sharp ?? null,
+    burst: p.burst ?? null,
+    screen: /\.png$/i.test(p.name) || (p.origin === 'winnow' && !p.device),
+    phash: phashOf(p.phash),
+    folder: p.folder ?? null,
+    at: day + (p.second ?? (p.minute ?? 720) * 60),
+  };
+}
+
+/** `list` best first by the carousel's preferences — then its time. */
+export function rankByRules(prefer: PictureRules['prefer']): (list: readonly RecapPicture[]) => RecapPicture[] {
+  const order = rankBy<PictureFacts & { key: string }>(prefer);
+  return (list) => {
+    const facts = new Map(list.map((p) => [p.key, factsOf(p)]));
+    return [...list].sort((a, b) => order(facts.get(a.key)!, facts.get(b.key)!));
+  };
+}
+
+export interface PoolReport {
+  pool: RecapPicture[];
+  /** How many each condition took out, for the panel. */
+  left: { screen: number; burst: number; alike: number };
+  /** Whether the rule draws from the picks only (set, or by itself). */
+  picksOnly: boolean;
+  picks: number;
+}
+
 /**
- * The pool the highlights (or a dump) draw from: the pictures in scope, the
- * ones left out removed, and — one per burst — each burst reduced to the
- * frame picked by hand, else the best by `rank`.
+ * The pool the highlights (a dump, a sheet) draw from: the pictures in
+ * scope, the removed ones out, then the shared conditions — screenshots, all
+ * but one frame of a burst (the one picked by hand, else the best), the
+ * look-alikes of a better picture — and, when `picksOnly` says so (or, unset,
+ * when the picks fill the `places`), Winnow's picks only.
  */
-export function carouselPool(list: readonly RecapPicture[], c: Pick<RecapCarousel, 'left' | 'bursts' | 'burstPick'>, rank: (l: readonly RecapPicture[]) => RecapPicture[]): RecapPicture[] {
-  const left = new Set(c.left);
-  const kept = list.filter((p) => !left.has(p.key));
-  if (!c.bursts) return kept;
-  const bursts = burstsOf(kept);
-  const leads = new Set<string>();
-  for (const [id, members] of burstMembers(kept, bursts)) {
-    const picked = members.find((m) => m.key === c.burstPick[id]);
-    leads.add((picked ?? rank(members)[0]).key);
+export function carouselReport(list: readonly RecapPicture[], c: Pick<RecapCarousel, 'left' | 'rules' | 'burstPick' | 'picksOnly'>, places = Infinity): PoolReport {
+  const rank = rankByRules(c.rules.prefer);
+  const removed = new Set(c.left);
+  let kept = list.filter((p) => !removed.has(p.key));
+  const left = { screen: 0, burst: 0, alike: 0 };
+  if (leaves(c.rules, 'screen')) kept = kept.filter((p) => (factsOf(p).screen ? (left.screen++, false) : true));
+  if (leaves(c.rules, 'burst')) {
+    const bursts = burstsOf(kept);
+    const leads = new Set<string>();
+    for (const [id, members] of burstMembers(kept, bursts)) {
+      const picked = members.find((m) => m.key === c.burstPick[id]);
+      leads.add((picked ?? rank(members)[0]).key);
+    }
+    kept = kept.filter((p) => (!bursts.has(p.key) || leads.has(p.key) ? true : (left.burst++, false)));
   }
-  return kept.filter((p) => !bursts.has(p.key) || leads.has(p.key));
+  if (leaves(c.rules, 'alike')) {
+    // Best first: a picture is left out when it looks like one already kept.
+    const keep: (PictureFacts & { key: string })[] = [];
+    const out = new Set<string>();
+    for (const p of rank(kept)) {
+      const f = factsOf(p);
+      if (keep.some((k) => looksAlike(f, k))) {
+        out.add(p.key);
+        left.alike++;
+      } else keep.push(f);
+    }
+    kept = kept.filter((p) => !out.has(p.key));
+  }
+  const picks = kept.filter((p) => p.picked).length;
+  const picksOnly = c.picksOnly ?? (picks > 0 && picks >= places);
+  return { pool: picksOnly ? kept.filter((p) => p.picked) : kept, left, picksOnly, picks };
+}
+
+/** The pool alone (`carouselReport`). */
+export function carouselPool(list: readonly RecapPicture[], c: Pick<RecapCarousel, 'left' | 'rules' | 'burstPick' | 'picksOnly'>, places = Infinity): RecapPicture[] {
+  return carouselReport(list, c, places).pool;
 }

@@ -5,12 +5,16 @@ import {
   SLIDE_LAYOUT_LABEL,
   burstMembers,
   burstsOf,
+  carouselReport,
   type AfterFirst,
   type RecapCarousel,
   type SlideLayout,
   type SlideTitles,
 } from '../../shared/recap/recap-carousel';
 import { withRecap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
+import { replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain } from '../../shared/recap/recap-selection';
+import { leaves } from '../../shared/sources/winnow/picture-rules';
+import PictureRulesFields from '../../shared/ui/PictureRulesFields';
 import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera } from '../../shared/recap/recap-sheet';
 import type { RecapPage } from '../../shared/recap/recap-layout';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
@@ -31,28 +35,39 @@ interface Thumbs {
 }
 
 /**
- * What the slides after the first hold (carousel lab, B and C): nothing, the
- * highlights or a slide per week; the pictures IN the carousel with a ✕ that
- * leaves one out (the next best comes in), a burst's ×n that picks its frame,
- * and the ones left out, each back with one click.
+ * What the slides after the first hold (carousel lab, B; removal lab, his
+ * yes): nothing, the highlights or a slide per week; WHERE the rule draws
+ * from (picks only — by itself when they fill the places — and the shared
+ * conditions); and the pictures IN the carousel with two gestures: ✕ removes
+ * (one fewer, nothing comes in), ⇄ replaces (a row of the next best for that
+ * place). The first correction freezes the selection; «Let the rule choose
+ * again» unfreezes it. A burst's ×n picks its frame; the bench brings one back.
  */
 export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapDoc; resolved: ResolvedRecap; change: Change; thumbs: Thumbs }) {
   const c = doc.carousel;
   // A dump and a sheet ARE their highlights: their tray, no «after the first slide».
   const dump = doc.template === 'dump' || doc.template === 'sheets';
   const flow = resolved.slots.filter((s) => (dump || s.flow) && s.picture);
+  const frozen = c.chosen !== null;
   const bursts = useMemo(() => burstsOf(resolved.inScope), [resolved.inScope]);
   const members = useMemo(() => burstMembers(resolved.inScope, bursts), [resolved.inScope, bursts]);
   const [open, setOpen] = useState<string | null>(null);
+  const [aim, setAim] = useState<string | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const byKey = useMemo(() => new Map(doc.pictures.map((p) => [p.key, p])), [doc.pictures]);
   const left = c.left.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
   const shows = dump || c.after === 'highlights';
+  const places = dump ? doc.count : c.highlights;
+  const shown = useMemo(() => new Set(resolved.slots.flatMap((s) => (!s.flow && s.picture ? [s.picture.key] : []))), [resolved.slots]);
+  const report = useMemo(() => carouselReport(resolved.inScope.filter((p) => !shown.has(p.key)), { ...c, left: [] }, places), [resolved.inScope, shown, c, places]);
+  const offered = useMemo(() => (aim ? replaceCandidates(doc, resolved, aim) : []), [aim, doc, resolved]);
   const openMembers = open ? (members.get(open) ?? []) : [];
   const tile = (pic: RecapPicture) => <PictureThumb pic={pic} client={thumbs.client} instance={thumbs.instance} file={thumbs.files.get(pic.key) ?? null} className="absolute inset-0 w-full h-full" />;
   const chip = 'absolute inline-flex items-center justify-center rounded-full bg-[rgba(16,15,13,0.72)] text-on-media cursor-pointer border-0';
+  const act = `${chip} w-6 h-6 pointer-coarse:w-9 pointer-coarse:h-9 text-xs hover:bg-accent`;
 
   return (
-    <InspectorSection id="recap-carousel" title={dump ? 'In the carousel' : 'After the first slide'} marked={c.left.length > 0}>
+    <InspectorSection id="recap-carousel" title={dump ? 'In the carousel' : 'After the first slide'} marked={frozen}>
       <div className="flex flex-col gap-3">
         {!dump && (
           <Segmented<AfterFirst>
@@ -60,7 +75,7 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
             fill
             label="After the first slide"
             value={c.after}
-            onChange={(after) => setCarousel(change, { after, order: null })}
+            onChange={(after) => setCarousel(change, { after, order: null, chosen: null, left: [] })}
             options={[
               { id: 'none', label: 'Nothing', title: 'The first slide alone (the clips’ slides when they are on)' },
               { id: 'highlights', label: 'Highlights', title: 'The best of the days the first slide does not show, in the photo dump’s rhythm' },
@@ -69,36 +84,98 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
           />
         )}
         {!dump && c.after === 'highlights' && (
-          <SliderRow label="Highlights" value={c.highlights} min={1} max={MAX_HIGHLIGHTS} step={1} reset={8} onChange={(highlights) => setCarousel(change, { highlights })} />
+          <SliderRow
+            label="Highlights"
+            value={frozen ? flow.length : c.highlights}
+            min={1}
+            max={MAX_HIGHLIGHTS}
+            step={1}
+            reset={8}
+            disabled={frozen}
+            onChange={(highlights) => setCarousel(change, { highlights })}
+          />
         )}
         {shows && (
-          <ToggleField checked={c.bursts} onChange={(on) => setCarousel(change, { bursts: on })} label="One per burst">
-            One per burst
-          </ToggleField>
+          <div className="flex flex-col gap-1.5">
+            <Segmented
+              size="sm"
+              fill
+              label="Draw from"
+              value={c.picksOnly === null ? 'auto' : c.picksOnly ? 'picks' : 'all'}
+              onChange={(v) => setCarousel(change, { picksOnly: v === 'auto' ? null : v === 'picks' })}
+              options={[
+                { id: 'auto', label: 'Auto', title: 'Your Winnow picks when they fill the places, else every picture kept by the conditions' },
+                { id: 'picks', label: 'Picks only', title: 'Only the pictures you picked in Winnow' },
+                { id: 'all', label: 'Everything kept', title: 'Every picture the conditions keep' },
+              ]}
+            />
+            <span className="font-mono text-2xs text-muted tabular-nums">
+              {report.picksOnly ? `Your picks · ${report.picks}` : `${report.pool.length.toLocaleString('en-GB')} kept by the conditions${report.picks ? ` · ${report.picks} picks` : ''}`}
+              {frozen ? ' · your selection is frozen' : ''}
+            </span>
+            <button type="button" aria-expanded={rulesOpen} onClick={() => setRulesOpen((o) => !o)} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">
+              {rulesOpen ? 'Hide the conditions' : 'The conditions…'}
+            </button>
+            {rulesOpen && (
+              <div className="flex flex-col gap-2.5 rounded-control border border-line bg-paper p-2.5">
+                <PictureRulesFields rules={c.rules} onRules={(rules) => setCarousel(change, { rules })} counts={report.left} leaveKeys={['screen', 'burst', 'alike']} />
+              </div>
+            )}
+          </div>
         )}
         {shows && flow.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <span className={legend}>
-              In the carousel · {flow.length} · ✕ leaves one out
-            </span>
+            <div className="flex items-center justify-between gap-2">
+              <span className={legend}>
+                {frozen ? 'Your selection' : 'Chosen by the rule'} · {flow.length}
+              </span>
+              {frozen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAim(null);
+                    change((d) => withRuleAgain(d));
+                  }}
+                  className="text-2xs text-accent-ink underline-offset-2 hover:underline"
+                  title="The rule chooses again from the conditions; the removed pictures come back to its choice"
+                >
+                  Let the rule choose again
+                </button>
+              )}
+            </div>
             <div role="list" className="grid grid-cols-4 gap-1.5">
               {flow.map((s) => {
                 const pic = s.picture!;
                 const burst = bursts.get(pic.key);
                 const n = burst ? (members.get(burst)?.length ?? 1) : 1;
                 return (
-                  <div key={s.id} role="listitem" className="relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame">
+                  <div key={s.id} role="listitem" className={`relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame ${aim === pic.key ? 'outline outline-2 outline-dashed outline-accent' : ''}`}>
                     {tile(pic)}
-                    <button
-                      type="button"
-                      aria-label={`Leave ${pic.name} out — the next best comes in`}
-                      title="Leave it out — the next best comes in"
-                      onClick={() => setCarousel(change, { left: [...c.left, pic.key] })}
-                      className={`${chip} right-1 top-1 w-6 h-6 pointer-coarse:w-9 pointer-coarse:h-9 text-xs hover:bg-accent`}
-                    >
-                      ✕
-                    </button>
-                    {c.bursts && n > 1 && burst && (
+                    <span className="absolute right-1 top-1 flex gap-1">
+                      <button
+                        type="button"
+                        aria-pressed={aim === pic.key}
+                        aria-label={`Replace ${pic.name} — choose among the next best`}
+                        title="Replace — choose among the next best"
+                        onClick={() => setAim((a) => (a === pic.key ? null : pic.key))}
+                        className={`${act} relative ${aim === pic.key ? 'bg-accent' : ''}`}
+                      >
+                        ⇄
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${pic.name} — one fewer in the carousel`}
+                        title="Remove — one fewer in the carousel"
+                        onClick={() => {
+                          if (aim === pic.key) setAim(null);
+                          change((d) => withRemoved(d, resolved, pic.key));
+                        }}
+                        className={`${act} relative`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                    {leaves(c.rules, 'burst') && n > 1 && burst && (
                       <button
                         type="button"
                         aria-pressed={open === burst}
@@ -115,19 +192,50 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
             </div>
           </div>
         )}
+        {aim && (
+          <div className="flex flex-col gap-1.5">
+            <span className={legend}>Replace with · nearest in time first</span>
+            {offered.length ? (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {offered.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    aria-label={`Use ${m.name} instead`}
+                    title={`${m.name}${m.day ? ` · ${m.day}` : ''}${m.picked ? ' · picked' : m.stars ? ` · ★${m.stars}` : ''}`}
+                    onClick={() => {
+                      const was = aim;
+                      setAim(null);
+                      change((d) => withReplaced(d, resolved, was, m.key));
+                    }}
+                    className="relative flex-none w-16 aspect-[4/5] rounded-[5px] overflow-hidden bg-frame p-0 border-0 cursor-pointer hover:opacity-80"
+                  >
+                    {tile(m)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="text-2xs text-muted">Nothing else under these conditions — «Everything kept» widens the choice.</span>
+            )}
+          </div>
+        )}
         {open && openMembers.length > 1 && (
           <div className="flex flex-col gap-1.5">
             <span className={legend}>This burst · the frame that enters</span>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
               {openMembers.map((m) => {
-                const on = flow.some((s) => s.picture?.key === m.key);
+                const inIt = flow.find((s) => s.picture && bursts.get(s.picture.key) === open)?.picture?.key;
+                const on = inIt === m.key;
                 return (
                   <button
                     key={m.key}
                     type="button"
                     aria-pressed={on}
                     aria-label={`Use ${m.name}`}
-                    onClick={() => setCarousel(change, { burstPick: { ...c.burstPick, [open]: m.key } })}
+                    onClick={() =>
+                      // Frozen, the frame takes the burst's place in the selection; else the rule remembers the frame.
+                      frozen && inIt ? change((d) => withReplaced(d, resolved, inIt, m.key)) : setCarousel(change, { burstPick: { ...c.burstPick, [open]: m.key } })
+                    }
                     className={`relative flex-none w-16 aspect-[4/5] rounded-[5px] overflow-hidden bg-frame p-0 border-0 cursor-pointer ${on ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface' : 'hover:opacity-80'}`}
                   >
                     {tile(m)}
@@ -139,18 +247,12 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
         )}
         {left.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <span className={legend}>Left out · {left.length}</span>
+            <span className={legend}>Removed · {left.length} · ↺ brings one back</span>
             <div role="list" className="grid grid-cols-5 gap-1.5">
               {left.map((pic) => (
                 <div key={pic.key} role="listitem" className="relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame opacity-60 hover:opacity-100">
                   {tile(pic)}
-                  <button
-                    type="button"
-                    aria-label={`Bring ${pic.name} back`}
-                    title="Bring it back"
-                    onClick={() => setCarousel(change, { left: c.left.filter((k) => k !== pic.key) })}
-                    className={`${chip} right-1 top-1 w-6 h-6 pointer-coarse:w-9 pointer-coarse:h-9 text-xs hover:bg-accent`}
-                  >
+                  <button type="button" aria-label={`Bring ${pic.name} back`} title="Bring it back" onClick={() => change((d) => withRestored(d, resolved, pic.key))} className={`${act} right-1 top-1`}>
                     ↺
                   </button>
                 </div>

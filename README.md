@@ -3523,9 +3523,14 @@ slide in its order — click one to see it, drag it to move it (the video
 follows), drop a picture from the stage onto it. After its first slide a recap
 holds nothing, its **highlights** (the best of its days the first slide does
 not show, in the photo dump's rhythm — a month's default) or, for a month, a
-slide per **week**. In *Pictures*, ✕ leaves a picture out and the next best
-takes its place; a **burst** (one camera, a few seconds) enters as one frame,
-and its ×n lets you choose which. In *Layout*, a slide keeps the rhythm (*Auto*)
+slide per **week**. In *Pictures*, ✕ **removes** a picture — the carousel
+holds one fewer, nothing comes in — and ⇄ **replaces** it with one you choose
+among the next best (nearest in time, never a look-alike of what stays); your
+first correction freezes the selection until *Let the rule choose again*. The
+rule draws from your Winnow **picks** when they fill the carousel (or always,
+or never), and leaves out screenshots, all but the best of a **burst** (its ×n
+lets you choose the frame) and **look-alikes** — the same conditions as
+Storytelling's wall, in the same panel. In *Layout*, a slide keeps the rhythm (*Auto*)
 or takes the layout you set, and the first slide's title can repeat on the
 others — small with the slide's number, or as big as on the first. The carousel
 export writes the slides in that order, a clip as its own video slide.

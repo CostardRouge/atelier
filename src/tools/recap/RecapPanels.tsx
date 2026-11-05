@@ -27,7 +27,8 @@ import {
 } from '../../shared/recap/recap-doc';
 import { agoKey, agoLabel, parseAgo, shortDate, weekStartOf } from '../../shared/recap/recap-days';
 import WhenCalendar, { type When } from './WhenCalendar';
-import { deviceLabel, poolDevices, type DeviceAliases, type RecapSlot } from '../../shared/recap/recap-slots';
+import { deviceLabel, poolDevices, type DeviceAliases, type RecapSlot, type ResolvedRecap } from '../../shared/recap/recap-slots';
+import { withRemoved, withReplaced } from '../../shared/recap/recap-selection';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
 import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from '../../shared/ui/Inspector';
@@ -259,6 +260,7 @@ export function SlotSection({
   onDevelop,
   onFrameStage,
   onPickFor,
+  resolved,
 }: {
   doc: RecapDoc;
   slot: RecapSlot;
@@ -271,6 +273,8 @@ export function SlotSection({
   onFrameStage: () => void;
   /** Open the Winnow picker FOR this place — on its day, any picture — when one is connected. */
   onPickFor: (() => void) | null;
+  /** The recap resolved — a carousel place's gestures (remove, replace) read it. */
+  resolved?: ResolvedRecap;
 }) {
   const pic = slot.picture;
   const zoom = pic?.frame?.zoom ?? 1;
@@ -300,9 +304,15 @@ export function SlotSection({
                       {pic.develop ? 'Developed · edit…' : 'Develop…'}
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => change((d) => withCleared(d, slot.id))} title="Leave this place empty">
-                    Empty
-                  </Button>
+                  {slot.flow && resolved ? (
+                    <Button size="sm" variant="ghost" onClick={() => change((d) => withRemoved(d, resolved, pic.key))} title="Remove it — one fewer in the carousel, nothing comes in">
+                      Remove
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" onClick={() => change((d) => withCleared(d, slot.id))} title="Leave this place empty">
+                      Empty
+                    </Button>
+                  )}
                 </div>
               </>
             )}
@@ -367,7 +377,8 @@ export function SlotSection({
                   type="button"
                   aria-label={`Use ${c.name}`}
                   aria-pressed={pic?.key === c.key}
-                  onClick={() => change((d) => withPick(d, slot.id, c.key))}
+                  // A carousel's place is replaced in the (frozen) selection; a template's own place is pinned.
+                  onClick={() => change((d) => (slot.flow && resolved && pic ? withReplaced(d, resolved, pic.key, c.key) : withPick(d, slot.id, c.key)))}
                   className={`aspect-square rounded-[5px] overflow-hidden ${pic?.key === c.key ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface' : 'hover:opacity-80'}`}
                 >
                   <PictureThumb pic={c} client={client} instance={instance} file={files.get(c.key) ?? null} className="w-full h-full" />
@@ -441,7 +452,18 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
               options={(Object.keys(GRID_SHAPES) as GridShape[]).map((g) => ({ id: g, label: GRID_SHAPES[g].label }))}
             />
           )}
-          {(doc.template === 'dump' || doc.template === 'sheets') && <SliderRow label="Pictures" value={doc.count} min={2} max={60} step={1} reset={12} onChange={(count) => change((d) => withRecap(d, { count }))} />}
+          {(doc.template === 'dump' || doc.template === 'sheets') && (
+            <SliderRow
+              label="Pictures"
+              value={doc.carousel.chosen ? doc.carousel.chosen.length : doc.count}
+              min={2}
+              max={60}
+              step={1}
+              reset={12}
+              disabled={doc.carousel.chosen !== null}
+              onChange={(count) => change((d) => withRecap(d, { count }))}
+            />
+          )}
           {doc.template === 'month' && (
             <ToggleField checked={c.weekStart === 0} onChange={(on) => set({ weekStart: on ? 0 : 1 })} label="Weeks start on Sunday">
               Weeks start on Sunday

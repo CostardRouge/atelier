@@ -17,6 +17,7 @@ import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { captureDay, captureMinute, captureSecond, dayFromName } from '../../shared/recap/recap-days';
 import { localKey, winnowKey, type RecapPicture } from '../../shared/recap/recap-doc';
 import type { WinnowAssetRow, WinnowClient } from '../../shared/sources/winnow/client';
+import { phashOf } from '../../shared/sources/winnow/picture-rules';
 import { localMinutes, localWallMs } from '../../shared/sources/winnow/capture-moment';
 import { toIsoDate } from '../../shared/roadtrip/trip-days';
 import { getClip, getPrint, putClip, putPrint, PRINT_EDGE } from './recap-store';
@@ -42,6 +43,8 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     ...(row.burst_id ? { burst: row.burst_id } : {}),
     // A sheet never cuts a picture with a face across two slides (`recap-sheet.ts`).
     ...(row.face_count ? { faces: row.face_count } : {}),
+    // What the shared conditions read (`picture-rules.ts`): edited in its Gallery, its sharpness, its fingerprint, its folder.
+    ...factsOfRow(row),
     ...(row.camera_model ? { device: row.camera_model } : {}),
     ...(row.lens ? { lens: row.lens } : {}),
     ...(row.focal_length ? { focal: row.focal_length } : {}),
@@ -55,6 +58,18 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     ...(row.verdict === 'pick' ? { picked: true } : {}),
     // A Live Photo: Winnow paired the still with its .mov — the clip drawer offers that motion.
     ...(row.group_kind === 'live_photo' && row.companion_id && row.companion_media_type !== 'photo' ? { motion: row.companion_id } : {}),
+  };
+}
+
+/** The facts a Winnow row carries for the shared conditions, when it carries them. */
+function factsOfRow(row: WinnowAssetRow): Pick<RecapPicture, 'edited' | 'sharp' | 'phash' | 'folder'> {
+  const extra = row as WinnowAssetRow & { sharpness?: unknown; phash?: unknown };
+  const phash = phashOf(extra.phash);
+  return {
+    ...(row.edit_count && row.edit_count > 0 ? { edited: true } : {}),
+    ...(typeof extra.sharpness === 'number' && Number.isFinite(extra.sharpness) ? { sharp: extra.sharpness } : {}),
+    ...(phash !== null ? { phash: phash.toString() } : {}),
+    ...(row.session_id ? { folder: row.session_id } : {}),
   };
 }
 
