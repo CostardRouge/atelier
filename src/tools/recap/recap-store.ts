@@ -24,6 +24,7 @@
  */
 
 import type { SyncRecord } from '../../shared/sources/doc-sync';
+import { styleKey, withStyle } from '../../shared/recap/recap-style';
 import { readRecapDoc, type RecapDoc } from '../../shared/recap/recap-doc';
 
 const DB_NAME = 'atelier-recap';
@@ -212,6 +213,15 @@ export async function getValue<T>(key: string): Promise<T | null> {
 
 export function setValue(key: string, value: unknown): Promise<boolean> {
   return write(KV, (tx) => tx.objectStore(KV).put(value, key));
+}
+
+export function deleteValue(key: string): Promise<boolean> {
+  return write(KV, (tx) => tx.objectStore(KV).delete(key));
+}
+
+/** A new recap of its template dressed in the style kept on this device, when there is one (`recap-style.ts`). */
+export async function styled(doc: RecapDoc): Promise<RecapDoc> {
+  return withStyle(doc, await getValue(styleKey(doc.template)).catch(() => null), doc.createdAt);
 }
 
 /** How many prints and clips are kept and what they weigh — the gallery's storage line. */

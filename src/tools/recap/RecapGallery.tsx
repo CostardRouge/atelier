@@ -25,7 +25,7 @@ import { useSurface } from '../../shared/ui/use-surface';
 import NewRecapDialog, { type NewRecapChoice } from './NewRecapDialog';
 import TemplatePreview from './TemplatePreview';
 import { RECAP_DOC_KIND, deleteRemoteRecap, fetchRemoteRecap, listRemoteRecaps, mirrorRecap, moveRecap, pushRecap, type RemoteRecapRow } from './recap-remote';
-import { askPersistence, deleteRecap, deleteSyncRecord, getSyncRecord, getThumb, listRecaps, mediaStorage, putRecap } from './recap-store';
+import { askPersistence, deleteRecap, deleteSyncRecord, getSyncRecord, getThumb, listRecaps, mediaStorage, putRecap, styled } from './recap-store';
 
 function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
@@ -273,7 +273,8 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
     async (choice: NewRecapChoice) => {
       setAsking(null);
       setNotice(null);
-      let doc = createRecapDoc(choice.template, choice.sourceId, { anchor: choice.anchor });
+      // From the template's style kept on this device, when there is one.
+      let doc = await styled(createRecapDoc(choice.template, choice.sourceId, { anchor: choice.anchor }));
       if (choice.range) doc = withRecap(doc, { range: choice.range });
       doc = { ...doc, title: uniqueDocName(defaultTitle(doc), namesIn(choice.sourceId)) };
       if (await createOn(doc, 'created')) onOpen(doc);

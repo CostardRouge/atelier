@@ -10,6 +10,7 @@ import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../..
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
 import ClipDrawer from './ClipDrawer';
+import StyleSection from './StyleSection';
 import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
@@ -577,7 +578,12 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
           />
         );
       case 'layout':
-        return <LayoutSection doc={doc} change={change} />;
+        return (
+          <>
+            <LayoutSection doc={doc} change={change} />
+            <StyleSection doc={doc} change={change} />
+          </>
+        );
       case 'background':
         return (
           <>

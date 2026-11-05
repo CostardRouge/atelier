@@ -28,7 +28,7 @@ import RecapEditor, { type SaveState } from './RecapEditor';
 import RecapGallery from './RecapGallery';
 import { RECAP_BASE, RECAP_HOME, recapFromRef, recapPath, recapRef, parseRecapPath } from './recap-route';
 import { RECAP_DOC_KIND, moveRecap, pullRecap, pushOnce } from './recap-remote';
-import { askPersistence, deleteRecap, deleteSyncRecord, getRecap, getSyncRecord, listRecaps, putRecap, putSyncRecord } from './recap-store';
+import { askPersistence, deleteRecap, deleteSyncRecord, getRecap, getSyncRecord, listRecaps, putRecap, putSyncRecord, styled } from './recap-store';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -298,7 +298,7 @@ export default function RecapTool() {
         const from = day(p.from);
         const to = day(p.to);
         // A period's recap is about its first day, as the gallery's.
-        let doc = createRecapDoc(template, DEFAULT_SOURCE_ID, { anchor: day(p.anchor) ?? from ?? undefined });
+        let doc = await styled(createRecapDoc(template, DEFAULT_SOURCE_ID, { anchor: day(p.anchor) ?? from ?? undefined }));
         if (from || to) doc = withRecap(doc, { range: from && to && from > to ? { from: to, to: from } : { from: from ?? to!, to: to ?? from! } });
         const names = (await listRecaps()).map((m) => m.title);
         const asked = typeof p.title === 'string' ? cleanRecapTitle(p.title) : '';

@@ -3510,6 +3510,11 @@ turns a picture or the background by up to 45° — it grows just enough that no
 corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
 framing wherever it goes.
 
+**Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its
+format, words and their styles, background, cells, motion, look, length and
+quality, never its pictures or days — on this device, and every new recap of
+the same template starts from it; *Forget* goes back to the template's own.
+
 **Sound.** One file of yours, looped under the film, with its volume and fades;
 the film can last whole loops so the music ends on its own seam. Heard in the
 video export only — a still or a carousel takes its music in the app you post
