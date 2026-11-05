@@ -119,4 +119,4 @@ The index outgrew its ~200-line budget, so its long entries were moved here verb
 
 ## Recap's commands (2026-11-04)
 
-`recap.*` — a recap made, filled, corrected, set, looked at and exported by an agent; `recap.set` refuses an out-of-range leaf of a settings OBJECT by reading the merge back through the document's own reader (`recap.md`, «An agent drives a recap»).
+`recap.*` — a recap made, filled, corrected, framed, set, looked at and exported by an agent; `recap.set` refuses an out-of-range leaf of a settings OBJECT by reading the merge back through the document's own reader (`recap.md`, «An agent drives a recap»).

@@ -13,6 +13,7 @@ import {
   withCaption,
   withCleared,
   withPick,
+  withPicture,
   withRecap,
   type BackgroundKind,
   type CellEntrance,
@@ -32,6 +33,9 @@ import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from 
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import PictureThumb from './PictureThumb';
+import FrameBox from './FrameBox';
+import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
+import type { Drawable } from '../../shared/recap/recap-paint';
 
 export type Change = (fn: (doc: RecapDoc) => RecapDoc) => void;
 
@@ -250,6 +254,7 @@ export function SlotSection({
   files,
   change,
   onDevelop,
+  onFrameStage,
 }: {
   doc: RecapDoc;
   slot: RecapSlot;
@@ -258,8 +263,12 @@ export function SlotSection({
   files: ReadonlyMap<string, File>;
   change: Change;
   onDevelop: (key: string) => void;
+  /** Frame this cell's picture on the stage (the same as a double-click there). */
+  onFrameStage: () => void;
 }) {
   const pic = slot.picture;
+  const zoom = pic?.frame?.zoom ?? 1;
+  const setFrame = (frame: Frame | undefined) => pic && change((d) => withPicture(d, pic.key, { frame: frame && !isDefaultFrame(frame) ? frame : undefined }));
   const shown = slot.candidates.slice(0, 60);
   return (
     <InspectorSection id="recap-slot" title={slot.label} foldable={false}>
@@ -298,6 +307,22 @@ export function SlotSection({
             )}
           </div>
         </div>
+        {pic && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className={legend}>Its frame</span>
+              <span className="inline-flex gap-1">
+                <Button size="sm" variant="ghost" onClick={onFrameStage} title="Drag it in its cell on the stage — or double-click the cell">
+                  Frame on the stage
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setFrame(undefined)} disabled={isDefaultFrame(pic.frame)} title="Centred, the cell just covered">
+                  Centre
+                </Button>
+              </span>
+            </div>
+            <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />
+          </div>
+        )}
         {shown.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className={legend}>
@@ -434,10 +459,33 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
 
 // ---- background ----------------------------------------------------------------------
 
-export function BackgroundSection({ doc, change, clips, onAddClip, onChooseClip }: { doc: RecapDoc; change: Change; clips: { key: string; name: string }[]; onAddClip: () => void; onChooseClip: (key: string) => void }) {
+export function BackgroundSection({
+  doc,
+  change,
+  clips,
+  onAddClip,
+  onChooseClip,
+  frameSource,
+  frameVersion,
+  onLayout,
+}: {
+  doc: RecapDoc;
+  change: Change;
+  clips: { key: string; name: string }[];
+  onAddClip: () => void;
+  onChooseClip: (key: string) => void;
+  /** What the frame is set on — the clip's frame or the blurred picture — or null when the ground is flat. */
+  frameSource: () => Drawable | null;
+  frameVersion: number;
+  /** The format is the Layout tab's: the chip goes there. */
+  onLayout: () => void;
+}) {
   const bg = doc.background;
   const set = (patch: Partial<RecapDoc['background']>) => change((d) => withRecap(d, { background: { ...d.background, ...patch } }));
+  const framed = bg.kind === 'video' || bg.kind === 'blur';
+  const fmt = FORMATS[doc.format];
   return (
+    <>
     <InspectorSection id="recap-background" title="Background">
       <div className={row}>
         <Segmented<BackgroundKind> size="sm" columns={3} label="Background" value={bg.kind} onChange={(kind) => set({ kind })} options={(Object.keys(BG_LABEL) as BackgroundKind[]).map((k) => ({ id: k, label: BG_LABEL[k] }))} />
@@ -469,6 +517,29 @@ export function BackgroundSection({ doc, change, clips, onAddClip, onChooseClip 
         {bg.kind !== 'paper' && bg.kind !== 'ink' && <SliderRow label="Veil" value={Math.round(bg.veil * 100)} min={0} max={80} step={1} reset={20} format={(v) => `${v} %`} onChange={(v) => set({ veil: v / 100 })} />}
       </div>
     </InspectorSection>
+    {framed && (
+      <InspectorSection
+        id="recap-background-frame"
+        title="Frame"
+        marked={!isDefaultFrame(bg.frame)}
+        mark={
+          <button type="button" onClick={onLayout} title="The page's format is set in Layout" className="font-mono text-2xs text-accent-ink hover:underline underline-offset-2">
+            {fmt.ratio} · change in Layout ›
+          </button>
+        }
+      >
+        <div className={row}>
+          <FrameBox source={frameSource} boxW={fmt.width} boxH={fmt.height} frame={bg.frame} onFrame={(frame) => set({ frame: isDefaultFrame(frame) ? undefined : frame })} version={frameVersion} />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-2xs text-muted">Double-click the background on the stage to frame it there.</span>
+            <Button size="sm" variant="ghost" onClick={() => set({ frame: undefined })} disabled={isDefaultFrame(bg.frame)} title="Centred, the page just covered">
+              Centre
+            </Button>
+          </div>
+        </div>
+      </InspectorSection>
+    )}
+    </>
   );
 }
 

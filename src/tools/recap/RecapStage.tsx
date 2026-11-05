@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import type { RecapDoc } from '../../shared/recap/recap-doc';
 import { hitTest, type Box, type Hit, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
-import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
+import { DEFAULT_FRAME, MAX_ZOOM, panFrame, sourceRect, zoomFrame, type Frame } from '../../shared/recap/recap-frame';
+import { paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 
 /** What the author has in hand on the stage: a cell's slot, a text, the background. */
@@ -36,6 +37,12 @@ interface Props {
   guides: boolean;
   /** The canvas, for a poster of the recap. */
   canvasRef?: React.MutableRefObject<HTMLCanvasElement | null>;
+  /** What is being FRAMED on the stage (a double-click): the background or a cell's picture; null when nothing is. */
+  framing: Selection;
+  onFraming: (s: Selection) => void;
+  /** The source a framing moves over: the clip's frame, the blurred picture, the cell's picture. */
+  frameSource: (s: Selection) => Drawable | null;
+  onFrame: (s: Selection, frame: Frame) => void;
 }
 
 const DRAG_PX = 6;
@@ -48,7 +55,7 @@ const DRAG_PX = 6;
  * carries the editor's chrome.
  */
 export default function RecapStage(props: Props) {
-  const { doc, resolved, layout, film, sources, page, t, version, selection, onSelect, onSwap, onMoveHeading, aliases, clipSlides, guides } = props;
+  const { doc, resolved, layout, film, sources, page, t, version, selection, onSelect, onSwap, onMoveHeading, aliases, clipSlides, guides, framing, onFraming, frameSource, onFrame } = props;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
@@ -141,6 +148,92 @@ export default function RecapStage(props: Props) {
     }
   };
 
+  // ---- framing: a double-click on the background or a picture, then drag moves it, a wheel or a pinch zooms ----
+  const frameBox: Box | null =
+    framing && pageBox
+      ? framing.kind === 'background'
+        ? { x: 0, y: 0, w: pageBox.width, h: pageBox.height }
+        : framing.kind === 'cell'
+          ? (pageBox.parts.find((p) => p.kind === 'cell' && p.id === framing.id)?.box ?? null)
+          : null
+      : null;
+  const frameNow = (): Frame =>
+    (framing?.kind === 'background' ? doc.background.frame : framing?.kind === 'cell' ? resolved.slots.find((s) => s.id === framing.id)?.picture?.frame : undefined) ?? DEFAULT_FRAME;
+  const frameSrc = framing ? frameSource(framing) : null;
+  // A framing whose target left the page (another page, an emptied cell) ends.
+  useEffect(() => {
+    if (framing && !frameBox) onFraming(null);
+  }, [framing, frameBox, onFraming]);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ frame: Frame; x: number; y: number; dist: number } | null>(null);
+  const frameDown = (e: ReactPointerEvent) => {
+    if (!canvas.current) return;
+    e.preventDefault();
+    canvas.current.setPointerCapture(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointers.current.values()];
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    const dist = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
+    gesture.current = { frame: frameNow(), x: cx, y: cy, dist };
+  };
+  const frameMove = (e: ReactPointerEvent) => {
+    const g0 = gesture.current;
+    if (!g0 || !pointers.current.has(e.pointerId) || !frameSrc || !frameBox) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointers.current.values()];
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    let f = g0.frame;
+    if (pts.length > 1 && g0.dist > 0) f = zoomFrame(f, (f.zoom * Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)) / g0.dist);
+    onFrame(framing, panFrame(f, (cx - g0.x) / scale, (cy - g0.y) / scale, frameSrc.width, frameSrc.height, frameBox.w, frameBox.h));
+  };
+  const frameUp = (e: ReactPointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    // The finger left on the glass carries on from where the pinch stopped.
+    const rest = [...pointers.current.values()];
+    gesture.current = rest.length ? { frame: frameNow(), x: rest[0].x, y: rest[0].y, dist: 0 } : null;
+  };
+  // The wheel zooms (non-passive, so the page does not scroll under it).
+  const frameRef = useRef({ framing, frameNow, onFrame });
+  frameRef.current = { framing, frameNow, onFrame };
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c || !framing) return;
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = frameRef.current;
+      const f = r.frameNow();
+      r.onFrame(r.framing, zoomFrame(f, f.zoom * Math.exp(-e.deltaY * 0.0015)));
+    };
+    c.addEventListener('wheel', wheel, { passive: false });
+    return () => c.removeEventListener('wheel', wheel);
+  }, [framing]);
+  // The ghost: the whole picture, faint, around the window a cell shows.
+  const ghostRef = useRef<HTMLCanvasElement>(null);
+  const cellFrame = framing?.kind === 'cell' ? resolved.slots.find((s) => s.id === framing.id)?.picture?.frame : undefined;
+  useEffect(() => {
+    const c = ghostRef.current;
+    if (!c || !size.w) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.round(size.w * dpr);
+    c.height = Math.round(size.h * dpr);
+    const g = c.getContext('2d');
+    if (!g) return;
+    g.clearRect(0, 0, c.width, c.height);
+    if (!frameBox || framing?.kind !== 'cell' || !frameSrc) return;
+    const k = scale * dpr;
+    const r = sourceRect(frameSrc.width, frameSrc.height, frameBox, cellFrame);
+    g.globalAlpha = 0.4;
+    g.drawImage(frameSrc.image, 0, 0, frameSrc.width, frameSrc.height, r.x * k, r.y * k, r.w * k, r.h * k);
+    g.globalAlpha = 1;
+    g.clearRect(frameBox.x * k, frameBox.y * k, frameBox.w * k, frameBox.h * k);
+  }, [framing, frameBox?.x, frameBox?.y, frameBox?.w, frameBox?.h, frameSrc, cellFrame, size, scale, version]);
+  const zoomBy = (by: number) => {
+    const f = frameNow();
+    onFrame(framing, zoomFrame(f, Math.min(MAX_ZOOM, f.zoom * by)));
+  };
+
   // The selected part's outline, in the stage's pixels.
   let outline: Box | null = null;
   if (selection && pageBox) {
@@ -164,22 +257,52 @@ export default function RecapStage(props: Props) {
           }}
           role="img"
           aria-label={`${doc.title}, page ${page + 1} of ${layout.pages.length}`}
-          className="block w-full h-full touch-none select-none cursor-pointer shadow-paper"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={() => {
+          className={`block w-full h-full touch-none select-none shadow-paper ${framing ? 'cursor-move' : 'cursor-pointer'}`}
+          onPointerDown={framing ? frameDown : onPointerDown}
+          onPointerMove={framing ? frameMove : onPointerMove}
+          onPointerUp={framing ? frameUp : onPointerUp}
+          onPointerCancel={(e) => {
             drag.current = null;
             setGhost(null);
+            pointers.current.delete(e.pointerId);
+            gesture.current = null;
+          }}
+          onDoubleClick={(e) => {
+            if (framing) return;
+            const h = hitAt(e);
+            if (h.kind === 'cell' && resolved.slots.find((s) => s.id === h.id)?.picture) onFraming({ kind: 'cell', id: h.id });
+            else if (h.kind === 'background' && (doc.background.kind === 'video' || doc.background.kind === 'blur')) onFraming({ kind: 'background' });
           }}
         />
+        <canvas ref={ghostRef} aria-hidden="true" className="pointer-events-none absolute inset-0 w-full h-full" />
         {guides && story && size.h > 0 && (
           <>
             <div className="pointer-events-none absolute inset-x-0 top-0 bg-[repeating-linear-gradient(135deg,rgba(217,68,42,0.10)_0_6px,transparent_6px_12px)] border-b border-dashed border-accent/50" style={{ height: size.h * 0.12 }} />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-[repeating-linear-gradient(135deg,rgba(217,68,42,0.10)_0_6px,transparent_6px_12px)] border-t border-dashed border-accent/50" style={{ height: size.h * 0.16 }} />
           </>
         )}
-        {outline && (
+        {frameBox && (
+          <div className="pointer-events-none absolute border-2 border-accent" style={css(frameBox)} />
+        )}
+        {framing && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-2 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-ink/85 text-paper shadow-paper text-2xs font-mono whitespace-nowrap" role="toolbar" aria-label="Framing">
+            <span className="px-1">{framing.kind === 'background' ? 'Background' : 'Picture'} · drag to move</span>
+            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.15)} className="w-7 h-7 rounded-full hover:bg-paper/15">
+              −
+            </button>
+            <span className="tabular-nums w-10 text-center">{Math.round(frameNow().zoom * 100)} %</span>
+            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)} className="w-7 h-7 rounded-full hover:bg-paper/15">
+              +
+            </button>
+            <button type="button" onClick={() => onFrame(framing, DEFAULT_FRAME)} className="h-7 px-2 rounded-full hover:bg-paper/15">
+              Centre
+            </button>
+            <button type="button" onClick={() => onFraming(null)} className="h-7 px-2.5 rounded-full bg-accent text-paper font-semibold">
+              Done
+            </button>
+          </div>
+        )}
+        {!framing && outline && (
           <div
             className={`pointer-events-none absolute border-2 ${selection?.kind === 'background' ? 'border-dashed border-accent/70' : 'border-accent'} rounded-[3px]`}
             style={{ ...css(outline), margin: -2 }}

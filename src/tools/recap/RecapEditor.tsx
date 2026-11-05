@@ -6,7 +6,8 @@ import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
 import { clipSlideNumbers, layoutRecap, pageOfSlot } from '../../shared/recap/recap-layout';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
-import { PAINT_FONTS, paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
+import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
+import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
@@ -96,6 +97,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const instance = connection?.id ?? null;
   const [files, setFiles] = useState<Map<string, File>>(() => new Map());
   const [selection, setSelection] = useState<Selection>(null);
+  /** What a double-click on the stage is framing — the background or a cell's picture. */
+  const [framing, setFraming] = useState<Selection>(null);
   const [tab, setTab] = useState<Tab>('pictures');
   const [notice, setNotice] = useState<string | null>(null);
   const [filling, setFilling] = useState(false);
@@ -227,6 +230,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     return () => cancelAnimationFrame(raf);
   }, [playing, slotKeys]);
   const togglePlay = useCallback(() => setPlaying((p) => !p), []);
+  const framingRef = useRef(framing);
+  framingRef.current = framing;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -234,7 +239,11 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       if (e.key === ' ') {
         e.preventDefault();
         togglePlay();
-      } else if (e.key === 'Escape') setSelection(null);
+      } else if (e.key === 'Escape' || e.key === 'Enter') {
+        // A framing ends first; a second Escape lets go of the selection.
+        if (framingRef.current) setFraming(null);
+        else if (e.key === 'Escape') setSelection(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -244,6 +253,49 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     () => ({ still: pictures.still, ...clips.sources }),
     // The stills' identity is the hook's; it repaints through `version`.
     [pictures.still, clips.sources, pictures.version, clips.version],
+  );
+
+  // ---- framing: what a frame moves over, and where it is written -----------------------
+  const frameSource = useCallback(
+    (s: Selection): Drawable | null => {
+      if (s?.kind === 'background') {
+        const bg = doc.background;
+        // Through the PEEK: framing never seeks the stage's own element.
+        if (bg.kind === 'video') return clips.peek.background?.(bg.loopIn) ?? null;
+        const first = bg.kind === 'blur' ? resolved.slots.find((x) => x.picture)?.picture : undefined;
+        return first ? pictures.still(first.key) : null;
+      }
+      if (s?.kind === 'cell') {
+        const pic = resolved.slots.find((x) => x.id === s.id)?.picture;
+        return pic ? pictures.still(pic.key) : null;
+      }
+      return null;
+    },
+    // The stills' identity is the hook's; a landed picture moves `version`.
+    [doc.background, resolved, clips.peek, pictures.still, pictures.version, clips.version],
+  );
+  const setFrame = useCallback(
+    (s: Selection, frame: Frame) => {
+      const kept = isDefaultFrame(frame) ? undefined : frame;
+      if (s?.kind === 'background') change((d) => withRecap(d, { background: { ...d.background, frame: kept } }));
+      else if (s?.kind === 'cell') {
+        // The frame belongs to the PICTURE: it follows it to another cell, another page, another format.
+        const key = resolved.slots.find((x) => x.id === s.id)?.picture?.key;
+        if (key) change((d) => withPicture(d, key, { frame: kept }));
+      }
+    },
+    [change, resolved],
+  );
+  const startFraming = useCallback(
+    (s: Selection) => {
+      setFraming(s);
+      if (s) {
+        setPlaying(false);
+        setSelection(s);
+        setTab(s.kind === 'background' ? 'background' : 'pictures');
+      }
+    },
+    [],
   );
 
   // ---- the poster: the gallery's card, drawn from the stage's own painter -------------
@@ -473,7 +525,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               onAlias={setAlias}
             />
             {slot ? (
-              <SlotSection doc={doc} slot={slot} client={client} instance={instance} files={files} change={change} onDevelop={setDeveloping} />
+              <SlotSection doc={doc} slot={slot} client={client} instance={instance} files={files} change={change} onDevelop={setDeveloping} onFrameStage={() => startFraming({ kind: 'cell', id: slot.id })} />
             ) : (
               <p className="m-0 px-1 text-xs text-muted">Click a cell on the stage to choose its picture, develop it or empty it. Drag a picture onto another cell to swap them.</p>
             )}
@@ -495,7 +547,16 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'background':
         return (
           <>
-            <BackgroundSection doc={doc} change={change} clips={videoClips} onAddClip={() => void addBackgroundClip()} onChooseClip={(key) => change((d) => withRecap(d, { background: { ...d.background, video: key } }))} />
+            <BackgroundSection
+              doc={doc}
+              change={change}
+              clips={videoClips}
+              onAddClip={() => void addBackgroundClip()}
+              onChooseClip={(key) => change((d) => withRecap(d, { background: { ...d.background, video: key } }))}
+              frameSource={() => frameSource({ kind: 'background' })}
+              frameVersion={pictures.version + clips.version}
+              onLayout={() => setTab('layout')}
+            />
             <SoundSection doc={doc} change={change} onChanged={sound.reload} />
           </>
         );
@@ -574,6 +635,10 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       aliases={aliases}
       clipSlides={clipSlides}
       guides={guides}
+      framing={framing}
+      onFraming={startFraming}
+      frameSource={frameSource}
+      onFrame={setFrame}
     />
   );
 

@@ -29,7 +29,7 @@ export const SETTABLE: Record<string, string> = {
   headingOffset: '{x, y}, fractions of the page, −0.5…0.5',
   cells: '{number, count, exif, device, caption, videoBadge, today, headers: booleans; empty: "number"|"dashed"|"hidden"; weekStart: 0|1; gap: 0–0.04; radius: 0–0.25; shadow: 0–1 (0 = none); shadowBlur: 0–0.5; shadowY: 0–0.25}',
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed}',
-  background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160}',
+  background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160; frame: {x, y: 0–1 the focus, zoom: 1–4}}',
   clipSlides: 'true: each clip gets a carousel slide of its own and its cell says which',
   length: 'the film’s length in seconds, 3–90, or null for the recap’s own (entrances, clips, hold); set, it wins over the sound’s whole loops',
 };
@@ -114,6 +114,7 @@ export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: numb
             kind: s.picture.kind,
             ...(s.picture.device ? { device: deviceLabel(s.picture.device, aliases) } : {}),
             ...(s.picture.develop ? { developed: true } : {}),
+            ...(s.picture.frame ? { frame: s.picture.frame } : {}),
           }
         : null,
       ...(s.pinned ? { pinned: true } : {}),

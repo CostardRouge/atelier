@@ -3495,6 +3495,15 @@ cells in order, at random, as a wave, by columns or as a spiral, each fading,
 sliding, popping, dropping, developing like a Polaroid or flickering; clips
 playing in turn, zoomed, together or as posters) and *Export*.
 
+**Framing.** The background and every picture can be framed: a point of the
+picture kept in the middle and a zoom, never a crop, so a change of format or of
+cell keeps what you framed. In the *Background* tab the whole clip or picture is
+shown with the page's shape on it — drag it, pull a corner to zoom; a cell's
+picture has its zoom in *Pictures*. Or **double-click** the background or a cell
+on the stage: drag moves it, the wheel or a pinch zooms, and the rest of a
+cell's picture shows faintly around it; *Done* or Escape leaves. A picture keeps
+its framing wherever it goes.
+
 **Sound.** One file of yours, looped under the film, with its volume and fades;
 the film can last whole loops so the music ends on its own seam. Heard in the
 video export only — a still or a carousel takes its music in the app you post
@@ -3511,7 +3520,7 @@ machine — and can be kept on a Winnow whose bucket lists the `recap` kind.
 recap with the same gestures: `recap.list`, `.create` (a template and the day
 or period it is about), `.open` and `.keep` from the gallery; in the editor
 `recap.get` (every slot with what it shows, every setting), `.fill` (from the
-connected Winnow), `.pin`, `.empty`, `.swap` and `.caption` on a slot, `.set`
+connected Winnow), `.pin`, `.empty`, `.swap`, `.caption` and `.frame` on a slot, `.set`
 (any setting, deep-merged; an unknown key or a value out of range is refused,
 never clamped), `.snapshot` (a page as a picture), `.export` (the video, the
 stills or the carousel into the downloads), and `.undo` / `.redo`. Every write

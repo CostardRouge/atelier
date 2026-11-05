@@ -15,7 +15,8 @@ import { imageResult } from '../../shared/commands/image-result';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { downloadBlob } from '../../shared/media/save';
 import { applySettings, recapOutline, SETTABLE } from '../../shared/recap/recap-commands';
-import { withCaption, withCleared, withPick, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
+import { withCaption, withCleared, withPick, withPicture, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
+import { DEFAULT_FRAME, readFrame } from '../../shared/recap/recap-frame';
 import { slugOf } from '../../shared/recap/recap-file';
 import type { RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
@@ -113,6 +114,29 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
         if ((p.text as string).length > 80) throw new CommandError('invalid', 'a caption is 80 characters at most');
         c.current.change((d) => withCaption(d, s.id, p.text as string));
         return { slot: s.id, caption: p.text };
+      },
+    },
+    {
+      id: 'recap.frame',
+      title: 'Frame a slot’s picture',
+      description:
+        'How the picture in a slot sits in its cell: x and y (0–1) the point of the picture kept in the middle, zoom (1–4) over the cell just covered. The frame belongs to the PICTURE — it follows it to another cell, page or format. No x, y nor zoom puts it back centred. (The background’s frame is `recap.set` background.frame.)',
+      params: {
+        slot: { type: 'string', description: 'The slot’s id.' },
+        x: { type: 'number', min: 0, max: 1, description: 'The focus across the picture.', optional: true },
+        y: { type: 'number', min: 0, max: 1, description: 'The focus down the picture.', optional: true },
+        zoom: { type: 'number', min: 1, max: 4, description: 'Over the cell just covered.', optional: true },
+      },
+      run: (p) => {
+        const s = slotOf(p.slot);
+        const pic = s.picture;
+        if (!pic) throw new CommandError('invalid', `slot ${s.id} shows no picture`);
+        // What is given changes; what is not keeps its value — and nothing given at all centres it.
+        const given = p.x !== undefined || p.y !== undefined || p.zoom !== undefined;
+        const was = given ? (pic.frame ?? DEFAULT_FRAME) : DEFAULT_FRAME;
+        const frame = readFrame({ x: p.x ?? was.x, y: p.y ?? was.y, zoom: p.zoom ?? was.zoom });
+        c.current.change((d) => withPicture(d, pic.key, { frame }));
+        return { slot: s.id, picture: pic.key, frame: frame ?? DEFAULT_FRAME };
       },
     },
     {

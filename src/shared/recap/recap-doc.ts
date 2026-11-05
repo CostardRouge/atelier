@@ -18,6 +18,7 @@
 import { developOrNull, type DevelopSettings } from '../develop/develop';
 import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
+import { readFrame, type Frame } from './recap-frame';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
 import { addDays } from '../roadtrip/trip-days';
@@ -98,6 +99,8 @@ export interface RecapPicture {
   picked?: boolean;
   /** Its own correction (the Develop sheet), null as shot. */
   develop?: DevelopSettings | null;
+  /** How it sits in a cell: its focus and zoom (`recap-frame.ts`); absent = centred, just covering. */
+  frame?: Frame;
   /**
    * Kept for the recap but never a slot's: a clip added as the looping
    * background, which must not land on the day it was shot.
@@ -126,6 +129,8 @@ export interface RecapBackground {
   veil: number;
   /** The blur of `blur` (a picture of the recap, softened), in page pixels. */
   blur: number;
+  /** How the video or the picture sits in the page: its focus and zoom; absent = centred, just covering. */
+  frame?: Frame;
 }
 
 export interface RecapCells {
@@ -434,6 +439,8 @@ export function readPicture(raw: unknown): RecapPicture | null {
   }
   if (r.picked === true) out.picked = true;
   if (r.loose === true) out.loose = true;
+  const frame = readFrame(r.frame);
+  if (frame) out.frame = frame;
   const develop = developOrNull(r.develop);
   if (develop) out.develop = develop;
   return out;
@@ -479,6 +486,7 @@ export function sanitizeBackground(raw: unknown): RecapBackground {
     speed: num(r.speed, 0.25, 2, 1),
     veil: num(r.veil, 0, 0.8, DEFAULT_BACKGROUND.veil),
     blur: num(r.blur, 0, 160, DEFAULT_BACKGROUND.blur),
+    ...(readFrame(r.frame) ? { frame: readFrame(r.frame) } : {}),
   };
 }
 

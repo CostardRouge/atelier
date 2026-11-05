@@ -17,7 +17,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   with Develop's sheet under one look, set it over a looping video with a sound, and exports a Reel, PNGs or a whole
   carousel whose clips get slides of their own. Each of its texts has its own face, size, weight, colour, outline,
   shadow and glow, or one of the suite's title styles (Or ciné, Rouge plein cadre…); the video's length can be set;
-  the shadow under its pictures is a setting.
+  the shadow under its pictures is a setting. The background and every picture can be framed — moved and zoomed in
+  the inspector, or straight on the stage with a double-click, a drag and the wheel or a pinch — and a picture keeps
+  its framing wherever it goes.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

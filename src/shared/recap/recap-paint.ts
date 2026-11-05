@@ -14,6 +14,7 @@ import type { Box, CellPart, RecapLayout, TextPart } from './recap-layout';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
 import { deviceLabel, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
+import { coverWindow, type Frame } from './recap-frame';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
 
@@ -78,13 +79,11 @@ export function isLightGround(doc: RecapDoc): boolean {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 150;
 }
 
-/** `src` drawn to cover `box` — cropped, never stretched. */
-export function drawCover(g: Ctx2D, src: Drawable, box: Box): void {
+/** `src` drawn to cover `box` — cropped, never stretched — around its `frame`'s focus, at its zoom. */
+export function drawCover(g: Ctx2D, src: Drawable, box: Box, frame?: Frame): void {
   if (src.width <= 0 || src.height <= 0 || box.w <= 0 || box.h <= 0) return;
-  const k = Math.max(box.w / src.width, box.h / src.height);
-  const sw = box.w / k;
-  const sh = box.h / k;
-  g.drawImage(src.image, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, box.x, box.y, box.w, box.h);
+  const w = coverWindow(src.width, src.height, box.w, box.h, frame);
+  g.drawImage(src.image, w.sx, w.sy, w.sw, w.sh, box.x, box.y, box.w, box.h);
 }
 
 function roundRect(g: Ctx2D, b: Box, r: number): void {
@@ -242,7 +241,7 @@ function background(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number,
   if (bg.kind === 'video' && src.background) {
     const frame = src.background(loopTime(bg, src.backgroundLength ?? 0, t));
     if (frame) {
-      drawCover(g, frame, { x: 0, y: 0, w: W, h: H });
+      drawCover(g, frame, { x: 0, y: 0, w: W, h: H }, bg.frame);
       drew = true;
     }
   } else if (bg.kind === 'blur') {
@@ -253,7 +252,7 @@ function background(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number,
       const had = 'filter' in f ? f.filter : undefined;
       if (had !== undefined) f.filter = `blur(${Math.round(bg.blur * (W / 1080))}px)`;
       // Drawn a little larger than the page, so the blur's soft edge falls outside it.
-      drawCover(g, still, { x: -W * 0.06, y: -H * 0.06, w: W * 1.12, h: H * 1.12 });
+      drawCover(g, still, { x: -W * 0.06, y: -H * 0.06, w: W * 1.12, h: H * 1.12 }, bg.frame);
       if (had !== undefined) f.filter = had;
       drew = true;
     }
@@ -387,7 +386,7 @@ function drawCell(
     g.save();
     roundRect(g, box, radius);
     g.clip();
-    drawCover(g, drawable, box);
+    drawCover(g, drawable, box, pic.frame);
     g.restore();
   } else {
     g.fillStyle = light ? PLACEHOLDER_LIGHT : PLACEHOLDER_DARK;
