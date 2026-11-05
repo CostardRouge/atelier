@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { LibraryHalf, WinnowClient } from '../client';
 import PickerSubject, { type DescribeState, type SubjectLists } from './PickerSubject';
+import type { Reach } from './describe-reach';
 import Segmented from '../../../ui/Segmented';
 import { Icons } from '../../../ui/icons';
 import {
@@ -58,6 +59,7 @@ export default function PickerRail({
   client,
   subject,
   describe,
+  onReach,
 }: {
   counts: FacetCounts;
   facets: PickFacets;
@@ -72,6 +74,8 @@ export default function PickerRail({
   subject: SubjectLists;
   /** Where a description's ranking stands — asked, ranked, or refused by an instance with no index. */
   describe: DescribeState;
+  /** Switch how far a description reaches, for this search (`describe-reach.ts`). */
+  onReach: (reach: Reach) => void;
 }) {
   const set = (patch: Partial<PickFacets>) => onFacets({ ...facets, ...patch });
   const active = activeFacets(facets);
@@ -108,7 +112,7 @@ export default function PickerRail({
         />
       </section>
 
-      <PickerSubject client={client} lists={subject} facets={facets} onFacets={onFacets} describe={describe} />
+      <PickerSubject client={client} lists={subject} facets={facets} onFacets={onFacets} describe={describe} onReach={onReach} />
 
       <section>
         <p className={legend}>Winnow verdict</p>

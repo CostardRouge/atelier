@@ -52,6 +52,8 @@ export default function MosaicPicker({
       start: { day: todayIso(), scope: 'span', span: doc.span ?? null },
       held: (row) => held.has(row.id),
       heldLabel: 'in this mosaic',
+      // A mosaic wants every picture a description can claim, not the best 200 (his ask of 2026-11-05).
+      reach: 'broad',
       // Hundreds or thousands are the point: everything but the rejects.
       openTicks: 'all',
       accepts: (row: WinnowAssetRow) => row.media_type === 'photo' || row.media_type === 'video',

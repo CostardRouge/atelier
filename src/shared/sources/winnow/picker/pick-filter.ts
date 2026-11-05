@@ -222,8 +222,6 @@ export interface PickFacets {
 }
 
 export type WordsIn = 'describe' | 'text';
-/** How many of the library's closest matches a description asks for — Winnow's own ceiling. */
-export const RANKED = 200;
 
 /** The kinds of place the rail offers — the names Winnow's reverse geocoding gave, finest last. */
 export const PLACE_KINDS = ['country', 'region', 'city', 'place'] as const satisfies readonly NameKind[];
