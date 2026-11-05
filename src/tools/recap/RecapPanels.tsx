@@ -36,7 +36,7 @@ import { Icons } from '../../shared/ui/icons';
 import PictureThumb from './PictureThumb';
 import FrameBox from './FrameBox';
 import LoopTrimmer from './LoopTrimmer';
-import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
+import { DEFAULT_FRAME, MAX_ROTATE, isDefaultFrame, rotateFrame, type Frame } from '../../shared/recap/recap-frame';
 import { ARRANGES, EXIF_LABEL, EXIF_PARTS, type Arrange, type ExifPart } from '../../shared/recap/recap-cellwords';
 import type { Drawable } from '../../shared/recap/recap-paint';
 
@@ -324,6 +324,7 @@ export function SlotSection({
               </span>
             </div>
             <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />
+            <SliderRow label="Straighten" value={pic.frame?.rotate ?? 0} min={-MAX_ROTATE} max={MAX_ROTATE} step={0.1} reset={0} format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}°`} onChange={(v) => setFrame(rotateFrame(pic.frame ?? DEFAULT_FRAME, v))} />
           </div>
         )}
         {pic && doc.cells.exif && (

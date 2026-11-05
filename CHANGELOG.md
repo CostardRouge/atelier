@@ -18,8 +18,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   carousel whose clips get slides of their own. Each of its texts has its own face, size, weight, colour, outline,
   shadow and glow, or one of the suite's title styles (Or ciné, Rouge plein cadre…); the video's length can be set;
   the shadow under its pictures is a setting. The background and every picture can be framed — moved and zoomed in
-  the inspector, or straight on the stage with a double-click, a drag and the wheel or a pinch — and a picture keeps
-  its framing wherever it goes. The background's clip is chosen from a drawer of thumbnails — the recap's own days
+  the inspector, or straight on the stage with a double-click, a drag and the wheel or a pinch — and straightened by
+  a few degrees without an empty corner; a picture keeps its framing wherever it goes. The background's clip is chosen from a drawer of thumbnails — the recap's own days
   first, Live Photos marked and offered as short loops — and its loop is a band on a filmstrip, set by its two
   handles or dragged whole. A cell's words never pass its edge: you choose which camera settings it says (for the
   whole recap or one picture) and whether they stand on one line, stacked, or packed to fit. The video export has

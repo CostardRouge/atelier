@@ -3505,8 +3505,10 @@ cell keeps what you framed. In the *Background* tab the whole clip or picture is
 shown with the page's shape on it — drag it, pull a corner to zoom; a cell's
 picture has its zoom in *Pictures*. Or **double-click** the background or a cell
 on the stage: drag moves it, the wheel or a pinch zooms, and the rest of a
-cell's picture shows faintly around it; *Done* or Escape leaves. A picture keeps
-its framing wherever it goes.
+cell's picture shows faintly around it; *Done* or Escape leaves. **Straighten**
+turns a picture or the background by up to 45° — it grows just enough that no
+corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
+framing wherever it goes.
 
 **Sound.** One file of yours, looped under the film, with its volume and fades;
 the film can last whole loops so the music ends on its own seam. Heard in the

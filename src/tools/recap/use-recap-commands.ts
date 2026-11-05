@@ -120,21 +120,22 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
       id: 'recap.frame',
       title: 'Frame a slot’s picture',
       description:
-        'How the picture in a slot sits in its cell: x and y (0–1) the point of the picture kept in the middle, zoom (1–4) over the cell just covered. The frame belongs to the PICTURE — it follows it to another cell, page or format. No x, y nor zoom puts it back centred. (The background’s frame is `recap.set` background.frame.)',
+        'How the picture in a slot sits in its cell: x and y (0–1) the point of the picture kept in the middle, zoom (1–4) over the cell just covered, rotate (−45–45°) to straighten it. The frame belongs to the PICTURE — it follows it to another cell, page or format. No x, y nor zoom puts it back centred. (The background’s frame is `recap.set` background.frame.)',
       params: {
         slot: { type: 'string', description: 'The slot’s id.' },
         x: { type: 'number', min: 0, max: 1, description: 'The focus across the picture.', optional: true },
         y: { type: 'number', min: 0, max: 1, description: 'The focus down the picture.', optional: true },
         zoom: { type: 'number', min: 1, max: 4, description: 'Over the cell just covered.', optional: true },
+        rotate: { type: 'number', min: -45, max: 45, description: 'Degrees clockwise — a horizon straightened; the picture grows so no corner goes empty.', optional: true },
       },
       run: (p) => {
         const s = slotOf(p.slot);
         const pic = s.picture;
         if (!pic) throw new CommandError('invalid', `slot ${s.id} shows no picture`);
         // What is given changes; what is not keeps its value — and nothing given at all centres it.
-        const given = p.x !== undefined || p.y !== undefined || p.zoom !== undefined;
+        const given = p.x !== undefined || p.y !== undefined || p.zoom !== undefined || p.rotate !== undefined;
         const was = given ? (pic.frame ?? DEFAULT_FRAME) : DEFAULT_FRAME;
-        const frame = readFrame({ x: p.x ?? was.x, y: p.y ?? was.y, zoom: p.zoom ?? was.zoom });
+        const frame = readFrame({ x: p.x ?? was.x, y: p.y ?? was.y, zoom: p.zoom ?? was.zoom, rotate: p.rotate ?? was.rotate });
         c.current.change((d) => withPicture(d, pic.key, { frame }));
         return { slot: s.id, picture: pic.key, frame: frame ?? DEFAULT_FRAME };
       },

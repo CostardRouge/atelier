@@ -14,7 +14,7 @@ import type { Box, CellPart, RecapLayout, TextPart } from './recap-layout';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
 import { deviceLabel, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
-import { coverWindow, type Frame } from './recap-frame';
+import { framedDraw, type Frame } from './recap-frame';
 import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
@@ -83,8 +83,17 @@ export function isLightGround(doc: RecapDoc): boolean {
 /** `src` drawn to cover `box` — cropped, never stretched — around its `frame`'s focus, at its zoom. */
 export function drawCover(g: Ctx2D, src: Drawable, box: Box, frame?: Frame): void {
   if (src.width <= 0 || src.height <= 0 || box.w <= 0 || box.h <= 0) return;
-  const w = coverWindow(src.width, src.height, box.w, box.h, frame);
-  g.drawImage(src.image, w.sx, w.sy, w.sw, w.sh, box.x, box.y, box.w, box.h);
+  const d = framedDraw(src.width, src.height, box, frame);
+  if (!d.angle) {
+    g.drawImage(src.image, d.win.sx, d.win.sy, d.win.sw, d.win.sh, box.x, box.y, box.w, box.h);
+    return;
+  }
+  // Turned: drawn around the box's centre, larger, so its corners land on picture (the caller clips to the box).
+  g.save();
+  g.translate(d.cx, d.cy);
+  g.rotate(d.angle);
+  g.drawImage(src.image, d.win.sx, d.win.sy, d.win.sw, d.win.sh, -d.w / 2, -d.h / 2, d.w, d.h);
+  g.restore();
 }
 
 function roundRect(g: Ctx2D, b: Box, r: number): void {

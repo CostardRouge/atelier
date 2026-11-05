@@ -237,6 +237,11 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
+      // A framing ends on Escape wherever the focus is — its own bar's buttons hold it while it runs.
+      if (e.key === 'Escape' && framingRef.current && !(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) {
+        setFraming(null);
+        return;
+      }
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName))) return;
       if (e.key === ' ') {
         e.preventDefault();

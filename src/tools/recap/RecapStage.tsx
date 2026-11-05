@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import type { RecapDoc } from '../../shared/recap/recap-doc';
 import { hitTest, type Box, type Hit, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
-import { DEFAULT_FRAME, MAX_ZOOM, panFrame, sourceRect, zoomFrame, type Frame } from '../../shared/recap/recap-frame';
+import { DEFAULT_FRAME, MAX_ZOOM, panFrame, rotateFrame, sourceRect, zoomFrame, type Frame } from '../../shared/recap/recap-frame';
 import { paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 
@@ -204,7 +204,9 @@ export default function RecapStage(props: Props) {
       e.preventDefault();
       const r = frameRef.current;
       const f = r.frameNow();
-      r.onFrame(r.framing, zoomFrame(f, f.zoom * Math.exp(-e.deltaY * 0.0015)));
+      // Shift turns it (a tenth of a degree a notch's step), the plain wheel zooms.
+      if (e.shiftKey) r.onFrame(r.framing, rotateFrame(f, (f.rotate ?? 0) + Math.sign(e.deltaY || e.deltaX) * 0.5));
+      else r.onFrame(r.framing, zoomFrame(f, f.zoom * Math.exp(-e.deltaY * 0.0015)));
     };
     c.addEventListener('wheel', wheel, { passive: false });
     return () => c.removeEventListener('wheel', wheel);
@@ -225,7 +227,14 @@ export default function RecapStage(props: Props) {
     const k = scale * dpr;
     const r = sourceRect(frameSrc.width, frameSrc.height, frameBox, cellFrame);
     g.globalAlpha = 0.4;
-    g.drawImage(frameSrc.image, 0, 0, frameSrc.width, frameSrc.height, r.x * k, r.y * k, r.w * k, r.h * k);
+    // Turned like the picture in its cell, around the cell's centre.
+    const angle = ((cellFrame?.rotate ?? 0) * Math.PI) / 180;
+    const ox = (frameBox.x + frameBox.w / 2) * k;
+    const oy = (frameBox.y + frameBox.h / 2) * k;
+    g.translate(ox, oy);
+    g.rotate(angle);
+    g.drawImage(frameSrc.image, 0, 0, frameSrc.width, frameSrc.height, r.x * k - ox, r.y * k - oy, r.w * k, r.h * k);
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalAlpha = 1;
     g.clearRect(frameBox.x * k, frameBox.y * k, frameBox.w * k, frameBox.h * k);
   }, [framing, frameBox?.x, frameBox?.y, frameBox?.w, frameBox?.h, frameSrc, cellFrame, size, scale, version]);
@@ -293,6 +302,13 @@ export default function RecapStage(props: Props) {
             <span className="tabular-nums w-10 text-center">{Math.round(frameNow().zoom * 100)} %</span>
             <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)} className="w-7 h-7 rounded-full hover:bg-paper/15">
               +
+            </button>
+            <button type="button" aria-label="Turn left" title="Turn half a degree left (Shift + wheel)" onClick={() => onFrame(framing, rotateFrame(frameNow(), (frameNow().rotate ?? 0) - 0.5))} className="w-7 h-7 rounded-full hover:bg-paper/15">
+              ↺
+            </button>
+            <span className="tabular-nums w-11 text-center">{(frameNow().rotate ?? 0).toFixed(1)}°</span>
+            <button type="button" aria-label="Turn right" title="Turn half a degree right (Shift + wheel)" onClick={() => onFrame(framing, rotateFrame(frameNow(), (frameNow().rotate ?? 0) + 0.5))} className="w-7 h-7 rounded-full hover:bg-paper/15">
+              ↻
             </button>
             <button type="button" onClick={() => onFrame(framing, DEFAULT_FRAME)} className="h-7 px-2 rounded-full hover:bg-paper/15">
               Centre

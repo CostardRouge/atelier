@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { DEFAULT_FRAME, coverWindow, frameAt, type Frame } from '../../shared/recap/recap-frame';
+import { DEFAULT_FRAME, MAX_ROTATE, frameAt, framedDraw, rotateFrame, type Frame } from '../../shared/recap/recap-frame';
 import type { Drawable } from '../../shared/recap/recap-paint';
 import { SliderRow } from '../../shared/ui/Inspector';
 
@@ -38,8 +38,13 @@ export default function FrameBox({
   const sh = src?.height ?? 9;
   const height = Math.round((width * sh) / sw);
   const k = width / sw;
-  const win = coverWindow(sw, sh, boxW, boxH, f);
-  const rect = { x: win.sx * k, y: win.sy * k, w: win.sw * k, h: win.sh * k };
+  // What the page shows, in the strip's pixels: box-shaped, centred on the window, turned against the picture's angle.
+  const fd = framedDraw(sw, sh, { x: 0, y: 0, w: boxW, h: boxH }, f);
+  const perPx = fd.win.sw / fd.w;
+  const rw = boxW * perPx * k;
+  const rh = boxH * perPx * k;
+  const rect = { x: (fd.win.sx + fd.win.sw / 2) * k - rw / 2, y: (fd.win.sy + fd.win.sh / 2) * k - rh / 2, w: rw, h: rh };
+  const turn = -(f.rotate ?? 0);
 
   useEffect(() => {
     const el = wrap.current;
@@ -63,9 +68,25 @@ export default function FrameBox({
     g.fillStyle = 'rgba(10,8,6,0.55)';
     g.beginPath();
     g.rect(0, 0, c.width, c.height);
-    g.rect(rect.x * dpr, rect.y * dpr, rect.w * dpr, rect.h * dpr);
+    // The shown region, turned like its outline (a closed path the even-odd rule cuts out).
+    const a = (turn * Math.PI) / 180;
+    const cx = (rect.x + rect.w / 2) * dpr;
+    const cy = (rect.y + rect.h / 2) * dpr;
+    const corners = [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ].map(([sx, sy]) => {
+      const x = (sx * rect.w * dpr) / 2;
+      const y = (sy * rect.h * dpr) / 2;
+      return [cx + x * Math.cos(a) - y * Math.sin(a), cy + x * Math.sin(a) + y * Math.cos(a)];
+    });
+    g.moveTo(corners[0][0], corners[0][1]);
+    for (const [x, y] of corners.slice(1)) g.lineTo(x, y);
+    g.closePath();
     g.fill('evenodd');
-  }, [source, width, height, version, rect.x, rect.y, rect.w, rect.h]);
+  }, [source, width, height, version, rect.x, rect.y, rect.w, rect.h, turn]);
 
   const drag = useRef<{ corner: string | null; x: number; y: number; f: Frame; rect: typeof rect; id: number } | null>(null);
   const down = (corner: string | null) => (e: ReactPointerEvent) => {
@@ -82,7 +103,7 @@ export default function FrameBox({
     if (!d.corner) {
       const cx = (d.rect.x + d.rect.w / 2 + dx) / k;
       const cy = (d.rect.y + d.rect.h / 2 + dy) / k;
-      onFrame(frameAt(cx, cy, d.f.zoom, sw, sh));
+      onFrame(frameAt(cx, cy, d.f.zoom, sw, sh, d.f.rotate));
       return;
     }
     // A corner: the frame grows away from the opposite corner, its shape held; the zoom is how much smaller it is than at 1.
@@ -96,7 +117,7 @@ export default function FrameBox({
     const h = (w * d.rect.h) / d.rect.w;
     const cx = (anchorX + (sx * w) / 2) / k;
     const cy = (anchorY + (sy * h) / 2) / k;
-    onFrame(frameAt(cx, cy, zoom, sw, sh));
+    onFrame(frameAt(cx, cy, zoom, sw, sh, d.f.rotate));
   };
   const up = () => {
     drag.current = null;
@@ -120,14 +141,14 @@ export default function FrameBox({
                 const by = m[e.key];
                 if (!by) return;
                 e.preventDefault();
-                onFrame(frameAt((f.x + by[0]) * sw, (f.y + by[1]) * sh, f.zoom, sw, sh));
+                onFrame(frameAt((f.x + by[0]) * sw, (f.y + by[1]) * sh, f.zoom, sw, sh, f.rotate));
               }}
               onPointerDown={down(null)}
               onPointerMove={move}
               onPointerUp={up}
               onPointerCancel={up}
               className="absolute border-2 border-accent cursor-move touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+              style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, transform: turn ? `rotate(${turn}deg)` : undefined }}
             >
               {(['nw', 'ne', 'sw', 'se'] as const).map((c) => (
                 <span
@@ -146,6 +167,7 @@ export default function FrameBox({
         )}
       </div>
       <SliderRow label="Zoom" value={Math.round(f.zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => onFrame({ ...f, zoom: v / 100 })} />
+      <SliderRow label="Straighten" value={f.rotate ?? 0} min={-MAX_ROTATE} max={MAX_ROTATE} step={0.1} reset={0} format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}°`} onChange={(v) => onFrame(rotateFrame(f, v))} />
     </div>
   );
 }
