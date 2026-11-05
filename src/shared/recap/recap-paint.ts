@@ -15,6 +15,7 @@ import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type 
 import { deviceLabel, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
 import { coverWindow, type Frame } from './recap-frame';
+import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
 
@@ -180,6 +181,26 @@ interface Place {
   shadow?: boolean;
   align?: CanvasTextAlign;
   baseline?: CanvasTextBaseline;
+  /** Never wider than this: shrunk a little, then cut with an ellipsis (`fitText`). */
+  maxWidth?: number;
+}
+
+/** What `value` measures in `role`'s style at `size` — the width `styled` would draw. */
+function measurer(g: Ctx2D, doc: RecapDoc, role: TextRole, size: number, place: Place): (value: string) => number {
+  const st = textStyleOf(doc.texts, role);
+  const owned = st !== DEFAULT_TEXT_STYLE;
+  const upper = st.upper ?? place.upper ?? false;
+  const px = Math.max(1, Math.round(size * st.size));
+  const weight = owned && (st.font !== 'auto' || st.weight !== DEFAULT_TEXT_STYLE.weight) ? shippedWeight(st) : (place.weight ?? 400);
+  const font = `${italicOf(st) ? 'italic ' : ''}${weight} ${px}px ${familyOf(st, place.face)}`;
+  const spacing = st.tracking ?? place.spacing ?? 0;
+  return (value) => {
+    g.font = font;
+    setSpacing(g, spacing, size * st.size);
+    const w = g.measureText(upper ? value.toUpperCase() : value).width;
+    setSpacing(g, 0, size);
+    return w;
+  };
 }
 
 /** The size a role draws at, from its place's own. */
@@ -189,6 +210,11 @@ function sizeIn(doc: RecapDoc, role: TextRole, size: number): number {
 
 /** A text of `role`, in the role's own style over its place's defaults (`recap-text.ts`). */
 function styled(g: Ctx2D, doc: RecapDoc, role: TextRole, value: string, x: number, y: number, size: number, place: Place): void {
+  if (place.maxWidth !== undefined && value) {
+    const fit = fitText(value, place.maxWidth, measurer(g, doc, role, size, place));
+    value = fit.text;
+    size *= fit.scale;
+  }
   const st = textStyleOf(doc.texts, role);
   const owned = st !== DEFAULT_TEXT_STYLE;
   const upper = st.upper ?? place.upper ?? false;
@@ -221,15 +247,16 @@ function numberAt(doc: RecapDoc, box: Box, s: number, size: number): { x: number
   }
 }
 
+/** The camera's settings a cell says for `p`: its own choice, else the recap's; the device alone when only it is asked. */
+export function cellBits(doc: RecapDoc, p: RecapPicture, aliases: DeviceAliases = {}): string[] {
+  const named = (d: string) => deviceLabel(d, aliases);
+  if (doc.cells.exif) return exifBits(p, p.exifParts ?? doc.cells.exifParts, named);
+  return doc.cells.device && p.device ? [named(p.device)] : [];
+}
+
 /** The camera's line: `α7 IV · 35 mm · f/1.8 · 1/250 · ISO 100`. */
 export function exifLine(p: RecapPicture, aliases: DeviceAliases = {}): string {
-  const bits: string[] = [];
-  if (p.device) bits.push(deviceLabel(p.device, aliases));
-  if (p.focal) bits.push(`${Math.round(p.focal)} mm`);
-  if (p.fNumber) bits.push(`f/${p.fNumber % 1 ? p.fNumber.toFixed(1) : p.fNumber}`);
-  if (p.shutter) bits.push(p.shutter);
-  if (p.iso) bits.push(`ISO ${p.iso}`);
-  return bits.join(' · ');
+  return exifBits(p, p.exifParts ?? DEFAULT_EXIF_PARTS, (d) => deviceLabel(d, aliases)).join(JOIN);
 }
 
 function background(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number, t: number, src: PaintSources): void {
@@ -414,15 +441,19 @@ function drawCell(
       if (doc.cells.number) styled(g, doc, 'dayNumber', part.number, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ON_MEDIA, align: 'center' });
       if (part.label) styled(g, doc, 'labels', part.label, cx, box.y + box.h - H * 0.16 + sizeIn(doc, 'dayNumber', size) * 0.9, size * 0.42, { face: FACES.sans, colour: ON_MEDIA, align: 'center', spacing: 0.12, upper: true });
     } else {
-      const lines: string[] = [];
-      if (doc.cells.exif) lines.push(exifLine(pic, opts.aliases));
-      else if (doc.cells.device && pic.device) lines.push(deviceLabel(pic.device, opts.aliases));
-      if (doc.cells.caption && opts && slot) {
-        const cap = doc.captions[part.id];
-        if (cap) lines.unshift(cap);
-      }
-      const step = sizeIn(doc, 'cellWords', W * 0.021) * 1.5;
-      lines.forEach((l, i) => styled(g, doc, 'cellWords', l, box.x + W * 0.065, box.y + box.h - H * 0.06 - (lines.length - 1 - i) * step, W * 0.021, { face: MONO, colour: ON_MEDIA, spacing: 0.02 }));
+      const size = W * 0.021;
+      const place: Place = { face: MONO, colour: ON_MEDIA, spacing: 0.02 };
+      const inset = Math.min(W * 0.065, box.w * 0.08);
+      const maxW = box.w - inset * 2;
+      const step = sizeIn(doc, 'cellWords', size) * 1.5;
+      const bottom = box.y + box.h - Math.min(H * 0.06, box.h * 0.08);
+      const room = Math.max(1, Math.floor((box.h * 0.5) / step));
+      const cap = doc.cells.caption ? doc.captions[part.id] : undefined;
+      const lines = [
+        ...(cap ? [cap] : []),
+        ...arrangeBits(cellBits(doc, pic, opts.aliases), doc.cells.arrange, maxW, measurer(g, doc, 'cellWords', size, place), box.h > box.w * 1.1, room - (cap ? 1 : 0)),
+      ];
+      lines.forEach((l, i) => styled(g, doc, 'cellWords', l, box.x + inset, bottom - (lines.length - 1 - i) * step, size, { ...place, maxWidth: maxW }));
     }
   } else if (words === 'inside') {
     if (doc.cells.number) {
@@ -445,17 +476,22 @@ function drawCell(
       tag(slide ? `▶ ${slide}` : '▶', ACCENT);
     }
     if (doc.cells.count && slot && slot.candidates.length > 1) tag(`×${slot.candidates.length}`, 'rgba(16,15,13,0.72)');
-    if (doc.cells.caption) {
-      const cap = doc.captions[part.id];
-      if (cap) styled(g, doc, 'cellWords', cap, box.x + s * 0.08, by - small * 0.2, small * 0.9, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true });
+    const maxW = box.w - s * 0.16;
+    if (doc.cells.caption && doc.captions[part.id]) {
+      styled(g, doc, 'cellWords', doc.captions[part.id], box.x + s * 0.08, by - small * 0.2, small * 0.9, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true, maxWidth: maxW });
     } else if (doc.cells.exif || doc.cells.device) {
-      const line = doc.cells.exif ? exifLine(pic, opts.aliases) : deviceLabel(pic.device, opts.aliases);
-      if (line) styled(g, doc, 'cellWords', line, box.x + s * 0.08, by - small * 0.2, Math.max(8, small * 0.62), { face: MONO, colour: ON_MEDIA, shadow: true });
+      const size = Math.max(8, small * 0.62);
+      const place: Place = { face: MONO, colour: ON_MEDIA, shadow: true };
+      const step = sizeIn(doc, 'cellWords', size) * 1.35;
+      // Under the number, never over it: the lines take what the cell leaves above its tags.
+      const room = Math.max(1, Math.floor((by - box.y - s * 0.3) / step));
+      const lines = arrangeBits(cellBits(doc, pic, opts.aliases), doc.cells.arrange, maxW, measurer(g, doc, 'cellWords', size, place), box.h > box.w * 1.1, room);
+      lines.forEach((l, i) => styled(g, doc, 'cellWords', l, box.x + s * 0.08, by - small * 0.2 - (lines.length - 1 - i) * step, size, { ...place, maxWidth: maxW }));
     }
   } else if (words === 'beside') {
     if (doc.cells.caption) {
       const cap = doc.captions[part.id];
-      if (cap) styled(g, doc, 'cellWords', cap, box.x + W * 0.018, box.y + box.h - W * 0.02, W * 0.022, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true });
+      if (cap) styled(g, doc, 'cellWords', cap, box.x + W * 0.018, box.y + box.h - W * 0.02, W * 0.022, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true, maxWidth: box.w - W * 0.036 });
     }
     if (pic.kind === 'video' && doc.cells.videoBadge) {
       const r = W * 0.024;

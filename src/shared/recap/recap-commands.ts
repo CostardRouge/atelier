@@ -27,7 +27,7 @@ export const SETTABLE: Record<string, string> = {
   cta: '{text, show} — the call to action',
   font: '"sans", "serif" or "mono"',
   headingOffset: '{x, y}, fractions of the page, −0.5…0.5',
-  cells: '{number, count, exif, device, caption, videoBadge, today, headers: booleans; empty: "number"|"dashed"|"hidden"; weekStart: 0|1; gap: 0–0.04; radius: 0–0.25; shadow: 0–1 (0 = none); shadowBlur: 0–0.5; shadowY: 0–0.25}',
+  cells: '{number, count, exif, device, caption, videoBadge, today, headers: booleans; empty: "number"|"dashed"|"hidden"; weekStart: 0|1; gap: 0–0.04; radius: 0–0.25; shadow: 0–1 (0 = none); shadowBlur: 0–0.5; shadowY: 0–0.25; numberAt: "topLeft"|"topRight"|"centre"|"bottomLeft"; exifParts: the camera settings the line says, a list in this order: "device","lens","focal","aperture","shutter","iso"; arrange: "auto"|"line"|"stack" (words never pass their cell)}',
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed}',
   background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160; frame: {x, y: 0–1 the focus, zoom: 1–4}}',
   clipSlides: 'true: each clip gets a carousel slide of its own and its cell says which',

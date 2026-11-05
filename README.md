@@ -3487,8 +3487,9 @@ sheet: its correction is the picture's, the look the whole recap's.
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
 to action, with words counted for you: `{month}`, `{count}`, `{days}`,
 `{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says: the day's number,
-how many shots that day, the camera's line, the device, a word per day, a clip's
-badge, today ringed; how an empty day reads), *Background* (paper, ink, a
+how many shots that day, the camera's line — which settings it says, for every
+cell or one picture, on one line, stacked or packed to fit, never past its cell —,
+the device, a word per day, a clip's badge, today ringed; how an empty day reads), *Background* (paper, ink, a
 colour, a blurred picture of the recap, or a **looping video** under a veil —
 chosen from a drawer of thumbnails with their lengths, the recap's own days
 first and Live Photos marked with a mauve dot and offered as short loops; the

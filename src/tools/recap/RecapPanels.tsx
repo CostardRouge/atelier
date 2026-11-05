@@ -37,6 +37,7 @@ import PictureThumb from './PictureThumb';
 import FrameBox from './FrameBox';
 import LoopTrimmer from './LoopTrimmer';
 import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
+import { ARRANGES, EXIF_LABEL, EXIF_PARTS, type Arrange, type ExifPart } from '../../shared/recap/recap-cellwords';
 import type { Drawable } from '../../shared/recap/recap-paint';
 
 export type Change = (fn: (doc: RecapDoc) => RecapDoc) => void;
@@ -325,6 +326,21 @@ export function SlotSection({
             <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />
           </div>
         )}
+        {pic && doc.cells.exif && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className={legend}>Its camera line</span>
+              <ToggleField
+                checked={pic.exifParts === undefined}
+                onChange={(same) => change((d) => withPicture(d, pic.key, { exifParts: same ? undefined : [...d.cells.exifParts] }))}
+                label="As every cell"
+              >
+                As every cell
+              </ToggleField>
+            </div>
+            {pic.exifParts !== undefined && <ExifChips parts={pic.exifParts} onParts={(exifParts) => change((d) => withPicture(d, pic.key, { exifParts }))} label="The camera's settings this picture says" />}
+          </div>
+        )}
         {shown.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className={legend}>
@@ -356,6 +372,32 @@ export function SlotSection({
     </InspectorSection>
   );
 }
+
+// ---- the camera's words -------------------------------------------------------------
+
+/** Which of the camera's settings a line says — toggles, in the line's own order. */
+function ExifChips({ parts, onParts, label }: { parts: readonly ExifPart[]; onParts: (parts: ExifPart[]) => void; label: string }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap gap-1">
+      {EXIF_PARTS.map((part) => {
+        const on = parts.includes(part);
+        return (
+          <button
+            key={part}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onParts(EXIF_PARTS.filter((x) => (x === part ? !on : parts.includes(x))))}
+            className={`h-8 pointer-coarse:h-11 px-2.5 rounded-full border text-2xs font-mono cursor-pointer ${on ? 'border-accent bg-accent-wash text-ink' : 'border-line text-muted hover:border-line-strong'}`}
+          >
+            {EXIF_LABEL[part]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const ARRANGE_LABEL: Record<Arrange, string> = { auto: 'Auto', line: 'One line', stack: 'Stacked' };
 
 // ---- layout --------------------------------------------------------------------------
 
@@ -427,6 +469,26 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
             Clips as slides
           </ToggleField>
         </div>
+        {(c.exif || c.device || c.caption) && (
+          <div className="mt-2 flex flex-col gap-2">
+            {c.exif && (
+              <div className="flex flex-col gap-1">
+                <span className={legend}>The camera says</span>
+                <ExifChips parts={c.exifParts} onParts={(exifParts) => set({ exifParts })} label="The camera's settings every cell says" />
+              </div>
+            )}
+            <div title="Words never pass their cell: a long line shrinks, then ends in “…”. Auto packs them into lines that fit, and stacks them in a tall cell.">
+              <Segmented<Arrange>
+                size="sm"
+                fill
+                label="How a cell's words lie"
+                value={c.arrange}
+                onChange={(arrange) => set({ arrange })}
+                options={ARRANGES.map((a) => ({ id: a, label: ARRANGE_LABEL[a] }))}
+              />
+            </div>
+          </div>
+        )}
         {(doc.template === 'month' || doc.template === 'week') && (
           <div className="mt-2">
             <Segmented

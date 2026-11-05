@@ -19,6 +19,7 @@ import { developOrNull, type DevelopSettings } from '../develop/develop';
 import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
 import { readFrame, type Frame } from './recap-frame';
+import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
 import { addDays } from '../roadtrip/trip-days';
@@ -106,6 +107,8 @@ export interface RecapPicture {
    * background, which must not land on the day it was shot.
    */
   loose?: boolean;
+  /** Its own choice of the camera's settings, over the recap's (`cells.exifParts`). */
+  exifParts?: ExifPart[];
   /** A Live Photo still: its motion's asset on the same Winnow (the paired `.mov`). */
   motion?: number;
   /** A clip that IS a Live Photo's motion: the still's asset, whose thumbnail it shows. */
@@ -167,6 +170,10 @@ export interface RecapCells {
   shadowY: number;
   /** Where a cell's number sits in it. */
   numberAt: NumberAt;
+  /** Which of the camera's settings its line says (a picture may choose its own, `RecapPicture.exifParts`). */
+  exifParts: ExifPart[];
+  /** How a cell's words lie: one line, stacked, or packed to fit (`recap-cellwords.ts`). */
+  arrange: Arrange;
 }
 
 export type NumberAt = 'topLeft' | 'topRight' | 'centre' | 'bottomLeft';
@@ -268,6 +275,8 @@ export const DEFAULT_CELLS: RecapCells = {
   shadowBlur: 0.12,
   shadowY: 0.04,
   numberAt: 'topLeft',
+  exifParts: [...DEFAULT_EXIF_PARTS],
+  arrange: 'auto',
 };
 
 export const DEFAULT_MOTION: RecapMotion = {
@@ -445,6 +454,8 @@ export function readPicture(raw: unknown): RecapPicture | null {
   }
   if (r.picked === true) out.picked = true;
   if (r.loose === true) out.loose = true;
+  const parts = readExifParts(r.exifParts);
+  if (parts) out.exifParts = parts;
   const frame = readFrame(r.frame);
   if (frame) out.frame = frame;
   const develop = developOrNull(r.develop);
@@ -515,6 +526,8 @@ export function sanitizeCells(raw: unknown, base: RecapCells = DEFAULT_CELLS): R
     shadowBlur: num(r.shadowBlur, 0, 0.5, base.shadowBlur),
     shadowY: num(r.shadowY, 0, 0.25, base.shadowY),
     numberAt: oneOf(r.numberAt, NUMBER_PLACES, base.numberAt),
+    exifParts: readExifParts(r.exifParts) ?? [...base.exifParts],
+    arrange: oneOf(r.arrange, ARRANGES, base.arrange),
   };
 }
 
