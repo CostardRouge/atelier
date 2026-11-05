@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarGrid, MonthHeader, busyClass, walkDays } from '../../ui/MonthCalendar';
 import type { FilterQuery, WinnowClient } from './client';
 import { densityStrip, type DayBar } from './day-density';
 import {
   monthKeyOf,
   monthLabel,
   monthSpan,
-  shiftMonth,
 } from './month';
 import {
   describeRelativeDay,
@@ -385,10 +385,6 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, filter,
   const busy = !answer && !failed;
   const strip = densityStrip(span.days, answer?.counts ?? new Map());
   const bounds = answer?.bounds ?? null;
-  // Only what the instance itself says it holds bounds the walk; with no
-  // answer yet, both arrows stay live rather than pretending to know.
-  const canPrev = !bounds || month > monthKeyOf(bounds.min);
-  const canNext = !bounds || month < monthKeyOf(bounds.max);
   /** The one day Tab reaches: the picked one, else the month's first. */
   const roving = strip.bars.some((b) => b.date === picked.from) ? picked.from : span.from;
 
@@ -424,52 +420,47 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, filter,
       aria-label="Pick a day"
       className="absolute left-0 right-0 top-9 z-20 flex flex-col gap-1.5 rounded-paper border border-line-strong bg-surface p-2 shadow-paper"
     >
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => setMonth(shiftMonth(month, -1))}
-          disabled={!canPrev}
-          aria-label="The month before"
-          className={monthBtn}
-        >
-          ‹
-        </button>
-        <span
-          className="flex-1 min-w-0 truncate text-center font-mono text-2xs text-ink"
-          title={
-            bounds ? `${connectionId} holds media from ${bounds.min} to ${bounds.max}` : undefined
-          }
-        >
-          {monthLabel(month)}
-        </span>
-        <button
-          type="button"
-          onClick={() => setMonth(shiftMonth(month, 1))}
-          disabled={!canNext}
-          aria-label="The month after"
-          className={monthBtn}
-        >
-          ›
-        </button>
-        {/* The two readings of the same month, one click apart and remembered:
-            the strip says where the shooting was, the calendar says which
-            weekday it fell on. Neither answers the other's question. */}
-        <button
-          type="button"
-          onClick={() => {
-            const next = view === 'strip' ? 'calendar' : 'strip';
-            setView(next);
-            writeMonthView(next);
-          }}
-          aria-label={view === 'strip' ? 'Show the month as a calendar' : 'Show the month as a strip'}
-          title={view === 'strip' ? 'Show the month as a calendar' : 'Show the month as a strip'}
-          className={`${monthBtn} ml-0.5 grid place-items-center`}
-        >
-          {view === 'strip' ? <CalendarGlyph /> : <StripGlyph />}
-        </button>
-      </div>
+      <MonthHeader
+        month={month}
+        onMonth={setMonth}
+        today={today}
+        bounds={bounds ? { from: bounds.min, to: bounds.max } : null}
+        title={bounds ? `${connectionId} holds media from ${bounds.min} to ${bounds.max}` : undefined}
+        trailing={
+          // The two readings of the same month, one click apart and remembered:
+          // the strip says where the shooting was, the calendar says which
+          // weekday it fell on. Neither answers the other's question.
+          <button
+            type="button"
+            onClick={() => {
+              const next = view === 'strip' ? 'calendar' : 'strip';
+              setView(next);
+              writeMonthView(next);
+            }}
+            aria-label={view === 'strip' ? 'Show the month as a calendar' : 'Show the month as a strip'}
+            title={view === 'strip' ? 'Show the month as a calendar' : 'Show the month as a strip'}
+            className={`${monthBtn} ml-0.5 grid place-items-center`}
+          >
+            {view === 'strip' ? <CalendarGlyph /> : <StripGlyph />}
+          </button>
+        }
+      />
 
-      {view === 'strip' ? <StripBody {...bodyProps} /> : <CalendarBody {...bodyProps} />}
+      {view === 'strip' ? (
+        <StripBody {...bodyProps} />
+      ) : (
+        <CalendarGrid
+          month={month}
+          counts={answer?.counts ?? null}
+          busy={busy}
+          picked={picked}
+          today={today}
+          roving={roving}
+          onPick={onPick}
+          onHover={setHovered}
+          markOf={(iso) => markClass(iso, bodyProps.marks)}
+        />
+      )}
 
       <p className="m-0 truncate text-center font-mono text-3xs text-muted">{read}</p>
       {/* What the two marks are, in the publisher's words — only when they
@@ -508,46 +499,6 @@ interface MonthBodyProps {
   onPick: (iso: string) => void;
   onHover: (iso: string | null) => void;
 }
-
-/**
- * Arrow-key walking, shared by both bodies: `columns` is 1 for the strip (a
- * single row, so up and down have nothing to say) and 7 for the calendar,
- * where they step a week. Focus moves; Enter and space still do the picking,
- * because these are ordinary buttons.
- *
- * The step is counted over **every** day, disabled ones included, or the
- * geometry lies: with the rest of the month out of reach (the future), a
- * seventh *enabled* button is not the same weekday a week later. Landing on
- * one of those is simply refused — Home and End are the two that search
- * inward for a day the walk may have.
- */
-function walkDays(e: React.KeyboardEvent<HTMLDivElement>, columns: number) {
-  const steps: Record<string, number> = {
-    ArrowLeft: -1,
-    ArrowRight: 1,
-    ...(columns > 1 ? { ArrowUp: -columns, ArrowDown: columns } : {}),
-  };
-  const jump = steps[e.key];
-  const ends = e.key === 'Home' || e.key === 'End';
-  if (jump === undefined && !ends) return;
-  const days = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button')];
-  const at = days.indexOf(document.activeElement as HTMLButtonElement);
-  if (at < 0) return;
-  e.preventDefault();
-  if (ends) {
-    const inward = e.key === 'Home' ? 1 : -1;
-    let to = e.key === 'Home' ? 0 : days.length - 1;
-    while (to >= 0 && to < days.length && days[to].disabled) to += inward;
-    days[to]?.focus({ preventScroll: true });
-    return;
-  }
-  const to = at + jump;
-  if (to < 0 || to >= days.length || days[to].disabled) return;
-  days[to].focus({ preventScroll: true });
-}
-
-/** The busy dress: dimmed, pulsing, and nothing to click. */
-const busyClass = 'opacity-50 animate-pulse motion-reduce:animate-none pointer-events-none';
 
 /**
  * The month as bars — one per day, height by count.
@@ -620,84 +571,6 @@ function StripBody({ bars, picked: shown, marks, today, roving, busy, onPick, on
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * The month as a calendar — the same counts, read by weekday.
- *
- * Fixed-height cells, never `aspect-square`: a `1fr` grid track's width is
- * indefinite and the ratio resolves against it however the browser likes
- * (`frontend.md`). An empty day stays clickable here, unlike the browse-all
- * sheet's grid: the stepper's arrows can already step onto one, and a picker
- * refusing what the arrows allow reads as broken.
- */
-function CalendarBody({
-  bars,
-  picked: shown,
-  marks,
-  today,
-  roving,
-  busy,
-  leading,
-  onPick,
-  onHover,
-}: MonthBodyProps) {
-  return (
-    <div
-      role="group"
-      aria-label="Days of the month"
-      aria-busy={busy}
-      onKeyDown={(e) => walkDays(e, 7)}
-      onPointerLeave={() => onHover(null)}
-      className={`grid grid-cols-7 gap-[3px] ${busy ? busyClass : ''}`}
-    >
-      {WEEKDAYS.map((name, i) => (
-        <span key={i} className="text-center font-mono text-3xs text-faint">
-          {name[0]}
-        </span>
-      ))}
-      {Array.from({ length: leading }, (_, i) => (
-        <span key={`lead-${i}`} />
-      ))}
-      {bars.map((bar) => {
-        const picked = bar.date >= shown.from && bar.date <= shown.to;
-        return (
-          <button
-            key={bar.date}
-            type="button"
-            disabled={bar.date > today}
-            tabIndex={bar.date === roving ? 0 : -1}
-            onClick={() => onPick(bar.date)}
-            onPointerEnter={() => onHover(bar.date)}
-            onFocus={() => onHover(bar.date)}
-            onBlur={() => onHover(null)}
-            aria-pressed={picked}
-            aria-label={dayLabel(bar)}
-            title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
-            className={`relative h-[30px] flex flex-col items-center justify-center gap-[1px] rounded-md border font-mono text-2xs tabular-nums cursor-pointer transition-colors disabled:cursor-default disabled:opacity-40 ${
-              picked
-                ? 'bg-ink border-ink text-paper'
-                : bar.count && !busy
-                  ? 'bg-accent-wash border-danger-line text-ink hover:border-accent'
-                  : 'bg-paper border-line text-faint hover:border-line-strong'
-            } ${bar.date === today && !picked ? 'shadow-[inset_0_0_0_1px_var(--color-line-strong)]' : ''}`}
-          >
-            {Number(bar.date.slice(-2))}
-            {bar.count > 0 && !busy && (
-              <span className="text-3xs leading-none opacity-70">{bar.count}</span>
-            )}
-            {/* The same marks as the strip's lane, as a foot on the cell. */}
-            {markClass(bar.date, marks) && (
-              <span
-                aria-hidden="true"
-                className={`absolute left-1 right-1 bottom-[2px] h-[2px] rounded-full ${markClass(bar.date, marks)}`}
-              />
-            )}
-          </button>
-        );
-      })}
     </div>
   );
 }

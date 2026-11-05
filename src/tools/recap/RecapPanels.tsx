@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CELL_ENTRANCES,
   CELL_ORDERS,
@@ -7,6 +7,8 @@ import {
   GRID_SHAPES,
   TITLE_ENTRANCES,
   VIDEO_PLAYS,
+  aboutLine,
+  defaultTitle,
   withAnchor,
   withCaption,
   withCleared,
@@ -21,12 +23,11 @@ import {
   type TitleEntrance,
   type VideoPlay,
 } from '../../shared/recap/recap-doc';
-import { agoKey, agoLabel, dayMonth, isoWeek, monthName, parseAgo, shortDate, weekStartOf } from '../../shared/recap/recap-days';
+import { agoKey, agoLabel, parseAgo, shortDate, weekStartOf } from '../../shared/recap/recap-days';
+import WhenCalendar, { type When } from './WhenCalendar';
 import { deviceLabel, poolDevices, type DeviceAliases, type RecapSlot } from '../../shared/recap/recap-slots';
-import { addDays, formatIsoDate } from '../../shared/roadtrip/trip-days';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
-import { DateField } from '../../shared/ui/DateField';
 import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
@@ -43,58 +44,52 @@ const ENTRANCE_LABEL: Record<CellEntrance, string> = { none: 'None', fade: 'Fade
 const VIDEO_LABEL: Record<VideoPlay, string> = { turn: 'In turn', zoom: 'Zoom', together: 'Together', poster: 'Poster' };
 const BG_LABEL: Record<BackgroundKind, string> = { paper: 'Paper', ink: 'Ink', colour: 'Colour', blur: 'Blurred', video: 'Video loop' };
 
-/** The month `iso` is in, moved by `by` months: its 1st. */
-export function shiftMonth(iso: string, by: number): string {
-  const y = Number(iso.slice(0, 4));
-  const m = Number(iso.slice(5, 7)) - 1 + by;
-  const d = new Date(Date.UTC(y, m, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
-}
-
-function Stepper({ label, onPrev, onNext, children }: { label: string; onPrev: () => void; onNext: () => void; children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-1" role="group" aria-label={label}>
-      <button type="button" aria-label={`Previous ${label}`} onClick={onPrev} className="w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 inline-flex items-center justify-center rounded-control border border-line hover:border-line-strong">
-        {Icons.back}
-      </button>
-      <span className="flex-1 text-center text-sm font-semibold tabular-nums">{children}</span>
-      <button type="button" aria-label={`Next ${label}`} onClick={onNext} className="w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 inline-flex items-center justify-center rounded-control border border-line hover:border-line-strong">
-        {Icons.forward}
-      </button>
-    </div>
-  );
-}
-
 // ---- what the recap is about ---------------------------------------------------------
 
-/** The day, week, month or period a recap reads — moving it drops the choices made for the old days. */
-export function AboutSection({ doc, change }: { doc: RecapDoc; change: Change }) {
+/**
+ * The day, week, month or period a recap reads: its words on a button that
+ * opens the suite's month calendar (`WhenCalendar`) under it — a click on the
+ * month, as he asked. Moving it drops the choices made for the old days, and
+ * the editor fills the new ones from the Winnow by itself.
+ */
+export function AboutSection({ doc, change, client }: { doc: RecapDoc; change: Change; client: WinnowClient | null }) {
   const t = doc.template;
+  const [open, setOpen] = useState(false);
+  const when: When = { anchor: doc.anchor, range: doc.range };
   return (
     <InspectorSection id="recap-about" title={t === 'month' ? 'Month' : t === 'week' ? 'Week' : t === 'onThisDay' ? 'Day' : 'Period'}>
       <div className={row}>
-        {t === 'month' && (
-          <Stepper label="month" onPrev={() => change((d) => withAnchor(d, shiftMonth(d.anchor, -1)))} onNext={() => change((d) => withAnchor(d, shiftMonth(d.anchor, 1)))}>
-            {monthName(doc.anchor)} {doc.anchor.slice(0, 4)}
-          </Stepper>
-        )}
-        {t === 'week' && (
-          <Stepper label="week" onPrev={() => change((d) => withAnchor(d, addDays(d.anchor, -7) ?? d.anchor))} onNext={() => change((d) => withAnchor(d, addDays(d.anchor, 7) ?? d.anchor))}>
-            Week {isoWeek(doc.anchor)} · {dayMonth(doc.anchor)} → {dayMonth(addDays(doc.anchor, 6) ?? doc.anchor)}
-          </Stepper>
-        )}
-        {t === 'onThisDay' && (
-          <>
-            <DateField value={doc.anchor} onChange={(v) => v && change((d) => withAnchor(d, v))} label="Day" format={formatIsoDate} />
-            <RungsField doc={doc} change={change} />
-          </>
-        )}
-        {(t === 'grid' || t === 'single' || t === 'dump') && (
-          <div className="grid grid-cols-2 gap-2">
-            <DateField value={doc.range?.from ?? doc.anchor} onChange={(v) => v && change((d) => withRecap(d, { range: { from: v, to: d.range && d.range.to >= v ? d.range.to : v } }))} label="From" format={formatIsoDate} />
-            <DateField value={doc.range?.to ?? doc.anchor} onChange={(v) => v && change((d) => withRecap(d, { range: { from: d.range && d.range.from <= v ? d.range.from : v, to: v } }))} label="To" format={formatIsoDate} />
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="w-full min-h-11 flex items-center gap-2 px-3 rounded-control border border-line-strong bg-surface text-left hover:border-accent aria-expanded:border-accent"
+        >
+          <span className="text-muted [&>svg]:w-4 [&>svg]:h-4">{Icons.calendar}</span>
+          <span className="flex-1 min-w-0 truncate text-sm font-semibold">{aboutLine(doc)}</span>
+          <span className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`}>{Icons.down}</span>
+        </button>
+        {open && (
+          <div className="rounded-paper border border-line bg-surface p-2.5 shadow-paper-soft">
+            <WhenCalendar
+              template={t}
+              when={when}
+              client={client}
+              weekStart={doc.cells.weekStart}
+              onChange={(w, done) => {
+                change((d) => {
+                  let next = withAnchor(d, w.anchor);
+                  if (w.range) next = withRecap(next, { range: w.range, picks: {}, cleared: [], captions: {} });
+                  // A title still the default follows the days it names; one the author wrote stays.
+                  if (next !== d && d.title === defaultTitle(d)) next = { ...next, title: defaultTitle(next) };
+                  return next;
+                });
+                if (done) setOpen(false);
+              }}
+            />
           </div>
         )}
+        {t === 'onThisDay' && <RungsField doc={doc} change={change} />}
         {t === 'week' && (
           <ToggleField checked={doc.cells.weekStart === 0} onChange={(on) => change((d) => withRecap(d, { cells: { ...d.cells, weekStart: on ? 0 : 1 }, anchor: weekStartOf(d.anchor, on ? 0 : 1) ?? d.anchor }))} label="Weeks start on Sunday">
             Weeks start on Sunday

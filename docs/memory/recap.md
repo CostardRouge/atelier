@@ -45,3 +45,7 @@ His review: the face was global. `RecapDoc.texts` holds a `TextStyle` per ROLE (
 ## A painter other than the stage never SEEKS the stage's clips (2026-11-05)
 
 His report: a paused background clip «played a bit and looped». The gallery's poster, painted 1.5 s after each change at another film moment than the stage's rest, drew through the stage's `sources`, whose `clip`/`background` SEEK a paused element to the time asked — the stage then seeked it back, and the poster re-armed. `useRecapClips().peek` gives the frames as they stand, never seeked; the poster paints through it. **How to apply**: only the stage (and an export's own elements) may seek; anything else that paints reads `peek`.
+
+## Moving a recap's days fills them, and a default title follows (2026-11-05)
+
+His ask: a click on the month (the period) opens the shared month calendar (`WhenCalendar`): a month recap's header IS its month (the lists teleport it at once), a week takes a clicked day's week, on this day the day, a period two clicks. Whenever `templateDays(doc)` changes after the editor opened, the editor fills the new days from the connected Winnow by itself (`filledFor` key; the pool keeps the old days' pictures). A title still equal to `defaultTitle` follows the new days («October 2026» → «June 2025»); one the author wrote stays.

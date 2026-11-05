@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { RECIPES, type RecapTemplate } from '../../shared/recap/recap-doc';
-import { dayMonth, isoWeek, monthName, weekStartOf } from '../../shared/recap/recap-days';
-import { addDays, formatIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
+import { RECIPES, aboutLine, type RecapTemplate } from '../../shared/recap/recap-doc';
+import { weekStartOf } from '../../shared/recap/recap-days';
+import { addDays, todayIso } from '../../shared/roadtrip/trip-days';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
-import { DateField } from '../../shared/ui/DateField';
-import { Icons } from '../../shared/ui/icons';
+import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
+import WhenCalendar, { type When } from './WhenCalendar';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import TemplatePreview from './TemplatePreview';
 
@@ -50,26 +50,26 @@ export default function NewRecapDialog({
 }) {
   const today = todayIso();
   const lastMonth = shiftMonth(today, -1);
-  const [month, setMonth] = useState(lastMonth);
-  const [day, setDay] = useState(today);
-  const [from, setFrom] = useState(lastMonth);
-  const [to, setTo] = useState(monthEnd(lastMonth));
+  // Last month by default — a recap looks back; on this day and a week start from today.
+  const [when, setWhen] = useState<When>(() =>
+    template === 'month'
+      ? { anchor: lastMonth, range: null }
+      : template === 'week'
+        ? { anchor: weekStartOf(today) ?? today, range: null }
+        : template === 'onThisDay'
+          ? { anchor: today, range: null }
+          : { anchor: lastMonth, range: { from: lastMonth, to: monthEnd(lastMonth) } },
+  );
+  const { connection, client } = useWinnowConnection();
   const [target, setTarget] = useState(sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID));
   const recipe = RECIPES[template];
   const buttonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => buttonRef.current?.focus({ preventScroll: true }), []);
 
-  const choice = (): NewRecapChoice => {
-    if (template === 'month') return { template, anchor: month, range: null, sourceId: target };
-    if (template === 'week') return { template, anchor: weekStartOf(day) ?? day, range: null, sourceId: target };
-    if (template === 'onThisDay') return { template, anchor: day, range: null, sourceId: target };
-    const [a, b] = from <= to ? [from, to] : [to, from];
-    return { template, anchor: a, range: { from: a, to: b }, sourceId: target };
-  };
+  const choice = (): NewRecapChoice => ({ template, anchor: when.anchor, range: when.range, sourceId: target });
   useDialogKeys({ onCancel, onConfirm: () => onCreate(choice()) });
 
-  const weekStart = weekStartOf(day) ?? day;
-  return (
+    return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px]"
       role="dialog"
@@ -79,9 +79,9 @@ export default function NewRecapDialog({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[34rem] max-h-[calc(var(--app-h,100dvh)-2rem)] overflow-auto flex gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-5 max-[560px]:flex-col">
+      <div className="w-full max-w-[40rem] max-h-[calc(var(--app-h,100dvh)-2rem)] overflow-auto flex gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-5 max-[560px]:flex-col">
         <div className="flex-none flex justify-center">
-          <TemplatePreview template={template} anchor={template === 'month' ? month : day} height={220} playing />
+          <TemplatePreview template={template} anchor={when.anchor} height={220} playing />
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           <div>
@@ -89,40 +89,11 @@ export default function NewRecapDialog({
             <p className="m-0 mt-1 text-sm text-muted">{recipe.rule}</p>
           </div>
 
-          {template === 'month' && (
-            <div className="flex flex-col gap-1.5">
-              <span className={legend}>Which month</span>
-              <div className="flex items-center gap-1">
-                <button type="button" aria-label="Previous month" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-11 h-11 inline-flex items-center justify-center rounded-control border border-line hover:border-line-strong">
-                  {Icons.back}
-                </button>
-                <span className="flex-1 text-center text-base font-semibold tabular-nums">
-                  {monthName(month)} {month.slice(0, 4)}
-                </span>
-                <button type="button" aria-label="Next month" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-11 h-11 inline-flex items-center justify-center rounded-control border border-line hover:border-line-strong">
-                  {Icons.forward}
-                </button>
-              </div>
-            </div>
-          )}
-          {(template === 'week' || template === 'onThisDay') && (
-            <label className="flex flex-col gap-1.5">
-              <span className={legend}>{template === 'week' ? 'A day of the week' : 'Which day'}</span>
-              <DateField value={day} onChange={(v) => v && setDay(v)} label="Day" format={formatIsoDate} />
-              <span className="font-mono text-2xs text-muted">
-                {template === 'week' ? `Week ${isoWeek(weekStart)} · ${dayMonth(weekStart)} → ${dayMonth(addDays(weekStart, 6) ?? weekStart)}` : 'and the same day a year, a month and a week before'}
-              </span>
-            </label>
-          )}
-          {(template === 'grid' || template === 'single' || template === 'dump') && (
-            <div className="flex flex-col gap-1.5">
-              <span className={legend}>From which period</span>
-              <div className="grid grid-cols-2 gap-2">
-                <DateField value={from} onChange={(v) => v && setFrom(v)} label="From" format={formatIsoDate} />
-                <DateField value={to} onChange={(v) => v && setTo(v)} label="To" format={formatIsoDate} />
-              </div>
-            </div>
-          )}
+          <div className="flex flex-col gap-1.5">
+            <span className={legend}>{template === 'month' ? 'Which month' : template === 'week' ? 'Which week' : template === 'onThisDay' ? 'Which day' : 'From which period'}</span>
+            <span className="text-sm font-semibold">{aboutLine({ template, anchor: when.anchor, range: when.range })}</span>
+            <WhenCalendar template={template} when={when} client={connection ? client : null} onChange={(w) => setWhen(w)} />
+          </div>
 
           {sources.length > 1 && (
             <label className="flex flex-col gap-1.5">

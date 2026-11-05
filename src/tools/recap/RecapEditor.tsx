@@ -7,7 +7,7 @@ import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSw
 import { clipSlideNumbers, layoutRecap, pageOfSlot } from '../../shared/recap/recap-layout';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { PAINT_FONTS, paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
-import { resolveRecap, type DeviceAliases } from '../../shared/recap/recap-slots';
+import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
 import WinnowPicker from '../../shared/sources/winnow/picker/WinnowPicker';
@@ -308,6 +308,20 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     void fill();
   }, [client, instance, doc.pictures.length, fill]);
 
+  // His ask (2026-11-05): moving the recap to other days (a month, a week, a period, a step back) fills them from the
+  // Winnow by itself, as a new recap does — the pictures already in the pool are kept.
+  const daysKey = useMemo(() => templateDays(doc).join(','), [doc]);
+  const filledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (filledFor.current === null) {
+      filledFor.current = daysKey;
+      return;
+    }
+    if (filledFor.current === daysKey) return;
+    filledFor.current = daysKey;
+    if (client && instance) void fill();
+  }, [daysKey, client, instance, fill]);
+
   const addFiles = useCallback(async () => {
     const picked = await pickFiles('image/*,video/*,.heic,.heif,.dng,.jxl');
     if (!picked.length) return;
@@ -445,7 +459,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'pictures':
         return (
           <>
-            <AboutSection doc={doc} change={change} />
+            <AboutSection doc={doc} change={change} client={instance ? client : null} />
             <SourcesSection
               doc={doc}
               connected={instance}
