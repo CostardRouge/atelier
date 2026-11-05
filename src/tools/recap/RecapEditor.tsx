@@ -633,7 +633,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         return (
           <>
             <LayoutSection doc={doc} change={change} />
-            {doc.template === 'sheets' ? <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} /> : <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />}
+            {doc.template === 'sheets' ? <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} /> : <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />}
             <StyleSection doc={doc} change={change} />
           </>
         );

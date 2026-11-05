@@ -15,11 +15,11 @@ import { withRecap, type RecapDoc, type RecapPicture } from '../../shared/recap/
 import { replaceCandidates, withMovedFlow, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from '../../shared/recap/recap-selection';
 import { leaves } from '../../shared/sources/winnow/picture-rules';
 import PictureRulesFields from '../../shared/ui/PictureRulesFields';
-import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera } from '../../shared/recap/recap-sheet';
+import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera, type SheetOwn } from '../../shared/recap/recap-sheet';
 import type { RecapPage } from '../../shared/recap/recap-layout';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
-import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspector';
+import { InspectorSection, SliderRow, TextField, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import PictureThumb from './PictureThumb';
 import type { Change } from './RecapPanels';
@@ -422,10 +422,22 @@ export function SlideSection({ doc, page, change }: { doc: RecapDoc; page: Recap
  * The cut rule is not a setting: never a face across a cut, one picture at
  * most per cut.
  */
-export function SheetSection({ doc, change, pictures }: { doc: RecapDoc; change: Change; pictures: number }) {
+export function SheetSection({ doc, change, pictures, page }: { doc: RecapDoc; change: Change; pictures: number; page: number }) {
   const sh = doc.sheet;
   const set = (patch: Partial<RecapSheet>) => change((d) => withRecap(d, { sheet: { ...d.sheet, ...patch } }));
   const counted = sheetSlides(pictures, null);
+  const own = page > 0 ? sh.own[String(page)] : undefined;
+  const setOwn = (next: SheetOwn | null) =>
+    change((d) => {
+      const all = { ...d.sheet.own };
+      if (next) all[String(page)] = next;
+      else delete all[String(page)];
+      return withRecap(d, { sheet: { ...d.sheet, own: all } });
+    });
+  const r = sh.rows;
+  const c = sh.collage;
+  const f = sh.film;
+  const t = sh.timeline;
   return (
     <InspectorSection id="recap-sheet" title="The sheet">
       <div className="flex flex-col gap-3">
@@ -445,15 +457,78 @@ export function SheetSection({ doc, change, pictures }: { doc: RecapDoc; change:
                 : a === 'collage'
                   ? 'Prints scattered and turned — best under 25 pictures'
                   : a === 'film'
-                    ? 'One band of frames, its sprocket holes running across the cuts'
-                    : 'Each picture hung on its day, above and below a line',
+                    ? 'Strips of frames, their sprocket holes running across the cuts'
+                    : 'Each picture hung on its day, along a line',
           }))}
         />
+        {/* Each arrangement's own settings, kept while another is shown (lab 6). */}
+        <div className="flex flex-col gap-1.5 pl-2 border-l-2 border-line">
+          {sh.arrangement === 'rows' && (
+            <>
+              <SliderRow label="Rows" value={r.rows ?? (doc.format === 'story' ? 3 : 2)} min={1} max={4} step={1} reset={doc.format === 'story' ? 3 : 2} onChange={(rows) => set({ rows: { ...r, rows } })} />
+              <ToggleField checked={r.big} onChange={(big) => set({ rows: { ...r, big } })} label="Top row big">
+                Top row big
+              </ToggleField>
+              <Segmented size="sm" fill label="Edges" value={r.loose ? 'loose' : 'justified'} onChange={(v) => set({ rows: { ...r, loose: v === 'loose' } })} options={[{ id: 'justified', label: 'Justified', title: 'Every row reaches the end' }, { id: 'loose', label: 'Loose', title: 'Rows end where their pictures do' }]} />
+              <SliderRow label="Margin" value={Math.round(r.margin * 100)} min={2} max={20} step={1} reset={9} format={(v) => `${v} %`} onChange={(v) => set({ rows: { ...r, margin: v / 100 } })} />
+            </>
+          )}
+          {sh.arrangement === 'collage' && (
+            <>
+              <SliderRow label="Density" value={Math.round(c.density * 100)} min={0} max={100} step={1} reset={50} format={(v) => `${v} %`} onChange={(v) => set({ collage: { ...c, density: v / 100 } })} />
+              <SliderRow label="Tilt" value={c.tilt} min={0} max={12} step={0.5} reset={6} format={(v) => `${v}°`} onChange={(tilt) => set({ collage: { ...c, tilt } })} />
+              <SliderRow label="Size spread" value={Math.round(c.spread * 100)} min={0} max={100} step={1} reset={40} format={(v) => `${v} %`} onChange={(v) => set({ collage: { ...c, spread: v / 100 } })} />
+              <Segmented size="sm" fill label="Border" value={c.border} onChange={(border) => set({ collage: { ...c, border } })} options={[{ id: 'white', label: 'White print' }, { id: 'thin', label: 'Thin' }, { id: 'none', label: 'None' }]} />
+            </>
+          )}
+          {sh.arrangement === 'film' && (
+            <>
+              <Segmented size="sm" fill label="Strips" value={String(f.strips)} onChange={(v) => set({ film: { ...f, strips: v === '2' ? 2 : 1 } })} options={[{ id: '1', label: 'One strip' }, { id: '2', label: 'Two strips', title: 'Like a contact sheet' }]} />
+              <Segmented size="sm" fill label="Frame shape" value={f.shape} onChange={(shape) => set({ film: { ...f, shape } })} options={[{ id: '3:2', label: '3:2' }, { id: '1:1', label: '1:1' }, { id: '4:5', label: '4:5' }]} />
+              <Segmented size="sm" fill label="Where" value={f.where} onChange={(where) => set({ film: { ...f, where } })} options={[{ id: 'high', label: 'High' }, { id: 'centre', label: 'Centre' }, { id: 'low', label: 'Low' }]} />
+              <ToggleField checked={f.edge} onChange={(edge) => set({ film: { ...f, edge } })} label="Edge print">
+                Edge print · frame numbers and dates
+              </ToggleField>
+            </>
+          )}
+          {sh.arrangement === 'timeline' && (
+            <>
+              <Segmented size="sm" fill label="Spacing" value={t.spacing} onChange={(spacing) => set({ timeline: { ...t, spacing } })} options={[{ id: 'time', label: 'True time', title: 'Busy days crowd, empty ones breathe' }, { id: 'even', label: 'Even' }]} />
+              <Segmented size="sm" fill label="Sides" value={t.sides} onChange={(sides) => set({ timeline: { ...t, sides } })} options={[{ id: 'both', label: 'Above and below' }, { id: 'one', label: 'One side' }]} />
+              <ToggleField checked={t.stars} onChange={(stars) => set({ timeline: { ...t, stars } })} label="Size by stars">
+                Size by stars · picks biggest
+              </ToggleField>
+              <ToggleField checked={t.days} onChange={(days) => set({ timeline: { ...t, days } })} label="Days marked">
+                Days marked on the line
+              </ToggleField>
+            </>
+          )}
+        </div>
         <div className="flex flex-col gap-1">
           <ToggleField checked={sh.slides === null} onChange={(auto) => set({ slides: auto ? null : counted })} label="Slides counted for you">
             Slides counted for you · {counted}
           </ToggleField>
           {sh.slides !== null && <SliderRow label="Slides" value={sh.slides} min={MIN_SHEET_SLIDES} max={MAX_SHEET_SLIDES} step={1} reset={counted} onChange={(slides) => set({ slides })} />}
+        </div>
+        {/* The slide on the stage: its own layout takes over its stretch of the sheet (lab 6). */}
+        <div className="flex flex-col gap-1.5">
+          <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">{page > 0 ? `Slide ${page + 1}’s layout` : 'The cover keeps the sheet'}</span>
+          <Segmented
+            size="sm"
+            fill
+            label="This slide's layout"
+            value={own?.layout ?? 'auto'}
+            onChange={(v) => setOwn(v === 'auto' ? null : { layout: v, ...(own?.text ? { text: own.text } : {}) })}
+            options={[
+              { id: 'auto', label: 'Auto', title: 'The arrangement runs through it', disabled: page === 0 ? 'The cover keeps the sheet' : false },
+              { id: 'hero', label: 'Hero', title: 'One picture edge to edge — a pause in the swipe', disabled: page === 0 ? 'The cover keeps the sheet' : false },
+              { id: 'pair', label: 'Pair', title: 'Two pictures, side by side (stacked on a Story)', disabled: page === 0 ? 'The cover keeps the sheet' : false },
+              { id: 'breather', label: 'Breather', title: 'No picture: the ground and a line of yours', disabled: page === 0 ? 'The cover keeps the sheet' : false },
+            ]}
+          />
+          {own?.layout === 'breather' && (
+            <TextField value={own.text ?? ''} onChange={(text) => setOwn({ layout: 'breather', ...(text ? { text: text.slice(0, 160) } : {}) })} label="Its line" placeholder="A line for this slide — «the light that week»" />
+          )}
         </div>
         <Segmented<SheetCamera>
           size="sm"

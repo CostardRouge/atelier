@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { carouselSlides, layoutRecap } from './recap-layout';
-import { arrangeSheet, readSheet, sheetSlides, sheetView, SHEET_ARRANGEMENTS, type SheetArea, type SheetItem } from './recap-sheet';
+import { arrangeSheet, DEFAULT_SHEET, readSheet, sheetSlides, sheetView, SHEET_ARRANGEMENTS, type SheetArea, type SheetItem } from './recap-sheet';
 import { resolveRecap } from './recap-slots';
 
 const W = 1080;
@@ -15,7 +15,7 @@ describe('the Sheets', () => {
   it('cuts every arrangement with no face on a cut and one picture at most per cut', () => {
     for (const arrangement of SHEET_ARRANGEMENTS) {
       const list = items(22);
-      const laid = arrangeSheet(list, area(5), arrangement);
+      const laid = arrangeSheet(list, area(5), { ...DEFAULT_SHEET, arrangement });
       expect(laid.boxes).toHaveLength(22);
       const faces = new Map(list.map((i) => [i.id, i.faces]));
       for (const c of laid.cuts) {
@@ -27,7 +27,7 @@ describe('the Sheets', () => {
   });
 
   it('runs rows the sheet’s whole length, in time order', () => {
-    const laid = arrangeSheet(items(22, () => 0), area(5), 'rows');
+    const laid = arrangeSheet(items(22, () => 0), area(5), DEFAULT_SHEET);
     const right = Math.max(...laid.boxes.map((b) => b.x + b.w));
     expect(right).toBeCloseTo(5 * W - 60, 0);
     expect(Math.min(...laid.boxes.map((b) => b.x))).toBeCloseTo(600, 0);
@@ -40,8 +40,12 @@ describe('the Sheets', () => {
     expect(sheetSlides(3, null)).toBe(2);
     expect(sheetSlides(200, null)).toBe(10);
     expect(sheetSlides(20, 8)).toBe(8);
-    expect(readSheet({ arrangement: 'film', slides: 40, camera: 'glide' })).toEqual({ arrangement: 'film', slides: 10, camera: 'glide' });
-    expect(readSheet(null)).toEqual({ arrangement: 'rows', slides: null, camera: 'stops' });
+    expect(readSheet({ arrangement: 'film', slides: 40, camera: 'glide' })).toMatchObject({ arrangement: 'film', slides: 10, camera: 'glide' });
+    expect(readSheet(null)).toEqual(DEFAULT_SHEET);
+    const r = readSheet({ rows: { rows: 9, big: true }, collage: { tilt: 40, border: 'nope' }, own: { '0': { layout: 'hero' }, '2': { layout: 'pair' }, '3': { layout: 'breather', text: ' the light ' }, '4': { layout: 'x' } } });
+    expect(r.rows).toMatchObject({ rows: 4, big: true });
+    expect(r.collage).toMatchObject({ tilt: 12, border: 'white' });
+    expect(Object.keys(r.own)).toEqual(['2', '3']);
   });
 
   it('moves the Reel’s camera: a hold then a glide, or one travelling shot', () => {
@@ -67,4 +71,36 @@ describe('the Sheets', () => {
     const moved = withRecap(doc, { carousel: { ...doc.carousel, order: ['s:3', 's:0'] } });
     expect(carouselSlides(moved, r, layoutRecap(moved, r)).map((s) => s.key)).toEqual(['s:0', 's:1', 's:2', 's:3', 's:4']);
   });
+
+  it('lets a slide keep its own layout: the arrangement stops at its cuts, its pictures flow on', () => {
+    const list = items(22, () => 0);
+    const sheet = { ...DEFAULT_SHEET, own: { '2': { layout: 'hero' as const }, '3': { layout: 'breather' as const, text: 'the light' } } };
+    const laid = arrangeSheet(list, area(5), sheet);
+    expect(laid.boxes).toHaveLength(22);
+    // The hero fills slide 2 edge to edge; nothing else enters slides 2 and 3.
+    const inSlide = (i: number) => laid.boxes.filter((b) => b.x < (i + 1) * W - 1 && b.x + b.w > i * W + 1);
+    expect(inSlide(2)).toHaveLength(1);
+    expect(inSlide(2)[0]).toMatchObject({ x: 2 * W, w: W, y: 0, h: H });
+    expect(inSlide(3)).toHaveLength(0);
+    expect(laid.own).toEqual([{ index: 2, layout: 'hero' }, { index: 3, layout: 'breather', text: 'the light' }]);
+    // Time still reads left to right: the hero is the picture after those before it.
+    const order = laid.boxes.slice().sort((a, b) => a.x - b.x).map((b) => b.id);
+    expect(order.indexOf(inSlide(2)[0].id)).toBeGreaterThan(0);
+  });
+
+  it('follows each arrangement’s settings', () => {
+    const list = items(16, () => 0);
+    const rowsY = (sheet: typeof DEFAULT_SHEET) => [...new Set(arrangeSheet(list, area(4), sheet).boxes.map((b) => Math.round(b.y)))].length;
+    expect(rowsY({ ...DEFAULT_SHEET, rows: { ...DEFAULT_SHEET.rows, rows: 3 } })).toBe(3);
+    const big = arrangeSheet(list, area(4), { ...DEFAULT_SHEET, rows: { ...DEFAULT_SHEET.rows, rows: 2, big: true } }).boxes;
+    expect(Math.max(...big.map((b) => b.h))).toBeCloseTo(2 * Math.min(...big.map((b) => b.h)), 0);
+    const film = arrangeSheet(list, area(4), { ...DEFAULT_SHEET, arrangement: 'film', film: { ...DEFAULT_SHEET.film, strips: 2, shape: '1:1' } });
+    expect(film.decor.filter((d) => d.kind === 'band')).toHaveLength(2);
+    expect(film.decor.some((d) => d.kind === 'marks' && d.marks.length === 16)).toBe(true);
+    const tl = arrangeSheet(list, area(4), { ...DEFAULT_SHEET, arrangement: 'timeline', timeline: { ...DEFAULT_SHEET.timeline, sides: 'one', days: false } });
+    const line = tl.decor.find((d) => d.kind === 'line');
+    expect(line && line.kind === 'line' && tl.boxes.every((b) => b.y + b.h <= line.y)).toBe(true);
+    expect(tl.decor.some((d) => d.kind === 'marks')).toBe(false);
+  });
 });
+

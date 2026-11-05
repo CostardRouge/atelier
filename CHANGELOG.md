@@ -34,7 +34,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   and the next best comes in, a burst enters as one frame you can change, a slide's layout can be set, and the
   first slide's title can repeat on the others. A new template, The Sheets, lays a period on one long sheet cut into
   slides — in rows, a collage, a film strip or a timeline — with pictures across the cuts to make people swipe
-  (never a face, one picture at most per cut), and its Reel is a camera travelling along the sheet. A day with no
+  (never a face, one picture at most per cut), and its Reel is a camera travelling along the sheet. Each arrangement
+  has its own settings (rows and a big top row; a collage's density, tilt and border; one or two film strips with
+  their edge print; a timeline's spacing and marked days), and a slide can take a layout of its own — one picture
+  edge to edge, a pair, or a pause with a line of yours. A day with no
   picture can be given one from your Winnow — any picture, even one from another day, marked as chosen by hand.
   Taking a picture out of a carousel no longer brings another in: ✕ removes it and the carousel holds one fewer, ⇄
   replaces it with one you choose among the next best; your selection stays as you made it until you let the rule

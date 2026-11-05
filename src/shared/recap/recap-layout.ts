@@ -11,12 +11,14 @@
  * Pure and DOM-free.
  */
 
-import { isoWeek, monthLead, weekdayHeaders } from './recap-days';
+import { isoWeek, monthLead, shortDate, weekdayHeaders } from './recap-days';
 import { FORMATS, MAX_SLIDES, type RecapDoc } from './recap-doc';
 import { fillText, ownSlots, rankPictures, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { SLIDE_LAYOUT_COUNT, type SlideLayout } from './recap-carousel';
-import { arrangeSheet, sheetSlides, type SheetArea, type SheetDecor, type SheetItem } from './recap-sheet';
+import { arrangeSheet, sheetSlides, type SheetArea, type SheetDecorItem, type SheetItem } from './recap-sheet';
 import { textStyleOf } from './recap-text';
+/** «12 Oct» — a day as the film's edge print and the timeline write it. */
+const shortDay = (day: string) => shortDate(day).replace(/\s\d{4}$/, '');
 
 export interface Box {
   x: number;
@@ -25,8 +27,8 @@ export interface Box {
   h: number;
 }
 
-/** `running`: the first slide's title repeated small at the top of the others, with the slide's number. */
-export type TextRole = 'heading' | 'subheading' | 'header' | 'cta' | 'running';
+/** `running`: the first slide's title repeated small at the top of the others, with the slide's number; `quote`: a sheet's breather line. */
+export type TextRole = 'heading' | 'subheading' | 'header' | 'cta' | 'running' | 'quote';
 
 export interface TextPart {
   kind: 'text';
@@ -61,8 +63,8 @@ export interface CellPart {
   words: 'inside' | 'beside' | 'bottom';
   /** Radians: a sheet's collage print, turned. */
   rot?: number;
-  /** Drawn as a print, a white border round it (a sheet's collage). */
-  print?: boolean;
+  /** Drawn as a print, its border round it — white (a deep foot) or thin (a sheet's collage). */
+  print?: 'white' | 'thin';
   /** The anchor day — ringed when `cells.today`. */
   today?: boolean;
 }
@@ -78,7 +80,7 @@ export interface RecapPage {
   /** True on a page whose pictures cover the page (a week's bands, a single picture). */
   bleed: boolean;
   /** A slice of the Sheets: what it draws behind its pictures, in the page's own pixels (`recap-sheet.ts`). */
-  sheet?: { index: number; decor: SheetDecor };
+  sheet?: { index: number; decor: SheetDecorItem[] };
 }
 
 export interface RecapLayout {
@@ -519,7 +521,14 @@ function sheetPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
   const items: SheetItem[] = slots.map((s) => {
     const p = s.picture!;
     const t = p.day ? Date.parse(`${p.day}T00:00:00Z`) + (p.minute ?? 720) * 60000 : lo;
-    return { id: s.id, aspect: p.width && p.height ? p.width / p.height : 1, faces: p.faces ?? 0, when: hi > lo ? Math.min(1, Math.max(0, (t - lo) / (hi - lo + 86_400_000))) : 0.5 };
+    return {
+      id: s.id,
+      aspect: p.width && p.height ? p.width / p.height : 1,
+      faces: p.faces ?? 0,
+      when: hi > lo ? Math.min(1, Math.max(0, (t - lo) / (hi - lo + 86_400_000))) : 0.5,
+      score: p.picked ? 5 : (p.stars ?? 0),
+      ...(p.day ? { label: shortDay(p.day) } : {}),
+    };
   });
   const area: SheetArea = {
     slides,
@@ -532,8 +541,9 @@ function sheetPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
     gap: Math.max(4, Math.round(doc.cells.gap * W)),
     rows: doc.format === 'story' ? 3 : 2,
   };
-  const laid = arrangeSheet(items, area, doc.sheet.arrangement);
-  const collage = doc.sheet.arrangement === 'collage';
+  const laid = arrangeSheet(items, area, doc.sheet);
+  const border = doc.sheet.arrangement === 'collage' && doc.sheet.collage.border !== 'none' ? doc.sheet.collage.border : null;
+  const heroes = new Set(laid.own.filter((o) => o.layout === 'hero').map((o) => o.index));
   const head = headingParts(doc, resolved, W, Math.round(H * 0.4), 'left', m, Math.round(W * 0.46));
   const cta = ctaPart(doc, resolved, W, H - Math.max(bottom, m) - Math.round(W * 0.06));
   return Array.from({ length: slides }, (_, i) => {
@@ -541,11 +551,39 @@ function sheetPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
     const cells: Part[] = [];
     laid.boxes.forEach((b, k) => {
       if (b.x >= left + W || b.x + b.w <= left) return;
-      cells.push({ kind: 'cell', id: b.id, box: { x: b.x - left, y: b.y, w: b.w, h: b.h }, col: k, row: 0, index: k, number: String(k + 1), words: 'inside', ...(b.rot ? { rot: b.rot } : {}), ...(collage ? { print: true } : {}) });
+      // A slide's own layout draws its pictures plain; the arrangement's prints keep their border.
+      const own = b.x >= left - 1 && b.x + b.w <= left + W + 1 && laid.own.some((o) => o.index === i);
+      cells.push({ kind: 'cell', id: b.id, box: { x: b.x - left, y: b.y, w: b.w, h: b.h }, col: k, row: 0, index: k, number: String(k + 1), words: 'inside', ...(b.rot ? { rot: b.rot } : {}), ...(border && !own ? { print: border } : {}) });
     });
-    const decor: SheetDecor = laid.decor ? { ...laid.decor, x0: laid.decor.x0 - left } : null;
-    const parts: Part[] = [...cells, ...(i === 0 ? head.parts : []), ...(i === 0 && cta ? [cta] : [])];
-    return { key: `s:${i}`, width: W, height: H, parts, bleed: false, sheet: { index: i, decor } };
+    // The decor in this slide's own pixels: what reaches into it.
+    const decor: SheetDecorItem[] = laid.decor.flatMap((d): SheetDecorItem[] => {
+      if (d.kind === 'marks') {
+        const marks = d.marks.filter((mk) => mk.x > left - W * 0.3 && mk.x < left + W).map((mk) => ({ ...mk, x: mk.x - left }));
+        return marks.length ? [{ ...d, marks }] : [];
+      }
+      if (d.x1 <= left || d.x0 >= left + W) return [];
+      return [{ ...d, x0: d.x0 - left, x1: d.x1 - left }];
+    });
+    const breather = laid.own.find((o) => o.index === i && o.layout === 'breather' && o.text);
+    const quote: Part[] = breather
+      ? [
+          {
+            kind: 'text',
+            role: 'quote',
+            id: `quote:${i}`,
+            box: { x: m, y: Math.round(H * 0.44), w: W - 2 * m, h: Math.round(W * DISPLAY_SIZE[doc.font] * 0.75 * 1.2) },
+            text: breather.text!,
+            // The title's own size, a little under it: a pause in the swipe, read at a glance.
+            size: Math.round(W * DISPLAY_SIZE[doc.font] * 0.75 * textStyleOf(doc.texts, 'heading').size),
+            align: 'left',
+            face: 'display',
+            tracking: 0,
+            upper: false,
+          },
+        ]
+      : [];
+    const parts: Part[] = [...cells, ...quote, ...(i === 0 ? head.parts : []), ...(i === 0 && cta ? [cta] : [])];
+    return { key: `s:${i}`, width: W, height: H, parts, bleed: heroes.has(i), sheet: { index: i, decor } };
   });
 }
 

@@ -15,7 +15,7 @@ import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type 
 import { deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
 import { framedDraw, type Frame } from './recap-frame';
-import { sheetView, type SheetDecor } from './recap-sheet';
+import { sheetView, type SheetDecorItem } from './recap-sheet';
 import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
@@ -416,14 +416,14 @@ function drawCell(
     g.translate(-cx, -cy);
   }
   if (part.print) {
-    // A print's white border, wider at its foot, its shadow under it.
-    const b = s * 0.035;
+    // A print's border — white with a deeper foot, or thin all round — its shadow under it.
+    const b = s * (part.print === 'white' ? 0.035 : 0.012);
     g.save();
     g.shadowColor = 'rgba(0,0,0,0.45)';
     g.shadowBlur = s * 0.06;
     g.shadowOffsetY = s * 0.02;
     g.fillStyle = PAPER;
-    g.fillRect(box.x - b, box.y - b, box.w + 2 * b, box.h + b * 3.2);
+    g.fillRect(box.x - b, box.y - b, box.w + 2 * b, box.h + b * (part.print === 'white' ? 3.2 : 2));
     g.restore();
   }
   if (doc.cells.shadow > 0 && !part.print) {
@@ -556,7 +556,7 @@ function drawCell(
 /** The style role a laid-out text part wears. */
 export function roleOfPart(part: TextPart): TextRole {
   // The running head is the title, small: it wears the heading's style.
-  return part.role === 'header' ? 'weekdays' : part.role === 'running' ? 'heading' : part.role;
+  return part.role === 'header' ? 'weekdays' : part.role === 'running' || part.role === 'quote' ? 'heading' : part.role;
 }
 
 function drawText(g: Ctx2D, doc: RecapDoc, part: TextPart, plan: PagePlan, t: number, light: boolean, bleed: boolean): void {
@@ -659,8 +659,7 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
   g.beginPath();
   g.rect(0, 0, page.width, page.height);
   g.clip();
-  const decor = page.sheet?.decor;
-  if (decor) drawDecor(g, decor, page.width, light);
+  for (const d of page.sheet?.decor ?? []) drawDecor(g, d, page.width, light);
   const slots = new Map(resolved.slots.map((s) => [s.id, s]));
   const cells = page.parts.filter((p): p is CellPart => p.kind === 'cell');
   // A zooming clip is drawn last, over its neighbours.
@@ -671,29 +670,39 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
   g.restore();
 }
 
-/** What a Sheet draws behind its pictures: the film's band and its sprocket holes, the timeline's line. */
-function drawDecor(g: Ctx2D, decor: NonNullable<SheetDecor>, W: number, light: boolean): void {
+/** What a Sheet draws behind its pictures: a film strip's band and its sprocket holes, the timeline's line, their marks. */
+function drawDecor(g: Ctx2D, decor: SheetDecorItem, W: number, light: boolean): void {
+  if (decor.kind === 'marks') {
+    g.fillStyle = decor.colour === 'film' ? 'rgba(232,170,60,0.9)' : light ? 'rgba(27,24,19,0.7)' : 'rgba(244,240,231,0.75)';
+    g.font = `500 ${Math.max(6, Math.round(decor.size))}px ${MONO}`;
+    g.textAlign = decor.colour === 'film' ? 'left' : 'center';
+    g.textBaseline = 'alphabetic';
+    for (const m of decor.marks) if (m.x > -W * 0.3 && m.x < W) g.fillText(m.text, m.x, m.y);
+    g.textAlign = 'left';
+    return;
+  }
   const from = Math.max(0, decor.x0);
-  if (from >= W) return;
-  if (decor.kind === 'film') {
+  const to = Math.min(W, decor.x1);
+  if (from >= to) return;
+  if (decor.kind === 'band') {
     g.fillStyle = '#0b0a08';
-    g.fillRect(from, decor.y, W - from, decor.h);
+    g.fillRect(from, decor.y, to - from, decor.h);
     const hole = decor.h * 0.045;
     const step = hole * 2.6;
     g.fillStyle = 'rgba(244,240,231,0.6)';
     // Holes on a grid of the SHEET, so they run on across a cut.
-    for (let x = from + ((step - ((from - decor.x0) % step)) % step); x < W; x += step) {
+    for (let x = from + ((step - ((from - decor.x0) % step)) % step); x < to; x += step) {
       g.fillRect(x, decor.y + hole * 0.8, hole * 1.3, hole);
       g.fillRect(x, decor.y + decor.h - hole * 1.8, hole * 1.3, hole);
     }
-  } else {
-    g.strokeStyle = light ? 'rgba(27,24,19,0.45)' : 'rgba(244,240,231,0.45)';
-    g.lineWidth = Math.max(1, W * 0.002);
-    g.beginPath();
-    g.moveTo(from, decor.y);
-    g.lineTo(W, decor.y);
-    g.stroke();
+    return;
   }
+  g.strokeStyle = light ? 'rgba(27,24,19,0.45)' : 'rgba(244,240,231,0.45)';
+  g.lineWidth = Math.max(1, W * 0.002);
+  g.beginPath();
+  g.moveTo(from, decor.y);
+  g.lineTo(to, decor.y);
+  g.stroke();
 }
 
 /** The page's height at `width`, for a canvas sized to draw it. */

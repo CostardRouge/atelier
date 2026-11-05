@@ -3471,7 +3471,13 @@ which day, which period — and makes it:
   timeline. Pictures cross the cuts so people swipe — never one with a face,
   and one at most per cut. The slides are counted from the pictures (about five
   a slide) or set; the Reel is a camera travelling along the sheet, pausing on
-  each slide or in one continuous shot.
+  each slide or in one continuous shot. Each arrangement has its own settings
+  — how many rows and a big top row; a collage's density, tilt, size spread and
+  border; one or two film strips, their frame shape and edge print; a
+  timeline's true or even spacing, its sides, sizes by stars and marked days —
+  and any slide after the cover can take a layout of its own: *Hero* (one
+  picture edge to edge), *Pair*, or *Breather* (a pause with a line of yours),
+  the sheet stopping at its edges and resuming after it.
 
 **The rule fills, you correct.** Every place of a template is a **slot** — a day,
 a step back, a place of the grid — and the rule fills it from the recap's pool:
