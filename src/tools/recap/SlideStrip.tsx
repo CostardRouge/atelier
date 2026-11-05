@@ -110,7 +110,7 @@ export default function SlideStrip({
             type="button"
             role="listitem"
             data-slide-key={s.key}
-            draggable
+            draggable={doc.template !== 'sheets'}
             onDragStart={(e) => {
               setDragging(s.key);
               e.dataTransfer.setData('text/x-recap-slide', s.key);

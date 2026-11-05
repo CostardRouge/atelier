@@ -43,6 +43,8 @@ interface Props {
   /** The source a framing moves over: the clip's frame, the blurred picture, the cell's picture. */
   frameSource: (s: Selection) => Drawable | null;
   onFrame: (s: Selection, frame: Frame) => void;
+  /** The film is playing: a Sheet's camera travels along it. */
+  pan?: boolean;
   /** A cell's picture released outside the stage, where the pointer let go. */
   onDropOut?: (slot: string, clientX: number, clientY: number) => void;
 }
@@ -95,7 +97,7 @@ export default function RecapStage(props: Props) {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
-    paintRecap(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true });
+    paintRecap(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan: props.pan });
   }, [doc, resolved, layout, film, sources, page, t, version, size, aliases, clipSlides]);
 
   // ---- pointer: select, drag a picture onto another cell, drag the heading ----

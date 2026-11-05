@@ -6,7 +6,7 @@ import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
 import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, type CarouselSlide } from '../../shared/recap/recap-layout';
 import SlideStrip from './SlideStrip';
-import { CarouselSection, SlideSection } from './CarouselPanel';
+import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
@@ -607,7 +607,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         return (
           <>
             <LayoutSection doc={doc} change={change} />
-            <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />
+            {doc.template === 'sheets' ? <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} /> : <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />}
             <StyleSection doc={doc} change={change} />
           </>
         );
@@ -725,6 +725,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       frameSource={frameSource}
       onFrame={setFrame}
       onDropOut={dropOnSlide}
+      pan={playing}
     />
   );
 

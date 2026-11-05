@@ -428,7 +428,7 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
               options={(Object.keys(GRID_SHAPES) as GridShape[]).map((g) => ({ id: g, label: GRID_SHAPES[g].label }))}
             />
           )}
-          {doc.template === 'dump' && <SliderRow label="Pictures" value={doc.count} min={2} max={60} step={1} reset={12} onChange={(count) => change((d) => withRecap(d, { count }))} />}
+          {(doc.template === 'dump' || doc.template === 'sheets') && <SliderRow label="Pictures" value={doc.count} min={2} max={60} step={1} reset={12} onChange={(count) => change((d) => withRecap(d, { count }))} />}
           {doc.template === 'month' && (
             <ToggleField checked={c.weekStart === 0} onChange={(on) => set({ weekStart: on ? 0 : 1 })} label="Weeks start on Sunday">
               Weeks start on Sunday

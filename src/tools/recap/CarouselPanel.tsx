@@ -11,6 +11,7 @@ import {
   type SlideTitles,
 } from '../../shared/recap/recap-carousel';
 import { withRecap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
+import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera } from '../../shared/recap/recap-sheet';
 import type { RecapPage } from '../../shared/recap/recap-layout';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
@@ -37,7 +38,8 @@ interface Thumbs {
  */
 export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapDoc; resolved: ResolvedRecap; change: Change; thumbs: Thumbs }) {
   const c = doc.carousel;
-  const dump = doc.template === 'dump';
+  // A dump and a sheet ARE their highlights: their tray, no «after the first slide».
+  const dump = doc.template === 'dump' || doc.template === 'sheets';
   const flow = resolved.slots.filter((s) => (dump || s.flow) && s.picture);
   const bursts = useMemo(() => burstsOf(resolved.inScope), [resolved.inScope]);
   const members = useMemo(() => burstMembers(resolved.inScope, bursts), [resolved.inScope, bursts]);
@@ -244,3 +246,60 @@ export function SlideSection({ doc, page, change }: { doc: RecapDoc; page: Recap
     </InspectorSection>
   );
 }
+
+/**
+ * The Sheets (lab 4): how the period is laid on its one sheet — rows, a
+ * collage, a film strip or a timeline — how many slides it is cut into
+ * (counted from the pictures unless set), and how the Reel's camera travels.
+ * The cut rule is not a setting: never a face across a cut, one picture at
+ * most per cut.
+ */
+export function SheetSection({ doc, change, pictures }: { doc: RecapDoc; change: Change; pictures: number }) {
+  const sh = doc.sheet;
+  const set = (patch: Partial<RecapSheet>) => change((d) => withRecap(d, { sheet: { ...d.sheet, ...patch } }));
+  const counted = sheetSlides(pictures, null);
+  return (
+    <InspectorSection id="recap-sheet" title="The sheet">
+      <div className="flex flex-col gap-3">
+        <Segmented<SheetArrangement>
+          size="sm"
+          fill
+          columns={2}
+          label="Arrangement"
+          value={sh.arrangement}
+          onChange={(arrangement) => set({ arrangement })}
+          options={SHEET_ARRANGEMENTS.map((a) => ({
+            id: a,
+            label: SHEET_ARRANGEMENT_LABEL[a],
+            title:
+              a === 'rows'
+                ? 'Rows the whole length, each picture at its shape, time reading left to right'
+                : a === 'collage'
+                  ? 'Prints scattered and turned — best under 25 pictures'
+                  : a === 'film'
+                    ? 'One band of frames, its sprocket holes running across the cuts'
+                    : 'Each picture hung on its day, above and below a line',
+          }))}
+        />
+        <div className="flex flex-col gap-1">
+          <ToggleField checked={sh.slides === null} onChange={(auto) => set({ slides: auto ? null : counted })} label="Slides counted for you">
+            Slides counted for you · {counted}
+          </ToggleField>
+          {sh.slides !== null && <SliderRow label="Slides" value={sh.slides} min={MIN_SHEET_SLIDES} max={MAX_SHEET_SLIDES} step={1} reset={counted} onChange={(slides) => set({ slides })} />}
+        </div>
+        <Segmented<SheetCamera>
+          size="sm"
+          fill
+          label="The Reel's camera"
+          value={sh.camera}
+          onChange={(camera) => set({ camera })}
+          options={[
+            { id: 'stops', label: 'Pause on each slide', title: 'A stop on each slide, a glide between — reads like the carousel' },
+            { id: 'glide', label: 'Continuous', title: 'One slow travelling shot along the sheet' },
+          ]}
+        />
+      </div>
+    </InspectorSection>
+  );
+}
+

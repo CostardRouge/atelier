@@ -282,11 +282,11 @@ export default function RecapTool() {
       id: 'recap.create',
       title: 'Make a recap',
       description:
-        'Make a recap kept on this device from a template and open it: "month" (one picture a day; anchor = a day of the month), "onThisDay" (the same day years, months and weeks before; anchor = the day), "week" (anchor = a day of the week), "grid", "single" or "dump" (the best of the period from → to). With a Winnow connected it fills itself from those days. Answers its id.',
+        'Make a recap kept on this device from a template and open it: "month" (one picture a day; anchor = a day of the month), "onThisDay" (the same day years, months and weeks before; anchor = the day), "week" (anchor = a day of the week), "grid", "single", "dump" (the best of the period from → to) or "sheets" (the period laid on one long sheet cut into slides, from → to). With a Winnow connected it fills itself from those days. Answers its id.',
       params: {
         template: { type: 'string', enum: TEMPLATES, description: 'The template.' },
         anchor: { type: 'string', description: 'The day it is about, YYYY-MM-DD (default today; a month and a week move to their first day).', optional: true },
-        from: { type: 'string', description: 'A grid’s, single’s or dump’s first day, YYYY-MM-DD.', optional: true },
+        from: { type: 'string', description: 'A grid’s, single’s, dump’s or sheet’s first day, YYYY-MM-DD.', optional: true },
         to: { type: 'string', description: 'Its last day, YYYY-MM-DD.', optional: true },
         title: { type: 'string', description: 'Its title (default from the template and the day, made unique).', optional: true },
       },

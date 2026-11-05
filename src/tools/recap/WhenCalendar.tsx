@@ -128,7 +128,7 @@ export default function WhenCalendar({
       return `${formatIsoDate(hovered)} · ${n ? `${n} file${n === 1 ? '' : 's'}` : 'nothing'}`;
     }
     if (answer) return total ? `${total.toLocaleString()} file${total === 1 ? '' : 's'} this month` : 'nothing this month';
-    if (template === 'grid' || template === 'single' || template === 'dump') return 'two clicks: its first day, then its last';
+    if (template === 'grid' || template === 'single' || template === 'dump' || template === 'sheets') return 'two clicks: its first day, then its last';
     return '';
   })();
 

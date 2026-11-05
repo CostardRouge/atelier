@@ -40,6 +40,8 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     // The seconds and Winnow's burst pile tell a burst's frames apart (`recap-carousel.ts`).
     ...(wall !== null ? { second: Math.floor((((wall % 86_400_000) + 86_400_000) % 86_400_000) / 1000) } : {}),
     ...(row.burst_id ? { burst: row.burst_id } : {}),
+    // A sheet never cuts a picture with a face across two slides (`recap-sheet.ts`).
+    ...(row.face_count ? { faces: row.face_count } : {}),
     ...(row.camera_model ? { device: row.camera_model } : {}),
     ...(row.lens ? { lens: row.lens } : {}),
     ...(row.focal_length ? { focal: row.focal_length } : {}),

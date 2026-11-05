@@ -32,7 +32,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   kept on the device for the next export. Every slide of a carousel sits in a strip under the stage, in its order,
   to look at and drag around; a month is followed by its highlights (or a slide per week); you leave pictures out
   and the next best comes in, a burst enters as one frame you can change, a slide's layout can be set, and the
-  first slide's title can repeat on the others.
+  first slide's title can repeat on the others. A new template, The Sheets, lays a period on one long sheet cut into
+  slides — in rows, a collage, a film strip or a timeline — with pictures across the cuts to make people swipe
+  (never a face, one picture at most per cut), and its Reel is a camera travelling along the sheet.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

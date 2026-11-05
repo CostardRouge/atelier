@@ -3465,7 +3465,13 @@ which day, which period — and makes it:
 - **Bento grid** — the best of a period, in four, nine, a bento or one and two;
 - **Single picture** — one picture with its day and its camera's line;
 - **Photo dump** — the best of a period over a carousel: a cover, then pages
-  whose density changes, never past Instagram's twenty slides.
+  whose density changes, never past Instagram's twenty slides;
+- **The Sheets** — a period laid on ONE long sheet as wide as the carousel, cut
+  into slides: in rows (the default), a collage of prints, a film strip or a
+  timeline. Pictures cross the cuts so people swipe — never one with a face,
+  and one at most per cut. The slides are counted from the pictures (about five
+  a slide) or set; the Reel is a camera travelling along the sheet, pausing on
+  each slide or in one continuous shot.
 
 **The rule fills, you correct.** Every place of a template is a **slot** — a day,
 a step back, a place of the grid — and the rule fills it from the recap's pool:

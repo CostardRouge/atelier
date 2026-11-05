@@ -15,6 +15,7 @@ import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type 
 import { deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
 import { framedDraw, type Frame } from './recap-frame';
+import { sheetView, type SheetDecor } from './recap-sheet';
 import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
@@ -49,6 +50,8 @@ export interface PaintOptions {
   clipSlides?: ReadonlyMap<string, number>;
   /** The editor's stage: an empty place shows a faint frame the export never draws. */
   editing?: boolean;
+  /** The film playing a Sheet: the camera travels along it (`sheetView`) instead of cutting from slide to slide. */
+  pan?: boolean;
 }
 
 export const PAPER = '#f4f0e7';
@@ -406,7 +409,24 @@ function drawCell(
   g.translate(cx + look.dx * box.w, cy + look.dy * box.h);
   g.scale(look.scale, look.scale);
   g.translate(-cx, -cy);
-  if (doc.cells.shadow > 0) {
+  if (part.rot) {
+    // A collage's print, turned about its middle.
+    g.translate(cx, cy);
+    g.rotate(part.rot);
+    g.translate(-cx, -cy);
+  }
+  if (part.print) {
+    // A print's white border, wider at its foot, its shadow under it.
+    const b = s * 0.035;
+    g.save();
+    g.shadowColor = 'rgba(0,0,0,0.45)';
+    g.shadowBlur = s * 0.06;
+    g.shadowOffsetY = s * 0.02;
+    g.fillStyle = PAPER;
+    g.fillRect(box.x - b, box.y - b, box.w + 2 * b, box.h + b * 3.2);
+    g.restore();
+  }
+  if (doc.cells.shadow > 0 && !part.print) {
     g.shadowColor = `rgba(0,0,0,${doc.cells.shadow})`;
     g.shadowBlur = s * doc.cells.shadowBlur;
     g.shadowOffsetY = s * doc.cells.shadowY;
@@ -619,6 +639,28 @@ export function paintRecap(
   g.setTransform(k, 0, 0, k, 0, 0);
   background(g, doc, resolved, page.width, page.height, t, src);
   const light = isLightGround(doc);
+  if (doc.template === 'sheets' && opts.pan && layout.pages.length > 1) {
+    // The Reel of a Sheet: the camera between two slides, each drawn at its place and clipped to itself, so a picture
+    // across the cut joins seamlessly. A slide past the cover is already laid when it slides in.
+    const v = sheetView(film.pages, film.total, t, doc.sheet.camera);
+    drawPage(g, doc, resolved, layout, film, src, opts, v.page, v.page > 0 ? Math.max(t, film.pages[v.page].allOn + 0.01) : t, -v.frac * page.width, light);
+    if (v.frac > 0) drawPage(g, doc, resolved, layout, film, src, opts, v.page + 1, Math.max(t, film.pages[v.page + 1].allOn + 0.01), (1 - v.frac) * page.width, light);
+  } else drawPage(g, doc, resolved, layout, film, src, opts, Math.min(opts.page, layout.pages.length - 1), t, 0, light);
+  g.restore();
+}
+
+/** One page's decor, cells and words, `dx` along — clipped to the page, so a slice of a Sheet draws its own half only. */
+function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout, film: FilmPlan, src: PaintSources, opts: PaintOptions, index: number, t: number, dx: number, light: boolean): void {
+  const page = layout.pages[index];
+  const plan = film.pages[Math.min(index, film.pages.length - 1)];
+  if (!page || !plan) return;
+  g.save();
+  g.translate(dx, 0);
+  g.beginPath();
+  g.rect(0, 0, page.width, page.height);
+  g.clip();
+  const decor = page.sheet?.decor;
+  if (decor) drawDecor(g, decor, page.width, light);
   const slots = new Map(resolved.slots.map((s) => [s.id, s]));
   const cells = page.parts.filter((p): p is CellPart => p.kind === 'cell');
   // A zooming clip is drawn last, over its neighbours.
@@ -627,6 +669,31 @@ export function paintRecap(
   for (const p of page.parts) if (p.kind === 'text') drawText(g, doc, p, plan, t, light, page.bleed);
   for (const c of zooming) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed);
   g.restore();
+}
+
+/** What a Sheet draws behind its pictures: the film's band and its sprocket holes, the timeline's line. */
+function drawDecor(g: Ctx2D, decor: NonNullable<SheetDecor>, W: number, light: boolean): void {
+  const from = Math.max(0, decor.x0);
+  if (from >= W) return;
+  if (decor.kind === 'film') {
+    g.fillStyle = '#0b0a08';
+    g.fillRect(from, decor.y, W - from, decor.h);
+    const hole = decor.h * 0.045;
+    const step = hole * 2.6;
+    g.fillStyle = 'rgba(244,240,231,0.6)';
+    // Holes on a grid of the SHEET, so they run on across a cut.
+    for (let x = from + ((step - ((from - decor.x0) % step)) % step); x < W; x += step) {
+      g.fillRect(x, decor.y + hole * 0.8, hole * 1.3, hole);
+      g.fillRect(x, decor.y + decor.h - hole * 1.8, hole * 1.3, hole);
+    }
+  } else {
+    g.strokeStyle = light ? 'rgba(27,24,19,0.45)' : 'rgba(244,240,231,0.45)';
+    g.lineWidth = Math.max(1, W * 0.002);
+    g.beginPath();
+    g.moveTo(from, decor.y);
+    g.lineTo(W, decor.y);
+    g.stroke();
+  }
 }
 
 /** The page's height at `width`, for a canvas sized to draw it. */

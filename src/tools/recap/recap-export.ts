@@ -328,7 +328,7 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
         if (bg) waits.push(seek(bg, loopTime(bgLoop, bg.length, t)));
         await Promise.all(waits);
         g.setTransform(1, 0, 0, 1, 0, 0);
-        paintRecap(g, W, doc, input.resolved, input.layout, film, sources, { t, page, aliases: input.aliases, clipSlides: input.clipSlides });
+        paintRecap(g, W, doc, input.resolved, input.layout, film, sources, { t, page, aliases: input.aliases, clipSlides: input.clipSlides, pan: true });
         return canvas;
       },
       onProgress: (p) =>
