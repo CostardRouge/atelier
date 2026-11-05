@@ -3642,7 +3642,11 @@ grouped (several at once, or *All of them in the frame*), **words** —
 sea*) and the image index Winnow keeps lists the library's closest, whatever
 day is open (its ranking knows no day; the rail's filters and a place still
 narrow it, a person cannot; Winnow's default index reads **English** — *dog*,
-not *chien* — and the field says so); or *In text*, the words in the file's path
+not *chien* — and the field says so); a description reaches **Precise** (the
+200 closest) or **Broad** (everything still close to the best match, up to
+3 000, read page after page from a Winnow that pages its search) — Mosaic opens
+on Broad, every other tool on Precise, and the switch under the field changes it
+for one search; or *In text*, the words in the file's path
 and in the text Winnow read in the picture — and a **place** by Winnow's own
 names (country, region, city, point of interest). The ⋯ panel's third view is
 a **Map**: every row with a position as a dot where it was taken, on the

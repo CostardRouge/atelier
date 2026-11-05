@@ -4,7 +4,8 @@ import { namesOfKind } from '../winnow-names';
 import Segmented from '../../../ui/Segmented';
 import { ToggleField } from '../../../ui/Inspector';
 import { Icons } from '../../../ui/icons';
-import { PLACE_KINDS, RANKED, toggled, type PickFacets, type PlaceKind, type WordsIn } from './pick-filter';
+import { PLACE_KINDS, toggled, type PickFacets, type PlaceKind, type WordsIn } from './pick-filter';
+import { BROAD_MAX, PRECISE, type Reach } from './describe-reach';
 
 /** What the rail knows of the instance's subjects: its people and its place names, or null while asked / unknown. */
 export interface SubjectLists {
@@ -30,7 +31,19 @@ export interface DescribeState {
   peopleAside: boolean;
   /** What the description sets aside: the day, the span or the folder open. */
   scopeWord: string;
+  /** How far it reaches (`describe-reach.ts`), and whether Broad wanted more than the instance hands. */
+  reach: Reach;
+  short: boolean;
 }
+
+const REACHES: { id: Reach; label: string; title: string }[] = [
+  { id: 'precise', label: 'Precise', title: `The ${PRECISE} closest — the best matches` },
+  {
+    id: 'broad',
+    label: 'Broad',
+    title: `Everything that stays close to the best match, up to ${BROAD_MAX.toLocaleString('en-GB')} — more pictures, looser matches. A mosaic opens on it.`,
+  },
+];
 
 const WORDS_IN: { id: WordsIn; label: string; title: string }[] = [
   { id: 'describe', label: 'Describe', title: 'What is in the picture — a dog, a parrot, a sunset over the sea — the closest in the whole library by the image index Winnow keeps, whatever day is open' },
@@ -61,12 +74,14 @@ export default function PickerSubject({
   facets,
   onFacets,
   describe,
+  onReach,
 }: {
   client: WinnowClient;
   lists: SubjectLists;
   facets: PickFacets;
   onFacets: (next: PickFacets) => void;
   describe: DescribeState;
+  onReach: (reach: Reach) => void;
 }) {
   const set = (patch: Partial<PickFacets>) => onFacets({ ...facets, ...patch });
   const [kind, setKind] = useState<PlaceKind>(() => PLACE_KINDS.find((k) => facets.places[k]?.length) ?? 'city');
@@ -117,6 +132,9 @@ export default function PickerSubject({
           className="mb-1"
         />
         <WordsField value={facets.words} onChange={(words) => set({ words })} way={facets.wordsIn} />
+        {facets.wordsIn === 'describe' && (
+          <Segmented<Reach> label="How far a description reaches" size="sm" fill value={describe.reach} onChange={onReach} options={REACHES} className="mt-1" />
+        )}
         {describe.state !== 'idle' && (
           <p className="m-0 mt-1 px-1.5 font-mono text-3xs text-muted" role="status">
             {describe.state === 'asking'
@@ -125,9 +143,9 @@ export default function PickerSubject({
                 ? `Winnow cannot rank by a description: ${describe.reason ?? 'no image index'}`
                 : describe.state === 'empty'
                   ? 'Nothing indexed for search yet'
-                  : `The library’s ${describe.ranked >= RANKED ? `${RANKED} ` : ''}closest, any day — the ${describe.scopeWord} is set aside${
-                      describe.indexed !== null && describe.library !== null && describe.indexed < describe.library ? ` · ${describe.indexed} of ${describe.library} indexed` : ''
-                    }`}
+                  : `${describe.ranked.toLocaleString('en-GB')} ${describe.reach === 'broad' ? 'close to it' : 'closest'} across the library, any day — the ${describe.scopeWord} is set aside${
+                      describe.short ? ' · this Winnow hands 200 at most, update it for more' : ''
+                    }${describe.indexed !== null && describe.library !== null && describe.indexed < describe.library ? ` · ${describe.indexed} of ${describe.library} indexed` : ''}`}
           </p>
         )}
         {describe.state !== 'idle' && describe.englishOnly && (

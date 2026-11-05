@@ -56,6 +56,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Winnow picker: a **Map** view beside Grid and Logbook — each picture a dot where it was taken; hold ⇧ and drag, or
   switch *Draw a box* on and drag with a finger, and every picture inside the box is ticked; a dot ticks on a click.
   Pictures with no position are counted beside the map. The map background stays the usual opt-in.
+- Winnow picker: a description reaches **Precise** (the 200 closest) or **Broad** (everything that stays close to the
+  best match, up to 3 000) — Mosaic opens on Broad to gather as many pictures as a description can find, the other
+  tools on Precise, and you can switch it for a search. Going past 200 needs a Winnow that pages its search.
 
 ### Fixed
 

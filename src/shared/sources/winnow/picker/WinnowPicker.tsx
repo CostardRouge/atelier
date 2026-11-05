@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import {
   listsBurstFrames,
+  searchPaging,
   WinnowError,
   type LibraryHalf,
   type WinnowAssetRow,
@@ -29,6 +30,7 @@ import PickerLogbook from './PickerLogbook';
 import PickerMap from './PickerMap';
 import PickerRail from './PickerRail';
 import type { DescribeState, SubjectLists } from './PickerSubject';
+import { kept, pageFor, wantsMore, type Reach } from './describe-reach';
 import { instanceNames } from '../winnow-names';
 import { readFlightLog } from './flight-logs';
 import { logFailureOf, type LogFailure } from './log-failures';
@@ -42,7 +44,6 @@ import {
   describedRows,
   describedText,
   describePeopleAside,
-  RANKED,
   rankedShown,
   readsEnglishOnly,
   BUCKETS,
@@ -427,9 +428,14 @@ export default function WinnowPicker({
   // fonctionne pas»: Winnow's `/api/search` ranks the WHOLE library (the half at most, never a day) and answers its
   // 200 closest, so keeping only those inside the open day or span left a real library with nothing. The ranking IS
   // the list while it stands — the day, span or folder set aside and said so, the rail's facets and place ticks
-  // still narrowing it. One ask per description and half.
+  // still narrowing it. One ask per description, half and REACH (2026-11-05, `describe-reach.ts`): Precise reads the
+  // 200 closest, Broad reads page after page while the rows stay near the best one — the instrument picks the
+  // default (`host.reach`, a mosaic Broad), the person may switch it for a search; an instance that does not page
+  // (`searchPaging`) hands one page of 200 whatever the reach, and the rail says so.
   const describing = describedText(facets);
-  const rankKey = describing ? `${half ?? 'all'}|${describing}` : '';
+  const paging = useMemo(() => searchPaging(connection.capabilities), [connection.capabilities]);
+  const [reach, setReach] = useState<Reach>(host.reach ?? 'precise');
+  const rankKey = describing ? `${half ?? 'all'}|${reach}|${describing}` : '';
   const [ranking, setRanking] = useState<{
     key: string;
     rows: (WinnowAssetRow & { distance: number })[];
@@ -438,20 +444,31 @@ export default function WinnowPicker({
     indexed: number | null;
     library: number | null;
     model: string | null;
+    /** Broad wanted more than this instance hands (it does not page). */
+    short: boolean;
   } | null>(null);
   useEffect(() => {
     if (!rankKey) return;
     const ctl = new AbortController();
-    void client.search(describing, { limit: RANKED, ...(half ? { half } : {}) }, ctl.signal).then(
-      (found) =>
-        !ctl.signal.aborted &&
-        setRanking({ key: rankKey, rows: found.items, enabled: found.enabled, reason: found.reason, indexed: found.indexed, library: found.library, model: found.model }),
-      (err: unknown) =>
-        !ctl.signal.aborted &&
-        setRanking({ key: rankKey, rows: [], enabled: false, reason: err instanceof Error ? err.message : String(err), indexed: null, library: null, model: null }),
-    );
+    const limit = pageFor(reach, paging.pageSize);
+    void (async () => {
+      try {
+        let found = await client.search(describing, { limit, ...(half ? { half } : {}) }, ctl.signal);
+        const rows = [...found.items];
+        while (found.enabled && paging.pages && wantsMore(rows, reach, found.nextOffset) && !ctl.signal.aborted) {
+          found = await client.search(describing, { limit, offset: found.nextOffset ?? rows.length, ...(half ? { half } : {}) }, ctl.signal);
+          rows.push(...found.items);
+        }
+        if (ctl.signal.aborted) return;
+        const short = reach === 'broad' && !paging.pages && rows.length >= limit;
+        setRanking({ key: rankKey, rows: kept(rows, reach), enabled: found.enabled, reason: found.reason, indexed: found.indexed, library: found.library, model: found.model, short });
+      } catch (err) {
+        if (ctl.signal.aborted) return;
+        setRanking({ key: rankKey, rows: [], enabled: false, reason: err instanceof Error ? err.message : String(err), indexed: null, library: null, model: null, short: false });
+      }
+    })();
     return () => ctl.abort();
-  }, [client, rankKey, describing, half]);
+  }, [client, rankKey, describing, half, reach, paging]);
   const ranked = rankKey && ranking?.key === rankKey ? ranking : null;
   const rankedRows = useMemo(() => (ranked?.enabled ? describedRows(ranked.rows, facets) : null), [ranked, facets]);
   const distances = useMemo(() => new Map((ranked?.rows ?? []).map((r) => [r.id, r.distance])), [ranked]);
@@ -509,8 +526,10 @@ export default function WinnowPicker({
       englishOnly: readsEnglishOnly(ranked?.model),
       peopleAside: describePeopleAside(facets),
       scopeWord: scope === 'span' ? 'span' : scope === 'session' ? 'folder' : 'day',
+      reach,
+      short: ranked?.short ?? false,
     }),
-    [describing, rankKey, ranked, facets, scope],
+    [describing, rankKey, ranked, facets, scope, reach],
   );
 
   // --- flight tracks ---------------------------------------------------------
@@ -1126,6 +1145,7 @@ export default function WinnowPicker({
               client={client}
               subject={subjectLists}
               describe={describe}
+              onReach={setReach}
               footer={
                 <div className="hidden max-[820px]:block sticky bottom-0 pt-2 bg-surface">
                   <Button variant="primary" size="lg" className="w-full" onClick={() => setRailOpen(false)}>
