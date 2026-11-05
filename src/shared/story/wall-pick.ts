@@ -18,19 +18,10 @@
  * it. Every picture keeps the reason it is there. (pure)
  */
 import type { WinnowAssetRow } from '../sources/winnow/client';
+import { LEAVE_KEYS, PREFER_KEYS, phashOf, looksAlike, rankBy as rankFacts, scoreOf, type LeaveKey, type PictureFacts, type PreferKey } from '../sources/winnow/picture-rules';
 
-export type PreferKey = 'pick' | 'stars' | 'edited' | 'faces' | 'sharp';
-export const PREFER_KEYS: readonly PreferKey[] = ['pick', 'stars', 'edited', 'faces', 'sharp'];
-export const PREFER_LABEL: Record<PreferKey, string> = {
-  pick: 'Picked in Winnow',
-  stars: 'Stars',
-  edited: 'Edited',
-  faces: 'People in it',
-  sharp: 'Sharp',
-};
-
-export type LeaveKey = 'reject' | 'screen' | 'burst' | 'alike';
-export const LEAVE_KEYS: readonly LeaveKey[] = ['reject', 'screen', 'burst', 'alike'];
+// The conditions are shared with Recap (`sources/winnow/picture-rules.ts`); the wall keeps their names.
+export { LEAVE_KEYS, PREFER_KEYS, PREFER_LABEL, type LeaveKey, type PreferKey } from '../sources/winnow/picture-rules';
 
 export interface WallRules {
   /** What the places are spread across. */
@@ -45,35 +36,10 @@ export interface WallRules {
 
 export const DEFAULT_WALL_RULES: WallRules = { unit: 'day', share: 'busy', leave: {}, prefer: [...PREFER_KEYS] };
 
-/** What the rules read of a picture — from a Winnow row (`candidateOf`). */
-export interface WallCandidate {
+/** What the rules read of a picture — from a Winnow row (`candidateOf`): the shared facts, its id and its day. */
+export interface WallCandidate extends PictureFacts {
   id: number;
   day: string;
-  folder: number | null;
-  /** Capture time, seconds — what « a few minutes apart » measures. */
-  at: number;
-  pick: boolean;
-  reject: boolean;
-  stars: number;
-  edited: boolean;
-  faces: number;
-  /** Winnow's sharpness measure, when it has one. */
-  sharp: number | null;
-  burst: number | null;
-  screen: boolean;
-  /** Winnow's 64-bit image fingerprint, when the row carries it. */
-  phash: bigint | null;
-}
-
-/** The fingerprint a row carries (a 64-bit integer, which a JSON answer gives as a string or a lossy number). */
-function phashOf(raw: unknown): bigint | null {
-  try {
-    if (typeof raw === 'string' && /^-?\d+$/.test(raw)) return BigInt.asUintN(64, BigInt(raw));
-    if (typeof raw === 'number' && Number.isSafeInteger(raw)) return BigInt.asUintN(64, BigInt(raw));
-  } catch {
-    // not a fingerprint
-  }
-  return null;
 }
 
 /** A Winnow row as the rules read it. Screens and saved images: nothing named a camera, or a PNG. */
@@ -97,36 +63,10 @@ export function candidateOf(row: WinnowAssetRow, day: string): WallCandidate {
   };
 }
 
-const SCORE: Record<PreferKey, (c: WallCandidate) => number | null> = {
-  pick: (c) => (c.pick ? 1 : 0),
-  stars: (c) => c.stars,
-  edited: (c) => (c.edited ? 1 : 0),
-  faces: (c) => (c.faces > 0 ? 1 : 0),
-  sharp: (c) => c.sharp,
-};
-
 /** Better first: each rule in turn, a missing fact counting for nothing; then capture time. */
 export function rankBy(prefer: readonly PreferKey[]): (a: WallCandidate, b: WallCandidate) => number {
-  return (a, b) => {
-    for (const k of prefer) {
-      const sa = SCORE[k](a);
-      const sb = SCORE[k](b);
-      if (sa === null || sb === null || sa === sb) continue;
-      return sb - sa;
-    }
-    return a.at - b.at || a.id - b.id;
-  };
+  return rankFacts<WallCandidate>(prefer, (a, b) => a.at - b.at || a.id - b.id);
 }
-
-const bits = (x: bigint) => {
-  let n = 0;
-  for (let v = x; v; v &= v - 1n) n++;
-  return n;
-};
-/** Two fingerprints this close are one look (Winnow's own duplicate threshold is 10 bits). */
-const ALIKE_BITS = 8;
-/** Look-alikes are only looked for within this many seconds, in the same folder. */
-const ALIKE_SECONDS = 10 * 60;
 
 const weekOf = (day: string) => {
   const t = Date.parse(`${day}T00:00:00Z`);
@@ -208,10 +148,7 @@ export function pickWall(
     taken.set(g, (taken.get(g) ?? 0) + 1);
     keptIn.set(g, [...(keptIn.get(g) ?? []), c]);
   }
-  const alike = (c: WallCandidate, kept: readonly WallCandidate[]) =>
-    on('alike') &&
-    c.phash !== null &&
-    kept.some((k) => k.phash !== null && k.folder === c.folder && Math.abs(k.at - c.at) <= ALIKE_SECONDS && bits(k.phash ^ c.phash!) <= ALIKE_BITS);
+  const alike = (c: WallCandidate, kept: readonly WallCandidate[]) => on('alike') && kept.some((k) => looksAlike(c, k));
 
   const cursor = new Map(keys.map((k) => [k, 0]));
   // Round after round, each group still under its share takes its next best — every group one
@@ -252,8 +189,8 @@ export function pickWall(
 function reason(c: WallCandidate, list: readonly WallCandidate[], i: number, rules: WallRules): string {
   const unit = rules.unit === 'folder' ? 'folder' : rules.unit === 'week' ? 'week' : 'day';
   const by = rules.prefer.find((k) => {
-    const s = SCORE[k](c);
-    return s !== null && s !== SCORE[k](list[list.length - 1]);
+    const s = scoreOf(k, c);
+    return s !== null && s !== scoreOf(k, list[list.length - 1]);
   });
   const what =
     by === 'pick' ? 'picked in Winnow' : by === 'stars' ? `★${c.stars}` : by === 'edited' ? 'edited' : by === 'faces' ? 'people in it' : by === 'sharp' ? 'the sharpest' : 'the first taken';
