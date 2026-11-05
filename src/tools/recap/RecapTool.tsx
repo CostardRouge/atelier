@@ -1,3 +1,16 @@
+// The faces a recap's texts may be set in (`shared/story/fonts.ts`, Storytelling's), from our own origin like every
+// font of the suite; Space Grotesk, Instrument Serif, Montserrat, VT323 and JetBrains Mono are the shell's (`main.tsx`).
+import '@fontsource/geist/300.css';
+import '@fontsource/geist/400.css';
+import '@fontsource/geist/600.css';
+import '@fontsource/fraunces/400.css';
+import '@fontsource/fraunces/600.css';
+import '@fontsource/fraunces/900.css';
+import '@fontsource/caveat/600.css';
+import '@fontsource/zilla-slab/600.css';
+import '@fontsource/zilla-slab/700.css';
+import '@fontsource/archivo-black/400.css';
+import '@fontsource/special-elite/400.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isWithinRoute, navigate, useHashRoute } from '../../app/use-hash-route';
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';

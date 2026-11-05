@@ -13,6 +13,12 @@ interface Held {
 
 export interface ClipsState {
   sources: Pick<PaintSources, 'clip' | 'background' | 'backgroundLength'>;
+  /**
+   * The same frames as they stand, NEVER seeked — for a painter other than the
+   * stage (the gallery's poster): one that seeks the stage's elements to its
+   * own moment makes the paused stage's clip jump there and back.
+   */
+  peek: Pick<PaintSources, 'clip' | 'background' | 'backgroundLength'>;
   /** Each clip's length, measured by its element. */
   lengths: ReadonlyMap<string, number>;
   /** Each frame of play: every clip and the background put where the film says. */
@@ -124,6 +130,15 @@ export function useRecapClips(doc: RecapDoc, keys: readonly string[], ctx: { fil
     [bgKey, bgLength, version],
   );
 
+  const peek = useMemo<ClipsState['peek']>(
+    () => ({
+      clip: (key, seconds) => frameOf(key, seconds, false),
+      background: bgKey ? (seconds) => frameOf(bgKey, seconds, false) : undefined,
+      backgroundLength: bgLength,
+    }),
+    [bgKey, bgLength, version],
+  );
+
   const docRef = useRef(doc);
   docRef.current = doc;
   const keep = (h: Held | undefined, want: number | null, rate = 1) => {
@@ -169,5 +184,5 @@ export function useRecapClips(doc: RecapDoc, keys: readonly string[], ctx: { fil
     for (const h of held.current.values()) if (!h.video.paused) h.video.pause();
   };
 
-  return { sources, lengths, drive, halt, version, missing };
+  return { sources, peek, lengths, drive, halt, version, missing };
 }

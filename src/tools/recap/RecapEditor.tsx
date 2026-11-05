@@ -19,7 +19,10 @@ import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
-import { AboutSection, BackgroundSection, LayoutSection, MotionSection, SlotSection, SourcesSection, TextSection, type Change } from './RecapPanels';
+import { AboutSection, BackgroundSection, LayoutSection, MotionSection, SlotSection, SourcesSection, type Change } from './RecapPanels';
+import RecapTextPanel from './RecapTextPanel';
+import { textStyleOf, type TextRole, type TextStyle } from '../../shared/recap/recap-text';
+import { STORY_FONTS, type StoryFontId } from '../../shared/story/fonts';
 import RecapStage, { sameSelection, type Selection } from './RecapStage';
 import { fillFromWinnow } from './recap-fill';
 import { pictureOfFile, pictureOfRow, printOf } from './recap-media';
@@ -109,6 +112,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   }, []);
   const [fontsReady, setFontsReady] = useState(false);
 
+
   // The recap's look lives in the document; the stack wears it (and the Develop sheet edits it there).
   const lookKey = gradeKey(doc.look ?? null);
   const restored = useRef<string | null>(null);
@@ -121,7 +125,33 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
 
   const resolved = useMemo(() => resolveRecap(doc), [doc]);
   const today = todayIso();
-  const layout = useMemo(() => layoutRecap(doc, resolved, today), [doc, resolved, today]);
+  // A face being tried in the Text tab dresses the STAGE only, never the recap: nothing is saved until it is kept.
+  const [textRole, setTextRole] = useState<TextRole>('heading');
+  const [tried, setTried] = useState<{ role: TextRole; font: string } | null>(null);
+  const view = useMemo<RecapDoc>(() => {
+    if (!tried) return doc;
+    const st = textStyleOf(doc.texts, tried.role);
+    return { ...doc, texts: { ...doc.texts, [tried.role]: { ...st, font: (tried.font || 'auto') as TextStyle['font'] } } };
+  }, [doc, tried]);
+  const [facesLoaded, setFacesLoaded] = useState(0);
+  const facesWanted = useMemo(() => {
+    const out = new Set<string>();
+    const add = (font: string, weight: number) => {
+      if (font && font !== 'auto' && font in STORY_FONTS) out.add(`${weight} 40px ${STORY_FONTS[font as StoryFontId].family}`);
+    };
+    for (const st of Object.values(doc.texts)) if (st) add(st.font, st.weight);
+    if (tried) add(tried.font, textStyleOf(doc.texts, tried.role).weight);
+    return [...out].sort().join('|');
+  }, [doc.texts, tried]);
+  useEffect(() => {
+    if (!facesWanted) return;
+    let alive = true;
+    void Promise.all(facesWanted.split('|').map((f) => document.fonts?.load(f).catch(() => undefined))).then(() => alive && setFacesLoaded((n) => n + 1));
+    return () => {
+      alive = false;
+    };
+  }, [facesWanted]);
+  const layout = useMemo(() => layoutRecap(view, resolved, today), [view, resolved, today]);
   const clipSlides = useMemo(() => clipSlideNumbers(doc, resolved, layout), [doc, resolved, layout]);
 
   const ctx = useMemo(() => ({ client, instance, files }), [client, instance, files]);
@@ -151,7 +181,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     },
     [resolved, clips.lengths],
   );
-  const film = useMemo(() => planFilm(doc, layout, clipLength, filledOf(resolved)), [doc, layout, resolved, clipLength]);
+  const film = useMemo(() => planFilm(view, layout, clipLength, filledOf(resolved)), [view, layout, resolved, clipLength]);
   const natural = useMemo(() => naturalLength(doc, layout, clipLength, filledOf(resolved)), [doc, layout, resolved, clipLength]);
   const [page, setPage] = useState(0);
   const pageCount = layout.pages.length;
@@ -226,19 +256,22 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       const c = new OffscreenCanvas(w, h);
       const g = c.getContext('2d');
       if (!g) return;
-      paintRecap(g, w, doc, resolved, layout, film, sources, { t: (film.pages[0]?.allOn ?? 0) + 1, page: 0, aliases, clipSlides });
+      // Through the clips' PEEK: the poster never seeks the stage's own elements (that made a paused background jump).
+      paintRecap(g, w, doc, resolved, layout, film, { still: pictures.still, ...clips.peek }, { t: (film.pages[0]?.allOn ?? 0) + 1, page: 0, aliases, clipSlides });
       void c.convertToBlob({ type: 'image/jpeg', quality: 0.82 }).then((b) => putThumb(doc.id, b));
     }, 1500);
     return () => {
       if (posterTimer.current) window.clearTimeout(posterTimer.current);
     };
-  }, [doc, resolved, layout, film, sources, aliases, clipSlides, pictures.version, fontsReady]);
+  }, [doc, resolved, layout, film, sources, aliases, clipSlides, pictures.version, fontsReady, facesLoaded]);
 
   // ---- selection and the inspector ---------------------------------------------------
   const select = useCallback((s: Selection) => {
     setSelection((cur) => (sameSelection(cur, s) && s?.kind === 'background' ? null : s));
     const to = tabOf(s);
     if (to) setTab(to);
+    // A text clicked on the stage is the one the Text tab sets.
+    if (s?.kind === 'text') setTextRole(s.id.startsWith('header:') ? 'weekdays' : (s.id as TextRole));
   }, []);
   const slot = selection?.kind === 'cell' ? (resolved.slots.find((s) => s.id === selection.id) ?? null) : null;
   // A slot picked from the inspector shows on its page.
@@ -433,7 +466,16 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
           </>
         );
       case 'text':
-        return <TextSection doc={doc} change={change} vars={resolved.vars} />;
+        return (
+          <RecapTextPanel
+            doc={doc}
+            change={change}
+            vars={resolved.vars}
+            role={textRole}
+            onRole={setTextRole}
+            onPreview={(role, font) => setTried(font === null ? null : { role, font })}
+          />
+        );
       case 'layout':
         return <LayoutSection doc={doc} change={change} />;
       case 'background':
@@ -499,14 +541,14 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
 
   const stage = (
     <RecapStage
-      doc={doc}
+      doc={view}
       resolved={resolved}
       layout={layout}
       film={film}
       sources={sources}
       page={Math.min(page, pageCount - 1)}
       t={t}
-      version={pictures.version + clips.version + (fontsReady ? 1 : 0)}
+      version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded}
       selection={selection}
       onSelect={select}
       onSwap={(a, b) => {

@@ -17,6 +17,7 @@
 
 import { developOrNull, type DevelopSettings } from '../develop/develop';
 import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
+import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
 import { addDays } from '../roadtrip/trip-days';
@@ -155,7 +156,12 @@ export interface RecapCells {
   shadow: number;
   shadowBlur: number;
   shadowY: number;
+  /** Where a cell's number sits in it. */
+  numberAt: NumberAt;
 }
+
+export type NumberAt = 'topLeft' | 'topRight' | 'centre' | 'bottomLeft';
+export const NUMBER_PLACES: readonly NumberAt[] = ['topLeft', 'topRight', 'centre', 'bottomLeft'];
 
 export interface RecapMotion {
   title: TitleEntrance;
@@ -210,7 +216,10 @@ export interface RecapDoc {
   subheading: RecapText;
   /** The cover's call to action — `{videos}` counts the clips inside. */
   cta: RecapText;
+  /** The recap's typeface — what every text whose own face is `auto` draws in. */
   font: RecapFont;
+  /** Each text's own style (`recap-text.ts`); a text absent draws with its place's defaults. */
+  texts: Partial<Record<TextRole, TextStyle>>;
   /** The heading moved on the page by hand, as a fraction of the page. */
   headingOffset: { x: number; y: number };
   background: RecapBackground;
@@ -249,6 +258,7 @@ export const DEFAULT_CELLS: RecapCells = {
   shadow: 0,
   shadowBlur: 0.12,
   shadowY: 0.04,
+  numberAt: 'topLeft',
 };
 
 export const DEFAULT_MOTION: RecapMotion = {
@@ -490,6 +500,7 @@ export function sanitizeCells(raw: unknown, base: RecapCells = DEFAULT_CELLS): R
     shadow: num(r.shadow, 0, 1, base.shadow),
     shadowBlur: num(r.shadowBlur, 0, 0.5, base.shadowBlur),
     shadowY: num(r.shadowY, 0, 0.25, base.shadowY),
+    numberAt: oneOf(r.numberAt, NUMBER_PLACES, base.numberAt),
   };
 }
 
@@ -583,6 +594,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     subheading: readText(r.subheading, { text: recipe.subheading, show: Boolean(recipe.subheading) }),
     cta: readText(r.cta, { text: '{videos} inside — swipe', show: false }),
     font: oneOf(r.font, ['sans', 'serif', 'mono'] as const, recipe.font),
+    texts: readTextStyles(r.texts),
     headingOffset: { x: num(off.x, -0.5, 0.5, 0), y: num(off.y, -0.5, 0.5, 0) },
     background: sanitizeBackground(r.background ?? { ...DEFAULT_BACKGROUND, kind: recipe.background }),
     cells,
@@ -725,4 +737,12 @@ export function defaultTitle(doc: Pick<RecapDoc, 'template' | 'anchor' | 'range'
   if (doc.template === 'month') return aboutLine(doc);
   if (doc.template === 'week') return `Week ${isoWeek(doc.anchor)}, ${doc.anchor.slice(0, 4)}`;
   return `${RECIPES[doc.template].label} · ${aboutLine(doc)}`;
+}
+
+/** A text's style changed (`patch` over what it has), or put back to its place's defaults with null. */
+export function withTextStyle(doc: RecapDoc, role: TextRole, patch: Partial<TextStyle> | null, now: number = Date.now()): RecapDoc {
+  const texts = { ...doc.texts };
+  if (patch === null) delete texts[role];
+  else texts[role] = readTextStyle({ ...(texts[role] ?? DEFAULT_TEXT_STYLE), ...patch });
+  return withRecap(doc, { texts }, now);
 }

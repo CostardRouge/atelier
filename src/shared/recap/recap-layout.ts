@@ -14,6 +14,7 @@
 import { monthLead, weekdayHeaders } from './recap-days';
 import { FORMATS, MAX_SLIDES, type RecapDoc } from './recap-doc';
 import { fillText, type ResolvedRecap } from './recap-slots';
+import { textStyleOf } from './recap-text';
 
 export interface Box {
   x: number;
@@ -83,7 +84,7 @@ function insets(format: RecapDoc['format'], H: number): { top: number; bottom: n
 
 function headingParts(doc: RecapDoc, resolved: ResolvedRecap, W: number, top: number, align: 'left' | 'center', x: number, w: number): { parts: TextPart[]; bottom: number } {
   const parts: TextPart[] = [];
-  const size = Math.round(W * DISPLAY_SIZE[doc.font]);
+  const size = Math.round(W * DISPLAY_SIZE[doc.font] * textStyleOf(doc.texts, 'heading').size);
   const dx = doc.headingOffset.x * W;
   const dy = doc.headingOffset.y * W;
   let y = top;
@@ -104,7 +105,7 @@ function headingParts(doc: RecapDoc, resolved: ResolvedRecap, W: number, top: nu
     y += Math.round(size * 1.15) + Math.round(W * 0.012);
   }
   if (doc.subheading.show && doc.subheading.text.trim()) {
-    const sub = Math.round(W * 0.024);
+    const sub = Math.round(W * 0.024 * textStyleOf(doc.texts, 'subheading').size);
     parts.push({
       kind: 'text',
       role: 'subheading',
@@ -124,7 +125,7 @@ function headingParts(doc: RecapDoc, resolved: ResolvedRecap, W: number, top: nu
 
 function ctaPart(doc: RecapDoc, resolved: ResolvedRecap, W: number, y: number): TextPart | null {
   if (!doc.cta.show || !doc.cta.text.trim()) return null;
-  const size = Math.round(W * 0.026);
+  const size = Math.round(W * 0.026 * textStyleOf(doc.texts, 'cta').size);
   const w = Math.round(W * 0.62);
   return {
     kind: 'text',
@@ -149,7 +150,7 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
   const gap = Math.round(doc.cells.gap * W);
   const colW = (W - 2 * m - 6 * gap) / 7;
   if (doc.cells.headers) {
-    const size = Math.round(W * 0.017);
+    const size = Math.round(W * 0.017 * textStyleOf(doc.texts, 'weekdays').size);
     weekdayHeaders(doc.cells.weekStart).forEach((name, i) => {
       parts.push({
         kind: 'text',
@@ -411,7 +412,7 @@ const inside = (b: Box, x: number, y: number) => x >= b.x && x <= b.x + b.w && y
 export function hitTest(page: RecapPage, x: number, y: number): Hit {
   for (let i = page.parts.length - 1; i >= 0; i--) {
     const p = page.parts[i];
-    if (p.kind === 'text' && p.role !== 'header' && inside(p.box, x, y)) return { kind: 'text', role: p.role, id: p.id };
+    if (p.kind === 'text' && inside(p.box, x, y)) return { kind: 'text', role: p.role, id: p.id };
   }
   for (let i = page.parts.length - 1; i >= 0; i--) {
     const p = page.parts[i];

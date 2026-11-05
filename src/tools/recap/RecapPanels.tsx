@@ -17,13 +17,12 @@ import {
   type CellOrder,
   type GridShape,
   type RecapDoc,
-  type RecapFont,
   type RecapFormat,
   type TitleEntrance,
   type VideoPlay,
 } from '../../shared/recap/recap-doc';
 import { agoKey, agoLabel, dayMonth, isoWeek, monthName, parseAgo, shortDate, weekStartOf } from '../../shared/recap/recap-days';
-import { TEXT_WORDS, deviceLabel, poolDevices, type DeviceAliases, type RecapSlot } from '../../shared/recap/recap-slots';
+import { deviceLabel, poolDevices, type DeviceAliases, type RecapSlot } from '../../shared/recap/recap-slots';
 import { addDays, formatIsoDate } from '../../shared/roadtrip/trip-days';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
@@ -330,53 +329,6 @@ export function SlotSection({
             <span className={legend}>Its caption</span>
             <TextField value={doc.captions[slot.id] ?? ''} onChange={(v) => change((d) => withCaption(d, slot.id, v))} label="Caption" placeholder="A word for this day" />
           </label>
-        )}
-      </div>
-    </InspectorSection>
-  );
-}
-
-// ---- text ----------------------------------------------------------------------------
-
-export function TextSection({ doc, change, vars }: { doc: RecapDoc; change: Change; vars: Readonly<Record<string, string>> }) {
-  const field = (which: 'heading' | 'subheading' | 'cta', label: string, placeholder: string) => (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-center justify-between">
-        <span className={legend}>{label}</span>
-        <ToggleField checked={doc[which].show} onChange={(show) => change((d) => withRecap(d, { [which]: { ...d[which], show } }))} label={`Show the ${label.toLowerCase()}`} />
-      </span>
-      <TextField value={doc[which].text} onChange={(text) => change((d) => withRecap(d, { [which]: { ...d[which], text } }))} label={label} placeholder={placeholder} />
-    </div>
-  );
-  return (
-    <InspectorSection id="recap-text" title="Text">
-      <div className={row}>
-        {field('heading', 'Heading', '{month}')}
-        {field('subheading', 'Subheading', '{year} · {count} shots')}
-        {field('cta', 'Call to action', '{videos} inside — swipe')}
-        <p className="m-0 text-2xs text-muted leading-relaxed">
-          Counted for you:{' '}
-          {TEXT_WORDS.map((w) => (
-            <span key={w} className="inline-block mr-1.5 font-mono" title={vars[w]}>
-              {`{${w}}`}
-            </span>
-          ))}
-        </p>
-        <Segmented<RecapFont>
-          size="sm"
-          label="Typeface"
-          value={doc.font}
-          onChange={(font) => change((d) => withRecap(d, { font }))}
-          options={[
-            { id: 'sans', label: 'Sans' },
-            { id: 'serif', label: 'Serif' },
-            { id: 'mono', label: 'Mono' },
-          ]}
-        />
-        {(doc.headingOffset.x !== 0 || doc.headingOffset.y !== 0) && (
-          <button type="button" onClick={() => change((d) => withRecap(d, { headingOffset: { x: 0, y: 0 } }))} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">
-            Put the heading back in its place
-          </button>
         )}
       </div>
     </InspectorSection>

@@ -14,6 +14,8 @@ import type { Box, CellPart, RecapLayout, TextPart } from './recap-layout';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
 import { deviceLabel, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
+import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
+import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -105,22 +107,119 @@ function setSpacing(g: Ctx2D, em: number, size: number): void {
   if ('letterSpacing' in s) s.letterSpacing = `${(em * size).toFixed(2)}px`;
 }
 
-function text(g: Ctx2D, value: string, x: number, y: number, size: number, face: string, colour: string, opts: { weight?: number; align?: CanvasTextAlign; baseline?: CanvasTextBaseline; spacing?: number; shadow?: boolean } = {}): void {
-  g.font = `${opts.weight ?? 400} ${Math.max(1, Math.round(size))}px ${face}`;
-  g.fillStyle = colour;
+interface TextFx {
+  weight?: number;
+  align?: CanvasTextAlign;
+  baseline?: CanvasTextBaseline;
+  spacing?: number;
+  /** The default legibility shadow of a place drawn over pictures. */
+  shadow?: boolean;
+  italic?: boolean;
+  /** A role's own effects (`recap-text.ts`), in fractions of the size. */
+  outline?: number;
+  outlineColour?: string;
+  ownShadow?: { darkness: number; blur: number; y: number };
+  glow?: { amount: number; warmth: number };
+}
+
+function text(g: Ctx2D, value: string, x: number, y: number, size: number, face: string, colour: string, opts: TextFx = {}): void {
+  const px = Math.max(1, Math.round(size));
+  g.font = `${opts.italic ? 'italic ' : ''}${opts.weight ?? 400} ${px}px ${face}`;
   g.textAlign = opts.align ?? 'left';
   g.textBaseline = opts.baseline ?? 'alphabetic';
   setSpacing(g, opts.spacing ?? 0, size);
-  if (opts.shadow) {
-    g.shadowColor = 'rgba(0,0,0,0.55)';
-    g.shadowBlur = size * 0.35;
-    g.shadowOffsetY = size * 0.06;
+  const clear = () => {
+    g.shadowColor = 'transparent';
+    g.shadowBlur = 0;
+    g.shadowOffsetY = 0;
+  };
+  // The glow, as the suite's title styles draw it: a wide warm bleed, then a tight bright halo.
+  if (opts.glow && opts.glow.amount > 0) {
+    const layers = glowLayersFor({ glowAmount: opts.glow.amount, glowWarmth: opts.glow.warmth } as Parameters<typeof glowLayersFor>[0]);
+    const [wr, wg, wb] = warmDrift(colour, opts.glow.warmth);
+    g.fillStyle = colour;
+    if (layers.bleedRadiusFrac > 0 && layers.bleedAlpha > 0) {
+      g.shadowColor = `rgba(${wr},${wg},${wb},${layers.bleedAlpha})`;
+      g.shadowBlur = layers.bleedRadiusFrac * size;
+      g.fillText(value, x, y);
+      g.fillText(value, x, y);
+    }
+    if (layers.haloRadiusFrac > 0 && layers.haloAlpha > 0) {
+      g.shadowColor = halolight(colour, layers.haloAlpha);
+      g.shadowBlur = Math.max(1, layers.haloRadiusFrac * size);
+      g.fillText(value, x, y);
+    }
+    clear();
   }
+  const shadow = opts.ownShadow && opts.ownShadow.darkness > 0 ? opts.ownShadow : opts.shadow ? { darkness: 0.55, blur: 0.35, y: 0.06 } : null;
+  if (shadow) {
+    g.shadowColor = `rgba(0,0,0,${shadow.darkness})`;
+    g.shadowBlur = size * shadow.blur;
+    g.shadowOffsetY = size * shadow.y;
+  }
+  // The outline under the fill, twice its width so the outside half shows and the letter keeps its own shape.
+  if (opts.outline && opts.outline > 0) {
+    g.lineJoin = 'round';
+    g.lineWidth = Math.max(1, opts.outline * size * 2);
+    g.strokeStyle = opts.outlineColour ?? '#000000';
+    g.strokeText(value, x, y);
+    clear();
+  }
+  g.fillStyle = colour;
   g.fillText(value, x, y);
-  g.shadowColor = 'transparent';
-  g.shadowBlur = 0;
-  g.shadowOffsetY = 0;
+  clear();
   setSpacing(g, 0, size);
+}
+
+/** What a place draws by default: its face, colour, weight, case, spacing and legibility shadow. */
+interface Place {
+  face: string;
+  colour: string;
+  weight?: number;
+  upper?: boolean;
+  spacing?: number;
+  shadow?: boolean;
+  align?: CanvasTextAlign;
+  baseline?: CanvasTextBaseline;
+}
+
+/** The size a role draws at, from its place's own. */
+function sizeIn(doc: RecapDoc, role: TextRole, size: number): number {
+  return size * textStyleOf(doc.texts, role).size;
+}
+
+/** A text of `role`, in the role's own style over its place's defaults (`recap-text.ts`). */
+function styled(g: Ctx2D, doc: RecapDoc, role: TextRole, value: string, x: number, y: number, size: number, place: Place): void {
+  const st = textStyleOf(doc.texts, role);
+  const owned = st !== DEFAULT_TEXT_STYLE;
+  const upper = st.upper ?? place.upper ?? false;
+  text(g, upper ? value.toUpperCase() : value, x, y, size * st.size, familyOf(st, place.face), st.colour ?? place.colour, {
+    weight: owned && (st.font !== 'auto' || st.weight !== DEFAULT_TEXT_STYLE.weight) ? shippedWeight(st) : place.weight,
+    align: place.align,
+    baseline: place.baseline,
+    spacing: st.tracking ?? place.spacing ?? 0,
+    shadow: place.shadow,
+    italic: italicOf(st),
+    outline: st.outline,
+    outlineColour: st.outlineColour,
+    ownShadow: { darkness: st.shadow, blur: st.shadowBlur, y: st.shadowY },
+    glow: { amount: st.glow, warmth: st.glowWarmth },
+  });
+}
+
+/** Where a cell's number sits in it: its corner, or its middle. */
+function numberAt(doc: RecapDoc, box: Box, s: number, size: number): { x: number; y: number; align: CanvasTextAlign } {
+  const pad = s * 0.08;
+  switch (doc.cells.numberAt) {
+    case 'topRight':
+      return { x: box.x + box.w - pad, y: box.y + size * 1.15, align: 'right' };
+    case 'centre':
+      return { x: box.x + box.w / 2, y: box.y + box.h / 2 + size * 0.36, align: 'center' };
+    case 'bottomLeft':
+      return { x: box.x + pad, y: box.y + box.h - pad, align: 'left' };
+    default:
+      return { x: box.x + pad, y: box.y + size * 1.15, align: 'left' };
+  }
 }
 
 /** The camera's line: `α7 IV · 35 mm · f/1.8 · 1/250 · ISO 100`. */
@@ -206,13 +305,13 @@ function drawCell(
     g.globalAlpha = pic ? textLook(doc.motion.title === 'none' ? 'none' : 'fade', span ?? null, t).alpha : gridAlpha;
     const x = box.x - W * 0.27;
     const size = W * 0.034;
-    text(g, part.label ?? '', x, box.y + size * 1.1, size, FACES[doc.font], part.today ? ACCENT : ink, { weight: 500 });
+    styled(g, doc, 'labels', part.label ?? '', x, box.y + sizeIn(doc, 'labels', size) * 1.1, size, { face: FACES[doc.font], colour: part.today ? ACCENT : ink, weight: 500 });
     let ly = box.y + box.h - W * 0.012;
     if (doc.cells.device && pic?.device) {
-      text(g, deviceLabel(pic.device, opts.aliases).toUpperCase(), x, ly, W * 0.017, MONO, ink, { spacing: 0.04 });
+      styled(g, doc, 'labels', deviceLabel(pic.device, opts.aliases), x, ly, W * 0.017, { face: MONO, colour: ink, spacing: 0.04, upper: true });
       ly -= W * 0.028;
     }
-    if (slot?.day) text(g, shortDate(slot.day).toUpperCase(), x, ly, W * 0.019, MONO, ink, { spacing: 0.04 });
+    if (slot?.day) styled(g, doc, 'labels', shortDate(slot.day), x, ly, W * 0.019, { face: MONO, colour: ink, spacing: 0.04, upper: true });
     g.globalAlpha = 1;
   }
 
@@ -231,8 +330,8 @@ function drawCell(
     if (doc.cells.empty !== 'hidden') {
       const size = Math.min(box.w * 0.42, W * 0.05);
       const cx = box.x + box.w / 2;
-      if (doc.cells.number) text(g, part.number, cx, box.y + box.h - H * 0.16, size, MONO, ink, { align: 'center' });
-      if (part.label) text(g, part.label.toUpperCase(), cx, box.y + box.h - H * 0.16 + size * 0.9, size * 0.42, FACES.sans, ink, { align: 'center', spacing: 0.12 });
+      if (doc.cells.number) styled(g, doc, 'dayNumber', part.number, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ink, align: 'center' });
+      if (part.label) styled(g, doc, 'labels', part.label, cx, box.y + box.h - H * 0.16 + sizeIn(doc, 'dayNumber', size) * 0.9, size * 0.42, { face: FACES.sans, colour: ink, align: 'center', spacing: 0.12, upper: true });
     }
     g.globalAlpha = 1;
     return;
@@ -251,7 +350,10 @@ function drawCell(
         g.stroke();
         g.restore();
       }
-      if (empty !== 'hidden' && doc.cells.number && words === 'inside') text(g, part.number, box.x + s * 0.09, box.y + small * 1.2, small, FACES.sans, ink, { weight: 500 });
+      if (empty !== 'hidden' && doc.cells.number && words === 'inside') {
+        const at = numberAt(doc, box, s, sizeIn(doc, 'dayNumber', small));
+        styled(g, doc, 'dayNumber', part.number, at.x, at.y, small, { face: FACES.sans, colour: ink, weight: 500, align: at.align });
+      }
       g.globalAlpha = 1;
     } else if (opts.editing) {
       g.fillStyle = light ? PLACEHOLDER_LIGHT : PLACEHOLDER_DARK;
@@ -310,8 +412,8 @@ function drawCell(
     g.fillRect(box.x, box.y + box.h * 0.55, box.w, box.h * 0.45);
     if (doc.template === 'week') {
       const size = Math.min(box.w * 0.42, W * 0.05);
-      if (doc.cells.number) text(g, part.number, cx, box.y + box.h - H * 0.16, size, MONO, ON_MEDIA, { align: 'center' });
-      if (part.label) text(g, part.label.toUpperCase(), cx, box.y + box.h - H * 0.16 + size * 0.9, size * 0.42, FACES.sans, ON_MEDIA, { align: 'center', spacing: 0.12 });
+      if (doc.cells.number) styled(g, doc, 'dayNumber', part.number, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ON_MEDIA, align: 'center' });
+      if (part.label) styled(g, doc, 'labels', part.label, cx, box.y + box.h - H * 0.16 + sizeIn(doc, 'dayNumber', size) * 0.9, size * 0.42, { face: FACES.sans, colour: ON_MEDIA, align: 'center', spacing: 0.12, upper: true });
     } else {
       const lines: string[] = [];
       if (doc.cells.exif) lines.push(exifLine(pic, opts.aliases));
@@ -320,10 +422,14 @@ function drawCell(
         const cap = doc.captions[part.id];
         if (cap) lines.unshift(cap);
       }
-      lines.forEach((l, i) => text(g, l, box.x + W * 0.065, box.y + box.h - H * 0.06 - (lines.length - 1 - i) * W * 0.032, W * 0.021, MONO, ON_MEDIA, { spacing: 0.02 }));
+      const step = sizeIn(doc, 'cellWords', W * 0.021) * 1.5;
+      lines.forEach((l, i) => styled(g, doc, 'cellWords', l, box.x + W * 0.065, box.y + box.h - H * 0.06 - (lines.length - 1 - i) * step, W * 0.021, { face: MONO, colour: ON_MEDIA, spacing: 0.02 }));
     }
   } else if (words === 'inside') {
-    if (doc.cells.number) text(g, part.number, box.x + s * 0.08, box.y + small * 1.15, small, FACES.sans, ON_MEDIA, { weight: 500, shadow: true });
+    if (doc.cells.number) {
+      const at = numberAt(doc, box, s, sizeIn(doc, 'dayNumber', small));
+      styled(g, doc, 'dayNumber', part.number, at.x, at.y, small, { face: FACES.sans, colour: ON_MEDIA, weight: 500, shadow: true, align: at.align });
+    }
     let by = box.y + box.h - s * 0.08;
     const tag = (label: string, fill: string) => {
       const size = Math.max(9, small * 0.72);
@@ -342,15 +448,15 @@ function drawCell(
     if (doc.cells.count && slot && slot.candidates.length > 1) tag(`×${slot.candidates.length}`, 'rgba(16,15,13,0.72)');
     if (doc.cells.caption) {
       const cap = doc.captions[part.id];
-      if (cap) text(g, cap, box.x + s * 0.08, by - small * 0.2, small * 0.9, FACES[doc.font], ON_MEDIA, { shadow: true });
+      if (cap) styled(g, doc, 'cellWords', cap, box.x + s * 0.08, by - small * 0.2, small * 0.9, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true });
     } else if (doc.cells.exif || doc.cells.device) {
       const line = doc.cells.exif ? exifLine(pic, opts.aliases) : deviceLabel(pic.device, opts.aliases);
-      if (line) text(g, line, box.x + s * 0.08, by - small * 0.2, Math.max(8, small * 0.62), MONO, ON_MEDIA, { shadow: true });
+      if (line) styled(g, doc, 'cellWords', line, box.x + s * 0.08, by - small * 0.2, Math.max(8, small * 0.62), { face: MONO, colour: ON_MEDIA, shadow: true });
     }
   } else if (words === 'beside') {
     if (doc.cells.caption) {
       const cap = doc.captions[part.id];
-      if (cap) text(g, cap, box.x + W * 0.018, box.y + box.h - W * 0.02, W * 0.022, FACES[doc.font], ON_MEDIA, { shadow: true });
+      if (cap) styled(g, doc, 'cellWords', cap, box.x + W * 0.018, box.y + box.h - W * 0.02, W * 0.022, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true });
     }
     if (pic.kind === 'video' && doc.cells.videoBadge) {
       const r = W * 0.024;
@@ -383,13 +489,21 @@ function drawCell(
   }
 }
 
+/** The style role a laid-out text part wears. */
+export function roleOfPart(part: TextPart): TextRole {
+  return part.role === 'header' ? 'weekdays' : part.role;
+}
+
 function drawText(g: Ctx2D, doc: RecapDoc, part: TextPart, plan: PagePlan, t: number, light: boolean, bleed: boolean): void {
   const span = part.role === 'heading' ? plan.heading : part.role === 'subheading' ? plan.subheading : part.role === 'cta' ? plan.cta : plan.heading;
   const look = textLook(part.role === 'header' ? (doc.motion.title === 'none' ? 'none' : 'fade') : doc.motion.title, span, t);
   if (look.alpha <= 0) return;
+  const role = roleOfPart(part);
+  const st = textStyleOf(doc.texts, role);
   const ink = light && !bleed ? PAPER_INK : ON_MEDIA;
   const face = part.face === 'mono' ? MONO : FACES[doc.font];
-  let value = part.upper ? part.text.toUpperCase() : part.text;
+  const upper = st.upper ?? part.upper;
+  let value = upper ? part.text.toUpperCase() : part.text;
   if (look.chars < 1) value = value.slice(0, Math.round(value.length * look.chars));
   const b = part.box;
   const x = part.align === 'center' ? b.x + b.w / 2 : part.align === 'right' ? b.x + b.w : b.x;
@@ -403,8 +517,11 @@ function drawText(g: Ctx2D, doc: RecapDoc, part: TextPart, plan: PagePlan, t: nu
     g.rect(x0, b.y - b.h, w, b.h * 3);
     g.clip();
   }
+  // The part's size already carries the role's (the layout sized its box with it): drawn at 1.
+  const asLaid = { ...st, size: 1 };
+  const drawn = { ...doc, texts: { ...doc.texts, [role]: st === DEFAULT_TEXT_STYLE ? st : asLaid } };
   if (part.role === 'cta') {
-    g.font = `500 ${part.size}px ${face}`;
+    g.font = `500 ${part.size}px ${familyOf(st, face)}`;
     setSpacing(g, 0, part.size);
     const w = Math.min(b.w, g.measureText(value).width + part.size * 2.6);
     const pill = { x: b.x + (b.w - w) / 2, y: b.y, w, h: b.h };
@@ -415,12 +532,15 @@ function drawText(g: Ctx2D, doc: RecapDoc, part: TextPart, plan: PagePlan, t: nu
     g.beginPath();
     g.arc(pill.x + part.size * 1.1, pill.y + b.h / 2, part.size * 0.28, 0, Math.PI * 2);
     g.fill();
-    text(g, value, pill.x + w / 2 + part.size * 0.35, pill.y + b.h / 2, part.size, face, ON_MEDIA, { align: 'center', baseline: 'middle', weight: 500 });
+    styled(g, drawn, role, value, pill.x + w / 2 + part.size * 0.35, pill.y + b.h / 2, part.size, { face, colour: ON_MEDIA, align: 'center', baseline: 'middle', weight: 500, upper: false });
   } else {
-    text(g, value, x, y, part.size, face, ink, {
+    styled(g, drawn, role, value, x, y, part.size, {
+      face,
+      colour: ink,
       align: part.align,
       spacing: part.tracking,
-      weight: part.face === 'mono' ? 400 : doc.font === 'sans' ? 400 : 400,
+      weight: 400,
+      upper: false,
       shadow: bleed || doc.background.kind === 'video' || doc.background.kind === 'blur',
     });
   }
