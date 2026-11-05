@@ -107,6 +107,9 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
     () => () => {
       for (const b of bitmaps.current.values()) b.close();
       bitmaps.current.clear();
+      // Emptied, so all of it is asked again if the editor comes back (a remount keeps the refs).
+      asked.current.clear();
+      graded.current.clear();
     },
     [],
   );

@@ -59,11 +59,13 @@ export function useRecapClips(doc: RecapDoc, keys: readonly string[], ctx: { fil
   useEffect(() => {
     let alive = true;
     const want = keysKey ? keysKey.split('|') : [];
+    const mine: string[] = [];
     for (const key of want) {
       if (held.current.has(key) || asked.current.has(key)) continue;
       const pic = byKeyRef.current.get(key);
       if (!pic) continue;
       asked.current.add(key);
+      mine.push(key);
       void clipOf(pic, ctxRef.current)
         .then((blob) => {
           if (!alive) return;
@@ -96,6 +98,10 @@ export function useRecapClips(doc: RecapDoc, keys: readonly string[], ctx: { fil
     }
     return () => {
       alive = false;
+      // What this run asked and did not land is asked again by the next one. Without this a clip whose load was cut
+      // (the Winnow connection arriving after the recap opened, React's double mount) stayed «asked» for good — his
+      // black background «on its way» forever on a reopened recap.
+      for (const k of mine) if (!held.current.has(k)) asked.current.delete(k);
     };
   }, [keysKey, ctxKey]);
 
@@ -108,6 +114,8 @@ export function useRecapClips(doc: RecapDoc, keys: readonly string[], ctx: { fil
         URL.revokeObjectURL(h.url);
       }
       held.current.clear();
+      // Emptied, so all of it is asked again if the editor comes back (a remount keeps the refs).
+      asked.current.clear();
     },
     [],
   );
