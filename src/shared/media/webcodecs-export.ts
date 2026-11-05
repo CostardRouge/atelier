@@ -78,6 +78,11 @@ export interface ExportProgress {
   phase: 'demuxing' | 'encoding' | 'finalizing';
   /** 0..1 during encoding; null when the phase has no measurable ratio. */
   ratio: number | null;
+  /** Where a painted clip is (`encodeFrames`): the frame done of all, and the pass of how many. */
+  frame?: number;
+  frames?: number;
+  pass?: number;
+  passes?: number;
 }
 
 /**

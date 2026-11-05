@@ -498,6 +498,19 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     />
   );
 
+  // ---- a Winnow clip's original, for an export that asks for it --------------------------
+  const fetchOriginal = useCallback(
+    async (key: string, signal: AbortSignal): Promise<Blob | null> => {
+      const pic = doc.pictures.find((p) => p.key === key);
+      if (!pic || pic.origin !== 'winnow' || pic.asset === undefined || !client || pic.instance !== instance) return null;
+      return client.fetchFile(client.originalUrl(pic.asset), pic.name, '', 0, { signal });
+    },
+    [doc.pictures, client, instance],
+  );
+  const winnowClips = useMemo(
+    () => clipKeys.some((k) => doc.pictures.find((p) => p.key === k)?.origin === 'winnow'),
+    [clipKeys, doc.pictures],
+  );
   const [choosingClip, setChoosingClip] = useState(false);
   const clipCount = useMemo(() => {
     const g = backgroundChoices(doc);
@@ -582,7 +595,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'motion':
         return <MotionSection doc={doc} change={change} />;
       case 'export':
-        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files }} natural={natural} change={change} />;
+        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, winnowClips }} natural={natural} change={change} />;
     }
   };
 

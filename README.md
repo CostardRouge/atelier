@@ -3513,6 +3513,16 @@ the film can last whole loops so the music ends on its own seam. Heard in the
 video export only — a still or a carousel takes its music in the app you post
 from.
 
+**Quality.** The video's quality — *Standard*, *High* or *Maximum* (about 8,
+16 or 28 Mb/s for a 1080 × 1920 Reel, variable) —, 30 or 60 frames a second,
+one pass or **two** (the film measured first, then encoded at the one quality
+that lands on its size; only where the browser's encoder has a constant-quality
+mode, greyed otherwise), and a Winnow clip painted from its light proxy or from
+its **original**, fetched for that export only. The tab says the file's rough
+size before you press; while it runs a bar under the button says what it is
+doing (opening the clips, the sound, each pass and frame), its speed and the
+time left.
+
 **Exports.** Everything is painted by the stage's own painter, so the file is
 what you saw: the **video** (an MP4 of the recap playing, its clips in step and
 its sound under it), the **stills** (each page as a PNG), and the **carousel**
@@ -3527,7 +3537,8 @@ or period it is about), `.open` and `.keep` from the gallery; in the editor
 connected Winnow), `.pin`, `.empty`, `.swap`, `.caption` and `.frame` on a slot, `.set`
 (any setting, deep-merged; an unknown key or a value out of range is refused,
 never clamped), `.snapshot` (a page as a picture), `.export` (the video, the
-stills or the carousel into the downloads), and `.undo` / `.redo`. Every write
+stills or the carousel into the downloads; `delivery` in `.set` chooses its
+quality, frame rate, passes and clips), and `.undo` / `.redo`. Every write
 is one step of the recap's undo, saved and synced like a gesture.
 
 ## Telemetry tool

@@ -19,6 +19,7 @@ import { developOrNull, type DevelopSettings } from '../develop/develop';
 import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
 import { readFrame, type Frame } from './recap-frame';
+import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
@@ -252,6 +253,8 @@ export interface RecapDoc {
    * over a sound's whole loops: the sound is cut, with its fade.
    */
   length: number | null;
+  /** How its video is delivered: quality, frame rate, passes, the clips' files (`recap-delivery.ts`). */
+  delivery: RecapDelivery;
   createdAt: number;
   updatedAt: number;
 }
@@ -630,6 +633,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     look: gradeOrNull(r.look),
     clipSlides: bool(r.clipSlides, true),
     length: typeof r.length === 'number' && Number.isFinite(r.length) ? Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Math.round(r.length * 10) / 10)) : null,
+    delivery: readDelivery(r.delivery),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };

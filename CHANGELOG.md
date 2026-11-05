@@ -22,7 +22,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   its framing wherever it goes. The background's clip is chosen from a drawer of thumbnails — the recap's own days
   first, Live Photos marked and offered as short loops — and its loop is a band on a filmstrip, set by its two
   handles or dragged whole. A cell's words never pass its edge: you choose which camera settings it says (for the
-  whole recap or one picture) and whether they stand on one line, stacked, or packed to fit.
+  whole recap or one picture) and whether they stand on one line, stacked, or packed to fit. The video export has
+  its quality (Standard, High, Maximum), 30 or 60 frames a second, two passes where the browser allows it, and your
+  Winnow clips' originals instead of their light copies, with the file's size said ahead and a progress bar that
+  tells what it is doing, how fast and how long is left.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

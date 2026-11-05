@@ -17,6 +17,7 @@ import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/re
 import { drawCover, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { getClip, getSound } from './recap-store';
+import { deliveryBitrate } from '../../shared/recap/recap-delivery';
 
 export interface ExportInput {
   doc: RecapDoc;
@@ -27,6 +28,26 @@ export interface ExportInput {
   stills: PaintSources['still'];
   aliases: DeviceAliases;
   clipSlides: ReadonlyMap<string, number>;
+  /**
+   * A Winnow clip's ORIGINAL, fetched for this export only (never kept: a
+   * rush can weigh gigabytes) — when the delivery asks for originals. Null
+   * when the clip is not a Winnow one or cannot be had: its proxy then.
+   */
+  original?: (key: string, signal: AbortSignal) => Promise<Blob | null>;
+}
+
+/** Where an export is, said to the person: what it is doing, how far, and the frame it is on. */
+export interface FilmProgress {
+  stage: 'clips' | 'sound' | 'encoding' | 'finishing';
+  /** 0..1 of the whole run where it can be told; null when not. */
+  ratio: number | null;
+  /** Clips fetched or opened, of how many (stage `clips`). */
+  done?: number;
+  of?: number;
+  frame?: number;
+  frames?: number;
+  pass?: number;
+  passes?: number;
 }
 
 /** A clip of the export's own: an element seeked to each frame. */
@@ -36,8 +57,8 @@ interface ExportClip {
   length: number;
 }
 
-async function openClip(key: string): Promise<ExportClip | null> {
-  const blob = await getClip(key);
+async function openClip(key: string, from?: Blob | null): Promise<ExportClip | null> {
+  const blob = from ?? (await getClip(key));
   if (!blob) return null;
   const url = URL.createObjectURL(blob);
   const video = document.createElement('video');
@@ -121,23 +142,44 @@ async function soundBed(doc: RecapDoc, seconds: number): Promise<AudioBuffer | n
 
 export interface FilmResult {
   blob: Blob;
+  /** Encoded in one pass where two were asked: why. */
+  onePass: string | null;
+  /** Clips painted from their proxy where the original was asked. */
+  proxies: number;
   /** Why the file is silent when a sound was set; null when it carries it, or none was asked. */
   silent: string | null;
   missingClips: number;
 }
 
 /** The recap as a film: every page in turn, the clips playing, the sound under it. */
-export async function exportFilm(input: ExportInput, onProgress: (ratio: number | null) => void, signal: AbortSignal): Promise<FilmResult> {
+export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgress) => void, signal: AbortSignal): Promise<FilmResult> {
   const { doc, film } = input;
   const { width: W, height: H } = FORMATS[doc.format];
+  const d = doc.delivery;
   const keys = filmClipKeys(input);
   const clips = new Map<string, ExportClip>();
   let missingClips = 0;
-  for (const k of keys) {
-    const c = await openClip(k);
+  let proxies = 0;
+  for (const [i, k] of keys.entries()) {
+    onProgress({ stage: 'clips', ratio: null, done: i, of: keys.length });
+    let original: Blob | null = null;
+    if (d.clips === 'original' && input.original) {
+      original = await input.original(k, signal).catch((err) => {
+        if (signal.aborted) throw err;
+        return null;
+      });
+      if (!original) proxies += 1;
+    }
+    let c = await openClip(k, original);
+    // An original this browser cannot read (a codec it lacks): its proxy, rather than a still.
+    if (!c && original) {
+      proxies += 1;
+      c = await openClip(k);
+    }
     if (c) clips.set(k, c);
     else missingClips += 1;
   }
+  if (signal.aborted) throw new DOMException('Export cancelled', 'AbortError');
   const slotKey = new Map(input.resolved.slots.flatMap((s) => (s.picture ? [[s.id, s.picture.key] as [string, string]] : [])));
   const bgKey = doc.background.kind === 'video' ? doc.background.video : undefined;
   const bg = bgKey ? clips.get(bgKey) : undefined;
@@ -151,7 +193,9 @@ export async function exportFilm(input: ExportInput, onProgress: (ratio: number 
     backgroundLength: bg?.length ?? 0,
   };
   let silent: string | null = null;
+  let onePass: string | null = null;
   try {
+    onProgress({ stage: 'sound', ratio: null });
     const audio = await soundBed(doc, film.total);
     if (doc.sound && !audio) silent = 'its sound is not on this device, or this browser cannot read it';
     const canvas = document.createElement('canvas');
@@ -162,7 +206,12 @@ export async function exportFilm(input: ExportInput, onProgress: (ratio: number 
       width: W,
       height: H,
       seconds: film.total,
-      fps: 30,
+      fps: d.fps,
+      bitrate: deliveryBitrate(d, W, H),
+      passes: d.passes,
+      onPasses: (_used, reason) => {
+        onePass = reason;
+      },
       audio,
       onAudioSkipped: (reason) => {
         silent = reason;
@@ -184,10 +233,11 @@ export async function exportFilm(input: ExportInput, onProgress: (ratio: number 
         paintRecap(g, W, doc, input.resolved, input.layout, film, sources, { t, page, aliases: input.aliases, clipSlides: input.clipSlides });
         return canvas;
       },
-      onProgress: (p) => onProgress(p.ratio),
+      onProgress: (p) =>
+        onProgress(p.phase === 'finalizing' ? { stage: 'finishing', ratio: null } : { stage: 'encoding', ratio: p.ratio, frame: p.frame, frames: p.frames, pass: p.pass, passes: p.passes }),
       signal,
     });
-    return { blob, silent, missingClips };
+    return { blob, silent, missingClips, onePass, proxies };
   } finally {
     for (const c of clips.values()) closeClip(c);
   }
@@ -227,11 +277,14 @@ export async function exportClipSlide(input: ExportInput, key: string, onProgres
     canvas.height = H;
     const g = canvas.getContext('2d')!;
     const seconds = Math.max(0.5, Math.min(CLIP_SLIDE_MAX, c.length));
+    const d = input.doc.delivery;
     return await encodeFrames({
       width: W,
       height: H,
       seconds,
-      fps: 30,
+      fps: d.fps,
+      bitrate: deliveryBitrate(d, W, H),
+      passes: d.passes,
       draw: async (t) => {
         await seek(c, t);
         g.fillStyle = '#141210';
