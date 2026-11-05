@@ -338,10 +338,20 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     if (s?.kind === 'text') setTextRole(s.id.startsWith('header:') ? 'weekdays' : (s.id as TextRole));
   }, []);
   const slot = selection?.kind === 'cell' ? (resolved.slots.find((s) => s.id === selection.id) ?? null) : null;
-  // A slot picked from the inspector shows on its page.
+  // A slot picked from the inspector shows on its page — when the SELECTION changes, never on an edit (his report: every
+  // setting changed sent the stage back to the first slide), and not when the page shown already holds it (a week's
+  // slide shows the same days as the calendar).
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const selectedCell = selection?.kind === 'cell' ? selection.id : null;
   useEffect(() => {
-    if (selection?.kind === 'cell' && !playing) setPage(pageOfSlot(layout, selection.id));
-  }, [selection, layout, playing]);
+    if (!selectedCell || playing) return;
+    const shown = layoutRef.current.pages[pageRef.current];
+    if (shown?.parts.some((p) => p.kind === 'cell' && p.id === selectedCell)) return;
+    setPage(pageOfSlot(layoutRef.current, selectedCell));
+  }, [selectedCell, playing]);
 
   // ---- bringing pictures in ------------------------------------------------------------
   const fill = useCallback(async (): Promise<string> => {
