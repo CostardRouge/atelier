@@ -12,7 +12,7 @@ import {
   type SlideTitles,
 } from '../../shared/recap/recap-carousel';
 import { withRecap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
-import { replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain } from '../../shared/recap/recap-selection';
+import { replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from '../../shared/recap/recap-selection';
 import { leaves } from '../../shared/sources/winnow/picture-rules';
 import PictureRulesFields from '../../shared/ui/PictureRulesFields';
 import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera } from '../../shared/recap/recap-sheet';
@@ -54,6 +54,32 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
   const [open, setOpen] = useState<string | null>(null);
   const [aim, setAim] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  // A drag in the tray: the picture held, where the pointer is, the tile under it — let go, the two trade places.
+  const [drag, setDrag] = useState<{ key: string; x: number; y: number; moved: boolean; over: string | null; id: number } | null>(null);
+  const startDrag = (key: string) => (e: React.PointerEvent) => {
+    if (e.button > 0 || (e.target as HTMLElement).closest('button:not([data-grip])')) return;
+    // A finger drags by the grip only, so a touch on a picture still scrolls the inspector.
+    if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-grip]')) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDrag({ key, x: e.clientX, y: e.clientY, moved: false, over: null, id: e.pointerId });
+  };
+  const moveDrag = (e: React.PointerEvent) => {
+    setDrag((d) => {
+      if (!d || d.id !== e.pointerId) return d;
+      const moved = d.moved || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6;
+      const under = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-tray-key]')?.dataset.trayKey ?? null;
+      return { ...d, x: e.clientX, y: e.clientY, moved, over: moved && under !== d.key ? under : null };
+    });
+  };
+  const endDrag = (e: React.PointerEvent) => {
+    const d = drag;
+    setDrag(null);
+    if (!d || d.id !== e.pointerId || !d.moved || !d.over) return;
+    const a = d.key;
+    const b = d.over;
+    change((x) => withSwappedFlow(x, resolved, a, b));
+  };
   const byKey = useMemo(() => new Map(doc.pictures.map((p) => [p.key, p])), [doc.pictures]);
   const left = c.left.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
   const shows = dump || c.after === 'highlights';
@@ -126,8 +152,8 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
         {shows && flow.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className={legend}>
-                {frozen ? 'Your selection' : 'Chosen by the rule'} · {flow.length}
+              <span className={legend} title="Drag a picture onto another to swap them">
+                {frozen ? 'Your selection' : 'Chosen by the rule'} · {flow.length} · drag to swap
               </span>
               {frozen && (
                 <button
@@ -143,14 +169,33 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
                 </button>
               )}
             </div>
-            <div role="list" className="grid grid-cols-4 gap-1.5">
+            <div role="list" aria-label="The pictures in the carousel — drag one onto another to swap them" className="grid grid-cols-4 gap-1.5">
               {flow.map((s) => {
                 const pic = s.picture!;
                 const burst = bursts.get(pic.key);
                 const n = burst ? (members.get(burst)?.length ?? 1) : 1;
+                const held = drag?.moved && drag.key === pic.key;
+                const under = drag?.over === pic.key;
                 return (
-                  <div key={s.id} role="listitem" className={`relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame ${aim === pic.key ? 'outline outline-2 outline-dashed outline-accent' : ''}`}>
+                  <div
+                    key={s.id}
+                    role="listitem"
+                    data-tray-key={pic.key}
+                    onPointerDown={startDrag(pic.key)}
+                    onPointerMove={moveDrag}
+                    onPointerUp={endDrag}
+                    onPointerCancel={() => setDrag(null)}
+                    className={`relative aspect-[4/5] rounded-[5px] overflow-hidden bg-frame select-none cursor-grab active:cursor-grabbing ${held ? 'opacity-35' : ''} ${under ? 'outline outline-2 outline-dashed outline-accent outline-offset-1' : aim === pic.key ? 'outline outline-2 outline-dashed outline-accent' : ''}`}
+                  >
                     {tile(pic)}
+                    <span
+                      data-grip
+                      aria-hidden="true"
+                      title="Drag onto another picture to swap them"
+                      className="absolute right-1 bottom-1 w-6 h-6 pointer-coarse:w-9 pointer-coarse:h-9 inline-flex items-center justify-center rounded-full bg-[rgba(16,15,13,0.72)] text-on-media text-xs touch-none cursor-grab"
+                    >
+                      ⠿
+                    </span>
                     <span className="absolute right-1 top-1 flex gap-1">
                       <button
                         type="button"
@@ -190,6 +235,11 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
                 );
               })}
             </div>
+          </div>
+        )}
+        {drag?.moved && byKey.get(drag.key) && (
+          <div aria-hidden="true" className="pointer-events-none fixed z-50 w-14 aspect-[4/5] rounded-[5px] overflow-hidden shadow-paper -translate-x-1/2 -translate-y-1/2 rotate-3" style={{ left: drag.x, top: drag.y }}>
+            {tile(byKey.get(drag.key)!)}
           </div>
         )}
         {aim && (

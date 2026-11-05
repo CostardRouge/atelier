@@ -12,6 +12,7 @@ import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../..
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
 import ClipDrawer from './ClipDrawer';
+import { withSwappedFlow } from '../../shared/recap/recap-selection';
 import StyleSection from './StyleSection';
 import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -737,9 +738,13 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       selection={selection}
       onSelect={select}
       onSwap={(a, b) => {
-        const ka = resolved.slots.find((s) => s.id === a)?.picture?.key ?? null;
-        const kb = resolved.slots.find((s) => s.id === b)?.picture?.key ?? null;
-        change((d) => withSwap(d, a, ka, b, kb));
+        const sa = resolved.slots.find((s) => s.id === a);
+        const sb = resolved.slots.find((s) => s.id === b);
+        const ka = sa?.picture?.key ?? null;
+        const kb = sb?.picture?.key ?? null;
+        // Two carousel places: the two pictures trade places in the selection (which freezes); else the pins swap.
+        if (sa?.flow && sb?.flow && ka && kb) change((d) => withSwappedFlow(d, resolved, ka, kb));
+        else change((d) => withSwap(d, a, ka, b, kb));
       }}
       onMoveHeading={(dx, dy) => change((d) => withRecap(d, { headingOffset: { x: Math.max(-0.5, Math.min(0.5, d.headingOffset.x + dx)), y: Math.max(-0.5, Math.min(0.5, d.headingOffset.y + dy)) } }))}
       aliases={aliases}

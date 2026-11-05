@@ -39,7 +39,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   Taking a picture out of a carousel no longer brings another in: ✕ removes it and the carousel holds one fewer, ⇄
   replaces it with one you choose among the next best; your selection stays as you made it until you let the rule
   choose again. The rule draws from your Winnow picks when they fill the carousel, and leaves out screenshots,
-  bursts and look-alikes by the same conditions as Storytelling's wall.
+  bursts and look-alikes by the same conditions as Storytelling's wall. Drag a picture onto another in the carousel's
+  list, or on the stage, to swap them.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

@@ -182,9 +182,9 @@ export function holdingPick(whole: readonly RecapPicture[], pool: readonly Recap
   return byTime(out);
 }
 
-/** A frozen selection's pictures, those still in the pool, in time order. */
+/** A frozen selection's pictures, those still in the pool, in HIS order (a drag in the tray sets it). */
 function frozenPictures(keys: readonly string[], byKey: ReadonlyMap<string, RecapPicture>): RecapPicture[] {
-  return byTime(keys.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : [])));
+  return keys.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
 }
 
 export function resolveRecap(doc: RecapDoc): ResolvedRecap {
@@ -228,7 +228,7 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
     const ranked = rankPictures(inScope, preferClips);
     const frozen = carousel ? doc.carousel.chosen : null;
     if (frozen) {
-      // His selection, frozen by a correction (removal lab): exactly these, in time order — none added, none taken.
+      // His selection, frozen by a correction (removal lab): exactly these, in his order — none added, none taken.
       slots = frozenPictures(frozen, byKey).map((picture, i) => ({ id: `n:${i}`, day: picture.day, label: `Picture ${i + 1}`, picture, pinned: false, cleared: false, candidates: ranked, flow: true }));
     } else {
       const n = placeCount(doc);

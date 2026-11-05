@@ -13,17 +13,24 @@ import { carouselPool, carouselReport, factsOf, rankByRules } from './recap-caro
 import { looksAlike } from '../sources/winnow/picture-rules';
 import { byTime, type ResolvedRecap } from './recap-slots';
 
-/** The carousel's pictures as the person sees them: its flow places' pictures, by key, in time order. */
+/** The carousel's pictures as the person sees them: its flow places' pictures, by key, in their places' order. */
 export function flowKeys(resolved: ResolvedRecap): string[] {
-  return byTime(resolved.slots.flatMap((s) => (s.flow && s.picture ? [s.picture] : []))).map((p) => p.key);
+  return resolved.slots.flatMap((s) => (s.flow && s.picture ? [s.picture.key] : []));
 }
 
 /** True once a correction froze the selection. */
 export const isFrozen = (doc: RecapDoc) => doc.carousel.chosen !== null;
 
-const timed = (doc: RecapDoc, keys: readonly string[]) => {
+/**
+ * `keys` with `key` put back at its moment: before the first picture taken
+ * after it — the order he set by hand elsewhere untouched.
+ */
+const atItsMoment = (doc: RecapDoc, keys: readonly string[], key: string): string[] => {
   const byKey = new Map(doc.pictures.map((p) => [p.key, p]));
-  return byTime([...new Set(keys)].flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []))).map((p) => p.key);
+  const order = new Map(byTime(doc.pictures).map((p, i) => [p.key, i]));
+  const rest = keys.filter((k) => k !== key && byKey.has(k));
+  const at = rest.findIndex((k) => (order.get(k) ?? 0) > (order.get(key) ?? 0));
+  return at < 0 ? [...rest, key] : [...rest.slice(0, at), key, ...rest.slice(at)];
 };
 
 /** ✕: the picture leaves the carousel, which holds one fewer; it waits on the bench. */
@@ -35,17 +42,26 @@ export function withRemoved(doc: RecapDoc, resolved: ResolvedRecap, key: string,
 /** ⇄: `by` takes `key`'s place; `key` waits on the bench. */
 export function withReplaced(doc: RecapDoc, resolved: ResolvedRecap, key: string, by: string, now: number = Date.now()): RecapDoc {
   const was = doc.carousel.chosen ?? flowKeys(resolved);
-  const chosen = timed(
-    doc,
-    was.map((k) => (k === key ? by : k)),
-  );
+  // In `key`'s place: the order he set stays.
+  const chosen = [...new Set(was.map((k) => (k === key ? by : k)))];
   return withRecap(doc, { carousel: { ...doc.carousel, chosen, left: [...doc.carousel.left.filter((k) => k !== key && k !== by), key] } }, now);
 }
 
 /** ↺: a removed picture back in the carousel, at its moment. */
 export function withRestored(doc: RecapDoc, resolved: ResolvedRecap, key: string, now: number = Date.now()): RecapDoc {
-  const chosen = timed(doc, [...(doc.carousel.chosen ?? flowKeys(resolved)), key]);
+  const chosen = atItsMoment(doc, doc.carousel.chosen ?? flowKeys(resolved), key);
   return withRecap(doc, { carousel: { ...doc.carousel, chosen, left: doc.carousel.left.filter((k) => k !== key) } }, now);
+}
+
+/** Two pictures of the carousel trade places (a drag in the tray, or on the stage): the order is his from then on. */
+export function withSwappedFlow(doc: RecapDoc, resolved: ResolvedRecap, a: string, b: string, now: number = Date.now()): RecapDoc {
+  const was = doc.carousel.chosen ?? flowKeys(resolved);
+  const i = was.indexOf(a);
+  const j = was.indexOf(b);
+  if (i < 0 || j < 0 || i === j) return doc;
+  const chosen = was.slice();
+  [chosen[i], chosen[j]] = [chosen[j], chosen[i]];
+  return withRecap(doc, { carousel: { ...doc.carousel, chosen } }, now);
 }
 
 /** «Let the rule choose again»: the selection unfrozen, the bench emptied. */

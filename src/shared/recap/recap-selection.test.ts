@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { carouselReport } from './recap-carousel';
-import { flowKeys, replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain } from './recap-selection';
+import { flowKeys, replaceCandidates, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from './recap-selection';
 import { resolveRecap } from './recap-slots';
 
 const pic = (i: number, extra: Partial<RecapPicture> = {}): RecapPicture => ({
@@ -74,4 +74,21 @@ describe('removing a picture from a carousel', () => {
     expect(r.pool.map((p) => p.key)).toEqual(['p1', 'p5']);
     expect(r.left).toEqual({ screen: 2, burst: 0, alike: 1 });
   });
+
+  it('keeps the order he sets: a swap, then a replacement and a return in place', () => {
+    const doc = dump(Array.from({ length: 20 }, (_, i) => pic(i)));
+    const r = resolveRecap(doc);
+    const k = flowKeys(r);
+    const swapped = withSwappedFlow(doc, r, k[0], k[3], 2);
+    const r2 = resolveRecap(swapped);
+    expect(flowKeys(r2)).toEqual([k[3], k[1], k[2], k[0], k[4], k[5]]);
+    // The slots follow: the first place shows what was the fourth.
+    expect(r2.slots[0].picture?.key).toBe(k[3]);
+    const by = replaceCandidates(swapped, r2, k[1])[0].key;
+    const r3 = resolveRecap(withReplaced(swapped, r2, k[1], by, 3));
+    expect(flowKeys(r3)).toEqual([k[3], by, k[2], k[0], k[4], k[5]]);
+    const removed = withRemoved(swapped, r2, k[4], 4);
+    expect(flowKeys(resolveRecap(withRestored(removed, resolveRecap(removed), k[4], 5)))).toEqual([k[3], k[1], k[2], k[0], k[4], k[5]]);
+  });
 });
+
