@@ -14,7 +14,7 @@
 import { decodePhoto } from '../../shared/media/photo-frame';
 import { isClipName } from '../../shared/library/assets';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
-import { captureDay, captureMinute, dayFromName } from '../../shared/recap/recap-days';
+import { captureDay, captureMinute, captureSecond, dayFromName } from '../../shared/recap/recap-days';
 import { localKey, winnowKey, type RecapPicture } from '../../shared/recap/recap-doc';
 import type { WinnowAssetRow, WinnowClient } from '../../shared/sources/winnow/client';
 import { localMinutes, localWallMs } from '../../shared/sources/winnow/capture-moment';
@@ -37,6 +37,9 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     kind: row.media_type === 'video' ? 'video' : 'photo',
     day,
     ...(minute !== null ? { minute } : {}),
+    // The seconds and Winnow's burst pile tell a burst's frames apart (`recap-carousel.ts`).
+    ...(wall !== null ? { second: Math.floor((((wall % 86_400_000) + 86_400_000) % 86_400_000) / 1000) } : {}),
+    ...(row.burst_id ? { burst: row.burst_id } : {}),
     ...(row.camera_model ? { device: row.camera_model } : {}),
     ...(row.lens ? { lens: row.lens } : {}),
     ...(row.focal_length ? { focal: row.focal_length } : {}),
@@ -68,10 +71,12 @@ export async function pictureOfFile(file: File): Promise<RecapPicture> {
       const { exif } = await readEffectiveExif(file);
       const day = captureDay(exif.dateTimeOriginal);
       const minute = captureMinute(exif.dateTimeOriginal);
+      const second = captureSecond(exif.dateTimeOriginal);
       const shutter = shutterText(exif.exposureTime);
       Object.assign(base, {
         day,
         ...(minute !== null ? { minute } : {}),
+        ...(second !== null ? { second } : {}),
         ...(exif.model ? { device: exif.model.trim() } : {}),
         ...(exif.lensModel ? { lens: exif.lensModel } : {}),
         ...(exif.focalLength ? { focal: exif.focalLength } : {}),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { burstsOf, carouselPool, readCarousel } from './recap-carousel';
 import { carouselSlides, clipSlideNumbers, flowLayouts, layoutRecap } from './recap-layout';
-import { rankPictures, resolveRecap } from './recap-slots';
+import { holdingPick, rankPictures, resolveRecap } from './recap-slots';
 
 const pic = (key: string, day: string, extra: Partial<RecapPicture> = {}): RecapPicture => ({ key, origin: 'local', name: key, kind: 'photo', day, device: 'ILCE-7M4', ...extra });
 
@@ -47,6 +47,19 @@ describe('a carousel’s pictures', () => {
     expect(r.layouts).toEqual({ 'p:0': 'six' });
     expect(r.titles).toBe('head');
     expect(r.left).toEqual(['a']);
+  });
+});
+
+describe('leaving a picture out', () => {
+  it('changes its place only, the nearest in time coming in', () => {
+    const list: RecapPicture[] = [];
+    for (let d = 1; d <= 20; d++) list.push(pic(`d${d}`, `2026-10-${String(d).padStart(2, '0')}`, { minute: 600 }), pic(`e${d}`, `2026-10-${String(d).padStart(2, '0')}`, { minute: 900 }));
+    const before = holdingPick(list, list, 8).map((p) => p.key);
+    const gone = before[3];
+    const after = holdingPick(list, list.filter((p) => p.key !== gone), 8).map((p) => p.key);
+    expect(after).toHaveLength(8);
+    expect(after.filter((k) => !before.includes(k))).toHaveLength(1);
+    expect(after).not.toContain(gone);
   });
 });
 

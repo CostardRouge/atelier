@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { downloadBlob } from '../../shared/media/save';
 import { useAvcEncodeSupport } from '../../shared/media/use-encode-support';
-import { FORMATS, MAX_LENGTH, MAX_SLIDES, MIN_LENGTH, withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
+import { FORMATS, MAX_LENGTH, MIN_LENGTH, withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { slugOf } from '../../shared/recap/recap-file';
 import type { RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
@@ -14,6 +14,7 @@ import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 import { Icons } from '../../shared/ui/icons';
 import { exportClipSlide, exportFilm, exportPages, type FilmProgress } from './recap-export';
+import { carouselSlides } from '../../shared/recap/recap-layout';
 import { QUALITIES, QUALITY_LABEL, deliveryBitrate, deliverySize, sizeText, type Quality, type RecapDelivery } from '../../shared/recap/recap-delivery';
 import { supportsQuantizer } from '../../shared/media/two-pass';
 
@@ -257,8 +258,9 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
     setProgress((cur) => (cur ? { ...cur, p } : cur));
     task.update({ progress: p.ratio, detail: p.ratio === null ? STAGE_WORDS[p.stage].toLowerCase() : `${Math.round(p.ratio * 100)} %` });
   };
-  const clips = [...clipSlides.entries()].map(([slot, n]) => ({ slot, n, key: resolved.slots.find((s) => s.id === slot)?.picture?.key ?? null }));
-  const slides = layout.pages.length + (doc.clipSlides ? clips.length : 0);
+  const order = carouselSlides(doc, resolved, layout);
+  const clips = order.flatMap((s) => (s.kind === 'clip' ? [s] : []));
+  const slides = order.length;
 
   const run = async (label: string, job: (signal: AbortSignal, task: ReturnType<typeof startTask>) => Promise<string>) => {
     const controller = new AbortController();
@@ -306,23 +308,29 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
 
   const exportCarousel = () =>
     run('carousel', async (signal, task) => {
+      // Slide by slide in the carousel's order: a page as a PNG, a clip as its own MP4 — the file's number is its place.
       const pages = await exportPages(input(), signal);
-      for (let i = 0; i < pages.length; i++) {
-        downloadBlob(pages[i], `${base}-${pad(i + 1)}.png`);
+      let made = 0;
+      for (const [i, s] of order.entries()) {
+        if (signal.aborted) break;
+        if (s.kind === 'page') {
+          const blob = pages[s.page];
+          if (blob) {
+            downloadBlob(blob, `${base}-${pad(i + 1)}.png`);
+            made += 1;
+          }
+        } else {
+          const key = resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
+          if (!key) continue;
+          task.update({ detail: `clip slide ${i + 1}`, progress: null });
+          const blob = await exportClipSlide(input(), key, (ratio) => report(task)({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length });
+          if (!blob) continue;
+          downloadBlob(blob, `${base}-${pad(i + 1)}.mp4`);
+          made += 1;
+        }
         await wait(350);
       }
-      let made = 0;
-      for (const c of clips) {
-        if (!c.key || signal.aborted) continue;
-        task.update({ detail: `clip slide ${c.n}`, progress: null });
-        const blob = await exportClipSlide(input(), c.key, (ratio) => report(task)({ stage: 'encoding', ratio }), signal);
-        if (blob) {
-          downloadBlob(blob, `${base}-${pad(c.n)}.mp4`);
-          made += 1;
-          await wait(350);
-        }
-      }
-      return `${pages.length + made} slides written, in their order — post them as one carousel.`;
+      return `${made} slides written, in their order — post them as one carousel.`;
     });
 
   return (
@@ -343,9 +351,9 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
           <Button icon={Icons.image} disabled={busy !== null} onClick={() => void exportStills()} title="Each page as it rests, everything on">
             {layout.pages.length > 1 ? `Stills · ${layout.pages.length} PNG` : 'Still · PNG'}
           </Button>
-          {(clips.length > 0 || layout.pages.length > 1) && doc.clipSlides && (
-            <Button icon={Icons.stack} disabled={busy !== null || (clips.length > 0 && !canEncode)} onClick={() => void exportCarousel()} title="The pages, then one video slide per clip — numbered as the cells' badges say">
-              Carousel · {Math.min(slides, MAX_SLIDES)} slides
+          {slides > 1 && (
+            <Button icon={Icons.stack} disabled={busy !== null || (clips.length > 0 && !canEncode)} onClick={() => void exportCarousel()} title="Every slide in the strip's order — the pages as PNG, each clip as its own video slide">
+              Carousel · {slides} slides
             </Button>
           )}
           {busy && progress && <ProgressBar p={progress.p} started={progress.started} onCancel={() => abort.current?.abort()} />}

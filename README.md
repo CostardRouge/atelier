@@ -3510,6 +3510,18 @@ turns a picture or the background by up to 45° — it grows just enough that no
 corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
 framing wherever it goes.
 
+**Carousels.** Every recap is a carousel: a strip under the stage shows each
+slide in its order — click one to see it, drag it to move it (the video
+follows), drop a picture from the stage onto it. After its first slide a recap
+holds nothing, its **highlights** (the best of its days the first slide does
+not show, in the photo dump's rhythm — a month's default) or, for a month, a
+slide per **week**. In *Pictures*, ✕ leaves a picture out and the next best
+takes its place; a **burst** (one camera, a few seconds) enters as one frame,
+and its ×n lets you choose which. In *Layout*, a slide keeps the rhythm (*Auto*)
+or takes the layout you set, and the first slide's title can repeat on the
+others — small with the slide's number, or as big as on the first. The carousel
+export writes the slides in that order, a clip as its own video slide.
+
 **Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its
 format, words and their styles, background, cells, motion, look, length and
 quality, never its pictures or days — on this device, and every new recap of

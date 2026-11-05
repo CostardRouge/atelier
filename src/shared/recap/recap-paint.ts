@@ -12,7 +12,7 @@
 import type { RecapDoc, RecapPicture } from './recap-doc';
 import type { Box, CellPart, RecapLayout, TextPart } from './recap-layout';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
-import { deviceLabel, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
+import { deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
 import { framedDraw, type Frame } from './recap-frame';
 import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
@@ -634,3 +634,29 @@ export function pageHeightAt(layout: RecapLayout, width: number): number {
   const p = layout.pages[0];
   return p ? Math.round((p.height / p.width) * width) : width;
 }
+
+/**
+ * The first slide's title over a clip's own slide (carousel lab, E): as a
+ * running head with the slide's number, or as big as on the first, on a
+ * shade so it reads over any video — nothing when the title stays on the
+ * first slide only. The page's slides carry it as parts (`recap-layout.ts`).
+ */
+export function paintSlideTitle(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number, n: number, of: number): void {
+  const titles = doc.carousel.titles;
+  if (titles === 'first' || !doc.heading.show) return;
+  const text = fillText(doc.heading.text, resolved.vars);
+  const m = Math.round(W * 0.06);
+  const shade = g.createLinearGradient(0, 0, 0, H * 0.22);
+  shade.addColorStop(0, 'rgba(10,8,6,0.55)');
+  shade.addColorStop(1, 'rgba(10,8,6,0)');
+  g.fillStyle = shade;
+  g.fillRect(0, 0, W, H * 0.22);
+  if (titles === 'head') {
+    const size = W * 0.026;
+    styled(g, doc, 'heading', `${text} · ${n}/${of}`, m, Math.round(m * 0.18) + sizeIn(doc, 'heading', size) * 1.05, size, { face: MONO, colour: ON_MEDIA, spacing: 0.08, upper: true, maxWidth: W - 2 * m });
+  } else {
+    const size = W * (doc.font === 'serif' ? 0.1 : doc.font === 'mono' ? 0.052 : 0.062);
+    styled(g, doc, 'heading', text, m, m + sizeIn(doc, 'heading', size) * 0.95, size, { face: FACES[doc.font], colour: ON_MEDIA, upper: doc.font === 'sans', spacing: doc.font === 'sans' ? 0.06 : 0, maxWidth: W - 2 * m });
+  }
+}
+

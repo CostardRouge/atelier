@@ -29,7 +29,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   tells what it is doing, how fast and how long is left. *Keep as my style* makes a recap's look the starting point
   of every new recap of its template. An original your browser cannot play — an iPhone HEVC `.MOV` behind a recap —
   can be converted for the video by ffmpeg, in your browser: only the part the film shows, at the size it is shown,
-  kept on the device for the next export.
+  kept on the device for the next export. Every slide of a carousel sits in a strip under the stage, in its order,
+  to look at and drag around; a month is followed by its highlights (or a slide per week); you leave pictures out
+  and the next best comes in, a burst enters as one frame you can change, a slide's layout can be set, and the
+  first slide's title can repeat on the others.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

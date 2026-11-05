@@ -43,6 +43,8 @@ interface Props {
   /** The source a framing moves over: the clip's frame, the blurred picture, the cell's picture. */
   frameSource: (s: Selection) => Drawable | null;
   onFrame: (s: Selection, frame: Frame) => void;
+  /** A cell's picture released outside the stage, where the pointer let go. */
+  onDropOut?: (slot: string, clientX: number, clientY: number) => void;
 }
 
 const DRAG_PX = 6;
@@ -138,7 +140,11 @@ export default function RecapStage(props: Props) {
     }
     if (d.hit.kind === 'cell') {
       const over = hitAt(e);
-      if (over.kind === 'cell' && over.id !== d.hit.id) {
+      const r = canvas.current?.getBoundingClientRect();
+      const off = r && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom);
+      // Dropped off the stage: perhaps onto a slide of the strip (the editor looks).
+      if (off) props.onDropOut?.(d.hit.id, e.clientX, e.clientY);
+      else if (over.kind === 'cell' && over.id !== d.hit.id) {
         onSwap(d.hit.id, over.id);
         onSelect({ kind: 'cell', id: over.id });
       }

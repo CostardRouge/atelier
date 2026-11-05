@@ -152,6 +152,36 @@ export function spreadPick(list: readonly RecapPicture[], n: number): RecapPictu
   return byTime([...chosen]);
 }
 
+/**
+ * `n` pictures of `pool` that HOLD when some are left out: the spread is made
+ * as if nothing were (`whole`), then each picture now missing is replaced by
+ * the nearest one in time still free — so leaving one out changes one place,
+ * not the whole selection's spacing.
+ */
+export function holdingPick(whole: readonly RecapPicture[], pool: readonly RecapPicture[], n: number): RecapPicture[] {
+  const base = spreadPick(whole, n);
+  const inPool = new Set(pool.map((p) => p.key));
+  const used = new Set(base.filter((p) => inPool.has(p.key)).map((p) => p.key));
+  const timeline = byTime(pool);
+  const at = (p: RecapPicture) => (p.day ? Date.parse(`${p.day}T00:00:00Z`) / 60000 : 0) + (p.second !== undefined ? p.second / 60 : (p.minute ?? 720));
+  const out: RecapPicture[] = [];
+  for (const p of base) {
+    if (inPool.has(p.key)) {
+      out.push(p);
+      continue;
+    }
+    let best: RecapPicture | null = null;
+    for (const q of timeline) if (!used.has(q.key) && (!best || Math.abs(at(q) - at(p)) < Math.abs(at(best) - at(p)))) best = q;
+    if (best) {
+      used.add(best.key);
+      out.push(best);
+    }
+  }
+  // Fewer than asked when the bench emptied what was spread: the rest of the pool, best first.
+  for (const q of rankPictures(pool)) if (out.length < n && !used.has(q.key) && !out.includes(q)) out.push(q);
+  return byTime(out);
+}
+
 export function resolveRecap(doc: RecapDoc): ResolvedRecap {
   const byKey = new Map(doc.pictures.map((p) => [p.key, p]));
   const pool = doc.pictures.filter((p) => passesFilter(p, doc.filter));
@@ -192,7 +222,8 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
     const n = placeCount(doc);
     // A dump IS highlights: what was left out stays out, one frame per burst.
     const free = carouselPool(inScope, doc.carousel, rankPictures).filter((p) => !pinnedKeys.has(p.key));
-    const auto = spreadPick(free, n);
+    const whole = carouselPool(inScope, { ...doc.carousel, left: [] }, rankPictures).filter((p) => !pinnedKeys.has(p.key));
+    const auto = holdingPick(whole, free, n);
     const ranked = rankPictures(inScope, preferClips);
     let next = 0;
     slots = Array.from({ length: n }, (_, i) => {
@@ -218,9 +249,10 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
 function highlightSlots(doc: RecapDoc, inScope: readonly RecapPicture[], own: readonly RecapSlot[], byKey: ReadonlyMap<string, RecapPicture>, cleared: ReadonlySet<string>, pinnedKeys: ReadonlySet<string>): RecapSlot[] {
   if (doc.template === 'dump' || doc.carousel.after !== 'highlights') return [];
   const shown = new Set(own.flatMap((s) => (s.picture ? [s.picture.key] : [])));
-  const pool = carouselPool(inScope.filter((p) => !shown.has(p.key)), doc.carousel, rankPictures);
+  const candidates = inScope.filter((p) => !shown.has(p.key) && !pinnedKeys.has(p.key));
+  const pool = carouselPool(candidates, doc.carousel, rankPictures);
   const n = Math.min(doc.carousel.highlights, MAX_SLIDES * 4);
-  const auto = spreadPick(pool.filter((p) => !pinnedKeys.has(p.key)), n);
+  const auto = holdingPick(carouselPool(candidates, { ...doc.carousel, left: [] }, rankPictures), pool, n);
   const ranked = rankPictures(pool);
   let next = 0;
   return Array.from({ length: n }, (_, i) => {

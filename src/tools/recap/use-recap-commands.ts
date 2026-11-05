@@ -18,7 +18,7 @@ import { applySettings, recapOutline, SETTABLE } from '../../shared/recap/recap-
 import { withCaption, withCleared, withPick, withPicture, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { DEFAULT_FRAME, readFrame } from '../../shared/recap/recap-frame';
 import { slugOf } from '../../shared/recap/recap-file';
-import type { RecapLayout } from '../../shared/recap/recap-layout';
+import { carouselSlides, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
@@ -57,7 +57,7 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
       title: 'Read the open recap',
       description:
         'The open recap: its template and format, the day or period it is about, its filter, how many pictures in its pool and in scope, its pages and length in seconds, every slot (a day, a step back or a place) with the picture it shows, whether pinned or emptied and how many candidates it has, and every setting (texts, cells, motion, background, sound, look).',
-      run: () => recapOutline(doc(), resolveRecap(doc()), c.current.layout.pages.length, c.current.film.total, c.current.aliases),
+      run: () => recapOutline(doc(), resolveRecap(doc()), c.current.layout.pages.length, c.current.film.total, c.current.aliases, carouselSlides(doc(), resolveRecap(doc()), c.current.layout).map((s) => s.key)),
     },
     {
       id: 'recap.fill',

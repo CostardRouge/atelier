@@ -4,7 +4,9 @@ import DevelopSheet from '../../shared/develop/DevelopSheet';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
-import { clipSlideNumbers, layoutRecap, pageOfSlot } from '../../shared/recap/recap-layout';
+import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, type CarouselSlide } from '../../shared/recap/recap-layout';
+import SlideStrip from './SlideStrip';
+import { CarouselSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
@@ -160,6 +162,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   }, [facesWanted]);
   const layout = useMemo(() => layoutRecap(view, resolved, today), [view, resolved, today]);
   const clipSlides = useMemo(() => clipSlideNumbers(doc, resolved, layout), [doc, resolved, layout]);
+  const slides = useMemo(() => carouselSlides(doc, resolved, layout), [doc, resolved, layout]);
 
   const ctx = useMemo(() => ({ client, instance, files }), [client, instance, files]);
   const shownKeys = useMemo(() => {
@@ -581,6 +584,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               change={change}
               onAlias={setAlias}
             />
+            <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />
             {slot ? (
               <SlotSection doc={doc} slot={slot} client={client} instance={instance} files={files} change={change} onDevelop={setDeveloping} onFrameStage={() => startFraming({ kind: 'cell', id: slot.id })} />
             ) : (
@@ -603,6 +607,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         return (
           <>
             <LayoutSection doc={doc} change={change} />
+            <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />
             <StyleSection doc={doc} change={change} />
           </>
         );
@@ -680,6 +685,20 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     </div>
   );
 
+  /** A cell's picture dropped on a slide of the strip: it takes that slide's first place, the two swapped. */
+  const dropOnSlide = (slot: string, x: number, y: number) => {
+    const key = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>('[data-slide-key]')?.dataset.slideKey;
+    const target = key ? slides.find((s) => s.key === key) : undefined;
+    if (!target || target.kind !== 'page') return;
+    const first = layout.pages[target.page].parts.find((p) => p.kind === 'cell' && p.id !== slot);
+    if (!first) return;
+    const ka = resolved.slots.find((s) => s.id === slot)?.picture?.key ?? null;
+    const kb = resolved.slots.find((s) => s.id === first.id)?.picture?.key ?? null;
+    change((d) => withSwap(d, slot, ka, first.id, kb));
+    setPage(target.page);
+    select({ kind: 'cell', id: first.id });
+  };
+
   const stage = (
     <RecapStage
       doc={view}
@@ -705,6 +724,40 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       onFraming={startFraming}
       frameSource={frameSource}
       onFrame={setFrame}
+      onDropOut={dropOnSlide}
+    />
+  );
+
+  // ---- the strip of slides under the stage (carousel lab, A) ---------------------------
+  const peekSources = useMemo<PaintSources>(
+    () => ({ still: pictures.still, ...clips.peek }),
+    // The stills' identity is the hook's; it repaints through `version`.
+    [pictures.still, clips.peek, pictures.version, clips.version],
+  );
+  const showSlide = (s: CarouselSlide) => {
+    scrubbed.current = false;
+    setPlaying(false);
+    if (s.kind === 'page') setPage(s.page);
+    else {
+      // A clip's slide is its cell's clip, whole: shown where the cell is, the cell in hand.
+      setPage(pageOfSlot(layout, s.slot));
+      select({ kind: 'cell', id: s.slot });
+    }
+  };
+  const strip = (
+    <SlideStrip
+      doc={view}
+      resolved={resolved}
+      layout={layout}
+      film={film}
+      slides={slides}
+      sources={peekSources}
+      aliases={aliases}
+      clipSlides={clipSlides}
+      version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded}
+      current={layout.pages[Math.min(page, pageCount - 1)]?.key ?? null}
+      onShow={showSlide}
+      onOrder={(order) => change((d) => withRecap(d, { carousel: { ...d.carousel, order } }))}
     />
   );
 
@@ -752,6 +805,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto overflow-x-hidden @min-[860px]:overflow-visible @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_23rem]">
         <div className="flex-none min-w-0 flex flex-col gap-2 @min-[860px]:min-h-0">
           <div className="flex-none h-[calc(var(--app-h,100dvh)*0.58)] min-h-[260px] min-w-0 rounded-control bg-paper-2 p-2 @min-[860px]:h-auto @min-[860px]:flex-1">{stage}</div>
+          {strip}
           {transport}
           <p className="m-0 px-1 font-mono text-3xs tabular-nums text-muted" role="status">
             {status}

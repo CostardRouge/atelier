@@ -14,7 +14,7 @@ import { encodeFrames } from '../../shared/media/render-video';
 import { FORMATS, type RecapDoc } from '../../shared/recap/recap-doc';
 import type { RecapLayout } from '../../shared/recap/recap-layout';
 import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/recap-motion';
-import { drawCover, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
+import { drawCover, paintSlideTitle, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { getClip, getSound, putClip } from './recap-store';
 import { transcodeWith } from '../../shared/media/transcode';
@@ -366,7 +366,7 @@ export async function exportPages(input: ExportInput, signal: AbortSignal = new 
 export const CLIP_SLIDE_MAX = 30;
 
 /** One clip as a slide of its own, covering the format — the slide a cell's `▶ n` points at. */
-export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal): Promise<Blob | null> {
+export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal, place?: { n: number; of: number }): Promise<Blob | null> {
   const { clip: c } = await openForExport(input, key, signal, onProgress);
   if (!c) return null;
   const { width: W, height: H } = FORMATS[input.doc.format];
@@ -391,6 +391,8 @@ export async function exportClipSlide(input: ExportInput, key: string, onProgres
         g.fillStyle = '#141210';
         g.fillRect(0, 0, W, H);
         drawCover(g, frame(c), { x: 0, y: 0, w: W, h: H });
+        // The first slide's title, when the carousel repeats it (its number is the slide's place).
+        if (place) paintSlideTitle(g, input.doc, input.resolved, W, H, place.n, place.of);
         return canvas;
       },
       onProgress: (p) => onProgress(p.ratio),

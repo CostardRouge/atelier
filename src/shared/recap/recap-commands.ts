@@ -28,6 +28,7 @@ export const SETTABLE: Record<string, string> = {
   font: '"sans", "serif" or "mono"',
   headingOffset: '{x, y}, fractions of the page, −0.5…0.5',
   cells: '{number, count, exif, device, caption, videoBadge, today, headers: booleans; empty: "number"|"dashed"|"hidden"; weekStart: 0|1; gap: 0–0.04; radius: 0–0.25; shadow: 0–1 (0 = none); shadowBlur: 0–0.5; shadowY: 0–0.25; numberAt: "topLeft"|"topRight"|"centre"|"bottomLeft"; exifParts: the camera settings the line says, a list in this order: "device","lens","focal","aperture","shutter","iso"; arrange: "auto"|"line"|"stack" (words never pass their cell)}',
+  carousel: '{after: "none"|"highlights"|"weeks" (weeks: a month only; a dump is highlights already); highlights: 1–60; bursts: boolean (one frame per burst); left: picture keys left out — the next best fills in; burstPick: {burstId: key}; layouts: {"p:0": "full"|"two"|"oneTwo"|"three"|"four"|"six"} a flow slide set by hand; order: slide keys ("first", "p:0", "w:1", "clip:<slot>") or null; titles: "first"|"head"|"same" — the first slide\'s title on the others}',
   delivery: '{quality: "standard"|"high"|"max" (≈8, 16, 28 Mb/s at 1080×1920 30 fps); fps: 30|60; passes: 1|2 (2 = measured two-pass, where the browser\'s encoder has a constant-quality mode, else one VBR pass); media: "proxy"|"original" (painted from the originals: every clip, the background first, and every picture a print would blow up — fetched for the export)}',
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed}',
   background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160; frame: {x, y: 0–1 the focus, zoom: 1–4, rotate: −45–45 degrees}}',
@@ -87,7 +88,7 @@ export function applySettings(doc: RecapDoc, patch: unknown, now: number = Date.
 }
 
 /** The recap as an agent reads it: what it is about, its settings, and every slot with what it shows. */
-export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: number, seconds: number, aliases: DeviceAliases = {}) {
+export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: number, seconds: number, aliases: DeviceAliases = {}, slides?: string[]) {
   return {
     id: doc.id,
     title: doc.title,
@@ -102,6 +103,7 @@ export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: numb
     inScope: resolved.inScope.length,
     days: resolved.days,
     pages,
+    ...(slides ? { slides } : {}),
     seconds: Math.round(seconds * 100) / 100,
     filled: resolved.slots.filter((s) => s.picture).length,
     slots: resolved.slots.map((s) => ({
