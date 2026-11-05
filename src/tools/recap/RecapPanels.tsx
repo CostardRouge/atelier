@@ -21,6 +21,7 @@ import {
   type GridShape,
   type RecapDoc,
   type RecapFormat,
+  type RecapPicture,
   type TitleEntrance,
   type VideoPlay,
 } from '../../shared/recap/recap-doc';
@@ -34,6 +35,7 @@ import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import PictureThumb from './PictureThumb';
 import FrameBox from './FrameBox';
+import LoopTrimmer from './LoopTrimmer';
 import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import type { Drawable } from '../../shared/recap/recap-paint';
 
@@ -462,18 +464,25 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
 export function BackgroundSection({
   doc,
   change,
-  clips,
-  onAddClip,
-  onChooseClip,
+  clip,
+  clipLength,
+  clipCount,
+  onOpenClips,
+  thumbClient,
+  thumbInstance,
   frameSource,
   frameVersion,
   onLayout,
 }: {
   doc: RecapDoc;
   change: Change;
-  clips: { key: string; name: string }[];
-  onAddClip: () => void;
-  onChooseClip: (key: string) => void;
+  /** The looping clip as it stands, its length once read, and how many the drawer offers. */
+  clip: RecapPicture | null;
+  clipLength: number;
+  clipCount: number;
+  onOpenClips: () => void;
+  thumbClient: WinnowClient | null;
+  thumbInstance: string | null;
   /** What the frame is set on — the clip's frame or the blurred picture — or null when the ground is flat. */
   frameSource: () => Drawable | null;
   frameVersion: number;
@@ -497,19 +506,23 @@ export function BackgroundSection({
         )}
         {bg.kind === 'video' && (
           <div className="flex flex-col gap-2">
-            <select value={bg.video ?? ''} onChange={(e) => (e.target.value ? onChooseClip(e.target.value) : undefined)} className={fieldClass} aria-label="The looping clip">
-              <option value="">{clips.length ? 'Choose a clip…' : 'No clip yet'}</option>
-              {clips.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <Button size="sm" variant="ghost" icon={Icons.import} onClick={onAddClip} title="A clip from this device, kept here for this recap">
-              Add a clip…
-            </Button>
-            <SliderRow label="Loop from" value={bg.loopIn} min={0} max={30} step={0.1} reset={0} format={(v) => `${v.toFixed(1)} s`} onChange={(loopIn) => set({ loopIn })} />
-            <SliderRow label="Loop to" value={bg.loopOut ?? 30} min={0.5} max={30} step={0.1} reset={30} format={(v) => (bg.loopOut === null ? 'its end' : `${v.toFixed(1)} s`)} onChange={(v) => set({ loopOut: v >= 30 ? null : v })} />
+            <button
+              type="button"
+              onClick={onOpenClips}
+              className="flex items-center gap-3 p-1.5 pr-3 rounded-control border border-line bg-paper text-left hover:border-line-strong cursor-pointer"
+              title="Choose the looping clip — the recap's days first"
+            >
+              {clip ? (
+                <PictureThumb pic={clip} client={thumbClient} instance={thumbInstance} file={null} className="flex-none w-20 h-12 rounded-[5px]" />
+              ) : (
+                <span className="flex-none w-20 h-12 rounded-[5px] border border-dashed border-line-strong" />
+              )}
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="text-sm font-semibold truncate">{clip ? clip.name : 'Choose a clip…'}</span>
+                <span className="font-mono text-2xs text-muted">{clip ? `${clip.day ?? 'no day'}${clipLength ? ` · ${clipLength.toFixed(1)} s` : ''} · change…` : `${clipCount} to choose from`}</span>
+              </span>
+            </button>
+            {clip && clipLength > 0 && <LoopTrimmer clipKey={clip.key} length={clipLength} bg={bg} onLoop={(loop) => set(loop)} />}
             <SliderRow label="Speed" value={bg.speed} min={0.25} max={2} step={0.05} reset={1} format={(v) => `${v.toFixed(2)}×`} onChange={(speed) => set({ speed })} />
           </div>
         )}

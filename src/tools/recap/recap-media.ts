@@ -48,6 +48,8 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     ...(row.duration_s ? { duration: row.duration_s } : {}),
     ...(stars > 0 ? { stars: Math.min(5, stars) } : {}),
     ...(row.verdict === 'pick' ? { picked: true } : {}),
+    // A Live Photo: Winnow paired the still with its .mov — the clip drawer offers that motion.
+    ...(row.group_kind === 'live_photo' && row.companion_id && row.companion_media_type !== 'photo' ? { motion: row.companion_id } : {}),
   };
 }
 
@@ -188,7 +190,9 @@ export async function printOf(pic: RecapPicture, ctx: PrintContext): Promise<Blo
   if (pic.origin === 'winnow' && ctx.client && pic.asset !== undefined && pic.instance === ctx.instance) {
     const c = ctx.client;
     if (pic.kind === 'video') {
-      const thumb = await c.fetchFile(c.thumbUrl(pic.asset), `${pic.asset}.jpg`, 'image/jpeg', 0, { signal: ctx.signal });
+      // A Live Photo's motion is a companion Winnow lists nowhere: its still's thumbnail stands for it.
+      const of = pic.liveStill ?? pic.asset;
+      const thumb = await c.fetchFile(c.thumbUrl(of), `${of}.jpg`, 'image/jpeg', 0, { signal: ctx.signal });
       blob = await printOfStill(thumb);
     } else {
       const proxy = await c.fetchFile(c.proxyUrl(pic.asset), `${pic.asset}.webp`, 'image/webp', 0, { signal: ctx.signal });
@@ -211,7 +215,14 @@ export async function clipOf(pic: RecapPicture, ctx: PrintContext): Promise<Blob
   if (kept) return kept;
   let blob: Blob | null = null;
   if (pic.origin === 'winnow' && ctx.client && pic.asset !== undefined && pic.instance === ctx.instance) {
-    blob = await ctx.client.fetchFile(ctx.client.proxyUrl(pic.asset), `${pic.asset}.mp4`, 'video/mp4', 0, { signal: ctx.signal });
+    const c = ctx.client;
+    try {
+      blob = await c.fetchFile(c.proxyUrl(pic.asset), `${pic.asset}.mp4`, 'video/mp4', 0, { signal: ctx.signal });
+    } catch (err) {
+      // A Live Photo's .mov may have no proxy of its own (a companion): its original is three seconds.
+      if (pic.liveStill === undefined || ctx.signal?.aborted) throw err;
+      blob = await c.fetchFile(c.originalUrl(pic.asset), pic.name, 'video/quicktime', 0, { signal: ctx.signal });
+    }
   } else if (pic.origin === 'local') {
     blob = ctx.files.get(pic.key) ?? null;
   }

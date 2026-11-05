@@ -3489,8 +3489,11 @@ to action, with words counted for you: `{month}`, `{count}`, `{days}`,
 `{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says: the day's number,
 how many shots that day, the camera's line, the device, a word per day, a clip's
 badge, today ringed; how an empty day reads), *Background* (paper, ink, a
-colour, a blurred picture of the recap, or a **looping video** with its in and
-out points and its speed, under a veil), *Motion* (the heading's entrance; the
+colour, a blurred picture of the recap, or a **looping video** under a veil —
+chosen from a drawer of thumbnails with their lengths, the recap's own days
+first and Live Photos marked with a mauve dot and offered as short loops; the
+loop is a band on the clip's filmstrip, its two handles setting where it starts
+and ends and the band itself dragged whole, and its speed is yours), *Motion* (the heading's entrance; the
 cells in order, at random, as a wave, by columns or as a spiral, each fading,
 sliding, popping, dropping, developing like a Polaroid or flickering; clips
 playing in turn, zoomed, together or as posters) and *Export*.

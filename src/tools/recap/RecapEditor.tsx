@@ -8,6 +8,8 @@ import { clipSlideNumbers, layoutRecap, pageOfSlot } from '../../shared/recap/re
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
+import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
+import ClipDrawer from './ClipDrawer';
 import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
@@ -496,8 +498,22 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     />
   );
 
-  const videoClips = useMemo(() => doc.pictures.filter((p) => p.kind === 'video').map((p) => ({ key: p.key, name: p.name })), [doc.pictures]);
+  const [choosingClip, setChoosingClip] = useState(false);
+  const clipCount = useMemo(() => {
+    const g = backgroundChoices(doc);
+    return g.days.length + g.kept.length + g.elsewhere.length;
+  }, [doc]);
+  const bgClip = doc.background.video ? (doc.pictures.find((p) => p.key === doc.background.video) ?? null) : null;
+  const chooseClip = useCallback(
+    (c: ClipChoice) => {
+      setChoosingClip(false);
+      // A Live Photo's motion joins the pool as a loose clip, the background's only.
+      change((d) => withRecap(c.added ? withPictures(d, [c.clip]) : d, { background: { ...d.background, kind: 'video', video: c.key, loopIn: 0, loopOut: null } }));
+    },
+    [change],
+  );
   const addBackgroundClip = useCallback(async () => {
+    setChoosingClip(false);
     const [f] = await pickFiles('video/*', false);
     if (!f) return;
     // Kept for the recap as its background only: never a cell's, whatever day it was shot.
@@ -550,9 +566,12 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             <BackgroundSection
               doc={doc}
               change={change}
-              clips={videoClips}
-              onAddClip={() => void addBackgroundClip()}
-              onChooseClip={(key) => change((d) => withRecap(d, { background: { ...d.background, video: key } }))}
+              clip={bgClip}
+              clipLength={bgClip ? (clips.lengths.get(bgClip.key) ?? bgClip.duration ?? 0) : 0}
+              clipCount={clipCount}
+              onOpenClips={() => setChoosingClip(true)}
+              thumbClient={instance ? client : null}
+              thumbInstance={instance}
               frameSource={() => frameSource({ kind: 'background' })}
               frameVersion={pictures.version + clips.version}
               onLayout={() => setTab('layout')}
@@ -697,6 +716,9 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         </aside>
       </div>
 
+      {choosingClip && (
+        <ClipDrawer doc={doc} client={instance ? client : null} instance={instance} files={files} lengths={clips.lengths} onChoose={chooseClip} onFile={() => void addBackgroundClip()} onClose={() => setChoosingClip(false)} />
+      )}
       {picking && connection && client && pickerHost && <WinnowPicker connection={connection} client={client} host={pickerHost} onClose={() => setPicking(false)} />}
       {developPic && (
         <DevelopSheet

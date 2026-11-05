@@ -22,6 +22,8 @@
   --color-accent: #d9442a;
   --color-accent-ink: #b2331e;
   --color-accent-wash: #f6e6df;
+  /* A Live Photo's mark — always on a picture, so one shade serves both themes */
+  --color-live: #b48ad6;
 
   /* The near-black behind video frames */
   --color-frame: #100f0d;

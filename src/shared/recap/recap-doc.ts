@@ -106,6 +106,10 @@ export interface RecapPicture {
    * background, which must not land on the day it was shot.
    */
   loose?: boolean;
+  /** A Live Photo still: its motion's asset on the same Winnow (the paired `.mov`). */
+  motion?: number;
+  /** A clip that IS a Live Photo's motion: the still's asset, whose thumbnail it shows. */
+  liveStill?: number;
 }
 
 export interface RecapText {
@@ -433,6 +437,8 @@ export function readPicture(raw: unknown): RecapPicture | null {
   optNum('height', 1, 100000);
   optNum('duration', 0, 360000);
   optNum('stars', 0, 5);
+  optNum('motion', 1, Number.MAX_SAFE_INTEGER);
+  optNum('liveStill', 1, Number.MAX_SAFE_INTEGER);
   for (const k of ['device', 'lens', 'shutter'] as const) {
     const v = str(r[k])?.trim().slice(0, 120);
     if (v) out[k] = v;

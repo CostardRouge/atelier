@@ -23,7 +23,7 @@ export default function PictureThumb({
   file: File | null;
   className?: string;
 }) {
-  const remote = pic.origin === 'winnow' && client && pic.asset !== undefined && pic.instance === instance ? client.thumbUrl(pic.asset) : null;
+  const remote = pic.origin === 'winnow' && client && pic.asset !== undefined && pic.instance === instance ? client.thumbUrl(pic.liveStill ?? pic.asset) : null;
   const [kept, setKept] = useState<Blob | null>(null);
   const localImage = file && pic.kind === 'photo' && /\.(jpe?g|png|webp|gif|avif)$/i.test(file.name) ? file : null;
   useEffect(() => {
