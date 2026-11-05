@@ -20,6 +20,7 @@ import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
 import { readFrame, type Frame } from './recap-frame';
 import { readDelivery, type RecapDelivery } from './recap-delivery';
+import { readCarousel, type RecapCarousel } from './recap-carousel';
 import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
@@ -108,6 +109,10 @@ export interface RecapPicture {
    * background, which must not land on the day it was shot.
    */
   loose?: boolean;
+  /** Seconds into its day, when the capture says them — what tells the frames of a burst apart (`recap-carousel.ts`). */
+  second?: number;
+  /** Winnow's burst pile it belongs to, when Winnow made one. */
+  burst?: number;
   /** Its own choice of the camera's settings, over the recap's (`cells.exifParts`). */
   exifParts?: ExifPart[];
   /** A Live Photo still: its motion's asset on the same Winnow (the paired `.mov`). */
@@ -255,6 +260,8 @@ export interface RecapDoc {
   length: number | null;
   /** How its video is delivered: quality, frame rate, passes, the clips' files (`recap-delivery.ts`). */
   delivery: RecapDelivery;
+  /** What the slides after the first hold, and how (`recap-carousel.ts`). */
+  carousel: RecapCarousel;
   createdAt: number;
   updatedAt: number;
 }
@@ -442,6 +449,8 @@ export function readPicture(raw: unknown): RecapPicture | null {
     if (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max) (out as unknown as Record<string, unknown>)[k] = v;
   };
   optNum('minute', 0, 1440);
+  optNum('second', 0, 86399);
+  optNum('burst', 1, Number.MAX_SAFE_INTEGER);
   optNum('focal', 0, 10000);
   optNum('fNumber', 0, 200);
   optNum('iso', 0, 10_000_000);
@@ -634,6 +643,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     clipSlides: bool(r.clipSlides, true),
     length: typeof r.length === 'number' && Number.isFinite(r.length) ? Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Math.round(r.length * 10) / 10)) : null,
     delivery: readDelivery(r.delivery),
+    carousel: readCarousel(r.carousel, template),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };

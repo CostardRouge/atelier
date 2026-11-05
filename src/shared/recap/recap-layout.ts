@@ -11,9 +11,10 @@
  * Pure and DOM-free.
  */
 
-import { monthLead, weekdayHeaders } from './recap-days';
+import { isoWeek, monthLead, weekdayHeaders } from './recap-days';
 import { FORMATS, MAX_SLIDES, type RecapDoc } from './recap-doc';
-import { fillText, type ResolvedRecap } from './recap-slots';
+import { fillText, ownSlots, rankPictures, type RecapSlot, type ResolvedRecap } from './recap-slots';
+import { SLIDE_LAYOUT_COUNT, type SlideLayout } from './recap-carousel';
 import { textStyleOf } from './recap-text';
 
 export interface Box {
@@ -23,7 +24,8 @@ export interface Box {
   h: number;
 }
 
-export type TextRole = 'heading' | 'subheading' | 'header' | 'cta';
+/** `running`: the first slide's title repeated small at the top of the others, with the slide's number. */
+export type TextRole = 'heading' | 'subheading' | 'header' | 'cta' | 'running';
 
 export interface TextPart {
   kind: 'text';
@@ -63,6 +65,8 @@ export interface CellPart {
 export type Part = TextPart | CellPart;
 
 export interface RecapPage {
+  /** What the carousel's order names it by: `first`, a flow slide `p:3`, a week `w:1` (`recap-carousel.ts`). */
+  key: string;
   width: number;
   height: number;
   parts: Part[];
@@ -168,12 +172,12 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
     y += Math.round(size * 1.6) + Math.round(W * 0.01);
   }
   const lead = monthLead(doc.anchor, doc.cells.weekStart);
-  const n = resolved.slots.length;
+  const n = ownSlots(resolved).length;
   const rows = Math.ceil((lead + n) / 7);
   const rowGap = Math.max(gap, Math.round(W * 0.01));
   const room = H - bottom - y - (doc.cta.show ? Math.round(W * 0.1) : 0);
   const cellH = Math.max(20, Math.min(colW * 0.86, (room - (rows - 1) * rowGap) / rows));
-  resolved.slots.forEach((s, i) => {
+  ownSlots(resolved).forEach((s, i) => {
     const at = lead + i;
     const col = at % 7;
     const row = Math.floor(at / 7);
@@ -200,14 +204,14 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
     const shift = Math.round(spare * 0.42);
     for (const p of parts) p.box = { ...p.box, y: p.box.y + shift };
   }
-  return { width: W, height: H, parts, bleed: false };
+  return { key: 'first', width: W, height: H, parts, bleed: false };
 }
 
 function weekPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number, today: string | null): RecapPage {
   const { top } = insets(doc.format, H);
   const gap = Math.round(doc.cells.gap * W);
   const bandW = (W - 6 * gap) / 7;
-  const parts: Part[] = resolved.slots.map((s, i) => ({
+  const parts: Part[] = ownSlots(resolved).map((s, i) => ({
     kind: 'cell' as const,
     id: s.id,
     box: { x: i * (bandW + gap), y: 0, w: bandW, h: H },
@@ -223,7 +227,7 @@ function weekPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number, 
   parts.push(...headingParts(doc, resolved, W, top, 'left', m, W - 2 * m).parts);
   const cta = ctaPart(doc, resolved, W, Math.round(H * 0.66));
   if (cta) parts.push(cta);
-  return { width: W, height: H, parts, bleed: true };
+  return { key: 'first', width: W, height: H, parts, bleed: true };
 }
 
 function ladderPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage {
@@ -232,12 +236,12 @@ function ladderPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
   const head = headingParts(doc, resolved, W, top, 'left', m, W - 2 * m);
   const parts: Part[] = [...head.parts];
   const y0 = head.bottom + Math.round(W * 0.045);
-  const n = Math.max(1, resolved.slots.length);
+  const n = Math.max(1, ownSlots(resolved).length);
   const gap = Math.round(W * 0.03);
   const ctaRoom = doc.cta.show ? Math.round(W * 0.09) : 0;
   const rowH = Math.max(40, (H - bottom - ctaRoom - y0 - (n - 1) * gap) / n);
   const labelW = Math.round(W * 0.27);
-  resolved.slots.forEach((s, i) => {
+  ownSlots(resolved).forEach((s, i) => {
     parts.push({
       kind: 'cell',
       id: s.id,
@@ -253,7 +257,7 @@ function ladderPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
   });
   const cta = ctaPart(doc, resolved, W, Math.round(y0 + n * (rowH + gap)));
   if (cta) parts.push(cta);
-  return { width: W, height: H, parts, bleed: false };
+  return { key: 'first', width: W, height: H, parts, bleed: false };
 }
 
 /** A grid shape's places, in columns × rows units: `[col, row, colSpan, rowSpan]`. */
@@ -291,15 +295,15 @@ function gridPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number):
   const ctaRoom = doc.cta.show ? Math.round(W * 0.09) : 0;
   const area = { x: m, y, w: W - 2 * m, h: H - bottom - ctaRoom - y };
   const gap = Math.round(doc.cells.gap * W);
-  const parts: Part[] = [...gridCells(SHAPES[doc.grid], area, gap, resolved.slots.map((s) => s.id)), ...head.parts];
+  const parts: Part[] = [...gridCells(SHAPES[doc.grid], area, gap, ownSlots(resolved).map((s) => s.id)), ...head.parts];
   const cta = ctaPart(doc, resolved, W, Math.round(area.y + area.h + W * 0.02));
   if (cta) parts.push(cta);
-  return { width: W, height: H, parts, bleed: false };
+  return { key: 'first', width: W, height: H, parts, bleed: false };
 }
 
 function singlePage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage {
   const { bottom } = insets(doc.format, H);
-  const parts: Part[] = resolved.slots.slice(0, 1).map((s) => ({
+  const parts: Part[] = ownSlots(resolved).slice(0, 1).map((s) => ({
     kind: 'cell' as const,
     id: s.id,
     box: { x: 0, y: 0, w: W, h: H },
@@ -316,14 +320,13 @@ function singlePage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
   parts.push(...headingParts(doc, resolved, W, textTop, 'left', m, W - 2 * m).parts);
   const cta = ctaPart(doc, resolved, W, Math.round(H * 0.08));
   if (cta) parts.push(cta);
-  return { width: W, height: H, parts, bleed: true };
+  return { key: 'first', width: W, height: H, parts, bleed: true };
 }
 
 /** A dump page's arrangement and how many pictures it holds. */
-export type DumpPattern = 'cover' | 'oneTwo' | 'full' | 'four' | 'two' | 'three';
-const PATTERN_COUNT: Record<DumpPattern, number> = { cover: 1, oneTwo: 3, full: 1, four: 4, two: 2, three: 3 };
-const RHYTHM: readonly DumpPattern[] = ['oneTwo', 'full', 'four', 'two', 'three'];
-const FIT: Record<number, DumpPattern> = { 1: 'full', 2: 'two', 3: 'oneTwo', 4: 'four' };
+export type DumpPattern = 'cover' | SlideLayout;
+const RHYTHM: readonly SlideLayout[] = ['oneTwo', 'full', 'four', 'two', 'three'];
+const FIT: Record<number, SlideLayout> = { 1: 'full', 2: 'two', 3: 'oneTwo', 4: 'four' };
 
 /**
  * The editorial rhythm of a dump: a cover, then densities that change page to
@@ -331,54 +334,165 @@ const FIT: Record<number, DumpPattern> = { 1: 'full', 2: 'two', 3: 'oneTwo', 4: 
  * never past an Instagram carousel's twenty slides.
  */
 export function dumpPages(count: number): DumpPattern[] {
-  const out: DumpPattern[] = [];
   if (count <= 0) return ['cover'];
-  out.push('cover');
-  let left = count - 1;
+  return ['cover', ...flowLayouts(count - 1).map((f) => f.layout)];
+}
+
+/** The cells of a flow slide's layout, in columns × rows units. */
+const FLOW_SHAPES: Record<SlideLayout, (typeof SHAPES)[keyof typeof SHAPES]> = {
+  full: { cols: 1, rows: 1, cells: [[0, 0, 1, 1]] },
+  two: { cols: 1, rows: 2, cells: [[0, 0, 1, 1], [0, 1, 1, 1]] },
+  oneTwo: { cols: 5, rows: 2, cells: [[0, 0, 3, 2], [3, 0, 2, 1], [3, 1, 2, 1]] },
+  three: { cols: 3, rows: 1, cells: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1]] },
+  four: SHAPES['2x2'],
+  six: { cols: 2, rows: 3, cells: Array.from({ length: 6 }, (_, i) => [i % 2, Math.floor(i / 2), 1, 1] as [number, number, number, number]) },
+};
+
+/**
+ * The flow slides' layouts for `count` pictures: each its own set by hand
+ * (`fixed`, by its place), else the rhythm — the last fitted to what is
+ * left — never past `room` slides. A slide set by hand that asks more than
+ * is left takes what is left.
+ */
+export function flowLayouts(count: number, fixed: Readonly<Record<string, SlideLayout>> = {}, room = MAX_SLIDES - 1): { layout: SlideLayout; take: number; auto: boolean }[] {
+  const out: { layout: SlideLayout; take: number; auto: boolean }[] = [];
+  let left = count;
   let k = 0;
-  while (left > 0 && out.length < MAX_SLIDES) {
-    // Four or fewer left end on ONE page fitted to them, never a lone picture after a pair.
-    const p = left <= 4 ? FIT[left] : RHYTHM[k % RHYTHM.length];
-    out.push(p);
-    left -= PATTERN_COUNT[p];
+  while (left > 0 && out.length < room) {
+    const set = fixed[`p:${k}`];
+    const layout: SlideLayout = set ?? (left <= 4 ? FIT[left] : RHYTHM[k % RHYTHM.length]);
+    const take = Math.min(SLIDE_LAYOUT_COUNT[layout], left);
+    out.push({ layout, take, auto: !set });
+    left -= take;
     k++;
   }
   return out;
 }
 
-function dumpLayout(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage[] {
-  const ids = resolved.slots.map((s) => s.id);
+/** The running head's words: the title, and the slide's number once the order is known (`layoutRecap`). */
+function runningPart(doc: RecapDoc, resolved: ResolvedRecap, W: number, m: number): TextPart | null {
+  if (!doc.heading.show) return null;
+  const size = Math.round(W * 0.026 * textStyleOf(doc.texts, 'heading').size);
+  return { kind: 'text', role: 'running', id: 'running', box: { x: m, y: Math.round(m * 0.18), w: W - 2 * m, h: Math.round(size * 1.3) }, text: fillText(doc.heading.text, resolved.vars), size, align: 'left', face: 'mono', tracking: 0.08, upper: true };
+}
+
+/**
+ * The slides after the first, from `ids` in order: each in its layout, the
+ * first slide's title repeated as the carousel asks (`titles`).
+ */
+function flowPages(doc: RecapDoc, resolved: ResolvedRecap, ids: readonly string[], numberFrom: number, W: number, H: number): RecapPage[] {
   const m = Math.round(W * 0.06);
   const gap = Math.round(doc.cells.gap * W);
+  const titles = doc.carousel.titles;
   const pages: RecapPage[] = [];
   let at = 0;
-  for (const pattern of dumpPages(ids.length)) {
-    const take = ids.slice(at, at + PATTERN_COUNT[pattern]);
-    const area = { x: m, y: m, w: W - 2 * m, h: H - 2 * m };
-    let parts: Part[];
-    if (pattern === 'cover') {
-      const { top, bottom } = insets(doc.format, H);
-      const head = headingParts(doc, resolved, W, Math.min(top, Math.round(H * 0.08)), 'left', m, W - 2 * m);
-      const y = head.bottom + Math.round(W * 0.04);
-      const ctaRoom = doc.cta.show ? Math.round(W * 0.1) : 0;
-      parts = [...head.parts, ...gridCells({ cols: 1, rows: 1, cells: [[0, 0, 1, 1]] }, { x: m, y, w: W - 2 * m, h: H - Math.min(bottom, m) - ctaRoom - y }, gap, take, at)];
-      const cta = ctaPart(doc, resolved, W, H - Math.min(bottom, m) - ctaRoom + Math.round(W * 0.025));
-      if (cta) parts.push(cta);
-    } else if (pattern === 'full') {
-      parts = gridCells({ cols: 1, rows: 1, cells: [[0, 0, 1, 1]] }, { x: 0, y: 0, w: W, h: H }, 0, take, at);
-    } else if (pattern === 'oneTwo') {
-      parts = gridCells({ cols: 5, rows: 2, cells: [[0, 0, 3, 2], [3, 0, 2, 1], [3, 1, 2, 1]] }, area, gap, take, at);
-    } else if (pattern === 'four') {
-      parts = gridCells(SHAPES['2x2'], area, gap, take, at);
-    } else if (pattern === 'two') {
-      parts = gridCells({ cols: 1, rows: 2, cells: [[0, 0, 1, 1], [0, 1, 1, 1]] }, area, gap, take, at);
-    } else {
-      parts = gridCells({ cols: 3, rows: 1, cells: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1]] }, area, gap, take, at);
+  flowLayouts(ids.length, doc.carousel.layouts).forEach(({ layout, take }, k) => {
+    const these = ids.slice(at, at + take);
+    const full = layout === 'full';
+    const parts: Part[] = [];
+    let area: Box = full ? { x: 0, y: 0, w: W, h: H } : { x: m, y: m, w: W - 2 * m, h: H - 2 * m };
+    const heads: Part[] = [];
+    if (titles === 'same') {
+      const head = headingParts(doc, resolved, W, m, 'left', m, W - 2 * m);
+      heads.push(...head.parts);
+      // Over a full-page picture the title sits on it; elsewhere the pictures move down under it.
+      if (!full && head.parts.length) area = { x: m, y: head.bottom + Math.round(W * 0.03), w: W - 2 * m, h: H - m - (head.bottom + Math.round(W * 0.03)) };
+    } else if (titles === 'head') {
+      const run = runningPart(doc, resolved, W, m);
+      if (run) heads.push(run);
     }
-    pages.push({ width: W, height: H, parts, bleed: pattern === 'full' });
-    at += take.length;
-  }
+    parts.push(...gridCells(FLOW_SHAPES[layout], area, full ? 0 : gap, these, numberFrom + at), ...heads);
+    pages.push({ key: `p:${k}`, width: W, height: H, parts, bleed: full });
+    at += take;
+  });
   return pages;
+}
+
+/** The dump's cover: its title, its first picture, its call to action. */
+function coverPage(doc: RecapDoc, resolved: ResolvedRecap, id: string | undefined, W: number, H: number): RecapPage {
+  const m = Math.round(W * 0.06);
+  const gap = Math.round(doc.cells.gap * W);
+  const { top, bottom } = insets(doc.format, H);
+  const head = headingParts(doc, resolved, W, Math.min(top, Math.round(H * 0.08)), 'left', m, W - 2 * m);
+  const y = head.bottom + Math.round(W * 0.04);
+  const ctaRoom = doc.cta.show ? Math.round(W * 0.1) : 0;
+  const parts: Part[] = [...head.parts, ...gridCells({ cols: 1, rows: 1, cells: [[0, 0, 1, 1]] }, { x: m, y, w: W - 2 * m, h: H - Math.min(bottom, m) - ctaRoom - y }, gap, id ? [id] : [], 0)];
+  const cta = ctaPart(doc, resolved, W, H - Math.min(bottom, m) - ctaRoom + Math.round(W * 0.025));
+  if (cta) parts.push(cta);
+  return { key: 'first', width: W, height: H, parts, bleed: false };
+}
+
+/**
+ * A month's slide per week (carousel lab, B): its best day big, its other
+ * days in a band under it, a small «Week 44» over it.
+ */
+function weekPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage[] {
+  const days = ownSlots(resolved).filter((s) => s.day);
+  const weeks: RecapSlot[][] = [];
+  for (const s of days) {
+    const dow = new Date(`${s.day}T00:00:00Z`).getUTCDay();
+    if (!weeks.length || dow === doc.cells.weekStart) weeks.push([]);
+    weeks[weeks.length - 1].push(s);
+  }
+  const m = Math.round(W * 0.06);
+  const gap = Math.round(doc.cells.gap * W);
+  return weeks
+    .filter((w) => w.some((s) => s.picture))
+    .slice(0, MAX_SLIDES - 1)
+    .map((w, i) => {
+      const best = rankPictures(w.flatMap((s) => (s.picture ? [s.picture] : [])))[0];
+      const big = w.find((s) => s.picture === best)!;
+      const rest = w.filter((s) => s !== big && s.picture).slice(0, 6);
+      const label = Math.round(W * 0.03);
+      const parts: Part[] = [];
+      const titleParts: Part[] = [];
+      let top = m + Math.round(label * 1.6);
+      if (doc.carousel.titles === 'same') {
+        const head = headingParts(doc, resolved, W, m, 'left', m, W - 2 * m);
+        titleParts.push(...head.parts);
+        top = head.bottom + Math.round(label * 1.6);
+      } else if (doc.carousel.titles === 'head') {
+        const run = runningPart(doc, resolved, W, m);
+        if (run) titleParts.push(run);
+      }
+      parts.push({ kind: 'text', role: 'header', id: `header:week${i}`, box: { x: m, y: top - Math.round(label * 1.4), w: W - 2 * m, h: Math.round(label * 1.3) }, text: `Week ${isoWeek(w[0].day!)}`, size: label, align: 'left', face: 'mono', tracking: 0.1, upper: true });
+      const band = rest.length ? Math.round((W - 2 * m - gap * 5) / 6) : 0;
+      const bigBox: Box = { x: m, y: top, w: W - 2 * m, h: H - m - top - (band ? band + gap : 0) };
+      parts.push({ kind: 'cell', id: big.id, box: bigBox, col: 0, row: 0, index: 0, number: String(Number(big.day!.slice(-2))), words: 'inside' });
+      rest.forEach((s, j) => parts.push({ kind: 'cell', id: s.id, box: { x: m + j * (band + gap), y: bigBox.y + bigBox.h + gap, w: band, h: band }, col: j, row: 1, index: j + 1, number: String(Number(s.day!.slice(-2))), words: 'inside' }));
+      parts.push(...titleParts);
+      return { key: `w:${i}`, width: W, height: H, parts, bleed: false };
+    });
+}
+
+/** `items` in the author's order (`carousel.order`), what it does not name after, in their own order. */
+function inOrder<T extends { key: string }>(items: readonly T[], order: readonly string[] | null): T[] {
+  if (!order) return [...items];
+  const byKey = new Map(items.map((x) => [x.key, x]));
+  const out = order.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
+  const named = new Set(out.map((x) => x.key));
+  return [...out, ...items.filter((x) => !named.has(x.key))];
+}
+
+/** A slide of the carousel: one of the recap's pages, or a clip playing whole. */
+export type CarouselSlide = { key: string; kind: 'page'; page: number } | { key: string; kind: 'clip'; slot: string };
+
+/**
+ * The carousel, slide by slide, in the author's order: the pages, then — when
+ * `clipSlides` is on — one slide per clip; never past Instagram's twenty.
+ * The Reel plays the pages in this same order (`layoutRecap` orders them).
+ */
+export function carouselSlides(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout): CarouselSlide[] {
+  const pages: CarouselSlide[] = layout.pages.map((p, i) => ({ key: p.key, kind: 'page', page: i }));
+  const seen = new Set<string>();
+  const clips: CarouselSlide[] = doc.clipSlides
+    ? resolved.slots.flatMap((s) => {
+        if (s.picture?.kind !== 'video' || seen.has(s.picture.key)) return [];
+        seen.add(s.picture.key);
+        return [{ key: `clip:${s.id}`, kind: 'clip' as const, slot: s.id }];
+      })
+    : [];
+  return inOrder([...pages, ...clips], doc.carousel.order).slice(0, MAX_SLIDES);
 }
 
 /**
@@ -387,20 +501,35 @@ function dumpLayout(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
  */
 export function layoutRecap(doc: RecapDoc, resolved: ResolvedRecap, today: string | null = null): RecapLayout {
   const { width: W, height: H } = FORMATS[doc.format];
-  switch (doc.template) {
-    case 'month':
-      return { pages: [monthPage(doc, resolved, W, H, today)] };
-    case 'week':
-      return { pages: [weekPage(doc, resolved, W, H, today)] };
-    case 'onThisDay':
-      return { pages: [ladderPage(doc, resolved, W, H)] };
-    case 'grid':
-      return { pages: [gridPage(doc, resolved, W, H)] };
-    case 'single':
-      return { pages: [singlePage(doc, resolved, W, H)] };
-    case 'dump':
-      return { pages: dumpLayout(doc, resolved, W, H) };
+  let pages: RecapPage[];
+  if (doc.template === 'dump') {
+    const ids = resolved.slots.map((s) => s.id);
+    pages = [coverPage(doc, resolved, ids[0], W, H), ...flowPages(doc, resolved, ids.slice(1), 1, W, H)];
+  } else {
+    const first =
+      doc.template === 'month'
+        ? monthPage(doc, resolved, W, H, today)
+        : doc.template === 'week'
+          ? weekPage(doc, resolved, W, H, today)
+          : doc.template === 'onThisDay'
+            ? ladderPage(doc, resolved, W, H)
+            : doc.template === 'grid'
+              ? gridPage(doc, resolved, W, H)
+              : singlePage(doc, resolved, W, H);
+    const after =
+      doc.carousel.after === 'weeks' && doc.template === 'month'
+        ? weekPages(doc, resolved, W, H)
+        : flowPages(doc, resolved, resolved.slots.filter((s) => s.flow && s.picture).map((s) => s.id), 0, W, H);
+    pages = [first, ...after];
   }
+  // The author's order, for the stage, the Reel and the carousel alike; the running heads count in it.
+  const ordered = { pages: inOrder(pages, doc.carousel.order) };
+  const slides = carouselSlides(doc, resolved, ordered);
+  for (const page of ordered.pages) {
+    const n = slides.findIndex((s) => s.key === page.key) + 1;
+    for (const part of page.parts) if (part.kind === 'text' && part.role === 'running') part.text = `${part.text} · ${n}/${slides.length}`;
+  }
+  return ordered;
 }
 
 /** What a point of a page is about: a text's role, a cell's slot, or the background. */
@@ -434,12 +563,8 @@ export function pageOfSlot(layout: RecapLayout, slot: string): number {
  */
 export function clipSlideNumbers(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout): Map<string, number> {
   const out = new Map<string, number>();
-  if (!doc.clipSlides) return out;
-  let next = layout.pages.length + 1;
-  for (const s of resolved.slots) {
-    if (s.picture?.kind !== 'video') continue;
-    if (next > MAX_SLIDES) break;
-    out.set(s.id, next++);
-  }
+  carouselSlides(doc, resolved, layout).forEach((s, i) => {
+    if (s.kind === 'clip') out.set(s.slot, i + 1);
+  });
   return out;
 }

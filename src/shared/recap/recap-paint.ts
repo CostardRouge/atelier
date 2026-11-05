@@ -535,7 +535,8 @@ function drawCell(
 
 /** The style role a laid-out text part wears. */
 export function roleOfPart(part: TextPart): TextRole {
-  return part.role === 'header' ? 'weekdays' : part.role;
+  // The running head is the title, small: it wears the heading's style.
+  return part.role === 'header' ? 'weekdays' : part.role === 'running' ? 'heading' : part.role;
 }
 
 function drawText(g: Ctx2D, doc: RecapDoc, part: TextPart, plan: PagePlan, t: number, light: boolean, bleed: boolean): void {

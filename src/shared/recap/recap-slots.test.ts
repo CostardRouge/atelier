@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withCleared, withPick, withPictures, withRecap, type RecapPicture } from './recap-doc';
-import { fillText, poolDevices, rankPictures, resolveRecap, spreadPick, templateDays } from './recap-slots';
+import { fillText, ownSlots, poolDevices, rankPictures, resolveRecap, spreadPick, templateDays } from './recap-slots';
 
 const pic = (key: string, day: string, extra: Partial<RecapPicture> = {}): RecapPicture => ({ key, origin: 'local', name: key, kind: 'photo', day, ...extra });
 
@@ -16,7 +16,9 @@ describe('recap slots', () => {
       pic('away', '2026-11-01'),
     ]);
     const r = resolveRecap(doc);
-    expect(r.slots).toHaveLength(31);
+    expect(ownSlots(r)).toHaveLength(31);
+    // Its highlights follow: what the calendar does not show.
+    expect(r.slots.filter((s) => s.flow).map((s) => s.picture?.key)).toEqual(['morning', 'plain']);
     const at = (d: string) => r.slots.find((s) => s.id === d)!;
     expect(at('2026-10-02').picture?.key).toBe('noon');
     expect(at('2026-10-03').picture?.key).toBe('star');

@@ -16,6 +16,7 @@ import { addDays, enumerateDays, type IsoDate } from '../roadtrip/trip-days';
 import { mulberry32 } from '../lib/prng';
 import { agoLabel, dayAgo, isoWeek, monthDays, monthName, parseAgo, shortDate, weekDays, dayMonth } from './recap-days';
 import { GRID_SHAPES, MAX_SLIDES, type RecapDoc, type RecapPicture } from './recap-doc';
+import { carouselPool } from './recap-carousel';
 
 export interface RecapSlot {
   /** What a pick, a caption or a clearing names: a day (`2026-10-14`), a step back (`ago:1y`), a place (`n:3`). */
@@ -32,6 +33,13 @@ export interface RecapSlot {
   cleared: boolean;
   /** Every picture the rule could show there, best first. */
   candidates: RecapPicture[];
+  /** A highlight (`h:3`): a slide after the first, not a place of the template's own page. */
+  flow?: boolean;
+}
+
+/** The slots of the template's own page — every slot but the highlights that follow it. */
+export function ownSlots(resolved: ResolvedRecap): RecapSlot[] {
+  return resolved.slots.filter((s) => !s.flow);
 }
 
 export interface ResolvedRecap {
@@ -182,7 +190,8 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
   } else {
     inScope = doc.range ? pool.filter((p) => p.day !== null && p.day >= doc.range!.from && p.day <= doc.range!.to) : pool;
     const n = placeCount(doc);
-    const free = inScope.filter((p) => !pinnedKeys.has(p.key));
+    // A dump IS highlights: what was left out stays out, one frame per burst.
+    const free = carouselPool(inScope, doc.carousel, rankPictures).filter((p) => !pinnedKeys.has(p.key));
     const auto = spreadPick(free, n);
     const ranked = rankPictures(inScope, preferClips);
     let next = 0;
@@ -195,8 +204,33 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
       return { id, day: picture?.day ?? null, label: `Picture ${i + 1}`, picture, pinned: Boolean(pinned) && !isCleared, cleared: isCleared, candidates: ranked };
     });
   }
+  slots = [...slots, ...highlightSlots(doc, inScope, slots, byKey, cleared, pinnedKeys)];
   const dayCount = new Set(inScope.map((p) => p.day).filter(Boolean)).size;
   return { slots, inScope, days: dayCount, vars: textVars(doc, inScope.length, dayCount, slots) };
+}
+
+/**
+ * The highlights after a template's own page (carousel lab, B): the best of
+ * its days or period, spread through them, none the page already shows —
+ * left-out pictures and a burst's other frames held back, pins and clearings
+ * as on any slot (`h:0`, `h:1`…).
+ */
+function highlightSlots(doc: RecapDoc, inScope: readonly RecapPicture[], own: readonly RecapSlot[], byKey: ReadonlyMap<string, RecapPicture>, cleared: ReadonlySet<string>, pinnedKeys: ReadonlySet<string>): RecapSlot[] {
+  if (doc.template === 'dump' || doc.carousel.after !== 'highlights') return [];
+  const shown = new Set(own.flatMap((s) => (s.picture ? [s.picture.key] : [])));
+  const pool = carouselPool(inScope.filter((p) => !shown.has(p.key)), doc.carousel, rankPictures);
+  const n = Math.min(doc.carousel.highlights, MAX_SLIDES * 4);
+  const auto = spreadPick(pool.filter((p) => !pinnedKeys.has(p.key)), n);
+  const ranked = rankPictures(pool);
+  let next = 0;
+  return Array.from({ length: n }, (_, i) => {
+    const id = `h:${i}`;
+    const pinKey = doc.picks[id];
+    const pinned = pinKey ? (byKey.get(pinKey) ?? null) : null;
+    const isCleared = cleared.has(id);
+    const picture = isCleared ? null : (pinned ?? auto[next++] ?? null);
+    return { id, day: picture?.day ?? null, label: `Highlight ${i + 1}`, picture, pinned: Boolean(pinned) && !isCleared, cleared: isCleared, candidates: ranked, flow: true };
+  }).filter((s) => s.picture || s.pinned || s.cleared);
 }
 
 function textVars(doc: RecapDoc, count: number, days: number, slots: readonly RecapSlot[]): Record<string, string> {

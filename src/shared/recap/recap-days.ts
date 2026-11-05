@@ -173,6 +173,14 @@ export function captureMinute(text: string | null | undefined): number | null {
   return Number(m[1]) * 60 + Number(m[2]) + Number(m[3] ?? 0) / 60;
 }
 
+/** Seconds into the day of a capture instant, when the text says them (`2026:10:12 18:42:07`) — what tells a burst. */
+export function captureSecond(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const m = /^\d{4}[:-]\d{2}[:-]\d{2}[T ](\d{2}):(\d{2}):(\d{2})/.exec(text.trim());
+  if (!m) return null;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+}
+
 /**
  * A day hidden in a camera's file name, when nothing else says it: DJI's
  * `DJI_20251104184207_0001`, a phone's `IMG_20251104_184207`, `PXL_20251104…`.
