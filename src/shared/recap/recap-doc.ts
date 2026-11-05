@@ -148,6 +148,10 @@ export interface RecapCells {
   gap: number;
   /** A cell's corner, a fraction of its short side. */
   radius: number;
+  /** The shadow under a picture: its darkness (0 = none), its blur and its drop, fractions of the cell's short side. */
+  shadow: number;
+  shadowBlur: number;
+  shadowY: number;
 }
 
 export interface RecapMotion {
@@ -233,6 +237,9 @@ export const DEFAULT_CELLS: RecapCells = {
   weekStart: 1,
   gap: 0.008,
   radius: 0,
+  shadow: 0,
+  shadowBlur: 0.12,
+  shadowY: 0.04,
 };
 
 export const DEFAULT_MOTION: RecapMotion = {
@@ -276,7 +283,7 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     heading: '{month}',
     subheading: '{year} · {days} days · {count} shots',
     background: 'ink',
-    cells: {},
+    cells: { shadow: 0.35 },
     motion: { order: 'wave', entrance: 'develop' },
     font: 'sans',
   },
@@ -309,7 +316,7 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     heading: '{month}',
     subheading: '{count} shots',
     background: 'ink',
-    cells: { number: false, gap: 0.006 },
+    cells: { number: false, gap: 0.006, shadow: 0.35 },
     motion: { order: 'random', entrance: 'pop', stagger: 0.12 },
     font: 'serif',
   },
@@ -331,7 +338,7 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     heading: '{month}',
     subheading: '{count} shots · swipe',
     background: 'paper',
-    cells: { number: false, gap: 0.012 },
+    cells: { number: false, gap: 0.012, shadow: 0.35 },
     motion: { order: 'inOrder', entrance: 'fade', stagger: 0.12 },
     font: 'serif',
   },
@@ -471,6 +478,9 @@ export function sanitizeCells(raw: unknown, base: RecapCells = DEFAULT_CELLS): R
     weekStart: r.weekStart === 0 ? 0 : r.weekStart === 1 ? 1 : base.weekStart,
     gap: num(r.gap, 0, 0.04, base.gap),
     radius: num(r.radius, 0, 0.25, base.radius),
+    shadow: num(r.shadow, 0, 1, base.shadow),
+    shadowBlur: num(r.shadowBlur, 0, 0.5, base.shadowBlur),
+    shadowY: num(r.shadowY, 0, 0.25, base.shadowY),
   };
 }
 

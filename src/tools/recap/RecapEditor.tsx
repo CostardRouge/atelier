@@ -5,7 +5,7 @@ import { useLutStack } from '../../shared/lut/use-lut-stack';
 import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
 import { clipSlideNumbers, layoutRecap, pageOfSlot } from '../../shared/recap/recap-layout';
-import { pageAt, planFilm } from '../../shared/recap/recap-motion';
+import { filledOf, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { PAINT_FONTS, paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -149,7 +149,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         const pic = resolved.slots.find((s) => s.id === slot)?.picture;
         if (!pic || pic.kind !== 'video') return null;
         return clips.lengths.get(pic.key) ?? pic.duration ?? null;
-      }),
+      }, filledOf(resolved)),
     [doc, layout, resolved, clips.lengths],
   );
   const [page, setPage] = useState(0);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { recordingContext } from '../story/recording-context';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { clipSlideNumbers, layoutRecap } from './recap-layout';
-import { planFilm } from './recap-motion';
+import { filledOf, planFilm } from './recap-motion';
 import { exifLine, isLightGround, paintRecap, type PaintSources } from './recap-paint';
 import { resolveRecap } from './recap-slots';
 
@@ -13,7 +13,7 @@ const sources: PaintSources = { still: () => still };
 function paint(doc: ReturnType<typeof createRecapDoc>, t: number, editing = false) {
   const resolved = resolveRecap(doc);
   const layout = layoutRecap(doc, resolved, '2026-10-14');
-  const film = planFilm(doc, layout, (slot) => resolved.slots.find((s) => s.id === slot)?.picture?.duration ?? null);
+  const film = planFilm(doc, layout, (slot) => resolved.slots.find((s) => s.id === slot)?.picture?.duration ?? null, filledOf(resolved));
   const rec = recordingContext(1080, 1920);
   paintRecap(rec.ctx, 1080, doc, resolved, layout, film, sources, { t, page: 0, editing, clipSlides: clipSlideNumbers(doc, resolved, layout) });
   return { ...rec, film };

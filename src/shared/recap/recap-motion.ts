@@ -87,8 +87,16 @@ export function cellRanks(cells: readonly CellPart[], order: CellOrder, seed: nu
 
 /** What a cell needs to know about its clip: how long it runs, when it has one. */
 export type ClipLength = (slot: string) => number | null;
+/** Whether a slot shows a picture — an empty day takes no turn in the entrance. */
+export type Filled = (slot: string) => boolean;
 
-function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean, clipLength: ClipLength): PagePlan {
+/** The slots of `resolved` that show a picture, as a `Filled`. */
+export function filledOf(resolved: { slots: readonly { id: string; picture: unknown }[] }): Filled {
+  const ids = new Set(resolved.slots.filter((s) => s.picture).map((s) => s.id));
+  return (slot) => ids.has(slot);
+}
+
+function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean, clipLength: ClipLength, filled: Filled): PagePlan {
   const m = doc.motion;
   const texts = page.parts.filter((p) => p.kind === 'text');
   const hasHeading = texts.some((p) => p.role === 'heading');
@@ -96,7 +104,9 @@ function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean,
   const titleOn = m.title !== 'none';
   const heading = hasHeading ? { at: start + (titleOn ? HEADING_AT : 0), dur: titleOn ? HEADING_DUR : 0 } : null;
   const subheading = hasSub ? { at: start + (titleOn ? HEADING_AT + 0.3 : 0), dur: titleOn ? HEADING_DUR : 0 } : null;
-  const cellsOf = page.parts.filter((p): p is CellPart => p.kind === 'cell');
+  // Only the cells with a picture ENTER: an empty day is there from the start, with the grid, and the wave runs
+  // through the pictures with no gap where a day is empty.
+  const cellsOf = page.parts.filter((p): p is CellPart => p.kind === 'cell' && filled(p.id));
   const ranks = cellRanks(cellsOf, m.order, m.seed);
   const dur = CELL_DUR[m.entrance];
   const cellsStart = start + (m.entrance === 'none' ? 0 : (first && titleOn && hasHeading ? HEADING_AT + 0.45 : 0.2));
@@ -142,11 +152,11 @@ function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean,
  * asks for it, to a whole number of the sound's loops so the music ends on
  * its own seam.
  */
-export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null): FilmPlan {
+export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true): FilmPlan {
   const pages: PagePlan[] = [];
   let t = 0;
   layout.pages.forEach((page, i) => {
-    const plan = planPage(doc, page, t, i === 0, clipLength);
+    const plan = planPage(doc, page, t, i === 0, clipLength, filled);
     pages.push(plan);
     t += plan.length;
   });

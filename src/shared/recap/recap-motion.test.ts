@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { layoutRecap, type CellPart } from './recap-layout';
-import { cellLook, cellRanks, clipTime, loopTime, pageAt, planFilm, textLook, zoomedBox } from './recap-motion';
+import { cellLook, cellRanks, clipTime, filledOf, loopTime, pageAt, planFilm, textLook, zoomedBox } from './recap-motion';
 import { resolveRecap } from './recap-slots';
 
 const pic = (key: string, day: string, extra: Partial<RecapPicture> = {}): RecapPicture => ({ key, origin: 'local', name: key, kind: 'photo', day, ...extra });
@@ -78,5 +78,14 @@ describe('recap motion', () => {
     const plan = planFilm(d, layoutRecap(d, resolveRecap(d)));
     expect(plan.pages.length).toBe(3);
     expect(pageAt(plan, plan.pages[1].start + 0.01)).toBe(1);
+  });
+
+  it('lets only the pictures enter: an empty day takes no turn and leaves no gap in the wave', () => {
+    const d = withPictures(doc, [pic('a', '2026-10-01'), pic('b', '2026-10-30')]);
+    const r = resolveRecap(d);
+    const plan = planFilm(d, layoutRecap(d, r), () => null, filledOf(r)).pages[0];
+    expect([...plan.cells.keys()]).toEqual(['2026-10-01', '2026-10-30']);
+    const [a, b] = [plan.cells.get('2026-10-01')!, plan.cells.get('2026-10-30')!];
+    expect(b.at - a.at).toBeCloseTo(d.motion.stagger);
   });
 });

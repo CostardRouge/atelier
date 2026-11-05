@@ -193,6 +193,8 @@ function drawCell(
   if (doc.motion.videos === 'zoom' && windows?.length) {
     for (const w of windows) box = zoomedBox(box, W, H, w, t);
   }
+  // What the grid itself wears — the weekdays' fade with the heading: an empty day is there with it, never entering.
+  const gridAlpha = textLook(doc.motion.title === 'none' ? 'none' : 'fade', plan.heading, t).alpha;
   const radius = doc.cells.radius * Math.min(box.w, box.h);
   const ink = light ? PAPER_INK : ON_MEDIA;
   const words = part.words;
@@ -201,8 +203,7 @@ function drawCell(
 
   // The rung's words beside its picture (on this day) are drawn whatever the picture's state.
   if (words === 'beside') {
-    const tl = textLook(doc.motion.title === 'none' ? 'none' : 'fade', span ?? null, t);
-    g.globalAlpha = tl.alpha;
+    g.globalAlpha = pic ? textLook(doc.motion.title === 'none' ? 'none' : 'fade', span ?? null, t).alpha : gridAlpha;
     const x = box.x - W * 0.27;
     const size = W * 0.034;
     text(g, part.label ?? '', x, box.y + size * 1.1, size, FACES[doc.font], part.today ? ACCENT : ink, { weight: 500 });
@@ -218,7 +219,7 @@ function drawCell(
   if (!pic && doc.template === 'week') {
     // A day of the week with no picture keeps its number and its name, as the bands around it do.
     if (doc.cells.empty === 'hidden' && !opts.editing) return;
-    g.globalAlpha = look.alpha || (opts.editing ? 1 : 0);
+    g.globalAlpha = opts.editing ? 1 : gridAlpha;
     if (doc.cells.empty === 'dashed' || opts.editing) {
       g.save();
       g.setLineDash([Math.max(3, W * 0.01), Math.max(3, W * 0.008)]);
@@ -240,7 +241,7 @@ function drawCell(
     if (part.words === 'beside' || doc.template === 'month') {
       const empty = doc.cells.empty;
       if (empty === 'hidden' && !opts.editing) return;
-      g.globalAlpha = look.alpha || (opts.editing ? 1 : 0);
+      g.globalAlpha = opts.editing ? 1 : gridAlpha;
       if (empty === 'dashed' || opts.editing) {
         g.save();
         g.setLineDash([Math.max(3, s * 0.06), Math.max(3, s * 0.05)]);
@@ -268,10 +269,10 @@ function drawCell(
   g.translate(cx + look.dx * box.w, cy + look.dy * box.h);
   g.scale(look.scale, look.scale);
   g.translate(-cx, -cy);
-  if (doc.template === 'month' || doc.template === 'grid' || doc.template === 'dump') {
-    g.shadowColor = 'rgba(0,0,0,0.35)';
-    g.shadowBlur = s * 0.12;
-    g.shadowOffsetY = s * 0.04;
+  if (doc.cells.shadow > 0) {
+    g.shadowColor = `rgba(0,0,0,${doc.cells.shadow})`;
+    g.shadowBlur = s * doc.cells.shadowBlur;
+    g.shadowOffsetY = s * doc.cells.shadowY;
   }
   const drawable = (playing !== null && src.clip ? src.clip(pic.key, playing) : null) ?? src.still(pic.key);
   roundRect(g, box, radius);

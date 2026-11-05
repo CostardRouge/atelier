@@ -474,6 +474,13 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
           <SliderRow label="Corners" value={Math.round(c.radius * 100)} min={0} max={25} step={1} reset={0} format={(v) => `${v} %`} onChange={(v) => set({ radius: v / 100 })} />
         </div>
       </InspectorSection>
+      <InspectorSection id="recap-shadow" title="Shadow" marked={c.shadow > 0} mark={<ToggleField checked={c.shadow > 0} onChange={(on) => set({ shadow: on ? 0.35 : 0 })} label="Shadow under the pictures" />}>
+        <div className={`flex flex-col gap-1 ${c.shadow > 0 ? '' : 'opacity-45'}`}>
+          <SliderRow label="Darkness" value={Math.round(c.shadow * 100)} min={0} max={100} step={1} reset={35} format={(v) => (v ? `${v} %` : 'none')} onChange={(v) => set({ shadow: v / 100 })} />
+          <SliderRow label="Softness" value={Math.round(c.shadowBlur * 100)} min={0} max={50} step={1} reset={12} format={(v) => `${v} %`} onChange={(v) => set({ shadowBlur: v / 100 })} disabled={c.shadow === 0} />
+          <SliderRow label="Drop" value={Math.round(c.shadowY * 100)} min={0} max={25} step={1} reset={4} format={(v) => `${v} %`} onChange={(v) => set({ shadowY: v / 100 })} disabled={c.shadow === 0} />
+        </div>
+      </InspectorSection>
     </>
   );
 }

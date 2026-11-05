@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { FORMATS, type RecapTemplate } from '../../shared/recap/recap-doc';
 import { layoutRecap } from '../../shared/recap/recap-layout';
-import { planFilm } from '../../shared/recap/recap-motion';
+import { filledOf, planFilm } from '../../shared/recap/recap-motion';
 import { paintRecap } from '../../shared/recap/recap-paint';
 import { resolveRecap } from '../../shared/recap/recap-slots';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
@@ -18,7 +18,7 @@ export default function TemplatePreview({ template, anchor, height, playing = fa
     const doc = sampleRecap(template, anchor);
     const resolved = resolveRecap(doc);
     const layout = layoutRecap(doc, resolved, anchor);
-    const film = planFilm(doc, layout, (slot) => resolved.slots.find((s) => s.id === slot)?.picture?.duration ?? null);
+    const film = planFilm(doc, layout, (slot) => resolved.slots.find((s) => s.id === slot)?.picture?.duration ?? null, filledOf(resolved));
     return { doc, resolved, layout, film };
   }, [template, anchor]);
   const { width: pw, height: ph } = FORMATS[model.doc.format];
