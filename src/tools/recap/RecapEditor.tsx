@@ -430,24 +430,28 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     if (!instance) return null;
     const held = new Set(doc.pictures.filter((p) => p.instance === instance).map((p) => p.asset));
     const span = doc.range ?? (resolved.slots.length ? { from: resolved.slots.find((s) => s.day)?.day ?? doc.anchor, to: [...resolved.slots].reverse().find((s) => s.day)?.day ?? doc.anchor } : null);
+    // A cell in hand: the picker is FOR it — opened on the recap's days as usual (another day a click away), any picture
+    // may be ticked (one already in the recap, one of another day: his ask, an empty day must be fillable), and the first
+    // ticked lands on it.
+    const target = selection?.kind === 'cell' ? (resolved.slots.find((s) => s.id === selection.id) ?? null) : null;
     return {
-      title: `Add from ${instance}`,
-      destination: `Recap · ${doc.title}`,
-      start: { day: doc.anchor, scope: span ? 'span' : 'day', span },
-      held: (row: WinnowAssetRow) => held.has(row.id),
+      title: target ? `Choose for ${target.label}` : `Add from ${instance}`,
+      destination: target ? `Recap · ${target.label}` : `Recap · ${doc.title}`,
+      start: { day: target?.day ?? doc.anchor, scope: span ? 'span' : 'day', span },
+      held: (row: WinnowAssetRow) => !target && held.has(row.id),
       heldLabel: 'in this recap',
       openTicks: 'none',
       accepts: (row: WinnowAssetRow) => row.media_type === 'photo' || row.media_type === 'video',
       actions: [
         {
           key: 'add',
-          label: (n: number) => (n ? `Add ${n.toLocaleString()} to the recap` : 'Add to the recap'),
+          label: (n: number) => (target ? (n > 1 ? `Put the first on ${target.label}, add ${n - 1}` : `Put it on ${target.label}`) : n ? `Add ${n.toLocaleString()} to the recap` : 'Add to the recap'),
           run: async (rows: WinnowAssetRow[]) => {
             const pics = rows.map((r) => pictureOfRow(r, instance));
             change((d) => {
               let next = withPictures(d, pics);
-              // Picked by hand for the slot on screen: the first one lands there.
-              if (selection?.kind === 'cell' && pics[0]) next = withPick(next, selection.id, pics[0].key);
+              // Picked by hand for the slot on screen: the first one lands there, whatever day it was taken.
+              if (target && pics[0]) next = withPick(next, target.id, pics[0].key);
               return next;
             });
             return true;
@@ -596,7 +600,17 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             />
             <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />
             {slot ? (
-              <SlotSection doc={doc} slot={slot} client={client} instance={instance} files={files} change={change} onDevelop={setDeveloping} onFrameStage={() => startFraming({ kind: 'cell', id: slot.id })} />
+              <SlotSection
+                doc={doc}
+                slot={slot}
+                client={client}
+                instance={instance}
+                files={files}
+                change={change}
+                onDevelop={setDeveloping}
+                onFrameStage={() => startFraming({ kind: 'cell', id: slot.id })}
+                onPickFor={connection && client ? () => setPicking(true) : null}
+              />
             ) : (
               <p className="m-0 px-1 text-xs text-muted">Click a cell on the stage to choose its picture, develop it or empty it. Drag a picture onto another cell to swap them.</p>
             )}

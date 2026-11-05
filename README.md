@@ -3478,7 +3478,9 @@ a step back, a place of the grid — and the rule fills it from the recap's pool
 Winnow's pick first, then its stars, then a photo over a clip, then the one
 nearest the middle of the day. Click a cell on the stage and the inspector shows
 that day's pictures: a tap pins one there, *Empty* leaves it empty, *Give it back
-to the rule* undoes both. Drag a picture onto another cell to swap them; drag
+to the rule* undoes both. *Choose one…* opens your Winnow for that place: any
+picture — even one from another day, then marked *chosen by hand* — lands
+there, so an empty day can be filled and developed. Drag a picture onto another cell to swap them; drag
 the heading to move it. The **filter** keeps only some devices — *your iPhone,
 your Sony, your drone*, named once per device — or only photos or only clips.
 

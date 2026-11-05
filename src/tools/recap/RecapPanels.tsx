@@ -258,6 +258,7 @@ export function SlotSection({
   change,
   onDevelop,
   onFrameStage,
+  onPickFor,
 }: {
   doc: RecapDoc;
   slot: RecapSlot;
@@ -268,6 +269,8 @@ export function SlotSection({
   onDevelop: (key: string) => void;
   /** Frame this cell's picture on the stage (the same as a double-click there). */
   onFrameStage: () => void;
+  /** Open the Winnow picker FOR this place — on its day, any picture — when one is connected. */
+  onPickFor: (() => void) | null;
 }) {
   const pic = slot.picture;
   const zoom = pic?.frame?.zoom ?? 1;
@@ -302,6 +305,16 @@ export function SlotSection({
                   </Button>
                 </div>
               </>
+            )}
+            {pic && slot.pinned && slot.day && pic.day && pic.day !== slot.day && (
+              <span className="self-start inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-accent-wash font-mono text-3xs text-accent-ink" title="Chosen by hand from another day — the recap shows it on this one">
+                from {shortDate(pic.day)} · chosen by hand
+              </span>
+            )}
+            {onPickFor && (
+              <Button size="sm" variant={pic ? 'ghost' : 'primary'} onClick={onPickFor} title="Open your Winnow on this day — any picture, even one from another day, lands here">
+                {pic ? 'Choose another…' : 'Choose one…'}
+              </Button>
             )}
             {(slot.pinned || slot.cleared) && (
               <button type="button" onClick={() => change((d) => withPick(d, slot.id, null))} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">

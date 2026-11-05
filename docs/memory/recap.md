@@ -90,3 +90,7 @@ His yes to lab 4 (https://claude.ai/artifact/8HMcmvJYCUSKPXU1Sgt8aU, every recom
 
 Every setting changed (a slide's layout, the background) sent the stage back to slide 1: the effect showing a selected cell's page ran on every `layout` change, and `pageOfSlot` answers the FIRST page holding the cell (a week's slide or a highlight shares day slots with the calendar). It now runs when the selected cell CHANGES only, and not at all when the page shown already holds it (`pageRef`/`layoutRef` read inside). **How to apply**: an effect that moves the view follows the person's gesture (the selection), never the document's edits.
 
+## The picker is FOR the cell in hand (2026-11-05, his ask on Week)
+
+An empty day could not be filled (nor developed): the Winnow picker drew every picture already in the recap as HELD (never tickable), so a day Winnow had nothing for stayed empty. With a cell selected, `pickerHost` is now that cell's: titled «Choose for 5 October», opened on the recap's days as usual, NOTHING held (a picture of the pool or of another day can be ticked), its action «Put it on 5 October» pins the first ticked there (the others join the pool). The slot's inspector has *Choose one…* / *Choose another…*, and a picture pinned from another day is marked «from 6 Oct · chosen by hand» (inspector only — the export draws it as any other). Driven headless on the stub.
+
