@@ -56,6 +56,8 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     ...(row.duration_s ? { duration: row.duration_s } : {}),
     ...(stars > 0 ? { stars: Math.min(5, stars) } : {}),
     ...(row.verdict === 'pick' ? { picked: true } : {}),
+    // Winnow's ♥ (#355); an older instance has no field — not a favourite.
+    ...(row.favourite === true ? { fav: true } : {}),
     // Where it was taken: the names Winnow's geocoding gave, and the GPS (a recap's opener and Wrapped read them).
     ...placeOfRow(row),
     // A Live Photo: Winnow paired the still with its .mov — the clip drawer offers that motion.

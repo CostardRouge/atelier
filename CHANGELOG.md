@@ -41,7 +41,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   picture can be given one from your Winnow — any picture, even one from another day, marked as chosen by hand.
   Taking a picture out of a carousel no longer brings another in: ✕ removes it and the carousel holds one fewer, ⇄
   replaces it with one you choose among the next best; your selection stays as you made it until you let the rule
-  choose again. The rule draws from your Winnow picks when they fill the carousel, and leaves out screenshots,
+  choose again. The rule draws from your Winnow favourites (♥) or picks when they fill the carousel — or from your
+  ♥ only, showing fewer pictures rather than others — puts a ♥ first wherever it chooses the best, and leaves out screenshots,
   bursts and look-alikes by the same conditions as Storytelling's wall. Drag a picture onto another in the carousel's
   list, or on the stage, to swap them — or onto its edge in the list to put it before or after it. The number of
   pictures can be changed again once you have corrected the selection — at the head of the carousel's list in

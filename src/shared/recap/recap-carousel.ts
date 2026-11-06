@@ -36,7 +36,8 @@ export interface RecapCarousel {
   /** What the rule leaves out and prefers — the conditions shared with Storytelling's wall (`picture-rules.ts`). */
   rules: PictureRules;
   /** Draw from Winnow's picks only; null = on by itself when the picks fill the places (removal lab, his yes). */
-  picksOnly: boolean | null;
+  /** Picks only (true), every kept picture (false), the ♥ only (`'favs'`, Winnow #355), or null: by itself — the ♥ when they fill the places, else the picks when they do, else everything. */
+  picksOnly: boolean | null | 'favs';
   /**
    * The selection FROZEN by his first correction (✕, ⇄, a pin, ↺), by key, in
    * time order: the rule no longer reshuffles it until «Let the rule choose
@@ -83,7 +84,7 @@ export function readCarousel(raw: unknown, template: RecapTemplate): RecapCarous
       if (r.bursts === false && !r.rules) rules.leave.burst = false;
       return rules;
     })(),
-    picksOnly: typeof r.picksOnly === 'boolean' ? r.picksOnly : null,
+    picksOnly: typeof r.picksOnly === 'boolean' || r.picksOnly === 'favs' ? r.picksOnly : null,
     chosen: Array.isArray(r.chosen) ? strings(r.chosen, 400) : null,
     left: strings(r.left, 4000),
     burstPick: record(r.burstPick, (x): x is string => typeof x === 'string' && x.length <= 400),
@@ -155,6 +156,7 @@ export function factsOf(p: RecapPicture): PictureFacts & { key: string } {
   const day = p.day ? Date.parse(`${p.day}T00:00:00Z`) / 1000 : 0;
   return {
     key: p.key,
+    fav: Boolean(p.fav),
     pick: Boolean(p.picked),
     reject: false,
     stars: p.stars ?? 0,
@@ -184,7 +186,12 @@ export interface PoolReport {
   left: { screen: number; burst: number; alike: number };
   /** Whether the rule draws from the picks only (set, or by itself). */
   picksOnly: boolean;
+  /** Whether it draws from the ♥ only (set, or by itself). */
+  favsOnly: boolean;
+  /** What it draws from, resolved — what a pool asked again with the same choice passes. */
+  drawFrom: boolean | 'favs';
   picks: number;
+  favs: number;
 }
 
 /**
@@ -223,8 +230,12 @@ export function carouselReport(list: readonly RecapPicture[], c: Pick<RecapCarou
     kept = kept.filter((p) => !out.has(p.key));
   }
   const picks = kept.filter((p) => p.picked).length;
-  const picksOnly = c.picksOnly ?? (picks > 0 && picks >= places);
-  return { pool: picksOnly ? kept.filter((p) => p.picked) : kept, left, picksOnly, picks };
+  const favs = kept.filter((p) => p.fav).length;
+  // By itself: the ♥ when they fill the places, else the picks when they do, else everything (fewer places than asked
+  // with the ♥ only — never filled with what he did not mark).
+  const drawFrom: boolean | 'favs' = c.picksOnly ?? (favs > 0 && favs >= places ? 'favs' : picks > 0 && picks >= places);
+  const pool = drawFrom === 'favs' ? kept.filter((p) => p.fav) : drawFrom ? kept.filter((p) => p.picked) : kept;
+  return { pool, left, picksOnly: drawFrom === true, favsOnly: drawFrom === 'favs', drawFrom, picks, favs };
 }
 
 /** The pool alone (`carouselReport`). */

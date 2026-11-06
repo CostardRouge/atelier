@@ -106,6 +106,8 @@ export interface RecapPicture {
   /** Winnow's culling, when it says: what the automatic pick ranks first. */
   stars?: number;
   picked?: boolean;
+  /** Winnow's ♥ — «show this», beside the culling (Winnow #355); the rule ranks it first. */
+  fav?: boolean;
   /** Its own correction (the Develop sheet), null as shot. */
   develop?: DevelopSettings | null;
   /** How it sits in a cell: its focus and zoom (`recap-frame.ts`); absent = centred, just covering. */
@@ -549,6 +551,7 @@ export function readPicture(raw: unknown): RecapPicture | null {
     if (v) out[k] = v;
   }
   if (r.picked === true) out.picked = true;
+  if (r.fav === true) out.fav = true;
   if (r.loose === true) out.loose = true;
   const parts = readExifParts(r.exifParts);
   if (parts) out.exifParts = parts;

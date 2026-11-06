@@ -5,7 +5,7 @@ import { beforeOf, laidPicks, readWallOrder, sameOrder, wallMoved, wallRemoved, 
 let next = 1;
 function c(day: string, over: Partial<WallCandidate> = {}): WallCandidate {
   const id = next++;
-  return { id, day, folder: 1, at: id * 1000, pick: false, reject: false, stars: 0, edited: false, faces: 0, sharp: null, burst: null, screen: false, phash: null, ...over };
+  return { id, day, folder: 1, at: id * 1000, fav: false, pick: false, reject: false, stars: 0, edited: false, faces: 0, sharp: null, burst: null, screen: false, phash: null, ...over };
 }
 
 const wall: WallEntry[] = [

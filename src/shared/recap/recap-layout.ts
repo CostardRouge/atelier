@@ -530,7 +530,8 @@ function sheetPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number
       aspect: p.width && p.height ? p.width / p.height : 1,
       faces: p.faces ?? 0,
       when: hi > lo ? Math.min(1, Math.max(0, (t - lo) / (hi - lo + 86_400_000))) : 0.5,
-      score: p.picked ? 5 : (p.stars ?? 0),
+      // A favourite or a pick counts as five stars.
+      score: p.fav || p.picked ? 5 : (p.stars ?? 0),
       ...(p.day ? { label: shortDay(p.day) } : {}),
     };
   });
@@ -733,7 +734,7 @@ function wrappedPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: numb
   const best = slot('w:best');
   if (best) {
     const p = best.picture;
-    const line = p ? [p.stars ? '★'.repeat(p.stars) : p.picked ? 'Picked' : null, p.day ? dayWords(p.day) : null, p.place ?? null].filter(Boolean).join(' · ') : '';
+    const line = p ? [p.fav ? '♥' : null, p.stars ? '★'.repeat(p.stars) : p.picked ? 'Picked' : null, p.day ? dayWords(p.day) : null, p.place ?? null].filter(Boolean).join(' · ') : '';
     const y = H - bottom - Math.round(eyebrow * 1.25) * 2 - Math.round(W * 0.03);
     pages.push({
       key: 'w:best',

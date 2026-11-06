@@ -21,7 +21,7 @@
  * it. Every picture keeps the reason it is there. (pure)
  */
 import type { WinnowAssetRow } from '../sources/winnow/client';
-import { LEAVE_KEYS, PREFER_KEYS, phashOf, looksAlike, rankBy as rankFacts, scoreOf, type LeaveKey, type PictureFacts, type PreferKey } from '../sources/winnow/picture-rules';
+import { LEAVE_KEYS, PREFER_KEYS, phashOf, readPrefer, looksAlike, rankBy as rankFacts, scoreOf, type LeaveKey, type PictureFacts, type PreferKey } from '../sources/winnow/picture-rules';
 
 // The conditions are shared with Recap (`sources/winnow/picture-rules.ts`); the wall keeps their names.
 export { LEAVE_KEYS, PREFER_KEYS, PREFER_LABEL, type LeaveKey, type PreferKey } from '../sources/winnow/picture-rules';
@@ -35,6 +35,8 @@ export interface WallRules {
   leave: Partial<Record<LeaveKey, boolean>>;
   /** The preferences in order, the first deciding — absent from the list is off. */
   prefer: PreferKey[];
+  /** The ♥ turned off by hand (`PictureRules.favOff`). */
+  favOff?: true;
 }
 
 export const DEFAULT_WALL_RULES: WallRules = { unit: 'day', share: 'busy', leave: {}, prefer: [...PREFER_KEYS] };
@@ -54,6 +56,7 @@ export function candidateOf(row: WinnowAssetRow, day: string): WallCandidate {
     day,
     folder: row.session_id ?? null,
     at: Number.isFinite(t) ? t : 0,
+    fav: row.favourite === true,
     pick: row.verdict === 'pick',
     reject: row.verdict === 'reject',
     stars: typeof row.star === 'number' ? row.star : 0,
@@ -210,6 +213,5 @@ export function readWallRules(raw: unknown): WallRules | undefined {
   if (typeof r.leave === 'object' && r.leave !== null) {
     for (const k of LEAVE_KEYS) if ((r.leave as Record<string, unknown>)[k] === false) leave[k] = false;
   }
-  const prefer = Array.isArray(r.prefer) ? [...new Set(r.prefer.filter((k): k is PreferKey => (PREFER_KEYS as readonly unknown[]).includes(k)))] : [...PREFER_KEYS];
-  return { unit, share, leave, prefer };
+  return { unit, share, leave, ...readPrefer(r) };
 }

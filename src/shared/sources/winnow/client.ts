@@ -187,6 +187,8 @@ export interface WinnowAssetRow {
    * the names its place filters match exactly. `a.*` carries them; optional
    * for an older instance or a stub.
    */
+  /** Winnow's ♥ — «show this», beside the verdict and the stars (#355). Absent on an older instance: not a favourite. */
+  favourite?: boolean;
   place_country?: string | null;
   place_region?: string | null;
   place_city?: string | null;
@@ -284,6 +286,11 @@ export interface WinnowCapabilities {
     /** What this account may hold for this app, in bytes. */
     quotaBytes?: number | null;
   };
+  /**
+   * Curation marks beside the culling (Winnow #355): `favourites` — rows carry
+   * `favourite`, `/api/assets` filters on it. Absent on an older instance: no ♥.
+   */
+  curation?: { favourites?: boolean };
   scheduling: { reminders: boolean };
   limits: { maxUploadBytes: number | null };
   storage: { driver: string; signedRedirects: boolean };

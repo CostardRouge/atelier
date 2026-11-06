@@ -5,7 +5,7 @@ import { candidateOf, DEFAULT_WALL_RULES, pickWall, rankBy, readWallRules, type 
 let next = 1;
 function c(day: string, over: Partial<WallCandidate> = {}): WallCandidate {
   const id = next++;
-  return { id, day, folder: 1, at: id * 1000, pick: false, reject: false, stars: 0, edited: false, faces: 0, sharp: null, burst: null, screen: false, phash: null, ...over };
+  return { id, day, folder: 1, at: id * 1000, fav: false, pick: false, reject: false, stars: 0, edited: false, faces: 0, sharp: null, burst: null, screen: false, phash: null, ...over };
 }
 
 describe('pickWall', () => {
@@ -86,7 +86,9 @@ describe('candidateOf and readWallRules', () => {
     expect(candidateOf({ ...row, camera_model: null, ext: 'png' } as WinnowAssetRow, '2025-01-01').screen).toBe(true);
   });
   it('keeps the rules field by field', () => {
-    expect(readWallRules({ unit: 'week', share: 'even', leave: { burst: false }, prefer: ['stars', 'nope', 'stars'] })).toEqual({ unit: 'week', share: 'even', leave: { burst: false }, prefer: ['stars'] });
+    // A list kept before Winnow's ♥ existed gets it first; one where he turned it off keeps it off.
+    expect(readWallRules({ unit: 'week', share: 'even', leave: { burst: false }, prefer: ['stars', 'nope', 'stars'] })).toEqual({ unit: 'week', share: 'even', leave: { burst: false }, prefer: ['fav', 'stars'] });
+    expect(readWallRules({ prefer: ['stars'], favOff: true })).toMatchObject({ prefer: ['stars'], favOff: true });
     expect(readWallRules('x')).toBeUndefined();
   });
 });
