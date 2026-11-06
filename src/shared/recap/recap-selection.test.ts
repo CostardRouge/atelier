@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
 import { carouselReport } from './recap-carousel';
-import { flowKeys, replaceCandidates, withMovedFlow, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from './recap-selection';
+import { carouselCount, flowKeys, replaceCandidates, withCount, withJoined, withMovedFlow, withRemoved, withReplaced, withRestored, withRuleAgain, withSwappedFlow } from './recap-selection';
 import { resolveRecap } from './recap-slots';
 
 const pic = (i: number, extra: Partial<RecapPicture> = {}): RecapPicture => ({
@@ -103,3 +103,47 @@ describe('removing a picture from a carousel', () => {
   });
 });
 
+
+describe('the number of pictures (his ask, 2026-11-06)', () => {
+  const pics = Array.from({ length: 20 }, (_, i) => pic(i, i % 3 === 0 ? { picked: true } : {}));
+
+  it('chosen by the rule: the count changes and the rule spreads again', () => {
+    const doc = withCount(dump(pics), 9, 2);
+    expect(doc.count).toBe(9);
+    expect(doc.carousel.chosen).toBeNull();
+    expect(flowKeys(resolveRecap(doc))).toHaveLength(9);
+  });
+
+  it('frozen: more adds the next best at their moment, his order kept; fewer benches the least liked', () => {
+    let doc = dump(pics);
+    const r = resolveRecap(doc);
+    const first = flowKeys(r);
+    doc = withSwappedFlow(doc, r, first[0], first[1], 2);
+    const his = doc.carousel.chosen!;
+    const more = withCount(doc, 9, 3);
+    expect(carouselCount(more)).toBe(9);
+    const kept = more.carousel.chosen!.filter((k) => his.includes(k));
+    expect(kept).toEqual(his);
+    expect(flowKeys(resolveRecap(more))).toHaveLength(9);
+    const fewer = withCount(more, 4, 4);
+    expect(fewer.carousel.chosen).toHaveLength(4);
+    expect(fewer.carousel.left).toHaveLength(5);
+    // Back up: the free pictures first, the bench only when nothing else is free.
+    const again = withCount(fewer, 5, 5);
+    expect(again.carousel.chosen!.some((k) => fewer.carousel.left.includes(k))).toBe(false);
+  });
+
+  it('pictures added by hand join the carousel at their moment, the count with them', () => {
+    const doc = dump(pics.slice(0, 10), 4);
+    const added = pic(30, { day: '2026-10-15', minute: 700 });
+    const joined = withJoined(withPictures(doc, [added]), [added.key], 2);
+    expect(joined.carousel.chosen).toContain('p30');
+    expect(joined.count).toBe(5);
+    const keys = joined.carousel.chosen!;
+    const days = keys.map((k) => joined.pictures.find((p) => p.key === k)!.day!);
+    expect([...days].sort()).toEqual(days);
+    // Outside the days: the pool only.
+    const far = pic(31, { day: '2025-01-01' });
+    expect(withJoined(withPictures(doc, [far]), [far.key], 3).carousel.chosen).toBeNull();
+  });
+});

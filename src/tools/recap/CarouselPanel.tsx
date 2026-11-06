@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  MAX_HIGHLIGHTS,
   SLIDE_LAYOUTS,
   SLIDE_LAYOUT_LABEL,
   burstMembers,
@@ -22,7 +21,7 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { InspectorSection, SliderRow, TextField, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import PictureThumb from './PictureThumb';
-import type { Change } from './RecapPanels';
+import { CountRow, type Change } from './RecapPanels';
 
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 
@@ -121,18 +120,8 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
             ]}
           />
         )}
-        {!dump && c.after === 'highlights' && (
-          <SliderRow
-            label="Highlights"
-            value={frozen ? flow.length : c.highlights}
-            min={1}
-            max={MAX_HIGHLIGHTS}
-            step={1}
-            reset={8}
-            disabled={frozen}
-            onChange={(highlights) => setCarousel(change, { highlights })}
-          />
-        )}
+        {/* The number of pictures, where they are chosen (his ask): the same row as Layout's. */}
+        {(dump || c.after === 'highlights') && <CountRow doc={doc} change={change} label={dump ? 'Pictures' : 'Highlights'} />}
         {shows && (
           <div className="flex flex-col gap-1.5">
             <Segmented

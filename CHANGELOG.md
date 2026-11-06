@@ -43,7 +43,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   replaces it with one you choose among the next best; your selection stays as you made it until you let the rule
   choose again. The rule draws from your Winnow picks when they fill the carousel, and leaves out screenshots,
   bursts and look-alikes by the same conditions as Storytelling's wall. Drag a picture onto another in the carousel's
-  list, or on the stage, to swap them — or onto its edge in the list to put it before or after it.
+  list, or on the stage, to swap them — or onto its edge in the list to put it before or after it. The number of
+  pictures can be changed again once you have corrected the selection — at the head of the carousel's list in
+  *Pictures* as well as in *Layout* — and pictures you add by hand join the carousel.
   A recap's Reel can start with an **opener**, as in Trips: a **Défilé** (its pictures flicking by, faster and faster,
   over a tape of its days, with a tick at each) or a **Badge** (one picture slowly pushed in, its day, its place and
   its camera) — then the recap. The Badge can also be the carousel's first slide.

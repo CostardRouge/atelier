@@ -28,7 +28,7 @@ import {
 import { agoKey, agoLabel, parseAgo, shortDate, weekStartOf } from '../../shared/recap/recap-days';
 import WhenCalendar, { type When } from './WhenCalendar';
 import { WRAPPED_COLLAGE_MAX, deviceLabel, poolDevices, type DeviceAliases, type RecapSlot, type ResolvedRecap } from '../../shared/recap/recap-slots';
-import { withRemoved, withReplaced } from '../../shared/recap/recap-selection';
+import { carouselCount, countMax, withCount, withRemoved, withReplaced } from '../../shared/recap/recap-selection';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
 import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from '../../shared/ui/Inspector';
@@ -458,18 +458,7 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
           {doc.template === 'wrapped' && (
             <SliderRow label="The last slide's pictures" value={doc.count} min={1} max={WRAPPED_COLLAGE_MAX} step={1} reset={9} onChange={(count) => change((d) => withRecap(d, { count }))} />
           )}
-          {(doc.template === 'dump' || doc.template === 'sheets') && (
-            <SliderRow
-              label="Pictures"
-              value={doc.carousel.chosen ? doc.carousel.chosen.length : doc.count}
-              min={2}
-              max={60}
-              step={1}
-              reset={12}
-              disabled={doc.carousel.chosen !== null}
-              onChange={(count) => change((d) => withRecap(d, { count }))}
-            />
-          )}
+          {(doc.template === 'dump' || doc.template === 'sheets') && <CountRow doc={doc} change={change} />}
           {doc.template === 'month' && (
             <ToggleField checked={c.weekStart === 0} onChange={(on) => set({ weekStart: on ? 0 : 1 })} label="Weeks start on Sunday">
               Weeks start on Sunday
@@ -669,6 +658,28 @@ export function BackgroundSection({
 }
 
 // ---- motion --------------------------------------------------------------------------
+
+/**
+ * How many pictures the carousel holds (his ask, 2026-11-06): the same row in
+ * Layout and at the head of Pictures' carousel. Chosen by the rule, the rule
+ * spreads again; his selection frozen, more adds the next best at their
+ * moment and fewer benches the least liked (`withCount`).
+ */
+export function CountRow({ doc, change, label = 'Pictures' }: { doc: RecapDoc; change: Change; label?: string }) {
+  const n = carouselCount(doc);
+  return (
+    <SliderRow
+      label={label}
+      value={n}
+      min={1}
+      max={countMax(doc)}
+      step={1}
+      reset={doc.template === 'dump' || doc.template === 'sheets' ? 12 : 8}
+      hint={doc.carousel.chosen ? 'Your selection stays as you made it: more adds the next best of the pool, each at its moment; fewer puts the least liked on the bench (↺ brings one back).' : undefined}
+      onChange={(v) => change((d) => withCount(d, v))}
+    />
+  );
+}
 
 /**
  * «Cuts on the beat» (lab 7): the film lands on the sound's beats. Its beat

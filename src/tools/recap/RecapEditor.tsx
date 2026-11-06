@@ -14,7 +14,7 @@ import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../..
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
 import ClipDrawer from './ClipDrawer';
-import { withSwappedFlow } from '../../shared/recap/recap-selection';
+import { withJoined, withSwappedFlow } from '../../shared/recap/recap-selection';
 import StyleSection from './StyleSection';
 import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -459,7 +459,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       next.set(p.key, f);
     }
     setFiles(next);
-    change((d) => withPictures(d, pics));
+    // Files he chose join the carousel, each at its moment (`withJoined`).
+    change((d) => withJoined(withPictures(d, pics), pics.map((p) => p.key)));
     const undated = pics.filter((p) => !p.day).length;
     setNotice(`${pics.length} file${pics.length === 1 ? '' : 's'} added${undated ? ` · ${undated} without a date stay out of the days` : ''} — read here, never uploaded.`);
   }, [files, change]);
@@ -503,6 +504,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               let next = withPictures(d, pics);
               // Picked by hand for the slot on screen: the first one lands there, whatever day it was taken.
               if (target && pics[0]) next = withPick(next, target.id, pics[0].key);
+              // Added by hand: they join the carousel, each at its moment, the count growing with them.
+              else next = withJoined(next, pics.map((p) => p.key));
               return next;
             });
             return true;
