@@ -661,7 +661,15 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               onAlias={setAlias}
             />
             {/* A Wrapped's slides are its stats: no carousel to draw beyond them. */}
-            {doc.template !== 'wrapped' && doc.template !== 'second' && <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />}
+            {doc.template !== 'wrapped' && doc.template !== 'second' && (
+              <CarouselSection
+                doc={doc}
+                resolved={resolved}
+                change={change}
+                thumbs={{ client: instance ? client : null, instance, files }}
+                favourites={connection?.capabilities?.curation?.favourites === true || doc.pictures.some((p) => p.fav)}
+              />
+            )}
             {/* The template's own places, dragged to swap (a dump's and a sheet's ARE the carousel's tray). */}
             {doc.template !== 'dump' && doc.template !== 'sheets' && (
               <PlacesTray

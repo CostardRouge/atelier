@@ -3146,7 +3146,8 @@ it and may grow blocks of its own.
   *Put N on the wall* — the wall then draws from those pictures, in day order,
   rather than one a day (up to 2 000 kept in your script, thinned evenly);
   *One a day* goes back. *By rules* chooses the wall by what to leave out,
-  how to spread it and what to prefer; *Correct the wall…* shows it in the
+  how to spread it and what to prefer (your Winnow ♥ first, then picks, stars…);
+*Correct the wall…* shows it in the
   order it is laid: ✕ takes a picture off (one fewer, the pictures after it
   close up), ⇄ offers the next best for its place, nearest in time first,
   and a picture dragged onto another swaps with it, onto its edge moves
@@ -3552,7 +3553,11 @@ slide in its order — click one to see it, drag it to move it (the video
 follows), drop a picture from the stage onto it. After its first slide a recap
 holds nothing, its **highlights** (the best of its days the first slide does
 not show, in the photo dump's rhythm — a month's default) or, for a month, a
-slide per **week**. In *Pictures*, ✕ **removes** a picture — the carousel
+slide per **week**. Where your Winnow has **favourites (♥)**, they come first —
+before a pick or five stars — everywhere a recap chooses the best, and the
+carousel can draw from *Favourites* only (fewer places rather than others),
+*Auto* (your ♥ when they fill the places, else your picks, else everything) or
+*Everything*. In *Pictures*, ✕ **removes** a picture — the carousel
 holds one fewer, nothing comes in — and ⇄ **replaces** it with one you choose
 among the next best (nearest in time, never a look-alike of what stays); your
 first correction freezes the selection until *Let the rule choose again*.

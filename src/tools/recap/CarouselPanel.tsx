@@ -42,7 +42,7 @@ interface Thumbs {
  * place). The first correction freezes the selection; «Let the rule choose
  * again» unfreezes it. A burst's ×n picks its frame; the bench brings one back.
  */
-export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapDoc; resolved: ResolvedRecap; change: Change; thumbs: Thumbs }) {
+export function CarouselSection({ doc, resolved, change, thumbs, favourites = false }: { doc: RecapDoc; resolved: ResolvedRecap; change: Change; thumbs: Thumbs; /** The connected Winnow knows the ♥ (#355), or the pool carries one. */ favourites?: boolean }) {
   const c = doc.carousel;
   // A dump and a sheet ARE their highlights: their tray, no «after the first slide».
   const dump = doc.template === 'dump' || doc.template === 'sheets';
@@ -135,16 +135,22 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
               size="sm"
               fill
               label="Draw from"
-              value={c.picksOnly === null ? 'auto' : c.picksOnly ? 'picks' : 'all'}
-              onChange={(v) => setCarousel(change, { picksOnly: v === 'auto' ? null : v === 'picks' })}
+              value={c.picksOnly === null ? 'auto' : c.picksOnly === 'favs' ? 'favs' : c.picksOnly ? 'picks' : 'all'}
+              onChange={(v) => setCarousel(change, { picksOnly: v === 'auto' ? null : v === 'favs' ? 'favs' : v === 'picks' })}
               options={[
-                { id: 'auto', label: 'Auto', title: 'Your Winnow picks when they fill the places, else every picture kept by the conditions' },
-                { id: 'picks', label: 'Picks only', title: 'Only the pictures you picked in Winnow' },
-                { id: 'all', label: 'Everything kept', title: 'Every picture the conditions keep' },
+                // Where the Winnow knows the ♥ (#355), it leads; «Picks only» stays only for a recap already set to it.
+                ...(favourites ? [{ id: 'favs', label: 'Favourites', title: 'Only the pictures you marked ♥ in Winnow — fewer places rather than others' }] : []),
+                { id: 'auto', label: 'Auto', title: favourites ? 'Your ♥ when they fill the places, else your picks when they do, else every picture kept — the ♥ first' : 'Your Winnow picks when they fill the places, else every picture kept by the conditions' },
+                ...(!favourites || c.picksOnly === true ? [{ id: 'picks', label: 'Picks only', title: 'Only the pictures you picked in Winnow' }] : []),
+                { id: 'all', label: favourites ? 'Everything' : 'Everything kept', title: 'Every picture the conditions keep' },
               ]}
             />
             <span className="font-mono text-2xs text-muted tabular-nums">
-              {report.picksOnly ? `Your picks · ${report.picks}` : `${report.pool.length.toLocaleString('en-GB')} kept by the conditions${report.picks ? ` · ${report.picks} picks` : ''}`}
+              {report.favsOnly
+                ? `Your ♥ · ${report.favs}`
+                : report.picksOnly
+                  ? `Your picks · ${report.picks}`
+                  : `${report.pool.length.toLocaleString('en-GB')} kept by the conditions${report.favs ? ` · ${report.favs} ♥` : ''}${report.picks ? ` · ${report.picks} picks` : ''}`}
               {frozen ? ' · your selection is frozen' : ''}
             </span>
             <button type="button" aria-expanded={rulesOpen} onClick={() => setRulesOpen((o) => !o)} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">

@@ -92,6 +92,9 @@ export function rankPictures(list: readonly RecapPicture[], preferClips = false)
   return list
     .map((p, i) => ({ p, i }))
     .sort((a, b) => {
+      // The ♥ first (Winnow's «show this»), then the pick.
+      const fv = Number(Boolean(b.p.fav)) - Number(Boolean(a.p.fav));
+      if (fv) return fv;
       const pk = Number(Boolean(b.p.picked)) - Number(Boolean(a.p.picked));
       if (pk) return pk;
       const st = (b.p.stars ?? 0) - (a.p.stars ?? 0);
@@ -153,7 +156,7 @@ export function templateDays(doc: RecapDoc): IsoDate[] {
 export function spreadPick(list: readonly RecapPicture[], n: number, rank: (l: readonly RecapPicture[]) => RecapPicture[] = (l) => rankPictures(l)): RecapPicture[] {
   if (n <= 0 || !list.length) return [];
   if (list.length <= n) return byTime(list);
-  const ranked = list.filter((p) => p.picked || (p.stars ?? 0) >= 3);
+  const ranked = list.filter((p) => p.fav || p.picked || (p.stars ?? 0) >= 3);
   const chosen = new Set<RecapPicture>(rank(ranked).slice(0, n));
   const rest = byTime(list.filter((p) => !chosen.has(p)));
   const need = n - chosen.size;

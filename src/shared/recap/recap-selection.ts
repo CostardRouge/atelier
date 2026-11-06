@@ -102,7 +102,7 @@ export function replaceCandidates(doc: RecapDoc, resolved: ResolvedRecap, key: s
     resolved.inScope.filter((p) => !shown.has(p.key)),
     { ...doc.carousel, left: [] },
     inCarousel.size,
-  ).picksOnly;
+  ).drawFrom;
   const pool = carouselPool(
     resolved.inScope.filter((p) => !inCarousel.has(p.key) && !shown.has(p.key)),
     { ...doc.carousel, picksOnly },
@@ -161,8 +161,11 @@ function nextBest(doc: RecapDoc, resolved: ResolvedRecap, chosen: readonly strin
   const bench = new Set(doc.carousel.left);
   const tiers: RecapPicture[][] = [];
   const kept = carouselPool(free, { ...doc.carousel, left: [], picksOnly: false });
-  if (doc.carousel.picksOnly !== false) tiers.push(kept.filter((p) => p.picked));
-  if (doc.carousel.picksOnly !== true) tiers.push(kept);
+  const from = doc.carousel.picksOnly;
+  // The ♥ first unless he draws from everything or the picks; the picks next; then the rest unless he asked for marks only.
+  if (from === null || from === 'favs') tiers.push(kept.filter((p) => p.fav));
+  if (from === null || from === true) tiers.push(kept.filter((p) => p.picked));
+  if (from === null || from === false) tiers.push(kept);
   const staying = chosen.flatMap((c) => (byKey.has(c) ? [factsOf(byKey.get(c)!)] : []));
   const out: string[] = [];
   const take = (list: readonly RecapPicture[]) => {
