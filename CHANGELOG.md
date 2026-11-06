@@ -57,6 +57,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   and the film ends on it.
   A new template, **One second a day**: a second of each day of a period — a clip's middle, a Live Photo's motion or
   a still slowly pushed in — with the day in a corner.
+  Every template lists its places in *Pictures*, where a picture is dragged onto another to swap them; a slow drag in
+  the carousel's list no longer falls through.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

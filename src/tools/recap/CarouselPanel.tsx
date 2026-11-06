@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   SLIDE_LAYOUTS,
   SLIDE_LAYOUT_LABEL,
@@ -55,19 +55,26 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
   const [rulesOpen, setRulesOpen] = useState(false);
   // A drag in the tray: the picture held, where the pointer is, the tile under it — let go, the two trade places.
   // Over a tile: its left edge inserts before it, its right edge after it, its middle swaps the two.
-  const [drag, setDrag] = useState<{ key: string; x: number; y: number; moved: boolean; over: string | null; zone: 'before' | 'swap' | 'after'; id: number } | null>(null);
+  const [drag, setDragState] = useState<{ key: string; x: number; y: number; sx: number; sy: number; moved: boolean; over: string | null; zone: 'before' | 'swap' | 'after'; id: number } | null>(null);
+  // Read by the release from a ref, never from the last render: a busy stage could leave the moves unrendered.
+  const live = useRef(drag);
+  const setDrag = (next: typeof drag | ((d: typeof drag) => typeof drag)) => {
+    live.current = typeof next === 'function' ? next(live.current) : next;
+    setDragState(live.current);
+  };
   const startDrag = (key: string) => (e: React.PointerEvent) => {
     if (e.button > 0 || (e.target as HTMLElement).closest('button:not([data-grip])')) return;
     // A finger drags by the grip only, so a touch on a picture still scrolls the inspector.
     if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-grip]')) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ key, x: e.clientX, y: e.clientY, moved: false, over: null, zone: 'swap', id: e.pointerId });
+    setDrag({ key, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, over: null, zone: 'swap', id: e.pointerId });
   };
   const moveDrag = (e: React.PointerEvent) => {
     setDrag((d) => {
       if (!d || d.id !== e.pointerId) return d;
-      const moved = d.moved || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6;
+      // Measured from where the press began: a slow drag moves a few pixels at a time.
+      const moved = d.moved || Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 6;
       const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-tray-key]') ?? null;
       const under = el?.dataset.trayKey ?? null;
       let zone: 'before' | 'swap' | 'after' = 'swap';
@@ -80,7 +87,7 @@ export function CarouselSection({ doc, resolved, change, thumbs }: { doc: RecapD
     });
   };
   const endDrag = (e: React.PointerEvent) => {
-    const d = drag;
+    const d = live.current;
     setDrag(null);
     if (!d || d.id !== e.pointerId || !d.moved || !d.over) return;
     const a = d.key;

@@ -3549,6 +3549,10 @@ How many pictures it holds is set at the head of that list (and in *Layout*),
 frozen or not: more adds the next best, each at its moment, your order kept;
 fewer puts the least liked on the bench. Pictures you add by hand — the
 picker's *Add to the recap*, your files — join the carousel at their moment.
+Every template also lists its own places in *Pictures* (*The places*: a
+calendar's days in weeks, a week's seven days, the steps back, Wrapped's
+stats…): drag a picture onto another place to swap them, onto an empty one to
+move it there — as on the stage.
 Drag a picture onto another in that list (by its ⠿ grip on a touch screen), or
 on the stage, and the two **swap** places; in the list, drop it on a picture's
 left or right edge (a red bar shows where) to **insert** it before or after

@@ -6,6 +6,7 @@ import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
 import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, styleRoleOfText, type CarouselSlide } from '../../shared/recap/recap-layout';
 import SlideStrip from './SlideStrip';
+import PlacesTray from './PlacesTray';
 import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { defileTicks, hasOpenerSlide, planOpener } from '../../shared/recap/recap-opener-plan';
@@ -657,6 +658,17 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             />
             {/* A Wrapped's slides are its stats: no carousel to draw beyond them. */}
             {doc.template !== 'wrapped' && doc.template !== 'second' && <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />}
+            {/* The template's own places, dragged to swap (a dump's and a sheet's ARE the carousel's tray). */}
+            {doc.template !== 'dump' && doc.template !== 'sheets' && (
+              <PlacesTray
+                doc={doc}
+                resolved={resolved}
+                change={change}
+                thumbs={{ client: instance ? client : null, instance, files }}
+                selected={selection?.kind === 'cell' ? selection.id : null}
+                onSelect={(id) => select({ kind: 'cell', id })}
+              />
+            )}
             {slot ? (
               <SlotSection
                 doc={doc}
@@ -798,9 +810,13 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     if (!target || target.kind !== 'page') return;
     const first = layout.pages[target.page].parts.find((p) => p.kind === 'cell' && p.id !== slot);
     if (!first) return;
-    const ka = resolved.slots.find((s) => s.id === slot)?.picture?.key ?? null;
-    const kb = resolved.slots.find((s) => s.id === first.id)?.picture?.key ?? null;
-    change((d) => withSwap(d, slot, ka, first.id, kb));
+    const sa = resolved.slots.find((s) => s.id === slot);
+    const sb = resolved.slots.find((s) => s.id === first.id);
+    const ka = sa?.picture?.key ?? null;
+    const kb = sb?.picture?.key ?? null;
+    // Two carousel places trade in the selection (pins are not read once it is frozen); any other two by pins.
+    if (sa?.flow && sb?.flow && ka && kb) change((d) => withSwappedFlow(d, resolved, ka, kb));
+    else change((d) => withSwap(d, slot, ka, first.id, kb));
     setPage(target.page);
     select({ kind: 'cell', id: first.id });
   };
