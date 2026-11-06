@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_WALL_RULES } from './wall-pick';
 import { chosenPicks, deviceKey, factChanges, factsFromCalendars, factText, fillParams, fillText, gearFacts, geoFacts, spanDays, wallPickDays, wallPicks, thinEvenly } from './story-facts';
 import { assemble, parseScript, SCRIPT_KIND, type PostSkeleton, type StoryScript } from './story-script';
 
@@ -86,6 +87,12 @@ describe('assemble with facts', () => {
     expect(ep.lang).toBe('en');
     expect(ep.blocks[0].cap?.text).toBe('98,412 photos.');
     expect(assemble(skeleton, script, [skeleton]).lang).toBe('fr');
+  });
+
+  it('tells the painter a wall frozen by his corrections, and only then', () => {
+    expect(assemble(skeleton, script, [skeleton]).wallFrozen).toBeUndefined();
+    const frozen: StoryScript = { ...script, sources: { wall: { rules: DEFAULT_WALL_RULES, order: [[4, '2025-09-01']] } } };
+    expect(assemble(skeleton, frozen, [skeleton]).wallFrozen).toBe(true);
   });
 });
 

@@ -15,7 +15,7 @@ export function drawCover(c: Ctx, ep: Episode): void {
   setStyles(ep.look?.objects, ep.objects);
   beginFrame();
   setSlot('cover');
-  setWallGrid(ep.look?.wall, ep.wallGroups);
+  setWallGrid(ep.look?.wall, ep.wallGroups, ep.wallFrozen);
   // A cover is a still: the wall as laid, never mid-slide.
   setWallMotion(null);
   setTexture(ep.look);

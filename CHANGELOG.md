@@ -11,6 +11,60 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Recap, a new editor that turns your pictures into recaps to post: a month as a calendar of its days, the same day
+  a year, a month and a week ago, a week, a grid, a single picture or a photo dump over a carousel. It fills itself
+  from your Winnow's days (or your files), lets you pin, swap or empty any day, filter by device, develop each picture
+  with Develop's sheet under one look, set it over a looping video with a sound, and exports a Reel, PNGs or a whole
+  carousel whose clips get slides of their own. Each of its texts has its own face, size, weight, colour, outline,
+  shadow and glow, or one of the suite's title styles (Or ciné, Rouge plein cadre…); the video's length can be set;
+  the shadow under its pictures is a setting. The background and every picture can be framed — moved and zoomed in
+  the inspector, or straight on the stage with a double-click, a drag and the wheel or a pinch — and straightened by
+  a few degrees without an empty corner; a picture keeps its framing wherever it goes. The background's clip is chosen from a drawer of thumbnails — the recap's own days
+  first, Live Photos marked and offered as short loops — and its loop is a band on a filmstrip, set by its two
+  handles or dragged whole. A cell's words never pass its edge: you choose which camera settings it says (for the
+  whole recap or one picture) and whether they stand on one line, stacked, or packed to fit. The video export has
+  its quality (Standard, High, Maximum), 30 or 60 frames a second, two passes where the browser allows it, and your
+  originals instead of the light copies — every clip, the background first, and every picture that would otherwise be
+  enlarged — and every picture and frame scaled with the browser's best filter, with the file's size said ahead and a progress bar that
+  tells what it is doing, how fast and how long is left. *Keep as my style* makes a recap's look the starting point
+  of every new recap of its template. An original your browser cannot play — an iPhone HEVC `.MOV` behind a recap —
+  can be converted for the video by ffmpeg, in your browser: only the part the film shows, at the size it is shown,
+  kept on the device for the next export. Every slide of a carousel sits in a strip under the stage, in its order,
+  to look at and drag around; a month is followed by its highlights (or a slide per week); you leave pictures out
+  and the next best comes in, a burst enters as one frame you can change, a slide's layout can be set, and the
+  first slide's title can repeat on the others. A new template, The Sheets, lays a period on one long sheet cut into
+  slides — in rows, a collage, a film strip or a timeline — with pictures across the cuts to make people swipe
+  (never a face, one picture at most per cut), and its Reel is a camera travelling along the sheet. Each arrangement
+  has its own settings (rows and a big top row; a collage's density, tilt and border; one or two film strips with
+  their edge print; a timeline's spacing and marked days), and a slide can take a layout of its own — one picture
+  edge to edge, a pair, or a pause with a line of yours. A day with no
+  picture can be given one from your Winnow — any picture, even one from another day, marked as chosen by hand.
+  Taking a picture out of a carousel no longer brings another in: ✕ removes it and the carousel holds one fewer, ⇄
+  replaces it with one you choose among the next best; your selection stays as you made it until you let the rule
+  choose again. The rule draws from your Winnow picks when they fill the carousel, and leaves out screenshots,
+  bursts and look-alikes by the same conditions as Storytelling's wall. Drag a picture onto another in the carousel's
+  list, or on the stage, to swap them — or onto its edge in the list to put it before or after it. The number of
+  pictures can be changed again once you have corrected the selection — at the head of the carousel's list in
+  *Pictures* as well as in *Layout* — and pictures you add by hand join the carousel.
+  A recap's Reel can start with an **opener**, as in Trips: a **Défilé** (its pictures flicking by, faster and faster,
+  over a tape of its days, with a tick at each) or a **Badge** (one picture slowly pushed in, its day, its place and
+  its camera) — then the recap; and, when a trip of Trips covers its days, **Virée** or **Itinerary** over that
+  trip, from picture to picture. The Badge, Virée or Itinerary can also be the carousel's first slide.
+  A new template, **Wrapped**: a year (or any period) in numbers, a slide each — your pictures counted, the busiest
+  day, your camera, the place you came back to, the hour you shoot most, your best picture — then the rest in a
+  grid.
+  **Cuts on the beat**: a recap's sound has its beat found on your device, and the slides change, the pictures enter
+  and the film ends on it.
+  A new template, **One second a day**: a second of each day of a period — a clip's middle, a Live Photo's motion or
+  a still slowly pushed in — with the day in a corner.
+  Every template lists its places in *Pictures*, where a picture is dragged onto another to swap them; a slow drag in
+  the carousel's list no longer falls through.
+  Choosing a recap's period: a month shown in the calendar is the period (no need to click its days), *Take all of
+  <month>* takes it in one click, and a whole month is named by its name.
+  A blurred background is the best photograph of the recap's own days, or the one you choose among them — any picture
+  of the pool when you force it.
+  A week's seven bands move in its Reel: each day in turn opens wide (Accordion), fills the screen (Spotlight), rides
+  a wave, slides past or stays bright while the others dim (Focus), each picture drifting inside its band.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
@@ -47,6 +101,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: the hook's big text and second line take your own line breaks — press Return in their field, now a
   text area. Choose how a long one is laid: Wrap (your breaks and the column's), Your breaks only (shrunk so the
   widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.
+- Storytelling: *Correct the wall…* has Recap's gestures — ✕ takes a picture off and the wall holds one fewer
+  (nothing comes in; the pictures after it close up), ⇄ lets you choose its replacement among the next best, nearest
+  in time first, and a picture dragged onto another trades places with it, or onto its edge moves before or after it.
+  Your first correction freezes the wall in your order, kept by every Count until *Let the rules choose again*.
 - Winnow picker (Develop, Mosaic, Storytelling, the Library, Flight Atlas): a **Subject** section in its filters —
   choose the **people** in the frame (one, several, or all of them together), **describe** what is in the picture
   (*a dog*, *a parrot*, *sunset over the sea*: the image index your Winnow keeps lists its closest pictures across
@@ -62,6 +120,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- *Transcode to H.264* — converting a clip your browser cannot play — failed before it started: ffmpeg could not be
+  loaded. It loads again.
 - Storytelling: two places close on the map (Parramatta and Sydney) no longer write their names over each other — a
   name moves above its dot or to its other side, and is left out only when there is no room.
 - Storytelling: the wall's number says what was counted when your script names none, instead of 100 000.

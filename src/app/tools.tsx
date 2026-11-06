@@ -28,6 +28,7 @@ const LOAD = {
   lut: () => import('../tools/lut/LutStudio'),
   map: () => import('../tools/map/MapTool'),
   mosaic: () => import('../tools/mosaic/MosaicTool'),
+  recap: () => import('../tools/recap/RecapTool'),
   overlay: () => import('../tools/overlay/OverlayStudio'),
   roadtrip: () => import('../tools/roadtrip/RoadTripTool'),
   storytelling: () => import('../tools/storytelling/StorytellingTool'),
@@ -42,6 +43,7 @@ const ExifTool = lazy(LOAD.exif);
 const LutStudio = lazy(LOAD.lut);
 const MapTool = lazy(LOAD.map);
 const MosaicTool = lazy(LOAD.mosaic);
+const RecapTool = lazy(LOAD.recap);
 const OverlayStudio = lazy(LOAD.overlay);
 const RoadTripTool = lazy(LOAD.roadtrip);
 const StorytellingTool = lazy(LOAD.storytelling);
@@ -171,6 +173,21 @@ export const TOOLS: Tool[] = [
     preload: LOAD.mosaic,
     wip: {
       note: 'Its mosaics, their gallery, their file, the door to a Winnow’s pictures, the stage and the animated modes exist; the exports and keeping a mosaic on a Winnow come next.',
+    },
+    accepts: [],
+  },
+  {
+    id: 'recap',
+    group: 'editor',
+    path: '/recap',
+    label: 'Recap',
+    subtitle: 'A month · a day · a week',
+    blurb:
+      'Turn your pictures into recaps to post: a month as a calendar, the same day a year ago, a week, a grid or a photo dump, filled from your Winnow or your files, each picture developed, over a looping video and a sound if you like.',
+    Component: RecapTool,
+    preload: LOAD.recap,
+    wip: {
+      note: 'Its six templates, the editor, the exports and keeping a recap on a Winnow exist; more templates (a year, one second a day, the sheets) come next.',
     },
     accepts: [],
   },

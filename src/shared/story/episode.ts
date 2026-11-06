@@ -81,6 +81,8 @@ export interface Episode {
   edits?: [number, number][];
   /** The wall's groups, when the look groups it by stage or month and the counting gave each picture its day (`wall-grid.ts`). */
   wallGroups?: WallGroup[] | null;
+  /** The wall frozen by his corrections (`ScriptSources.wall.order`): laid from its first place, closing up (`pictureFor`). */
+  wallFrozen?: boolean;
 }
 
 export type Slot = BlockSpec & { a: number; b: number; start: number; key: string };

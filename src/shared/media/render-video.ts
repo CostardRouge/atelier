@@ -32,6 +32,7 @@ import { deadline, raceAbort } from '../lib/abortable';
 import { safeChunkMetadata } from './colour-tag';
 import { framePlan } from './frame-plan';
 import { encodeAudioBuffer, type EncodedAudio } from './audio-encode';
+import { MEASURE_QP, supportsQuantizer, twoPassQuantizer } from './two-pass';
 import {
   awaitQueue,
   coalesceProgress,
@@ -83,6 +84,16 @@ export interface EncodeFramesOptions {
   onTracks?: (tracks: { video: string; audio: string | null; frames: number; fps: number; width: number; height: number }) => void;
   /** This clip's grade carries film GRAIN — see `ExportOptions.grained`. */
   grained?: boolean;
+  /** The target in bits per second, over the suite's own (`deriveBitrate`): a tool's quality choice. */
+  bitrate?: number;
+  /**
+   * Two passes: every frame painted and encoded twice, the first to measure
+   * (`two-pass.ts`). Only where the encoder takes a quantizer per frame; else
+   * one VBR pass, and `onPasses` says why.
+   */
+  passes?: 1 | 2;
+  /** How many passes the clip was actually encoded in, and why fewer than asked. */
+  onPasses?: (used: 1 | 2, reason: string | null) => void;
   onProgress?: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -166,10 +177,12 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
 
   let pipelineError: Error | null = null;
 
+  const target = opts.bitrate && opts.bitrate > 0 ? Math.round(opts.bitrate) : deriveBitrate(w, h, fps, opts.grained);
   const encoderConfig: Omit<VideoEncoderConfig, 'codec'> = {
     width: w,
     height: h,
-    bitrate: deriveBitrate(w, h, fps, opts.grained),
+    bitrate: target,
+    bitrateMode: 'variable',
     framerate: fps,
   };
   const codec = await pickAvcCodec(encoderConfig);
@@ -188,6 +201,64 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
     );
   }
 
+  let passes: 1 | 2 = 1;
+  if (opts.passes === 2) {
+    if (await supportsQuantizer(codec, w, h, fps)) passes = 2;
+    else opts.onPasses?.(1, 'this browser’s encoder has no constant-quality mode, so the film was encoded in one VBR pass at the same target');
+  }
+  const gop = Math.max(1, fps * 2); // keyframe every ~2s
+  const total = plan.length * passes;
+  let painted = 0;
+  /** One pass over every frame into `encoder`, each at `quantizer` when given. */
+  const pass = async (encoder: VideoEncoder, quantizer: number | null, index: number, errorOf: () => Error | null) => {
+    let done = 0;
+    for (const f of plan) {
+      throwIfAborted();
+      const failed = errorOf();
+      if (failed) throw failed;
+      const surface = await opts.draw(f.tSeconds);
+      const frame = new VideoFrame(surface, { timestamp: f.timestampMicros, duration: f.durationMicros });
+      try {
+        encoder.encode(frame, quantizer === null ? { keyFrame: done % gop === 0 } : { keyFrame: done % gop === 0, avc: { quantizer } } as VideoEncoderEncodeOptions);
+      } finally {
+        // Closed whatever the encoder did with it: a VideoFrame holds a real
+        // buffer, and the painter usually hands back the SAME canvas every
+        // time, so a leaked frame is a leak per frame.
+        frame.close();
+      }
+      done += 1;
+      painted += 1;
+      onProgress?.({ phase: 'encoding', ratio: painted / total, frame: done, frames: plan.length, pass: index, passes });
+      await awaitQueue(() => encoder.encodeQueueSize, 24, encoder, opts.signal);
+    }
+    await raceAbort(deadline(encoder.flush(), FLUSH_DEADLINE_MS, () => new Error('The video encoder did not finish the clip.')), opts.signal, 'Export cancelled');
+    const failed = errorOf();
+    if (failed) throw failed;
+  };
+
+  // Pass 1, when two: the same frames at one quantizer, only their bytes counted.
+  let quantizer: number | null = null;
+  if (passes === 2) {
+    let bytes = 0;
+    let measureError: Error | null = null;
+    const measure = new VideoEncoder({
+      output: (chunk) => {
+        bytes += chunk.byteLength;
+      },
+      error: (e) => {
+        measureError = e instanceof Error ? e : new Error(String(e));
+      },
+    });
+    try {
+      measure.configure({ codec, width: w, height: h, framerate: fps, bitrateMode: 'quantizer', avc: { format: 'avc' } });
+      await pass(measure, MEASURE_QP, 1, () => measureError);
+    } finally {
+      if (measure.state !== 'closed') measure.close();
+    }
+    quantizer = twoPassQuantizer(bytes, (target * opts.seconds) / 8);
+    opts.onPasses?.(2, null);
+  } else if (opts.passes !== 2) opts.onPasses?.(1, null);
+
   // The encoder is created before the try so that EVERY exit path below closes
   // it: an encoder left open still holds a hardware encode session, the
   // browser caps how many a page may have, and leaking one breaks every
@@ -203,36 +274,15 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
   });
 
   try {
-    encoder.configure({ codec, ...encoderConfig, avc: { format: 'avc' } });
+    encoder.configure(
+      quantizer === null
+        ? { codec, ...encoderConfig, avc: { format: 'avc' } }
+        : { codec, width: w, height: h, framerate: fps, bitrateMode: 'quantizer', avc: { format: 'avc' } },
+    );
     opts.onTracks?.({ video: codec, audio: audio?.codec ?? null, frames: plan.length, fps, width: w, height: h });
-
-    const gop = Math.max(1, fps * 2); // keyframe every ~2s
-    let done = 0;
-    for (const f of plan) {
-      throwIfAborted();
-      if (pipelineError) throw pipelineError;
-      const painted = await opts.draw(f.tSeconds);
-      const frame = new VideoFrame(painted, {
-        timestamp: f.timestampMicros,
-        duration: f.durationMicros,
-      });
-      try {
-        encoder.encode(frame, { keyFrame: done % gop === 0 });
-      } finally {
-        // Closed whatever the encoder did with it: a VideoFrame holds a real
-        // buffer, and the painter usually hands back the SAME canvas every
-        // time, so a leaked frame is a leak per frame.
-        frame.close();
-      }
-      done += 1;
-      onProgress?.({ phase: 'encoding', ratio: done / plan.length });
-      await awaitQueue(() => encoder.encodeQueueSize, 24, encoder, opts.signal);
-    }
-
     // A flush that never returns (an encoder that died mid-clip) would hold
-    // the run on this slide for good: bounded, and cut by a Cancel.
-    await raceAbort(deadline(encoder.flush(), FLUSH_DEADLINE_MS, () => new Error('The video encoder did not finish the clip.')), opts.signal, 'Export cancelled');
-    if (pipelineError) throw pipelineError;
+    // the run on this slide for good: `pass` bounds it, and a Cancel cuts it.
+    await pass(encoder, quantizer, passes, () => pipelineError);
 
     onProgress?.({ phase: 'finalizing', ratio: null });
     muxer.finalize();

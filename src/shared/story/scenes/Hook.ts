@@ -35,9 +35,12 @@ export function setWall(images: readonly (CanvasImageSource | null)[] | null | u
 /** The series' grid (`wall-grid.ts`) and its groups, set with the pictures by `compose.ts` and `cover.ts`. */
 let GRID: Partial<WallGrid> | null = null;
 let GROUPS: readonly WallGroup[] | null = null;
-export function setWallGrid(grid: Partial<WallGrid> | null | undefined, groups?: readonly WallGroup[] | null) {
+/** A wall frozen by his corrections lays picture i on place i, the spare places at its end (`pictureFor`). */
+let CLOSED = false;
+export function setWallGrid(grid: Partial<WallGrid> | null | undefined, groups?: readonly WallGroup[] | null, frozen = false) {
   GRID = grid ?? null;
   GROUPS = groups?.length ? groups : null;
+  CLOSED = frozen;
 }
 
 /**
@@ -97,7 +100,7 @@ function drawPicture(c: Ctx, img: CanvasImageSource, x: number, y: number, w: nu
 export function drawTiles(c: Ctx, alphaOf: (rect: WallRect, i: number) => number, lt?: number) {
   const g = wallGrid(GRID);
   const groups = g.group !== 'none' ? GROUPS : null;
-  const layout = wallLayout(g, groups?.map((x) => x.n));
+  const layout = wallLayout(g, groups?.map((x) => x.n), CLOSED);
   const { rects, cellH } = layout;
   const inset = g.gap / 2;
   const total = groups ? groups.reduce((n, x) => n + x.n, 0) : 0;
@@ -123,8 +126,8 @@ export function drawTiles(c: Ctx, alphaOf: (rect: WallRect, i: number) => number
       const srcRect = rects[src];
       const at =
         srcRect.pic !== undefined && total
-          ? pictureFor(srcRect.pic * queue + lap, total * queue, WALL.length)
-          : pictureFor(src * queue + lap, rects.length * queue, WALL.length);
+          ? pictureFor(srcRect.pic * queue + lap, total * queue, WALL.length, CLOSED)
+          : pictureFor(src * queue + lap, rects.length * queue, WALL.length, CLOSED);
       const img = at >= 0 ? WALL[at] : null;
       c.save();
       if (d && (d.sx !== 1 || d.sy !== 1)) {

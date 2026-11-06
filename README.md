@@ -28,6 +28,12 @@ Today it ships twelve tools, converging into a few editors:
   them as the screen saver that zoomed from picture to picture. Each
   **mosaic** is kept on this device with its pictures' colours, in a gallery
   like the others'.
+- **Recap** *(work in progress)* — turn your pictures into recaps to post: a
+  month as a calendar of its days, the same day a year, a month and a week ago,
+  a week, a grid, a single picture or a photo dump over a carousel. The recap
+  fills itself from your Winnow (or your files), each picture can be developed
+  with Develop's own sheet, and it exports as a Reel with its sound, as PNGs, or
+  as a whole carousel.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -3139,7 +3145,13 @@ it and may grow blocks of its own.
   screenshots), Winnow's picks and stars, then tick *All* or *⚑ Picks* and
   *Put N on the wall* — the wall then draws from those pictures, in day order,
   rather than one a day (up to 2 000 kept in your script, thinned evenly);
-  *One a day* goes back. Counting also finds the days with media
+  *One a day* goes back. *By rules* chooses the wall by what to leave out,
+  how to spread it and what to prefer; *Correct the wall…* shows it in the
+  order it is laid: ✕ takes a picture off (one fewer, the pictures after it
+  close up), ⇄ offers the next best for its place, nearest in time first,
+  and a picture dragged onto another swaps with it, onto its edge moves
+  before or after it. The first correction freezes the wall in your order,
+  which every Count keeps until *Let the rules choose again*. Counting also finds the days with media
   but no position: a map with holes (`map-holes`) that the script leaves without
   `gaps` draws them where the road was driven on those days. A season recap the
   script does not spell out lists the season's posts, their titles and cover
@@ -3438,6 +3450,193 @@ and `.export` (the PNG or the film into the downloads), and `.undo` /
 `.redo`. Every write is one step of the mosaic's undo, saved and synced
 like a gesture; a value out of range is refused with its range, never
 clamped.
+
+## Recap tool
+
+*Work in progress* — the home page and the tool menu say so with a badge. What
+exists: the six templates below, their gallery and their file, the editor, the
+exports and keeping a recap on a Winnow (`docs/recap.md`). More templates (a
+year, one second a day, the sheets of a whole month) come next.
+
+**Templates.** `/recap` opens on a **catalogue**: each card is the template drawn
+by the real painter over colour fields, and plays its entrance when you hover
+or focus it. A click asks what the recap is about — which month, which week,
+which day, which period — and makes it:
+
+- **Month calendar** — one picture a day for a month, under its weekdays (the
+  trend: a calendar over a looping video);
+- **On this day** — the same day a year, a month and a week ago and today (the
+  steps back are yours to choose, up to ten years);
+- **Week** — seven bands, one picture a day; in the Reel each day takes the
+  stage in turn once all are on — *Accordion* (it opens wide, the default),
+  *Spotlight* (it fills the screen), *Wave*, *Slide-through* or *Focus* (the
+  others dim) —, each picture drifting inside its band (*Pan inside*), on the
+  beat when the cuts are;
+- **Bento grid** — the best of a period, in four, nine, a bento or one and two;
+- **Single picture** — one picture with its day and its camera's line;
+- **Photo dump** — the best of a period over a carousel: a cover, then pages
+  whose density changes, never past Instagram's twenty slides;
+- **The Sheets** — a period laid on ONE long sheet as wide as the carousel, cut
+  into slides: in rows (the default), a collage of prints, a film strip or a
+  timeline. Pictures cross the cuts so people swipe — never one with a face,
+  and one at most per cut. The slides are counted from the pictures (about five
+  a slide) or set; the Reel is a camera travelling along the sheet, pausing on
+  each slide or in one continuous shot. Each arrangement has its own settings
+  — how many rows and a big top row; a collage's density, tilt, size spread and
+  border; one or two film strips, their frame shape and edge print; a
+  timeline's true or even spacing, its sides, sizes by stars and marked days —
+  and any slide after the cover can take a layout of its own: *Hero* (one
+  picture edge to edge), *Pair*, or *Breather* (a pause with a line of yours),
+  the sheet stopping at its edges and resuming after it;
+- **Wrapped** — a year (this one so far, by default) or any period in numbers,
+  a slide each: how many pictures, the busiest day, the camera you used most,
+  the place you came back to most (as your Winnow names it), the hour you shoot
+  most (as bars), your best picture edge to edge, then the rest in a grid. Each
+  stat shows the best picture of what it counts — pin another like on any
+  place; a stat with nothing to say (no camera named, no place) leaves its
+  slide out;
+- **One second a day** — a period (last month by default) as a film of one
+  second per day, the video twin of the month calendar: a clip plays its
+  middle second, a Live Photo plays its motion, a still slowly pushes in, the
+  day in a corner; a day with nothing is skipped. *Each day lasts* (in
+  *Layout*) sets the second, from half a second to three.
+
+**The rule fills, you correct.** Every place of a template is a **slot** — a day,
+a step back, a place of the grid — and the rule fills it from the recap's pool:
+Winnow's pick first, then its stars, then a photo over a clip, then the one
+nearest the middle of the day. Click a cell on the stage and the inspector shows
+that day's pictures: a tap pins one there, *Empty* leaves it empty, *Give it back
+to the rule* undoes both. *Choose one…* opens your Winnow for that place: any
+picture — even one from another day, then marked *chosen by hand* — lands
+there, so an empty day can be filled and developed. Drag a picture onto another cell to swap them; drag
+the heading to move it. The **filter** keeps only some devices — *your iPhone,
+your Sony, your drone*, named once per device — or only photos or only clips.
+
+**Pictures.** With a Winnow connected, a new recap **fills itself** from the
+days it is about (references only: a picture is fetched when a cell shows it);
+*Pick…* opens the shared Winnow picker, and *Add files…* reads photos and clips
+from this device — never uploaded. The copy a cell draws (a JPEG of at most
+2048 px) is kept on this device, so a recap reopens and exports without its
+files; the legal notice says so. **Develop…** on a picture opens Develop's own
+sheet: its correction is the picture's, the look the whole recap's.
+
+**The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
+to action, with words counted for you: `{month}`, `{count}`, `{days}`,
+`{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says: the day's number,
+how many shots that day, the camera's line — which settings it says, for every
+cell or one picture, on one line, stacked or packed to fit, never past its cell —,
+the device, a word per day, a clip's badge, today ringed; how an empty day reads), *Background* (paper, ink, a
+colour, a blurred picture — the best photograph of the recap's days unless you
+choose another among them, or force one from the whole pool — or a **looping video** under a veil —
+chosen from a drawer of thumbnails with their lengths, the recap's own days
+first and Live Photos marked with a mauve dot and offered as short loops; the
+loop is a band on the clip's filmstrip, its two handles setting where it starts
+and ends and the band itself dragged whole, and its speed is yours), *Motion* (the heading's entrance; the
+cells in order, at random, as a wave, by columns or as a spiral, each fading,
+sliding, popping, dropping, developing like a Polaroid or flickering; clips
+playing in turn, zoomed, together or as posters) and *Export*.
+
+**Framing.** The background and every picture can be framed: a point of the
+picture kept in the middle and a zoom, never a crop, so a change of format or of
+cell keeps what you framed. In the *Background* tab the whole clip or picture is
+shown with the page's shape on it — drag it, pull a corner to zoom; a cell's
+picture has its zoom in *Pictures*. Or **double-click** the background or a cell
+on the stage: drag moves it, the wheel or a pinch zooms, and the rest of a
+cell's picture shows faintly around it; *Done* or Escape leaves. **Straighten**
+turns a picture or the background by up to 45° — it grows just enough that no
+corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
+framing wherever it goes.
+
+**Carousels.** Every recap is a carousel: a strip under the stage shows each
+slide in its order — click one to see it, drag it to move it (the video
+follows), drop a picture from the stage onto it. After its first slide a recap
+holds nothing, its **highlights** (the best of its days the first slide does
+not show, in the photo dump's rhythm — a month's default) or, for a month, a
+slide per **week**. In *Pictures*, ✕ **removes** a picture — the carousel
+holds one fewer, nothing comes in — and ⇄ **replaces** it with one you choose
+among the next best (nearest in time, never a look-alike of what stays); your
+first correction freezes the selection until *Let the rule choose again*.
+How many pictures it holds is set at the head of that list (and in *Layout*),
+frozen or not: more adds the next best, each at its moment, your order kept;
+fewer puts the least liked on the bench. Pictures you add by hand — the
+picker's *Add to the recap*, your files — join the carousel at their moment.
+Every template also lists its own places in *Pictures* (*The places*: a
+calendar's days in weeks, a week's seven days, the steps back, Wrapped's
+stats…): drag a picture onto another place to swap them, onto an empty one to
+move it there — as on the stage.
+Drag a picture onto another in that list (by its ⠿ grip on a touch screen), or
+on the stage, and the two **swap** places; in the list, drop it on a picture's
+left or right edge (a red bar shows where) to **insert** it before or after
+instead — the order is yours from then on. The
+rule draws from your Winnow **picks** when they fill the carousel (or always,
+or never), and leaves out screenshots, all but the best of a **burst** (its ×n
+lets you choose the frame) and **look-alikes** — the same conditions as
+Storytelling's wall, in the same panel. In *Layout*, a slide keeps the rhythm (*Auto*)
+or takes the layout you set, and the first slide's title can repeat on the
+others — small with the slide's number, or as big as on the first. The carousel
+export writes the slides in that order, a clip as its own video slide.
+
+**Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
+before its own first page: **Défilé** — its pictures flick by, faster and
+faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its
+days, with a tick at each picture — or **Badge** — one picture full screen,
+slowly pushed in, with its day, its place (as your Winnow names it) and its
+camera; the best picture unless you choose one, its big line yours to write. When
+a trip of Trips on this device covers the recap's days, **Virée** (the trip's
+vehicle driving from picture to picture along its road) and **Itinerary** (its
+map, the stops lit one by one, the pictures pinned) are offered too — the stops
+are the recap's own pictures that carry a position, else the trip's places. A
+Badge, a Virée or an Itinerary can also be the carousel's first slide. The opener's seconds count in the
+film's length; *Play the opener* plays the film from its first second.
+
+**Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its
+format, words and their styles, background, cells, motion, look, length and
+quality, never its pictures or days — on this device, and every new recap of
+the same template starts from it; *Forget* goes back to the template's own.
+
+**Sound.** One file of yours, looped under the film, with its volume and fades;
+the film can last whole loops so the music ends on its own seam. Its beat is
+found on your device when you add it (♩ 120): **Cuts on the beat** (in
+*Motion*) then lands every page change, the opener's cut and each picture's
+entrance on a beat — on half beats when they come faster — and ends the film
+on a whole bar. Heard in the
+video export only — a still or a carousel takes its music in the app you post
+from.
+
+**Quality.** The video's quality — *Standard*, *High* or *Maximum* (about 8,
+16 or 28 Mb/s for a 1080 × 1920 Reel, variable) —, 30 or 60 frames a second,
+one pass or **two** (the film measured first, then encoded at the one quality
+that lands on its size; only where the browser's encoder has a constant-quality
+mode, greyed otherwise), and whether the film is painted from the light copies
+the stage uses or from the **originals** — every clip, the looping background
+first, and every picture a copy would have to enlarge (a full-page photograph,
+a zoomed cell) — fetched for that export only. An original your browser cannot
+play (an iPhone HEVC `.MOV`) can be **converted** by the suite's ffmpeg, in your
+browser: only the part the film shows — the background's loop — at the size it
+is shown, kept on this device for the next export (*Convert what this browser
+cannot play*; ffmpeg's ~31 MB is fetched the first time, as for *Transcode to
+H.264*). The tab says the file's rough
+size before you press; while it runs a bar under the button says what it is
+doing (opening the clips, the sound, each pass and frame), its speed and the
+time left.
+
+**Exports.** Everything is painted by the stage's own painter, so the file is
+what you saw: the **video** (an MP4 of the recap playing, its clips in step and
+its sound under it), the **stills** (each page as a PNG), and the **carousel**
+(the pages, then one MP4 slide per clip, numbered as the cells' `▶ n` badges
+say). A recap is a `.recap.json` file too — a backup, and how it reaches another
+machine — and can be kept on a Winnow whose bucket lists the `recap` kind.
+
+**For an agent.** Through the agent bridge (`#/agents`), an agent drives a
+recap with the same gestures: `recap.list`, `.create` (a template and the day
+or period it is about), `.open` and `.keep` from the gallery; in the editor
+`recap.get` (every slot with what it shows, every setting), `.fill` (from the
+connected Winnow), `.pin`, `.empty`, `.swap`, `.caption` and `.frame` on a slot, `.set`
+(any setting, deep-merged; an unknown key or a value out of range is refused,
+never clamped), `.snapshot` (a page as a picture), `.export` (the video, the
+stills or the carousel into the downloads; `delivery` in `.set` chooses its
+quality, frame rate, passes and clips), and `.undo` / `.redo`. Every write
+is one step of the recap's undo, saved and synced like a gesture.
 
 ## Telemetry tool
 

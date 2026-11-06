@@ -22,7 +22,10 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 // Single-threaded core — needs no cross-origin isolation, so it works on plain
 // static hosting (GitHub Pages). Pinned so the runtime fetch can't drift.
 const CORE_VERSION = '0.12.10';
-const CORE_BASE = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`;
+// The ESM build: `@ffmpeg/ffmpeg` always starts a MODULE worker (and the build emits ES workers), where
+// `importScripts` does not exist — it then `import()`s the core and needs its default export, which the UMD
+// build does not have («failed to import ffmpeg-core.js», measured 2026-11-05).
+const CORE_BASE = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
 
 let instance: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
@@ -81,10 +84,29 @@ function inputName(name: string): string {
   return `input.${ext || 'mp4'}`;
 }
 
+/** The suite's default conversion: the whole clip, H.264 + AAC, fast. */
+function wholeClipArgs(inName: string, outName: string): string[] {
+  // Re-encode video to broadly-compatible H.264; re-encode audio to AAC so the
+  // output is uniform regardless of the source's audio codec. `+faststart`
+  // moves the moov atom up front so the result streams/seeks immediately.
+  return [
+    '-i', inName,
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-crf', '23',
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-movflags', '+faststart',
+    outName,
+  ];
+}
+
 async function runTranscode(
   file: File,
   onProgress?: (ratio: number | null) => void,
   signal?: AbortSignal,
+  makeArgs: (inName: string, outName: string) => string[] = wholeClipArgs,
 ): Promise<Blob> {
   if (signal?.aborted) {
     throw new DOMException('Transcode cancelled', 'AbortError');
@@ -105,22 +127,9 @@ async function runTranscode(
     await ffmpeg.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
     if (signal?.aborted) throw new DOMException('Transcode cancelled', 'AbortError');
 
-    // Re-encode video to broadly-compatible H.264; re-encode audio to AAC so the
-    // output is uniform regardless of the source's audio codec. `+faststart`
-    // moves the moov atom up front so the result streams/seeks immediately.
     let code: number;
     try {
-      code = await ffmpeg.exec([
-        '-i', inName,
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '23',
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-movflags', '+faststart',
-        outName,
-      ]);
+      code = await ffmpeg.exec(makeArgs(inName, outName));
     } catch (err) {
       if (signal?.aborted) throw new DOMException('Transcode cancelled', 'AbortError');
       throw err instanceof Error ? err : new Error(String(err));
@@ -158,3 +167,21 @@ export function transcodeToH264(
   chain = run.catch(() => {});
   return run;
 }
+
+/**
+ * The same conversion with the caller's own ffmpeg arguments (`(inName,
+ * outName) => args`) — a window of the clip, a scale, another quality — on
+ * the same core, queue and hard cancel (Recap's backgrounds,
+ * `recap-transcode.ts`). The output is read as an MP4.
+ */
+export function transcodeWith(
+  file: File,
+  makeArgs: (inName: string, outName: string) => string[],
+  onProgress?: (ratio: number | null) => void,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const run = chain.then(() => runTranscode(file, onProgress, signal, makeArgs));
+  chain = run.catch(() => {});
+  return run;
+}
+

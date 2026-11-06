@@ -114,8 +114,8 @@ export default function LegalNotice() {
       <Section title="On your device">
         <P>
           Your photos, clips and logs are read in this browser and never uploaded. What Atelier keeps, it keeps in this
-          browser’s storage, on this device only: your projects, trips, rolls, atlases and mosaics with their settings and
-          small previews of them; the story script you loaded in Storytelling and its last ten versions, how long its last exports took on this device, with a small square of each picture its wall shows and a larger copy of each developed picture its before/after shows, taken from your Winnow; the colours and a 160-pixel tile of each picture a Mosaic draws, taken from your Winnow and kept until the last mosaic using them is deleted; the Winnow instances you connected, with the app token you
+          browser’s storage, on this device only: your projects, trips, rolls, atlases, mosaics and recaps with their settings and
+          small previews of them; the story script you loaded in Storytelling and its last ten versions, how long its last exports took on this device, with a small square of each picture its wall shows and a larger copy of each developed picture its before/after shows, taken from your Winnow; the colours and a 160-pixel tile of each picture a Mosaic draws, taken from your Winnow and kept until the last mosaic using them is deleted; for each Recap, its settings and choices (and the style you kept for each of its templates), a copy at most 2048 pixels wide of each picture it shows and the clips it plays — taken from your Winnow or from the files you added — and the sound you chose for it, all kept until the last recap using them is deleted; the Winnow instances you connected, with the app token you
           pasted for one on another site; the looks and presets you loaded; the map tiles, lens profiles, camera profiles and
           logos you asked for or brought in; and your preferences (theme, layout, the choices each tool remembers). A
           Develop roll may also keep, when you let it, a working preview of each of its local pictures and a small
