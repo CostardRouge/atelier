@@ -126,7 +126,7 @@ export default function RecapStage(props: Props) {
       const over = hitAt(e);
       const r = canvas.current!.getBoundingClientRect();
       setGhost({ x: e.clientX - r.left, y: e.clientY - r.top, over: over.kind === 'cell' && over.id !== d.hit.id ? over.id : null });
-    } else if (d.hit.kind === 'text' && (d.hit.role === 'heading' || d.hit.role === 'subheading')) {
+    } else if (d.hit.kind === 'text' && (d.hit.id === 'heading' || d.hit.id === 'subheading')) {
       const r = canvas.current!.getBoundingClientRect();
       setGhost({ x: e.clientX - r.left, y: e.clientY - r.top, over: null });
     }
@@ -151,7 +151,7 @@ export default function RecapStage(props: Props) {
         onSwap(d.hit.id, over.id);
         onSelect({ kind: 'cell', id: over.id });
       }
-    } else if (d.hit.kind === 'text' && (d.hit.role === 'heading' || d.hit.role === 'subheading') && pageBox) {
+    } else if (d.hit.kind === 'text' && (d.hit.id === 'heading' || d.hit.id === 'subheading') && pageBox) {
       onMoveHeading((e.clientX - d.x) / scale / pageBox.width, (e.clientY - d.y) / scale / pageBox.width);
       onSelect({ kind: 'text', id: d.hit.id });
     }

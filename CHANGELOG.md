@@ -47,6 +47,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   A recap's Reel can start with an **opener**, as in Trips: a **Défilé** (its pictures flicking by, faster and faster,
   over a tape of its days, with a tick at each) or a **Badge** (one picture slowly pushed in, its day, its place and
   its camera) — then the recap. The Badge can also be the carousel's first slide.
+  A new template, **Wrapped**: a year (or any period) in numbers, a slide each — your pictures counted, the busiest
+  day, your camera, the place you came back to, the hour you shoot most, your best picture — then the rest in a
+  grid.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

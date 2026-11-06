@@ -1,4 +1,4 @@
-import { createRecapDoc, withPictures, withRecap, type RecapDoc, type RecapPicture, type RecapTemplate } from '../../shared/recap/recap-doc';
+import { PERIOD_TEMPLATES, createRecapDoc, withPictures, withRecap, type RecapDoc, type RecapPicture, type RecapTemplate } from '../../shared/recap/recap-doc';
 import { templateDays } from '../../shared/recap/recap-slots';
 import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
 
@@ -47,15 +47,15 @@ function sampleTiles(): Drawable[] {
 /** A sample recap of `template`: a few empty days on a calendar, one clip, a full grid. */
 export function sampleRecap(template: RecapTemplate, anchor: string): RecapDoc {
   let doc = createRecapDoc(template, 'local', { anchor, now: 1 });
-  if (template === 'grid' || template === 'single' || template === 'dump' || template === 'sheets') {
-    doc = withRecap(doc, { range: { from: `${anchor.slice(0, 7)}-01`, to: `${anchor.slice(0, 7)}-28` }, count: template === 'sheets' ? 12 : 9 });
+  if (PERIOD_TEMPLATES.includes(template)) {
+    doc = withRecap(doc, { range: { from: `${anchor.slice(0, 7)}-01`, to: `${anchor.slice(0, 7)}-28` }, count: template === 'sheets' ? 12 : template === 'wrapped' ? 6 : 9 });
   }
   const days = templateDays(doc);
   const pics: RecapPicture[] = [];
   days.forEach((day, i) => {
     if (template === 'month' && [6, 11, 21, 26].includes(i)) return;
     if (template === 'onThisDay' && i === 2) return;
-    pics.push({ key: `s:${i}`, origin: 'local', name: `${i}`, kind: template === 'month' && i === 8 ? 'video' : 'photo', day, duration: 3, device: i % 3 ? 'ILCE-7M4' : 'iPhone 16 Pro', width: i % 3 === 1 ? 900 : 1500, height: 1200, focal: 35, fNumber: 1.8, shutter: '1/250', iso: 100 });
+    pics.push({ key: `s:${i}`, origin: 'local', name: `${i}`, kind: template === 'month' && i === 8 ? 'video' : 'photo', day, minute: 600 + ((i * 97) % 600), duration: 3, device: i % 3 ? 'ILCE-7M4' : 'iPhone 16 Pro', width: i % 3 === 1 ? 900 : 1500, height: 1200, focal: 35, fNumber: 1.8, shutter: '1/250', iso: 100, ...(template === 'wrapped' ? { place: i % 4 ? 'Esperance' : 'Albany', ...(i === 9 ? { stars: 5 } : {}) } : {}) });
   });
   return withPictures(doc, pics);
 }

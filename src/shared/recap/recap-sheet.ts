@@ -194,7 +194,12 @@ export interface SheetMark {
 }
 
 /** What the painter draws behind the pictures, in sheet pixels: a film strip's band, the timeline's line, and their marks. */
-export type SheetDecorItem = { kind: 'band'; x0: number; x1: number; y: number; h: number } | { kind: 'line'; x0: number; x1: number; y: number } | { kind: 'marks'; marks: SheetMark[]; size: number; colour: 'film' | 'ink' };
+export type SheetDecorItem =
+  | { kind: 'band'; x0: number; x1: number; y: number; h: number }
+  | { kind: 'line'; x0: number; x1: number; y: number }
+  | { kind: 'marks'; marks: SheetMark[]; size: number; colour: 'film' | 'ink' }
+  /** A Wrapped's hours: one bar per value, the tallest in the accent, standing on `y + h`. */
+  | { kind: 'bars'; x0: number; x1: number; y: number; h: number; values: number[] };
 
 /** A slide that keeps a layout of its own (`SheetOwn`), its pictures' boxes, and a breather's line. */
 export interface SheetOwnSlide {

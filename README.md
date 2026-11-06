@@ -3477,7 +3477,14 @@ which day, which period — and makes it:
   timeline's true or even spacing, its sides, sizes by stars and marked days —
   and any slide after the cover can take a layout of its own: *Hero* (one
   picture edge to edge), *Pair*, or *Breather* (a pause with a line of yours),
-  the sheet stopping at its edges and resuming after it.
+  the sheet stopping at its edges and resuming after it;
+- **Wrapped** — a year (this one so far, by default) or any period in numbers,
+  a slide each: how many pictures, the busiest day, the camera you used most,
+  the place you came back to most (as your Winnow names it), the hour you shoot
+  most (as bars), your best picture edge to edge, then the rest in a grid. Each
+  stat shows the best picture of what it counts — pin another like on any
+  place; a stat with nothing to say (no camera named, no place) leaves its
+  slide out.
 
 **The rule fills, you correct.** Every place of a template is a **slot** — a day,
 a step back, a place of the grid — and the rule fills it from the recap's pool:

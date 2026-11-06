@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { weekStartOf } from '../../shared/recap/recap-days';
-import type { RecapTemplate } from '../../shared/recap/recap-doc';
+import { PERIOD_TEMPLATES, type RecapTemplate } from '../../shared/recap/recap-doc';
 import { addDays, formatIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { monthSpan } from '../../shared/sources/winnow/month';
@@ -128,7 +128,7 @@ export default function WhenCalendar({
       return `${formatIsoDate(hovered)} · ${n ? `${n} file${n === 1 ? '' : 's'}` : 'nothing'}`;
     }
     if (answer) return total ? `${total.toLocaleString()} file${total === 1 ? '' : 's'} this month` : 'nothing this month';
-    if (template === 'grid' || template === 'single' || template === 'dump' || template === 'sheets') return 'two clicks: its first day, then its last';
+    if (PERIOD_TEMPLATES.includes(template)) return 'two clicks: its first day, then its last';
     return '';
   })();
 

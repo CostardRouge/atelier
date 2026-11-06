@@ -58,7 +58,10 @@ export default function NewRecapDialog({
         ? { anchor: weekStartOf(today) ?? today, range: null }
         : template === 'onThisDay'
           ? { anchor: today, range: null }
-          : { anchor: lastMonth, range: { from: lastMonth, to: monthEnd(lastMonth) } },
+          : template === 'wrapped'
+            ? // A Wrapped is a year by default: this one, so far.
+              { anchor: `${today.slice(0, 4)}-01-01`, range: { from: `${today.slice(0, 4)}-01-01`, to: today } }
+            : { anchor: lastMonth, range: { from: lastMonth, to: monthEnd(lastMonth) } },
   );
   const { connection, client } = useWinnowConnection();
   const [target, setTarget] = useState(sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID));

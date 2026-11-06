@@ -17,6 +17,7 @@ import { mulberry32 } from '../lib/prng';
 import { agoLabel, dayAgo, isoWeek, monthDays, monthName, parseAgo, shortDate, weekDays, dayMonth } from './recap-days';
 import { GRID_SHAPES, MAX_SLIDES, type RecapDoc, type RecapPicture } from './recap-doc';
 import { carouselPool, rankByRules } from './recap-carousel';
+import { WRAPPED_STATS, statPictures, wrappedStats, type WrappedStatKey, type WrappedStats } from './recap-wrapped';
 
 export interface RecapSlot {
   /** What a pick, a caption or a clearing names: a day (`2026-10-14`), a step back (`ago:1y`), a place (`n:3`). */
@@ -50,7 +51,14 @@ export interface ResolvedRecap {
   days: number;
   /** The words a heading can count (`fillText`). */
   vars: Record<string, string>;
+  /** A Wrapped's numbers (`recap-wrapped.ts`). */
+  wrapped?: WrappedStats;
 }
+
+/** A Wrapped's stat slots, as the inspector names them. */
+export const WRAPPED_LABEL: Record<WrappedStatKey, string> = { busiest: 'The busiest day', camera: 'The camera', place: 'The place', best: 'The best picture' };
+/** The most pictures a Wrapped's closing collage holds. */
+export const WRAPPED_COLLAGE_MAX = 12;
 
 /** The device's own name for a camera model, when the person gave one (`Sony`, `Drone`). */
 export type DeviceAliases = Readonly<Record<string, string>>;
@@ -122,6 +130,7 @@ export function placeCount(doc: RecapDoc): number {
   if (doc.template === 'single') return 1;
   if (doc.template === 'grid') return GRID_SHAPES[doc.grid].count;
   if (doc.template === 'dump' || doc.template === 'sheets') return Math.min(doc.count, MAX_SLIDES * 4);
+  if (doc.template === 'wrapped') return Math.min(doc.count, WRAPPED_COLLAGE_MAX);
   return 0;
 }
 
@@ -196,7 +205,12 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
   const days = daySlots(doc);
   let slots: RecapSlot[];
   let inScope: RecapPicture[];
-  if (days.length) {
+  let wrapped: WrappedStats | undefined;
+  if (doc.template === 'wrapped') {
+    inScope = doc.range ? pool.filter((p) => p.day !== null && p.day >= doc.range!.from && p.day <= doc.range!.to) : pool;
+    wrapped = wrappedStats(inScope);
+    slots = wrappedSlots(doc, inScope, wrapped, byKey, cleared, pinnedKeys);
+  } else if (days.length) {
     const byDay = new Map<IsoDate, RecapPicture[]>();
     for (const p of pool) {
       if (!p.day) continue;
@@ -250,7 +264,42 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
   }
   slots = [...slots, ...highlightSlots(doc, inScope, slots, byKey, cleared, pinnedKeys)];
   const dayCount = new Set(inScope.map((p) => p.day).filter(Boolean)).size;
-  return { slots, inScope, days: dayCount, vars: textVars(doc, inScope.length, dayCount, slots) };
+  return { slots, inScope, days: dayCount, vars: textVars(doc, inScope.length, dayCount, slots), ...(wrapped ? { wrapped } : {}) };
+}
+
+/**
+ * A Wrapped's slots: one per stat that has something to say (`w:busiest`…),
+ * the best of what it counts — a photograph first, never a picture another
+ * slot shows — then the closing collage (`n:i`), the rest of the period spread
+ * through it under the carousel's conditions.
+ */
+function wrappedSlots(doc: RecapDoc, inScope: readonly RecapPicture[], stats: WrappedStats, byKey: ReadonlyMap<string, RecapPicture>, cleared: ReadonlySet<string>, pinnedKeys: ReadonlySet<string>): RecapSlot[] {
+  const used = new Set(pinnedKeys);
+  const slot = (id: string, label: string, candidates: RecapPicture[], auto: RecapPicture | null): RecapSlot => {
+    const pinKey = doc.picks[id];
+    const pinned = pinKey ? (byKey.get(pinKey) ?? null) : null;
+    const isCleared = cleared.has(id);
+    const picture = isCleared ? null : (pinned ?? auto);
+    if (picture) used.add(picture.key);
+    return { id, day: picture?.day ?? null, label, picture, pinned: Boolean(pinned) && !isCleared, cleared: isCleared, candidates };
+  };
+  // The best picture of the period chooses first — it must be the best — then each stat among what is left; laid in their own order.
+  const filled = new Map<WrappedStatKey, RecapSlot>();
+  for (const key of ['best', ...WRAPPED_STATS.filter((k) => k !== 'best')] as WrappedStatKey[]) {
+    const among = statPictures(stats, key, inScope);
+    if (!among.length) continue;
+    const ranked = rankPictures(among);
+    filled.set(key, slot(`w:${key}`, WRAPPED_LABEL[key], ranked, ranked.find((p) => !used.has(p.key)) ?? null));
+  }
+  const out: RecapSlot[] = WRAPPED_STATS.flatMap((k) => (filled.has(k) ? [filled.get(k)!] : []));
+  const n = placeCount(doc);
+  const rank = rankByRules(doc.carousel.rules.prefer);
+  // The pool under the carousel's conditions, the stats' pictures out FIRST: picks only when what is left of them fills the grid.
+  const free = carouselPool(inScope.filter((p) => !used.has(p.key)), doc.carousel, n);
+  const auto = spreadPick(free, n, rank);
+  const ranked = rankPictures(inScope);
+  for (let i = 0; i < n; i++) out.push(slot(`n:${i}`, `Picture ${i + 1}`, ranked, auto[i] ?? null));
+  return out;
 }
 
 /**

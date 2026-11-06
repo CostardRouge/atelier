@@ -4,7 +4,7 @@ import DevelopSheet from '../../shared/develop/DevelopSheet';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
 import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
-import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, type CarouselSlide } from '../../shared/recap/recap-layout';
+import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, styleRoleOfText, type CarouselSlide } from '../../shared/recap/recap-layout';
 import SlideStrip from './SlideStrip';
 import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
@@ -386,7 +386,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     const to = tabOf(s);
     if (to) setTab(to);
     // A text clicked on the stage is the one the Text tab sets.
-    if (s?.kind === 'text') setTextRole(s.id.startsWith('header:') ? 'weekdays' : (s.id as TextRole));
+    if (s?.kind === 'text') setTextRole(styleRoleOfText(s.id));
   }, [leaveOpener]);
   const slot = selection?.kind === 'cell' ? (resolved.slots.find((s) => s.id === selection.id) ?? null) : null;
   // A slot picked from the inspector shows on its page — when the SELECTION changes, never on an edit (his report: every
@@ -649,7 +649,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               change={change}
               onAlias={setAlias}
             />
-            <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />
+            {/* A Wrapped's slides are its stats: no carousel to draw beyond them. */}
+            {doc.template !== 'wrapped' && <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />}
             {slot ? (
               <SlotSection
                 doc={doc}
@@ -683,7 +684,11 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         return (
           <>
             <LayoutSection doc={doc} change={change} />
-            {doc.template === 'sheets' ? <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} /> : <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />}
+            {doc.template === 'sheets' ? (
+              <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} />
+            ) : doc.template !== 'wrapped' ? (
+              <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />
+            ) : null}
             <StyleSection doc={doc} change={change} />
           </>
         );

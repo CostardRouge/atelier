@@ -16,7 +16,8 @@ import { FORMATS, MAX_SLIDES, type RecapDoc } from './recap-doc';
 import { fillText, ownSlots, rankPictures, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { SLIDE_LAYOUT_COUNT, type SlideLayout } from './recap-carousel';
 import { arrangeSheet, sheetSlides, type SheetArea, type SheetDecorItem, type SheetItem } from './recap-sheet';
-import { textStyleOf } from './recap-text';
+import { TEXT_ROLES, textStyleOf, type TextRole as StyleRole } from './recap-text';
+import { countWord, hourWord } from './recap-wrapped';
 /** «12 Oct» — a day as the film's edge print and the timeline write it. */
 const shortDay = (day: string) => shortDate(day).replace(/\s\d{4}$/, '');
 
@@ -602,7 +603,9 @@ export function layoutRecap(doc: RecapDoc, resolved: ResolvedRecap, today: strin
     const sheet = { pages: sheetPages(doc, resolved, W, H) };
     return sheet;
   }
-  if (doc.template === 'dump') {
+  if (doc.template === 'wrapped') {
+    pages = wrappedPages(doc, resolved, W, H);
+  } else if (doc.template === 'dump') {
     const ids = resolved.slots.map((s) => s.id);
     pages = [coverPage(doc, resolved, ids[0], W, H), ...flowPages(doc, resolved, ids.slice(1), 1, W, H)];
   } else {
@@ -630,6 +633,123 @@ export function layoutRecap(doc: RecapDoc, resolved: ResolvedRecap, today: strin
     for (const part of page.parts) if (part.kind === 'text' && part.role === 'running') part.text = `${part.text} · ${n}/${slides.length}`;
   }
   return ordered;
+}
+
+/** A text part: role, id, box, words — the rest a Wrapped's defaults. */
+function wordPart(role: TextRole, id: string, text: string, x: number, y: number, w: number, size: number, face: TextPart['face'], opts: Partial<Pick<TextPart, 'align' | 'tracking' | 'upper'>> = {}): TextPart {
+  return { kind: 'text', role, id, box: { x, y, w, h: Math.round(size * 1.25) }, text, size, align: opts.align ?? 'left', face, tracking: opts.tracking ?? 0, upper: opts.upper ?? false };
+}
+
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayWords = (day: string) => `${Number(day.slice(8, 10))} ${MONTHS_SHORT[Number(day.slice(5, 7)) - 1]}`;
+
+/**
+ * A Wrapped (`recap-wrapped.ts`): the cover (its title, the count, big), then
+ * a slide per stat that has something to say — a small word above, the
+ * number or the name big, a line under, its picture below — the hours as
+ * bars, the best picture edge to edge, and the rest as a closing grid. The
+ * stat is the slide's HEADING (its entrance, its style), its words the
+ * subheading's.
+ */
+function wrappedPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage[] {
+  const st = resolved.wrapped;
+  const { top, bottom } = insets(doc.format, H);
+  const m = Math.round(W * 0.07);
+  const inner = W - 2 * m;
+  const eyebrow = Math.round(W * 0.026 * textStyleOf(doc.texts, 'subheading').size);
+  const bigNumber = Math.round(W * 0.2 * textStyleOf(doc.texts, 'heading').size);
+  const bigWords = Math.round(W * DISPLAY_SIZE[doc.font] * 1.25 * textStyleOf(doc.texts, 'heading').size);
+  const slot = (id: string) => resolved.slots.find((s) => s.id === id);
+  const cell = (id: string, box: Box, index = 0): CellPart => ({ kind: 'cell', id, box, col: 0, row: 0, index, number: String(index + 1), words: 'inside' });
+  const pages: RecapPage[] = [];
+
+  // The cover: the title, then the count as big as it gets.
+  const head = headingParts(doc, resolved, W, top, 'left', m, inner);
+  const coverY = Math.round(H * 0.42);
+  pages.push({
+    key: 'first',
+    width: W,
+    height: H,
+    bleed: false,
+    parts: [
+      ...head.parts,
+      wordPart('heading', 'stat:shots', countWord(st?.shots ?? 0), m, coverY, inner, bigNumber, 'display'),
+      wordPart('subheading', 'line:shots', `pictures${st && st.clips ? ` · ${st.clips} ${st.clips === 1 ? 'video' : 'videos'}` : ''}${st && st.places ? ` · ${st.places} ${st.places === 1 ? 'place' : 'places'}` : ''}`, m, coverY + Math.round(bigNumber * 1.3), inner, eyebrow, 'mono', { upper: true, tracking: 0.08 }),
+    ],
+  });
+
+  // A stat's slide: its word, its value, its line, its picture under them.
+  const statPage = (key: string, word: string, value: string, line: string, slotId: string | null, numeric: boolean, decor?: SheetDecorItem[]): void => {
+    const size = numeric ? bigNumber : bigWords;
+    let y = top;
+    const parts: Part[] = [wordPart('subheading', `eyebrow:${key}`, word, m, y, inner, eyebrow, 'mono', { upper: true, tracking: 0.14 })];
+    y += Math.round(eyebrow * 1.25) + Math.round(W * 0.02);
+    parts.push(wordPart('heading', `stat:${key}`, value, m, y, inner, size, 'display', { upper: doc.font === 'sans' && !numeric, tracking: doc.font === 'sans' && !numeric ? 0.02 : 0 }));
+    y += Math.round(size * 1.25);
+    parts.push(wordPart('subheading', `line:${key}`, line, m, y, inner, eyebrow, 'mono', { upper: true, tracking: 0.06 }));
+    y += Math.round(eyebrow * 1.25) + Math.round(W * 0.05);
+    if (slotId && slot(slotId)) parts.unshift(cell(slotId, { x: m, y, w: inner, h: Math.max(W * 0.3, H - bottom - y) }));
+    pages.push({ key: `w:${key}`, width: W, height: H, parts, bleed: false, ...(decor ? { sheet: { index: 0, decor } } : {}) });
+  };
+
+  if (st?.busiest) statPage('busiest', 'The busiest day', dayWords(st.busiest.day), `${countWord(st.busiest.count)} pictures that day`, 'w:busiest', false);
+  if (st?.camera) statPage('camera', 'Most often with', st.camera.device, `${Math.round(st.camera.share * 100)} % of your pictures`, 'w:camera', false);
+  if (st?.place) statPage('place', 'You came back to', st.place.name, `${st.place.days} ${st.place.days === 1 ? 'day' : 'days'} · ${countWord(st.place.count)} pictures`, 'w:place', false);
+  if (st?.hour) {
+    const barsTop = Math.round(H * 0.5);
+    statPage('hour', 'Most often at', hourWord(st.hour.hour), `${countWord(st.hour.count)} pictures in that hour`, null, true, [{ kind: 'bars', x0: m, x1: W - m, y: barsTop, h: Math.round(H - bottom - barsTop - W * 0.04), values: st.hour.byHour }]);
+  }
+
+  // The best, edge to edge, its words low over it.
+  const best = slot('w:best');
+  if (best) {
+    const p = best.picture;
+    const line = p ? [p.stars ? '★'.repeat(p.stars) : p.picked ? 'Picked' : null, p.day ? dayWords(p.day) : null, p.place ?? null].filter(Boolean).join(' · ') : '';
+    const y = H - bottom - Math.round(eyebrow * 1.25) * 2 - Math.round(W * 0.03);
+    pages.push({
+      key: 'w:best',
+      width: W,
+      height: H,
+      bleed: true,
+      parts: [
+        cell('w:best', { x: 0, y: 0, w: W, h: H }),
+        wordPart('heading', 'stat:best', 'Your best', m, y - Math.round(bigWords * 1.25), inner, bigWords, 'display', { upper: doc.font === 'sans', tracking: doc.font === 'sans' ? 0.04 : 0 }),
+        wordPart('subheading', 'line:best', line, m, y + Math.round(W * 0.01), inner, eyebrow, 'mono', { upper: true, tracking: 0.08 }),
+      ],
+    });
+  }
+
+  // The rest: a closing grid.
+  const rest = resolved.slots.filter((s) => s.id.startsWith('n:') && s.picture);
+  if (rest.length) {
+    const word = wordPart('subheading', 'eyebrow:rest', 'And the rest', m, top, inner, eyebrow, 'mono', { upper: true, tracking: 0.14 });
+    const ctaRoom = doc.cta.show ? Math.round(W * 0.12) : 0;
+    const y0 = top + Math.round(eyebrow * 1.25) + Math.round(W * 0.03);
+    const n = rest.length;
+    const cols = n <= 4 ? 2 : 3;
+    const rows = Math.ceil(n / cols);
+    const gap = Math.max(4, Math.round(doc.cells.gap * W));
+    const cw = (inner - gap * (cols - 1)) / cols;
+    const ch = Math.min(cw * 1.25, (H - bottom - ctaRoom - y0 - gap * (rows - 1)) / rows);
+    const cells = rest.map((s, i) => cell(s.id, { x: Math.round(m + (i % cols) * (cw + gap)), y: Math.round(y0 + Math.floor(i / cols) * (ch + gap)), w: Math.round(cw), h: Math.round(ch) }, i));
+    const parts: Part[] = [...cells, word];
+    const cta = ctaPart(doc, resolved, W, Math.round(y0 + rows * (ch + gap) + W * 0.02));
+    if (cta) parts.push(cta);
+    pages.push({ key: 'w:rest', width: W, height: H, parts, bleed: false });
+  }
+  return pages;
+}
+
+/**
+ * The style role (`recap-text.ts`) a text part's id wears — what the Text tab
+ * opens on when it is clicked: a weekday header its weekdays, a Wrapped's
+ * stat or a sheet's line the heading's, their small words the subheading's.
+ */
+export function styleRoleOfText(id: string): StyleRole {
+  if (id.startsWith('header:')) return 'weekdays';
+  if (id.startsWith('stat:') || id.startsWith('quote:') || id === 'running') return 'heading';
+  if (id.startsWith('eyebrow:') || id.startsWith('line:')) return 'subheading';
+  return (TEXT_ROLES as readonly string[]).includes(id) ? (id as StyleRole) : 'heading';
 }
 
 /** What a point of a page is about: a text's role, a cell's slot, or the background. */

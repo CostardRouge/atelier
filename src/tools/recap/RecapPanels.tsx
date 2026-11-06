@@ -27,7 +27,7 @@ import {
 } from '../../shared/recap/recap-doc';
 import { agoKey, agoLabel, parseAgo, shortDate, weekStartOf } from '../../shared/recap/recap-days';
 import WhenCalendar, { type When } from './WhenCalendar';
-import { deviceLabel, poolDevices, type DeviceAliases, type RecapSlot, type ResolvedRecap } from '../../shared/recap/recap-slots';
+import { WRAPPED_COLLAGE_MAX, deviceLabel, poolDevices, type DeviceAliases, type RecapSlot, type ResolvedRecap } from '../../shared/recap/recap-slots';
 import { withRemoved, withReplaced } from '../../shared/recap/recap-selection';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
@@ -451,6 +451,9 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
               onChange={(grid) => change((d) => withRecap(d, { grid }))}
               options={(Object.keys(GRID_SHAPES) as GridShape[]).map((g) => ({ id: g, label: GRID_SHAPES[g].label }))}
             />
+          )}
+          {doc.template === 'wrapped' && (
+            <SliderRow label="The last slide's pictures" value={doc.count} min={1} max={WRAPPED_COLLAGE_MAX} step={1} reset={9} onChange={(count) => change((d) => withRecap(d, { count }))} />
           )}
           {(doc.template === 'dump' || doc.template === 'sheets') && (
             <SliderRow

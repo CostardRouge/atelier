@@ -39,8 +39,10 @@ export const MAX_SLIDES = 20;
 export const MIN_LENGTH = 3;
 export const MAX_LENGTH = 90;
 
-export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump' | 'sheets';
-export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump', 'sheets'];
+export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump' | 'sheets' | 'wrapped';
+export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump', 'sheets', 'wrapped'];
+/** The templates about a PERIOD (two clicks: its first day, its last), not a month, a week or a day. */
+export const PERIOD_TEMPLATES: readonly RecapTemplate[] = ['grid', 'single', 'dump', 'sheets', 'wrapped'];
 
 export type RecapFormat = 'story' | 'portrait' | 'square';
 export const FORMATS: Record<RecapFormat, { width: number; height: number; label: string; ratio: string }> = {
@@ -422,6 +424,18 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     motion: { order: 'inOrder', entrance: 'fade', stagger: 0.06 },
     font: 'serif',
     count: 20,
+  },
+  wrapped: {
+    label: 'Wrapped',
+    rule: 'A year (or a month) in numbers, a slide each',
+    format: 'story',
+    heading: '{year}, wrapped',
+    subheading: '{count} pictures · {days} days',
+    background: 'ink',
+    cells: { number: false, gap: 0.008, shadow: 0.35, radius: 0.04 },
+    motion: { order: 'inOrder', entrance: 'pop', stagger: 0.1, title: 'rise', hold: 2.2 },
+    font: 'sans',
+    count: 9,
   },
 };
 
@@ -820,6 +834,12 @@ export function aboutLine(doc: Pick<RecapDoc, 'template' | 'anchor' | 'range'>):
 export function defaultTitle(doc: Pick<RecapDoc, 'template' | 'anchor' | 'range'>): string {
   if (doc.template === 'month') return aboutLine(doc);
   if (doc.template === 'week') return `Week ${isoWeek(doc.anchor)}, ${doc.anchor.slice(0, 4)}`;
+  // A Wrapped of one whole year or one month says it so.
+  if (doc.template === 'wrapped' && doc.range) {
+    const { from, to } = doc.range;
+    if (from.endsWith('-01-01') && to.slice(0, 4) === from.slice(0, 4) && to.slice(5) >= '12-01') return `${from.slice(0, 4)}, wrapped`;
+    if (from.endsWith('-01') && from.slice(0, 7) === to.slice(0, 7)) return `${monthName(from)} ${from.slice(0, 4)}, wrapped`;
+  }
   return `${RECIPES[doc.template].label} · ${aboutLine(doc)}`;
 }
 

@@ -674,6 +674,18 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
 
 /** What a Sheet draws behind its pictures: a film strip's band and its sprocket holes, the timeline's line, their marks. */
 function drawDecor(g: Ctx2D, decor: SheetDecorItem, W: number, light: boolean): void {
+  if (decor.kind === 'bars') {
+    const n = decor.values.length;
+    const peak = Math.max(1, ...decor.values);
+    const step = (decor.x1 - decor.x0) / Math.max(1, n);
+    const top = decor.values.indexOf(Math.max(...decor.values));
+    for (let i = 0; i < n; i++) {
+      const h = Math.max(decor.h * 0.02, (decor.values[i] / peak) * decor.h);
+      g.fillStyle = i === top ? ACCENT : light ? 'rgba(27,24,19,0.35)' : 'rgba(244,240,231,0.35)';
+      g.fillRect(decor.x0 + i * step + step * 0.15, decor.y + decor.h - h, step * 0.7, h);
+    }
+    return;
+  }
   if (decor.kind === 'marks') {
     g.fillStyle = decor.colour === 'film' ? 'rgba(232,170,60,0.9)' : light ? 'rgba(27,24,19,0.7)' : 'rgba(244,240,231,0.75)';
     g.font = `500 ${Math.max(6, Math.round(decor.size))}px ${MONO}`;
