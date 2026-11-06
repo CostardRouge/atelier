@@ -56,8 +56,25 @@ export function pictureOfRow(row: WinnowAssetRow, instance: string): RecapPictur
     ...(row.duration_s ? { duration: row.duration_s } : {}),
     ...(stars > 0 ? { stars: Math.min(5, stars) } : {}),
     ...(row.verdict === 'pick' ? { picked: true } : {}),
+    // Where it was taken: the names Winnow's geocoding gave, and the GPS (a recap's opener and Wrapped read them).
+    ...placeOfRow(row),
     // A Live Photo: Winnow paired the still with its .mov — the clip drawer offers that motion.
     ...(row.group_kind === 'live_photo' && row.companion_id && row.companion_media_type !== 'photo' ? { motion: row.companion_id } : {}),
+  };
+}
+
+/** The place a Winnow row names, most local first, and its GPS. */
+function placeOfRow(row: WinnowAssetRow): Pick<RecapPicture, 'place' | 'region' | 'country' | 'lat' | 'lon'> {
+  const name = (v: string | null | undefined) => (v && v.trim() ? v.trim().slice(0, 120) : undefined);
+  const place = name(row.place_city) ?? name(row.place_poi) ?? name(row.place_region);
+  const region = name(row.place_region);
+  const country = name(row.place_country);
+  const gps = Number.isFinite(row.gps_lat) && Number.isFinite(row.gps_lon) && !(row.gps_lat === 0 && row.gps_lon === 0);
+  return {
+    ...(place ? { place } : {}),
+    ...(region && region !== place ? { region } : {}),
+    ...(country ? { country } : {}),
+    ...(gps ? { lat: row.gps_lat as number, lon: row.gps_lon as number } : {}),
   };
 }
 
@@ -102,6 +119,7 @@ export async function pictureOfFile(file: File): Promise<RecapPicture> {
         ...(exif.iso ? { iso: exif.iso } : {}),
         ...(exif.pixelWidth ? { width: exif.pixelWidth } : {}),
         ...(exif.pixelHeight ? { height: exif.pixelHeight } : {}),
+        ...(exif.gps && Number.isFinite(exif.gps.lat) && Number.isFinite(exif.gps.lon) ? { lat: exif.gps.lat, lon: exif.gps.lon } : {}),
       });
     } catch {
       // No EXIF: the name or the file's date says the day below.

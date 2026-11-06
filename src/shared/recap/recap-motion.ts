@@ -10,6 +10,7 @@
 import { seededOrder } from './recap-slots';
 import type { CellEntrance, CellOrder, RecapDoc, TitleEntrance } from './recap-doc';
 import type { Box, CellPart, RecapLayout, RecapPage } from './recap-layout';
+import type { OpenerPlan } from './recap-opener-plan';
 
 /** A window of the film, in seconds. */
 export interface Span {
@@ -35,7 +36,11 @@ export interface PagePlan {
 
 export interface FilmPlan {
   pages: PagePlan[];
+  /** The whole film, the opener included. */
   total: number;
+  /** The opener's seconds before the first page (`recap-opener.ts`); every page is shifted by it. */
+  lead?: number;
+  opener?: OpenerPlan | null;
 }
 
 export const HEADING_AT = 0.25;
@@ -190,10 +195,17 @@ function scalePlan(plan: FilmPlan, k: number): FilmPlan {
  * it, it is stretched to a whole number of the sound's loops so the music ends
  * on its own seam.
  */
-export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true): FilmPlan {
+export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true, opener: OpenerPlan | null = null): FilmPlan {
+  const lead = opener ? Math.max(0, opener.seconds) : 0;
+  const plan = planBody(doc, layout, clipLength, filled, lead);
+  return lead > 0 ? { ...shiftPlan(plan, lead), lead, opener } : { ...plan, lead: 0, opener: null };
+}
+
+/** The recap's own pages, `lead` seconds short of the author's length (the opener counts in it), or fitted to the sound's loops with the opener. */
+function planBody(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength, filled: Filled, lead: number): FilmPlan {
   const natural = planPages(doc, layout, clipLength, filled);
   if (doc.length !== null && doc.length > 0) {
-    const want = doc.length;
+    const want = Math.max(1, doc.length - lead);
     if (natural.total > want) return { ...scalePlan(natural, want / natural.total), total: want };
     if (natural.total < want) {
       const n = Math.max(1, natural.pages.length);
@@ -209,23 +221,42 @@ export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLen
   let total = natural.total;
   const s = doc.sound;
   if (s && s.fit && s.seconds >= 0.5) {
-    const turns = Math.max(1, Math.round(total / s.seconds));
+    const whole = total + lead;
+    const turns = Math.max(1, Math.round(whole / s.seconds));
     let fitted = turns * s.seconds;
-    if (fitted < (pages[pages.length - 1]?.allOn ?? 0) + 0.5) fitted += s.seconds;
+    if (fitted < lead + (pages[pages.length - 1]?.allOn ?? 0) + 0.5) fitted += s.seconds;
     // A long song is not a reason for a long recap: past twice the recap's own length the sound is cut instead.
-    if (fitted <= total * 2) {
-      const stretch = fitted - total;
+    if (fitted <= whole * 2) {
       const last = pages[pages.length - 1];
-      if (last) last.length += stretch;
-      total = fitted;
+      if (last) last.length += fitted - whole;
+      total = fitted - lead;
     }
   }
   return { pages, total };
 }
 
+const shiftSpan = (s: Span, d: number): Span => ({ at: s.at + d, dur: s.dur });
+
+/** The plan `d` seconds later: what an opener in front of it does. */
+function shiftPlan(plan: FilmPlan, d: number): FilmPlan {
+  return {
+    total: plan.total + d,
+    pages: plan.pages.map((p) => ({
+      start: p.start + d,
+      length: p.length,
+      heading: p.heading && shiftSpan(p.heading, d),
+      subheading: p.subheading && shiftSpan(p.subheading, d),
+      cta: p.cta && shiftSpan(p.cta, d),
+      cells: new Map([...p.cells].map(([id, s]) => [id, shiftSpan(s, d)])),
+      clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ from: w.from + d, to: w.to + d }))])),
+      allOn: p.allOn + d,
+    })),
+  };
+}
+
 /** The film's own length, before any length the author set — what the Export tab offers as *Auto*. */
-export function naturalLength(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true): number {
-  return planFilm({ ...doc, length: null }, layout, clipLength, filled).total;
+export function naturalLength(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true, opener: OpenerPlan | null = null): number {
+  return planFilm({ ...doc, length: null }, layout, clipLength, filled, opener).total;
 }
 
 /** The page on screen at film time `t`. */

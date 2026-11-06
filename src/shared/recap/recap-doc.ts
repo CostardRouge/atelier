@@ -21,6 +21,7 @@ import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type 
 import { readFrame, type Frame } from './recap-frame';
 import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { readCarousel, type RecapCarousel } from './recap-carousel';
+import { readOpener, type RecapOpener } from './recap-opener';
 import { readSheet, type RecapSheet } from './recap-sheet';
 import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
@@ -127,6 +128,13 @@ export interface RecapPicture {
   motion?: number;
   /** A clip that IS a Live Photo's motion: the still's asset, whose thumbnail it shows. */
   liveStill?: number;
+  /** Where Winnow's geocoding put it: the most local name (a town, else a sight, else a region), its region, its country. */
+  place?: string;
+  region?: string;
+  country?: string;
+  /** Where it was taken, decimal degrees — a GPS a camera wrote. */
+  lat?: number;
+  lon?: number;
 }
 
 export interface RecapText {
@@ -272,6 +280,8 @@ export interface RecapDoc {
   delivery: RecapDelivery;
   /** What the slides after the first hold, and how (`recap-carousel.ts`). */
   carousel: RecapCarousel;
+  /** The first seconds of its Reel, before its own first page (`recap-opener.ts`). */
+  opener: RecapOpener;
   createdAt: number;
   updatedAt: number;
 }
@@ -489,7 +499,9 @@ export function readPicture(raw: unknown): RecapPicture | null {
   if (typeof r.phash === 'string' && /^\d{1,20}$/.test(r.phash)) out.phash = r.phash;
   optNum('motion', 1, Number.MAX_SAFE_INTEGER);
   optNum('liveStill', 1, Number.MAX_SAFE_INTEGER);
-  for (const k of ['device', 'lens', 'shutter'] as const) {
+  optNum('lat', -90, 90);
+  optNum('lon', -180, 180);
+  for (const k of ['device', 'lens', 'shutter', 'place', 'region', 'country'] as const) {
     const v = str(r[k])?.trim().slice(0, 120);
     if (v) out[k] = v;
   }
@@ -674,6 +686,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     length: typeof r.length === 'number' && Number.isFinite(r.length) ? Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Math.round(r.length * 10) / 10)) : null,
     delivery: readDelivery(r.delivery),
     carousel: readCarousel(r.carousel, template),
+    opener: readOpener(r.opener),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };

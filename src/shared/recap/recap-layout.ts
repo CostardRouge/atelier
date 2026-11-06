@@ -90,7 +90,7 @@ export interface RecapLayout {
 const DISPLAY_SIZE = { sans: 0.062, serif: 0.1, mono: 0.052 };
 
 /** Room a format keeps free at its top and bottom: a Reel's buttons and captions sit over its frame. */
-function insets(format: RecapDoc['format'], H: number): { top: number; bottom: number } {
+export function insets(format: RecapDoc['format'], H: number): { top: number; bottom: number } {
   if (format === 'story') return { top: Math.round(H * 0.12), bottom: Math.round(H * 0.16) };
   return { top: Math.round(H * 0.075), bottom: Math.round(H * 0.06) };
 }

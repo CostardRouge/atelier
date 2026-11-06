@@ -67,7 +67,7 @@ export const FACES: Record<RecapDoc['font'], string> = {
   serif: '"Instrument Serif", Georgia, serif',
   mono: '"JetBrains Mono", ui-monospace, monospace',
 };
-const MONO = FACES.mono;
+export const MONO = FACES.mono;
 
 /** The faces the painter sets text in, as `document.fonts.load` takes them — canvas text needs them loaded first. */
 export const PAINT_FONTS = ['400 40px "Space Grotesk"', '500 40px "Space Grotesk"', '400 40px "Instrument Serif"', '400 40px "JetBrains Mono"', '500 40px "JetBrains Mono"'];
@@ -184,7 +184,7 @@ function text(g: Ctx2D, value: string, x: number, y: number, size: number, face:
 }
 
 /** What a place draws by default: its face, colour, weight, case, spacing and legibility shadow. */
-interface Place {
+export interface Place {
   face: string;
   colour: string;
   weight?: number;
@@ -216,12 +216,12 @@ function measurer(g: Ctx2D, doc: RecapDoc, role: TextRole, size: number, place: 
 }
 
 /** The size a role draws at, from its place's own. */
-function sizeIn(doc: RecapDoc, role: TextRole, size: number): number {
+export function sizeIn(doc: RecapDoc, role: TextRole, size: number): number {
   return size * textStyleOf(doc.texts, role).size;
 }
 
 /** A text of `role`, in the role's own style over its place's defaults (`recap-text.ts`). */
-function styled(g: Ctx2D, doc: RecapDoc, role: TextRole, value: string, x: number, y: number, size: number, place: Place): void {
+export function styled(g: Ctx2D, doc: RecapDoc, role: TextRole, value: string, x: number, y: number, size: number, place: Place): void {
   if (place.maxWidth !== undefined && value) {
     const fit = fitText(value, place.maxWidth, measurer(g, doc, role, size, place));
     value = fit.text;
@@ -642,7 +642,9 @@ export function paintRecap(
   if (doc.template === 'sheets' && opts.pan && layout.pages.length > 1) {
     // The Reel of a Sheet: the camera between two slides, each drawn at its place and clipped to itself, so a picture
     // across the cut joins seamlessly. A slide past the cover is already laid when it slides in.
-    const v = sheetView(film.pages, film.total, t, doc.sheet.camera);
+    // The camera reads the recap's own time: an opener's seconds come before its first slide.
+    const lead = film.lead ?? 0;
+    const v = sheetView(film.pages.map((p) => ({ start: p.start - lead, length: p.length })), film.total - lead, t - lead, doc.sheet.camera);
     drawPage(g, doc, resolved, layout, film, src, opts, v.page, v.page > 0 ? Math.max(t, film.pages[v.page].allOn + 0.01) : t, -v.frac * page.width, light);
     if (v.frac > 0) drawPage(g, doc, resolved, layout, film, src, opts, v.page + 1, Math.max(t, film.pages[v.page + 1].allOn + 0.01), (1 - v.frac) * page.width, light);
   } else drawPage(g, doc, resolved, layout, film, src, opts, Math.min(opts.page, layout.pages.length - 1), t, 0, light);
