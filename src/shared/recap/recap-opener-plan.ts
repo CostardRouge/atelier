@@ -59,10 +59,14 @@ export interface BadgePlan {
 export interface TripOpenerPlan {
   kind: 'drive' | 'map';
   seconds: number;
-  /** Paints the opener's frame at `t` into a `w × h` page. */
-  paint(g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, w: number, h: number, t: number): void;
+  /** Paints the opener's frame at `t` into a `w × h` page, its pictures read through `read` (the painter's stills). */
+  paint(g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, w: number, h: number, t: number, read?: (key: string) => { image: CanvasImageSource; width: number; height: number } | null): void;
   /** The stills it draws (pool keys), for the painter's sources. */
   keys: string[];
+  /** What it needs before it paints (fonts, an OSM ground the trip asked for). */
+  ready?: () => Promise<void>;
+  /** The trip it drives, for the panel's words. */
+  tripName: string;
 }
 
 export type OpenerPlan = DefilePlan | BadgePlan | TripOpenerPlan;

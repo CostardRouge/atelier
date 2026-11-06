@@ -315,6 +315,8 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
   try {
     onProgress({ stage: 'sound', ratio: null });
     const ticks = film.opener?.kind === 'defile' && doc.opener.ticks ? defileTicks(film.opener) : [];
+    // A trip opener's fonts and ground, before its first frame.
+    if (film.opener && 'ready' in film.opener && film.opener.ready) await film.opener.ready().catch(() => undefined);
     const audio = await soundBed(doc, film.total, ticks);
     if (doc.sound && !audio) silent = 'its sound is not on this device, or this browser cannot read it';
     const canvas = document.createElement('canvas');
@@ -388,6 +390,7 @@ export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal 
   const plan = input.film.opener;
   if (!plan) return null;
   const stills = await originalStills(input, signal);
+  if ('ready' in plan && plan.ready) await plan.ready().catch(() => undefined);
   const { width: W, height: H } = FORMATS[input.doc.format];
   const canvas = document.createElement('canvas');
   canvas.width = W;

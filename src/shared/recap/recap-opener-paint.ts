@@ -56,7 +56,7 @@ export function paintOpener(g: Ctx2D, width: number, doc: RecapDoc, layout: Reca
   const byKey = new Map(doc.pictures.map((p) => [p.key, p]));
   if (plan.kind === 'defile') paintDefile(g, doc, plan, byKey, src, t, W, H);
   else if (plan.kind === 'badge') paintBadge(g, doc, plan, byKey, src, t, W, H);
-  else plan.paint(g, W, H, t);
+  else plan.paint(g, W, H, t, (k) => src.still(k));
   g.restore();
 }
 

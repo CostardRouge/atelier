@@ -42,6 +42,7 @@ import { decodePhoto } from '../../shared/media/photo-frame';
 import { useRecapCommands } from './use-recap-commands';
 import { useRecapClips } from './use-recap-clips';
 import { useRecapSound } from './use-recap-sound';
+import { useTripOpener } from './use-trip-opener';
 import SoundSection from './SoundSection';
 import RecapExportPanel from './RecapExportPanel';
 
@@ -166,7 +167,9 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   }, [facesWanted]);
   const layout = useMemo(() => layoutRecap(view, resolved, today), [view, resolved, today]);
   // The opener leads the film (`recap-opener.ts`): planned once, read by the film plan, the stage, the strip and the exports.
-  const opener = useMemo(() => planOpener(view, resolved, aliases), [view, resolved, aliases]);
+  // Virée and Itinerary drive a trip of Trips that covers these days (`recap-trip-opener.ts`).
+  const tripOpener = useTripOpener(view, resolved);
+  const opener = useMemo(() => planOpener(view, resolved, aliases, tripOpener.plan), [view, resolved, aliases, tripOpener.plan]);
   const openerSlide = hasOpenerSlide(doc, opener);
   const clipSlides = useMemo(() => clipSlideNumbers(doc, resolved, layout, openerSlide), [doc, resolved, layout, openerSlide]);
   const slides = useMemo(() => carouselSlides(doc, resolved, layout, openerSlide), [doc, resolved, layout, openerSlide]);
@@ -726,6 +729,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
                 peekAtOpener();
               }}
               plan={opener}
+              trip={tripOpener.trip ? { name: tripOpener.trip.name } : null}
               client={instance ? client : null}
               instance={instance}
               files={files}
@@ -810,7 +814,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       sources={sources}
       page={Math.min(page, pageCount - 1)}
       t={t}
-      version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded}
+      version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded + tripOpener.version}
       selection={selection}
       onSelect={select}
       onSwap={(a, b) => {

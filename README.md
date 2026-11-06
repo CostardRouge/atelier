@@ -3566,8 +3566,12 @@ before its own first page: **Défilé** — its pictures flick by, faster and
 faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its
 days, with a tick at each picture — or **Badge** — one picture full screen,
 slowly pushed in, with its day, its place (as your Winnow names it) and its
-camera; the best picture unless you choose one, its big line yours to write. A
-Badge can also be the carousel's first slide. The opener's seconds count in the
+camera; the best picture unless you choose one, its big line yours to write. When
+a trip of Trips on this device covers the recap's days, **Virée** (the trip's
+vehicle driving from picture to picture along its road) and **Itinerary** (its
+map, the stops lit one by one, the pictures pinned) are offered too — the stops
+are the recap's own pictures that carry a position, else the trip's places. A
+Badge, a Virée or an Itinerary can also be the carousel's first slide. The opener's seconds count in the
 film's length; *Play the opener* plays the film from its first second.
 
 **Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its
