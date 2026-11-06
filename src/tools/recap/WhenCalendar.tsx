@@ -59,6 +59,15 @@ function useMonthCounts(client: WinnowClient | null, month: string): { answer: A
   return { answer, busy };
 }
 
+/** True when a period is exactly one calendar month — the period the month header moves. */
+function isWholeMonth(range: When['range']): boolean {
+  if (!range || !range.from.endsWith('-01') || range.from.slice(0, 7) !== range.to.slice(0, 7)) return false;
+  return monthSpan(range.from.slice(0, 7)).to === range.to;
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const formatMonth = (key: string) => `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+
 /** The days a template's value covers, as the calendar draws them picked. */
 function pickedOf(template: RecapTemplate, when: When): { from: string; to: string } {
   if (template === 'month') return { from: `${when.anchor.slice(0, 7)}-01`, to: monthSpan(when.anchor.slice(0, 7)).to };
@@ -102,10 +111,22 @@ export default function WhenCalendar({
     return pickedOf(template, when);
   }, [template, when, first, hovered]);
 
+  const period = PERIOD_TEMPLATES.includes(template);
   const goMonth = (key: string) => {
     setMonth(key);
     // A month recap IS its month: the header's teleport changes it at once.
     if (template === 'month') onChange({ anchor: `${key}-01`, range: null }, false);
+    // A period that is a whole month follows the month shown (his report: October 2025 shown, the recap stayed on
+    // October 2026 until two days were clicked); a period of his own (two clicks, a year) stays until he clicks.
+    else if (period && !first && isWholeMonth(when.range)) {
+      const span = monthSpan(key);
+      onChange({ anchor: span.from, range: { from: span.from, to: span.to } }, false);
+    }
+  };
+  const takeMonth = () => {
+    const span = monthSpan(month);
+    setFirst(null);
+    onChange({ anchor: span.from, range: { from: span.from, to: span.to } }, true);
   };
   const pick = (iso: string) => {
     if (template === 'month') onChange({ anchor: `${iso.slice(0, 7)}-01`, range: null }, true);
@@ -128,15 +149,23 @@ export default function WhenCalendar({
       return `${formatIsoDate(hovered)} · ${n ? `${n} file${n === 1 ? '' : 's'}` : 'nothing'}`;
     }
     if (answer) return total ? `${total.toLocaleString()} file${total === 1 ? '' : 's'} this month` : 'nothing this month';
-    if (PERIOD_TEMPLATES.includes(template)) return 'two clicks: its first day, then its last';
+    if (period) return 'two clicks: its first day, then its last';
     return '';
   })();
+  const span = monthSpan(month);
+  const shownIsPicked = when.range?.from === span.from && when.range?.to === span.to;
 
   return (
     <div className="flex flex-col gap-2">
       <MonthHeader month={month} onMonth={goMonth} today={today} bounds={answer?.bounds ?? null} size="roomy" />
       <CalendarGrid month={month} counts={answer?.counts ?? null} busy={busy} picked={picked} today={today} onPick={pick} onHover={setHovered} size="roomy" />
       {line && <p className="m-0 text-center font-mono text-2xs text-muted truncate">{line}</p>}
+      {period && !shownIsPicked && (
+        // The whole month shown in one click — two days for any other period.
+        <button type="button" onClick={takeMonth} className="self-center text-xs text-accent-ink underline-offset-2 hover:underline">
+          Take all of {formatMonth(month)}
+        </button>
+      )}
     </div>
   );
 }

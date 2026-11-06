@@ -847,7 +847,11 @@ export function aboutLine(doc: Pick<RecapDoc, 'template' | 'anchor' | 'range'>):
   if (doc.template === 'month') return `${monthName(doc.anchor)} ${doc.anchor.slice(0, 4)}`;
   if (doc.template === 'week') return `${shortDate(doc.anchor)} → ${shortDate(addDays(doc.anchor, 6) ?? doc.anchor)}`;
   if (doc.template === 'onThisDay') return shortDate(doc.anchor);
-  return doc.range ? `${shortDate(doc.range.from)} → ${shortDate(doc.range.to)}` : 'every picture';
+  if (!doc.range) return 'every picture';
+  const { from, to } = doc.range;
+  // A whole calendar month says its name.
+  if (from.endsWith('-01') && from.slice(0, 7) === to.slice(0, 7) && addDays(to, 1)?.endsWith('-01')) return `${monthName(from)} ${from.slice(0, 4)}`;
+  return `${shortDate(from)} → ${shortDate(to)}`;
 }
 
 /** The title a new recap takes before it is made unique: a month by its name, the others by template and day. */
