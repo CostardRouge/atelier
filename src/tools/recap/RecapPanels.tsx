@@ -36,6 +36,7 @@ import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import PictureThumb from './PictureThumb';
 import { getSound } from './recap-store';
+import { SECOND_RANGE, secondOf } from '../../shared/recap/recap-second';
 import { beatOfFile } from './recap-beat-find';
 import { bpmOf } from '../../shared/recap/recap-beat';
 import FrameBox from './FrameBox';
@@ -453,6 +454,18 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
               value={doc.grid}
               onChange={(grid) => change((d) => withRecap(d, { grid }))}
               options={(Object.keys(GRID_SHAPES) as GridShape[]).map((g) => ({ id: g, label: GRID_SHAPES[g].label }))}
+            />
+          )}
+          {doc.template === 'second' && (
+            <SliderRow
+              label="Each day lasts"
+              value={secondOf(doc)}
+              min={SECOND_RANGE.min}
+              max={SECOND_RANGE.max}
+              step={0.1}
+              reset={1}
+              format={(v) => `${v.toFixed(1)} s`}
+              onChange={(hold) => change((d) => withRecap(d, { motion: { ...d.motion, hold } }))}
             />
           )}
           {doc.template === 'wrapped' && (

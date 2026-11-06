@@ -55,7 +55,7 @@ export function sampleRecap(template: RecapTemplate, anchor: string): RecapDoc {
   days.forEach((day, i) => {
     if (template === 'month' && [6, 11, 21, 26].includes(i)) return;
     if (template === 'onThisDay' && i === 2) return;
-    pics.push({ key: `s:${i}`, origin: 'local', name: `${i}`, kind: template === 'month' && i === 8 ? 'video' : 'photo', day, minute: 600 + ((i * 97) % 600), duration: 3, device: i % 3 ? 'ILCE-7M4' : 'iPhone 16 Pro', width: i % 3 === 1 ? 900 : 1500, height: 1200, focal: 35, fNumber: 1.8, shutter: '1/250', iso: 100, ...(template === 'wrapped' ? { place: i % 4 ? 'Esperance' : 'Albany', ...(i === 9 ? { stars: 5 } : {}) } : {}) });
+    pics.push({ key: `s:${i}`, origin: 'local', name: `${i}`, kind: (template === 'month' && i === 8) || (template === 'second' && i % 5 === 2) ? 'video' : 'photo', day, minute: 600 + ((i * 97) % 600), duration: 3, device: i % 3 ? 'ILCE-7M4' : 'iPhone 16 Pro', width: i % 3 === 1 ? 900 : 1500, height: 1200, focal: 35, fNumber: 1.8, shutter: '1/250', iso: 100, ...(template === 'wrapped' ? { place: i % 4 ? 'Esperance' : 'Albany', ...(i === 9 ? { stars: 5 } : {}) } : {}) });
   });
   return withPictures(doc, pics);
 }

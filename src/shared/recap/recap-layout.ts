@@ -605,6 +605,8 @@ export function layoutRecap(doc: RecapDoc, resolved: ResolvedRecap, today: strin
   }
   if (doc.template === 'wrapped') {
     pages = wrappedPages(doc, resolved, W, H);
+  } else if (doc.template === 'second') {
+    pages = secondPages(doc, resolved, W, H);
   } else if (doc.template === 'dump') {
     const ids = resolved.slots.map((s) => s.id);
     pages = [coverPage(doc, resolved, ids[0], W, H), ...flowPages(doc, resolved, ids.slice(1), 1, W, H)];
@@ -633,6 +635,33 @@ export function layoutRecap(doc: RecapDoc, resolved: ResolvedRecap, today: strin
     for (const part of page.parts) if (part.kind === 'text' && part.role === 'running') part.text = `${part.text} · ${n}/${slides.length}`;
   }
   return ordered;
+}
+
+/**
+ * One second a day (`recap-second.ts`): a page per day that has a picture, in
+ * the days' order — the picture edge to edge, the day in the top corner; the
+ * first page carries the title low over its picture.
+ */
+function secondPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage[] {
+  const { top, bottom } = insets(doc.format, H);
+  const m = Math.round(W * 0.065);
+  const size = Math.round(W * 0.034 * textStyleOf(doc.texts, 'subheading').size);
+  const days = resolved.slots.filter((s) => s.picture);
+  const titleSize = Math.round(W * DISPLAY_SIZE[doc.font]);
+  const titleTop = H - bottom - Math.round(W * 0.06) - Math.round(titleSize * 1.15) - (doc.subheading.show ? Math.round(W * 0.034) : 0);
+  // No day with a picture yet: the title alone, so a recap always has a first page.
+  if (!days.length) return [{ key: 'first', width: W, height: H, bleed: false, parts: headingParts(doc, resolved, W, titleTop, 'left', m, W - 2 * m).parts }];
+  return days.map((s, i) => ({
+    key: i === 0 ? 'first' : `d:${s.id}`,
+    width: W,
+    height: H,
+    bleed: true,
+    parts: [
+      { kind: 'cell' as const, id: s.id, box: { x: 0, y: 0, w: W, h: H }, col: 0, row: 0, index: i, number: String(i + 1), words: 'bottom' as const },
+      wordPart('subheading', `date:${s.id}`, s.day ? shortDay(s.day) : '', m, top, W - 2 * m, size, 'mono', { upper: true, tracking: 0.1 }),
+      ...(i === 0 ? headingParts(doc, resolved, W, titleTop, 'left', m, W - 2 * m).parts : []),
+    ],
+  }));
 }
 
 /** A text part: role, id, box, words — the rest a Wrapped's defaults. */

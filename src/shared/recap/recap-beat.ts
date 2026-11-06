@@ -127,7 +127,7 @@ export function onTheBeat(plan: FilmPlan, grid: readonly number[], fixedTotal: n
     let allOn = Math.max(start, ...[heading, subheading].filter((x): x is Span => Boolean(x)).map((x) => x.at + x.dur), ...[...cells.values()].map((x) => x.at + x.dur));
     const cta = p.cta ? { at: nearest(fine, allOn, allOn), dur: p.cta.dur } : null;
     if (cta) allOn = cta.at + cta.dur;
-    const clips = new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ from: w.from + d, to: w.to + d }))]));
+    const clips = new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ ...w, from: w.from + d, to: w.to + d }))]));
     const end = Math.max(p.start + p.length + d, allOn);
     pages.push({ start, length: end - start, heading, subheading, cta, cells, clips, allOn });
   }

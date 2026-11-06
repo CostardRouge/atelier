@@ -40,10 +40,10 @@ export const MAX_SLIDES = 20;
 export const MIN_LENGTH = 3;
 export const MAX_LENGTH = 90;
 
-export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump' | 'sheets' | 'wrapped';
-export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump', 'sheets', 'wrapped'];
+export type RecapTemplate = 'month' | 'onThisDay' | 'week' | 'grid' | 'single' | 'dump' | 'sheets' | 'wrapped' | 'second';
+export const TEMPLATES: readonly RecapTemplate[] = ['month', 'onThisDay', 'week', 'grid', 'single', 'dump', 'sheets', 'wrapped', 'second'];
 /** The templates about a PERIOD (two clicks: its first day, its last), not a month, a week or a day. */
-export const PERIOD_TEMPLATES: readonly RecapTemplate[] = ['grid', 'single', 'dump', 'sheets', 'wrapped'];
+export const PERIOD_TEMPLATES: readonly RecapTemplate[] = ['grid', 'single', 'dump', 'sheets', 'wrapped', 'second'];
 
 export type RecapFormat = 'story' | 'portrait' | 'square';
 export const FORMATS: Record<RecapFormat, { width: number; height: number; label: string; ratio: string }> = {
@@ -442,6 +442,18 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     motion: { order: 'inOrder', entrance: 'pop', stagger: 0.1, title: 'rise', hold: 2.2 },
     font: 'sans',
     count: 9,
+  },
+  second: {
+    label: 'One second a day',
+    rule: 'A second of each day: a clip, a Live Photo or a still',
+    format: 'story',
+    heading: '{month}',
+    subheading: '{year} · one second a day',
+    background: 'ink',
+    cells: { number: false, gap: 0, radius: 0, shadow: 0 },
+    // `hold` is the second each day lasts; no entrance — a cut on every frame.
+    motion: { title: 'fade', entrance: 'none', order: 'inOrder', stagger: 0, hold: 1 },
+    font: 'mono',
   },
 };
 

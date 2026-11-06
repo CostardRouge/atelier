@@ -115,6 +115,8 @@ export function byTime(list: readonly RecapPicture[]): RecapPicture[] {
 function daySlots(doc: RecapDoc): { id: string; day: IsoDate | null; label: string }[] {
   if (doc.template === 'month') return monthDays(doc.anchor).map((d) => ({ id: d, day: d, label: dayMonth(d) }));
   if (doc.template === 'week') return weekDays(doc.anchor).map((d) => ({ id: d, day: d, label: dayMonth(d) }));
+  // One second a day: every day of its period, the days with nothing skipped when it is laid out.
+  if (doc.template === 'second') return doc.range ? enumerateDays(doc.range.from, doc.range.to).slice(0, 400).map((d) => ({ id: d, day: d, label: dayMonth(d) })) : [];
   if (doc.template === 'onThisDay') {
     return doc.rungs.flatMap((r) => {
       const ago = parseAgo(r);
@@ -199,7 +201,8 @@ function frozenPictures(keys: readonly string[], byKey: ReadonlyMap<string, Reca
 export function resolveRecap(doc: RecapDoc): ResolvedRecap {
   const byKey = new Map(doc.pictures.map((p) => [p.key, p]));
   const pool = doc.pictures.filter((p) => passesFilter(p, doc.filter));
-  const preferClips = doc.filter.kinds === 'video';
+  // A day's second is its clip first (a Live Photo's motion is one), then a still.
+  const preferClips = doc.filter.kinds === 'video' || doc.template === 'second';
   const cleared = new Set(doc.cleared);
   const pinnedKeys = new Set(Object.values(doc.picks));
   const days = daySlots(doc);
@@ -220,7 +223,9 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
     }
     inScope = days.flatMap((s) => (s.day ? (byDay.get(s.day) ?? []) : []));
     slots = days.map((s) => {
-      const candidates = rankPictures(s.day ? (byDay.get(s.day) ?? []) : [], preferClips);
+      const ranked = rankPictures(s.day ? (byDay.get(s.day) ?? []) : [], preferClips);
+      // A day's second is a moving one whenever the day has one: its clips first, then the stills, each best first.
+      const candidates = doc.template === 'second' ? [...ranked.filter((p) => p.kind === 'video'), ...ranked.filter((p) => p.kind !== 'video')] : ranked;
       const pinKey = doc.picks[s.id];
       const pinned = pinKey ? (byKey.get(pinKey) ?? null) : null;
       const isCleared = cleared.has(s.id);

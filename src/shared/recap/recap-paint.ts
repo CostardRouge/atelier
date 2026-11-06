@@ -16,6 +16,7 @@ import { deviceLabel, fillText, type DeviceAliases, type RecapSlot, type Resolve
 import { shortDate } from './recap-days';
 import { framedDraw, type Frame } from './recap-frame';
 import { sheetView, type SheetDecorItem } from './recap-sheet';
+import { pushIn } from './recap-second';
 import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
@@ -442,7 +443,9 @@ function drawCell(
     g.save();
     roundRect(g, box, radius);
     g.clip();
-    drawCover(g, drawable, box, pic.frame);
+    // One second a day: a still breathes through its second — a slow push-in (`recap-second.ts`).
+    const breathe = doc.template === 'second' && playing === null && plan.length > 0 ? pushIn((t - plan.start) / plan.length) : 1;
+    drawCover(g, drawable, box, breathe === 1 ? pic.frame : { ...(pic.frame ?? { x: 0.5, y: 0.5, zoom: 1 }), zoom: Math.min(4, (pic.frame?.zoom ?? 1) * breathe) });
     g.restore();
   } else {
     g.fillStyle = light ? PLACEHOLDER_LIGHT : PLACEHOLDER_DARK;

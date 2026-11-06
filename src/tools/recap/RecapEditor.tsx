@@ -653,7 +653,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               onAlias={setAlias}
             />
             {/* A Wrapped's slides are its stats: no carousel to draw beyond them. */}
-            {doc.template !== 'wrapped' && <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />}
+            {doc.template !== 'wrapped' && doc.template !== 'second' && <CarouselSection doc={doc} resolved={resolved} change={change} thumbs={{ client: instance ? client : null, instance, files }} />}
             {slot ? (
               <SlotSection
                 doc={doc}
@@ -689,7 +689,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             <LayoutSection doc={doc} change={change} />
             {doc.template === 'sheets' ? (
               <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} />
-            ) : doc.template !== 'wrapped' ? (
+            ) : doc.template !== 'wrapped' && doc.template !== 'second' ? (
               <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />
             ) : null}
             <StyleSection doc={doc} change={change} />

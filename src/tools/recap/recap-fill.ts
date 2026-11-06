@@ -1,3 +1,4 @@
+import { liveClipOf } from '../../shared/recap/recap-clips';
 import type { RecapDoc, RecapPicture } from '../../shared/recap/recap-doc';
 import { templateDays } from '../../shared/recap/recap-slots';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
@@ -37,7 +38,11 @@ export async function fillFromWinnow(doc: RecapDoc, client: WinnowClient, instan
     for (const row of rows) {
       if (row.verdict === 'reject') continue;
       if (row.media_type !== 'photo' && row.media_type !== 'video') continue;
-      out.push(pictureOfRow(row, instance));
+      const pic = pictureOfRow(row, instance);
+      out.push(pic);
+      // One second a day plays a Live Photo's motion: its clip joins the pool as a day's clip (a few seconds; measured when it plays).
+      const live = doc.template === 'second' ? liveClipOf(pic) : null;
+      if (live) out.push({ ...live, loose: false, duration: 3 });
     }
   }
   return out;

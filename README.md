@@ -3484,7 +3484,12 @@ which day, which period — and makes it:
   most (as bars), your best picture edge to edge, then the rest in a grid. Each
   stat shows the best picture of what it counts — pin another like on any
   place; a stat with nothing to say (no camera named, no place) leaves its
-  slide out.
+  slide out;
+- **One second a day** — a period (last month by default) as a film of one
+  second per day, the video twin of the month calendar: a clip plays its
+  middle second, a Live Photo plays its motion, a still slowly pushes in, the
+  day in a corner; a day with nothing is skipped. *Each day lasts* (in
+  *Layout*) sets the second, from half a second to three.
 
 **The rule fills, you correct.** Every place of a template is a **slot** — a day,
 a step back, a place of the grid — and the rule fills it from the recap's pool:

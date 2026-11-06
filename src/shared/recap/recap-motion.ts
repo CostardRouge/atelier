@@ -12,6 +12,7 @@ import type { CellEntrance, CellOrder, RecapDoc, TitleEntrance } from './recap-d
 import type { Box, CellPart, RecapLayout, RecapPage } from './recap-layout';
 import type { OpenerPlan } from './recap-opener-plan';
 import { beatGrid, onTheBeat } from './recap-beat';
+import { secondPlan } from './recap-second';
 
 /** A window of the film, in seconds. */
 export interface Span {
@@ -29,10 +30,16 @@ export interface PagePlan {
   cta: Span | null;
   /** Each cell's entrance, by slot. */
   cells: Map<string, Span>;
-  /** When each clip plays (by slot): its windows, film time. */
-  clips: Map<string, { from: number; to: number }[]>;
+  /** When each clip plays (by slot): its windows, film time — `offset` the clip's own second it starts at (one second a day plays a clip's middle). */
+  clips: Map<string, ClipWindow[]>;
   /** When everything is on. */
   allOn: number;
+}
+
+export interface ClipWindow {
+  from: number;
+  to: number;
+  offset?: number;
 }
 
 export interface FilmPlan {
@@ -152,6 +159,11 @@ function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean,
   return { start, length: end - start, heading, subheading, cta, cells, clips, allOn };
 }
 
+/** How a template's pages are timed: one second a day has its own clock (`recap-second.ts`). */
+function pagesPlanner(doc: RecapDoc): (doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength, filled: Filled) => FilmPlan {
+  return doc.template === 'second' ? (d, l, c) => secondPlan(d, l, c) : planPages;
+}
+
 /**
  * The whole film: its pages one after the other (a dump's pages are a
  * slideshow; every other template is one page), stretched, when the sound
@@ -182,7 +194,7 @@ function scalePlan(plan: FilmPlan, k: number): FilmPlan {
       subheading: p.subheading && scaleSpan(p.subheading, k),
       cta: p.cta && scaleSpan(p.cta, k),
       cells: new Map([...p.cells].map(([id, s]) => [id, scaleSpan(s, k)])),
-      clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ from: w.from * k, to: w.to * k }))])),
+      clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ ...w, from: w.from * k, to: w.to * k }))])),
       allOn: p.allOn * k,
     })),
   };
@@ -209,6 +221,7 @@ export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLen
 
 /** The recap's own pages, `lead` seconds short of the author's length (the opener counts in it), or fitted to the sound's loops with the opener. */
 function planBody(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength, filled: Filled, lead: number): FilmPlan {
+  const planPages = pagesPlanner(doc);
   const natural = planPages(doc, layout, clipLength, filled);
   if (doc.length !== null && doc.length > 0) {
     const want = Math.max(1, doc.length - lead);
@@ -254,7 +267,7 @@ function shiftPlan(plan: FilmPlan, d: number): FilmPlan {
       subheading: p.subheading && shiftSpan(p.subheading, d),
       cta: p.cta && shiftSpan(p.cta, d),
       cells: new Map([...p.cells].map(([id, s]) => [id, shiftSpan(s, d)])),
-      clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ from: w.from + d, to: w.to + d }))])),
+      clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ ...w, from: w.from + d, to: w.to + d }))])),
       allOn: p.allOn + d,
     })),
   };
@@ -384,9 +397,9 @@ export function zoomedBox(box: Box, pageW: number, pageH: number, window: { from
  * its window it plays from its start (looping a short clip); outside, it
  * holds the frame it stopped on.
  */
-export function clipTime(windows: readonly { from: number; to: number }[] | undefined, length: number, t: number): number | null {
+export function clipTime(windows: readonly ClipWindow[] | undefined, length: number, t: number): number | null {
   if (!windows?.length || length <= 0) return null;
-  for (const w of windows) if (t >= w.from && t < w.to) return (t - w.from) % length;
+  for (const w of windows) if (t >= w.from && t < w.to) return ((w.offset ?? 0) + t - w.from) % length;
   return null;
 }
 
