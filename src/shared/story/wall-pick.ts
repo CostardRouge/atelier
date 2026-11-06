@@ -13,7 +13,10 @@
  *    for a busy one, never more than three times a quiet one's;
  * 3. PREFER inside each group by the rules in his order, the first deciding,
  *    the next breaking its ties.
- * PINS go first whatever the rules say, REMOVED pictures never come back. A
+ * PINS go first whatever the rules say, REMOVED pictures never come back
+ * (taken off by hand they leave the wall one fewer and freeze it since
+ * 2026-11-06 — `wall-correct.ts`; the rules re-run without them only when he
+ * lets them choose again). A
  * rule whose fact Winnow does not have for a picture simply does not count for
  * it. Every picture keeps the reason it is there. (pure)
  */

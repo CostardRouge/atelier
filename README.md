@@ -3145,7 +3145,13 @@ it and may grow blocks of its own.
   screenshots), Winnow's picks and stars, then tick *All* or *⚑ Picks* and
   *Put N on the wall* — the wall then draws from those pictures, in day order,
   rather than one a day (up to 2 000 kept in your script, thinned evenly);
-  *One a day* goes back. Counting also finds the days with media
+  *One a day* goes back. *By rules* chooses the wall by what to leave out,
+  how to spread it and what to prefer; *Correct the wall…* shows it in the
+  order it is laid: ✕ takes a picture off (one fewer, the pictures after it
+  close up), ⇄ offers the next best for its place, nearest in time first,
+  and a picture dragged onto another swaps with it, onto its edge moves
+  before or after it. The first correction freezes the wall in your order,
+  which every Count keeps until *Let the rules choose again*. Counting also finds the days with media
   but no position: a map with holes (`map-holes`) that the script leaves without
   `gaps` draws them where the road was driven on those days. A season recap the
   script does not spell out lists the season's posts, their titles and cover

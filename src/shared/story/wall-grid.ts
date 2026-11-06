@@ -179,9 +179,9 @@ const layouts = new Map<string, WallLayout>();
  * one until the frame is covered; a big picture takes 2 × 2 cells, placed
  * by a seeded draw (the same wall every time), never over the centre cell.
  */
-export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly number[] | null): WallLayout {
+export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly number[] | null, closed = false): WallLayout {
   const g = wallGrid(given);
-  const key = `${g.cols}|${g.rows}|${g.big}|${g.order}|${g.gap}|${groups?.join(',') ?? ''}`;
+  const key = `${g.cols}|${g.rows}|${g.big}|${g.order}|${g.gap}|${groups?.join(',') ?? ''}|${closed ? 1 : 0}`;
   const known = layouts.get(key);
   if (known) return known;
   const cellW = W / g.cols;
@@ -283,7 +283,7 @@ export function wallLayout(given?: Partial<WallGrid> | null, groups?: readonly n
           centre: q.centre,
           band: b,
           head: (heads.get(b) ?? rects.find((x) => bandOf[x.r] === b)) === q,
-          pic: startOf[b] + pictureFor(j, counts.get(b) ?? 1, groups[b]),
+          pic: startOf[b] + pictureFor(j, counts.get(b) ?? 1, groups[b], closed),
           row: q.row,
           col: q.col,
           span: q.span,
@@ -331,5 +331,11 @@ export const wallCells = (given?: Partial<WallGrid> | null): number => wallLayou
  * Which of `n` pictures (in day order) goes on place `i` of `cells`: spread
  * evenly, so a wall with more places than pictures repeats each one beside
  * itself and keeps the days in order, and one with fewer leaves some out.
+ * `closed` — a wall FROZEN by his corrections (`wall-correct.ts`) — spreads
+ * from the other end: picture i on place i as far as they go, so a picture
+ * taken off closes its followers up and the spare place goes to the last
+ * picture, at the wall's end, never beside the centre one an `order: centre`
+ * lays first.
  */
-export const pictureFor = (i: number, cells: number, n: number): number => (n <= 0 ? -1 : Math.min(n - 1, Math.floor((i * n) / cells)));
+export const pictureFor = (i: number, cells: number, n: number, closed = false): number =>
+  n <= 0 ? -1 : closed ? n - 1 - Math.min(n - 1, Math.floor(((cells - 1 - i) * n) / cells)) : Math.min(n - 1, Math.floor((i * n) / cells));

@@ -15,6 +15,7 @@ import { readRoutePace } from './route-pace';
 import { readHookBadge, readPostBadge } from './hook-badge';
 import { readMapNames, type MapNames } from './map-names';
 import { readWallRules, type WallRules } from './wall-pick';
+import { readWallOrder } from './wall-correct';
 import type { Stop } from './geo';
 import type { Episode, StoryLook } from './episode';
 import { fillParams, fillText } from './story-facts';
@@ -137,6 +138,12 @@ export interface ScriptSources {
     rules?: WallRules;
     /** Pictures he pinned on the wall, whatever the rules say. */
     pin?: number[];
+    /**
+     * The wall FROZEN by his corrections (`wall-correct.ts`): its pictures in
+     * his order, `[asset id, ISO day]` — what ✕, ⇄ or a drag left. Counting
+     * lays exactly these; absent = the rules choose.
+     */
+    order?: [number, string][];
   };
 }
 
@@ -524,6 +531,8 @@ function readSources(raw: unknown): ScriptSources | undefined {
       : [];
     const rules = readWallRules(wall.rules);
     const pin = Array.isArray(wall.pin) ? [...new Set(wall.pin.filter(id))].slice(0, 2000) : [];
+    // A frozen order belongs to a wall chosen by rules.
+    const order = rules ? readWallOrder(wall.order, MAX_TILES) : [];
     if (skip.length || Object.keys(pick).length || chosen.length || rules || pin.length)
       out.wall = {
         ...(skip.length ? { skip } : {}),
@@ -531,6 +540,7 @@ function readSources(raw: unknown): ScriptSources | undefined {
         ...(chosen.length ? { chosen } : {}),
         ...(rules ? { rules } : {}),
         ...(pin.length ? { pin } : {}),
+        ...(order.length ? { order } : {}),
       };
   }
   return out.trip || out.winnow || out.map || out.days || out.wall ? out : undefined;
@@ -663,6 +673,7 @@ export function assemble(skeleton: PostSkeleton, script: StoryScript | null, reg
       (mine?.facts ?? script?.facts)?.stages,
       (iso) => monthText(iso, lang),
     ),
+    ...(script?.sources?.wall?.order?.length ? { wallFrozen: true } : {}),
     hook: hook ? { ...hook, lines: hook.lines.map((l) => fillText(l, values, lang)) } : null,
     ...(() => {
       const f = mine?.facts ?? script?.facts;

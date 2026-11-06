@@ -227,6 +227,26 @@ describe('the wall chosen in the picker', () => {
     expect(parsed.ok && parsed.script.sources?.wall).toMatchObject({ rules: DEFAULT_WALL_RULES, pin: [4], skip: [5] });
   });
 
+  it('keeps the wall frozen in his order beside the rules, dropped with them or when the rules choose again', () => {
+    const ruled = withWallRules(counted, { rules: DEFAULT_WALL_RULES }, null);
+    const order: [number, string][] = [
+      [8, '2025-09-02'],
+      [4, '2025-09-01'],
+    ];
+    const frozen = withWallRules(ruled, { skip: [5], order }, order.map(([id, day]) => ({ id, day })));
+    expect(frozen.sources?.wall).toMatchObject({ rules: DEFAULT_WALL_RULES, skip: [5], order });
+    expect(frozen.facts?.tiles).toEqual([8, 4]);
+    expect(frozen.facts?.tileDays).toEqual(['2025-09-02', '2025-09-01']);
+    const parsed = parseScript(frozen);
+    expect(parsed.ok && parsed.script.sources?.wall?.order).toEqual(order);
+    expect(withWallRules(frozen, { order: null }, null).sources?.wall?.order).toBeUndefined();
+    expect(withWallRules(frozen, { rules: null }, null).sources?.wall?.order).toBeUndefined();
+    // An order without rules means nothing: never written, never read.
+    expect(withWallRules(counted, { order }, null).sources?.wall).toBeUndefined();
+    const stray = parseScript({ ...base, sources: { wall: { skip: [3], order } } });
+    expect(stray.ok && stray.script.sources?.wall).toEqual({ skip: [3] });
+  });
+
   it('reads a pool from a script file, keeping only ids with a day', () => {
     const parsed = parseScript({ ...base, sources: { wall: { chosen: [[7, '2025-09-01'], [0, '2025-09-02'], [8, 'soon'], 'x'] } } });
     expect(parsed.ok && parsed.script.sources?.wall).toEqual({ chosen: [[7, '2025-09-01']] });

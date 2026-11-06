@@ -131,20 +131,26 @@ export function withChosenWall(script: StoryScript, chosen: readonly (readonly [
 
 /**
  * The script with the wall chosen by rules (`wall-pick.ts`): `rules` (null =
- * back to one a day, his pins dropped with them), his `pin`s and removed
- * pictures (`skip`) as given, the rest of the wall kept. `picks`, when given,
- * freezes the wall at once.
+ * back to one a day, his pins and his frozen order dropped with them), his
+ * `pin`s and removed pictures (`skip`) as given, the wall frozen in his
+ * `order` (`wall-correct.ts`; null = the rules choose again), the rest of the
+ * wall kept. `picks`, when given, freezes the wall's pictures at once.
  */
 export function withWallRules(
   script: StoryScript,
-  patch: { rules?: WallRules | null; pin?: readonly number[]; skip?: readonly number[] },
+  patch: { rules?: WallRules | null; pin?: readonly number[]; skip?: readonly number[]; order?: readonly (readonly [number, string])[] | null },
   picks: readonly WallPick[] | null,
 ): StoryScript {
   const wall: NonNullable<ScriptSources['wall']> = { ...(script.sources?.wall ?? {}) };
   if (patch.rules === null) {
     delete wall.rules;
     delete wall.pin;
+    delete wall.order;
   } else if (patch.rules) wall.rules = patch.rules;
+  if (patch.order !== undefined) {
+    if (patch.order?.length && wall.rules) wall.order = patch.order.map((e): [number, string] => [e[0], e[1]]);
+    else delete wall.order;
+  }
   if (patch.pin) {
     if (patch.pin.length) wall.pin = [...patch.pin];
     else delete wall.pin;

@@ -5,6 +5,7 @@ import { listWinnowConnections, subscribeWinnowConnections } from '../../shared/
 import { WinnowClient } from '../../shared/sources/winnow/client';
 import { countedSpan, factsOf, mapChoiceOf, sourcesOf, stagesSpan, tripLine, withSeriesFacts, withSeriesSources, withTiles, withWall, withChosenWall, withWallRules, countedStages } from '../../shared/story/sources';
 import { DEFAULT_WALL_RULES, pickWall } from '../../shared/story/wall-pick';
+import { laidPicks } from '../../shared/story/wall-correct';
 import WallRulesPanel from './WallRulesPanel';
 import WallRulesModal from './WallRulesModal';
 import { candidatesKey, keptCandidates, readCandidates } from './wall-candidates';
@@ -142,11 +143,15 @@ export default function SourcesPanel({
       const devicePics = devicePictures(gearCals, span);
       const values = { ...factsFromCalendars(all, photos, span), ...tripFacts(trip, mapChoiceOf(sources)), ...gear, ...(geo?.values ?? {}) };
       const places = wallCapacity(wallCells(script.look?.wall), script.look?.wallMotion, MAX_TILES);
-      // By rules when he set some (over the pictures ticked in the picker, else every counted
-      // day's), else the ticked pictures, else one cover a day.
+      // His frozen order when his corrections made one (laid as it is), by rules when he set some
+      // (over the pictures ticked in the picker, else every counted day's), else the ticked pictures,
+      // else one cover a day.
       const rules = sources.wall?.rules;
       const ticked = sources.wall?.chosen ?? null;
-      const picks = rules
+      const frozen = rules ? sources.wall?.order : undefined;
+      const picks = frozen?.length
+        ? laidPicks(frozen)
+        : rules
         ? pickWall(await readCandidates(client, candidatesKey(connection.id, span, ticked), span, ticked, new AbortController().signal), rules, places, {
             pins: sources.wall?.pin,
             removed: sources.wall?.skip,
@@ -205,7 +210,9 @@ export default function SourcesPanel({
   const rules = sources.wall?.rules ?? null;
   const wallKey = trip && connection ? candidatesKey(connection.id, countedSpan(trip, sources), chosen) : null;
   const wallLine = rules
-    ? `By your rules${chosen ? `, from the ${chosen.length} picture${chosen.length === 1 ? '' : 's'} chosen in ${connection?.id ?? 'Winnow'}` : ''}: ${sources.wall?.pin?.length ?? 0} pinned, ${sources.wall?.skip?.length ?? 0} removed.`
+    ? sources.wall?.order
+      ? `Your wall: ${sources.wall.order.length} picture${sources.wall.order.length === 1 ? '' : 's'} in your order, frozen by your corrections.`
+      : `By your rules${chosen ? `, from the ${chosen.length} picture${chosen.length === 1 ? '' : 's'} chosen in ${connection?.id ?? 'Winnow'}` : ''}: ${sources.wall?.pin?.length ?? 0} pinned, ${sources.wall?.skip?.length ?? 0} removed.`
     : chosen
     ? `${chosen.length} picture${chosen.length === 1 ? '' : 's'} chosen in ${connection?.id ?? 'Winnow'}${chosen.length > places ? `, ${places} on the wall` : ''}.`
     : sources.wall
@@ -366,10 +373,10 @@ export default function SourcesPanel({
           </Button>
           {rules ? (
             <>
-              <Button size="sm" onClick={() => setCorrectingWall(true)} title="See the wall your rules choose: remove a picture, pin one, swap one for another of its day">
+              <Button size="sm" onClick={() => setCorrectingWall(true)} title="See the wall your rules choose: remove a picture, replace one, drag one to another place">
                 Correct the wall…
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => onScript(withWallRules(script, { rules: null }, null))} title="Your rules and pins are dropped; the next counting takes one cover a day">
+              <Button size="sm" variant="ghost" onClick={() => onScript(withWallRules(script, { rules: null }, null))} title="Your rules, pins and order are dropped; the next counting takes one cover a day">
                 No rules
               </Button>
             </>
@@ -406,6 +413,7 @@ export default function SourcesPanel({
               places={places}
               pins={sources.wall?.pin ?? []}
               removed={sources.wall?.skip ?? []}
+              order={sources.wall?.order ?? null}
               onCancel={() => setCorrectingWall(false)}
               onApply={(corrections, picks) => {
                 setCorrectingWall(false);
@@ -423,6 +431,7 @@ export default function SourcesPanel({
                 kept={wallKey ? keptCandidates(wallKey) : null}
                 pins={sources.wall?.pin ?? NO_IDS}
                 removed={sources.wall?.skip ?? NO_IDS}
+                frozen={!!sources.wall?.order}
               />
             </div>
           ) : null}

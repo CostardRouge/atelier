@@ -99,6 +99,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Storytelling: the hook's big text and second line take your own line breaks — press Return in their field, now a
   text area. Choose how a long one is laid: Wrap (your breaks and the column's), Your breaks only (shrunk so the
   widest line fits) or One line; set how many lines Wrap may take before it shrinks, and the line spacing.
+- Storytelling: *Correct the wall…* has Recap's gestures — ✕ takes a picture off and the wall holds one fewer
+  (nothing comes in; the pictures after it close up), ⇄ lets you choose its replacement among the next best, nearest
+  in time first, and a picture dragged onto another trades places with it, or onto its edge moves before or after it.
+  Your first correction freezes the wall in your order, kept by every Count until *Let the rules choose again*.
 - Winnow picker (Develop, Mosaic, Storytelling, the Library, Flight Atlas): a **Subject** section in its filters —
   choose the **people** in the frame (one, several, or all of them together), **describe** what is in the picture
   (*a dog*, *a parrot*, *sunset over the sea*: the image index your Winnow keeps lists its closest pictures across

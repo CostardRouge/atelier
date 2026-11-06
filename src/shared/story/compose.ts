@@ -133,7 +133,7 @@ export function drawEpisode(c: Ctx, ep: Episode, t: number, opts: ComposeOptions
   setOpenerTrip(opts.trip, opts.tripFrom);
   setGround(ep.look?.map, opts.ground ?? null);
   setStoryCamera(ep.look?.camera);
-  setWallGrid(ep.look?.wall, ep.wallGroups);
+  setWallGrid(ep.look?.wall, ep.wallGroups, ep.wallFrozen);
   // The wall's motion: the series', this post's over it; the voice's spans and the music's beats as its cues.
   setWallMotion(ep.look?.wallMotion || ep.wallMotion ? { ...(ep.look?.wallMotion ?? {}), ...(ep.wallMotion ?? {}) } : null, opts.cues);
   setTexture(ep.look);

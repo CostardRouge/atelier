@@ -57,6 +57,17 @@ describe('pictureFor', () => {
     expect([0, 1].map((i) => pictureFor(i, 2, 10))).toEqual([0, 5]);
     expect(pictureFor(0, 4, 0)).toBe(-1);
   });
+
+  it('a frozen wall closes up: picture i on place i, the spare place to the last one', () => {
+    // One fewer than the places: the plain spread doubles the FIRST (the centre one under `order: centre`).
+    expect([0, 1, 2, 3, 4].map((i) => pictureFor(i, 5, 4))).toEqual([0, 0, 1, 2, 3]);
+    expect([0, 1, 2, 3, 4].map((i) => pictureFor(i, 5, 4, true))).toEqual([0, 1, 2, 3, 3]);
+    // As many pictures as places: the same either way; fewer or more stay spread evenly.
+    expect([0, 1, 2, 3].map((i) => pictureFor(i, 4, 4, true))).toEqual([0, 1, 2, 3]);
+    expect([0, 1, 2, 3].map((i) => pictureFor(i, 4, 2, true))).toEqual([0, 0, 1, 1]);
+    expect([0, 1].map((i) => pictureFor(i, 2, 10, true))).toEqual([4, 9]);
+    expect(pictureFor(0, 4, 0, true)).toBe(-1);
+  });
 });
 
 describe('readWallGrid', () => {

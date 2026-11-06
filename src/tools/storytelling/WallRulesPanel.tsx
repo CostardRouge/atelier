@@ -11,7 +11,9 @@ import Segmented from '../../shared/ui/Segmented';
  * what to leave out, what the places are spread across and how, and the
  * preferences in order (↑ ↓, a box to turn one off). With the series'
  * pictures read this visit (`kept`), a change re-chooses the wall at once;
- * otherwise the next counting does.
+ * otherwise the next counting does. A wall FROZEN by his corrections
+ * (`wall-correct.ts`) stays as he left it whatever the rules, until «Let the
+ * rules choose again».
  */
 export default function WallRulesPanel({
   script,
@@ -21,6 +23,7 @@ export default function WallRulesPanel({
   kept,
   pins,
   removed,
+  frozen,
 }: {
   script: StoryScript;
   onScript: (s: StoryScript) => void;
@@ -29,12 +32,12 @@ export default function WallRulesPanel({
   kept: readonly WallCandidate[] | null;
   pins: readonly number[];
   removed: readonly number[];
+  frozen: boolean;
 }) {
   const outcome = useMemo(() => (kept ? pickWall(kept, rules, places, { pins, removed }) : null), [kept, rules, places, pins, removed]);
-  const write = (next: WallRules) => {
-    const picks: WallPick[] | null = kept ? pickWall(kept, next, places, { pins, removed }).picks.map((p) => ({ id: p.id, day: p.day })) : null;
-    onScript(withWallRules(script, { rules: next }, picks));
-  };
+  const chosenBy = (next: WallRules): WallPick[] | null => (kept ? pickWall(kept, next, places, { pins, removed }).picks.map((p) => ({ id: p.id, day: p.day })) : null);
+  // Frozen, a rule changed reshuffles nothing: it is what the rules read when they choose again.
+  const write = (next: WallRules) => onScript(withWallRules(script, { rules: next }, frozen ? null : chosenBy(next)));
 
   return (
     <div className="flex flex-col gap-2.5 rounded-control border border-line bg-paper p-2.5">
@@ -43,6 +46,19 @@ export default function WallRulesPanel({
           ? `${outcome.picks.length} on the wall, from ${outcome.pool.toLocaleString('en-GB')} pictures over ${outcome.groups} ${rules.unit === 'folder' ? 'folders' : rules.unit === 'week' ? 'weeks' : 'days'}.`
           : 'Count to read the pictures these rules choose from.'}
       </p>
+      {frozen ? (
+        <p className="m-0 text-2xs text-muted leading-snug">
+          Your corrections froze the wall.{' '}
+          <button
+            type="button"
+            onClick={() => onScript(withWallRules(script, { order: null }, chosenBy(rules)))}
+            title="The rules choose again; your pins stay and the pictures you removed stay out"
+            className="text-accent-ink underline-offset-2 hover:underline"
+          >
+            Let the rules choose again
+          </button>
+        </p>
+      ) : null}
       {/* The shared conditions (leave out, prefer) — Recap draws the same panel. */}
       <PictureRulesFields
         rules={rules}
