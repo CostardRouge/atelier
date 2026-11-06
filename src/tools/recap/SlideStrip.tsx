@@ -3,6 +3,7 @@ import type { RecapDoc } from '../../shared/recap/recap-doc';
 import type { CarouselSlide, RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { drawCover, paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
+import { paintOpener } from '../../shared/recap/recap-opener-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 
 const THUMB_W = 46;
@@ -64,6 +65,9 @@ export default function SlideStrip({
         g.setTransform(1, 0, 0, 1, 0, 0);
         if (s.kind === 'page') {
           paintRecap(g, c.width, doc, resolved, layout, film, sources, { t: (film.pages[s.page]?.allOn ?? 0) + 0.05, page: s.page, aliases, clipSlides });
+        } else if (s.kind === 'opener') {
+          // Its last frame, as the carousel's first slide shows it.
+          if (film.opener) paintOpener(g, c.width, doc, layout, film.opener, sources, Math.max(0, film.opener.seconds - 0.01));
         } else {
           g.fillStyle = '#141210';
           g.fillRect(0, 0, c.width, c.height);
@@ -110,7 +114,7 @@ export default function SlideStrip({
             type="button"
             role="listitem"
             data-slide-key={s.key}
-            draggable={doc.template !== 'sheets'}
+            draggable={doc.template !== 'sheets' && s.kind !== 'opener'}
             onDragStart={(e) => {
               setDragging(s.key);
               e.dataTransfer.setData('text/x-recap-slide', s.key);
@@ -128,7 +132,7 @@ export default function SlideStrip({
             onDrop={(e) => drop(e, s.key)}
             onClick={() => onShow(s)}
             aria-current={on}
-            aria-label={`Slide ${i + 1}${s.kind === 'clip' ? ', a clip' : s.key === 'first' ? ', the first' : ''}`}
+            aria-label={`Slide ${i + 1}${s.kind === 'clip' ? ', a clip' : s.kind === 'opener' ? ', the opener' : s.key === 'first' ? ', the first' : ''}`}
             className={`flex-none flex flex-col items-center gap-0.5 p-0 border-0 bg-transparent cursor-pointer font-mono text-3xs tabular-nums ${on ? 'text-accent-ink' : 'text-muted'} ${dragging === s.key ? 'opacity-40' : ''}`}
           >
             <canvas

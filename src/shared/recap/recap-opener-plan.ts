@@ -218,3 +218,8 @@ function dayRun(pictures: readonly RecapPicture[]): IsoDate[] {
   for (let t = Date.parse(`${days[0]}T00:00:00Z`); t <= end && out.length < 400; t += 86_400_000) out.push(new Date(t).toISOString().slice(0, 10) as IsoDate);
   return out;
 }
+
+/** True when the opener is also the carousel's first slide: asked, and a still that says something (a Badge, a trip's map — never a Défilé's flicker). */
+export function hasOpenerSlide(doc: Pick<RecapDoc, 'opener'>, plan: OpenerPlan | null | undefined): boolean {
+  return Boolean(plan && doc.opener.slide && plan.kind !== 'defile');
+}

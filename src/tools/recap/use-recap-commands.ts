@@ -22,7 +22,8 @@ import { carouselSlides, type RecapLayout } from '../../shared/recap/recap-layou
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
-import { exportClipSlide, exportFilm, exportPages } from './recap-export';
+import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages } from './recap-export';
+import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
 
 export interface RecapCommandsContext {
   /** The recap as it is NOW — written the moment an edit is applied, before React renders. */
@@ -57,7 +58,7 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
       title: 'Read the open recap',
       description:
         'The open recap: its template and format, the day or period it is about, its filter, how many pictures in its pool and in scope, its pages and length in seconds, every slot (a day, a step back or a place) with the picture it shows, whether pinned or emptied and how many candidates it has, and every setting (texts, cells, motion, background, sound, look).',
-      run: () => recapOutline(doc(), resolveRecap(doc()), c.current.layout.pages.length, c.current.film.total, c.current.aliases, carouselSlides(doc(), resolveRecap(doc()), c.current.layout).map((s) => s.key)),
+      run: () => recapOutline(doc(), resolveRecap(doc()), c.current.layout.pages.length, c.current.film.total, c.current.aliases, carouselSlides(doc(), resolveRecap(doc()), c.current.layout, hasOpenerSlide(doc(), c.current.film.opener)).map((s) => s.key)),
     },
     {
       id: 'recap.fill',
@@ -186,21 +187,30 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           return { files: [`${base}.mp4`], seconds: c.current.film.total, sound: r.silent ? `none: ${r.silent}` : Boolean(doc().sound), missingClips: r.missingClips };
         }
         const pages = await exportPages(input());
-        pages.forEach((b, i) => {
-          const name = pages.length > 1 || p.what === 'carousel' ? `${base}-${String(i + 1).padStart(2, '0')}.png` : `${base}.png`;
-          downloadBlob(b, name);
-          files.push(name);
-        });
-        if (p.what === 'carousel') {
-          for (const [slot, n] of c.current.clipSlides) {
-            const key = c.current.resolved.slots.find((s) => s.id === slot)?.picture?.key;
-            if (!key) continue;
-            const blob = await exportClipSlide(input(), key, () => undefined, signal);
-            if (!blob) continue;
-            const name = `${base}-${String(n).padStart(2, '0')}.mp4`;
-            downloadBlob(blob, name);
+        if (p.what !== 'carousel') {
+          pages.forEach((b, i) => {
+            const name = pages.length > 1 ? `${base}-${String(i + 1).padStart(2, '0')}.png` : `${base}.png`;
+            downloadBlob(b, name);
             files.push(name);
+          });
+          return { files };
+        }
+        // The carousel slide by slide in its order, as the Export tab writes it: the opener's still, the pages, the clips.
+        const order = carouselSlides(doc(), c.current.resolved, c.current.layout, hasOpenerSlide(doc(), c.current.film.opener));
+        for (const [i, s] of order.entries()) {
+          const n = String(i + 1).padStart(2, '0');
+          let blob: Blob | null = null;
+          let ext = 'png';
+          if (s.kind === 'page') blob = pages[s.page] ?? null;
+          else if (s.kind === 'opener') blob = await exportOpenerSlide(input(), signal);
+          else {
+            const key = c.current.resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
+            if (key) blob = await exportClipSlide(input(), key, () => undefined, signal);
+            ext = 'mp4';
           }
+          if (!blob) continue;
+          downloadBlob(blob, `${base}-${n}.${ext}`);
+          files.push(`${base}-${n}.${ext}`);
         }
         return { files };
       },

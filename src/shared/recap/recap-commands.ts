@@ -34,6 +34,7 @@ export const SETTABLE: Record<string, string> = {
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed}',
   background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160; frame: {x, y: 0–1 the focus, zoom: 1–4, rotate: −45–45 degrees}}',
   clipSlides: 'true: each clip gets a carousel slide of its own and its cell says which',
+  opener: '{kind: "none"|"defile"|"badge"|"drive"|"map" (drive and map need a trip of Trips over the recap\'s days); seconds: 0.6–8; easing: "ease-out"|"ease-out-hard"|"linear"|"ease-in"|"ease-in-out" (Défilé); tape, ticks: booleans (Défilé); picture: a pool key or null (Badge: the best); lines: {date, place, camera: booleans}; title: the Badge\'s big line or null (its place, else the title); slide: true = also the carousel\'s first slide (Badge, a trip opener); trip: a trip id or null} — the first seconds of the Reel, before the first page; the length counts them',
   length: 'the film’s length in seconds, 3–90, or null for the recap’s own (entrances, clips, hold); set, it wins over the sound’s whole loops',
 };
 
@@ -132,6 +133,7 @@ export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: numb
     font: doc.font,
     cells: doc.cells,
     motion: doc.motion,
+    opener: doc.opener,
     background: { ...doc.background },
     sound: doc.sound,
     look: doc.look ? doc.look.layers.map((l) => l.name) : null,

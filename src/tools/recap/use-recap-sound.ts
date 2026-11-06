@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RecapDoc } from '../../shared/recap/recap-doc';
 import { getSound, type KeptSound } from './recap-store';
+import type { SoundEvent } from '../../shared/audio/sound-event';
+import { scheduleVoice } from '../../shared/audio/voices';
 
 /** The gain the bed is heard at `t` seconds into a film of `total`: its fades at both ends. */
 export function soundGain(t: number, total: number, gain: number, fade: number): number {
@@ -15,7 +17,14 @@ export function soundGain(t: number, total: number, gain: number, fade: number):
  * hear the same bar at the same frame, its fades applied. Paused with the
  * stage. The export renders it offline (`render-bed.ts`), never from here.
  */
-export function useRecapSound(doc: RecapDoc): { kept: KeptSound | null; drive: (t: number, total: number) => void; halt: () => void; reload: () => void } {
+export function useRecapSound(doc: RecapDoc): {
+  kept: KeptSound | null;
+  drive: (t: number, total: number) => void;
+  /** The opener's ticks from film time `from` on, scheduled once as the stage starts playing (the export mixes them itself). */
+  cue: (events: readonly SoundEvent[], from: number) => void;
+  halt: () => void;
+  reload: () => void;
+} {
   const [kept, setKept] = useState<KeptSound | null>(null);
   const [nonce, setNonce] = useState(0);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -68,6 +77,35 @@ export function useRecapSound(doc: RecapDoc): { kept: KeptSound | null; drive: (
       a.currentTime = want;
     }
   };
-  const halt = () => audio.current?.pause();
-  return { kept, drive, halt, reload: () => setNonce((n) => n + 1) };
+  const ticks = useRef<{ ctx: AudioContext; bus: GainNode | null } | null>(null);
+  const silence = () => {
+    ticks.current?.bus?.disconnect();
+    if (ticks.current) ticks.current.bus = null;
+  };
+  const cue = (events: readonly SoundEvent[], from: number) => {
+    silence();
+    const ahead = events.filter((e) => e.at >= from);
+    if (!ahead.length || typeof AudioContext === 'undefined') return;
+    if (!ticks.current) ticks.current = { ctx: new AudioContext(), bus: null };
+    const { ctx } = ticks.current;
+    void ctx.resume().catch(() => undefined);
+    const bus = ctx.createGain();
+    bus.connect(ctx.destination);
+    ticks.current.bus = bus;
+    const base = ctx.currentTime + 0.02;
+    for (const e of ahead) scheduleVoice(ctx, bus, base + e.at - from, e.voice, { gain: e.gain, rate: e.rate });
+  };
+  useEffect(
+    () => () => {
+      ticks.current?.bus?.disconnect();
+      void ticks.current?.ctx.close().catch(() => undefined);
+      ticks.current = null;
+    },
+    [],
+  );
+  const halt = () => {
+    audio.current?.pause();
+    silence();
+  };
+  return { kept, drive, cue, halt, reload: () => setNonce((n) => n + 1) };
 }

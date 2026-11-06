@@ -13,7 +13,8 @@ import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspec
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 import { Icons } from '../../shared/ui/icons';
-import { exportClipSlide, exportFilm, exportPages, type FilmProgress } from './recap-export';
+import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, type FilmProgress } from './recap-export';
+import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
 import { carouselSlides } from '../../shared/recap/recap-layout';
 import { QUALITIES, QUALITY_LABEL, deliveryBitrate, deliverySize, sizeText, type Quality, type RecapDelivery } from '../../shared/recap/recap-delivery';
 import { supportsQuantizer } from '../../shared/media/two-pass';
@@ -258,7 +259,7 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
     setProgress((cur) => (cur ? { ...cur, p } : cur));
     task.update({ progress: p.ratio, detail: p.ratio === null ? STAGE_WORDS[p.stage].toLowerCase() : `${Math.round(p.ratio * 100)} %` });
   };
-  const order = carouselSlides(doc, resolved, layout);
+  const order = carouselSlides(doc, resolved, layout, hasOpenerSlide(doc, film.opener));
   const clips = order.flatMap((s) => (s.kind === 'clip' ? [s] : []));
   const slides = order.length;
 
@@ -315,6 +316,12 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
         if (signal.aborted) break;
         if (s.kind === 'page') {
           const blob = pages[s.page];
+          if (blob) {
+            downloadBlob(blob, `${base}-${pad(i + 1)}.png`);
+            made += 1;
+          }
+        } else if (s.kind === 'opener') {
+          const blob = await exportOpenerSlide(input(), signal);
           if (blob) {
             downloadBlob(blob, `${base}-${pad(i + 1)}.png`);
             made += 1;

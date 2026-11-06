@@ -483,15 +483,17 @@ function inOrder<T extends { key: string }>(items: readonly T[], order: readonly
   return [...out, ...items.filter((x) => !named.has(x.key))];
 }
 
-/** A slide of the carousel: one of the recap's pages, or a clip playing whole. */
-export type CarouselSlide = { key: string; kind: 'page'; page: number } | { key: string; kind: 'clip'; slot: string };
+/** A slide of the carousel: one of the recap's pages, a clip playing whole, or the opener's last frame. */
+export type CarouselSlide = { key: string; kind: 'page'; page: number } | { key: string; kind: 'clip'; slot: string } | { key: 'opener'; kind: 'opener' };
 
 /**
- * The carousel, slide by slide, in the author's order: the pages, then — when
- * `clipSlides` is on — one slide per clip; never past Instagram's twenty.
- * The Reel plays the pages in this same order (`layoutRecap` orders them).
+ * The carousel, slide by slide, in the author's order: the opener's still
+ * first when it is one (`hasOpenerSlide`, never moved), the pages, then —
+ * when `clipSlides` is on — one slide per clip; never past Instagram's
+ * twenty. The Reel plays the pages in this same order (`layoutRecap` orders
+ * them).
  */
-export function carouselSlides(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout): CarouselSlide[] {
+export function carouselSlides(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout, opener = false): CarouselSlide[] {
   const pages: CarouselSlide[] = layout.pages.map((p, i) => ({ key: p.key, kind: 'page', page: i }));
   const seen = new Set<string>();
   const clips: CarouselSlide[] = doc.clipSlides
@@ -501,7 +503,8 @@ export function carouselSlides(doc: RecapDoc, resolved: ResolvedRecap, layout: R
         return [{ key: `clip:${s.id}`, kind: 'clip' as const, slot: s.id }];
       })
     : [];
-  return (doc.template === 'sheets' ? [...pages, ...clips] : inOrder([...pages, ...clips], doc.carousel.order)).slice(0, MAX_SLIDES);
+  const laid = doc.template === 'sheets' ? [...pages, ...clips] : inOrder([...pages, ...clips], doc.carousel.order);
+  return [...(opener ? [{ key: 'opener', kind: 'opener' } as const] : []), ...laid].slice(0, MAX_SLIDES);
 }
 
 /**
@@ -658,9 +661,9 @@ export function pageOfSlot(layout: RecapLayout, slot: string): number {
  * recap's own pages first, then one slide per clip in the order they appear —
  * what a cell's `▶ 4` says, recounted whenever a clip moves.
  */
-export function clipSlideNumbers(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout): Map<string, number> {
+export function clipSlideNumbers(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout, opener = false): Map<string, number> {
   const out = new Map<string, number>();
-  carouselSlides(doc, resolved, layout).forEach((s, i) => {
+  carouselSlides(doc, resolved, layout, opener).forEach((s, i) => {
     if (s.kind === 'clip') out.set(s.slot, i + 1);
   });
   return out;

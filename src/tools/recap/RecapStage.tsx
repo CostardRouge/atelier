@@ -3,7 +3,8 @@ import type { RecapDoc } from '../../shared/recap/recap-doc';
 import { hitTest, type Box, type Hit, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { DEFAULT_FRAME, MAX_ZOOM, panFrame, rotateFrame, sourceRect, zoomFrame, type Frame } from '../../shared/recap/recap-frame';
-import { paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
+import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
+import { paintFilm } from '../../shared/recap/recap-opener-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 
 /** What the author has in hand on the stage: a cell's slot, a text, the background. */
@@ -97,7 +98,7 @@ export default function RecapStage(props: Props) {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
-    paintRecap(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan: props.pan });
+    paintFilm(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan: props.pan });
   }, [doc, resolved, layout, film, sources, page, t, version, size, aliases, clipSlides]);
 
   // ---- pointer: select, drag a picture onto another cell, drag the heading ----

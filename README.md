@@ -3545,6 +3545,15 @@ or takes the layout you set, and the first slide's title can repeat on the
 others — small with the slide's number, or as big as on the first. The carousel
 export writes the slides in that order, a clip as its own video slide.
 
+**Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
+before its own first page: **Défilé** — its pictures flick by, faster and
+faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its
+days, with a tick at each picture — or **Badge** — one picture full screen,
+slowly pushed in, with its day, its place (as your Winnow names it) and its
+camera; the best picture unless you choose one, its big line yours to write. A
+Badge can also be the carousel's first slide. The opener's seconds count in the
+film's length; *Play the opener* plays the film from its first second.
+
 **Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its
 format, words and their styles, background, cells, motion, look, length and
 quality, never its pictures or days — on this device, and every new recap of

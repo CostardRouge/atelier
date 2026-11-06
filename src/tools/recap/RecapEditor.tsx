@@ -8,6 +8,8 @@ import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, type Carouse
 import SlideStrip from './SlideStrip';
 import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
+import { defileTicks, hasOpenerSlide, planOpener } from '../../shared/recap/recap-opener-plan';
+import { inOpener } from '../../shared/recap/recap-opener-paint';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
@@ -27,6 +29,7 @@ import { Icons } from '../../shared/ui/icons';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
 import { AboutSection, BackgroundSection, LayoutSection, MotionSection, SlotSection, SourcesSection, type Change } from './RecapPanels';
+import OpenerSection from './OpenerSection';
 import RecapTextPanel from './RecapTextPanel';
 import { textStyleOf, type TextRole, type TextStyle } from '../../shared/recap/recap-text';
 import { STORY_FONTS, type StoryFontId } from '../../shared/story/fonts';
@@ -162,14 +165,19 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     };
   }, [facesWanted]);
   const layout = useMemo(() => layoutRecap(view, resolved, today), [view, resolved, today]);
-  const clipSlides = useMemo(() => clipSlideNumbers(doc, resolved, layout), [doc, resolved, layout]);
-  const slides = useMemo(() => carouselSlides(doc, resolved, layout), [doc, resolved, layout]);
+  // The opener leads the film (`recap-opener.ts`): planned once, read by the film plan, the stage, the strip and the exports.
+  const opener = useMemo(() => planOpener(view, resolved, aliases), [view, resolved, aliases]);
+  const openerSlide = hasOpenerSlide(doc, opener);
+  const clipSlides = useMemo(() => clipSlideNumbers(doc, resolved, layout, openerSlide), [doc, resolved, layout, openerSlide]);
+  const slides = useMemo(() => carouselSlides(doc, resolved, layout, openerSlide), [doc, resolved, layout, openerSlide]);
 
   const ctx = useMemo(() => ({ client, instance, files }), [client, instance, files]);
   const shownKeys = useMemo(() => {
     const keys = resolved.slots.flatMap((s) => (s.picture ? [s.picture.key] : []));
+    // A Badge may show a picture of the pool no place shows.
+    if (opener?.kind === 'badge' && opener.key) keys.push(opener.key);
     return [...new Set(keys)];
-  }, [resolved]);
+  }, [resolved, opener]);
   const pictures = useRecapPictures(doc, shownKeys, ctx, stack);
 
   // ---- the clock -------------------------------------------------------------------
@@ -192,8 +200,12 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     },
     [resolved, clips.lengths],
   );
-  const film = useMemo(() => planFilm(view, layout, clipLength, filledOf(resolved)), [view, layout, resolved, clipLength]);
-  const natural = useMemo(() => naturalLength(doc, layout, clipLength, filledOf(resolved)), [doc, layout, resolved, clipLength]);
+  const film = useMemo(() => planFilm(view, layout, clipLength, filledOf(resolved), opener), [view, layout, resolved, clipLength, opener]);
+  const natural = useMemo(() => naturalLength(doc, layout, clipLength, filledOf(resolved), opener), [doc, layout, resolved, clipLength, opener]);
+  // A Défilé's ticks, played live with the stage and mixed into the Reel.
+  const ticks = useMemo(() => (opener?.kind === 'defile' && doc.opener.ticks ? defileTicks(opener) : []), [opener, doc.opener.ticks]);
+  const ticksRef = useRef(ticks);
+  ticksRef.current = ticks;
   const [page, setPage] = useState(0);
   const pageCount = layout.pages.length;
   const restT = (p: number) => (film.pages[p]?.allOn ?? 0) + 0.05;
@@ -201,13 +213,37 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const tRef = useRef(t);
   tRef.current = t;
   const scrubbed = useRef(false);
+  /** The stage holds the opener's last frame while it is being set (the Opener section, its slide in the strip). */
+  const peekOpener = useRef(false);
   useEffect(() => {
     if (page >= pageCount) setPage(Math.max(0, pageCount - 1));
   }, [page, pageCount]);
   // Paused, the stage shows the page with everything on: an edit is seen at once.
   useEffect(() => {
-    if (!playing && !scrubbed.current) setT(restT(Math.min(page, pageCount - 1)));
+    if (playing) return;
+    if (peekOpener.current && film.lead) setT(Math.max(0, film.lead - 0.02));
+    else if (!scrubbed.current) setT(restT(Math.min(page, pageCount - 1)));
   }, [film, page, playing, pageCount]);
+  useEffect(() => {
+    if (playing) peekOpener.current = false;
+  }, [playing]);
+  // Another tab, or a click on the stage, lets go of the opener: the stage rests on its page again.
+  const leaveOpener = useCallback(() => {
+    if (!peekOpener.current) return;
+    peekOpener.current = false;
+    scrubbed.current = false;
+    setT(restT(Math.min(page, pageCount - 1)));
+    // `restT` reads the film of this render.
+  }, [page, pageCount, film]);
+  useEffect(() => {
+    if (tab !== 'motion') leaveOpener();
+  }, [tab, leaveOpener]);
+  const peekAtOpener = useCallback(() => {
+    peekOpener.current = true;
+    scrubbed.current = true;
+    setPlaying(false);
+    setPage(0);
+  }, []);
   const filmRef = useRef(film);
   filmRef.current = film;
   const clipsRef = useRef(clips);
@@ -223,11 +259,15 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     // Play starts the film from its beginning, unless the author scrubbed to a moment: then from there.
     let now = scrubbed.current && tRef.current < filmRef.current.total - 0.05 ? tRef.current : 0;
     scrubbed.current = false;
+    soundRef.current.cue(ticksRef.current, now);
     const tick = () => {
       const at = performance.now();
       now += (at - last) / 1000;
       last = at;
-      if (now >= filmRef.current.total) now = 0;
+      if (now >= filmRef.current.total) {
+        now = 0;
+        soundRef.current.cue(ticksRef.current, 0);
+      }
       setT(now);
       setPage(pageAt(filmRef.current, now));
       clipsRef.current.drive(now, filmRef.current, slotKeys);
@@ -238,6 +278,15 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     return () => cancelAnimationFrame(raf);
   }, [playing, slotKeys]);
   const togglePlay = useCallback(() => setPlaying((p) => !p), []);
+  /** The film from its first second: the opener, then the recap. */
+  const playOpener = useCallback(() => {
+    setPlaying(false);
+    window.setTimeout(() => {
+      // Play starts at 0 when nothing was scrubbed.
+      scrubbed.current = false;
+      setPlaying(true);
+    }, 0);
+  }, []);
   const framingRef = useRef(framing);
   framingRef.current = framing;
   useEffect(() => {
@@ -332,12 +381,13 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
 
   // ---- selection and the inspector ---------------------------------------------------
   const select = useCallback((s: Selection) => {
+    leaveOpener();
     setSelection((cur) => (sameSelection(cur, s) && s?.kind === 'background' ? null : s));
     const to = tabOf(s);
     if (to) setTab(to);
     // A text clicked on the stage is the one the Text tab sets.
     if (s?.kind === 'text') setTextRole(s.id.startsWith('header:') ? 'weekdays' : (s.id as TextRole));
-  }, []);
+  }, [leaveOpener]);
   const slot = selection?.kind === 'cell' ? (resolved.slots.find((s) => s.id === selection.id) ?? null) : null;
   // A slot picked from the inspector shows on its page — when the SELECTION changes, never on an edit (his report: every
   // setting changed sent the stage back to the first slide), and not when the page shown already holds it (a week's
@@ -658,7 +708,24 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
           </>
         );
       case 'motion':
-        return <MotionSection doc={doc} change={change} />;
+        return (
+          <>
+            <OpenerSection
+              doc={doc}
+              resolved={resolved}
+              change={(fn) => {
+                change(fn);
+                peekAtOpener();
+              }}
+              plan={opener}
+              client={instance ? client : null}
+              instance={instance}
+              files={files}
+              onPlay={playOpener}
+            />
+            <MotionSection doc={doc} change={change} />
+          </>
+        );
       case 'export':
         return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }} natural={natural} change={change} />;
     }
@@ -681,6 +748,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         onChange={(e) => {
           setPlaying(false);
           scrubbed.current = true;
+          peekOpener.current = false;
           const v = Number(e.target.value);
           setPage(pageAt(film, v));
           setT(v);
@@ -692,13 +760,13 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       </span>
       {pageCount > 1 && (
         <span className="inline-flex items-center gap-1" role="group" aria-label="Page">
-          <button type="button" aria-label="Previous page" disabled={page === 0} onClick={() => ((scrubbed.current = false), setPlaying(false), setPage((p) => Math.max(0, p - 1)))} className="w-8 h-8 inline-flex items-center justify-center rounded-control border border-line disabled:opacity-40">
+          <button type="button" aria-label="Previous page" disabled={page === 0} onClick={() => ((scrubbed.current = false), (peekOpener.current = false), setPlaying(false), setPage((p) => Math.max(0, p - 1)))} className="w-8 h-8 inline-flex items-center justify-center rounded-control border border-line disabled:opacity-40">
             {Icons.back}
           </button>
           <span className="font-mono text-2xs tabular-nums">
             {page + 1}/{pageCount}
           </span>
-          <button type="button" aria-label="Next page" disabled={page >= pageCount - 1} onClick={() => ((scrubbed.current = false), setPlaying(false), setPage((p) => Math.min(pageCount - 1, p + 1)))} className="w-8 h-8 inline-flex items-center justify-center rounded-control border border-line disabled:opacity-40">
+          <button type="button" aria-label="Next page" disabled={page >= pageCount - 1} onClick={() => ((scrubbed.current = false), (peekOpener.current = false), setPlaying(false), setPage((p) => Math.min(pageCount - 1, p + 1)))} className="w-8 h-8 inline-flex items-center justify-center rounded-control border border-line disabled:opacity-40">
             {Icons.forward}
           </button>
         </span>
@@ -767,9 +835,14 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   );
   const showSlide = (s: CarouselSlide) => {
     scrubbed.current = false;
+    peekOpener.current = false;
     setPlaying(false);
     if (s.kind === 'page') setPage(s.page);
-    else {
+    else if (s.kind === 'opener') {
+      // The opener's slide is its last frame: the stage stops there.
+      peekAtOpener();
+      setT(Math.max(0, (film.lead ?? 0) - 0.02));
+    } else {
       // A clip's slide is its cell's clip, whole: shown where the cell is, the cell in hand.
       setPage(pageOfSlot(layout, s.slot));
       select({ kind: 'cell', id: s.slot });
@@ -786,7 +859,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       aliases={aliases}
       clipSlides={clipSlides}
       version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded}
-      current={layout.pages[Math.min(page, pageCount - 1)]?.key ?? null}
+      current={openerSlide && inOpener(film, t) ? 'opener' : (layout.pages[Math.min(page, pageCount - 1)]?.key ?? null)}
       onShow={showSlide}
       onOrder={(order) => change((d) => withRecap(d, { carousel: { ...d.carousel, order } }))}
     />

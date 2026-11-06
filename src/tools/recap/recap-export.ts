@@ -15,6 +15,9 @@ import { FORMATS, type RecapDoc } from '../../shared/recap/recap-doc';
 import type { RecapLayout } from '../../shared/recap/recap-layout';
 import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/recap-motion';
 import { drawCover, paintSlideTitle, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
+import { paintFilm, paintOpener } from '../../shared/recap/recap-opener-paint';
+import { defileTicks } from '../../shared/recap/recap-opener-plan';
+import type { SoundEvent } from '../../shared/audio/sound-event';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { getClip, getSound, putClip } from './recap-store';
 import { transcodeWith } from '../../shared/media/transcode';
@@ -203,7 +206,24 @@ function filmClipKeys(input: ExportInput): string[] {
 }
 
 /** The recap's sound as a bed: the file looped over the film, its fades and gain baked in. */
-async function soundBed(doc: RecapDoc, seconds: number): Promise<AudioBuffer | null> {
+async function soundBed(doc: RecapDoc, seconds: number, ticks: readonly SoundEvent[] = []): Promise<AudioBuffer | null> {
+  const music = await musicBed(doc, seconds);
+  if (!ticks.length) return music;
+  // The opener's ticks over the music, never under its fades: rendered apart, then added.
+  const lead = aacPrimingSeconds(BED_SAMPLE_RATE);
+  const heard = await renderBed(ticks, seconds, { leadSeconds: lead });
+  if (!heard) return music;
+  if (!music) return heard;
+  for (let c = 0; c < music.numberOfChannels; c++) {
+    const d = music.getChannelData(c);
+    const t = heard.getChannelData(Math.min(c, heard.numberOfChannels - 1));
+    for (let i = 0; i < d.length && i < t.length; i++) d[i] += t[i];
+  }
+  return music;
+}
+
+/** The recap's song, looped over the film, the film's fades on it. */
+async function musicBed(doc: RecapDoc, seconds: number): Promise<AudioBuffer | null> {
   if (!doc.sound) return null;
   const kept = await getSound(doc.id);
   if (!kept) return null;
@@ -294,7 +314,8 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
   let onePass: string | null = null;
   try {
     onProgress({ stage: 'sound', ratio: null });
-    const audio = await soundBed(doc, film.total);
+    const ticks = film.opener?.kind === 'defile' && doc.opener.ticks ? defileTicks(film.opener) : [];
+    const audio = await soundBed(doc, film.total, ticks);
     if (doc.sound && !audio) silent = 'its sound is not on this device, or this browser cannot read it';
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -328,7 +349,7 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
         if (bg) waits.push(seek(bg, loopTime(bgLoop, bg.length, t)));
         await Promise.all(waits);
         g.setTransform(1, 0, 0, 1, 0, 0);
-        paintRecap(g, W, doc, input.resolved, input.layout, film, sources, { t, page, aliases: input.aliases, clipSlides: input.clipSlides, pan: true });
+        paintFilm(g, W, doc, input.resolved, input.layout, film, sources, { t, page, aliases: input.aliases, clipSlides: input.clipSlides, pan: true });
         return canvas;
       },
       onProgress: (p) =>
@@ -360,6 +381,20 @@ export async function exportPages(input: ExportInput, signal: AbortSignal = new 
     if (blob) out.push(blob);
   }
   return out;
+}
+
+/** The opener's last frame as a PNG — the carousel's first slide when it is one. */
+export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal = new AbortController().signal): Promise<Blob | null> {
+  const plan = input.film.opener;
+  if (!plan) return null;
+  const stills = await originalStills(input, signal);
+  const { width: W, height: H } = FORMATS[input.doc.format];
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext('2d')!;
+  paintOpener(g, W, input.doc, input.layout, plan, { still: stills.still }, Math.max(0, plan.seconds - 0.01));
+  return new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
 }
 
 /** How long a clip slide runs at most: a carousel's video is a glance, not the whole take. */
