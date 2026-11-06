@@ -3567,7 +3567,11 @@ quality, never its pictures or days — on this device, and every new recap of
 the same template starts from it; *Forget* goes back to the template's own.
 
 **Sound.** One file of yours, looped under the film, with its volume and fades;
-the film can last whole loops so the music ends on its own seam. Heard in the
+the film can last whole loops so the music ends on its own seam. Its beat is
+found on your device when you add it (♩ 120): **Cuts on the beat** (in
+*Motion*) then lands every page change, the opener's cut and each picture's
+entrance on a beat — on half beats when they come faster — and ends the film
+on a whole bar. Heard in the
 video export only — a still or a carousel takes its music in the app you post
 from.
 

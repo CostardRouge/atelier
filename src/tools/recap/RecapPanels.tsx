@@ -35,6 +35,9 @@ import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from 
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import PictureThumb from './PictureThumb';
+import { getSound } from './recap-store';
+import { beatOfFile } from './recap-beat-find';
+import { bpmOf } from '../../shared/recap/recap-beat';
 import FrameBox from './FrameBox';
 import LoopTrimmer from './LoopTrimmer';
 import { DEFAULT_FRAME, MAX_ROTATE, isDefaultFrame, rotateFrame, type Frame } from '../../shared/recap/recap-frame';
@@ -667,6 +670,37 @@ export function BackgroundSection({
 
 // ---- motion --------------------------------------------------------------------------
 
+/**
+ * «Cuts on the beat» (lab 7): the film lands on the sound's beats. Its beat
+ * was found when the sound was added; a sound kept before that is measured
+ * when the switch is first turned on.
+ */
+function OnBeatField({ doc, change }: { doc: RecapDoc; change: Change }) {
+  const [busy, setBusy] = useState(false);
+  const s = doc.sound;
+  const on = doc.motion.onBeat;
+  const turn = async (want: boolean) => {
+    if (!want || !s || s.beat !== undefined) {
+      change((d) => withRecap(d, { motion: { ...d.motion, onBeat: want } }));
+      return;
+    }
+    setBusy(true);
+    const kept = await getSound(doc.id);
+    const beat = kept ? await beatOfFile(kept.blob) : null;
+    setBusy(false);
+    change((d) => withRecap(d, { motion: { ...d.motion, onBeat: true }, ...(d.sound ? { sound: { ...d.sound, beat } } : {}) }));
+  };
+  const note = !s ? 'Add a sound (Background › Sound) to cut on its beat.' : busy ? 'Listening for its beat…' : s.beat === null ? 'No steady beat in this sound: the film keeps its own time.' : s.beat ? `♩ ${bpmOf(s.beat)} — the pages change on a beat, the pictures enter on the beat, the film ends on a bar.` : null;
+  return (
+    <div className="flex flex-col gap-1">
+      <ToggleField checked={on && Boolean(s)} onChange={(v) => void turn(v)} label="Cuts on the beat">
+        Cuts on the beat
+      </ToggleField>
+      {note && <p className="m-0 text-2xs text-muted">{note}</p>}
+    </div>
+  );
+}
+
 export function MotionSection({ doc, change }: { doc: RecapDoc; change: Change }) {
   const m = doc.motion;
   const set = (patch: Partial<RecapDoc['motion']>) => change((d) => withRecap(d, { motion: { ...d.motion, ...patch } }));
@@ -685,6 +719,7 @@ export function MotionSection({ doc, change }: { doc: RecapDoc; change: Change }
         )}
         <SliderRow label="One every" value={m.stagger} min={0} max={0.6} step={0.01} reset={0.09} format={(v) => `${v.toFixed(2)} s`} onChange={(stagger) => set({ stagger })} />
         <SliderRow label="Hold" value={m.hold} min={0.5} max={15} step={0.5} reset={3} format={(v) => `${v} s`} onChange={(hold) => set({ hold })} />
+        <OnBeatField doc={doc} change={change} />
         <span className={legend}>Clips play</span>
         <Segmented<VideoPlay> size="sm" fill label="Clips play" value={m.videos} onChange={(videos) => set({ videos })} options={VIDEO_PLAYS.map((k) => ({ id: k, label: VIDEO_LABEL[k] }))} />
       </div>

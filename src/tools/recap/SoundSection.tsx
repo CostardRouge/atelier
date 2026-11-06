@@ -6,6 +6,8 @@ import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspec
 import { Icons } from '../../shared/ui/icons';
 import type { Change } from './RecapPanels';
 import { putSound } from './recap-store';
+import { beatOfBuffer } from './recap-beat-find';
+import { bpmOf } from '../../shared/recap/recap-beat';
 
 function pickOne(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
@@ -41,7 +43,9 @@ export default function SoundSection({ doc, change, onChanged }: { doc: RecapDoc
       setError('This browser refused to keep the sound (a private window, or the disk is full).');
       return;
     }
-    change((d) => withRecap(d, { sound: { name: file.name, gain: d.sound?.gain ?? 0.8, fade: d.sound?.fade ?? 0.8, fit: d.sound?.fit ?? true, seconds: Math.round(buffer.duration * 1000) / 1000 } }));
+    // Its beat, found once here: what «Cuts on the beat» lands the film on.
+    const beat = beatOfBuffer(buffer);
+    change((d) => withRecap(d, { sound: { name: file.name, gain: d.sound?.gain ?? 0.8, fade: d.sound?.fade ?? 0.8, fit: d.sound?.fit ?? true, seconds: Math.round(buffer.duration * 1000) / 1000, beat } }));
     onChanged?.();
   };
   const remove = async () => {
@@ -59,7 +63,9 @@ export default function SoundSection({ doc, change, onChanged }: { doc: RecapDoc
               <span className="flex-1 min-w-0 truncate text-sm" title={s.name}>
                 {s.name}
               </span>
-              <span className="font-mono text-2xs text-muted tabular-nums">{s.seconds.toFixed(1)} s loop</span>
+              <span className="font-mono text-2xs text-muted tabular-nums" title={s.beat ? 'Its beat, found on this device' : undefined}>
+                {s.seconds.toFixed(1)} s loop{s.beat ? ` · ♩ ${bpmOf(s.beat)}` : ''}
+              </span>
             </div>
             <SliderRow label="Volume" value={Math.round(s.gain * 100)} min={0} max={150} step={1} reset={80} format={(v) => `${v} %`} onChange={(v) => set({ gain: v / 100 })} />
             <SliderRow label="Fades" value={s.fade} min={0} max={5} step={0.1} reset={0.8} format={(v) => `${v.toFixed(1)} s`} onChange={(fade) => set({ fade })} />

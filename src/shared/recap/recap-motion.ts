@@ -11,6 +11,7 @@ import { seededOrder } from './recap-slots';
 import type { CellEntrance, CellOrder, RecapDoc, TitleEntrance } from './recap-doc';
 import type { Box, CellPart, RecapLayout, RecapPage } from './recap-layout';
 import type { OpenerPlan } from './recap-opener-plan';
+import { beatGrid, onTheBeat } from './recap-beat';
 
 /** A window of the film, in seconds. */
 export interface Span {
@@ -198,7 +199,12 @@ function scalePlan(plan: FilmPlan, k: number): FilmPlan {
 export function planFilm(doc: RecapDoc, layout: RecapLayout, clipLength: ClipLength = () => null, filled: Filled = () => true, opener: OpenerPlan | null = null): FilmPlan {
   const lead = opener ? Math.max(0, opener.seconds) : 0;
   const plan = planBody(doc, layout, clipLength, filled, lead);
-  return lead > 0 ? { ...shiftPlan(plan, lead), lead, opener } : { ...plan, lead: 0, opener: null };
+  const led: FilmPlan = lead > 0 ? { ...shiftPlan(plan, lead), lead, opener } : { ...plan, lead: 0, opener: null };
+  // On the beat (`recap-beat.ts`): the cuts and entrances land on the sound's beats, the end on a bar.
+  const beat = doc.motion.onBeat ? doc.sound?.beat : null;
+  if (!beat || !doc.sound) return led;
+  const grid = beatGrid(beat, doc.sound.seconds, led.total + beat.period * 12 + 1);
+  return onTheBeat(led, grid, doc.length);
 }
 
 /** The recap's own pages, `lead` seconds short of the author's length (the opener counts in it), or fitted to the sound's loops with the opener. */

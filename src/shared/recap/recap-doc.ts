@@ -22,6 +22,7 @@ import { readFrame, type Frame } from './recap-frame';
 import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { readCarousel, type RecapCarousel } from './recap-carousel';
 import { readOpener, type RecapOpener } from './recap-opener';
+import { readBeat, type RecapBeat } from './recap-beat';
 import { readSheet, type RecapSheet } from './recap-sheet';
 import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
@@ -214,6 +215,8 @@ export interface RecapMotion {
   videos: VideoPlay;
   /** Seeds `random` — the same recap plays the same way. */
   seed: number;
+  /** The cuts and entrances land on the sound's beats, the film ends on a bar (`recap-beat.ts`). */
+  onBeat: boolean;
 }
 
 export interface RecapSound {
@@ -226,6 +229,8 @@ export interface RecapSound {
   fit: boolean;
   /** The loop's length, measured when the file was added. */
   seconds: number;
+  /** Its beat, found on the device when it was added (`recap-beat.ts`); null when it has no steady pulse. */
+  beat?: RecapBeat | null;
 }
 
 export interface RecapDoc {
@@ -319,6 +324,7 @@ export const DEFAULT_MOTION: RecapMotion = {
   hold: 3,
   videos: 'turn',
   seed: 1,
+  onBeat: false,
 };
 
 export const DEFAULT_BACKGROUND: RecapBackground = {
@@ -608,6 +614,7 @@ export function sanitizeMotion(raw: unknown, base: RecapMotion = DEFAULT_MOTION)
     hold: num(r.hold, 0.5, 30, base.hold),
     videos: oneOf(r.videos, VIDEO_PLAYS, base.videos),
     seed: Math.round(num(r.seed, 1, 2147483646, base.seed)),
+    onBeat: bool(r.onBeat, base.onBeat),
   };
 }
 
@@ -622,6 +629,7 @@ function readSound(raw: unknown): RecapSound | null {
     fade: num(r.fade, 0, 5, 0.8),
     fit: bool(r.fit, true),
     seconds: num(r.seconds, 0, 3600, 0),
+    beat: readBeat(r.beat),
   };
 }
 
