@@ -376,3 +376,20 @@ export function seededOrder(n: number, seed: number): number[] {
   }
   return out;
 }
+
+/**
+ * The pictures a blurred ground may soften (his ask, 2026-11-06): the
+ * photographs of the recap's own days or period, the best first — or, when he
+ * forces it, every photograph of the pool.
+ */
+export function backgroundChoices(doc: RecapDoc, resolved: ResolvedRecap, everywhere = false): RecapPicture[] {
+  const from = everywhere ? doc.pictures.filter((p) => !p.loose) : resolved.inScope;
+  const photos = from.filter((p) => p.kind === 'photo');
+  return rankByRules(doc.carousel.rules.prefer)(photos.length ? photos : from);
+}
+
+/** The picture the blurred ground softens: his, when it is still in the pool, else the best photograph of the period. */
+export function backgroundPicture(doc: RecapDoc, resolved: ResolvedRecap): RecapPicture | null {
+  const own = doc.background.picture ? doc.pictures.find((p) => p.key === doc.background.picture && !p.loose) : undefined;
+  return own ?? backgroundChoices(doc, resolved)[0] ?? resolved.slots.find((s) => s.picture)?.picture ?? null;
+}

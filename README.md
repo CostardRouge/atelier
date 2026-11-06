@@ -3516,7 +3516,8 @@ to action, with words counted for you: `{month}`, `{count}`, `{days}`,
 how many shots that day, the camera's line — which settings it says, for every
 cell or one picture, on one line, stacked or packed to fit, never past its cell —,
 the device, a word per day, a clip's badge, today ringed; how an empty day reads), *Background* (paper, ink, a
-colour, a blurred picture of the recap, or a **looping video** under a veil —
+colour, a blurred picture — the best photograph of the recap's days unless you
+choose another among them, or force one from the whole pool — or a **looping video** under a veil —
 chosen from a drawer of thumbnails with their lengths, the recap's own days
 first and Live Photos marked with a mauve dot and offered as short loops; the
 loop is a band on the clip's filmstrip, its two handles setting where it starts

@@ -161,6 +161,8 @@ export interface RecapBackground {
   veil: number;
   /** The blur of `blur` (a picture of the recap, softened), in page pixels. */
   blur: number;
+  /** The picture `blur` softens, by key; absent = the best photograph of the period (`backgroundPicture`). */
+  picture?: string;
   /** How the video or the picture sits in the page: its focus and zoom; absent = centred, just covering. */
   frame?: Frame;
 }
@@ -583,6 +585,7 @@ export function sanitizeBackground(raw: unknown): RecapBackground {
     kind: oneOf(r.kind, BACKGROUNDS, DEFAULT_BACKGROUND.kind),
     colour: typeof r.colour === 'string' && HEX.test(r.colour) ? r.colour.toLowerCase() : DEFAULT_BACKGROUND.colour,
     ...(video ? { video } : {}),
+    ...(str(r.picture) ? { picture: str(r.picture)!.slice(0, 600) } : {}),
     loopIn: num(r.loopIn, 0, 36000, 0),
     loopOut,
     speed: num(r.speed, 0.25, 2, 1),

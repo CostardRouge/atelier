@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, withCleared, withPick, withPictures, withRecap, type RecapPicture } from './recap-doc';
-import { fillText, ownSlots, poolDevices, rankPictures, resolveRecap, spreadPick, templateDays } from './recap-slots';
+import { backgroundChoices, backgroundPicture, fillText, ownSlots, poolDevices, rankPictures, resolveRecap, spreadPick, templateDays } from './recap-slots';
 
 const pic = (key: string, day: string, extra: Partial<RecapPicture> = {}): RecapPicture => ({ key, origin: 'local', name: key, kind: 'photo', day, ...extra });
 
@@ -86,5 +86,23 @@ describe('recap slots', () => {
     doc = withRecap(doc, { range: { from: '2026-10-01', to: '2026-10-31' } });
     doc = withPictures(doc, [pic('a', '2026-10-12', { stars: 5 })]);
     expect(resolveRecap(doc).vars.date).toBe('12 October');
+  });
+});
+
+describe('the blurred ground’s picture (his ask, 2026-11-06)', () => {
+  it('is the best photograph of the period, his own when he chose one, any of the pool when he forces it', () => {
+    let doc = createRecapDoc('month', 'local', { anchor: '2026-10-01', now: 1 });
+    doc = withPictures(doc, [
+      { key: 'a', origin: 'local', name: 'a', kind: 'photo', day: '2026-10-02' },
+      { key: 'b', origin: 'local', name: 'b', kind: 'photo', day: '2026-10-09', picked: true },
+      { key: 'v', origin: 'local', name: 'v', kind: 'video', day: '2026-10-10', picked: true },
+      { key: 'far', origin: 'local', name: 'far', kind: 'photo', day: '2025-06-01', picked: true },
+    ]);
+    const r = resolveRecap(doc);
+    expect(backgroundPicture(doc, r)?.key).toBe('b');
+    expect(backgroundChoices(doc, r).map((p) => p.key)).toEqual(['b', 'a']);
+    expect(backgroundChoices(doc, r, true).map((p) => p.key)).toContain('far');
+    const own = withRecap(doc, { background: { ...doc.background, picture: 'far' } });
+    expect(backgroundPicture(own, resolveRecap(own))?.key).toBe('far');
   });
 });

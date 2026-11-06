@@ -134,3 +134,7 @@ His ask: drag and drop in ALL the templates, not only the carousel's tray. `Plac
 ## A whole-month period follows the month shown (2026-11-06, his report)
 
 His report on One second a day: October 2025 shown in the new-recap calendar, *Make it* made October 2026 — a period template only took a period from TWO day clicks, and the month header only moved the view. `WhenCalendar` now: while the period is exactly one calendar month (`isWholeMonth`), the header's month (arrows, month or year list) MOVES the period with it; a period of his own (two clicks, a year) stays until he clicks; *Take all of <month>* takes the shown month in one click. `aboutLine` names a whole-month range by its month («October 2025»), so the dialog's line and `defaultTitle` say it. Same calendar in the dialog and the inspector's *Period*.
+
+## The blurred ground's picture: the period's best, his choice, or forced (2026-11-06, his ask)
+
+It was the first slot's picture, unchangeable. `RecapBackground.picture` (absent = auto) → `backgroundPicture`: his key when still in the pool (not loose), else the best PHOTOGRAPH of `resolved.inScope` by the carousel's preferences (`backgroundChoices`) — his «legit»: the period's own pictures by default; *From the whole pool* lists every photograph, a forced one marked «outside the period». Choosing one clears `background.frame` (a focus belongs to its picture). The editor loads its print (`shownKeys`) and frames it (`frameSource`). `GroundPicture` in the Background tab (Best + the period's photographs, 60 at most).

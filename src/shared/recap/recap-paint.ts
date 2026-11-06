@@ -12,7 +12,7 @@
 import type { RecapDoc, RecapPicture } from './recap-doc';
 import type { Box, CellPart, RecapLayout, TextPart } from './recap-layout';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
-import { deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
+import { backgroundPicture, deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
 import { framedDraw, type Frame } from './recap-frame';
 import { sheetView, type SheetDecorItem } from './recap-sheet';
@@ -285,7 +285,8 @@ function background(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number,
       drew = true;
     }
   } else if (bg.kind === 'blur') {
-    const first = resolved.slots.find((s) => s.picture)?.picture;
+    // His picture, else the best photograph of the period (`backgroundPicture`).
+    const first = backgroundPicture(doc, resolved);
     const still = first ? src.still(first.key) : null;
     if (still) {
       const f = g as Ctx2D & { filter?: string };

@@ -17,7 +17,7 @@ import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-cli
 import ClipDrawer from './ClipDrawer';
 import { withJoined, withSwappedFlow } from '../../shared/recap/recap-selection';
 import StyleSection from './StyleSection';
-import { resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
+import { backgroundPicture, resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
 import WinnowPicker from '../../shared/sources/winnow/picker/WinnowPicker';
@@ -178,10 +178,14 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const ctx = useMemo(() => ({ client, instance, files }), [client, instance, files]);
   const shownKeys = useMemo(() => {
     const keys = resolved.slots.flatMap((s) => (s.picture ? [s.picture.key] : []));
-    // A Badge may show a picture of the pool no place shows.
+    // A Badge may show a picture of the pool no place shows; so may a blurred ground.
     if (opener?.kind === 'badge' && opener.key) keys.push(opener.key);
+    if (doc.background.kind === 'blur') {
+      const ground = backgroundPicture(doc, resolved);
+      if (ground) keys.push(ground.key);
+    }
     return [...new Set(keys)];
-  }, [resolved, opener]);
+  }, [resolved, opener, doc]);
   const pictures = useRecapPictures(doc, shownKeys, ctx, stack);
 
   // ---- the clock -------------------------------------------------------------------
@@ -328,7 +332,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         const bg = doc.background;
         // Through the PEEK: framing never seeks the stage's own element.
         if (bg.kind === 'video') return clips.peek.background?.(bg.loopIn) ?? null;
-        const first = bg.kind === 'blur' ? resolved.slots.find((x) => x.picture)?.picture : undefined;
+        const first = bg.kind === 'blur' ? (backgroundPicture(doc, resolved) ?? undefined) : undefined;
         return first ? pictures.still(first.key) : null;
       }
       if (s?.kind === 'cell') {
@@ -726,6 +730,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               frameSource={() => frameSource({ kind: 'background' })}
               frameVersion={pictures.version + clips.version}
               onLayout={() => setTab('layout')}
+              resolved={resolved}
+              files={files}
             />
             <SoundSection doc={doc} change={change} onChanged={sound.reload} />
           </>

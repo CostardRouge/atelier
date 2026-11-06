@@ -35,6 +35,7 @@ import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from 
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import PictureThumb from './PictureThumb';
+import GroundPicture from './GroundPicture';
 import { getSound } from './recap-store';
 import { SECOND_RANGE, secondOf } from '../../shared/recap/recap-second';
 import { beatOfFile } from './recap-beat-find';
@@ -580,6 +581,8 @@ export function BackgroundSection({
   frameSource,
   frameVersion,
   onLayout,
+  resolved,
+  files,
 }: {
   doc: RecapDoc;
   change: Change;
@@ -597,6 +600,9 @@ export function BackgroundSection({
   frameVersion: number;
   /** The format is the Layout tab's: the chip goes there. */
   onLayout: () => void;
+  /** What a blurred ground's picture is chosen among. */
+  resolved: ResolvedRecap;
+  files: ReadonlyMap<string, File>;
 }) {
   const bg = doc.background;
   const set = (patch: Partial<RecapDoc['background']>) => change((d) => withRecap(d, { background: { ...d.background, ...patch } }));
@@ -640,6 +646,7 @@ export function BackgroundSection({
             <SliderRow label="Speed" value={bg.speed} min={0.25} max={2} step={0.05} reset={1} format={(v) => `${v.toFixed(2)}×`} onChange={(speed) => set({ speed })} />
           </div>
         )}
+        {bg.kind === 'blur' && <GroundPicture doc={doc} resolved={resolved} change={change} thumbs={{ client: thumbClient, instance: thumbInstance, files }} />}
         {bg.kind === 'blur' && <SliderRow label="Blur" value={bg.blur} min={0} max={160} step={1} reset={48} onChange={(blur) => set({ blur })} />}
         {bg.kind !== 'paper' && bg.kind !== 'ink' && <SliderRow label="Veil" value={Math.round(bg.veil * 100)} min={0} max={80} step={1} reset={20} format={(v) => `${v} %`} onChange={(v) => set({ veil: v / 100 })} />}
       </div>
