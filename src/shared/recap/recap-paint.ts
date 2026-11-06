@@ -17,6 +17,7 @@ import { shortDate } from './recap-days';
 import { framedDraw, type Frame } from './recap-frame';
 import { sheetView, type SheetDecorItem } from './recap-sheet';
 import { pushIn } from './recap-second';
+import { bandsAt } from './recap-bands';
 import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
@@ -322,6 +323,8 @@ function drawCell(
   src: PaintSources,
   opts: PaintOptions,
   light: boolean,
+  /** A week's band in motion (`recap-bands.ts`): a veil over it, its picture's drift. */
+  fx: { dim: number; pan: number } | null = null,
 ): void {
   const pic = slotPicture(slot);
   const span = plan.cells.get(part.id);
@@ -446,7 +449,14 @@ function drawCell(
     g.clip();
     // One second a day: a still breathes through its second — a slow push-in (`recap-second.ts`).
     const breathe = doc.template === 'second' && playing === null && plan.length > 0 ? pushIn((t - plan.start) / plan.length) : 1;
-    drawCover(g, drawable, box, breathe === 1 ? pic.frame : { ...(pic.frame ?? { x: 0.5, y: 0.5, zoom: 1 }), zoom: Math.min(4, (pic.frame?.zoom ?? 1) * breathe) });
+    let frame = breathe === 1 ? pic.frame : { ...(pic.frame ?? { x: 0.5, y: 0.5, zoom: 1 }), zoom: Math.min(4, (pic.frame?.zoom ?? 1) * breathe) };
+    // A week's band: its picture drifts across what the band hides (the window clamps it inside the picture).
+    if (fx && fx.pan !== 0) frame = { ...(frame ?? { x: 0.5, y: 0.5, zoom: 1 }), x: Math.min(1, Math.max(0, (frame?.x ?? 0.5) + 0.35 * fx.pan)) };
+    drawCover(g, drawable, box, frame);
+    if (fx && fx.dim > 0) {
+      g.fillStyle = `rgba(10,8,6,${fx.dim})`;
+      g.fillRect(box.x, box.y, box.w, box.h);
+    }
     g.restore();
   } else {
     g.fillStyle = light ? PLACEHOLDER_LIGHT : PLACEHOLDER_DARK;
@@ -667,10 +677,19 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
   g.clip();
   for (const d of page.sheet?.decor ?? []) drawDecor(g, d, page.width, light);
   const slots = new Map(resolved.slots.map((s) => [s.id, s]));
-  const cells = page.parts.filter((p): p is CellPart => p.kind === 'cell');
+  let cells = page.parts.filter((p): p is CellPart => p.kind === 'cell');
+  // A week's bands in motion (lab 8): each band its box, veil and drift at this moment; the one over the others last.
+  const looks = new Map<string, { dim: number; pan: number }>();
+  if (doc.template === 'week' && page.key === 'first' && (plan.bands || doc.motion.bandPan)) {
+    const order = [...cells].sort((a, b) => a.index - b.index);
+    const at = bandsAt(doc.motion.bands, order.map((c) => c.box), page.width, page.height, plan.bands ?? null, t, doc.motion.bandPan);
+    const moved = order.map((c, k) => ({ ...c, box: at[k].box, top: at[k].top }));
+    order.forEach((c, k) => looks.set(c.id, { dim: at[k].dim, pan: at[k].pan }));
+    cells = [...moved.filter((c) => !c.top), ...moved.filter((c) => c.top)];
+  }
   // A zooming clip is drawn last, over its neighbours.
   const zooming = doc.motion.videos === 'zoom' ? cells.filter((c) => (plan.clips.get(c.id) ?? []).some((w) => t > w.from && t < w.to)) : [];
-  for (const c of cells) if (!zooming.includes(c)) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed);
+  for (const c of cells) if (!zooming.includes(c)) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, looks.get(c.id) ?? null);
   for (const p of page.parts) if (p.kind === 'text') drawText(g, doc, p, plan, t, light, page.bleed);
   for (const c of zooming) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed);
   g.restore();

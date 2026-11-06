@@ -11,6 +11,7 @@
  */
 
 import type { FilmPlan, PagePlan, Span } from './recap-motion';
+import { bandSeconds } from './recap-bands';
 
 export interface RecapBeat {
   /** Seconds between two beats. */
@@ -128,8 +129,10 @@ export function onTheBeat(plan: FilmPlan, grid: readonly number[], fixedTotal: n
     const cta = p.cta ? { at: nearest(fine, allOn, allOn), dur: p.cta.dur } : null;
     if (cta) allOn = cta.at + cta.dur;
     const clips = new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ ...w, from: w.from + d, to: w.to + d }))]));
-    const end = Math.max(p.start + p.length + d, allOn);
-    pages.push({ start, length: end - start, heading, subheading, cta, cells, clips, allOn });
+    // A week's days turn on the beat: each day whole beats, the first from a beat.
+    const bands = p.bands ? { from: upTo(grid, Math.max(allOn, p.bands.from + d)), hold: Math.max(1, Math.round(p.bands.hold / period)) * period } : undefined;
+    const end = Math.max(p.start + p.length + d, allOn, bands ? bands.from + bandSeconds(bands.hold) + 0.4 : 0);
+    pages.push({ start, length: end - start, heading, subheading, cta, cells, clips, allOn, ...(bands ? { bands } : {}) });
   }
   // Each page lasts until the next one starts; the last until the end.
   for (let i = 0; i + 1 < pages.length; i++) pages[i].length = pages[i + 1].start - pages[i].start;

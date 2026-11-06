@@ -63,6 +63,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   <month>* takes it in one click, and a whole month is named by its name.
   A blurred background is the best photograph of the recap's own days, or the one you choose among them — any picture
   of the pool when you force it.
+  A week's seven bands move in its Reel: each day in turn opens wide (Accordion), fills the screen (Spotlight), rides
+  a wave, slides past or stays bright while the others dim (Focus), each picture drifting inside its band.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

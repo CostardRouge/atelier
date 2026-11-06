@@ -3467,7 +3467,11 @@ which day, which period — and makes it:
   trend: a calendar over a looping video);
 - **On this day** — the same day a year, a month and a week ago and today (the
   steps back are yours to choose, up to ten years);
-- **Week** — seven bands, one picture a day;
+- **Week** — seven bands, one picture a day; in the Reel each day takes the
+  stage in turn once all are on — *Accordion* (it opens wide, the default),
+  *Spotlight* (it fills the screen), *Wave*, *Slide-through* or *Focus* (the
+  others dim) —, each picture drifting inside its band (*Pan inside*), on the
+  beat when the cuts are;
 - **Bento grid** — the best of a period, in four, nine, a bento or one and two;
 - **Single picture** — one picture with its day and its camera's line;
 - **Photo dump** — the best of a period over a carousel: a cover, then pages
