@@ -10,8 +10,8 @@
  */
 
 import type { RecapDoc, RecapPicture } from './recap-doc';
-import { insets, type Box, type CellPart, type RecapLayout, type TextPart } from './recap-layout';
-import { placeMarks, placeName, type PinCorner } from './recap-places';
+import { insets, type Box, type CellPart, type RecapLayout, type RecapPage, type TextPart } from './recap-layout';
+import { PIN, placeMarks, placeName, type PinCorner } from './recap-places';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
 import { backgroundPicture, deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
@@ -137,7 +137,14 @@ interface TextFx {
   glow?: { amount: number; warmth: number };
 }
 
+/** The room the pin takes in a line of text (`{place}`): the teardrop and a little air after it. */
+const pinRoom = (size: number) => size * 0.95;
+
 function text(g: Ctx2D, value: string, x: number, y: number, size: number, face: string, colour: string, opts: TextFx = {}): void {
+  if (value.includes(PIN)) {
+    textWithPin(g, value, x, y, size, face, colour, opts);
+    return;
+  }
   const px = Math.max(1, Math.round(size));
   g.font = `${opts.italic ? 'italic ' : ''}${opts.weight ?? 400} ${px}px ${face}`;
   g.textAlign = opts.align ?? 'left';
@@ -186,6 +193,80 @@ function text(g: Ctx2D, value: string, x: number, y: number, size: number, face:
   setSpacing(g, 0, size);
 }
 
+/** A line holding the pin (`{place}`, lab 11): its words drawn in turn from the left, the pin in the accent where it stands. */
+function textWithPin(g: Ctx2D, value: string, x: number, y: number, size: number, face: string, colour: string, opts: TextFx): void {
+  const px = Math.max(1, Math.round(size));
+  const pieces = value.split(PIN);
+  g.font = `${opts.italic ? 'italic ' : ''}${opts.weight ?? 400} ${px}px ${face}`;
+  setSpacing(g, opts.spacing ?? 0, size);
+  const widths = pieces.map((p) => (p ? g.measureText(p).width : 0));
+  setSpacing(g, 0, size);
+  const total = widths.reduce((a, b) => a + b, 0) + (pieces.length - 1) * pinRoom(size);
+  let cx = opts.align === 'center' ? x - total / 2 : opts.align === 'right' || opts.align === 'end' ? x - total : x;
+  // A middle baseline lifts the pin with the words.
+  const foot = opts.baseline === 'middle' ? y + size * 0.42 : opts.baseline === 'top' || opts.baseline === 'hanging' ? y + size * 0.86 : y;
+  pieces.forEach((piece, i) => {
+    if (i > 0) {
+      const s = size * 0.92;
+      g.save();
+      if (opts.shadow || (opts.ownShadow && opts.ownShadow.darkness > 0)) {
+        g.shadowColor = 'rgba(0,0,0,0.45)';
+        g.shadowBlur = size * 0.25;
+        g.shadowOffsetY = size * 0.04;
+      }
+      drawPin(g, cx + s * 0.38, foot + size * 0.06, s);
+      g.restore();
+      cx += pinRoom(size);
+    }
+    if (piece) text(g, piece, cx, y, size, face, colour, { ...opts, align: 'left' });
+    cx += widths[i];
+  });
+}
+
+/**
+ * A calendar's RUNS OF DAYS (lab 11, off until he turns them on): under each
+ * row a hairline in the accent from the run's first day to its last, the pin
+ * and `Albany · 8–14` under it — on a week, one line over the bands above
+ * their numbers. They fade in with the grid.
+ */
+function drawRuns(g: Ctx2D, doc: RecapDoc, page: RecapPage, cells: readonly CellPart[], plan: PagePlan, t: number, light: boolean): void {
+  // With the grid, as the weekdays: there before the pictures land on it.
+  const alpha = textLook(doc.motion.title === 'none' ? 'none' : 'fade', plan.heading, t).alpha;
+  if (alpha <= 0) return;
+  const W = page.width;
+  const H = page.height;
+  const boxes = new Map(cells.map((c) => [c.id, c.box]));
+  const week = doc.template === 'week';
+  const size = W * (week ? 0.019 : 0.0175);
+  const thick = Math.max(1, W * 0.0022);
+  const colour = week ? ON_MEDIA : light ? PAPER_INK : ON_MEDIA;
+  const laid = (page.runs ?? []).flatMap((r) => {
+    const a = boxes.get(r.from);
+    const b = boxes.get(r.to);
+    if (!a || !b) return [];
+    const numberSize = sizeIn(doc, 'dayNumber', Math.min(a.w * 0.42, W * 0.05));
+    const lineY = week ? H - H * 0.16 - numberSize * 1.25 : a.y + a.h + W * 0.009;
+    return [{ r, x0: a.x + thick, x1: b.x + b.w - thick, lineY }];
+  });
+  g.save();
+  g.globalAlpha = alpha;
+  for (const s of laid) {
+    g.fillStyle = ACCENT;
+    g.fillRect(s.x0, s.lineY, Math.max(thick, s.x1 - s.x0), thick);
+  }
+  for (const s of laid) {
+    if (!s.r.label) continue;
+    // Its words run to the next run's words on the same row, never over them.
+    const next = laid.find((o) => o !== s && o.r.label && o.r.row === s.r.row && o.x0 > s.x0);
+    const room = (next ? next.x0 - size * 0.6 : week ? W - size * 0.6 : Math.max(...laid.filter((o) => o.r.row === s.r.row).map((o) => o.x1), s.x1)) - s.x0;
+    g.font = `600 ${Math.round(size)}px ${FACES.sans}`;
+    const fit = fitText(s.r.label, room - pinRoom(size), (v) => g.measureText(v).width, 0.8);
+    const baseline = week ? s.lineY - size * 0.55 : s.lineY + thick + size * 1.2;
+    text(g, PIN + fit.text, s.x0, baseline, size * fit.scale, FACES.sans, colour, { weight: 600, shadow: week });
+  }
+  g.restore();
+}
+
 /** What a place draws by default: its face, colour, weight, case, spacing and legibility shadow. */
 export interface Place {
   face: string;
@@ -212,7 +293,9 @@ function measurer(g: Ctx2D, doc: RecapDoc, role: TextRole, size: number, place: 
   return (value) => {
     g.font = font;
     setSpacing(g, spacing, size * st.size);
-    const w = g.measureText(upper ? value.toUpperCase() : value).width;
+    // The pin is no letter of the face: it takes its own room.
+    const pins = value.split(PIN).length - 1;
+    const w = g.measureText((upper ? value.toUpperCase() : value).split(PIN).join('')).width + pins * pinRoom(size * st.size);
     setSpacing(g, 0, size);
     return w;
   };
@@ -389,7 +472,7 @@ function pinPill(g: Ctx2D, doc: RecapDoc, name: string, part: CellPart, box: Box
   } else if (bottom) {
     let foot = box.y + box.h - inset;
     // A week's band: above its day's number. A page the picture covers: out of the format's bottom margin.
-    if (doc.template === 'week' && part.words === 'bottom') foot = box.y + box.h - H * 0.16 - sizeIn(doc, 'dayNumber', Math.min(box.w * 0.42, W * 0.05)) * 1.1;
+    if (doc.template === 'week' && part.words === 'bottom') foot = box.y + box.h - H * 0.16 - sizeIn(doc, 'dayNumber', Math.min(box.w * 0.42, W * 0.05)) * (doc.places.runs ? 1.25 : 1.1) - (doc.places.runs ? W * 0.05 : 0);
     else if (bleed) foot = Math.min(foot, H - insets(doc.format, H).bottom - W * 0.02);
     y = foot - h;
   } else {
@@ -811,6 +894,7 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
   for (const c of cells) if (!zooming.includes(c)) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, looks.get(c.id) ?? null, pinOf(c));
   for (const p of page.parts) if (p.kind === 'text') drawText(g, doc, p, plan, t, light, page.bleed);
   for (const c of zooming) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, null, pinOf(c));
+  if (page.runs?.length) drawRuns(g, doc, page, cells, plan, t, light && !page.bleed);
   g.restore();
 }
 

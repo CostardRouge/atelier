@@ -22,7 +22,7 @@ export const SETTABLE: Record<string, string> = {
   rungs: 'on this day’s steps back, e.g. ["1y","1m","1w","0d"]',
   range: 'a grid’s, single’s or dump’s period {from, to} (YYYY-MM-DD)',
   filter: '{devices: [camera models], kinds: "all" | "photo" | "video"}',
-  heading: '{text, show} — text may hold {month} {year} {week} {date} {from} {to} {count} {days} {videos}',
+  heading: '{text, show} — text may hold {month} {year} {week} {date} {from} {to} {count} {days} {videos} {place} (the place most visited, after the pin unless places.titlePin is false) {places} (the route: Esperance → Albany → Perth)',
   subheading: '{text, show}',
   cta: '{text, show} — the call to action',
   font: '"sans", "serif" or "mono"',

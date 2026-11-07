@@ -30,23 +30,40 @@ export default function PlacesSection({ doc, change }: { doc: RecapDoc; change: 
       marked={on}
       mark={<ToggleField checked={on} onChange={(v) => set({ cells: v ? 'changes' : 'off' })} label="The place on the cells" />}
     >
-      <div className={`flex flex-col gap-2 ${on ? '' : 'opacity-45'}`}>
-        <Segmented<Exclude<PlaceMarks, 'off'>>
-          size="sm"
-          fill
-          label="Which cells say their place"
-          value={on ? (p.cells as Exclude<PlaceMarks, 'off'>) : 'changes'}
-          onChange={(cells) => set({ cells })}
-          options={(['changes', 'every', 'first'] as const).map((id) => ({ id, label: MARKS_LABEL[id], title: MARKS_HINT[id] }))}
-        />
-        <Segmented<PinCorner>
-          size="sm"
-          columns={2}
-          label="The corner it sits in"
-          value={p.corner}
-          onChange={(corner) => set({ corner, ...(on ? {} : { cells: 'changes' as const }) })}
-          options={(['bottomLeft', 'topLeft', 'topRight', 'bottomRight'] as const).map((id) => ({ id, label: CORNER_LABEL[id] }))}
-        />
+      <div className="flex flex-col gap-2">
+        <div className={`flex flex-col gap-2 ${on ? '' : 'opacity-45'}`}>
+          <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">On the cells</span>
+          <Segmented<Exclude<PlaceMarks, 'off'>>
+            size="sm"
+            fill
+            label="Which cells say their place"
+            value={on ? (p.cells as Exclude<PlaceMarks, 'off'>) : 'changes'}
+            onChange={(cells) => set({ cells })}
+            options={(['changes', 'every', 'first'] as const).map((id) => ({ id, label: MARKS_LABEL[id], title: MARKS_HINT[id] }))}
+          />
+          <Segmented<PinCorner>
+            size="sm"
+            columns={2}
+            label="The corner it sits in"
+            value={p.corner}
+            onChange={(corner) => set({ corner, ...(on ? {} : { cells: 'changes' as const }) })}
+            options={(['bottomLeft', 'topLeft', 'topRight', 'bottomRight'] as const).map((id) => ({ id, label: CORNER_LABEL[id] }))}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+          {(doc.template === 'month' || doc.template === 'week') && (
+            <span title="A line in the accent under the days spent in one place, the pin and its words on it — «Albany · 8–14»">
+              <ToggleField checked={p.runs} onChange={(runs) => set({ runs })} label="Runs of days">
+                Runs of days
+              </ToggleField>
+            </span>
+          )}
+          <span title="{place} in a text is the place you came back to most, the pin before it; {places} is the route">
+            <ToggleField checked={p.titlePin} onChange={(titlePin) => set({ titlePin })} label="The pin before {place}">
+              Pin before {'{place}'}
+            </ToggleField>
+          </span>
+        </div>
         {!known && doc.pictures.length > 0 && <p className="m-0 text-2xs text-muted">No picture here knows its town yet — Winnow names them from their GPS when it fills the recap.</p>}
       </div>
     </InspectorSection>

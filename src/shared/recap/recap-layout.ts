@@ -18,6 +18,7 @@ import { SLIDE_LAYOUT_COUNT, type SlideLayout } from './recap-carousel';
 import { arrangeSheet, sheetSlides, type SheetArea, type SheetDecorItem, type SheetItem } from './recap-sheet';
 import { TEXT_ROLES, textStyleOf, type TextRole as StyleRole } from './recap-text';
 import { countWord, hourWord } from './recap-wrapped';
+import { placeName, placeRuns } from './recap-places';
 /** «12 Oct» — a day as the film's edge print and the timeline write it. */
 const shortDay = (day: string) => shortDate(day).replace(/\s\d{4}$/, '');
 
@@ -82,6 +83,40 @@ export interface RecapPage {
   bleed: boolean;
   /** A slice of the Sheets: what it draws behind its pictures, in the page's own pixels (`recap-sheet.ts`). */
   sheet?: { index: number; decor: SheetDecorItem[] };
+  /** A calendar's runs of days in one place (`places.runs`), each a stretch of one row of cells — drawn under them. */
+  runs?: RunSegment[];
+}
+
+/** A run of days on one row: from one cell to another (by id), its words on one stretch of the run only. */
+export interface RunSegment {
+  from: string;
+  to: string;
+  row: number;
+  /** `Albany · 8–14`, on the run's first stretch (or its second, when the first is a lone cell); null elsewhere. */
+  label: string | null;
+}
+
+/**
+ * The runs of `slots` (a calendar's days, in order) cut into rows of seven:
+ * `lead` empty places before the first. A run's words sit on its first
+ * stretch, or on the next when the first holds one day only and the next more.
+ */
+export function runSegments(slots: readonly RecapSlot[], lead: number): RunSegment[] {
+  const out: RunSegment[] = [];
+  const dayOf = (i: number) => Number(slots[i].day?.slice(8, 10) ?? i + 1);
+  for (const r of placeRuns(slots.map((s) => placeName(s.picture)))) {
+    const parts: { a: number; b: number; row: number }[] = [];
+    for (let i = r.from; i <= r.to; ) {
+      const row = Math.floor((lead + i) / 7);
+      const b = Math.min(r.to, (row + 1) * 7 - 1 - lead);
+      parts.push({ a: i, b, row });
+      i = b + 1;
+    }
+    const words = `${r.place} · ${r.from === r.to ? dayOf(r.from) : `${dayOf(r.from)}–${dayOf(r.to)}`}`;
+    const at = parts.length > 1 && parts[0].b === parts[0].a && parts[1].b > parts[1].a ? 1 : 0;
+    parts.forEach((p, k) => out.push({ from: slots[p.a].id, to: slots[p.b].id, row: p.row, label: k === at ? words : null }));
+  }
+  return out;
 }
 
 export interface RecapLayout {
@@ -184,8 +219,11 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
   const lead = monthLead(doc.anchor, doc.cells.weekStart);
   const n = ownSlots(resolved).length;
   const rows = Math.ceil((lead + n) / 7);
-  const rowGap = Math.max(gap, Math.round(W * 0.01));
-  const room = H - bottom - y - (doc.cta.show ? Math.round(W * 0.1) : 0);
+  // His runs of days, when he turned them on: a band under each row for their line and words.
+  const runs = doc.places.runs ? runSegments(ownSlots(resolved), lead) : [];
+  const band = runs.length ? Math.round(W * 0.038) : 0;
+  const rowGap = Math.max(gap, Math.round(W * 0.01)) + band;
+  const room = H - bottom - y - (doc.cta.show ? Math.round(W * 0.1) : 0) - band;
   const cellH = Math.max(20, Math.min(colW * 0.86, (room - (rows - 1) * rowGap) / rows));
   ownSlots(resolved).forEach((s, i) => {
     const at = lead + i;
@@ -203,7 +241,7 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
       today: doc.cells.today && s.day === today,
     });
   });
-  const gridBottom = y + rows * cellH + (rows - 1) * rowGap;
+  const gridBottom = y + rows * cellH + (rows - 1) * rowGap + band;
   const cta = ctaPart(doc, resolved, W, Math.round(gridBottom + W * 0.05));
   if (cta) parts.push(cta);
   // The block — heading to the last row — sits at the page's OPTICAL centre, a little above the middle of the room
@@ -214,7 +252,7 @@ function monthPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number,
     const shift = Math.round(spare * 0.42);
     for (const p of parts) p.box = { ...p.box, y: p.box.y + shift };
   }
-  return { key: 'first', width: W, height: H, parts, bleed: false };
+  return { key: 'first', width: W, height: H, parts, bleed: false, ...(runs.length ? { runs } : {}) };
 }
 
 function weekPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number, today: string | null): RecapPage {
@@ -237,7 +275,8 @@ function weekPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number, 
   parts.push(...headingParts(doc, resolved, W, top, 'left', m, W - 2 * m).parts);
   const cta = ctaPart(doc, resolved, W, Math.round(H * 0.66));
   if (cta) parts.push(cta);
-  return { key: 'first', width: W, height: H, parts, bleed: true };
+  const runs = doc.places.runs ? runSegments(ownSlots(resolved), 0) : [];
+  return { key: 'first', width: W, height: H, parts, bleed: true, ...(runs.length ? { runs } : {}) };
 }
 
 function ladderPage(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number): RecapPage {

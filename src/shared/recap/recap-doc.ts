@@ -145,7 +145,7 @@ export interface RecapPicture {
 }
 
 export interface RecapText {
-  /** May hold `{month}`, `{year}`, `{week}`, `{date}`, `{count}`, `{days}` — counted for you (`fillText`). */
+  /** May hold `{month}`, `{year}`, `{week}`, `{date}`, `{count}`, `{days}`, `{place}`, `{places}` — counted for you (`fillText`). */
   text: string;
   show: boolean;
 }

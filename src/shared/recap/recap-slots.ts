@@ -18,6 +18,7 @@ import { agoLabel, dayAgo, isoWeek, monthDays, monthName, parseAgo, shortDate, w
 import { GRID_SHAPES, MAX_SLIDES, type RecapDoc, type RecapPicture } from './recap-doc';
 import { carouselPool, rankByRules } from './recap-carousel';
 import { WRAPPED_STATS, statPictures, wrappedStats, type WrappedStatKey, type WrappedStats } from './recap-wrapped';
+import { PIN, placeName, placeWords, routeLine } from './recap-places';
 
 export interface RecapSlot {
   /** What a pick, a caption or a clearing names: a day (`2026-10-14`), a step back (`ago:1y`), a place (`n:3`). */
@@ -272,7 +273,7 @@ export function resolveRecap(doc: RecapDoc): ResolvedRecap {
   }
   slots = [...slots, ...highlightSlots(doc, inScope, slots, byKey, cleared, pinnedKeys)];
   const dayCount = new Set(inScope.map((p) => p.day).filter(Boolean)).size;
-  return { slots, inScope, days: dayCount, vars: textVars(doc, inScope.length, dayCount, slots), ...(wrapped ? { wrapped } : {}) };
+  return { slots, inScope, days: dayCount, vars: textVars(doc, inScope, dayCount, slots), ...(wrapped ? { wrapped } : {}) };
 }
 
 /**
@@ -341,8 +342,12 @@ function highlightSlots(doc: RecapDoc, inScope: readonly RecapPicture[], own: re
   }).filter((s) => s.picture || s.pinned || s.cleared);
 }
 
-function textVars(doc: RecapDoc, count: number, days: number, slots: readonly RecapSlot[]): Record<string, string> {
+function textVars(doc: RecapDoc, inScope: readonly RecapPicture[], days: number, slots: readonly RecapSlot[]): Record<string, string> {
+  const count = inScope.length;
   const a = doc.anchor;
+  // The places, from the period's pictures — else from the pictures shown (a ladder's steps back lie outside any one period).
+  const shown = slots.flatMap((s) => (s.picture ? [s.picture] : []));
+  const words = placeWords(inScope.some((p) => placeName(p)) ? inScope : shown);
   const first = slots.find((s) => s.picture)?.picture?.day ?? doc.range?.from ?? a;
   const month = doc.template === 'month' || doc.template === 'week' || doc.template === 'onThisDay' ? a : first;
   const end = doc.template === 'week' ? (addDays(a, 6) ?? a) : (doc.range?.to ?? a);
@@ -358,6 +363,9 @@ function textVars(doc: RecapDoc, count: number, days: number, slots: readonly Re
     count: count.toLocaleString('en-GB').replace(/,/g, ' '),
     days: String(days),
     videos: `${clips} ${clips === 1 ? 'video' : 'videos'}`,
+    // The pin leads the place (lab 11), unless he turned it off; nothing at all when no picture knows its place.
+    place: words.place ? `${doc.places.titlePin ? PIN : ''}${words.place}` : '',
+    places: routeLine(words.route),
   };
 }
 
@@ -367,7 +375,7 @@ export function fillText(text: string, vars: Readonly<Record<string, string>>): 
 }
 
 /** The words a heading can hold, for the editor's hint. */
-export const TEXT_WORDS = ['month', 'year', 'week', 'date', 'from', 'to', 'count', 'days', 'videos'] as const;
+export const TEXT_WORDS = ['month', 'year', 'week', 'date', 'from', 'to', 'count', 'days', 'videos', 'place', 'places'] as const;
 
 /** A seeded shuffle of `0 … n-1` — `random` order, the same every play. */
 export function seededOrder(n: number, seed: number): number[] {

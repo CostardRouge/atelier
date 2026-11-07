@@ -75,3 +75,66 @@ export function placeMarks(cells: readonly { id: string; place: string | null }[
   }
   return out;
 }
+
+/**
+ * The words a text can hold (`{place}`, `{places}`), counted from the
+ * recap's pictures: the place he came back to most — the most DAYS, then the
+ * most pictures (Wrapped's rule) — and the route, its places in time order,
+ * each said once per stay. Null and empty when Winnow named none.
+ */
+export function placeWords(pictures: readonly Pick<RecapPicture, 'day' | 'minute' | 'second' | 'place' | 'region' | 'country'>[]): { place: string | null; route: string[] } {
+  const days = new Map<string, Set<string>>();
+  const counts = new Map<string, number>();
+  const timed: { at: string; name: string }[] = [];
+  for (const p of pictures) {
+    const name = placeName(p);
+    if (!name) continue;
+    days.set(name, (days.get(name) ?? new Set()).add(p.day ?? ''));
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+    const secs = p.second ?? (p.minute !== undefined ? p.minute * 60 : 43200);
+    timed.push({ at: `${p.day ?? ''}T${String(Math.round(secs)).padStart(5, '0')}`, name });
+  }
+  let place: string | null = null;
+  let best = -1;
+  for (const [name, d] of days) {
+    const score = d.size * 100_000 + (counts.get(name) ?? 0);
+    if (score > best || (score === best && place !== null && name.localeCompare(place) < 0)) {
+      best = score;
+      place = name;
+    }
+  }
+  const route: string[] = [];
+  for (const { name } of timed.sort((a, b) => a.at.localeCompare(b.at))) if (route[route.length - 1] !== name) route.push(name);
+  return { place, route };
+}
+
+/** The route as a text says it: `Esperance → Albany → Perth`; past five, its first three, an ellipsis and its last. */
+export function routeLine(route: readonly string[]): string {
+  if (route.length <= 5) return route.join(' → ');
+  return [...route.slice(0, 3), '…', route[route.length - 1]].join(' → ');
+}
+
+/** A run of days in one place: its place and the first and last positions (in the list given) of the days it holds. */
+export interface PlaceRun {
+  place: string;
+  from: number;
+  to: number;
+}
+
+/**
+ * The runs of days spent in one place, over `days` in calendar order. A day
+ * with no picture (or no place) between two days of the same place joins the
+ * run; between two places it belongs to neither — a run starts and ends on a
+ * day that said it.
+ */
+export function placeRuns(days: readonly (string | null)[]): PlaceRun[] {
+  const out: PlaceRun[] = [];
+  for (let i = 0; i < days.length; i++) {
+    const place = days[i];
+    if (!place) continue;
+    const cur = out[out.length - 1];
+    if (cur && cur.place === place) cur.to = i;
+    else out.push({ place, from: i, to: i });
+  }
+  return out;
+}
