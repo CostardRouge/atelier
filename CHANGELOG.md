@@ -68,6 +68,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   a wave, slides past or stays bright while the others dim (Focus), each picture drifting inside its band.
   The recaps' gallery has three sections you open and close — Suggestions, Your recaps, New recap — and when a month
   (or a week) has ended, the recaps you made for the one before are ready for it, in the same dress, one tap to make.
+  A picture can say its town in a small glass pill with a red map pin, in a corner of its cell — off until you turn
+  it on, then only where the place changes (or on every picture, or the first of each place).
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg

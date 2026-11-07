@@ -52,3 +52,23 @@ describe('recap painter', () => {
     expect(exifLine(pic('x', 'd', { device: 'ILCE-7M4', focal: 35, fNumber: 1.8, shutter: '1/250', iso: 100 }), { 'ILCE-7M4': 'Sony' })).toBe('Sony · 35 mm · f/1.8 · 1/250 · ISO 100');
   });
 });
+
+describe('the place pin on the cells', () => {
+  let doc = createRecapDoc('grid', 'local', { anchor: '2026-10-01', now: 1 });
+  doc = withRecap(doc, { grid: '2x2', range: { from: '2026-10-01', to: '2026-10-31' } });
+  doc = withPictures(doc, [
+    pic('a', '2026-10-02', { place: 'Esperance' }),
+    pic('b', '2026-10-05', { place: 'Esperance' }),
+    pic('c', '2026-10-09', { place: 'Albany', region: 'Western Australia' }),
+    pic('d', '2026-10-20'),
+  ]);
+
+  it('says nothing until asked, then the town where the place changes', () => {
+    expect(paint(doc, 99).texts).not.toContain('Esperance');
+    const on = paint(withRecap(doc, { places: { ...doc.places, cells: 'changes' } }), 99).texts;
+    expect(on.filter((s) => s === 'Esperance')).toHaveLength(1);
+    expect(on).toContain('Albany');
+    const every = paint(withRecap(doc, { places: { ...doc.places, cells: 'every' } }), 99).texts;
+    expect(every.filter((s) => s === 'Esperance')).toHaveLength(2);
+  });
+});

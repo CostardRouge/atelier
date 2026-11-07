@@ -10,7 +10,8 @@
  */
 
 import type { RecapDoc, RecapPicture } from './recap-doc';
-import type { Box, CellPart, RecapLayout, TextPart } from './recap-layout';
+import { insets, type Box, type CellPart, type RecapLayout, type TextPart } from './recap-layout';
+import { placeMarks, placeName, type PinCorner } from './recap-places';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
 import { backgroundPicture, deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
@@ -311,6 +312,112 @@ function slotPicture(slot: RecapSlot | undefined): RecapPicture | null {
   return slot?.picture ?? null;
 }
 
+/**
+ * The PIN (lab 11, his pick): the Maps teardrop with its hole, its tip at
+ * (`x`, `y`), `s` tall — the one mark for «where», in a cell's pill, at the
+ * head of a run of days, before a title's `{place}`.
+ */
+export function drawPin(g: Ctx2D, x: number, y: number, s: number, colour: string = ACCENT): void {
+  g.save();
+  g.translate(x, y);
+  g.fillStyle = colour;
+  g.beginPath();
+  g.arc(0, -s * 0.62, s * 0.36, Math.PI * 0.82, Math.PI * 0.18, false);
+  g.lineTo(0, 0);
+  g.closePath();
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.arc(0, -s * 0.62, s * 0.14, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+}
+
+/** Where a cell's place pill lies: its box, its words, and whether it sits at the bottom (the cell's words then lift over it). */
+interface PinPill {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  size: number;
+  /** The town as it fits; empty when only the pin fits (a small cell). */
+  label: string;
+  /** At the bottom among the cell's words: they lift over it. */
+  bottom: boolean;
+}
+
+/** The cells of `layout` that wear the pill, by id → the name it says; kept per layout and mode (the painter runs every frame). */
+const marksKept = new WeakMap<RecapLayout, { mode: string; slots: ResolvedRecap['slots']; marks: Map<string, string> }>();
+function cellMarks(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout): Map<string, string> {
+  const kept = marksKept.get(layout);
+  if (kept && kept.mode === doc.places.cells && kept.slots === resolved.slots) return kept.marks;
+  const byId = new Map(resolved.slots.map((s) => [s.id, s]));
+  const cells = layout.pages.flatMap((p) => p.parts.filter((x): x is CellPart => x.kind === 'cell').sort((a, b) => a.index - b.index));
+  const marks = placeMarks(
+    cells.map((c) => ({ id: c.id, place: placeName(byId.get(c.id)?.picture) })),
+    doc.places.cells,
+  );
+  marksKept.set(layout, { mode: doc.places.cells, slots: resolved.slots, marks });
+  return marks;
+}
+
+function pinPill(g: Ctx2D, doc: RecapDoc, name: string, part: CellPart, box: Box, W: number, H: number, bleed: boolean): PinPill {
+  const s = Math.min(box.w, box.h);
+  const size = Math.max(6, Math.min(W * 0.024, s * 0.13));
+  const corner: PinCorner = doc.places.corner;
+  const pad = size * 0.5;
+  const glyphW = size * 1.05;
+  const inset = Math.max(3, s * 0.05);
+  g.font = `600 ${Math.round(size)}px ${FACES.sans}`;
+  const room = box.w - inset * 2 - pad * 2 - glyphW;
+  // A cell too small for a word: the pin alone, in its round of glass.
+  const fit = room >= size * 2.2 ? fitText(name, room, (v) => g.measureText(v).width, 0.85) : null;
+  const label = fit ? fit.text : '';
+  const tw = fit ? g.measureText(label).width * fit.scale : 0;
+  const h = size * 1.75;
+  const w = label ? pad * 2 + glyphW + tw : h;
+  const left = corner === 'bottomLeft' || corner === 'topLeft';
+  const bottom = corner === 'bottomLeft' || corner === 'bottomRight';
+  const x = left ? box.x + inset : box.x + box.w - inset - w;
+  let y: number;
+  let under = false;
+  // A cell whose words lie low over its picture (a single, a dump's page): in the margin under them when it fits there.
+  const margin = Math.min(H * 0.06, box.h * 0.08);
+  if (bottom && part.words === 'bottom' && doc.template !== 'week' && margin >= h + size * 0.6) {
+    y = box.y + box.h - margin + Math.max(size * 0.35, (margin - h) / 2);
+    under = true;
+  } else if (bottom) {
+    let foot = box.y + box.h - inset;
+    // A week's band: above its day's number. A page the picture covers: out of the format's bottom margin.
+    if (doc.template === 'week' && part.words === 'bottom') foot = box.y + box.h - H * 0.16 - sizeIn(doc, 'dayNumber', Math.min(box.w * 0.42, W * 0.05)) * 1.1;
+    else if (bleed) foot = Math.min(foot, H - insets(doc.format, H).bottom - W * 0.02);
+    y = foot - h;
+  } else {
+    y = box.y + inset;
+    if (bleed) y = Math.max(y, insets(doc.format, H).top);
+    // Under the day's number when they share the corner.
+    const numberCorner = doc.cells.numberAt === corner;
+    if (numberCorner && doc.cells.number && part.words === 'inside') y = box.y + sizeIn(doc, 'dayNumber', Math.max(10, Math.min(W * 0.022, s * 0.16))) * 1.45;
+  }
+  return { x, y, w, h, size: fit ? size * fit.scale : size, label, bottom: bottom && !under };
+}
+
+/** The pill: glass — a soft dark round under white words, a hairline of light — the pin in the accent, the town. */
+function drawPinPill(g: Ctx2D, p: PinPill): void {
+  g.save();
+  roundRect(g, { x: p.x, y: p.y, w: p.w, h: p.h }, p.h / 2);
+  g.fillStyle = 'rgba(16,14,12,0.55)';
+  g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.18)';
+  g.lineWidth = Math.max(0.75, p.h * 0.03);
+  g.stroke();
+  const pinS = p.h * 0.56;
+  const px = p.label ? p.x + p.h * 0.5 : p.x + p.w / 2;
+  drawPin(g, px, p.y + p.h / 2 + pinS * 0.5, pinS);
+  if (p.label) text(g, p.label, p.x + p.h * 0.5 + p.h * 0.42, p.y + p.h * 0.66, p.size, FACES.sans, ON_MEDIA, { weight: 600 });
+  g.restore();
+}
+
 function drawCell(
   g: Ctx2D,
   doc: RecapDoc,
@@ -325,6 +432,8 @@ function drawCell(
   light: boolean,
   /** A week's band in motion (`recap-bands.ts`): a veil over it, its picture's drift. */
   fx: { dim: number; pan: number } | null = null,
+  /** The place its pill says (`recap-places.ts`), and whether its page bleeds; null = no pill. */
+  pin: { name: string; bleed: boolean } | null = null,
 ): void {
   const pic = slotPicture(slot);
   const span = plan.cells.get(part.id);
@@ -472,6 +581,10 @@ function drawCell(
     g.globalAlpha = look.alpha;
   }
 
+  // The place's pill, measured first: at the bottom, the cell's own words lift over it.
+  const pill = pin ? pinPill(g, doc, pin.name, part, box, W, H, pin.bleed) : null;
+  const lift = pill?.bottom ? pill.h + s * 0.04 : 0;
+
   // The words over the picture.
   if (words === 'bottom') {
     const grad = g.createLinearGradient(0, box.y + box.h * 0.55, 0, box.y + box.h);
@@ -489,7 +602,7 @@ function drawCell(
       const inset = Math.min(W * 0.065, box.w * 0.08);
       const maxW = box.w - inset * 2;
       const step = sizeIn(doc, 'cellWords', size) * 1.5;
-      const bottom = box.y + box.h - Math.min(H * 0.06, box.h * 0.08);
+      const bottom = box.y + box.h - Math.min(H * 0.06, box.h * 0.08) - lift;
       const room = Math.max(1, Math.floor((box.h * 0.5) / step));
       const cap = doc.cells.caption ? doc.captions[part.id] : undefined;
       const lines = [
@@ -503,7 +616,7 @@ function drawCell(
       const at = numberAt(doc, box, s, sizeIn(doc, 'dayNumber', small));
       styled(g, doc, 'dayNumber', part.number, at.x, at.y, small, { face: FACES.sans, colour: ON_MEDIA, weight: 500, shadow: true, align: at.align });
     }
-    let by = box.y + box.h - s * 0.08;
+    let by = box.y + box.h - s * 0.08 - lift;
     const tag = (label: string, fill: string) => {
       const size = Math.max(9, small * 0.72);
       g.font = `500 ${Math.round(size)}px ${MONO}`;
@@ -534,7 +647,7 @@ function drawCell(
   } else if (words === 'beside') {
     if (doc.cells.caption) {
       const cap = doc.captions[part.id];
-      if (cap) styled(g, doc, 'cellWords', cap, box.x + W * 0.018, box.y + box.h - W * 0.02, W * 0.022, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true, maxWidth: box.w - W * 0.036 });
+      if (cap) styled(g, doc, 'cellWords', cap, box.x + W * 0.018, box.y + box.h - W * 0.02 - lift, W * 0.022, { face: FACES[doc.font], colour: ON_MEDIA, shadow: true, maxWidth: box.w - W * 0.036 });
     }
     if (pic.kind === 'video' && doc.cells.videoBadge) {
       const r = W * 0.024;
@@ -551,6 +664,7 @@ function drawCell(
       g.fill();
     }
   }
+  if (pill) drawPinPill(g, pill);
   g.restore();
 
   // What rings a cell: today, the clip playing in turn.
@@ -689,9 +803,14 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
   }
   // A zooming clip is drawn last, over its neighbours.
   const zooming = doc.motion.videos === 'zoom' ? cells.filter((c) => (plan.clips.get(c.id) ?? []).some((w) => t > w.from && t < w.to)) : [];
-  for (const c of cells) if (!zooming.includes(c)) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, looks.get(c.id) ?? null);
+  const marks = doc.places.cells === 'off' ? null : cellMarks(doc, resolved, layout);
+  const pinOf = (c: CellPart) => {
+    const name = marks?.get(c.id);
+    return name ? { name, bleed: page.bleed } : null;
+  };
+  for (const c of cells) if (!zooming.includes(c)) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, looks.get(c.id) ?? null, pinOf(c));
   for (const p of page.parts) if (p.kind === 'text') drawText(g, doc, p, plan, t, light, page.bleed);
-  for (const c of zooming) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed);
+  for (const c of zooming) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, null, pinOf(c));
   g.restore();
 }
 

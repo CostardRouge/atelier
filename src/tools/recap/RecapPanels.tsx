@@ -42,6 +42,7 @@ import { BAND_HOLD, BAND_HINT, BAND_LABEL, BAND_MOTIONS, type BandMotion } from 
 import { beatOfFile } from './recap-beat-find';
 import { bpmOf } from '../../shared/recap/recap-beat';
 import FrameBox from './FrameBox';
+import PlacesSection from './PlacesSection';
 import LoopTrimmer from './LoopTrimmer';
 import { DEFAULT_FRAME, MAX_ROTATE, isDefaultFrame, rotateFrame, type Frame } from '../../shared/recap/recap-frame';
 import { ARRANGES, EXIF_LABEL, EXIF_PARTS, type Arrange, type ExifPart } from '../../shared/recap/recap-cellwords';
@@ -556,6 +557,7 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
           <SliderRow label="Corners" value={Math.round(c.radius * 100)} min={0} max={25} step={1} reset={0} format={(v) => `${v} %`} onChange={(v) => set({ radius: v / 100 })} />
         </div>
       </InspectorSection>
+      <PlacesSection doc={doc} change={change} />
       <InspectorSection id="recap-shadow" title="Shadow" marked={c.shadow > 0} mark={<ToggleField checked={c.shadow > 0} onChange={(on) => set({ shadow: on ? 0.35 : 0 })} label="Shadow under the pictures" />}>
         <div className={`flex flex-col gap-1 ${c.shadow > 0 ? '' : 'opacity-45'}`}>
           <SliderRow label="Darkness" value={Math.round(c.shadow * 100)} min={0} max={100} step={1} reset={35} format={(v) => (v ? `${v} %` : 'none')} onChange={(v) => set({ shadow: v / 100 })} />
