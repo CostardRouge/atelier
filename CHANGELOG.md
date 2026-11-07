@@ -113,6 +113,14 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   switch *Draw a box* on and drag with a finger, and every picture inside the box is ticked; a dot ticks on a click.
   Pictures with no position are counted beside the map. The map background stays the usual opt-in.
 
+### Changed
+
+- Trips' Vehicles panel in the overview's Map view folds: one row per stage says its vehicle, hops, kilometres and a
+  strip of its hops, and opens on the stage of the day shown or one that drives over the sea; inside, only the hops
+  that differ are listed and the others fold into one line. On a wide screen the whole card folds to its one line.
+- An older trip's question about the sea no longer takes a band across the top of the overview: it waits in the
+  Vehicles panel, with a dot on the Map switch and on the panel pointing to it.
+
 ### Fixed
 
 - *Transcode to H.264* — converting a clip your browser cannot play — failed before it started: ffmpeg could not be

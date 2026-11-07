@@ -211,3 +211,46 @@ export function withStageVehicle(trip: TripDoc, stageId: string, ref: VehicleRef
     }),
   };
 }
+
+/**
+ * A hop that simply follows its stage's or the trip's vehicle — nothing set on
+ * it, no sea crossed. The band and the Virée panel fold these into one line
+ * and list the others, the hops someone opens the list to change (2026-11-07,
+ * list B of the vehicles lab https://claude.ai/artifact/EYpL6XvriERXnN9AMbe459).
+ */
+export function isPlainHop(line: Pick<HopLine, 'why' | 'wet'>): boolean {
+  return (line.why === 'stage' || line.why === 'trip') && !line.wet;
+}
+
+/** One stage's hops as its folded row says them. */
+export interface StageHopSummary {
+  hops: number;
+  /** Kilometres driven or sailed: a hop not driven is left out. */
+  km: number;
+  /** Hops at sea, sailed or driven over. */
+  atSea: number;
+  /** Hops driven straight over the sea (the rule is off). */
+  wet: number;
+  /** Hops whose making is set by hand: a vehicle, a boat or not driven. */
+  set: number;
+}
+
+export function stageHopSummary(lines: readonly HopLine[]): StageHopSummary {
+  const out: StageHopSummary = { hops: lines.length, km: 0, atSea: 0, wet: 0, set: 0 };
+  for (const line of lines) {
+    if (line.why !== 'flown') out.km += line.km;
+    if (line.sea?.water) out.atSea += 1;
+    if (line.wet) out.wet += 1;
+    if (line.why === 'place' || line.why === 'flown' || line.boat?.own) out.set += 1;
+  }
+  return out;
+}
+
+/**
+ * Whether a stage's fold opens by itself: the stage of the day the overview
+ * shows, and any stage with a hop driven over the sea — the one thing the list
+ * must not hide. A stage the person opened or closed keeps their choice.
+ */
+export function stageOpensByDefault(stageId: string, lines: readonly HopLine[], currentStageId: string | null): boolean {
+  return stageId === currentStageId || lines.some((l) => l.wet);
+}

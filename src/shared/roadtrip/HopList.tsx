@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { FieldRow, ToggleField, fieldClass } from '../ui/Inspector';
 import { vehicleModel, VEHICLE_MODELS } from './hooks/vehicle-registry';
-import type { HopChoice, HopLine, HopWhy } from './trip-hops';
+import { isPlainHop, type HopChoice, type HopLine, type HopWhy } from './trip-hops';
 import { mainVehicle, type TripVehicle, type VehicleRef } from './vehicle-fleet';
 import VehicleRefSelect from './VehicleRefSelect';
 import { vehicleKind, type VehicleModelId } from './vehicle-spec';
@@ -32,7 +32,8 @@ const WHY_TITLE: Record<HopWhy, string> = {
   trip: 'The trip’s main vehicle',
 };
 
-const km = (v: number) => `${Math.round(v).toLocaleString('en')} km`;
+/** Kilometres as a row says them. */
+export const km = (v: number) => `${Math.round(v).toLocaleString('en')} km`;
 
 export interface HopListProps {
   lines: readonly HopLine[];
@@ -52,12 +53,22 @@ export interface HopListProps {
  * choices — not driven, one vehicle for the whole hop, a boat for this
  * crossing. One list for the overview's band and the Virée panel, so the two
  * say the same thing in the same words; what a choice WRITES is the host's.
+ *
+ * Exceptions first (2026-11-07, list B of the vehicles lab): only the hops
+ * that differ — at sea, set by hand, not driven — are rows; the hops that
+ * simply follow their vehicle fold into one line that unfolds them, and their
+ * WHY chip («stage», «trip») is dropped as the default it is.
  */
 export default function HopList({ lines, fleet, ruleAuto, ruleBoat, onChoose, onCrossBoat }: HopListProps) {
   const [open, setOpen] = useState<string | null>(null);
+  const [unfolded, setUnfolded] = useState(false);
+  const plain = lines.filter(isPlainHop);
+  const folded = !unfolded && plain.length > 0;
+  const shown = folded ? lines.filter((l) => !isPlainHop(l)) : lines;
+  const names = [...new Set(plain.map((l) => refShort(l.ref, fleet)))];
   return (
     <ul className="m-0 p-0 list-none flex flex-col">
-      {lines.map((line) => (
+      {shown.map((line) => (
         <HopRow
           key={line.key}
           line={line}
@@ -78,6 +89,23 @@ export default function HopList({ lines, fleet, ruleAuto, ruleBoat, onChoose, on
           )}
         </HopRow>
       ))}
+      {folded && (
+        <li className={shown.length ? 'pt-1.5 border-t border-line' : ''}>
+          <button
+            type="button"
+            onClick={() => setUnfolded(true)}
+            data-hop-fold
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-control border border-dashed border-line-strong bg-paper text-left text-xs text-ink-soft cursor-pointer hover:bg-paper-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-coarse:min-h-11"
+          >
+            <span className="flex-1 min-w-0 truncate">
+              {plain.length} hop{plain.length === 1 ? '' : 's'} {names.length === 1 ? `by ${names[0]}` : 'on their stage’s vehicle'}
+            </span>
+            <span className="flex-none font-mono text-2xs text-faint tabular-nums">
+              {km(plain.reduce((sum, l) => sum + l.km, 0))} ▸
+            </span>
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
@@ -117,18 +145,22 @@ function HopRow({
       <HopBar line={line} />
       <span className="w-full flex items-center gap-2 text-2xs">
         <span className={`flex-1 min-w-0 truncate ${line.wet ? 'text-warn' : 'text-muted'}`}>{says}</span>
-        <span
-          title={WHY_TITLE[line.why]}
-          className={`flex-none font-mono uppercase tracking-[0.08em] text-3xs px-1.5 py-px rounded-full border ${
-            line.why === 'place' || line.boat?.own
-              ? 'border-accent/40 text-accent-ink'
-              : line.why === 'water'
-                ? 'border-info-line text-info'
-                : 'border-line text-faint'
-          }`}
-        >
-          {line.boat?.own ? 'boat set here' : WHY[line.why]}
-        </span>
+        {!isPlainHop(line) && (
+          <span
+            title={line.wet ? 'The water rule is off: the land vehicle drives straight over the sea' : WHY_TITLE[line.why]}
+            className={`flex-none font-mono uppercase tracking-[0.08em] text-3xs px-1.5 py-px rounded-full border ${
+              line.wet
+                ? 'border-warn-bright text-warn'
+                : line.why === 'place' || line.boat?.own
+                  ? 'border-accent/40 text-accent-ink'
+                  : line.why === 'water'
+                    ? 'border-info-line text-info'
+                    : 'border-line text-faint'
+            }`}
+          >
+            {line.wet ? 'over sea' : line.boat?.own ? 'boat set here' : WHY[line.why]}
+          </span>
+        )}
       </span>
     </>
   );

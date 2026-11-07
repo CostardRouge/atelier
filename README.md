@@ -1561,9 +1561,9 @@ fleet, or a model borrowed for the day (the select beside its place style, in
 the stage's card, with its paint beside it for a borrowed model); a place can say how it was reached (its **Reached by**: a
 boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
 **water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
-new trip, off for one made before it — such a trip's overview asks once,
-naming the hops that cross the sea: *Sail them*, *Choose the boat* or *Not
-now*) a hop that crosses the sea sails, from
+new trip, off for one made before it — such a trip asks once, at the top of
+the Map view's Vehicles panel, with a dot on the Map switch pointing there:
+*Sail them* or *Not now*) a hop that crosses the sea sails, from
 the shore it leaves to the shore it reaches, on the boat the rule names. Its
 **Fine settings** hold the two distances the coarse coastline needs: water
 narrower than the **bridge** length stays a road, and a stop within the
@@ -1583,8 +1583,13 @@ trip's places changes it there.
 
 All of this can be read and changed in one place: the overview's **Map** view
 lists every **hop** from place to place, stage by stage, under the water rule's
-switch and boat (a card beside the map on a wide screen, *Vehicles, hop by
-hop* on a phone). Each row shows the hop's kilometres, a bar of its road and its
+switch and boat (a card beside the map on a wide screen, folded to one line
+until opened; *Vehicles, hop by hop* on a phone). Each stage folds into one
+row — its vehicle, its hops, its kilometres and a strip of its hops — and opens
+by itself when it holds the day shown or a hop driven over the sea. Open, it
+lists only the hops that differ (at sea, set by hand, not driven); the ones
+that simply follow the stage's vehicle fold into one line, *5 hops by Prado*,
+that unfolds them. Each row shows the hop's kilometres, a bar of its road and its
 sea (blue where it sails, amber where the vehicle drives over the water), the
 vehicle that makes it and why: *set here*, *water*, *stage* or *trip*. A tap
 opens three choices: one vehicle for the **whole hop**, a **boat for this
