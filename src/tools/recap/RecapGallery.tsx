@@ -17,6 +17,7 @@ import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
 import LoadingState from '../../shared/ui/LoadingState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { focusOnMount } from '../../shared/ui/focus';
+import { revealInScroller } from '../../shared/ui/reveal';
 import { Icons } from '../../shared/ui/icons';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
@@ -25,7 +26,12 @@ import { useSurface } from '../../shared/ui/use-surface';
 import NewRecapDialog, { type NewRecapChoice } from './NewRecapDialog';
 import TemplatePreview from './TemplatePreview';
 import { RECAP_DOC_KIND, deleteRemoteRecap, fetchRemoteRecap, listRemoteRecaps, mirrorRecap, moveRecap, pushRecap, type RemoteRecapRow } from './recap-remote';
-import { askPersistence, deleteRecap, deleteSyncRecord, getSyncRecord, getThumb, listRecaps, mediaStorage, putRecap, styled } from './recap-store';
+import { askPersistence, deleteRecap, deleteSyncRecord, getSyncRecord, getThumb, getValue, listRecaps, mediaStorage, putRecap, setValue, styled } from './recap-store';
+import { readyRecap, suggestions, type Suggestion } from '../../shared/recap/recap-suggest';
+import { GallerySection, SuggestionCard, SuggestionPoster, useSectionState } from './GallerySections';
+
+/** The suggestions hidden by «Not this month», by key — kept on this device. */
+const HIDDEN_KEY = 'suggest:hidden';
 
 function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
@@ -257,6 +263,18 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
   });
   const { docs: recaps, documentSources, refresh, groups, absent, busy, notice, setNotice, createOn } = gallery;
   const listedCount = groups.reduce((n, g) => n + g.items.length + g.remoteOnly.length, 0);
+  // The gallery's three sections (lab 10): Suggestions, Your recaps, New recap — each opens and closes, remembered here.
+  const sections = useSectionState(listedCount > 0);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    void getValue<string[]>(HIDDEN_KEY).then((keys) => keys && setHidden(new Set(keys)));
+  }, []);
+  const ready = useMemo(() => (recaps ? suggestions(recaps, todayIso(), hidden) : []), [recaps, hidden]);
+  const hide = (s: Suggestion) => {
+    const next = new Set(hidden).add(s.key);
+    setHidden(next);
+    void setValue(HIDDEN_KEY, [...next].slice(-200));
+  };
   useEffect(() => {
     void mediaStorage().then(setStorage);
   }, [recaps]);
@@ -303,6 +321,17 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
       if (await createOn(copy, 'created')) onOpen(copy);
     },
     [createOn, namesIn, onOpen],
+  );
+
+  /** A suggestion made: its model's dress on the new period, saved now and opened — the editor fills it from the Winnow. */
+  const makeReady = useCallback(
+    async (sug: Suggestion) => {
+      setNotice(null);
+      const doc = readyRecap(sug, DEFAULT_SOURCE_ID);
+      doc.title = uniqueDocName(doc.title, namesIn(DEFAULT_SOURCE_ID));
+      if (await createOn(doc, 'created')) onOpen(doc);
+    },
+    [setNotice, namesIn, createOn, onOpen],
   );
 
   const handleImportRef = useRef<(sourceId: string) => Promise<void>>(async () => {});
@@ -354,26 +383,49 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
   return (
     <section className={`${pageScroll} ${compact ? 'pt-3' : ''}`} aria-label="Recaps">
       <h1 className="sr-only">Recaps</h1>
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="font-serif text-2xl leading-none" aria-hidden="true">
-          New recap
-        </span>
-        <span className="text-sm text-muted">Pick a template — each card plays what it does.</span>
-        <span className="flex-1" />
-        {!compact && (
-          <Button onClick={startImport} icon={Icons.import} title={`Import recaps from a ${RECAP_FILE_EXTENSION} file`}>
-            Import
-          </Button>
-        )}
-      </div>
-      <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4'}>
-        {TEMPLATES.map((t) => (
-          <TemplateCard key={t} template={t} onPick={() => setAsking(t)} />
-        ))}
-      </div>
+      {ready.length > 0 && (
+        <GallerySection
+          id="suggestions"
+          title="Suggestions"
+          count={ready.length}
+          hot
+          open={sections.isOpen('suggestions')}
+          onToggle={() => sections.toggle('suggestions')}
+          peek={
+            <>
+              <span className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis">ready for {[...new Set(ready.map((x) => x.label))].join(', ')}</span>
+              {ready.slice(0, 4).map((x) => (
+                <span key={x.key} className="flex-none h-8 w-[26px] rounded-[3px] overflow-hidden border border-line bg-frame flex items-center justify-center">
+                  <SuggestionPoster s={x} height={32} />
+                </span>
+              ))}
+            </>
+          }
+        >
+          <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4'}>
+            {ready.map((x) => (
+              <SuggestionCard key={x.key} s={x} onMake={() => void makeReady(x)} onHide={() => hide(x)} />
+            ))}
+          </div>
+        </GallerySection>
+      )}
 
+      <GallerySection
+        id="yours"
+        title="Your recaps"
+        count={recaps === null ? null : listedCount}
+        open={sections.isOpen('yours')}
+        onToggle={() => sections.toggle('yours')}
+        actions={
+          !compact && (
+            <Button size="sm" variant="ghost" onClick={startImport} icon={Icons.import} title={`Import recaps from a ${RECAP_FILE_EXTENSION} file`}>
+              Import
+            </Button>
+          )
+        }
+      >
       {notice && (
-        <p className="m-0 text-xs text-ink-soft" role="status">
+        <p className="m-0 mb-3 text-xs text-ink-soft" role="status">
           {notice}
         </p>
       )}
@@ -382,7 +434,8 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
       {recaps === null ? (
         <LoadingState label="Loading recaps…" />
       ) : (
-        <div className="flex flex-col gap-6 pb-4 pt-2">
+        <div className="flex flex-col gap-6 pb-1">
+          {listedCount === 0 && <p className="m-0 text-xs text-muted">No recap yet — pick a template in New recap below.</p>}
           {groups.map(({ id, items, list, remoteOnly }) => {
             const source = sourceById(id);
             const count = items.length + remoteOnly.length;
@@ -390,14 +443,17 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
             if (!count && id === DEFAULT_SOURCE_ID && listedCount === 0) return null;
             return (
               <section key={id} aria-label={`Recaps on ${source?.label ?? id}`}>
+                {/* The section names the recaps; a group says only where they are kept, when there is more than one place. */}
+                {(groups.length > 1 || id !== DEFAULT_SOURCE_ID) && (
                 <p className="m-0 mb-3 font-mono text-2xs tracking-[0.14em] uppercase text-muted">
-                  {id === DEFAULT_SOURCE_ID ? 'your recaps · on this device' : `on ${source?.label ?? id}`}
+                  {id === DEFAULT_SOURCE_ID ? 'on this device' : `on ${source?.label ?? id}`}
                   <span className="text-faint"> · </span>
                   <span className="tabular-nums">{count}</span>
                   {!source && <span className="text-faint"> · not connected</span>}
                   {list?.status === 'loading' && <span className="text-faint"> · checking…</span>}
                   {list?.status === 'failed' && <span className="text-faint normal-case tracking-normal"> · {list.text}</span>}
                 </p>
+                )}
                 {count === 0 ? (
                   <p className="m-0 text-xs text-faint">Nothing kept here yet — a recap’s ⋯ keeps it here.</p>
                 ) : (
@@ -451,6 +507,37 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
           </div>
         </div>
       )}
+      </GallerySection>
+
+      <GallerySection
+        id="new"
+        title="New recap"
+        count={TEMPLATES.length}
+        open={sections.isOpen('new')}
+        onToggle={() => sections.toggle('new')}
+        peek={<span className="text-xs text-muted whitespace-nowrap">templates</span>}
+        actions={
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Icons.plus}
+            onClick={() => {
+              sections.toggle('new', true);
+              requestAnimationFrame(() => revealInScroller(document.getElementById('recap-section-new')?.parentElement, { block: 'start', behavior: 'smooth' }));
+            }}
+            title="Pick a template"
+          >
+            New
+          </Button>
+        }
+      >
+        <p className="m-0 mb-3 text-xs text-muted">Pick a template — each card plays what it does.</p>
+        <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4'}>
+          {TEMPLATES.map((t) => (
+            <TemplateCard key={t} template={t} onPick={() => setAsking(t)} />
+          ))}
+        </div>
+      </GallerySection>
 
       {asking && <NewRecapDialog template={asking} sources={documentSources} onCancel={() => setAsking(null)} onCreate={(c) => void create(c)} />}
       {importing && (
