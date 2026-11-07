@@ -66,6 +66,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   of the pool when you force it.
   A week's seven bands move in its Reel: each day in turn opens wide (Accordion), fills the screen (Spotlight), rides
   a wave, slides past or stays bright while the others dim (Focus), each picture drifting inside its band.
+  The recaps' gallery has three sections you open and close — Suggestions, Your recaps, New recap — and when a month
+  (or a week) has ended, the recaps you made for the one before are ready for it, in the same dress, one tap to make.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
@@ -118,6 +120,14 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Winnow picker: a description reaches **Precise** (the 200 closest) or **Broad** (everything that stays close to the
   best match, up to 3 000) — Mosaic opens on Broad to gather as many pictures as a description can find, the other
   tools on Precise, and you can switch it for a search. Going past 200 needs a Winnow that pages its search.
+
+### Changed
+
+- Trips' Vehicles panel in the overview's Map view folds: one row per stage says its vehicle, hops, kilometres and a
+  strip of its hops, and opens on the stage of the day shown or one that drives over the sea; inside, only the hops
+  that differ are listed and the others fold into one line. On a wide screen the whole card folds to its one line.
+- An older trip's question about the sea no longer takes a band across the top of the overview: it waits in the
+  Vehicles panel, with a dot on the Map switch and on the panel pointing to it.
 
 ### Fixed
 

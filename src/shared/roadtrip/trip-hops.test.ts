@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseLand } from '../map/land';
 import { landIndex } from '../map/terrain';
-import { tripHops, withCrossBoat, withHopChoice, withStageVehicle } from './trip-hops';
+import { isPlainHop, stageHopSummary, stageOpensByDefault, tripHops, withCrossBoat, withHopChoice, withStageVehicle } from './trip-hops';
 import type { TripDoc, TripPlace, TripStage } from './trip-types';
 import { DEFAULT_CROSSINGS, fleetOf } from './vehicle-fleet';
 import { defaultVehicleSpec } from './vehicle-spec';
@@ -88,5 +88,35 @@ describe('the trip’s hops', () => {
     const far = trip([stage('tas', '2026-03-06', [HOBART]), stage('qld', '2026-03-20', [HERVEY])]);
     expect(tripHops(far, SHIPPED)[0].why).toBe('water');
     expect(tripHops(withHopChoice(far, 'Hervey Bay', { kind: 'flown' }), SHIPPED)[0]).toMatchObject({ why: 'flown', sea: null });
+  });
+});
+
+describe('a stage folded into one row', () => {
+  const t = trip([
+    stage('vic', '2026-03-01', [GEELONG, MELBOURNE]),
+    stage('tas', '2026-03-06', [DEVONPORT, HOBART, place('Hervey Bay', -25.29, 152.85, { flown: true })]),
+  ]);
+
+  it('folds only the hops that follow their vehicle', () => {
+    const hops = tripHops(t, SHIPPED);
+    expect(hops.map((h) => isPlainHop(h))).toEqual([true, false, true, false]);
+    const wet = tripHops({ ...t, crossings: { ...t.crossings, auto: false } }, SHIPPED);
+    expect(isPlainHop(wet[1])).toBe(false);
+  });
+
+  it('counts a stage’s hops, its kilometres without the flights, the sea and what was set', () => {
+    const tas = tripHops(t, SHIPPED).filter((h) => h.stageId === 'tas');
+    const sum = stageHopSummary(tas);
+    expect(sum).toMatchObject({ hops: 3, atSea: 1, wet: 0, set: 1 });
+    expect(sum.km).toBeCloseTo(tas[0].km + tas[1].km, 6);
+  });
+
+  it('opens the stage of the day shown, and any stage that drives over the sea', () => {
+    const dry = tripHops(t, SHIPPED);
+    const wet = tripHops({ ...t, crossings: { ...t.crossings, auto: false } }, SHIPPED);
+    const of = (lines: typeof dry, id: string) => lines.filter((h) => h.stageId === id);
+    expect(stageOpensByDefault('vic', of(dry, 'vic'), 'vic')).toBe(true);
+    expect(stageOpensByDefault('tas', of(dry, 'tas'), 'vic')).toBe(false);
+    expect(stageOpensByDefault('tas', of(wet, 'tas'), null)).toBe(true);
   });
 });

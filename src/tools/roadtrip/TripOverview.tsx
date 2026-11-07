@@ -51,8 +51,8 @@ import DayPanel from './DayPanel';
 import LocatePicturePanel from './LocatePicturePanel';
 import StagesPanel, { StageCard } from './StagesPanel';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
-import SailNudge from './SailNudge';
 import TripRouteBand from './TripRouteBand';
+import { useSailQuestion } from './use-sail-question';
 import PageBar from '../../shared/ui/PageBar';
 import { useAtLeast, useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -704,6 +704,8 @@ export default function TripOverview({
   const [offMapOpen, setOffMapOpen] = useState(false);
   /** The Trajet band, as a sheet on a phone's map (it is a card in the aside on a wide screen). */
   const [routeOpen, setRouteOpen] = useState(false);
+  // The sea question of an old trip waits in the Vehicles panel; a dot leads there (2026-11-07).
+  const seaQuestion = useSailQuestion(trip);
   /**
    * «Fix…» / «Add a place…» (was «Locate…»): open the stage — as a tap on its dial would, the day moving
    * into it — where its place is edited: the aside's card, or the legs sheet.
@@ -1023,7 +1025,14 @@ export default function TripOverview({
         },
         {
           id: 'map',
-          label: compact ? <span className="sr-only">Map</span> : 'Map',
+          label: (
+            <>
+              {compact ? <span className="sr-only">Map</span> : 'Map'}
+              {seaQuestion > 0 && overview !== 'map' && (
+                <span className="inline-block w-1.5 h-1.5 ml-1 align-super rounded-full bg-warn-bright" aria-label="· a question waits about the sea" />
+              )}
+            </>
+          ),
           icon: Icons.map,
           title: 'The trip as its route: each stage at its place, with its days',
         },
@@ -1093,7 +1102,12 @@ export default function TripOverview({
       {routeOpen && (
         <BottomSheet open onClose={() => setRouteOpen(false)} title="Vehicles" hint="hop by hop" snaps={[0.62, 0.92]}>
           <div className="px-4 pt-2 pb-4">
-            <TripRouteBand trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />
+            <TripRouteBand
+              trip={trip}
+              onChange={onChange}
+              onOpenVehicle={() => openSettings('car')}
+              currentStageId={selectedStageId}
+            />
           </div>
         </BottomSheet>
       )}
@@ -1200,7 +1214,6 @@ export default function TripOverview({
             </Button>
           </div>
         )}
-        {!adjusting && <SailNudge trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />}
         </div>
 
         {onMap && !adjusting ? (
@@ -1218,6 +1231,7 @@ export default function TripOverview({
               >
                 <span className="w-3.5 h-3.5 [&>svg]:w-full [&>svg]:h-full" aria-hidden="true">{Icons.swap}</span>
                 Vehicles, hop by hop
+                {seaQuestion > 0 && <span className="w-2 h-2 rounded-full bg-warn-bright" aria-label="A question waits" />}
               </button>
             </div>
             <div className="flex-1 min-h-0 flex px-2 pb-2">
@@ -1447,8 +1461,6 @@ export default function TripOverview({
         </div>
       </div>
 
-      <SailNudge trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />
-
       {/* The same blocks as the phone, three to a row above 1180px and two
           below, the year map above them and the ruler between — which now
           details the months the calendar shows, the loupe read from the
@@ -1521,8 +1533,14 @@ export default function TripOverview({
                 {stageCard}
               </div>
             )}
-            <div className="bg-surface border border-line rounded-paper-lg px-5 pb-5 pt-3">
-              <TripRouteBand trip={trip} onChange={onChange} onOpenVehicle={() => openSettings('car')} />
+            <div className="bg-surface border border-line rounded-paper-lg px-5 py-3">
+              <TripRouteBand
+                trip={trip}
+                onChange={onChange}
+                onOpenVehicle={() => openSettings('car')}
+                currentStageId={selectedStageId}
+                foldable
+              />
             </div>
           </aside>
         </div>

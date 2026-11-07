@@ -112,7 +112,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 - 2026-10-07 — The map openers' round built, not seen on his Mac or phone — `roadtrip.md`.
 - 2026-10-07 — Streamed OSM tiles under a following camera, unseen against the real tile server — `roadtrip.md`.
 - 2026-10-07 — Camera colour profiles: C1–C8 built, C9 waits on one ARW of his — `camera-profiles.md`.
-- 2026-10-08 (rev. 2026-10-17) — Vehicles per stage, the water switch and the Trajet band built; unseen in the real editor — `roadtrip.md`.
+- 2026-10-08 (rev. 2026-11-07) — Vehicles per stage, the water switch and the Trajet band built; the band folds by stage, the sea question moved into it (no band over the overview); unseen on his trip and phone — `roadtrip.md`.
 - 2026-10-21 — Adding pictures as slides built, driven headless only — `roadtrip.md`.
 - 2026-10-13 — The openers' inspector redesign built; see the pins and the drawer on his phone — `roadtrip.md`.
 - 2026-10-08 — The Vitrine opener built, rendered headless only — `showcase.md`.
