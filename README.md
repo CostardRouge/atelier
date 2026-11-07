@@ -3455,11 +3455,19 @@ clamped.
 ## Recap tool
 
 *Work in progress* — the home page and the tool menu say so with a badge. What
-exists: the six templates below, their gallery and their file, the editor, the
-exports and keeping a recap on a Winnow (`docs/recap.md`). More templates (a
-year, one second a day, the sheets of a whole month) come next.
+exists: the templates below, their gallery and their file, the editor, the
+exports and keeping a recap on a Winnow (`docs/recap.md`).
 
-**Templates.** `/recap` opens on a **catalogue**: each card is the template drawn
+**The gallery** has three sections you open and close, remembered on this
+device: **Suggestions** (closed, one line with its small posters), **Your
+recaps** and **New recap** (closed once you have a recap; *+ New* opens it).
+When a month has ended, each kind of recap you made for the month before is
+**ready** for it — a month calendar and a dump in September, both for October
+— and a week likewise; from 1 December, the year's Wrapped. *Make it* makes
+it in the same dress and opens it, filling itself from your Winnow; *Not this
+month* hides it. Nothing is saved until you make it.
+
+**Templates.** *New recap* is a **catalogue**: each card is the template drawn
 by the real painter over colour fields, and plays its entrance when you hover
 or focus it. A click asks what the recap is about — which month, which week,
 which day, which period — and makes it:
