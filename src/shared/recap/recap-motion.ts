@@ -13,6 +13,7 @@ import type { Box, CellPart, RecapLayout, RecapPage } from './recap-layout';
 import type { OpenerPlan } from './recap-opener-plan';
 import { beatGrid, onTheBeat } from './recap-beat';
 import { secondPlan } from './recap-second';
+import { bandSeconds, type BandSpan } from './recap-bands';
 
 /** A window of the film, in seconds. */
 export interface Span {
@@ -34,6 +35,8 @@ export interface PagePlan {
   clips: Map<string, ClipWindow[]>;
   /** When everything is on. */
   allOn: number;
+  /** A week's bands taking their turns (`recap-bands.ts`). */
+  bands?: BandSpan;
 }
 
 export interface ClipWindow {
@@ -153,10 +156,12 @@ function planPage(doc: RecapDoc, page: RecapPage, start: number, first: boolean,
       clips.set(c.id, [{ from: span?.at ?? allOn, to: Number.POSITIVE_INFINITY }]);
     }
   }
-  const end = Math.max(allOn + m.hold, clipsEnd + 0.4);
+  // A week's bands take their turns once everything is on (lab 8); the page lasts until they rest again.
+  const bands = doc.template === 'week' && page.key === 'first' && m.bands !== 'none' ? { from: allOn + 0.2, hold: m.bandHold } : undefined;
+  const end = Math.max(allOn + m.hold, clipsEnd + 0.4, bands ? bands.from + bandSeconds(bands.hold) + 0.4 : 0);
   // `together` plays to the page's end: its windows close there.
-  for (const [k, w] of clips) clips.set(k, w.map((x) => ({ from: x.from, to: Math.min(x.to, end) })));
-  return { start, length: end - start, heading, subheading, cta, cells, clips, allOn };
+  for (const [k, w] of clips) clips.set(k, w.map((x) => ({ ...x, to: Math.min(x.to, end) })));
+  return { start, length: end - start, heading, subheading, cta, cells, clips, allOn, ...(bands ? { bands } : {}) };
 }
 
 /** How a template's pages are timed: one second a day has its own clock (`recap-second.ts`). */
@@ -196,6 +201,7 @@ function scalePlan(plan: FilmPlan, k: number): FilmPlan {
       cells: new Map([...p.cells].map(([id, s]) => [id, scaleSpan(s, k)])),
       clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ ...w, from: w.from * k, to: w.to * k }))])),
       allOn: p.allOn * k,
+      ...(p.bands ? { bands: { from: p.bands.from * k, hold: p.bands.hold * k } } : {}),
     })),
   };
 }
@@ -269,6 +275,7 @@ function shiftPlan(plan: FilmPlan, d: number): FilmPlan {
       cells: new Map([...p.cells].map(([id, s]) => [id, shiftSpan(s, d)])),
       clips: new Map([...p.clips].map(([id, ws]) => [id, ws.map((w) => ({ ...w, from: w.from + d, to: w.to + d }))])),
       allOn: p.allOn + d,
+      ...(p.bands ? { bands: { from: p.bands.from + d, hold: p.bands.hold } } : {}),
     })),
   };
 }

@@ -38,6 +38,7 @@ import PictureThumb from './PictureThumb';
 import GroundPicture from './GroundPicture';
 import { getSound } from './recap-store';
 import { SECOND_RANGE, secondOf } from '../../shared/recap/recap-second';
+import { BAND_HOLD, BAND_HINT, BAND_LABEL, BAND_MOTIONS, type BandMotion } from '../../shared/recap/recap-bands';
 import { beatOfFile } from './recap-beat-find';
 import { bpmOf } from '../../shared/recap/recap-beat';
 import FrameBox from './FrameBox';
@@ -751,6 +752,28 @@ export function MotionSection({ doc, change }: { doc: RecapDoc; change: Change }
         <SliderRow label="One every" value={m.stagger} min={0} max={0.6} step={0.01} reset={0.09} format={(v) => `${v.toFixed(2)} s`} onChange={(stagger) => set({ stagger })} />
         <SliderRow label="Hold" value={m.hold} min={0.5} max={15} step={0.5} reset={3} format={(v) => `${v} s`} onChange={(hold) => set({ hold })} />
         <OnBeatField doc={doc} change={change} />
+        {doc.template === 'week' && (
+          <>
+            <span className={legend}>The bands move</span>
+            <Segmented<BandMotion> size="sm" columns={3} label="How the bands move" value={m.bands} onChange={(bands) => set({ bands })} options={BAND_MOTIONS.map((k) => ({ id: k, label: BAND_LABEL[k], title: BAND_HINT[k] }))} />
+            {m.bands !== 'none' && (
+              <SliderRow
+                label="Each day"
+                value={m.bandHold}
+                min={BAND_HOLD.min}
+                max={BAND_HOLD.max}
+                step={0.1}
+                reset={0.9}
+                format={(v) => `${v.toFixed(1)} s`}
+                hint={m.onBeat ? 'On the beat: rounded to whole beats.' : undefined}
+                onChange={(bandHold) => set({ bandHold })}
+              />
+            )}
+            <ToggleField checked={m.bandPan} onChange={(bandPan) => set({ bandPan })} label="Pan inside">
+              Pan inside
+            </ToggleField>
+          </>
+        )}
         <span className={legend}>Clips play</span>
         <Segmented<VideoPlay> size="sm" fill label="Clips play" value={m.videos} onChange={(videos) => set({ videos })} options={VIDEO_PLAYS.map((k) => ({ id: k, label: VIDEO_LABEL[k] }))} />
       </div>

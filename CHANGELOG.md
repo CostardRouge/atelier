@@ -41,7 +41,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   picture can be given one from your Winnow — any picture, even one from another day, marked as chosen by hand.
   Taking a picture out of a carousel no longer brings another in: ✕ removes it and the carousel holds one fewer, ⇄
   replaces it with one you choose among the next best; your selection stays as you made it until you let the rule
-  choose again. The rule draws from your Winnow picks when they fill the carousel, and leaves out screenshots,
+  choose again. The rule draws from your Winnow favourites (♥) or picks when they fill the carousel — or from your
+  ♥ only, showing fewer pictures rather than others — puts a ♥ first wherever it chooses the best, and leaves out screenshots,
   bursts and look-alikes by the same conditions as Storytelling's wall. Drag a picture onto another in the carousel's
   list, or on the stage, to swap them — or onto its edge in the list to put it before or after it. The number of
   pictures can be changed again once you have corrected the selection — at the head of the carousel's list in
@@ -63,6 +64,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   <month>* takes it in one click, and a whole month is named by its name.
   A blurred background is the best photograph of the recap's own days, or the one you choose among them — any picture
   of the pool when you force it.
+  A week's seven bands move in its Reel: each day in turn opens wide (Accordion), fills the screen (Spotlight), rides
+  a wave, slides past or stays bright while the others dim (Focus), each picture drifting inside its band.
+  The recaps' gallery has three sections you open and close — Suggestions, Your recaps, New recap — and when a month
+  (or a week) has ended, the recaps you made for the one before are ready for it, in the same dress, one tap to make.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
@@ -112,6 +117,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Winnow picker: a **Map** view beside Grid and Logbook — each picture a dot where it was taken; hold ⇧ and drag, or
   switch *Draw a box* on and drag with a finger, and every picture inside the box is ticked; a dot ticks on a click.
   Pictures with no position are counted beside the map. The map background stays the usual opt-in.
+- Winnow picker: a description reaches **Precise** (the 200 closest) or **Broad** (everything that stays close to the
+  best match, up to 3 000) — Mosaic opens on Broad to gather as many pictures as a description can find, the other
+  tools on Precise, and you can switch it for a search. Going past 200 needs a Winnow that pages its search.
 
 ### Changed
 

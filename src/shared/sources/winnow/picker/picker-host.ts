@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { DaySpan } from '../../scope-override';
 import type { LibraryHalf, WinnowAssetRow } from '../client';
 import type { OpeningTicks } from './pick-filter';
+import type { Reach } from './describe-reach';
 
 /**
  * What a HOST tells the Winnow picker — the one modal behind the Library's
@@ -48,6 +49,12 @@ export interface PickerHost {
    * cap before the host's rows (Flight Atlas: clips only).
    */
   narrow?: { mediaType?: 'photo' | 'video' };
+  /**
+   * How far a DESCRIPTION reaches into the library by default (`describe-reach.ts`): `precise` — the 200 closest —
+   * when absent; `broad` for an instrument that wants as many pictures as a description can claim (the Mosaic). The
+   * person may switch it for one search.
+   */
+  reach?: Reach;
   /**
    * Controls drawn in the bar before the actions — the Library's *Proxies ·
    * Originals* and the weight it would download. Handed the ticked rows.

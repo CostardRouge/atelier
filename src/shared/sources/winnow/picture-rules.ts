@@ -11,9 +11,11 @@
  * Pure: generic over anything that carries `PictureFacts`.
  */
 
-export type PreferKey = 'pick' | 'stars' | 'edited' | 'faces' | 'sharp';
-export const PREFER_KEYS: readonly PreferKey[] = ['pick', 'stars', 'edited', 'faces', 'sharp'];
+export type PreferKey = 'fav' | 'pick' | 'stars' | 'edited' | 'faces' | 'sharp';
+/** Winnow's ♥ first (2026-11-06, Winnow #355: a «show this» mark beside the culling, the Gallery's only one). */
+export const PREFER_KEYS: readonly PreferKey[] = ['fav', 'pick', 'stars', 'edited', 'faces', 'sharp'];
 export const PREFER_LABEL: Record<PreferKey, string> = {
+  fav: 'Favourite ♥ in Winnow',
   pick: 'Picked in Winnow',
   stars: 'Stars',
   edited: 'Edited',
@@ -40,6 +42,19 @@ export const LEAVE_TITLE: Record<LeaveKey, string> = {
 export interface PictureRules {
   leave: Partial<Record<LeaveKey, boolean>>;
   prefer: PreferKey[];
+  /**
+   * The ♥ turned off by hand. A list kept before favourites existed lacks
+   * `fav` without meaning «off», so it gets the ♥ first; only this says no.
+   */
+  favOff?: true;
+}
+
+/** The preferences a stored record keeps, the ♥ first in a list that never knew it (`PictureRules.favOff`). */
+export function readPrefer(r: Record<string, unknown>): { prefer: PreferKey[]; favOff?: true } {
+  if (!Array.isArray(r.prefer)) return { prefer: [...PREFER_KEYS] };
+  const prefer = [...new Set(r.prefer.filter((k): k is PreferKey => PREFER_KEYS.includes(k as PreferKey)))];
+  if (r.favOff === true) return { prefer: prefer.filter((k) => k !== 'fav'), favOff: true };
+  return { prefer: prefer.includes('fav') ? prefer : ['fav', ...prefer] };
 }
 
 export const DEFAULT_PICTURE_RULES: PictureRules = { leave: {}, prefer: [...PREFER_KEYS] };
@@ -50,14 +65,15 @@ export function readPictureRules(raw: unknown): PictureRules {
   const r = raw as Record<string, unknown>;
   const leave: Partial<Record<LeaveKey, boolean>> = {};
   if (r.leave && typeof r.leave === 'object') for (const k of LEAVE_KEYS) if ((r.leave as Record<string, unknown>)[k] === false) leave[k] = false;
-  const prefer = Array.isArray(r.prefer) ? [...new Set(r.prefer.filter((k): k is PreferKey => PREFER_KEYS.includes(k as PreferKey)))] : [...PREFER_KEYS];
-  return { leave, prefer };
+  return { leave, ...readPrefer(r) };
 }
 
 export const leaves = (rules: Pick<PictureRules, 'leave'>, k: LeaveKey) => rules.leave[k] !== false;
 
 /** What the conditions read of a picture. */
 export interface PictureFacts {
+  /** Winnow's ♥ (absent on an older instance: false). */
+  fav: boolean;
   pick: boolean;
   reject: boolean;
   stars: number;
@@ -89,6 +105,7 @@ export function phashOf(raw: unknown): bigint | null {
 }
 
 const SCORE: Record<PreferKey, (c: PictureFacts) => number | null> = {
+  fav: (c) => (c.fav ? 1 : 0),
   pick: (c) => (c.pick ? 1 : 0),
   stars: (c) => c.stars,
   edited: (c) => (c.edited ? 1 : 0),

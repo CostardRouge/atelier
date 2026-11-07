@@ -187,6 +187,8 @@ export interface WinnowAssetRow {
    * the names its place filters match exactly. `a.*` carries them; optional
    * for an older instance or a stub.
    */
+  /** Winnow's ♥ — «show this», beside the verdict and the stars (#355). Absent on an older instance: not a favourite. */
+  favourite?: boolean;
   place_country?: string | null;
   place_region?: string | null;
   place_city?: string | null;
@@ -265,6 +267,11 @@ export interface WinnowCapabilities {
     summaries?: boolean;
   };
   /**
+   * `/api/search` PAGES (Winnow #351, 2026-11-05): up to `maxLimit` rows a page and `offset` into the same ranking.
+   * Absent on an older instance, which answers 200 rows at most and ignores an offset (`searchPaging`).
+   */
+  search?: { maxLimit?: number; offset?: boolean };
+  /**
    * The BINARY bucket beside the documents (Winnow's migration 0044): blobs
    * keyed by their own SHA-256, for what a 1 MiB document cannot hold — a
    * purchased LUT lattice is 1.5–2 MB. **Absent on an instance that predates
@@ -279,6 +286,11 @@ export interface WinnowCapabilities {
     /** What this account may hold for this app, in bytes. */
     quotaBytes?: number | null;
   };
+  /**
+   * Curation marks beside the culling (Winnow #355): `favourites` — rows carry
+   * `favourite`, `/api/assets` filters on it. Absent on an older instance: no ♥.
+   */
+  curation?: { favourites?: boolean };
   scheduling: { reminders: boolean };
   limits: { maxUploadBytes: number | null };
   storage: { driver: string; signedRedirects: boolean };
@@ -532,6 +544,14 @@ export function listsBurstFrames(caps: WinnowCapabilities | null | undefined): b
   return Array.isArray(caps?.media?.listCollapse) && caps.media.listCollapse.includes('pairs');
 }
 
+/** How a description may be asked of this instance: rows a page, and whether further pages exist (`capabilities.search`). */
+export function searchPaging(caps: WinnowCapabilities | null | undefined): { pageSize: number; pages: boolean } {
+  const s = caps?.search;
+  if (s?.offset !== true) return { pageSize: 200, pages: false };
+  const max = typeof s.maxLimit === 'number' && Number.isFinite(s.maxLimit) && s.maxLimit >= 1 ? Math.floor(s.maxLimit) : 200;
+  return { pageSize: max, pages: true };
+}
+
 export function hasFileBucket(caps: WinnowCapabilities | null | undefined): boolean {
   return caps?.files?.bucket === true;
 }
@@ -739,6 +759,8 @@ export interface WinnowSearch {
   /** The CLIP model the index was built with (`ML_CLIP_MODEL`, e.g. `ViT-B-32__openai`) — what language it reads. */
   model: string | null;
   items: (WinnowAssetRow & { distance: number })[];
+  /** Where the next page of the same ranking starts (`offset`), or null: the last page, or an instance that does not page. */
+  nextOffset: number | null;
 }
 
 /** A person as `/api/people` lists them — one face cluster, named or not. */
@@ -1248,7 +1270,7 @@ export class WinnowClient {
    */
   async search(
     text: string,
-    opts: { half?: 'incoming' | 'final'; limit?: number } = {},
+    opts: { half?: 'incoming' | 'final'; limit?: number; offset?: number } = {},
     signal?: AbortSignal,
   ): Promise<WinnowSearch> {
     let raw: {
@@ -1258,6 +1280,7 @@ export class WinnowClient {
       indexed?: number;
       library?: number;
       model?: string;
+      next_offset?: number | null;
     };
     try {
       raw = await this.searchRaw(text, opts, signal);
@@ -1266,7 +1289,7 @@ export class WinnowClient {
       // its `search` feature switched off, a 502 its ML container failing to read the words.
       const reason = err instanceof WinnowError ? searchRefusal(err) : null;
       if (!reason) throw err;
-      return { enabled: false, reason, indexed: null, library: null, model: null, items: [] };
+      return { enabled: false, reason, indexed: null, library: null, model: null, items: [], nextOffset: null };
     }
     return {
       enabled: raw.enabled !== false,
@@ -1275,10 +1298,11 @@ export class WinnowClient {
       library: raw.library ?? null,
       model: raw.model ?? null,
       items: raw.items ?? [],
+      nextOffset: typeof raw.next_offset === 'number' && raw.next_offset > 0 ? raw.next_offset : null,
     };
   }
 
-  private searchRaw(text: string, opts: { half?: 'incoming' | 'final'; limit?: number }, signal?: AbortSignal) {
+  private searchRaw(text: string, opts: { half?: 'incoming' | 'final'; limit?: number; offset?: number }, signal?: AbortSignal) {
     return this.json<{
       items?: (WinnowAssetRow & { distance: number })[];
       enabled?: boolean;
@@ -1286,10 +1310,12 @@ export class WinnowClient {
       indexed?: number;
       library?: number;
       model?: string;
+      next_offset?: number | null;
     }>(
       this.url('/api/search', {
         q: text,
         limit: opts.limit,
+        offset: opts.offset ? opts.offset : undefined,
         source: opts.half === 'final' ? 'gallery' : opts.half === 'incoming' ? 'incoming' : undefined,
       }),
       signal,

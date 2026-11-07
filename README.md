@@ -3151,7 +3151,8 @@ it and may grow blocks of its own.
   *Put N on the wall* — the wall then draws from those pictures, in day order,
   rather than one a day (up to 2 000 kept in your script, thinned evenly);
   *One a day* goes back. *By rules* chooses the wall by what to leave out,
-  how to spread it and what to prefer; *Correct the wall…* shows it in the
+  how to spread it and what to prefer (your Winnow ♥ first, then picks, stars…);
+*Correct the wall…* shows it in the
   order it is laid: ✕ takes a picture off (one fewer, the pictures after it
   close up), ⇄ offers the next best for its place, nearest in time first,
   and a picture dragged onto another swaps with it, onto its edge moves
@@ -3459,11 +3460,19 @@ clamped.
 ## Recap tool
 
 *Work in progress* — the home page and the tool menu say so with a badge. What
-exists: the six templates below, their gallery and their file, the editor, the
-exports and keeping a recap on a Winnow (`docs/recap.md`). More templates (a
-year, one second a day, the sheets of a whole month) come next.
+exists: the templates below, their gallery and their file, the editor, the
+exports and keeping a recap on a Winnow (`docs/recap.md`).
 
-**Templates.** `/recap` opens on a **catalogue**: each card is the template drawn
+**The gallery** has three sections you open and close, remembered on this
+device: **Suggestions** (closed, one line with its small posters), **Your
+recaps** and **New recap** (closed once you have a recap; *+ New* opens it).
+When a month has ended, each kind of recap you made for the month before is
+**ready** for it — a month calendar and a dump in September, both for October
+— and a week likewise; from 1 December, the year's Wrapped. *Make it* makes
+it in the same dress and opens it, filling itself from your Winnow; *Not this
+month* hides it. Nothing is saved until you make it.
+
+**Templates.** *New recap* is a **catalogue**: each card is the template drawn
 by the real painter over colour fields, and plays its entrance when you hover
 or focus it. A click asks what the recap is about — which month, which week,
 which day, which period — and makes it:
@@ -3472,7 +3481,11 @@ which day, which period — and makes it:
   trend: a calendar over a looping video);
 - **On this day** — the same day a year, a month and a week ago and today (the
   steps back are yours to choose, up to ten years);
-- **Week** — seven bands, one picture a day;
+- **Week** — seven bands, one picture a day; in the Reel each day takes the
+  stage in turn once all are on — *Accordion* (it opens wide, the default),
+  *Spotlight* (it fills the screen), *Wave*, *Slide-through* or *Focus* (the
+  others dim) —, each picture drifting inside its band (*Pan inside*), on the
+  beat when the cuts are;
 - **Bento grid** — the best of a period, in four, nine, a bento or one and two;
 - **Single picture** — one picture with its day and its camera's line;
 - **Photo dump** — the best of a period over a carousel: a cover, then pages
@@ -3553,7 +3566,11 @@ slide in its order — click one to see it, drag it to move it (the video
 follows), drop a picture from the stage onto it. After its first slide a recap
 holds nothing, its **highlights** (the best of its days the first slide does
 not show, in the photo dump's rhythm — a month's default) or, for a month, a
-slide per **week**. In *Pictures*, ✕ **removes** a picture — the carousel
+slide per **week**. Where your Winnow has **favourites (♥)**, they come first —
+before a pick or five stars — everywhere a recap chooses the best, and the
+carousel can draw from *Favourites* only (fewer places rather than others),
+*Auto* (your ♥ when they fill the places, else your picks, else everything) or
+*Everything*. In *Pictures*, ✕ **removes** a picture — the carousel
 holds one fewer, nothing comes in — and ⇄ **replaces** it with one you choose
 among the next best (nearest in time, never a look-alike of what stays); your
 first correction freezes the selection until *Let the rule choose again*.
@@ -3842,7 +3859,11 @@ grouped (several at once, or *All of them in the frame*), **words** —
 sea*) and the image index Winnow keeps lists the library's closest, whatever
 day is open (its ranking knows no day; the rail's filters and a place still
 narrow it, a person cannot; Winnow's default index reads **English** — *dog*,
-not *chien* — and the field says so); or *In text*, the words in the file's path
+not *chien* — and the field says so); a description reaches **Precise** (the
+200 closest) or **Broad** (everything still close to the best match, up to
+3 000, read page after page from a Winnow that pages its search) — Mosaic opens
+on Broad, every other tool on Precise, and the switch under the field changes it
+for one search; or *In text*, the words in the file's path
 and in the text Winnow read in the picture — and a **place** by Winnow's own
 names (country, region, city, point of interest). The ⋯ panel's third view is
 a **Map**: every row with a position as a dot where it was taken, on the

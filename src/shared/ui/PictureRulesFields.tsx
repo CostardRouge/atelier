@@ -58,7 +58,17 @@ export default function PictureRulesFields({
               <li key={k} className={`flex items-center gap-2 rounded-control border border-line bg-surface pl-2 pr-1 min-h-9 ${on ? '' : 'opacity-55'}`}>
                 <span className="w-4 font-mono text-2xs text-muted text-right">{on ? i + 1 : '–'}</span>
                 <label className="flex-1 min-w-0 flex items-center gap-2 text-xs cursor-pointer">
-                  <input type="checkbox" checked={on} onChange={(e) => onRules({ ...rules, prefer: e.target.checked ? [...rules.prefer, k] : rules.prefer.filter((x) => x !== k) })} />
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={(e) => {
+                      const prefer = e.target.checked ? [...rules.prefer, k] : rules.prefer.filter((x) => x !== k);
+                      // The ♥ off is said aloud: a list without it would otherwise read as one from before favourites.
+                      const { favOff: _was, ...rest } = rules;
+                      void _was;
+                      onRules(k === 'fav' && !e.target.checked ? { ...rest, prefer, favOff: true } : k === 'fav' ? { ...rest, prefer } : { ...rules, prefer });
+                    }}
+                  />
                   <span className="truncate">{PREFER_LABEL[k]}</span>
                 </label>
                 <IconButton label={`Prefer ${PREFER_LABEL[k]} sooner`} size="sm" variant="ghost" disabled={!on || i === 0} onClick={() => move(k, -1)}>

@@ -23,6 +23,7 @@ import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { readCarousel, type RecapCarousel } from './recap-carousel';
 import { readOpener, type RecapOpener } from './recap-opener';
 import { readBeat, type RecapBeat } from './recap-beat';
+import { BAND_HOLD, BAND_MOTIONS, type BandMotion } from './recap-bands';
 import { readSheet, type RecapSheet } from './recap-sheet';
 import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
@@ -105,6 +106,8 @@ export interface RecapPicture {
   /** Winnow's culling, when it says: what the automatic pick ranks first. */
   stars?: number;
   picked?: boolean;
+  /** Winnow's ♥ — «show this», beside the culling (Winnow #355); the rule ranks it first. */
+  fav?: boolean;
   /** Its own correction (the Develop sheet), null as shot. */
   develop?: DevelopSettings | null;
   /** How it sits in a cell: its focus and zoom (`recap-frame.ts`); absent = centred, just covering. */
@@ -219,6 +222,10 @@ export interface RecapMotion {
   seed: number;
   /** The cuts and entrances land on the sound's beats, the film ends on a bar (`recap-beat.ts`). */
   onBeat: boolean;
+  /** A week's bands moving, each day in turn (`recap-bands.ts`); how long a day keeps the stage; a slow drift inside each band. */
+  bands: BandMotion;
+  bandHold: number;
+  bandPan: boolean;
 }
 
 export interface RecapSound {
@@ -327,6 +334,9 @@ export const DEFAULT_MOTION: RecapMotion = {
   videos: 'turn',
   seed: 1,
   onBeat: false,
+  bands: 'none',
+  bandHold: 0.9,
+  bandPan: false,
 };
 
 export const DEFAULT_BACKGROUND: RecapBackground = {
@@ -385,7 +395,8 @@ export const RECIPES: Record<RecapTemplate, Recipe> = {
     subheading: '{from} → {to}',
     background: 'ink',
     cells: { gap: 0.003 },
-    motion: { order: 'inOrder', entrance: 'drop', stagger: 0.14 },
+    // His pick (lab 8): the days open in turn like an accordion, each picture drifting in its band.
+    motion: { order: 'inOrder', entrance: 'drop', stagger: 0.14, bands: 'accordion', bandPan: true },
     font: 'serif',
   },
   grid: {
@@ -540,6 +551,7 @@ export function readPicture(raw: unknown): RecapPicture | null {
     if (v) out[k] = v;
   }
   if (r.picked === true) out.picked = true;
+  if (r.fav === true) out.fav = true;
   if (r.loose === true) out.loose = true;
   const parts = readExifParts(r.exifParts);
   if (parts) out.exifParts = parts;
@@ -630,6 +642,9 @@ export function sanitizeMotion(raw: unknown, base: RecapMotion = DEFAULT_MOTION)
     videos: oneOf(r.videos, VIDEO_PLAYS, base.videos),
     seed: Math.round(num(r.seed, 1, 2147483646, base.seed)),
     onBeat: bool(r.onBeat, base.onBeat),
+    bands: oneOf(r.bands, BAND_MOTIONS, base.bands),
+    bandHold: num(r.bandHold, BAND_HOLD.min, BAND_HOLD.max, base.bandHold),
+    bandPan: bool(r.bandPan, base.bandPan),
   };
 }
 

@@ -375,8 +375,24 @@ English only («dog» finds dogs, «chien» barely), shown as a warning under th
 multilingual model (XLM-RoBERTa, NLLB) is his call in Winnow, after a re-index. `indexed: 0` is its own state
 (nothing indexed yet). **The stub hid the bug**: one day of 90 rows makes «the scope» and «the library» the same —
 `stub.cjs {spread: true}` puts every tenth row a year earlier and honours `date_from/date_to`; test a scope against
-the library with it. The root fix — ranking WITHIN a scope (Winnow's `/api/search` reading `filterFromSearchParams`
-into its CTE) — is a Winnow change, his call.
+the library with it. **Ranking WITHIN a scope was REJECTED by him (2026-11-05)**: «la recherche sur toute la
+database me convient parfaitement, surtout quand on est dans Mosaïque» — a span-bound description is for another
+instrument, if ever; do not propose it for the picker again.
+
+**How FAR a description reaches is the INSTRUMENT's (2026-11-05, his ask «intelligemment augmenter la portée de la
+recherche en fonction du scope demandé par l'instrument», then «prends tes recommandations»).** `describe-reach.ts`
+(pure): *Precise* = the 200 closest; *Broad* = never narrower than Precise, then every row within `BROAD_SLACK`
+(0.06 cosine distance) of the BEST row, up to `BROAD_MAX` 3 000 — relative to the best because CLIP's distances
+shift from query to query. Winnow pages its search since CostardRouge/winnow#351 (`offset`, 1 000 a page,
+`next_offset`, `capabilities.search`): the picker reads page after page while `wantsMore` (Precise until it holds
+200 on an instance with small pages; Broad while the page ends inside the cutoff). **How to apply**: an instrument
+says `PickerHost.reach` (`broad` for the Mosaic, absent = `precise` for the others); the person switches it for one
+search under the Describe field (*Precise · Broad*, state of the picker, never stored in the facets — the default is
+the instrument's); an instance without `capabilities.search` hands one page of 200 and the rail says «this Winnow
+hands 200 at most». `BROAD_SLACK` is a starting value from ViT-B-32's typical distances (a clear match ~0.70, noise
+~0.80), never measured on his library: if Broad brings too much noise or too little, tune that one number. The stub
+ranks the WHOLE library and pages (`stub.cjs {searchPage: n}`), driven at 900 rows: Broad read 3 pages and kept 225,
+Precise 200, an old instance 200 with the note.
 
 **WHY the index refuses is said, never «no index» (2026-11-03, his next report: the picker said «No image index on
 this Winnow», Winnow's own Search page «Unexpected token '<', "<!DOCTYPE"», the URL a Cloudflare-branded 502).**

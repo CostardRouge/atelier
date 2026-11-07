@@ -34,22 +34,22 @@
     "libraw-wasm": "^1.6.0",
     "maplibre-gl": "^5.24.0",
     "mp4-muxer": "^5.2.2",
-    "mp4box": "^2.4.1",
-    "onnxruntime-web": "^1.30.0",
+    "mp4box": "^2.5.0",
+    "onnxruntime-web": "^1.31.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^10.13.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.0",
+    "typescript-eslint": "^8.72.1",
     "vite": "^6.4.5",
     "vitest": "^2.1.8"
   }

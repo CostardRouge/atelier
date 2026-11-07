@@ -9,6 +9,7 @@ import {
   hasTimeline,
   normalizeBaseUrl,
   sameSite,
+  searchPaging,
   sourceIdFor,
   takesQueryToken,
   type WinnowCapabilities,
@@ -261,7 +262,27 @@ describe('WinnowClient requests', () => {
     expect(url.pathname).toBe('/api/search');
     expect(Object.fromEntries(url.searchParams)).toEqual({ q: 'a koala in a tree', limit: '30', source: 'gallery' });
     expect(on).toMatchObject({ enabled: true, indexed: 90, library: 100, items: [{ id: 4, distance: 0.21 }] });
-    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed on this Winnow', indexed: null, library: null, model: null, items: [] });
+    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed on this Winnow', indexed: null, library: null, model: null, items: [], nextOffset: null });
+  });
+
+  it('pages a description when the instance says it can, and reads where the next page starts', async () => {
+    const fetchImpl = vi
+      .fn<FetchLike>()
+      .mockResolvedValueOnce(ok({ items: [{ id: 9, distance: 0.7 }], enabled: true, next_offset: 1000 }))
+      .mockResolvedValueOnce(ok({ items: [], enabled: true, next_offset: null }))
+      .mockResolvedValueOnce(ok({ items: [], enabled: true }));
+    const c = client(fetchImpl);
+    expect((await c.search('dog', { limit: 1000, offset: 1000 })).nextOffset).toBe(1000);
+    expect((await c.search('dog', { limit: 1000 })).nextOffset).toBeNull();
+    expect((await c.search('dog')).nextOffset).toBeNull();
+    const asked = fetchImpl.mock.calls.map((call) => Object.fromEntries(new URL(call[0]).searchParams));
+    expect(asked[0]).toEqual({ q: 'dog', limit: '1000', offset: '1000' });
+    expect(asked[1]).toEqual({ q: 'dog', limit: '1000' });
+    // Paging is the capability's word, never a guess: an older instance hands one page of 200.
+    expect(searchPaging(null)).toEqual({ pageSize: 200, pages: false });
+    expect(searchPaging({ search: { maxLimit: 1000 } } as unknown as WinnowCapabilities)).toEqual({ pageSize: 200, pages: false });
+    expect(searchPaging({ search: { maxLimit: 1000, offset: true } } as unknown as WinnowCapabilities)).toEqual({ pageSize: 1000, pages: true });
+    expect(searchPaging({ search: { offset: true } } as unknown as WinnowCapabilities)).toEqual({ pageSize: 200, pages: true });
   });
 
   it('says WHY the index cannot rank — ML off, the feature off, the ML container failing — and keeps other errors errors', async () => {
