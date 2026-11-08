@@ -3626,7 +3626,10 @@ day, it says so and lets you. The **caption** is a template of Recap's words —
 places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
 shows it. Sending it approves it; an agent can write one, and it waits for
 your approval. The recap keeps what it sent and shows its state in Postiz;
-once a post is out, add its location in Instagram (the API cannot).
+once a post is out, add its location in Instagram (the API cannot). The
+gallery's **Planned** section lists, week by week, what goes out in the next
+six weeks as your Postiz says — scheduled, out, failed (with the reason) —
+including posts scheduled outside Recap; a click opens the recap that sent it.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and

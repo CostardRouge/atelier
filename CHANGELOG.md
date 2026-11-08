@@ -75,7 +75,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   posts a week at most.
   A recap's *Export* tab can then **publish** it: rendered, sent to your Postiz and scheduled on Instagram as a Reel
   (or a Trial Reel), a carousel or a story, in the next free slot of your rhythm, now, or as a draft — with a caption
-  written from the recap's own words (its title, the place, the route, hashtags from the places) that you edit. A month or a week can
+  written from the recap's own words (its title, the place, the route, hashtags from the places) that you edit.
+  The recaps' gallery has a **Planned** section: what goes out in the next six weeks, week by week, scheduled, out or
+  failed, read from your Postiz. A month or a week can
   show its runs of days in one place — a red line under them, *Albany · 8–14* — when you turn them on, and a title
   can say `{place}` (the place you came back to most, the pin before it) or `{places}` (the route).
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's

@@ -8,7 +8,7 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import TemplatePreview from './TemplatePreview';
 import { getThumb } from './recap-store';
 
-export type SectionId = 'suggestions' | 'yours' | 'new';
+export type SectionId = 'suggestions' | 'planned' | 'yours' | 'new';
 const KEY = 'atelier.recap.gallery.sections';
 
 /**
@@ -22,7 +22,7 @@ export function useSectionState(hasRecaps: boolean): { isOpen: (id: SectionId) =
     try {
       const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Record<string, unknown>;
       const out: Partial<Record<SectionId, boolean>> = {};
-      for (const id of ['suggestions', 'yours', 'new'] as const) if (typeof raw[id] === 'boolean') out[id] = raw[id] as boolean;
+      for (const id of ['suggestions', 'planned', 'yours', 'new'] as const) if (typeof raw[id] === 'boolean') out[id] = raw[id] as boolean;
       return out;
     } catch {
       return {};
@@ -35,8 +35,8 @@ export function useSectionState(hasRecaps: boolean): { isOpen: (id: SectionId) =
       // A private window keeps it for this visit only.
     }
   }, [kept]);
-  const isOpen = useCallback((id: SectionId) => kept[id] ?? (id === 'yours' ? true : id === 'new' ? !hasRecaps : false), [kept, hasRecaps]);
-  const toggle = useCallback((id: SectionId, open?: boolean) => setKept((k) => ({ ...k, [id]: open ?? !(k[id] ?? (id === 'yours' ? true : id === 'new' ? !hasRecaps : false)) })), [hasRecaps]);
+  const isOpen = useCallback((id: SectionId) => kept[id] ?? (id === 'yours' || id === 'planned' ? true : id === 'new' ? !hasRecaps : false), [kept, hasRecaps]);
+  const toggle = useCallback((id: SectionId, open?: boolean) => setKept((k) => ({ ...k, [id]: open ?? !(k[id] ?? (id === 'yours' || id === 'planned' ? true : id === 'new' ? !hasRecaps : false)) })), [hasRecaps]);
   return { isOpen, toggle };
 }
 
