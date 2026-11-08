@@ -483,3 +483,17 @@ export async function renderCarouselFiles(
   }
   return out;
 }
+
+/** The files a post sends: the film for a Reel or a story, the slides in order for a carousel. */
+export async function renderPostFiles(
+  input: ExportInput,
+  kind: 'reel' | 'carousel' | 'story',
+  order: Parameters<typeof renderCarouselFiles>[1],
+  base: string,
+  onProgress: (p: FilmProgress) => void,
+  signal: AbortSignal,
+): Promise<File[]> {
+  if (kind === 'carousel') return renderCarouselFiles(input, order, base, onProgress, signal);
+  const r = await exportFilm(input, onProgress, signal);
+  return [new File([r.blob], `${base}.mp4`, { type: 'video/mp4' })];
+}

@@ -13,7 +13,7 @@ import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspec
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 import { Icons } from '../../shared/ui/icons';
-import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderCarouselFiles, type FilmProgress } from './recap-export';
+import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles, type FilmProgress } from './recap-export';
 import PublishSection from './PublishSection';
 import type { PublishKind } from '../../shared/recap/recap-publish';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
@@ -343,11 +343,7 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
     });
 
   /** What a post sends: the film for a Reel or a story, the slides for a carousel. */
-  const renderFor = async (kind: PublishKind, signal: AbortSignal, task: ReturnType<typeof startTask>): Promise<File[]> => {
-    if (kind === 'carousel') return renderCarouselFiles(input(), order, base, report(task), signal);
-    const r = await exportFilm(input(), report(task), signal);
-    return [new File([r.blob], `${base}.mp4`, { type: 'video/mp4' })];
-  };
+  const renderFor = (kind: PublishKind, signal: AbortSignal, task: ReturnType<typeof startTask>): Promise<File[]> => renderPostFiles(input(), kind, order, base, report(task), signal);
 
   return (
     <>

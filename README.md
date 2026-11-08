@@ -3693,6 +3693,18 @@ stills or the carousel into the downloads; `delivery` in `.set` chooses its
 quality, frame rate, passes and clips), and `.undo` / `.redo`. Every write
 is one step of the recap's undo, saved and synced like a gesture.
 
+The whole posting routine can be driven too, so an agent prepares the posts
+and you only validate them: `recap.suggestions` and `.makeSuggestion` (the
+recaps ready to make), `.calendar` (your rhythm, its free and taken slots, and
+what goes out week by week, from your Postiz), `.facts` (what a caption is
+written from: the period, the places in order and how long each was stayed
+in, the cameras, the best pictures with their day and place, the caption's
+words filled), `.postCaption` (the caption's template — writing it takes your
+approval back), `.approve` (only once you said yes), `.schedule` (render,
+send to your Postiz and schedule — as a Reel, a Trial Reel, a carousel or a
+story, in the next free slot, at a time, now or as a draft; refused while the
+caption is not approved) and `.unschedule`.
+
 ## Telemetry tool
 
 When a DJI drone records, the memory card holds both the video (`.mp4`) and a

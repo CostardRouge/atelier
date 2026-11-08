@@ -1,8 +1,13 @@
 /**
  * The open recap's agent commands, registered by the EDITOR while a recap is
  * open (`agent-commands.md`): `recap.get`, `.fill`, `.pin`, `.empty`, `.swap`,
- * `.caption`, `.set`, `.snapshot`, `.export`. The shell registers the rest
- * (`recap.list`, `.create`, `.open`, `.keep`, `.undo`, `.redo`).
+ * `.caption`, `.frame`, `.set`, `.snapshot`, `.export` — and its POST (lab 12):
+ * `.facts`, `.postCaption`, `.approve`, `.schedule`, `.unschedule`. The shell
+ * registers the rest (`recap.list`, `.create`, `.open`, `.keep`, `.undo`,
+ * `.redo`, `.suggestions`, `.makeSuggestion`, `.calendar`).
+ *
+ * An agent WRITES a caption; only the person APPROVES it (his flow: generate,
+ * validate, publish) — `recap.schedule` refuses an unapproved one.
  *
  * Every write goes through the editor's own funnel — the one a gesture uses —
  * so it is saved, synced and one undo step; the checks only a recap can make
@@ -15,15 +20,21 @@ import { imageResult } from '../../shared/commands/image-result';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { downloadBlob } from '../../shared/media/save';
 import { applySettings, recapOutline, SETTABLE } from '../../shared/recap/recap-commands';
-import { withCaption, withCleared, withPick, withPicture, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
+import { withCaption, withCleared, withPick, withPicture, withRecap, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { DEFAULT_FRAME, readFrame } from '../../shared/recap/recap-frame';
 import { slugOf } from '../../shared/recap/recap-file';
 import { carouselSlides, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
-import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages } from './recap-export';
+import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
+import { recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
+import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
+import { PostizClient } from '../../shared/sources/postiz/client';
+import { rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
+import { getPostiz, publishChannel } from '../../shared/sources/postiz/store';
+import { sendPost } from './recap-post';
 
 export interface RecapCommandsContext {
   /** The recap as it is NOW — written the moment an edit is applied, before React renders. */
@@ -213,6 +224,113 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           files.push(`${base}-${n}.${ext}`);
         }
         return { files };
+      },
+    },
+    {
+      id: 'recap.facts',
+      title: 'Gather what the recap is about',
+      description:
+        'What a caption is written from: the period, days, pictures and videos, the places (the one most visited, the route in time order, each stay with its days), the cameras, the pictures shown with their day and place (♥ and picks first), the words a caption template can hold (filled: heading, at, route, tags, place, places, month, year, count, days…), and the caption as it stands — its template, its text as it would go out, whether the person approved it.',
+      run: () => recapFacts(doc(), resolveRecap(doc()), c.current.aliases),
+    },
+    {
+      id: 'recap.postCaption',
+      title: 'Write the post’s caption',
+      description: `The Instagram caption the recap goes out with — a TEMPLATE of Recap's words filled when it is sent: {heading}, {at} (" — Albany"), {route} (Esperance → Albany), {tags} (hashtags from the places), {place}, {places}, {month}, {year}, {count}, {days}, {videos}; plain text and emoji around them. ${CAPTION_MAX} characters at most once filled. Writing it takes the person's approval back: they read it (Export › Publish) and approve, or tell you to (recap.approve). reset: true gives back Recap's own. Answers the text as it would go out.`,
+      params: {
+        text: { type: 'string', description: 'The caption template.', optional: true },
+        reset: { type: 'boolean', description: 'Back to Recap’s own caption.', optional: true },
+      },
+      run: (p) => {
+        if (p.reset !== true && typeof p.text !== 'string') throw new CommandError('invalid', 'give text, or reset: true');
+        const next = p.reset === true ? null : (p.text as string);
+        if (next !== null && !next.trim()) throw new CommandError('invalid', 'an empty caption — reset: true gives back Recap’s own');
+        c.current.change((d) => withRecap(d, { publish: withPostCaption(d.publish, next) }));
+        const after = { ...doc(), publish: withPostCaption(doc().publish, next) };
+        const text = captionText(after, resolveRecap(after));
+        return { text, length: text.length, approved: after.publish.approved, ...(text.length >= CAPTION_MAX ? { cut: `longer than ${CAPTION_MAX} once filled — cut` } : {}) };
+      },
+    },
+    {
+      id: 'recap.approve',
+      title: 'Approve the caption',
+      description: 'Mark the caption approved — ONLY when the person has read it and said so in this conversation. recap.schedule needs it. Any change to the caption takes it back.',
+      run: () => {
+        c.current.change((d) => withRecap(d, { publish: { ...d.publish, approved: true } }));
+        return { approved: true, text: captionText(doc(), resolveRecap(doc())) };
+      },
+    },
+    {
+      id: 'recap.schedule',
+      title: 'Schedule the recap on Instagram',
+      description:
+        'Render the open recap, send it to the person’s Postiz and schedule it on their Instagram — the caption must be approved first (recap.approve). kind: "reel" (the film), "carousel" (the slides, 10 at most) or "story" (default: a carousel for a dump, sheets or Wrapped, else the Reel). at: "next" (default — the next free slot of their rhythm), "now", "draft" (left in Postiz unsent), or a time: YYYY-MM-DDTHH:MM in the rhythm’s time zone, or ISO with its zone. trial: a Trial Reel shown to non-followers first; graduate: "auto" (shared with the followers when it performs, default) or "manual". collaborator: false leaves out the collaborator set on Sources. A broken rhythm (two the same day, past the week’s ceiling) is answered as warnings, not refused. Answers when it goes out and the post’s id.',
+      params: {
+        kind: { type: 'string', enum: [...PUBLISH_KINDS], description: 'What it goes out as.', optional: true },
+        at: { type: 'string', description: '"next", "now", "draft" or a time.', optional: true },
+        trial: { type: 'boolean', description: 'A Trial Reel.', optional: true },
+        graduate: { type: 'string', enum: ['auto', 'manual'], description: 'A trial shared with followers when it performs, or by hand.', optional: true },
+        collaborator: { type: 'boolean', description: 'Invite the collaborator set on Sources (default true).', optional: true },
+      },
+      available: () => {
+        const conn = getPostiz();
+        if (!conn) return 'no Postiz is connected — the person connects theirs on #/sources';
+        return publishChannel(conn) ? true : 'the person has not chosen the Instagram account Recap posts to, on #/sources';
+      },
+      run: async (p) => {
+        const d0 = doc();
+        if (!d0.publish.approved) throw new CommandError('unavailable', 'the caption is not approved — show it to the person (recap.facts) and approve it once they say so (recap.approve)');
+        const conn = getPostiz()!;
+        const channel = publishChannel(conn)!;
+        const client = new PostizClient(conn.apiBase, conn.apiKey);
+        const order = carouselSlides(d0, c.current.resolved, c.current.layout, hasOpenerSlide(d0, c.current.film.opener));
+        const kind = (p.kind as PublishKind | undefined) ?? defaultKind(d0, order.length);
+        if (kind === 'carousel' && order.length < 2) throw new CommandError('invalid', 'this recap has one slide — a carousel needs two');
+        const now = new Date();
+        const planned = (await client.posts(new Date(now.getTime() - 86400000), new Date(now.getTime() + 63 * 86400000))).filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => new Date(x.publishDate));
+        const target = scheduleTarget(p.at, conn.rhythm, planned, now);
+        if ('error' in target) throw new CommandError('invalid', target.error);
+        const signal = new AbortController().signal;
+        const files = await renderPostFiles(input(), kind, order, slugOf(d0.title) || 'recap', () => undefined, signal);
+        const text = captionText(d0, resolveRecap(d0));
+        const sent = await sendPost({
+          client,
+          channel,
+          kind,
+          caption: text,
+          files,
+          at: target.at,
+          trial: p.trial === true,
+          graduate: (p.graduate as 'auto' | 'manual' | undefined) ?? 'auto',
+          collaborators: p.collaborator !== false && conn.collaborator ? [conn.collaborator] : [],
+          signal,
+        });
+        c.current.change((d) => withRecap(d, { publish: withPublication(d.publish, sent) }));
+        return {
+          postId: sent.postId,
+          kind,
+          trial: sent.trial,
+          on: channel.name,
+          goesOut: target.at instanceof Date ? `${slotLabel(target.at, conn.rhythm.timeZone)} (${conn.rhythm.timeZone})` : target.at,
+          files: files.length,
+          warnings: target.at instanceof Date ? rhythmWarnings(conn.rhythm, planned, target.at) : [],
+          remember: 'Instagram’s API sets no location: tell the person to add it in Instagram once the post is out.',
+        };
+      },
+    },
+    {
+      id: 'recap.unschedule',
+      title: 'Take a scheduled post back',
+      description: 'Delete a post this recap sent from the person’s Postiz, by its id (recap.get › post.publications), before it goes out — and forget it here. A post already out stays on Instagram.',
+      params: { postId: { type: 'string', description: 'The post’s id.' } },
+      available: () => (getPostiz() ? true : 'no Postiz is connected'),
+      run: async (p) => {
+        const pub = doc().publish.publications.find((x) => x.postId === p.postId);
+        if (!pub) throw new CommandError('invalid', `this recap sent no post "${String(p.postId)}"`);
+        const conn = getPostiz()!;
+        await new PostizClient(conn.apiBase, conn.apiKey).deletePost(pub.postId);
+        c.current.change((d) => withRecap(d, { publish: { ...d.publish, publications: d.publish.publications.filter((x) => x.postId !== pub.postId) } }));
+        return { removed: pub.postId };
       },
     },
   ];

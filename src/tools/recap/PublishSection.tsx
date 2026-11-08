@@ -3,7 +3,8 @@ import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { CAPTION_MAX, DEFAULT_CAPTION, captionText, defaultKind, withCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
 import { placeWords } from '../../shared/recap/recap-places';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
-import { PostizClient, postProblem, uploadProblem, type PostizPost } from '../../shared/sources/postiz/client';
+import { PostizClient, type PostizPost } from '../../shared/sources/postiz/client';
+import { sendPost } from './recap-post';
 import { nextFreeSlot, rhythmWarnings, slotLabel, slotsWithState } from '../../shared/sources/postiz/rhythm';
 import { publishChannel } from '../../shared/sources/postiz/store';
 import { usePostiz } from '../../shared/sources/postiz/use-postiz';
@@ -123,33 +124,21 @@ export default function PublishSection({
   const schedule = () =>
     run('publish', async (signal, task) => {
       const files = await render(kind, signal, task);
-      const problem = postProblem(kind, files) ?? files.map(uploadProblem).find(Boolean) ?? null;
-      if (problem) throw new Error(problem);
-      const media = [];
-      for (const [i, f] of files.entries()) {
-        task.update({ progress: i / files.length, detail: `sending ${i + 1} / ${files.length}` });
-        media.push(await client!.upload(f, signal));
-      }
       const target = chosen.kind === 'now' ? 'now' : chosen.kind === 'draft' ? 'draft' : (at ?? 'draft');
-      const ids = await client!.createPost(
-        { channel, kind, caption: text, media, at: target, trial: kind === 'reel' && trial, graduate, collaborators: collab && conn.collaborator ? [conn.collaborator] : [] },
+      const sent = await sendPost({
+        client: client!,
+        channel,
+        kind,
+        caption: text,
+        files,
+        at: target,
+        trial,
+        graduate,
+        collaborators: collab && conn.collaborator ? [conn.collaborator] : [],
         signal,
-      );
-      if (!ids.length) throw new Error('Postiz took the post but gave no id back — look in Postiz before sending it again.');
-      change((d) =>
-        withRecap(d, {
-          publish: withPublication(withCaption(d.publish, d.publish.caption), {
-            postId: ids[0],
-            channelId: channel.id,
-            channel: channel.name,
-            kind,
-            trial: kind === 'reel' && trial,
-            at: target instanceof Date ? target.toISOString() : target === 'now' ? new Date().toISOString() : null,
-            sentAt: Date.now(),
-            caption: text,
-          }),
-        }),
-      );
+        onFile: (n, of) => task.update({ progress: (n - 1) / of, detail: `sending ${n} / ${of}` }),
+      });
+      change((d) => withRecap(d, { publish: withPublication(d.publish, sent) }));
       void refresh();
       setWhen(null);
       const where = target === 'now' ? 'Sent — Instagram is publishing it' : target === 'draft' ? 'Sent to Postiz as a draft' : `Scheduled on Postiz for ${slotLabel(target, rhythm!.timeZone)}`;
