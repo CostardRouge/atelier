@@ -1,13 +1,9 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import { PostizClient, findApi, type PostizChannel } from '../shared/sources/postiz/client';
-import { forgetPostiz, getPostiz, publishChannel, putPostiz, subscribePostiz, updatePostiz, type PostizConnection } from '../shared/sources/postiz/store';
+import { forgetPostiz, publishChannel, putPostiz, updatePostiz, type PostizConnection } from '../shared/sources/postiz/store';
+import { usePostiz } from '../shared/sources/postiz/use-postiz';
 import { DEFAULT_RHYTHM, rhythmSlotLabel, type Rhythm, type RhythmSlot } from '../shared/sources/postiz/rhythm';
 import { Fact, SourceRow, danger, ghost, legend, pill, solid } from './source-row';
-
-/** The kept Postiz, live. */
-export function usePostiz(): PostizConnection | null {
-  return useSyncExternalStore(subscribePostiz, getPostiz, getPostiz);
-}
 
 const input = 'font-mono text-sm px-3 py-1.5 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

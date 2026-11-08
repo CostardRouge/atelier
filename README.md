@@ -3613,6 +3613,21 @@ or takes the layout you set, and the first slide's title can repeat on the
 others — small with the slide's number, or as big as on the first. The carousel
 export writes the slides in that order, a clip as its own video slide.
 
+**Publishing.** Once your own **Postiz** is connected on `#/sources`, the
+*Export* tab has a *Publish* section: the recap is rendered, sent to your
+Postiz and scheduled on your Instagram — as a **Reel** (a **Trial Reel**,
+shown to non-followers first, if you like, shared with your followers when it
+works or by hand), a **carousel** (its slides as JPEG, a clip as a video
+slide; Instagram's API takes 10) or a **story**. It goes out in the next free
+slot of your rhythm (the slots already taken in Postiz are struck out), now,
+or as a draft left in Postiz; past your ceiling, or a second post the same
+day, it says so and lets you. The **caption** is a template of Recap's words —
+`{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
+places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
+shows it. Sending it approves it; an agent can write one, and it waits for
+your approval. The recap keeps what it sent and shows its state in Postiz;
+once a post is out, add its location in Instagram (the API cannot).
+
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and
 faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its

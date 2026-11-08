@@ -140,6 +140,7 @@ export function readyRecap(s: Suggestion, sourceId: string, now: number = Date.n
         carousel: { ...s.model.carousel, chosen: null, left: [], burstPick: {}, order: null },
         background: { ...s.model.background, video: undefined, picture: undefined, frame: undefined, loopIn: 0, loopOut: null },
         opener: { ...s.model.opener, picture: null },
+        publish: { caption: s.model.publish.caption, approved: false, publications: [] },
         createdAt: fresh.createdAt,
         updatedAt: fresh.updatedAt,
       }

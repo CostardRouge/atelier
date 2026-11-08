@@ -133,7 +133,7 @@ async function openForExport(input: ExportInput, key: string, signal: AbortSigna
 
 /** Where an export is, said to the person: what it is doing, how far, and the frame it is on. */
 export interface FilmProgress {
-  stage: 'clips' | 'converting' | 'pictures' | 'sound' | 'encoding' | 'finishing';
+  stage: 'clips' | 'converting' | 'pictures' | 'sound' | 'encoding' | 'finishing' | 'sending';
   /** 0..1 of the whole run where it can be told; null when not. */
   ratio: number | null;
   /** Clips or pictures fetched or opened, of how many (stages `clips`, `pictures`). */
@@ -439,4 +439,47 @@ export async function exportClipSlide(input: ExportInput, key: string, onProgres
   } finally {
     closeClip(c);
   }
+}
+
+/** A PNG page as the JPEG Instagram's API takes for a picture. */
+async function asJpeg(png: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(png);
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+    return await new Promise<Blob>((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error('This browser could not write a JPEG.'))), 'image/jpeg', 0.93));
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** The slides a carousel post sends, in its order: a page or the opener as a JPEG, a clip as its own MP4. */
+export async function renderCarouselFiles(
+  input: ExportInput,
+  order: readonly ({ kind: 'page'; page: number } | { kind: 'opener' } | { kind: 'clip'; slot: string })[],
+  base: string,
+  onProgress: (p: FilmProgress) => void,
+  signal: AbortSignal,
+): Promise<File[]> {
+  const pages = await exportPages(input, signal);
+  const out: File[] = [];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  for (const [i, s] of order.entries()) {
+    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+    onProgress({ stage: 'pictures', ratio: i / Math.max(1, order.length), done: i, of: order.length });
+    if (s.kind === 'page') {
+      const png = pages[s.page];
+      if (png) out.push(new File([await asJpeg(png)], `${base}-${pad(i + 1)}.jpg`, { type: 'image/jpeg' }));
+    } else if (s.kind === 'opener') {
+      const png = await exportOpenerSlide(input, signal);
+      if (png) out.push(new File([await asJpeg(png)], `${base}-${pad(i + 1)}.jpg`, { type: 'image/jpeg' }));
+    } else {
+      const key = input.resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
+      const blob = key ? await exportClipSlide(input, key, (ratio) => onProgress({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }) : null;
+      if (blob) out.push(new File([blob], `${base}-${pad(i + 1)}.mp4`, { type: 'video/mp4' }));
+    }
+  }
+  return out;
 }

@@ -72,7 +72,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   it on, then only where the place changes (or on every picture, or the first of each place).
   Your own **Postiz** can be connected on the Sources screen (its address and an API key): you choose the Instagram
   account Recap publishes to, a collaborator it proposes, and your publishing rhythm — the week's slots and how many
-  posts a week at most. A month or a week can
+  posts a week at most.
+  A recap's *Export* tab can then **publish** it: rendered, sent to your Postiz and scheduled on Instagram as a Reel
+  (or a Trial Reel), a carousel or a story, in the next free slot of your rhythm, now, or as a draft — with a caption
+  written from the recap's own words (its title, the place, the route, hashtags from the places) that you edit. A month or a week can
   show its runs of days in one place — a red line under them, *Albany · 8–14* — when you turn them on, and a title
   can say `{place}` (the place you came back to most, the pin before it) or `{places}` (the route).
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
