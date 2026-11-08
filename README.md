@@ -3561,6 +3561,18 @@ turns a picture or the background by up to 45° — it grows just enough that no
 corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
 framing wherever it goes.
 
+**Places.** In *Layout › Places*, a picture can say the town it was taken in
+— as your Winnow named it from its GPS — in a small glass pill with a red map
+pin, in the cell's corner you choose. It is off until you turn it on, then
+shows only where the place changes from the picture before (a route you read
+at a glance); *Every cell* and *First of each* are the other two choices. A
+cell's own words move up over it; a cell too small for the town shows the pin
+alone. On a month or a week, **Runs of days** (off until you turn it on) draws
+a red line under the days spent in one place, with the pin and its words —
+*Albany · 8–14*. In any text, `{place}` is the place you came back to most,
+the same pin before it (*Pin before {place}* takes it away), and `{places}`
+the route: *Esperance → Albany → Perth*.
+
 **Carousels.** Every recap is a carousel: a strip under the stage shows each
 slide in its order — click one to see it, drag it to move it (the video
 follows), drop a picture from the stage onto it. After its first slide a recap

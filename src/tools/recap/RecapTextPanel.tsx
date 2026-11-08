@@ -1,5 +1,6 @@
 import { withRecap, withTextStyle, NUMBER_PLACES, type NumberAt, type RecapDoc, type RecapFont } from '../../shared/recap/recap-doc';
 import { TEXT_WORDS } from '../../shared/recap/recap-slots';
+import { PIN } from '../../shared/recap/recap-places';
 import { DEFAULT_TEXT_STYLE, TEXT_PRESETS, TEXT_ROLE_LABEL, presetStyle, rolesOf, textStyleOf, type TextRole, type TextStyle } from '../../shared/recap/recap-text';
 import { STORY_FONTS, storyFaceChoices } from '../../shared/story/fonts';
 import type { FontChoice } from '../../shared/ui/font-picker';
@@ -57,7 +58,7 @@ function PresetTile({ id, name, tagline, style, on, onPick }: { id: string; name
 export default function RecapTextPanel({
   doc,
   change,
-  vars,
+  vars: counted,
   role,
   onRole,
   onPreview,
@@ -70,6 +71,8 @@ export default function RecapTextPanel({
   /** A face being tried on the stage, or null. */
   onPreview: (role: TextRole, font: string | null) => void;
 }) {
+  // The pin the stage draws for `{place}` reads as 📍 in the panel's own words.
+  const vars = Object.fromEntries(Object.entries(counted).map(([k, v]) => [k, v.split(PIN).join('📍')]));
   const roles = rolesOf(doc.template);
   const current = roles.includes(role) ? role : roles[0];
   const st = textStyleOf(doc.texts, current);

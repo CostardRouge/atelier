@@ -36,6 +36,7 @@ export interface RecapStyle {
   delivery: RecapDoc['delivery'];
   /** The opener's kind and dress — never its picture, its words nor its trip (those are this recap's). */
   opener?: Omit<RecapDoc['opener'], 'picture' | 'title' | 'trip'>;
+  places?: RecapDoc['places'];
 }
 
 export const styleKey = (template: RecapTemplate) => `style:${template}`;
@@ -66,6 +67,7 @@ export function styleOf(doc: RecapDoc): RecapStyle {
     length: doc.length,
     delivery: doc.delivery,
     opener: openerStyle(doc.opener),
+    places: doc.places,
   };
 }
 
@@ -106,6 +108,7 @@ export function withStyle(doc: RecapDoc, style: unknown, now: number = Date.now(
     ...(s.length !== undefined ? { length: s.length } : {}),
     ...(s.delivery !== undefined ? { delivery: s.delivery } : {}),
     opener: { ...doc.opener, ...(s.opener ?? {}), picture: doc.opener.picture, title: doc.opener.title, trip: doc.opener.trip },
+    ...(s.places !== undefined ? { places: s.places } : {}),
   };
   const read = readRecapDoc(merged, doc.sourceId, now);
   if (!read) return doc;

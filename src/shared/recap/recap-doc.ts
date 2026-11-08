@@ -22,6 +22,7 @@ import { readFrame, type Frame } from './recap-frame';
 import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { readCarousel, type RecapCarousel } from './recap-carousel';
 import { readOpener, type RecapOpener } from './recap-opener';
+import { readPlaces, type RecapPlaces } from './recap-places';
 import { readBeat, type RecapBeat } from './recap-beat';
 import { BAND_HOLD, BAND_MOTIONS, type BandMotion } from './recap-bands';
 import { readSheet, type RecapSheet } from './recap-sheet';
@@ -144,7 +145,7 @@ export interface RecapPicture {
 }
 
 export interface RecapText {
-  /** May hold `{month}`, `{year}`, `{week}`, `{date}`, `{count}`, `{days}` — counted for you (`fillText`). */
+  /** May hold `{month}`, `{year}`, `{week}`, `{date}`, `{count}`, `{days}`, `{place}`, `{places}` — counted for you (`fillText`). */
   text: string;
   show: boolean;
 }
@@ -298,6 +299,8 @@ export interface RecapDoc {
   carousel: RecapCarousel;
   /** The first seconds of its Reel, before its own first page (`recap-opener.ts`). */
   opener: RecapOpener;
+  /** Where the places are said: a pin in a cell's corner, runs of days, `{place}` (`recap-places.ts`). */
+  places: RecapPlaces;
   createdAt: number;
   updatedAt: number;
 }
@@ -739,6 +742,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     delivery: readDelivery(r.delivery),
     carousel: readCarousel(r.carousel, template),
     opener: readOpener(r.opener),
+    places: readPlaces(r.places),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };
