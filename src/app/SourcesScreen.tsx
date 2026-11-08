@@ -35,14 +35,8 @@ import { BRIDGE_VERSION, bridgeLabel } from '../shared/commands/bridge-version';
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
 const AFTER_CONNECT = '/studio/home';
 
-const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
-const pill =
-  'inline-flex items-center gap-1.5 font-mono text-2xs tracking-[0.04em] px-2 py-[0.15rem] rounded-full border whitespace-nowrap';
-const btn =
-  'px-3 py-[0.28rem] rounded-full border text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-default';
-const solid = `${btn} border-ink bg-ink text-paper hover:bg-accent hover:border-accent`;
-const ghost = `${btn} border-line-strong bg-transparent text-ink hover:text-accent-ink hover:border-accent`;
-const danger = `${btn} border-danger-line bg-transparent text-danger hover:bg-danger-wash`;
+import { Fact, SourceRow, danger, ghost, legend, pill, solid } from './source-row';
+import PostizRow from './PostizRow';
 
 /** The dot + words for a state, in the four shapes an instance can be in. */
 function HealthPill({ health }: { health: SourceHealth }) {
@@ -77,65 +71,6 @@ function HealthPill({ health }: { health: SourceHealth }) {
         </span>
       );
   }
-}
-
-/** One fact, monospaced — the row's own facts line reads as a data strip. */
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <span>
-      {label} <b className="text-ink-soft font-medium">{value}</b>
-    </span>
-  );
-}
-
-interface RowProps {
-  glyph: string;
-  remote?: boolean;
-  name: string;
-  aside: string | null;
-  pill: React.ReactNode;
-  facts: React.ReactNode;
-  actions?: React.ReactNode;
-  note?: React.ReactNode;
-  dim?: boolean;
-}
-
-/** The one shape every source is drawn in — local and remote alike. */
-function SourceRow({ glyph, remote, name, aside, pill: state, facts, actions, note, dim }: RowProps) {
-  return (
-    <div
-      className={`grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] gap-x-4 gap-y-1.5 items-start px-4 py-3.5 border rounded-paper ${
-        dim ? 'border-line bg-paper/50' : 'border-line bg-surface'
-      }`}
-    >
-      <span
-        className={`row-span-2 w-8 h-8 rounded-[10px] grid place-items-center font-mono text-2xs font-bold border ${
-          remote
-            ? 'bg-accent-wash text-accent-ink border-danger-line'
-            : 'bg-paper-2 text-ink-soft border-line'
-        }`}
-        aria-hidden="true"
-      >
-        {glyph}
-      </span>
-      <span className={`min-w-0 font-mono text-sm font-medium ${dim ? 'text-muted' : ''}`}>
-        <span className="break-all">{name}</span>
-        {aside && <small className="ml-2 font-sans text-xs text-muted">{aside}</small>}
-      </span>
-      <span className="col-span-2 sm:col-span-1 flex flex-wrap items-center justify-start sm:justify-end gap-1.5 order-3 sm:order-none">
-        {state}
-        {actions}
-      </span>
-      <span
-        className={`col-start-2 col-span-1 sm:col-span-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-2xs text-muted tabular-nums ${
-          dim ? 'opacity-70' : ''
-        }`}
-      >
-        {facts}
-      </span>
-      {note && <span className="col-start-1 col-span-2 sm:col-span-3 order-4">{note}</span>}
-    </div>
-  );
 }
 
 /**
@@ -567,6 +502,11 @@ export default function SourcesScreen({ query }: { query: string }) {
             {error}
           </p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className={legend}>Publishing</p>
+        <PostizRow />
       </div>
 
       <div className="flex flex-col gap-2">
