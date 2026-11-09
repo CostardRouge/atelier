@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { navigate } from '../../app/use-hash-route';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
@@ -60,6 +60,10 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'export', label: 'Export' },
 ];
 
+/** Every section's title band sticks under the tabs while its section scrolls (lab 13). */
+const STICKY_BANDS =
+  '[&_section[data-section]>div:first-child]:sticky [&_section[data-section]>div:first-child]:top-[var(--bands-top)] [&_section[data-section]>div:first-child]:z-[2] [&_section[data-section]>div:first-child]:bg-surface';
+
 /** Which tab a selection opens: the inspector follows what was clicked on the stage. */
 function tabOf(s: Selection): Tab | null {
   if (!s) return null;
@@ -112,6 +116,16 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   /** What a double-click on the stage is framing — the background or a cell's picture. */
   const [framing, setFraming] = useState<Selection>(null);
   const [tab, setTab] = useState<Tab>('pictures');
+  // The pinned tabs' height: on a phone the sections' titles stick just under them.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [tabsH, setTabsH] = useState(0);
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setTabsH(Math.round(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const [filling, setFilling] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -957,9 +971,31 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             {status}
           </p>
         </div>
-        <aside className="flex-none min-w-0 flex flex-col gap-2 overflow-x-hidden @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto" aria-label="Recap settings">
-          <Segmented<Tab> size="sm" columns={3} label="Settings" value={tab} onChange={setTab} options={TABS.map((x) => ({ id: x.id, label: x.label }))} />
-          <div className="flex flex-col gap-1 pb-4">{panel(tab)}</div>
+        {/* The inspector is a block of its own (lab 13, `frontend.md` «An instrument's inspector»): the tabs
+            pinned at its top on one row, the sections scrolling under them with their titles sticky. On a
+            phone it is the drawer under the stage: the page scrolls, the tabs stick to its top. */}
+        <aside
+          className="flex-none min-w-0 flex flex-col border border-line rounded-paper bg-surface [--bands-top:var(--tabs-h,0px)] @min-[860px]:min-h-0 @min-[860px]:[--bands-top:0px]"
+          style={{ '--tabs-h': `${tabsH}px` } as CSSProperties}
+          aria-label="Recap settings"
+        >
+          <div ref={tabsRef} className="flex-none sticky top-0 z-[3] rounded-t-paper bg-surface px-3 pt-3 pb-2 @min-[860px]:static">
+            <Segmented<Tab>
+              size="sm"
+              fill
+              label="Settings"
+              value={tab}
+              onChange={setTab}
+              options={TABS.map((x) => ({ id: x.id, label: x.label }))}
+              // Each tab as wide as its word, so the six hold one row; a screen too narrow scrolls it sideways.
+              className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:flex-auto [&>button]:min-w-max [&>button]:px-1.5 [&>button]:text-2xs"
+            />
+          </div>
+          <div
+            className={`flex flex-col gap-1 px-3 pb-4 overflow-x-clip @min-[860px]:overflow-x-hidden @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain ${STICKY_BANDS}`}
+          >
+            {panel(tab)}
+          </div>
         </aside>
       </div>
 
