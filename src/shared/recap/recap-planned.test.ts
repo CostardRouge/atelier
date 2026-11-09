@@ -30,3 +30,26 @@ describe('the planned weeks', () => {
     expect(plannedPeek([], 'Europe/Paris', new Date(), String)).toBe('nothing planned');
   });
 });
+
+describe('the week strip', () => {
+  it('lays a week day by day, today marked, the rhythm’s free slots where nothing goes out', async () => {
+    const { weekStrip, mondayOf, weekLabel } = await import('./recap-planned');
+    const { DEFAULT_RHYTHM } = await import('../sources/postiz/rhythm');
+    const now = new Date('2026-11-10T10:00:00Z'); // Tue 10 Nov, 11:00 in Paris
+    expect(mondayOf(now, 'Europe/Paris')).toBe('2026-11-09');
+    expect(mondayOf(now, 'Europe/Paris', 1)).toBe('2026-11-16');
+    expect(weekLabel('2026-11-09')).toBe('9–15 Nov');
+    expect(weekLabel('2026-11-30')).toBe('30 Nov – 6 Dec');
+    const posts = [post('a', '2026-11-09T19:48:00Z', 'published', 'Ceci est un test'), post('b', '2026-11-13T18:00:00Z'), post('c', '2026-11-12T22:55:00Z', 'error', '')];
+    const days = weekStrip(posts, [], DEFAULT_RHYTHM, '2026-11-09', now);
+    expect(days.map((d) => d.label)).toEqual(['Mon 9', 'Tue 10', 'Wed 11', 'Thu 12', 'Fri 13', 'Sat 14', 'Sun 15']);
+    expect(days[0]).toMatchObject({ past: true, today: false });
+    expect(days[1].today).toBe(true);
+    expect(days[0].items.map((i) => i.postId)).toEqual(['a']);
+    expect(days[3].items[0]).toMatchObject({ postId: 'c', state: 'error', title: '' });
+    // Tuesday 9:00 is past at 11:00; Friday's slot holds a post; Sunday's is free.
+    expect(days[1].free).toEqual([]);
+    expect(days[4].free).toEqual([]);
+    expect(days[6].free.map((d) => d.toISOString())).toEqual(['2026-11-15T09:00:00.000Z']);
+  });
+});

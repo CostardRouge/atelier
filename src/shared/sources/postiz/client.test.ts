@@ -63,3 +63,24 @@ describe('the Postiz client', () => {
     await expect(findApi('https://p', 'bad', async () => json(401, {}))).rejects.toThrow(/API key/);
   });
 });
+
+describe('what Postiz keeps, read for a person', () => {
+  it('reads a caption’s HTML as plain text, never as markup', async () => {
+    const { postizText } = await import('./client');
+    expect(postizText('<p></p>')).toBe('');
+    expect(postizText('<p>Ceci est un petit test</p><p>de publication &amp; plus</p>')).toBe('Ceci est un petit test\nde publication & plus');
+    expect(postizText('A<br>B<br/>C &lt;b&gt; &#127462;&#127482; &nbsp;')).toBe('A\nB\nC <b> 🇦🇺');
+    expect(postizText('<p><img src=x onerror=alert(1)>Hi</p>')).toBe('Hi');
+  });
+
+  it('says what to do about the failures it knows, and the Postiz to open', async () => {
+    const { failureHint, postizHome } = await import('./client');
+    expect(failureHint('Instagram could not process this video. If the issue persists…')).toMatch(/Standard quality/);
+    expect(failureHint('Failed to fetch media from url')).toMatch(/reachable/);
+    expect(failureHint('The access token has expired')).toMatch(/Reconnect/);
+    expect(failureHint('Something else')).toBeNull();
+    expect(failureHint(null)).toBeNull();
+    expect(postizHome('https://postiz.example.com/api/public/v1')).toBe('https://postiz.example.com');
+    expect(postizHome('https://api.postiz.example.com/public/v1')).toBe('https://api.postiz.example.com');
+  });
+});

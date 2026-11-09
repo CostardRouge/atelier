@@ -3627,9 +3627,14 @@ places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
 shows it. Sending it approves it; an agent can write one, and it waits for
 your approval. The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
-gallery's **Planned** section lists, week by week, what goes out in the next
-six weeks as your Postiz says — scheduled, out, failed (with the reason) —
-including posts scheduled outside Recap; a click opens the recap that sent it.
+gallery's **Planned** section is one week as a strip of seven days — what went
+out, what will, what failed, and your rhythm's free slots — that scrolls
+sideways on a phone, today first; ‹ › move a week, and *Open Postiz* opens your
+Postiz for the whole calendar. A post opens a small card: its time and state,
+a failure's reason and what to do about it, and its verbs — *Open recap*,
+*Take back* (deleted in Postiz before it goes out), *Send again* (the recap on
+Export › Publish), *View on Instagram*, *Open in Postiz*, *Delete*. Posts
+scheduled outside Recap show too, by their caption.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and

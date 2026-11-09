@@ -9,7 +9,7 @@
  */
 
 import type { PostizPost, PostState } from '../sources/postiz/client';
-import { localDay, weekOf } from '../sources/postiz/rhythm';
+import { localDay, slotsWithState, weekOf, wallClock, zonedInstant, type Rhythm } from '../sources/postiz/rhythm';
 import type { RecapDoc } from './recap-doc';
 import type { PublishKind } from './recap-publish';
 
@@ -32,7 +32,7 @@ export interface PlannedWeek {
   items: PlannedItem[];
 }
 
-const firstLine = (s: string) => (s.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 80) || 'A post';
+const firstLine = (s: string) => (s.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 80);
 
 /** The posts, newest week last, each week's in time order; tied to their recaps. */
 export function plannedWeeks(posts: readonly PostizPost[], recaps: readonly RecapDoc[], tz: string): PlannedWeek[] {
@@ -75,4 +75,64 @@ export function plannedPeek(weeks: readonly PlannedWeek[], tz: string, now: Date
 export function sameDayClash(week: PlannedWeek, tz: string): boolean {
   const days = week.items.filter((i) => i.state !== 'draft' && i.state !== 'error').map((i) => localDay(i.at, tz));
   return new Set(days).size < days.length;
+}
+
+export interface StripDay {
+  /** `YYYY-MM-DD` in the rhythm's zone. */
+  day: string;
+  /** `Mon 9`. */
+  label: string;
+  today: boolean;
+  past: boolean;
+  items: PlannedItem[];
+  /** The rhythm's slots of that day still free: in the future, no post near them, no post that day. */
+  free: Date[];
+}
+
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** The Monday `offset` weeks from `now`'s week, in the rhythm's zone, `YYYY-MM-DD`. */
+export function mondayOf(now: Date, tz: string, offset = 0): string {
+  const m = weekOf(now, tz);
+  const d = new Date(`${m}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offset * 7);
+  return d.toISOString().slice(0, 10);
+}
+
+/** `9–15 Nov`, `30 Nov – 6 Dec`. */
+export function weekLabel(monday: string): string {
+  const a = new Date(`${monday}T12:00:00Z`);
+  const b = new Date(a.getTime() + 6 * 86400000);
+  return a.getUTCMonth() === b.getUTCMonth() ? `${a.getUTCDate()}–${b.getUTCDate()} ${MO[b.getUTCMonth()]}` : `${a.getUTCDate()} ${MO[a.getUTCMonth()]} – ${b.getUTCDate()} ${MO[b.getUTCMonth()]}`;
+}
+
+/**
+ * The WEEK STRIP (lab 14, his pick): the seven days of the week starting
+ * `monday`, each with its posts in time order and the rhythm's slots still
+ * free — what the gallery's *Planned* draws, a week at a time.
+ */
+export function weekStrip(posts: readonly PostizPost[], recaps: readonly RecapDoc[], rhythm: Rhythm, monday: string, now: Date): StripDay[] {
+  const tz = rhythm.timeZone;
+  const items = plannedWeeks(posts, recaps, tz).find((w) => w.monday === monday)?.items ?? [];
+  const today = localDay(now, tz);
+  const live = posts.filter((p) => p.state !== 'error' && p.state !== 'draft').map((p) => new Date(p.publishDate));
+  const start = zonedInstant(Number(monday.slice(0, 4)), Number(monday.slice(5, 7)), Number(monday.slice(8, 10)), 0, 0, tz);
+  const slots = slotsWithState(rhythm, live, new Date(Math.max(now.getTime(), start.getTime() - 1)), 30).filter((s) => !s.taken);
+  return Array.from({ length: 7 }, (_, k) => {
+    const d = new Date(`${monday}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + k);
+    const day = d.toISOString().slice(0, 10);
+    const its = items.filter((i) => localDay(i.at, tz) === day);
+    const busy = its.some((i) => i.state !== 'error' && i.state !== 'draft');
+    const w = wallClock(new Date(`${day}T12:00:00Z`), 'UTC');
+    return {
+      day,
+      label: `${WD[d.getUTCDay()]} ${w.d}`,
+      today: day === today,
+      past: day < today,
+      items: its,
+      free: busy ? [] : slots.filter((s) => localDay(s.at, tz) === day).map((s) => s.at),
+    };
+  });
 }

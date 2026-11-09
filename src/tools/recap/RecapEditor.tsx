@@ -46,6 +46,7 @@ import { useRecapSound } from './use-recap-sound';
 import { useTripOpener } from './use-trip-opener';
 import SoundSection from './SoundSection';
 import RecapExportPanel from './RecapExportPanel';
+import { OPEN_TAB_KEY } from './PlannedSection';
 
 export type SaveState = 'saved' | 'saving' | 'failed';
 const SAVE_WORDS: Record<SaveState, string> = { saved: 'Saved', saving: 'Saving…', failed: 'Not saved' };
@@ -111,7 +112,19 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const [selection, setSelection] = useState<Selection>(null);
   /** What a double-click on the stage is framing — the background or a cell's picture. */
   const [framing, setFraming] = useState<Selection>(null);
-  const [tab, setTab] = useState<Tab>('pictures');
+  // *Send again* in the gallery's Planned opens this recap on Export › Publish (`OPEN_TAB_KEY`).
+  const [tab, setTab] = useState<Tab>(() => {
+    try {
+      const asked = sessionStorage.getItem(OPEN_TAB_KEY);
+      if (asked === `${doc.id}:export`) {
+        sessionStorage.removeItem(OPEN_TAB_KEY);
+        return 'export';
+      }
+    } catch {
+      // Storage refused: the usual first tab.
+    }
+    return 'pictures';
+  });
   const [notice, setNotice] = useState<string | null>(null);
   const [filling, setFilling] = useState(false);
   const [picking, setPicking] = useState(false);

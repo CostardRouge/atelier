@@ -154,6 +154,47 @@ export function readChannels(raw: unknown): PostizChannel[] {
   });
 }
 
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
+
+/**
+ * A caption as Postiz keeps it — HTML from its editor (`<p>…</p>`, `<br>`,
+ * entities) — turned into the plain text it says: each paragraph and break a
+ * line, every tag dropped, entities decoded. Never parsed into a document,
+ * never injected: it is drawn as text (lab 13, his report of `<p></p>` on
+ * the gallery). Pure.
+ */
+export function postizText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+\d*);/gi, (all, e: string) => {
+      if (e[0] === '#') {
+        const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1));
+        return Number.isFinite(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : all;
+      }
+      return ENTITIES[e.toLowerCase()] ?? all;
+    })
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** What to do about a post Instagram refused, from what Postiz says — null when the error is not one we know. */
+export function failureHint(error: string | null): string | null {
+  if (!error) return null;
+  if (/could not process (this|the) video|video format|codec|aspect ratio/i.test(error)) return 'Send it again at Standard quality, 30 fps.';
+  if (/(fetch|download|retrieve|access).{0,40}(media|image|video|url)|media.{0,20}(not|un)reachable|invalid (image|media) url/i.test(error)) return 'Your Postiz’s uploads must be reachable from the internet. Send it again once they are.';
+  if (/token|expired|re-?authori[sz]e|reconnect|session has been invalidated|permission/i.test(error)) return 'Reconnect the account in your Postiz, then send it again.';
+  if (/too (long|many)|caption|hashtag/i.test(error)) return 'Shorten the caption or its hashtags, then send it again.';
+  return null;
+}
+
+/** The person's Postiz itself, for a link: its API's base without `/api/public/v1`. */
+export function postizHome(apiBase: string): string {
+  return apiBase.replace(/\/(api\/)?public\/v1\/?$/, '') || apiBase;
+}
+
 const STATES: Record<string, PostState> = { QUEUE: 'queue', PUBLISHED: 'published', ERROR: 'error', DRAFT: 'draft' };
 
 /** The posts `GET /posts` lists. */
@@ -170,7 +211,7 @@ export function readPosts(raw: unknown): PostizPost[] {
       {
         id,
         group: str(r.group),
-        content: typeof r.content === 'string' ? r.content : '',
+        content: typeof r.content === 'string' ? postizText(r.content) : '',
         publishDate,
         state: STATES[String(r.state ?? '').toUpperCase()] ?? 'queue',
         releaseURL: str(r.releaseURL),

@@ -413,7 +413,7 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
         </GallerySection>
       )}
 
-      <PlannedSection recaps={recaps ?? []} open={sections.isOpen('planned')} onToggle={() => sections.toggle('planned')} onOpen={onOpen} />
+      <PlannedSection recaps={recaps ?? []} open={sections.isOpen('planned')} onToggle={() => sections.toggle('planned')} onOpen={onOpen} onChanged={refresh} />
 
       <GallerySection
         id="yours"
