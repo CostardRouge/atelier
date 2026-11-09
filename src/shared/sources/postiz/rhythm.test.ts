@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RHYTHM, localDay, nextFreeSlot, readRhythm, rhythmWarnings, slotLabel, slotsWithState, upcomingSlots, weekOf, zonedInstant } from './rhythm';
+import { DEFAULT_RHYTHM, localDay, rhythmGrid, slotHead, nextFreeSlot, readRhythm, rhythmWarnings, slotLabel, slotsWithState, upcomingSlots, weekOf, zonedInstant } from './rhythm';
 
 const tz = 'Europe/Paris';
 
@@ -43,5 +43,20 @@ describe('the publishing rhythm', () => {
     expect(rhythmWarnings(DEFAULT_RHYTHM, [tue], fri)).toEqual([]);
     expect(weekOf(sun, tz)).toBe('2026-11-09');
     expect(localDay(zonedInstant(2026, 11, 10, 0, 30, tz), tz)).toBe('2026-11-10');
+  });
+
+  it('lays the rhythm as a grid: its slots as columns from Monday, three weeks as rows, gone, taken or free', () => {
+    const now = new Date('2026-11-11T12:00:00Z'); // Wednesday 11 Nov, 13:00 in Paris
+    const planned = [zonedInstant(2026, 11, 13, 19, 30, tz), zonedInstant(2026, 11, 28, 9, 0, tz)];
+    const g = rhythmGrid(DEFAULT_RHYTHM, planned, now);
+    expect(g.slots.map(slotHead)).toEqual(['Tue 9:00', 'Fri 19:00', 'Sun 10:00']);
+    expect(g.weeks.map((w) => w.label)).toEqual(['9–15 Nov', '16–22 Nov', '23–29 Nov']);
+    expect(g.weeks.map((w) => w.cells.map((c) => c.state))).toEqual([
+      ['past', 'taken', 'free'],
+      ['free', 'free', 'free'],
+      ['free', 'free', 'free'], // Saturday 9:00 is not a slot's 90 minutes
+    ]);
+    expect(slotLabel(g.weeks[2].cells[2].at, tz)).toBe('Sun 29 Nov · 10:00');
+    expect(rhythmGrid(DEFAULT_RHYTHM, [], new Date('2026-11-25T12:00:00Z'), 2).weeks.map((w) => w.label)).toEqual(['23–29 Nov', '30 Nov – 6 Dec']);
   });
 });

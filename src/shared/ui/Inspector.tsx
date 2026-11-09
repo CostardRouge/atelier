@@ -93,6 +93,12 @@ interface InspectorSectionProps {
    */
   foldable?: boolean;
   /**
+   * What the section is set to, in a few words, drawn on its band while it is
+   * FOLDED (Recap's Export tab, lab 13: «High · 30 fps · 1 pass») — a folded
+   * section still says its state, so folding hides controls, never a choice.
+   */
+  summary?: ReactNode;
+  /**
    * Controlled fold, for a section whose body COSTS something while open (a
    * request to an instance): the owner decides, and nothing is remembered.
    */
@@ -114,6 +120,7 @@ export function InspectorSection({
   dimmed = false,
   onBandMenu,
   foldable = true,
+  summary,
   open: controlled,
   onOpenChange,
   children,
@@ -206,6 +213,11 @@ export function InspectorSection({
         )}
         {info && <InfoDot about={title.toLowerCase()}>{info}</InfoDot>}
         <span data-fold className="flex-1 self-stretch" />
+        {!open && summary && (
+          <span data-fold className="min-w-0 max-w-[65%] truncate font-mono text-3xs text-muted tabular-nums select-none">
+            {summary}
+          </span>
+        )}
         {open && actions && (
           <span ref={actionsRef} className={`contents ${locked ? '[&>*]:opacity-45' : ''}`}>
             {actions}

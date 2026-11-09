@@ -12,9 +12,10 @@ import Button from '../../shared/ui/Button';
 import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
-import { Icons } from '../../shared/ui/icons';
 import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles, type FilmProgress } from './recap-export';
-import PublishSection from './PublishSection';
+import { usePublish } from './PublishSection';
+import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
+import { createPortal } from 'react-dom';
 import type { PublishKind } from '../../shared/recap/recap-publish';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
 import { carouselSlides } from '../../shared/recap/recap-layout';
@@ -69,7 +70,7 @@ function QualitySection({ doc, change, seconds, originals }: { doc: RecapDoc; ch
   const { width: W, height: H } = FORMATS[doc.format];
   const mbps = (q: Quality) => (deliveryBitrate({ quality: q, fps: d.fps }, W, H) / 1e6).toFixed(0);
   return (
-    <InspectorSection id="recap-quality" title="Quality" foldable={false}>
+    <InspectorSection id="recap-quality" title="Quality" defaultOpen={false} summary={`${QUALITY_LABEL[d.quality]} · ${d.fps} fps · ${d.passes === 2 ? '2 passes' : '1 pass'}${originals && d.media === 'original' ? ' · originals' : ''}`}>
       <div className="flex flex-col gap-2">
         <Segmented<Quality>
           size="sm"
@@ -246,7 +247,60 @@ function LengthSection({ doc, natural, change }: { doc: RecapDoc; natural: numbe
   );
 }
 
-export default function RecapExportPanel({ ctx, natural, change }: { ctx: ExportContext; natural: number; change: Change }) {
+/** What the foot delivers on this device: the film, the pages, or the carousel whole. */
+type SaveKind = 'video' | 'stills' | 'carousel';
+type FootMode = 'save' | 'publish';
+interface FootChoice {
+  mode?: FootMode;
+  save?: SaveKind;
+}
+
+/** The foot's last choice, per recap, on this device (lab 13: «it remembers your last choice per recap»). */
+const FOOT_KEY = 'atelier.recap.foot.v1';
+function readFoot(id: string): FootChoice {
+  try {
+    const all = JSON.parse(localStorage.getItem(FOOT_KEY) ?? '{}') as Record<string, FootChoice>;
+    return all && typeof all === 'object' && all[id] && typeof all[id] === 'object' ? all[id] : {};
+  } catch {
+    return {};
+  }
+}
+function writeFoot(id: string, choice: FootChoice) {
+  try {
+    const all = JSON.parse(localStorage.getItem(FOOT_KEY) ?? '{}') as Record<string, FootChoice>;
+    const next = { ...(all && typeof all === 'object' ? all : {}), [id]: choice };
+    // A device keeps the last 200 recaps' choices; older ones go back to the defaults.
+    const keys = Object.keys(next);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete next[k];
+    localStorage.setItem(FOOT_KEY, JSON.stringify(next));
+  } catch {
+    /* storage refused: the choice lasts the visit */
+  }
+}
+
+/**
+ * The Export tab (lab 13): what is SET scrolls — Length, Quality, Export (which
+ * of the three deliveries), Publish — and what is TRIGGERED is the inspector's
+ * pinned foot (`DeliverBar`, portalled into `foot`): a Save · Publish switch
+ * when a Postiz is connected, the one verb, the others behind ▾, the run
+ * itself while one goes on. The host keeps this mounted once opened, so a run
+ * started here stays in the foot on every tab.
+ */
+export default function RecapExportPanel({
+  ctx,
+  natural,
+  change,
+  visible,
+  foot,
+}: {
+  ctx: ExportContext;
+  natural: number;
+  change: Change;
+  /** The Export tab is the one shown. */
+  visible: boolean;
+  /** Where the foot is drawn: the inspector's bottom, outside its scroll. */
+  foot: HTMLElement | null;
+}) {
   const { doc, film, layout, resolved, clipSlides } = ctx;
   const canEncode = useAvcEncodeSupport();
   const [busy, setBusy] = useState<string | null>(null);
@@ -344,40 +398,99 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
 
   /** What a post sends: the film for a Reel or a story, the slides for a carousel. */
   const renderFor = (kind: PublishKind, signal: AbortSignal, task: ReturnType<typeof startTask>): Promise<File[]> => renderPostFiles(input(), kind, order, base, report(task), signal);
+  const publish = usePublish({ doc, resolved, change, slides, canEncode: canEncode !== false, busy: busy !== null, run, render: renderFor });
+
+  // ---- the foot: Save · Publish, the verb, the others behind ▾ -------------------------
+  const [choice, setChoice] = useState<FootChoice>(() => readFoot(doc.id));
+  const choose = (patch: FootChoice) => {
+    const next = { ...choice, ...patch };
+    setChoice(next);
+    writeFoot(doc.id, next);
+  };
+  const saveOk = (k: SaveKind) => (k === 'video' ? canEncode !== false : k === 'carousel' ? slides > 1 && (clips.length === 0 || canEncode !== false) : true);
+  const savePreferred: SaveKind = choice.save ?? (slides > 1 && (doc.template === 'dump' || doc.template === 'sheets' || doc.template === 'wrapped') ? 'carousel' : 'video');
+  const save: SaveKind = saveOk(savePreferred) ? savePreferred : saveOk('video') ? 'video' : 'stills';
+  // His pick (lab 13, Q2): with a Postiz ready the foot opens on Publish, then keeps his last choice.
+  const mode: FootMode = publish.verbs.ready ? (choice.mode ?? 'publish') : 'save';
+  const pages = layout.pages.length;
+  const SAVE: Record<SaveKind, { label: string; hint: string; run: () => void }> = {
+    video: { label: `Export video · ${film.total.toFixed(1)} s`, hint: `${W} × ${H} · ${doc.delivery.fps} fps · about ${sizeText(deliverySize(doc.delivery, W, H, film.total, Boolean(doc.sound)))}`, run: () => void exportVideo() },
+    stills: { label: pages > 1 ? `Export ${pages} stills` : 'Export the still', hint: `${pages} PNG · ${W} × ${H}, each page as it rests`, run: () => void exportStills() },
+    carousel: { label: `Export the carousel · ${slides}`, hint: `${slides} slides in the strip's order${clips.length ? `, ${clips.length} as video` : ''}, numbered`, run: () => void exportCarousel() },
+  };
+  const saveVerbs: ExportVerb[] = (['video', 'stills', 'carousel'] as const).filter(saveOk).map((k) => ({ id: k, ...SAVE[k] }));
+  const pv = publish.verbs;
+  const publishVerbs: ExportVerb[] = pv.blocked
+    ? []
+    : [
+        { id: 'chosen', label: pv.label, hint: pv.summary, run: () => pv.send() },
+        ...(pv.label !== 'Publish now' ? [{ id: 'now', label: 'Publish now', hint: 'Instagram publishes it as soon as it is sent', run: () => pv.send('now') }] : []),
+        ...(pv.label !== 'Send as a draft' ? [{ id: 'draft', label: 'Send as a draft', hint: 'Nothing is scheduled: you finish it in Postiz', run: () => pv.send('draft') }] : []),
+      ];
+  const footBar = (
+    <DeliverBar
+      placement="panel"
+      verbs={mode === 'publish' ? publishVerbs : saveVerbs}
+      primary={mode === 'publish' ? 'chosen' : save}
+      summary={mode === 'publish' ? pv.summary : SAVE[save].hint}
+      empty={mode === 'publish' ? (pv.blocked ?? '') : 'This browser cannot encode video, and there is nothing else to export.'}
+      exporting={null}
+      progress={null}
+      onCancel={() => abort.current?.abort()}
+      note={note}
+      unitWord="file"
+      lead={
+        publish.verbs.ready ? (
+          <Segmented<FootMode>
+            size="sm"
+            label="Where it goes"
+            value={mode}
+            onChange={(m) => choose({ mode: m })}
+            options={[
+              { id: 'save', label: 'Save', title: 'Files on this device' },
+              { id: 'publish', label: 'Publish', title: 'Sent to your Postiz' },
+            ]}
+            className="flex-none"
+          />
+        ) : undefined
+      }
+      running={busy && progress ? <ProgressBar p={progress.p} started={progress.started} onCancel={() => abort.current?.abort()} /> : undefined}
+    />
+  );
 
   return (
     <>
-      <LengthSection doc={doc} natural={natural} change={change} />
-      <QualitySection doc={doc} change={change} seconds={film.total} originals={ctx.originals} />
-      <InspectorSection id="recap-export" title="Export" foldable={false}>
-        <div className="flex flex-col gap-3">
-          <p className="m-0 font-mono text-2xs text-muted tabular-nums">
-            {W} × {H} · {ratio} · {filled}/{resolved.slots.length} places filled
-          </p>
-          <div className="flex flex-col gap-1.5">
-            <Button variant="primary" icon={Icons.video} disabled={busy !== null || !canEncode} onClick={() => void exportVideo()} title={canEncode ? 'The recap as it plays, its sound under it' : 'This browser cannot encode H.264 video'}>
-              Video · {film.total.toFixed(1)} s
-            </Button>
-            {!canEncode && <span className="text-2xs text-warn">This browser cannot encode video — the stills still export.</span>}
-          </div>
-          <Button icon={Icons.image} disabled={busy !== null} onClick={() => void exportStills()} title="Each page as it rests, everything on">
-            {layout.pages.length > 1 ? `Stills · ${layout.pages.length} PNG` : 'Still · PNG'}
-          </Button>
-          {slides > 1 && (
-            <Button icon={Icons.stack} disabled={busy !== null || (clips.length > 0 && !canEncode)} onClick={() => void exportCarousel()} title="Every slide in the strip's order — the pages as PNG, each clip as its own video slide">
-              Carousel · {slides} slides
-            </Button>
-          )}
-          {busy && progress && <ProgressBar p={progress.p} started={progress.started} onCancel={() => abort.current?.abort()} />}
-          {note && (
-            <p className="m-0 text-xs text-ink-soft" role="status">
-              {note}
+      <div className={visible ? 'contents' : 'hidden'}>
+        <LengthSection doc={doc} natural={natural} change={change} />
+        <QualitySection doc={doc} change={change} seconds={film.total} originals={ctx.originals} />
+        <InspectorSection
+          id="recap-export"
+          title="Export"
+          summary={{ video: `Video · ${film.total.toFixed(1)} s`, stills: `Stills · ${pages} PNG`, carousel: `Carousel · ${slides} slides` }[save]}
+          info="Painted here, from the same painter as the stage: what you see is what the files hold. Nothing leaves this device."
+        >
+          <div className="flex flex-col gap-2">
+            <Segmented<SaveKind>
+              size="sm"
+              fill
+              label="What is saved"
+              value={save}
+              onChange={(k) => choose({ save: k, mode: 'save' })}
+              options={[
+                { id: 'video', label: 'Video', title: 'The recap as it plays, its sound under it', disabled: canEncode === false ? 'This browser cannot encode H.264 video' : false },
+                { id: 'stills', label: pages > 1 ? `Stills · ${pages}` : 'Still', title: 'Each page as it rests, everything on, as PNG' },
+                { id: 'carousel', label: `Carousel · ${slides}`, title: 'Every slide in the strip’s order — the pages as PNG, each clip as its own video slide', disabled: slides < 2 ? 'One slide: the still is the carousel' : clips.length > 0 && canEncode === false ? 'Its clips need a video encoder' : false },
+              ]}
+            />
+            <p className="m-0 font-mono text-2xs text-muted tabular-nums">
+              {W} × {H} · {ratio} · {filled}/{resolved.slots.length} places filled
             </p>
-          )}
-          <p className="m-0 text-2xs text-muted leading-relaxed">Painted here, from the same painter as the stage: what you see is what the files hold. Nothing leaves this device.</p>
-        </div>
-      </InspectorSection>
-      <PublishSection doc={doc} resolved={resolved} change={change} slides={slides} canEncode={canEncode !== false} busy={busy !== null} run={run} render={renderFor} />
+            {canEncode === false && <span className="text-2xs text-warn">This browser cannot encode video — the stills still export.</span>}
+          </div>
+        </InspectorSection>
+        {publish.section}
+      </div>
+      {foot && (visible || busy) && createPortal(footBar, foot)}
     </>
   );
 }
