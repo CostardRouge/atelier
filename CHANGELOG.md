@@ -77,8 +77,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   (or a Trial Reel), a carousel or a story, in the next free slot of your rhythm, now, or as a draft — with a caption
   written from the recap's own words (its title, the place, the route, hashtags from the places) that you edit.
   The recaps' gallery has a **Planned** section: one week as a strip of seven days, read from your Postiz — what went
-  out, what will, what failed and why, your free slots — with a post's actions one tap away and your Postiz one link
-  away.
+  out, what will, what failed and why, your free slots — each post shown by a small picture of what it sent, with its
+  time and state over it, its actions one tap away and your Postiz one link away.
   An agent can drive the whole posting routine: the recaps ready to make, your calendar and free slots, the facts a
   caption is written from, the caption itself (which waits for your approval), scheduling and taking a post back —
   and the pictures: browse all of a recap's pictures, bring in any picture of your Winnow, and set the carousel in a
