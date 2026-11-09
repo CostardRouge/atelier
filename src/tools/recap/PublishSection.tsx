@@ -5,7 +5,8 @@ import { placeWords } from '../../shared/recap/recap-places';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import { PostizClient, type PostizPost } from '../../shared/sources/postiz/client';
 import { sendPost } from './recap-post';
-import { nextFreeSlot, rhythmWarnings, slotLabel, slotsWithState } from '../../shared/sources/postiz/rhythm';
+import { nextFreeSlot, rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
+import WhenCard, { type When } from './WhenCard';
 import { publishChannel } from '../../shared/sources/postiz/store';
 import { usePostiz } from '../../shared/sources/postiz/use-postiz';
 import type { startTask } from '../../shared/tasks/tasks';
@@ -15,16 +16,12 @@ import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 
 type Task = ReturnType<typeof startTask>;
-type When = { kind: 'slot'; at: Date } | { kind: 'other'; at: Date | null } | { kind: 'now' } | { kind: 'draft' };
 
 const KIND_LABEL: Record<PublishKind, string> = { reel: 'Reel', carousel: 'Carousel', story: 'Story' };
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
-const chip = 'px-2.5 min-h-8 pointer-coarse:min-h-11 rounded-full border text-xs cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:line-through';
 /** How far ahead the planned posts are read, to mark the slots taken. */
 const AHEAD_DAYS = 42;
 
-/** `2026-11-17T09:00` for a datetime-local input, in this browser's own zone. */
-const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 /** What the foot of the Export tab needs from Publish: its verbs, and what they will send. */
 export interface PublishVerbs {
@@ -102,7 +99,6 @@ export function usePublish({
   const rhythm = conn?.rhythm;
   const takenAt = useMemo(() => (planned ?? []).filter((p) => p.state !== 'error' && p.state !== 'draft').map((p) => new Date(p.publishDate)), [planned]);
   const now = new Date();
-  const slots = rhythm ? slotsWithState(rhythm, takenAt, now, 5) : [];
   const free = rhythm ? nextFreeSlot(rhythm, takenAt, now) : null;
   // The next free slot, until he picks another.
   const chosen: When = when ?? (free ? { kind: 'slot', at: free } : { kind: 'draft' });
@@ -206,52 +202,10 @@ export function usePublish({
           </div>
         )}
 
-        <span className={legend}>When · your rhythm</span>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="When it goes out">
-          {slots.map((s) => {
-            const on = chosen.kind === 'slot' && chosen.at.getTime() === s.at.getTime();
-            return (
-              <button
-                key={s.at.toISOString()}
-                type="button"
-                disabled={s.taken}
-                aria-pressed={on}
-                title={s.taken ? 'A post already goes out then' : undefined}
-                onClick={() => setWhen({ kind: 'slot', at: s.at })}
-                className={`${chip} ${on ? 'border-accent bg-accent-wash text-ink' : 'border-line-strong text-ink-soft hover:border-accent'}`}
-              >
-                {slotLabel(s.at, rhythm!.timeZone)}
-              </button>
-            );
-          })}
-          {(['other', 'now', 'draft'] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={chosen.kind === k}
-              onClick={() => setWhen(k === 'other' ? { kind: 'other', at: at ?? new Date(Date.now() + 3600000) } : { kind: k })}
-              className={`${chip} ${chosen.kind === k ? 'border-accent bg-accent-wash text-ink' : 'border-line-strong text-ink-soft hover:border-accent'}`}
-            >
-              {k === 'other' ? 'Other…' : k === 'now' ? 'Now' : 'Draft in Postiz'}
-            </button>
-          ))}
-        </div>
-        {chosen.kind === 'other' && (
-          <input
-            type="datetime-local"
-            aria-label="When it goes out, on this device's clock"
-            className="font-mono text-sm px-3 py-1.5 border border-line-strong rounded-paper bg-paper text-ink"
-            value={chosen.at ? localInput(chosen.at) : ''}
-            onChange={(e) => setWhen({ kind: 'other', at: e.target.value ? new Date(e.target.value) : null })}
-          />
-        )}
+        <span className={legend}>When</span>
+        <WhenCard rhythm={rhythm!} taken={takenAt} chosen={chosen} free={free} warnings={warnings} onChoose={setWhen} />
         {planned === null && <span className="text-2xs text-muted">Asking your Postiz what is planned…</span>}
         {plannedError && <span className="text-2xs text-warn">{plannedError} The slots are not marked.</span>}
-        {warnings.map((w) => (
-          <span key={w} className="text-2xs text-warn">
-            {w} Still yours to send.
-          </span>
-        ))}
 
         <span className={legend}>
           Caption · {text.length.toLocaleString('en-GB')} / {CAPTION_MAX.toLocaleString('en-GB')}

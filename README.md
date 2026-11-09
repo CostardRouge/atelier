@@ -3628,10 +3628,12 @@ the foot becomes its progress bar, on every tab.
 Postiz and scheduled on your Instagram — as a **Reel** (a **Trial Reel**,
 shown to non-followers first, if you like, shared with your followers when it
 works or by hand), a **carousel** (its slides as JPEG, a clip as a video
-slide; Instagram's API takes 10) or a **story**. It goes out in the next free
-slot of your rhythm (the slots already taken in Postiz are struck out), now,
-or as a draft left in Postiz; past your ceiling, or a second post the same
-day, it says so and lets you. The **caption** is a template of Recap's words —
+slide; Instagram's API takes 10) or a **story**. *When* says the slot it goes out
+in, in big type — the next free one of your rhythm — and *Change* opens your
+rhythm as a small grid, its slots as columns and this week and the next two as
+rows (a slot already taken in Postiz hatched, one gone dashed, the chosen one
+red), with *Another time…*, *Now* and *Draft* (left in Postiz) under it; past
+your ceiling, or a second post the same day, the card says so and lets you. The **caption** is a template of Recap's words —
 `{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
 places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
 shows it. Sending it approves it; an agent can write one, and it waits for
