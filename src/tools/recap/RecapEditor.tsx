@@ -116,6 +116,10 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   /** What a double-click on the stage is framing — the background or a cell's picture. */
   const [framing, setFraming] = useState<Selection>(null);
   const [tab, setTab] = useState<Tab>('pictures');
+  // The Export panel is mounted the first time its tab opens, then kept: a run it started stays in the foot.
+  const exportSeen = useRef(false);
+  if (tab === 'export') exportSeen.current = true;
+  const [footEl, setFootEl] = useState<HTMLDivElement | null>(null);
   // The pinned tabs' height: on a phone the sections' titles stick just under them.
   const tabsRef = useRef<HTMLDivElement>(null);
   const [tabsH, setTabsH] = useState(0);
@@ -779,7 +783,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
           </>
         );
       case 'export':
-        return <RecapExportPanel ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }} natural={natural} change={change} />;
+        // Drawn below, kept mounted once opened (its run lives in the foot on every tab).
+        return null;
     }
   };
 
@@ -995,7 +1000,18 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             className={`flex flex-col gap-1 px-3 pb-4 overflow-x-clip @min-[860px]:overflow-x-hidden @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain ${STICKY_BANDS}`}
           >
             {panel(tab)}
+            {exportSeen.current && (
+              <RecapExportPanel
+                ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }}
+                natural={natural}
+                change={change}
+                visible={tab === 'export'}
+                foot={footEl}
+              />
+            )}
           </div>
+          {/* The foot: what the Export tab TRIGGERS, pinned at the inspector's bottom (a run keeps it on every tab). */}
+          <div ref={setFootEl} className="flex-none sticky bottom-0 z-[3] px-3 pb-3 empty:hidden @min-[860px]:static" />
         </aside>
       </div>
 

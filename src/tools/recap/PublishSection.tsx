@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { CAPTION_MAX, DEFAULT_CAPTION, captionText, defaultKind, withCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
 import { placeWords } from '../../shared/recap/recap-places';
@@ -26,6 +26,22 @@ const AHEAD_DAYS = 42;
 /** `2026-11-17T09:00` for a datetime-local input, in this browser's own zone. */
 const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
+/** What the foot of the Export tab needs from Publish: its verbs, and what they will send. */
+export interface PublishVerbs {
+  /** A Postiz and its account are there: the foot can publish. */
+  ready: boolean;
+  /** `Reel · @steeve.road · caption approved`. */
+  summary: string;
+  /** The verb as the slot chosen says it: `Schedule · Fri 14 Nov · 19:00`, `Publish now`, `Send as a draft`. */
+  label: string;
+  /** Why it cannot be sent now, or null. */
+  blocked: string | null;
+  /** Sends as chosen, or now / as a draft whatever is chosen. */
+  send: (as?: 'now' | 'draft') => void;
+  /** What the chosen slot is, in a few words — the folded section's line. */
+  when: string;
+}
+
 /**
  * Export › *Publish* (lab 12, his yes of 2026-11-08): the recap rendered, sent
  * to HIS Postiz and scheduled on his Instagram — as a Reel (a trial one, if he
@@ -33,8 +49,12 @@ const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 6
  * slots barred, a broken rhythm SAID, never refused), with its caption: a
  * template of Recap's words he edits, filled when sent. Pressing Schedule
  * approves the caption he reads; an agent's caption waits for that.
+ *
+ * Since lab 13 the SETTINGS are this section and the VERB is the Export tab's
+ * pinned foot: `usePublish` holds both, the panel draws `section` in the
+ * scroll and `verbs` in the foot.
  */
-export default function PublishSection({
+export function usePublish({
   doc,
   resolved,
   change,
@@ -52,7 +72,7 @@ export default function PublishSection({
   busy: boolean;
   run: (label: string, job: (signal: AbortSignal, task: Task) => Promise<string>) => Promise<void>;
   render: (kind: PublishKind, signal: AbortSignal, task: Task) => Promise<File[]>;
-}) {
+}): { section: ReactNode; verbs: PublishVerbs } {
   const conn = usePostiz();
   const channel = publishChannel(conn);
   const [kind, setKind] = useState<PublishKind>(() => defaultKind(doc, slides));
@@ -93,38 +113,35 @@ export default function PublishSection({
   const text = captionText(doc, resolved);
   const place = placeWords(resolved.slots.flatMap((s) => (s.picture ? [s.picture] : []))).place;
 
-  if (!conn) {
-    return (
-      <InspectorSection id="recap-publish" title="Publish" foldable={false}>
-        <p className="m-0 text-xs text-muted leading-relaxed">
-          Schedule this recap on Instagram from here: connect your own Postiz on{' '}
-          <a href="#/sources" className="text-accent-ink font-semibold no-underline hover:underline">
-            Sources →
-          </a>
-        </p>
-      </InspectorSection>
-    );
-  }
-  if (!channel) {
-    return (
-      <InspectorSection id="recap-publish" title="Publish" foldable={false}>
-        <p className="m-0 text-xs text-muted leading-relaxed">
-          Choose the Instagram account Recap posts to on{' '}
-          <a href="#/sources" className="text-accent-ink font-semibold no-underline hover:underline">
-            Sources →
-          </a>
-        </p>
-      </InspectorSection>
-    );
-  }
+  const linkTo = (words: string) => (
+    <InspectorSection id="recap-publish" title="Publish" summary="not connected">
+      <p className="m-0 text-xs text-muted leading-relaxed">
+        {words}{' '}
+        <a href="#/sources" className="text-accent-ink font-semibold no-underline hover:underline">
+          Sources →
+        </a>
+      </p>
+    </InspectorSection>
+  );
+  const idle: PublishVerbs = { ready: false, summary: '', label: '', blocked: null, send: () => {}, when: '' };
+  if (!conn) return { section: linkTo('Schedule this recap on Instagram from here: connect your own Postiz on'), verbs: idle };
+  if (!channel) return { section: linkTo('Choose the Instagram account Recap posts to on'), verbs: idle };
 
   const kindOk = (k: PublishKind) => (k === 'carousel' ? slides > 1 : canEncode);
+  const whenWords = chosen.kind === 'now' ? 'now' : chosen.kind === 'draft' ? 'a draft' : at ? slotLabel(at, rhythm!.timeZone) : 'a time to choose';
   const label = chosen.kind === 'now' ? 'Publish now' : chosen.kind === 'draft' ? 'Send as a draft' : at ? `Schedule · ${slotLabel(at, rhythm!.timeZone)}` : 'Schedule';
+  const blocked = !kindOk(kind)
+    ? kind === 'carousel'
+      ? 'A carousel needs two slides at least.'
+      : 'This browser cannot encode video.'
+    : chosen.kind === 'other' && !chosen.at
+      ? 'Choose when it goes out.'
+      : null;
 
-  const schedule = () =>
+  const schedule = (as?: 'now' | 'draft') =>
     run('publish', async (signal, task) => {
       const files = await render(kind, signal, task);
-      const target = chosen.kind === 'now' ? 'now' : chosen.kind === 'draft' ? 'draft' : (at ?? 'draft');
+      const target = as ?? (chosen.kind === 'now' ? 'now' : chosen.kind === 'draft' ? 'draft' : (at ?? 'draft'));
       const sent = await sendPost({
         client: client!,
         channel,
@@ -145,8 +162,17 @@ export default function PublishSection({
       return `${where} (${KIND_LABEL[kind]}${kind === 'reel' && trial ? ', trial' : ''}, ${files.length} file${files.length === 1 ? '' : 's'}).${place ? ` Once it is out, add the location in Instagram: ${place}.` : ''}`;
     });
 
-  return (
-    <InspectorSection id="recap-publish" title="Publish" foldable={false}>
+  const verbs: PublishVerbs = {
+    ready: true,
+    summary: `${KIND_LABEL[kind]}${kind === 'reel' && trial ? ' · trial' : ''} · ${channel.name} · caption ${doc.publish.approved ? 'approved' : 'not approved yet'}`,
+    label,
+    blocked: busy ? null : blocked,
+    send: (as) => void schedule(as),
+    when: whenWords,
+  };
+
+  const section = (
+    <InspectorSection id="recap-publish" title="Publish" summary={`${KIND_LABEL[kind]} · ${whenWords}`}>
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-2 text-xs">
           {channel.picture ? <img src={channel.picture} alt="" className="w-6 h-6 rounded-full object-cover" /> : <span className="w-6 h-6 rounded-full bg-accent-wash block" aria-hidden="true" />}
@@ -263,13 +289,11 @@ export default function PublishSection({
             @{conn.collaborator} as collaborator
           </ToggleField>
         )}
-        <Button variant="primary" disabled={busy || !kindOk(kind) || (chosen.kind === 'other' && !chosen.at)} onClick={() => void schedule()}>
-          {label}
-        </Button>
         {doc.publish.publications.length > 0 && <Sent doc={doc} planned={planned} tz={rhythm!.timeZone} />}
       </div>
     </InspectorSection>
   );
+  return { section, verbs };
 }
 
 /** What this recap sent, newest first, with Postiz's own state when it said. */

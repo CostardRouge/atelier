@@ -58,6 +58,8 @@ export default function DeliverBar({
   unitWord,
   settingsLine,
   empty = 'Nothing to export yet.',
+  lead,
+  running,
 }: {
   verbs: readonly ExportVerb[];
   /** Which verb is the button; the first when unnamed or absent. */
@@ -81,6 +83,10 @@ export default function DeliverBar({
   settingsLine?: string | null;
   /** Said where no verb is offered. */
   empty?: string;
+  /** Drawn at the start of the summary's line — Recap's Save · Publish switch (lab 13). */
+  lead?: ReactNode;
+  /** A host's own run, drawn IN PLACE of the verbs while it goes on (a tool whose progress is not a `RunProgress`). */
+  running?: ReactNode;
 }) {
   const primary = verbs.find((v) => v.id === primaryId) ?? verbs[0] ?? null;
   const others = verbs.filter((v) => v !== primary);
@@ -89,14 +95,27 @@ export default function DeliverBar({
     <div
       className={`flex-none flex flex-col gap-1.5 border-t border-line-strong bg-surface ${PLACEMENT[placement]} shadow-[0_-10px_18px_-16px_rgba(43,33,18,0.45)]`}
     >
-      {progress ? (
+      {running ? (
+        running
+      ) : progress ? (
         <RunBar progress={progress} exporting={exporting} onCancel={onCancel} unitWord={unitWord} settingsLine={settingsLine ?? null} />
       ) : (
         <>
-          {summary && (
-            <span className="font-mono text-3xs text-ink-soft tabular-nums leading-snug line-clamp-2" title={summary}>
-              {summary}
-            </span>
+          {lead ? (
+            <div className="flex items-center gap-2 min-w-0">
+              {lead}
+              {summary && (
+                <span className="flex-1 min-w-0 font-mono text-3xs text-ink-soft tabular-nums leading-snug truncate" title={summary}>
+                  {summary}
+                </span>
+              )}
+            </div>
+          ) : (
+            summary && (
+              <span className="font-mono text-3xs text-ink-soft tabular-nums leading-snug line-clamp-2" title={summary}>
+                {summary}
+              </span>
+            )
           )}
           {primary ? (
             <div className="flex items-stretch gap-1 min-w-0">

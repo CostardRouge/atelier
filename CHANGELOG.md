@@ -83,7 +83,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   show its runs of days in one place — a red line under them, *Albany · 8–14* — when you turn them on, and a title
   can say `{place}` (the place you came back to most, the pin before it) or `{places}` (the route).
   Its inspector is a panel of its own beside the stage: its six tabs on one row stay at the top while the settings
-  scroll under them, and each section's title stays in view as you scroll through it.
+  scroll under them, and each section's title stays in view as you scroll through it. In its Export tab the button
+  that exports or schedules stays pinned at the panel's foot whatever the scroll — with a Save · Publish switch when
+  your Postiz is connected and the other deliveries behind ▾ — and becomes the progress bar while an export runs,
+  on every tab; Quality, Export and Publish fold to one line that says what they are set to.
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's
   days and their originals on your Winnow, and the block wipes from the original to the final.
 - Storytelling: a map scene can be drawn as Trips' Itinerary or as Virée's 3D drive, on the series' trip and the leg
