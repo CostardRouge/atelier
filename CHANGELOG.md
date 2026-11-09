@@ -79,7 +79,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   The recaps' gallery has a **Planned** section: what goes out in the next six weeks, week by week, scheduled, out or
   failed, read from your Postiz.
   An agent can drive the whole posting routine: the recaps ready to make, your calendar and free slots, the facts a
-  caption is written from, the caption itself (which waits for your approval), scheduling and taking a post back. A month or a week can
+  caption is written from, the caption itself (which waits for your approval), scheduling and taking a post back —
+  and the pictures: browse all of a recap's pictures, bring in any picture of your Winnow, and set the carousel in a
+  given order. A month or a week can
   show its runs of days in one place — a red line under them, *Albany · 8–14* — when you turn them on, and a title
   can say `{place}` (the place you came back to most, the pin before it) or `{places}` (the route).
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's

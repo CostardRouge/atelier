@@ -20,7 +20,7 @@ import { imageResult } from '../../shared/commands/image-result';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { downloadBlob } from '../../shared/media/save';
 import { applySettings, recapOutline, SETTABLE } from '../../shared/recap/recap-commands';
-import { withCaption, withCleared, withPick, withPicture, withRecap, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
+import { withCaption, withCleared, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { DEFAULT_FRAME, readFrame } from '../../shared/recap/recap-frame';
 import { slugOf } from '../../shared/recap/recap-file';
 import { carouselSlides, type RecapLayout } from '../../shared/recap/recap-layout';
@@ -29,7 +29,10 @@ import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
 import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
-import { recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
+import { chooseCarousel, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
+import type { WinnowClient } from '../../shared/sources/winnow/client';
+import { withJoined } from '../../shared/recap/recap-selection';
+import { pictureOfRow } from './recap-media';
 import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
@@ -49,6 +52,8 @@ export interface RecapCommandsContext {
   /** Fill from the connected Winnow; the reason when none is. */
   fill: () => Promise<string>;
   canFill: () => true | string;
+  /** The connected Winnow, for a picture brought in by id (`recap.add`); null when none is. */
+  winnow: () => { client: WinnowClient; instance: string } | null;
 }
 
 export function useRecapCommands(ctx: RecapCommandsContext): void {
@@ -224,6 +229,93 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           files.push(`${base}-${n}.${ext}`);
         }
         return { files };
+      },
+    },
+    {
+      id: 'recap.pool',
+      title: 'Browse the recap’s pictures',
+      description:
+        'Every picture the recap holds — not only those it shows — in time order, filtered: a day or a span (from, to), a place (part of the town, region or country), ♥ (fav), Winnow’s pick, at least minStars, photo or video, a camera (part of its name), shown or not. Each with its key (what recap.pin and recap.choose take), its Winnow id (what winnow.sheet shows), its day and time, place, camera, ♥/pick/stars, and the slots it shows on. 100 at a time (limit up to 500, offset to page).',
+      params: {
+        day: { type: 'string', description: 'One day, YYYY-MM-DD.', optional: true },
+        from: { type: 'string', description: 'A span’s first day.', optional: true },
+        to: { type: 'string', description: 'A span’s last day.', optional: true },
+        place: { type: 'string', description: 'Part of a place’s name.', optional: true },
+        fav: { type: 'boolean', description: 'Only the ♥ (true) or only the others (false).', optional: true },
+        picked: { type: 'boolean', description: 'Only Winnow’s picks, or only the others.', optional: true },
+        minStars: { type: 'number', integer: true, min: 1, max: 5, description: 'At least this many stars.', optional: true },
+        kind: { type: 'string', enum: ['photo', 'video'], description: 'Photos or videos only.', optional: true },
+        device: { type: 'string', description: 'Part of a camera’s name.', optional: true },
+        shown: { type: 'boolean', description: 'Only what the recap shows (true), or only what it does not (false).', optional: true },
+        limit: { type: 'number', integer: true, min: 1, max: 500, description: 'How many (default 100).', optional: true },
+        offset: { type: 'number', integer: true, min: 0, description: 'Skip this many.', optional: true },
+      },
+      run: (p) => {
+        const day = (k: string) => {
+          const v = p[k];
+          if (v !== undefined && (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v))) throw new CommandError('invalid', `${k} is a day, YYYY-MM-DD`);
+          return v as string | undefined;
+        };
+        return poolList(
+          doc(),
+          resolveRecap(doc()),
+          { day: day('day'), from: day('from'), to: day('to'), place: p.place as string | undefined, fav: p.fav as boolean | undefined, picked: p.picked as boolean | undefined, minStars: p.minStars as number | undefined, kind: p.kind as 'photo' | 'video' | undefined, device: p.device as string | undefined, shown: p.shown as boolean | undefined, limit: p.limit as number | undefined, offset: p.offset as number | undefined },
+          c.current.aliases,
+        );
+      },
+    },
+    {
+      id: 'recap.add',
+      title: 'Bring Winnow pictures into the recap',
+      description:
+        'Bring pictures of the connected Winnow into the recap, by their Winnow ids (from winnow.search — "a beach at sunset" —, winnow.assets, winnow.near…), whatever day they were taken: they join its pool, and the carousel at their moment (join: false leaves them in the pool only, for recap.choose or recap.pin). With slot, the first lands on that slot instead (a day may then show another day’s picture). Answers their keys.',
+      params: {
+        ids: { type: 'numbers', integer: true, min: 1, maxItems: 200, description: 'Winnow asset ids.' },
+        join: { type: 'boolean', description: 'Join the carousel (default true).', optional: true },
+        slot: { type: 'string', description: 'Put the first on this slot instead.', optional: true },
+      },
+      available: () => (c.current.winnow() ? true : 'no Winnow is connected — connect one on #/sources'),
+      run: async (p) => {
+        const w = c.current.winnow()!;
+        const ids = p.ids as number[];
+        const target = p.slot === undefined ? null : slotOf(p.slot);
+        const rows = (await w.client.assetsByIds(ids)).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+        const found = new Set(rows.map((r) => r.id));
+        const missing = ids.filter((id) => !found.has(id));
+        if (!rows.length) throw new CommandError('invalid', `no photo or video of this Winnow has the ids ${ids.slice(0, 5).join(', ')}${ids.length > 5 ? '…' : ''}`);
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        const pics = ids.flatMap((id) => (byId.has(id) ? [pictureOfRow(byId.get(id)!, w.instance)] : []));
+        const had = new Set(doc().pictures.map((x) => x.key));
+        c.current.change((d) => {
+          let next = withPictures(d, pics);
+          if (target) next = withPick(next, target.id, pics[0].key);
+          else if (p.join !== false) next = withJoined(next, pics.map((x) => x.key));
+          return next;
+        });
+        // What actually shows now: a picture outside the recap's days stays in the pool (recap.choose forces it in).
+        const shown = new Set(resolveRecap(doc()).slots.flatMap((s) => (s.picture ? [s.picture.key] : [])));
+        const outside = target || p.join === false ? [] : pics.filter((x) => !shown.has(x.key)).map((x) => x.key);
+        return {
+          added: pics.filter((x) => !had.has(x.key)).map((x) => x.key),
+          already: pics.filter((x) => had.has(x.key)).map((x) => x.key),
+          ...(target ? { onSlot: target.id } : p.join === false ? { inPoolOnly: true } : { joined: pics.filter((x) => shown.has(x.key)).map((x) => x.key) }),
+          ...(outside.length ? { notJoined: outside, why: 'outside the recap’s days, or past the carousel’s count — recap.choose puts them in by key' } : {}),
+          ...(missing.length ? { notFound: missing } : {}),
+        };
+      },
+    },
+    {
+      id: 'recap.choose',
+      title: 'Set the carousel’s pictures',
+      description:
+        'Make the carousel exactly these pictures, in this order — keys from recap.pool (recap.add brings others in). The selection is then frozen, as one made by hand: nothing comes in or moves by itself; recap.set carousel.chosen: null gives it back to the rule. For a dump or a sheet, the pictures; for a month, its highlights after the calendar. Instagram’s API posts 10 slides at most.',
+      params: { keys: { type: 'strings', description: 'Picture keys, in the order they show (240 at most).' } },
+      run: (p) => {
+        const r = chooseCarousel(doc(), p.keys as string[]);
+        if (!r.ok) throw new CommandError('invalid', r.error);
+        c.current.change(() => r.doc);
+        const shown = resolveRecap(r.doc).slots.flatMap((s) => (s.flow && s.picture ? [s.picture.key] : []));
+        return { carousel: shown, frozen: true };
       },
     },
     {

@@ -484,6 +484,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     clipSlides,
     fill,
     canFill: () => (client && instance ? true : 'no Winnow is connected — connect one on #/sources'),
+    winnow: () => (client && instance ? { client, instance } : null),
   });
 
   const pickerHost = useMemo<PickerHost | null>(() => {

@@ -215,3 +215,94 @@ export function scheduleTarget(raw: unknown, rhythm: Rhythm, planned: readonly D
   if (at.getTime() < now.getTime() + 60_000) return { error: `${raw} is past — "now" publishes at once` };
   return { at };
 }
+
+export interface PoolQuery {
+  /** One day, or a span `from`–`to` (YYYY-MM-DD). */
+  day?: string;
+  from?: string;
+  to?: string;
+  /** A part of the place's name (town, region or country), case aside. */
+  place?: string;
+  fav?: boolean;
+  picked?: boolean;
+  minStars?: number;
+  kind?: 'photo' | 'video';
+  /** A part of the camera's name, as recap.get says it. */
+  device?: string;
+  /** Only what the recap shows, or only what it does not. */
+  shown?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+/** The Winnow asset id a picture's key carries (`w:<instance>:<id>`), or null for a local file. */
+export const winnowIdOf = (key: string): number | null => {
+  const m = /^w:[^:]+:(\d+)$/.exec(key);
+  return m ? Number(m[1]) : null;
+};
+
+/**
+ * The recap's POOL as an agent browses it (his ask, 2026-11-09): every
+ * picture it holds, not only those shown — filtered by day, place, ♥, pick,
+ * stars, kind, camera, shown or not — each with its key (what `recap.pin` and
+ * `recap.choose` take), its Winnow id, and where it shows. In time order.
+ */
+export function poolList(doc: RecapDoc, resolved: ResolvedRecap, q: PoolQuery, aliases: DeviceAliases = {}) {
+  const where = new Map<string, string[]>();
+  for (const s of resolved.slots) if (s.picture) where.set(s.picture.key, [...(where.get(s.picture.key) ?? []), s.id]);
+  const from = q.day ?? q.from;
+  const to = q.day ?? q.to;
+  const place = q.place?.trim().toLowerCase();
+  const device = q.device?.trim().toLowerCase();
+  const all = doc.pictures
+    .filter((p) => !p.loose)
+    .filter((p) => (!from || (p.day ?? '') >= from) && (!to || (p.day ?? '') <= to))
+    .filter((p) => !place || [p.place, p.region, p.country].some((v) => v?.toLowerCase().includes(place)))
+    .filter((p) => q.fav === undefined || Boolean(p.fav) === q.fav)
+    .filter((p) => q.picked === undefined || Boolean(p.picked) === q.picked)
+    .filter((p) => q.minStars === undefined || (p.stars ?? 0) >= q.minStars)
+    .filter((p) => !q.kind || p.kind === q.kind)
+    .filter((p) => !device || (p.device ? deviceLabel(p.device, aliases).toLowerCase().includes(device) || p.device.toLowerCase().includes(device) : false))
+    .filter((p) => q.shown === undefined || where.has(p.key) === q.shown)
+    .sort((a, b) => `${a.day ?? ''}${String(a.second ?? (a.minute ?? 0) * 60).padStart(5, '0')}`.localeCompare(`${b.day ?? ''}${String(b.second ?? (b.minute ?? 0) * 60).padStart(5, '0')}`));
+  const offset = q.offset ?? 0;
+  const limit = q.limit ?? 100;
+  return {
+    total: doc.pictures.filter((p) => !p.loose).length,
+    matching: all.length,
+    offset,
+    pictures: all.slice(offset, offset + limit).map((p) => ({
+      key: p.key,
+      ...(winnowIdOf(p.key) !== null ? { winnowId: winnowIdOf(p.key) } : {}),
+      name: p.name,
+      kind: p.kind,
+      day: p.day ?? null,
+      ...(p.minute !== undefined ? { time: `${Math.floor(p.minute / 60)}:${String(p.minute % 60).padStart(2, '0')}` } : {}),
+      ...(placeName(p) ? { place: placeName(p) } : {}),
+      ...(p.device ? { device: deviceLabel(p.device, aliases) } : {}),
+      ...(p.fav ? { fav: true } : {}),
+      ...(p.picked ? { picked: true } : {}),
+      ...(p.stars ? { stars: p.stars } : {}),
+      ...(where.has(p.key) ? { shownOn: where.get(p.key) } : {}),
+    })),
+  };
+}
+
+/**
+ * The carousel set to exactly these pictures, in this order (`recap.choose`):
+ * a FROZEN selection, like a hand-made one — nothing comes in or moves by
+ * itself after. Refused, with the reason, when the recap has no carousel of
+ * pictures, a key is not in its pool, or a key is twice.
+ */
+export function chooseCarousel(doc: RecapDoc, keys: readonly string[]): { ok: true; doc: RecapDoc } | { ok: false; error: string } {
+  if (!(doc.template === 'dump' || doc.template === 'sheets' || (doc.carousel.after === 'highlights' && doc.template !== 'wrapped'))) {
+    return { ok: false, error: `this ${doc.template} recap has no carousel of pictures — a month's is its highlights (recap.set carousel.after: "highlights"), a dump's and a sheet's are their pictures` };
+  }
+  if (!keys.length) return { ok: false, error: 'give one key at least — recap.pool lists them' };
+  const pool = new Set(doc.pictures.filter((p) => !p.loose).map((p) => p.key));
+  const missing = keys.filter((k) => !pool.has(k));
+  if (missing.length) return { ok: false, error: `not in this recap's pool: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''} — recap.add brings a Winnow picture in` };
+  const twice = keys.filter((k, i) => keys.indexOf(k) !== i);
+  if (twice.length) return { ok: false, error: `twice: ${[...new Set(twice)].join(', ')}` };
+  return { ok: true, doc: withRecap(doc, { carousel: { ...doc.carousel, chosen: [...keys], left: doc.carousel.left.filter((k) => !keys.includes(k)) } }) };
+}

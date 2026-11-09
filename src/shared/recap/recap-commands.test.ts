@@ -74,3 +74,41 @@ describe('what an agent writes a caption from, and when it goes out', () => {
     expect(scheduleTarget('tomorrow', DEFAULT_RHYTHM, [], now)).toMatchObject({ error: expect.stringMatching(/not a time/) });
   });
 });
+
+describe('the pool an agent browses, and the carousel it sets', () => {
+  it('lists every picture, filtered, with its key, Winnow id and where it shows', async () => {
+    const { createRecapDoc, withPictures } = await import('./recap-doc');
+    const { resolveRecap } = await import('./recap-slots');
+    const { poolList, winnowIdOf } = await import('./recap-commands');
+    let doc = createRecapDoc('month', 'local', { anchor: '2025-07-01', now: 1 });
+    doc = withPictures(doc, [
+      { key: 'w:winnow.example:12', origin: 'winnow', name: 'IMG_12', kind: 'photo', day: '2025-07-14', minute: 1140, place: 'Cape Tribulation', region: 'Queensland', fav: true },
+      { key: 'w:winnow.example:13', origin: 'winnow', name: 'IMG_13', kind: 'photo', day: '2025-07-14', minute: 600, place: 'Cape Tribulation', region: 'Queensland' },
+      { key: 'w:winnow.example:20', origin: 'winnow', name: 'IMG_20', kind: 'video', day: '2025-07-20', place: 'Cairns', device: 'iPhone 15 Pro' },
+    ]);
+    const r = resolveRecap(doc);
+    const all = poolList(doc, r, {});
+    expect(all.total).toBe(3);
+    expect(all.pictures.map((p) => p.key)).toEqual(['w:winnow.example:13', 'w:winnow.example:12', 'w:winnow.example:20']);
+    expect(all.pictures[1]).toMatchObject({ winnowId: 12, time: '19:00', place: 'Cape Tribulation', fav: true, shownOn: ['2025-07-14'] });
+    expect(all.pictures[0].shownOn).toBeUndefined();
+    expect(poolList(doc, r, { place: 'queens', fav: true }).pictures.map((p) => p.winnowId)).toEqual([12]);
+    expect(poolList(doc, r, { kind: 'video', device: 'iphone' }).matching).toBe(1);
+    expect(poolList(doc, r, { shown: false }).pictures.map((p) => p.winnowId)).toEqual([13]);
+    expect(poolList(doc, r, { day: '2025-07-20' }).matching).toBe(1);
+    expect(winnowIdOf('local:abc')).toBeNull();
+  });
+
+  it('sets the carousel in his order, frozen — or says why not', async () => {
+    const { createRecapDoc, withPictures } = await import('./recap-doc');
+    const { chooseCarousel } = await import('./recap-commands');
+    let dump = createRecapDoc('dump', 'local', { now: 1 });
+    dump = withPictures(dump, ['a', 'b', 'c'].map((k) => ({ key: k, origin: 'local' as const, name: k, kind: 'photo' as const, day: '2025-07-01' })));
+    const r = chooseCarousel(dump, ['c', 'a']);
+    expect(r.ok && r.doc.carousel.chosen).toEqual(['c', 'a']);
+    expect(chooseCarousel(dump, ['z'])).toMatchObject({ ok: false, error: expect.stringMatching(/not in this recap/) });
+    expect(chooseCarousel(dump, ['a', 'a'])).toMatchObject({ ok: false, error: expect.stringMatching(/twice/) });
+    const single = createRecapDoc('single', 'local', { now: 1 });
+    expect(chooseCarousel(single, ['a'])).toMatchObject({ ok: false, error: expect.stringMatching(/no carousel/) });
+  });
+});
