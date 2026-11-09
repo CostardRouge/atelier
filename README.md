@@ -3640,7 +3640,10 @@ shows it. Sending it approves it; an agent can write one, and it waits for
 your approval. The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
 gallery's **Planned** section is one week as a strip of seven days — what went
-out, what will, what failed, and your rhythm's free slots — that scrolls
+out, what will, what failed, and your rhythm's free slots — each post a small
+picture of what it sent (kept on this device when it was sent; the recap's
+poster for an older one, your account's for a post made in Postiz) with its
+time, kind and state over it, a failed one ringed in red; the strip scrolls
 sideways on a phone, today first; ‹ › move a week, and *Open Postiz* opens your
 Postiz for the whole calendar. A post opens a small card: its time and state,
 a failure's reason and what to do about it, and its verbs — *Open recap*,

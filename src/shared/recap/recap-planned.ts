@@ -24,6 +24,8 @@ export interface PlannedItem {
   trial: boolean;
   error: string | null;
   url: string | null;
+  /** The account it goes out on, as Postiz names it — for a post with no recap behind it. */
+  channel: { name: string; picture: string | null } | null;
 }
 
 export interface PlannedWeek {
@@ -53,6 +55,7 @@ export function plannedWeeks(posts: readonly PostizPost[], recaps: readonly Reca
       trial: from?.trial ?? false,
       error: post.error,
       url: post.releaseURL,
+      channel: post.channel ? { name: post.channel.name, picture: post.channel.picture } : null,
     };
     const key = weekOf(at, tz);
     weeks.set(key, [...(weeks.get(key) ?? []), item]);

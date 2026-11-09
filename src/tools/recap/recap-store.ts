@@ -134,6 +134,11 @@ export async function pruneMedia(): Promise<void> {
     const gone = keys.filter((k) => typeof k === 'string' && !keep.has(k.replace(/#.*$/, '')));
     if (gone.length) await write(store, (tx) => gone.forEach((k) => tx.objectStore(store).delete(k)));
   }
+  // A post's vignette goes with the last recap that remembers sending it.
+  const posts = new Set((await listRecaps()).flatMap((r) => r.publish.publications.map((p) => `post:${p.postId}`)));
+  const thumbs = ((await read<IDBValidKey[]>(THUMBS, (s) => s.getAllKeys())) ?? []) as string[];
+  const stale = thumbs.filter((k) => typeof k === 'string' && k.startsWith('post:') && !posts.has(k));
+  if (stale.length) await write(THUMBS, (tx) => stale.forEach((k) => tx.objectStore(THUMBS).delete(k)));
 }
 
 // ---- pictures and clips ----
@@ -190,6 +195,10 @@ export async function getThumb(id: string): Promise<Blob | null> {
 export function putThumb(id: string, blob: Blob): Promise<boolean> {
   return write(THUMBS, (tx) => tx.objectStore(THUMBS).put(blob, id));
 }
+
+/** The vignette of what a post sent (lab 15): kept beside the recaps' posters, under `post:<postId>`. */
+export const getPostThumb = (postId: string) => getThumb(`post:${postId}`);
+export const putPostThumb = (postId: string, blob: Blob) => putThumb(`post:${postId}`, blob);
 
 // ---- sync records ----
 
