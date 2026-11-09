@@ -3613,15 +3613,27 @@ or takes the layout you set, and the first slide's title can repeat on the
 others — small with the slide's number, or as big as on the first. The carousel
 export writes the slides in that order, a clip as its own video slide.
 
+**The inspector.** Recap's settings are a panel of their own beside the stage
+(a drawer under it on a phone): its six tabs stay on one row at the top, the
+sections scroll under them with their titles kept in view, and a section folds
+to one line that still says what it is set to. In the *Export* tab what you
+SET scrolls (Length, Quality, Export, Publish) and what you TRIGGER is pinned
+at the panel's foot: one button, the other deliveries behind ▾, and — with a
+Postiz connected — a *Save · Publish* switch that says where the recap goes
+(Publish first, then your last choice for that recap). While an export runs,
+the foot becomes its progress bar, on every tab.
+
 **Publishing.** Once your own **Postiz** is connected on `#/sources`, the
-*Export* tab has a *Publish* section: the recap is rendered, sent to your
+*Export* tab has a *Publish* section and its foot a *Publish* side: the recap is rendered, sent to your
 Postiz and scheduled on your Instagram — as a **Reel** (a **Trial Reel**,
 shown to non-followers first, if you like, shared with your followers when it
 works or by hand), a **carousel** (its slides as JPEG, a clip as a video
-slide; Instagram's API takes 10) or a **story**. It goes out in the next free
-slot of your rhythm (the slots already taken in Postiz are struck out), now,
-or as a draft left in Postiz; past your ceiling, or a second post the same
-day, it says so and lets you. The **caption** is a template of Recap's words —
+slide; Instagram's API takes 10) or a **story**. *When* says the slot it goes out
+in, in big type — the next free one of your rhythm — and *Change* opens your
+rhythm as a small grid, its slots as columns and this week and the next two as
+rows (a slot already taken in Postiz hatched, one gone dashed, the chosen one
+red), with *Another time…*, *Now* and *Draft* (left in Postiz) under it; past
+your ceiling, or a second post the same day, the card says so and lets you. The **caption** is a template of Recap's words —
 `{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
 places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
 shows it. Sending it approves it; an agent can write one, and it waits for

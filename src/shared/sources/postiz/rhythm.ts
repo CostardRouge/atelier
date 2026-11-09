@@ -136,6 +136,58 @@ export function nextFreeSlot(rhythm: Rhythm, planned: readonly Date[], from: Dat
   return null;
 }
 
+/** One cell of the rhythm's grid: a slot of one week, gone, taken by a planned post, or free. */
+export interface RhythmCell {
+  at: Date;
+  state: 'past' | 'taken' | 'free';
+}
+
+/** The rhythm's grid (lab 13): its slots as COLUMNS, Monday first, and the weeks from this one as ROWS. */
+export interface RhythmGrid {
+  slots: RhythmSlot[];
+  weeks: { monday: string; label: string; cells: RhythmCell[] }[];
+}
+
+/** `10–16 Nov`, `24 Nov – 1 Dec`: a week from its Monday (`YYYY-MM-DD`). */
+function weekLabel(monday: string): string {
+  const [y, m, d] = monday.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m - 1, d + 6));
+  const em = end.getUTCMonth();
+  return em === m - 1 ? `${d}–${end.getUTCDate()} ${MONTHS[em]}` : `${d} ${MONTHS[m - 1]} – ${end.getUTCDate()} ${MONTHS[em]}`;
+}
+
+/**
+ * The next `weeks` weeks of the rhythm, in its zone, from the week holding
+ * `now`: each slot's instant and whether it is gone, taken (a planned post
+ * within 90 min of it, the rule `slotsWithState` keeps) or free. A slot is the
+ * same column every week, so «Tue 9:00» reads as one thing that repeats.
+ */
+export function rhythmGrid(rhythm: Rhythm, planned: readonly Date[], now: Date, weeks = 3): RhythmGrid {
+  const slots = [...rhythm.slots].sort((a, b) => (a.day + 6) % 7 - (b.day + 6) % 7 || a.time.localeCompare(b.time));
+  const first = weekOf(now, rhythm.timeZone);
+  const [y, m, d] = first.split('-').map(Number);
+  const out: RhythmGrid['weeks'] = [];
+  for (let w = 0; w < weeks; w++) {
+    const mon = new Date(Date.UTC(y, m - 1, d + 7 * w));
+    const monday = mon.toISOString().slice(0, 10);
+    const cells = slots.map((s): RhythmCell => {
+      const day = new Date(Date.UTC(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate() + ((s.day + 6) % 7)));
+      const [h, mi] = s.time.split(':').map(Number);
+      const at = zonedInstant(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), h, mi, rhythm.timeZone);
+      const state = at.getTime() <= now.getTime() ? 'past' : planned.some((p) => Math.abs(p.getTime() - at.getTime()) <= TAKEN_MIN * 60_000) ? 'taken' : 'free';
+      return { at, state };
+    });
+    out.push({ monday, label: weekLabel(monday), cells });
+  }
+  return { slots, weeks: out };
+}
+
+/** `Tue 9:00` — a slot as the grid's column says it. */
+export function slotHead(s: RhythmSlot): string {
+  const [h, mi] = s.time.split(':').map(Number);
+  return `${DAYS[s.day]} ${h}:${String(mi).padStart(2, '0')}`;
+}
+
 /** What a post at `at` would break, said plainly — or nothing. Never a refusal. */
 export function rhythmWarnings(rhythm: Rhythm, planned: readonly Date[], at: Date): string[] {
   const out: string[] = [];
