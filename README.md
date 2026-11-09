@@ -3639,9 +3639,14 @@ places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
 shows it. Sending it approves it; an agent can write one, and it waits for
 your approval. The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
-gallery's **Planned** section lists, week by week, what goes out in the next
-six weeks as your Postiz says — scheduled, out, failed (with the reason) —
-including posts scheduled outside Recap; a click opens the recap that sent it.
+gallery's **Planned** section is one week as a strip of seven days — what went
+out, what will, what failed, and your rhythm's free slots — that scrolls
+sideways on a phone, today first; ‹ › move a week, and *Open Postiz* opens your
+Postiz for the whole calendar. A post opens a small card: its time and state,
+a failure's reason and what to do about it, and its verbs — *Open recap*,
+*Take back* (deleted in Postiz before it goes out), *Send again* (the recap on
+Export › Publish), *View on Instagram*, *Open in Postiz*, *Delete*. Posts
+scheduled outside Recap show too, by their caption.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and
@@ -3715,7 +3720,13 @@ words filled), `.postCaption` (the caption's template — writing it takes your
 approval back), `.approve` (only once you said yes), `.schedule` (render,
 send to your Postiz and schedule — as a Reel, a Trial Reel, a carousel or a
 story, in the next free slot, at a time, now or as a draft; refused while the
-caption is not approved) and `.unschedule`.
+caption is not approved) and `.unschedule`. The pictures themselves too:
+`.pool` lists every picture a recap holds — not only those it shows — by
+day, place, ♥, pick, stars, kind, camera, shown or not, with the key the
+other commands take; `.add` brings pictures of your Winnow in by id (found
+with `winnow.search` — « a beach at sunset » —, `winnow.near`, `winnow.assets`),
+whatever day they were taken; `.choose` makes the carousel exactly the
+pictures given, in that order.
 
 ## Telemetry tool
 

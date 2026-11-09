@@ -76,10 +76,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   A recap's *Export* tab can then **publish** it: rendered, sent to your Postiz and scheduled on Instagram as a Reel
   (or a Trial Reel), a carousel or a story, in the next free slot of your rhythm, now, or as a draft — with a caption
   written from the recap's own words (its title, the place, the route, hashtags from the places) that you edit.
-  The recaps' gallery has a **Planned** section: what goes out in the next six weeks, week by week, scheduled, out or
-  failed, read from your Postiz.
+  The recaps' gallery has a **Planned** section: one week as a strip of seven days, read from your Postiz — what went
+  out, what will, what failed and why, your free slots — with a post's actions one tap away and your Postiz one link
+  away.
   An agent can drive the whole posting routine: the recaps ready to make, your calendar and free slots, the facts a
-  caption is written from, the caption itself (which waits for your approval), scheduling and taking a post back. A month or a week can
+  caption is written from, the caption itself (which waits for your approval), scheduling and taking a post back —
+  and the pictures: browse all of a recap's pictures, bring in any picture of your Winnow, and set the carousel in a
+  given order. A month or a week can
   show its runs of days in one place — a red line under them, *Albany · 8–14* — when you turn them on, and a title
   can say `{place}` (the place you came back to most, the pin before it) or `{places}` (the route).
   Its inspector is a panel of its own beside the stage: its six tabs on one row stay at the top while the settings
