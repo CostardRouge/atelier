@@ -11,8 +11,11 @@
  * Pure and DOM-free.
  */
 
-import { readRecapDoc, withRecap, type RecapDoc } from './recap-doc';
+import { readRecapDoc, withRecap, type RecapDoc, type RecapPicture } from './recap-doc';
 import { deviceLabel, type DeviceAliases, type ResolvedRecap } from './recap-slots';
+import { placeName, placeWords } from './recap-places';
+import { DEFAULT_CAPTION, captionText, captionWords } from './recap-publish';
+import { nextFreeSlot, zonedInstant, type Rhythm } from '../sources/postiz/rhythm';
 
 /** The settings an agent may set, and what each holds. */
 export const SETTABLE: Record<string, string> = {
@@ -139,5 +142,76 @@ export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: numb
     sound: doc.sound,
     look: doc.look ? doc.look.layers.map((l) => l.name) : null,
     clipSlides: doc.clipSlides,
+    places: doc.places,
+    post: {
+      caption: doc.publish.caption ?? DEFAULT_CAPTION,
+      text: captionText(doc, resolved),
+      approved: doc.publish.approved,
+      publications: doc.publish.publications,
+    },
   };
+}
+
+/**
+ * What an agent needs to WRITE a recap's caption (his ask, 2026-11-08: «générer
+ * les textes automatiquement, les valider, les publier»): what it is about,
+ * the places in order and how long each was stayed in, the cameras, the
+ * pictures it shows with their day and place (the best first), the words a
+ * caption template can hold, filled, and the caption as it stands.
+ */
+export function recapFacts(doc: RecapDoc, resolved: ResolvedRecap, aliases: DeviceAliases = {}) {
+  const shown = resolved.slots.flatMap((s) => (s.picture ? [s.picture] : []));
+  const pool = resolved.inScope.length ? resolved.inScope : shown;
+  const words = placeWords(pool);
+  const stays = new Map<string, Set<string>>();
+  for (const p of pool) {
+    const name = placeName(p);
+    if (name && p.day) stays.set(name, (stays.get(name) ?? new Set()).add(p.day));
+  }
+  const devices = new Map<string, number>();
+  for (const p of pool) if (p.device) devices.set(deviceLabel(p.device, aliases), (devices.get(deviceLabel(p.device, aliases)) ?? 0) + 1);
+  const days = [...new Set(pool.map((p) => p.day).filter(Boolean))].sort() as string[];
+  const rank = (p: RecapPicture) => (p.fav ? 4 : 0) + (p.picked ? 2 : 0) + (p.stars ?? 0) / 5;
+  return {
+    title: doc.title,
+    template: doc.template,
+    period: days.length ? { from: days[0], to: days[days.length - 1] } : null,
+    days: resolved.days,
+    pictures: pool.filter((p) => p.kind === 'photo').length,
+    videos: pool.filter((p) => p.kind === 'video').length,
+    places: {
+      mostVisited: words.place,
+      route: words.route,
+      stays: [...stays.entries()].map(([place, d]) => {
+        const sorted = [...d].sort();
+        return { place, days: d.size, from: sorted[0], to: sorted[sorted.length - 1] };
+      }).sort((a, b) => a.from.localeCompare(b.from)),
+    },
+    devices: [...devices.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+    shown: [...shown]
+      .sort((a, b) => rank(b) - rank(a))
+      .slice(0, 16)
+      .map((p) => ({ key: p.key, day: p.day ?? null, place: placeName(p), kind: p.kind, ...(p.fav ? { fav: true } : {}), ...(p.picked ? { picked: true } : {}), ...(p.stars ? { stars: p.stars } : {}) })),
+    words: captionWords(doc, resolved),
+    caption: { template: doc.publish.caption ?? DEFAULT_CAPTION, text: captionText(doc, resolved), approved: doc.publish.approved, custom: doc.publish.caption !== null },
+  };
+}
+
+/**
+ * When an agent's post goes out: `next` (or nothing) — the rhythm's next free
+ * slot; `now`; `draft`; or a time — with a zone (`…Z`, `+01:00`), or a wall
+ * clock `YYYY-MM-DDTHH:MM` read in the rhythm's zone. Never in the past.
+ */
+export function scheduleTarget(raw: unknown, rhythm: Rhythm, planned: readonly Date[], now: Date = new Date()): { at: Date | 'now' | 'draft' } | { error: string } {
+  if (raw === undefined || raw === null || raw === 'next') {
+    const free = nextFreeSlot(rhythm, planned, now);
+    return free ? { at: free } : { error: 'no free slot of the rhythm in the next weeks — give a time, "now" or "draft"' };
+  }
+  if (raw === 'now' || raw === 'draft') return { at: raw };
+  if (typeof raw !== 'string') return { error: 'at is "next", "now", "draft" or a time (YYYY-MM-DDTHH:MM, in the rhythm’s zone, or ISO with its zone)' };
+  const wall = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/.exec(raw);
+  const at = wall ? zonedInstant(Number(wall[1]), Number(wall[2]), Number(wall[3]), Number(wall[4]), Number(wall[5]), rhythm.timeZone) : new Date(raw);
+  if (Number.isNaN(at.getTime())) return { error: `"${raw}" is not a time — YYYY-MM-DDTHH:MM in ${rhythm.timeZone}, or ISO with its zone` };
+  if (at.getTime() < now.getTime() + 60_000) return { error: `${raw} is past — "now" publishes at once` };
+  return { at };
 }

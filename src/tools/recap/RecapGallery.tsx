@@ -29,6 +29,7 @@ import { RECAP_DOC_KIND, deleteRemoteRecap, fetchRemoteRecap, listRemoteRecaps, 
 import { askPersistence, deleteRecap, deleteSyncRecord, getSyncRecord, getThumb, getValue, listRecaps, mediaStorage, putRecap, setValue, styled } from './recap-store';
 import { readyRecap, suggestions, type Suggestion } from '../../shared/recap/recap-suggest';
 import { GallerySection, SuggestionCard, SuggestionPoster, useSectionState } from './GallerySections';
+import PlannedSection from './PlannedSection';
 
 /** The suggestions hidden by «Not this month», by key — kept on this device. */
 const HIDDEN_KEY = 'suggest:hidden';
@@ -313,6 +314,8 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
         picks: anchor === doc.anchor ? doc.picks : {},
         cleared: anchor === doc.anchor ? doc.cleared : [],
         captions: anchor === doc.anchor ? doc.captions : {},
+        // The caption's words travel; its approval and what was sent stay with the original.
+        publish: { caption: doc.publish.caption, approved: false, publications: [] },
         createdAt: fresh.createdAt,
         updatedAt: fresh.updatedAt,
       };
@@ -409,6 +412,8 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
           </div>
         </GallerySection>
       )}
+
+      <PlannedSection recaps={recaps ?? []} open={sections.isOpen('planned')} onToggle={() => sections.toggle('planned')} onOpen={onOpen} />
 
       <GallerySection
         id="yours"

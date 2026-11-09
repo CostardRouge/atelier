@@ -29,6 +29,7 @@ const NOT_REQUESTS = new Set([
   'umami.is',
   'www.cnil.fr',
   'winnow.example',
+  'postiz.example',
   ...DEPLOYED_ORIGINS.map((origin) => new URL(origin).host),
 ]);
 

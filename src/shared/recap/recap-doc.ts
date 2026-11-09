@@ -23,6 +23,7 @@ import { readDelivery, type RecapDelivery } from './recap-delivery';
 import { readCarousel, type RecapCarousel } from './recap-carousel';
 import { readOpener, type RecapOpener } from './recap-opener';
 import { readPlaces, type RecapPlaces } from './recap-places';
+import { readPublish, type RecapPublish } from './recap-publish';
 import { readBeat, type RecapBeat } from './recap-beat';
 import { BAND_HOLD, BAND_MOTIONS, type BandMotion } from './recap-bands';
 import { readSheet, type RecapSheet } from './recap-sheet';
@@ -301,6 +302,8 @@ export interface RecapDoc {
   opener: RecapOpener;
   /** Where the places are said: a pin in a cell's corner, runs of days, `{place}` (`recap-places.ts`). */
   places: RecapPlaces;
+  /** Its post: the caption, its approval, what was sent to Postiz (`recap-publish.ts`). */
+  publish: RecapPublish;
   createdAt: number;
   updatedAt: number;
 }
@@ -743,6 +746,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     carousel: readCarousel(r.carousel, template),
     opener: readOpener(r.opener),
     places: readPlaces(r.places),
+    publish: readPublish(r.publish),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };

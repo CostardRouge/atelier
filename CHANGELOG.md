@@ -69,7 +69,17 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   The recaps' gallery has three sections you open and close — Suggestions, Your recaps, New recap — and when a month
   (or a week) has ended, the recaps you made for the one before are ready for it, in the same dress, one tap to make.
   A picture can say its town in a small glass pill with a red map pin, in a corner of its cell — off until you turn
-  it on, then only where the place changes (or on every picture, or the first of each place). A month or a week can
+  it on, then only where the place changes (or on every picture, or the first of each place).
+  Your own **Postiz** can be connected on the Sources screen (its address and an API key): you choose the Instagram
+  account Recap publishes to, a collaborator it proposes, and your publishing rhythm — the week's slots and how many
+  posts a week at most.
+  A recap's *Export* tab can then **publish** it: rendered, sent to your Postiz and scheduled on Instagram as a Reel
+  (or a Trial Reel), a carousel or a story, in the next free slot of your rhythm, now, or as a draft — with a caption
+  written from the recap's own words (its title, the place, the route, hashtags from the places) that you edit.
+  The recaps' gallery has a **Planned** section: what goes out in the next six weeks, week by week, scheduled, out or
+  failed, read from your Postiz.
+  An agent can drive the whole posting routine: the recaps ready to make, your calendar and free slots, the facts a
+  caption is written from, the caption itself (which waits for your approval), scheduling and taking a post back. A month or a week can
   show its runs of days in one place — a red line under them, *Albany · 8–14* — when you turn them on, and a title
   can say `{place}` (the place you came back to most, the pin before it) or `{places}` (the route).
 - Storytelling: the before/after block shows a picture you developed — Count finds your Gallery finals of the trip's

@@ -13,7 +13,9 @@ import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspec
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 import { Icons } from '../../shared/ui/icons';
-import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, type FilmProgress } from './recap-export';
+import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles, type FilmProgress } from './recap-export';
+import PublishSection from './PublishSection';
+import type { PublishKind } from '../../shared/recap/recap-publish';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
 import { carouselSlides } from '../../shared/recap/recap-layout';
 import { QUALITIES, QUALITY_LABEL, deliveryBitrate, deliverySize, sizeText, type Quality, type RecapDelivery } from '../../shared/recap/recap-delivery';
@@ -137,7 +139,7 @@ function QualitySection({ doc, change, seconds, originals }: { doc: RecapDoc; ch
   );
 }
 
-const STAGE_WORDS: Record<FilmProgress['stage'], string> = { clips: 'Opening the clips', converting: 'Converting an original', pictures: 'Fetching the originals', sound: 'Mixing the sound', encoding: 'Encoding', finishing: 'Finishing the file' };
+const STAGE_WORDS: Record<FilmProgress['stage'], string> = { clips: 'Opening the clips', converting: 'Converting an original', pictures: 'Fetching the originals', sound: 'Mixing the sound', encoding: 'Encoding', finishing: 'Finishing the file', sending: 'Sending to your Postiz' };
 
 /** The export's own bar, beside its button: what it is doing, how far, its speed and what is left. */
 function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: number; onCancel: () => void }) {
@@ -160,7 +162,7 @@ function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: numbe
   const what =
     p.stage === 'encoding'
       ? `${passes > 1 ? (p.pass === 1 ? 'Measuring · pass 1 of 2' : 'Encoding · pass 2 of 2') : 'Encoding'}${p.frame !== undefined && p.frames ? ` · frame ${p.frame} / ${p.frames}` : ''}`
-      : (p.stage === 'clips' || p.stage === 'pictures' || p.stage === 'converting') && p.of
+      : (p.stage === 'clips' || p.stage === 'pictures' || p.stage === 'converting' || p.stage === 'sending') && p.of
         ? `${STAGE_WORDS[p.stage]} · ${Math.min(p.of, (p.done ?? 0) + 1)} / ${p.of}`
         : STAGE_WORDS[p.stage];
   return (
@@ -340,6 +342,9 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
       return `${made} slides written, in their order — post them as one carousel.`;
     });
 
+  /** What a post sends: the film for a Reel or a story, the slides for a carousel. */
+  const renderFor = (kind: PublishKind, signal: AbortSignal, task: ReturnType<typeof startTask>): Promise<File[]> => renderPostFiles(input(), kind, order, base, report(task), signal);
+
   return (
     <>
       <LengthSection doc={doc} natural={natural} change={change} />
@@ -372,6 +377,7 @@ export default function RecapExportPanel({ ctx, natural, change }: { ctx: Export
           <p className="m-0 text-2xs text-muted leading-relaxed">Painted here, from the same painter as the stage: what you see is what the files hold. Nothing leaves this device.</p>
         </div>
       </InspectorSection>
+      <PublishSection doc={doc} resolved={resolved} change={change} slides={slides} canEncode={canEncode !== false} busy={busy !== null} run={run} render={renderFor} />
     </>
   );
 }

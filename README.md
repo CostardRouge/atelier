@@ -102,6 +102,13 @@ Today it ships twelve tools, converging into a few editors:
 > fetched from it the first time a picture asks for one — all under your
 > account there. Nothing is sent to a server you did not name yourself.
 >
+> The same holds for a **Postiz** of your own, connected on `#/sources` with
+> its address and an API key: only when you press *Schedule* in a recap's
+> *Export* tab (or an agent you drive does), Recap sends that Postiz the files
+> it just rendered and the post to schedule on your Instagram, and it reads
+> back the posts it planned for the gallery's *Planned* section. Postiz then
+> publishes through Meta's own API.
+>
 > One more connection never leaves your computer: the **agent bridge** (see
 > "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,
 > the tab talks to `127.0.0.1` alone, to a program you started yourself — and
@@ -3606,6 +3613,24 @@ or takes the layout you set, and the first slide's title can repeat on the
 others — small with the slide's number, or as big as on the first. The carousel
 export writes the slides in that order, a clip as its own video slide.
 
+**Publishing.** Once your own **Postiz** is connected on `#/sources`, the
+*Export* tab has a *Publish* section: the recap is rendered, sent to your
+Postiz and scheduled on your Instagram — as a **Reel** (a **Trial Reel**,
+shown to non-followers first, if you like, shared with your followers when it
+works or by hand), a **carousel** (its slides as JPEG, a clip as a video
+slide; Instagram's API takes 10) or a **story**. It goes out in the next free
+slot of your rhythm (the slots already taken in Postiz are struck out), now,
+or as a draft left in Postiz; past your ceiling, or a second post the same
+day, it says so and lets you. The **caption** is a template of Recap's words —
+`{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
+places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
+shows it. Sending it approves it; an agent can write one, and it waits for
+your approval. The recap keeps what it sent and shows its state in Postiz;
+once a post is out, add its location in Instagram (the API cannot). The
+gallery's **Planned** section lists, week by week, what goes out in the next
+six weeks as your Postiz says — scheduled, out, failed (with the reason) —
+including posts scheduled outside Recap; a click opens the recap that sent it.
+
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and
 faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its
@@ -3667,6 +3692,18 @@ never clamped), `.snapshot` (a page as a picture), `.export` (the video, the
 stills or the carousel into the downloads; `delivery` in `.set` chooses its
 quality, frame rate, passes and clips), and `.undo` / `.redo`. Every write
 is one step of the recap's undo, saved and synced like a gesture.
+
+The whole posting routine can be driven too, so an agent prepares the posts
+and you only validate them: `recap.suggestions` and `.makeSuggestion` (the
+recaps ready to make), `.calendar` (your rhythm, its free and taken slots, and
+what goes out week by week, from your Postiz), `.facts` (what a caption is
+written from: the period, the places in order and how long each was stayed
+in, the cameras, the best pictures with their day and place, the caption's
+words filled), `.postCaption` (the caption's template — writing it takes your
+approval back), `.approve` (only once you said yes), `.schedule` (render,
+send to your Postiz and schedule — as a Reel, a Trial Reel, a carousel or a
+story, in the next free slot, at a time, now or as a draft; refused while the
+caption is not approved) and `.unschedule`.
 
 ## Telemetry tool
 

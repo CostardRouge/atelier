@@ -18,7 +18,7 @@ import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { TEMPLATES, cleanRecapTitle, createRecapDoc, defaultTitle, withRecap, type RecapDoc, type RecapTemplate } from '../../shared/recap/recap-doc';
 import { recapSummary } from '../../shared/recap/recap-summary';
-import { isIsoDate } from '../../shared/roadtrip/trip-days';
+import { isIsoDate, todayIso } from '../../shared/roadtrip/trip-days';
 import { documentSourcesFor } from '../../shared/sources/document-gallery';
 import { uniqueDocName } from '../../shared/sources/doc-name';
 import { DEFAULT_SOURCE_ID } from '../../shared/sources/source';
@@ -28,7 +28,12 @@ import RecapEditor, { type SaveState } from './RecapEditor';
 import RecapGallery from './RecapGallery';
 import { RECAP_BASE, RECAP_HOME, recapFromRef, recapPath, recapRef, parseRecapPath } from './recap-route';
 import { RECAP_DOC_KIND, moveRecap, pullRecap, pushOnce } from './recap-remote';
-import { askPersistence, deleteRecap, deleteSyncRecord, getRecap, getSyncRecord, listRecaps, putRecap, putSyncRecord, styled } from './recap-store';
+import { askPersistence, deleteRecap, deleteSyncRecord, getRecap, getSyncRecord, getValue, listRecaps, putRecap, putSyncRecord, styled } from './recap-store';
+import { readyRecap, suggestions } from '../../shared/recap/recap-suggest';
+import { plannedWeeks } from '../../shared/recap/recap-planned';
+import { PostizClient } from '../../shared/sources/postiz/client';
+import { rhythmSlotLabel, slotLabel, slotsWithState } from '../../shared/sources/postiz/rhythm';
+import { getPostiz, publishChannel } from '../../shared/sources/postiz/store';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -282,7 +287,7 @@ export default function RecapTool() {
       id: 'recap.create',
       title: 'Make a recap',
       description:
-        'Make a recap kept on this device from a template and open it: "month" (one picture a day; anchor = a day of the month), "onThisDay" (the same day years, months and weeks before; anchor = the day), "week" (anchor = a day of the week), "grid", "single", "dump" (the best of the period from → to) or "sheets" (the period laid on one long sheet cut into slides, from → to). With a Winnow connected it fills itself from those days. Answers its id.',
+        'Make a recap kept on this device from a template and open it: "month" (one picture a day; anchor = a day of the month), "onThisDay" (the same day years, months and weeks before; anchor = the day), "week" (anchor = a day of the week), "grid", "single", "dump" (the best of the period from → to), "sheets" (the period laid on one long sheet cut into slides, from → to), "wrapped" (a period in numbers, a slide each, from → to) or "second" (one second a day of a period, from → to). With a Winnow connected it fills itself from those days. The person’s style kept for the template dresses it. Answers its id.',
       params: {
         template: { type: 'string', enum: TEMPLATES, description: 'The template.' },
         anchor: { type: 'string', description: 'The day it is about, YYYY-MM-DD (default today; a month and a week move to their first day).', optional: true },
@@ -385,6 +390,56 @@ export default function RecapTool() {
         h.redo();
         await settle();
         return { redone: true };
+      },
+    },
+    {
+      id: 'recap.suggestions',
+      title: 'The recaps ready to make',
+      description:
+        'What the gallery suggests today (lab 9): when a month or a week has ended, each kind of recap the person made for the one before, ready for it in the same dress — and the year’s Wrapped in December and January. Answers each one’s key, template, period, label and the recap it repeats. recap.makeSuggestion makes one.',
+      run: async () => {
+        const hidden = new Set((await getValue<string[]>('suggest:hidden')) ?? []);
+        return { suggestions: suggestions(await listRecaps(), todayIso(), hidden).map((s) => ({ key: s.key, template: s.template, anchor: s.anchor, range: s.range, label: s.label, as: s.as, repeats: s.model ? { id: s.model.id, title: s.model.title } : null })) };
+      },
+    },
+    {
+      id: 'recap.makeSuggestion',
+      title: 'Make a suggested recap',
+      description: 'Make the suggestion of that key (recap.suggestions) — a recap in its model’s dress on the new period, its pictures left behind — keep it on this device and open it; it fills itself from the connected Winnow as it opens. Answers its id.',
+      params: { key: { type: 'string', description: 'The suggestion’s key, e.g. month:2026-10.' } },
+      run: async (p) => {
+        const s = suggestions(await listRecaps(), todayIso()).find((x) => x.key === p.key);
+        if (!s) throw new CommandError('invalid', `no suggestion "${String(p.key)}" today — recap.suggestions lists them`);
+        let doc = readyRecap(s, DEFAULT_SOURCE_ID);
+        doc = { ...doc, title: uniqueDocName(doc.title, (await listRecaps()).map((m) => m.title)) };
+        if (!(await putRecap(doc))) throw new CommandError('failed', 'the browser refused to store the recap');
+        handleOpen(doc);
+        return { ...listed(doc), open: true };
+      },
+    },
+    {
+      id: 'recap.calendar',
+      title: 'The publishing calendar',
+      description:
+        'What goes out on the person’s Instagram, read from their Postiz: their rhythm (time zone, the week’s slots, the most posts a week), the next slots of it — each free or taken —, and week by week the posts from a week back to `weeks` ahead (default 6): when, scheduled · published · failed (with the reason) · draft, and the recap that sent it when one did. Use it to choose when a recap goes out (recap.schedule at).',
+      params: { weeks: { type: 'number', integer: true, min: 1, max: 12, description: 'How many weeks ahead (default 6).', optional: true } },
+      available: () => (getPostiz() ? true : 'no Postiz is connected — the person connects theirs on #/sources'),
+      run: async (p) => {
+        const conn = getPostiz()!;
+        const now = new Date();
+        const ahead = (p.weeks as number | undefined) ?? 6;
+        const posts = await new PostizClient(conn.apiBase, conn.apiKey).posts(new Date(now.getTime() - 7 * 86400000), new Date(now.getTime() + ahead * 7 * 86400000));
+        const tz = conn.rhythm.timeZone;
+        const taken = posts.filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => new Date(x.publishDate));
+        return {
+          account: publishChannel(conn)?.name ?? null,
+          rhythm: { timeZone: tz, slots: conn.rhythm.slots.map(rhythmSlotLabel), perWeek: conn.rhythm.perWeek },
+          nextSlots: slotsWithState(conn.rhythm, taken, now, 8).map((s) => ({ at: s.at.toISOString(), label: slotLabel(s.at, tz), taken: s.taken })),
+          weeks: plannedWeeks(posts, await listRecaps(), tz).map((w) => ({
+            weekOf: w.monday,
+            posts: w.items.map((i) => ({ postId: i.postId, at: i.at.toISOString(), label: slotLabel(i.at, tz), state: i.state, title: i.title, ...(i.recapId ? { recapId: i.recapId } : {}), ...(i.kind ? { kind: i.kind } : {}), ...(i.trial ? { trial: true } : {}), ...(i.error ? { error: i.error } : {}) })),
+          })),
+        };
       },
     },
   ]);
