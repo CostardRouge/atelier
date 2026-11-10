@@ -12,7 +12,7 @@ import DayChooser from './DayChooser';
 import { slideLabel } from '../../shared/recap/recap-chooser';
 import { tripPlaceFacts } from '../../shared/recap/recap-places';
 import { tripOf } from '../../shared/recap/recap-opener-trip';
-import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
+import { CarouselSection, SheetSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { defileTicks, hasOpenerSlide, openerRest, planOpener } from '../../shared/recap/recap-opener-plan';
 import { inOpener } from '../../shared/recap/recap-opener-paint';
@@ -876,12 +876,18 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'layout':
         return (
           <>
-            <LayoutSection doc={doc} change={change} />
-            {doc.template === 'sheets' ? (
-              <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} />
-            ) : doc.template !== 'wrapped' && doc.template !== 'second' ? (
-              <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />
-            ) : null}
+            <LayoutSection
+              doc={doc}
+              change={change}
+              page={layout.pages[Math.min(page, pageCount - 1)]}
+              pages={layout.pages}
+              onPage={(i) => {
+                scrubbed.current = false;
+                setPlaying(false);
+                setPage(i);
+              }}
+            />
+            {doc.template === 'sheets' && <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} />}
             <StyleSection doc={doc} change={change} />
           </>
         );

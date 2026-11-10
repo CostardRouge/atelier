@@ -65,7 +65,14 @@ export function docOn(doc: RecapDoc, pageKey: string): RecapDoc {
  * highlights» stays inherited, and the slide's dot goes when nothing is left).
  */
 export function withWords(doc: RecapDoc, scope: CellScope, pageKey: string, patch: Partial<CellWords>, now: number = Date.now()): RecapDoc {
-  if (scope === 'first') return withRecap(doc, { cells: { ...doc.cells, ...patch } }, now);
+  if (scope === 'first') {
+    // The first slide's change stays the first slide's (his report: the calendar's numbers off took the highlights' too):
+    // a word the family did not set yet keeps, for the family, the value it showed until now.
+    if (!hasFamily(doc)) return withRecap(doc, { cells: { ...doc.cells, ...patch } }, now);
+    const fam = { ...doc.carousel.cells };
+    for (const k of Object.keys(patch) as (keyof CellWords)[]) if (!(k in fam)) (fam as Record<string, unknown>)[k] = doc.cells[k];
+    return withRecap(doc, { cells: { ...doc.cells, ...patch }, carousel: { ...doc.carousel, cells: fam } }, now);
+  }
   if (scope === 'family') return withRecap(doc, { carousel: { ...doc.carousel, cells: { ...doc.carousel.cells, ...patch } } }, now);
   const fam = familyWords(doc);
   const own: Partial<CellWords> = { ...doc.carousel.slideCells[pageKey], ...patch };

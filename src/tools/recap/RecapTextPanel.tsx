@@ -1,4 +1,5 @@
-import { withRecap, withTextStyle, NUMBER_PLACES, type NumberAt, type RecapDoc, type RecapFont } from '../../shared/recap/recap-doc';
+import { withRecap, withTextStyle, type RecapDoc, type RecapFont } from '../../shared/recap/recap-doc';
+import { hasFamily } from '../../shared/recap/recap-scope';
 import { TEXT_WORDS } from '../../shared/recap/recap-slots';
 import { PIN } from '../../shared/recap/recap-places';
 import { DEFAULT_TEXT_STYLE, TEXT_PRESETS, TEXT_ROLE_LABEL, presetStyle, rolesOf, textStyleOf, type TextRole, type TextStyle } from '../../shared/recap/recap-text';
@@ -15,7 +16,6 @@ const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const AUTO: FontChoice = { id: '', label: 'Auto', family: 'inherit', weights: [400], group: 'This recap', note: 'its typeface', system: true };
 const FACES = [AUTO, ...storyFaceChoices()];
 
-const NUMBER_LABEL: Record<NumberAt, string> = { topLeft: 'Top left', topRight: 'Top right', centre: 'Centre', bottomLeft: 'Bottom left', foot: 'Under the picture' };
 
 /** A preset's name written in its own dress — the tile shows what it does (Jakob: the suite's own styles). */
 function PresetTile({ id, name, tagline, style, on, onPick }: { id: string; name: string; tagline: string; style: Omit<TextStyle, 'preset'>; on: boolean; onPick: () => void }) {
@@ -73,7 +73,7 @@ export default function RecapTextPanel({
 }) {
   // The pin the stage draws for `{place}` reads as 📍 in the panel's own words.
   const vars = Object.fromEntries(Object.entries(counted).map(([k, v]) => [k, v.split(PIN).join('📍')]));
-  const roles = rolesOf(doc.template);
+  const roles = rolesOf(doc.template, hasFamily(doc));
   const current = roles.includes(role) ? role : roles[0];
   const st = textStyleOf(doc.texts, current);
   const owned = Boolean(doc.texts[current]);
@@ -126,7 +126,7 @@ export default function RecapTextPanel({
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             <button
               type="button"
-              onClick={() => change((d) => rolesOf(d.template).reduce((acc, r) => withTextStyle(acc, r, owned ? { ...st } : null), d))}
+              onClick={() => change((d) => rolesOf(d.template, hasFamily(d)).reduce((acc, r) => withTextStyle(acc, r, owned ? { ...st } : null), d))}
               className="text-2xs text-accent-ink underline-offset-2 hover:underline"
               title="Every text of this recap in this one's style"
             >
@@ -177,9 +177,6 @@ export default function RecapTextPanel({
             </ToggleField>
             {st.colour !== null && <input type="color" value={st.colour} onChange={(e) => set({ colour: e.target.value })} aria-label="Colour" className="w-11 h-9 p-0 border border-line rounded-control bg-transparent" />}
           </div>
-          {current === 'dayNumber' && (
-            <Segmented<NumberAt> size="sm" columns={2} label="Where the number sits" value={doc.cells.numberAt} onChange={(numberAt) => change((d) => withRecap(d, { cells: { ...d.cells, numberAt } }))} options={NUMBER_PLACES.map((n) => ({ id: n, label: NUMBER_LABEL[n] }))} />
-          )}
         </div>
       </InspectorSection>
 

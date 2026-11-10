@@ -53,7 +53,9 @@ describe('who a cell setting belongs to', () => {
     expect(scopeNames(doc)).toEqual({ first: 'Calendar', family: 'Highlights', slide: 'This slide' });
     doc = withWords(doc, 'first', 'first', { number: false }, 2);
     expect(wordsOn(doc, 'first').number).toBe(false);
-    // The calendar's day numbers off, the highlights' still on: what he could not do before.
+    // The calendar's day numbers off, the highlights' still on: what he could not do before — without touching them.
+    expect(wordsOn(doc, 'p:1')).toMatchObject({ number: true, date: 'dMon' });
+    expect(doc.carousel.cells).toEqual({ date: 'dMon', number: true });
     doc = withWords(doc, 'family', 'p:0', { number: true }, 3);
     expect(wordsOn(doc, 'p:1')).toMatchObject({ number: true, date: 'dMon' });
     doc = withWords(doc, 'slide', 'p:2', { date: 'full', numberAt: 'foot' }, 4);
@@ -78,6 +80,9 @@ describe('who a cell setting belongs to', () => {
     expect(hasFamily(dump)).toBe(true);
     expect(scopeNames(dump)).toMatchObject({ first: 'Cover', family: 'Pictures' });
     expect(hasFamily(createRecapDoc('grid', 'local', { now: 1 }))).toBe(false);
+    // With no family, the first slide's words are simply the cells'.
+    const grid = createRecapDoc('grid', 'local', { now: 1 });
+    expect(withWords(grid, 'first', 'first', { count: true }, 2).carousel.cells).toEqual({});
   });
 });
 
