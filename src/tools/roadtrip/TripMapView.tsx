@@ -645,7 +645,7 @@ export default function TripMapView({
   const nothingPlaced = model.stages.every((s) => !s.anchor);
 
   return (
-    <div ref={wrapRef} className="relative flex-1 min-h-0 min-w-0 overflow-hidden rounded-paper-lg border border-line" style={{ background: SEA }}>
+    <div ref={wrapRef} className="relative flex-1 min-h-0 min-w-0 overflow-hidden rounded-control border border-line" style={{ background: SEA }}>
       {/* Full size in the flow, never `absolute inset-0`: MapLibre's own CSS
           sets `position: relative` on its container, which would leave an
           inset box zero pixels tall and the canvas with it. */}

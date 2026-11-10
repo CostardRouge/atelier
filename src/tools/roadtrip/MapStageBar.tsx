@@ -47,7 +47,7 @@ export default function MapStageBar({
   onCover,
 }: MapStageBarProps) {
   return (
-    <div className="flex flex-col gap-1.5 p-1.5 rounded-paper-lg border border-line bg-surface shadow-paper">
+    <div className="flex flex-col gap-1.5 p-1.5 rounded-control border border-line bg-surface shadow-paper">
       <div className="flex items-center gap-1 min-w-0">
         <IconButton size="sm" variant="ghost" label="The stage before" disabled={!canStep.back} onClick={() => onStep(-1)}>
           {Icons.back}

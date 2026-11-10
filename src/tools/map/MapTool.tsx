@@ -94,7 +94,7 @@ export default function MapTool() {
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem]" aria-label="Flight map">
       {/* Control bar: clip switcher + base-map toggle. */}
-      <div className="flex flex-wrap items-center gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+      <div className="flex flex-wrap items-center gap-2 px-2 py-2 border border-line rounded-control bg-surface shadow-paper-soft">
         {clips.length === 0 ? (
           <span className="text-sm text-muted px-1">
             Select a DJI clip (or a loose <code className="font-mono">.srt</code>)

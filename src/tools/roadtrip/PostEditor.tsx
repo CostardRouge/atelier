@@ -2725,7 +2725,7 @@ export default function PostEditor({
 
       {/* Floating, the deck band rides over the stage, above the shell's bar. */}
       {compact && floating && !hidden && (
-        <div className={`absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] p-1.5 border border-line rounded-paper-lg ${GLASS}`}>
+        <div className={`absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] p-1.5 border border-line rounded-control ${GLASS}`}>
           {deckStrip}
         </div>
       )}
