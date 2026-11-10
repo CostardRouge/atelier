@@ -70,7 +70,6 @@ import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../sh
 import { formatBytes } from '../../shared/lib/format';
 import {
   BASE_LABELS,
-  DEFAULT_DEVELOP,
   baseRung,
   developBase,
   isRawDevelop,
@@ -80,7 +79,8 @@ import {
   withoutBase,
 } from '../../shared/develop/develop';
 import { resolveRollChoice, rollChoiceFor } from '../../shared/develop/roll-choice';
-import { needsProfileCurve, openingBaseCurve } from '../../shared/develop/base-curve';
+import { openOnSensor } from '../../shared/develop/raw-choice';
+import { needsProfileCurve } from '../../shared/develop/base-curve';
 import { profileCurveFor } from '../../shared/develop/profile-curve';
 import { captureRenditions, meterRaw } from '../../shared/develop/roll-choice-source';
 import {
@@ -335,7 +335,7 @@ export function useRollExport({
   let open = stored;
   if (stored && openFile && openHanded === 'sensor') {
     const reach = sensorSourceFor(openFile, mediaOrigin(openFile), siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null);
-    if (reach) open = { ...stored, develop: { ...(stored.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null, baseCurve: openingBaseCurve(stored.develop?.baseCurve) } };
+    if (reach) open = { ...stored, develop: openOnSensor(stored.develop) };
   } else if (stored && openHanded === 'delivered' && openFollow?.file === openFile && openFollow.rendition) {
     open = { ...stored, rendition: openFollow.rendition };
   }
@@ -639,11 +639,8 @@ export function useRollExport({
             if (answer.row) picture = { ...picture, rendition: answer.row.id };
           } else if (handed === 'sensor' && sensorSourceFor(file, origin, beside, identity?.assetId ?? null)) {
             followed = true;
-            // The curve the stage opened it on, so preview = export (`openingBaseCurve`).
-            picture = {
-              ...picture,
-              develop: { ...(picture.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null, baseCurve: openingBaseCurve(picture.develop?.baseCurve) },
-            };
+            // The recipe every instrument puts a picture on its sensor with (`raw-choice.ts`).
+            picture = { ...picture, develop: openOnSensor(picture.develop) };
           }
           let raw: { file: File; gain: number; profile: ReturnType<typeof decodeProfileOf> } | null = null;
           if (isRawDevelop(picture.develop)) {

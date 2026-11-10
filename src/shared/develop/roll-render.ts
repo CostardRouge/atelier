@@ -116,6 +116,13 @@ export interface RollRenderOptions {
   /** The sensor to develop from, its stored gain, and the camera profile its decode folds in (`decodeProfileOf`). */
   raw?: { file: File; gain: number; profile?: ProfileRequest } | null;
   /**
+   * How many times the asked long edge a RAW's half-size decode must still
+   * hold to be taken: 2 by default, the margin a crop may need; 1 for a
+   * picture delivered whole (a print), which never crops — else a 2048 px
+   * print decodes all 36 megapixels of a DJI sensor (`sensor-outside-develop.md`).
+   */
+  rawMargin?: number;
+  /**
    * The camera's own calibration to apply to that RAW (`raw/calibration.ts`),
    * at the rung the picture stands on — or the top one the file can reach,
    * which is what an export climbs to. Read only on the RAW path: a render or
@@ -340,7 +347,7 @@ async function renderFromRaw(raw: { file: File; gain: number; profile?: ProfileR
   const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '', watermark: Boolean(t.watermark), format: t.format ?? 'jpeg' })));
   const gpuMax = maxRenderSize();
   const decoded = await decodeRaw(raw.file, {
-    minLongEdge: decodeEdge ? decodeEdge * 2 : null,
+    minLongEdge: decodeEdge ? decodeEdge * (opts.rawMargin ?? 2) : null,
     gain: raw.gain,
     profile: raw.profile,
     // The GPU's cap and, on a phone, the device's own export ceiling
