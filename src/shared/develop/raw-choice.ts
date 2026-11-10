@@ -26,7 +26,7 @@
  */
 
 import { openingBaseCurve } from './base-curve';
-import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, isRawDevelop, withoutBase, type DevelopSettings } from './develop';
 
 export type RawMaterial = 'render' | 'sensor';
 
@@ -80,4 +80,31 @@ export function materialOf(own: RawMaterial | undefined | null, doc: RawMaterial
 export function openOnSensor(own: DevelopSettings | null | undefined): DevelopSettings {
   const from = own ?? DEFAULT_DEVELOP;
   return { ...from, base: 'gain', rawGain: null, baseCurve: openingBaseCurve(from.baseCurve) };
+}
+
+// ---- a develop made on the sensor, taken by a host --------------------------------
+
+/**
+ * A RAW develop's MATERIAL alone — its rung, gain, white, profile and base
+ * curve over neutral numbers: the picture a host's Develop sheet edits on, so
+ * the numbers it shows are the ones it writes (`sensor-outside-develop.md`).
+ */
+export function materialHalf(d: DevelopSettings): DevelopSettings {
+  return { ...DEFAULT_DEVELOP, base: d.base, rawGain: d.rawGain ?? null, rawWb: d.rawWb ?? null, rawProfile: d.rawProfile ?? null, baseCurve: d.baseCurve ?? null };
+}
+
+/** A RAW develop's NUMBERS alone, on no material — what that sheet shows and edits. */
+export function numbersHalf(d: DevelopSettings): DevelopSettings {
+  return withoutBase(d);
+}
+
+/**
+ * The sheet's numbers put back on the RAW develop's material, so the picture
+ * stays rendered whole from its sensor; «as shot» (null) keeps the material
+ * with neutral numbers. A develop that was not on the sensor is the numbers.
+ */
+export function withMaterialOf(numbers: DevelopSettings | null, raw: DevelopSettings | null | undefined): DevelopSettings | null {
+  if (!raw || !isRawDevelop(raw)) return numbers;
+  const half = materialHalf(raw);
+  return numbers ? { ...numbers, base: half.base, rawGain: half.rawGain, rawWb: half.rawWb, rawProfile: half.rawProfile, baseCurve: half.baseCurve } : half;
 }

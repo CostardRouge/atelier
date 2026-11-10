@@ -1,3 +1,4 @@
+import { isRawDevelop } from '../../shared/develop/develop';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
@@ -149,8 +150,10 @@ export function useTripGrade(
       // grade, so a cube for it would only be a cube nobody looks through.
       if (target.kind === 'cta') return null;
       const key = pictureKeyOf(target);
-      if (sameGradeRung(post, key, picture)) return stack.composeWith(target.develop);
-      return cubeFor(gradeShownBy(trip, post, key), target.develop);
+      // A develop made on the sensor is already in the sensor's picture (`sensor-still.ts`): the cube adds the look alone.
+      const develop = isRawDevelop(target.develop) ? null : target.develop;
+      if (sameGradeRung(post, key, picture)) return stack.composeWith(develop);
+      return cubeFor(gradeShownBy(trip, post, key), develop);
     },
     [trip, post, picture, stack.composeWith, cubeFor],
   );

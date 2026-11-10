@@ -3,6 +3,7 @@ import { isRawImage } from '../library/assets';
 import { rawSizes, type RawSizes } from '../exif/raw-probe';
 import type { MaterialRow } from './MaterialMenu';
 import type { RawMaterial } from './raw-choice';
+import type { DevelopSettings } from './develop';
 import { materialForFile, sensorReachable, sensorStillFile, type SensorStillOptions } from './sensor-still';
 
 export interface SensorFile {
@@ -31,7 +32,7 @@ const sizeText = (s: { width: number; height: number } | null | undefined) => (s
 export function useSensorFile(
   file: File | null,
   own: RawMaterial | null | undefined,
-  opts: Pick<SensorStillOptions, 'edge' | 'purpose'> = { edge: 4096, purpose: 'stage' },
+  opts: Partial<Pick<SensorStillOptions, 'edge' | 'purpose' | 'develop'>> = {},
 ): SensorFile {
   const isImage = Boolean(file && (file.type.startsWith('image/') || isRawImage(file.name)));
   const reachable = isImage && sensorReachable(file);
@@ -39,7 +40,9 @@ export function useSensorFile(
   const [shown, setShown] = useState<{ of: File; file: File } | null>(null);
   const [busy, setBusy] = useState(false);
   const [sizes, setSizes] = useState<RawSizes | null>(null);
-  const { edge, purpose } = opts;
+  const { edge = 4096, purpose = 'stage', develop = null } = opts;
+  // A taken develop renders the sensor whole (`sensor-still.ts`); by value, so a new object of the same numbers is the same picture.
+  const developKey = develop ? JSON.stringify(develop) : '';
 
   useEffect(() => {
     setSizes(null);
@@ -69,7 +72,7 @@ export function useSensorFile(
       }
       setBusy(true);
       try {
-        const still = await sensorStillFile(file, { edge, purpose, signal: controller.signal });
+        const still = await sensorStillFile(file, { edge, purpose, signal: controller.signal, develop: developKey ? (JSON.parse(developKey) as DevelopSettings) : null });
         if (alive && still) setShown({ of: file, file: still });
       } catch {
         // Out of reach or refused: the file itself stays on the stage.
@@ -81,7 +84,7 @@ export function useSensorFile(
       alive = false;
       controller.abort();
     };
-  }, [file, reachable, own, edge, purpose]);
+  }, [file, reachable, own, edge, purpose, developKey]);
 
   const local = Boolean(file && isRawImage(file.name));
   const rows: MaterialRow[] = [

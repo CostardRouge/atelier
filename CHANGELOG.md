@@ -22,6 +22,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   drone DNG of yours goes to its sensor by itself.
 - The Studio's chip of a photo's files offers its sensor when the photo is a camera RAW: the stage shows it and the
   JPEG is delivered from it, at full quality.
+- A picture developed on its sensor in Develop can be taken by Trips and the Studio: they read the same sensor and
+  draw the develop as Develop renders it, instead of refusing it.
 - Recap, a new editor that turns your pictures into recaps to post: a month as a calendar of its days, the same day
   a year, a month and a week ago, a week, a grid, a single picture or a photo dump over a carousel. It fills itself
   from your Winnow's days (or your files), lets you pin, swap or empty any day, filter by device, develop each picture

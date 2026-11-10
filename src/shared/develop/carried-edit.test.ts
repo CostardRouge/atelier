@@ -4,6 +4,7 @@ import { DEFAULT_KEYSTONE } from '../render/geometry';
 import { addPictures, addVariant, createRollDoc, patchPicture, type RollDoc } from './roll-types';
 import { journalRoll } from './journal';
 import {
+  offerWithSensor,
   carriedIsStale,
   carriedKey,
   carriedDraws,
@@ -58,6 +59,9 @@ describe('what a Develop picture carries into a host', () => {
     expect(carriedOn(edit, ref('a.jpg'))).toBe(edit);
     const sensor = patchPicture(roll(), 'r1p1', { develop: { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 1.2 } }, 5);
     expect(offerFrom(sensor, pic(sensor, 'r1p1')).refusal).toMatch(/sensor/);
+    // A host that reaches the sensor takes it; one that cannot still refuses.
+    expect(offerWithSensor(offerFrom(sensor, pic(sensor, 'r1p1')), true).refusal).toBeNull();
+    expect(offerWithSensor(offerFrom(sensor, pic(sensor, 'r1p1')), false).refusal).toMatch(/sensor/);
   });
 
   it('lists the rolls that hold a picture with an edit, the latest first, each variant its own', () => {

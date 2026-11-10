@@ -4,7 +4,7 @@ import IconButton from '../ui/IconButton';
 import { FieldRow } from '../ui/Inspector';
 import OverflowMenu from '../ui/OverflowMenu';
 import { Icons } from '../ui/icons';
-import { carriedWords, offerFrom, offerWords, type CarriedEdit, type EditOffer } from './carried-edit';
+import { carriedWords, offerFrom, offerWithSensor, offerWords, type CarriedEdit, type EditOffer } from './carried-edit';
 import { pictureLabel } from './roll-types';
 import { useDevelopOffers } from './use-develop-offers';
 
@@ -25,6 +25,7 @@ export default function FromDevelopRow({
   onTakeOff,
   carriesLook = true,
   frameWord,
+  sensorReach = false,
 }: {
   /** The file the host shows. */
   media: SavedMediaRef | null;
@@ -38,9 +39,13 @@ export default function FromDevelopRow({
   carriesLook?: boolean;
   /** Why the crop stays in Develop, said after it: `the frame is this slide’s own`. */
   frameWord: string;
+  /** The host can read this picture's sensor: a develop made on it is taken, not refused (`offerWithSensor`). */
+  sensorReach?: boolean;
 }) {
-  const { offers, held, update, orphan } = useDevelopOffers(media, edit);
-  const take = (offer: EditOffer) => onUse(offerFrom(offer.roll, offer.picture));
+  const found = useDevelopOffers(media, edit);
+  const { held, update, orphan } = found;
+  const offers = found.offers.map((o) => offerWithSensor(o, sensorReach));
+  const take = (offer: EditOffer) => onUse(offerWithSensor(offerFrom(offer.roll, offer.picture), sensorReach));
   const verbTitle = (offer: EditOffer) => {
     const { takes, leaves } = offerWords(offer, carriesLook);
     const stay = leaves.includes(' · ') ? 'stay' : 'stays';

@@ -1696,9 +1696,11 @@ His «avec tes recommandations». The hosts «gain rendering, not panels»
   `aspect: 'original'`, no framing, `raw: false`. The crop and border STAY
   (the frame is the host's), said in the verb's title. The Studio's look is
   the project's, so it never crosses there.
-- **Refused**: a develop made on the SENSOR (`isRawDevelop`) — the hosts draw
-  the camera's render, where those numbers mean something else. A clip
-  crosses its develop (and look) only.
+- **A develop made on the SENSOR** (`isRawDevelop`) is refused only by a host
+  that cannot reach that sensor (`SENSOR_REFUSAL`); since 2026-11-10 one that
+  can (`offerWithSensor`, `FromDevelopRow.sensorReach`) takes it and renders
+  it WHOLE from the sensor — `sensor-outside-develop.md`, «D». A clip crosses
+  its develop (and look) only.
 - **The origin is kept even with no pass** (`CarriedEdit` always carries
   `from`), so the row can say where the develop came from and offer an
   update; renderers read `drawnEdit` (made on THIS file — `from.media` against

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
-import { autoFactsOf, autoMaterial, materialOf, openOnSensor, readMaterial } from './raw-choice';
+import { autoFactsOf, autoMaterial, materialHalf, materialOf, numbersHalf, openOnSensor, readMaterial, withMaterialOf } from './raw-choice';
 
 const dji = { sensor: { width: 8064, height: 4536 }, render: { width: 960, height: 540 } };
 const sony = { sensor: { width: 7040, height: 4688 }, render: { width: 7008, height: 4672 } };
@@ -54,5 +54,32 @@ describe('openOnSensor', () => {
     const d = openOnSensor({ ...DEFAULT_DEVELOP, exposure: 0.5, baseCurve: { kind: 'linear' } });
     expect(d.exposure).toBe(0.5);
     expect(d.baseCurve).toEqual({ kind: 'linear' });
+  });
+});
+
+describe('a sensor develop taken by a host', () => {
+  const raw = { ...DEFAULT_DEVELOP, base: 'gainMapWarp' as const, rawGain: 3.07, exposure: 0.7, contrast: 12, baseCurve: { kind: 'contrast' as const } };
+  it('splits into its material and its numbers', () => {
+    const m = materialHalf(raw);
+    expect(m.base).toBe('gainMapWarp');
+    expect(m.rawGain).toBe(3.07);
+    expect(m.exposure).toBe(0);
+    expect(m.baseCurve).toEqual({ kind: 'contrast' });
+    const n = numbersHalf(raw);
+    expect(n.base).toBeNull();
+    expect(n.rawGain).toBeNull();
+    expect(n.exposure).toBe(0.7);
+  });
+  it('puts edited numbers back on the material, and as shot keeps the material', () => {
+    const back = withMaterialOf({ ...numbersHalf(raw), exposure: 1 }, raw)!;
+    expect(back.base).toBe('gainMapWarp');
+    expect(back.rawGain).toBe(3.07);
+    expect(back.exposure).toBe(1);
+    expect(withMaterialOf(null, raw)!.base).toBe('gainMapWarp');
+  });
+  it('leaves a render develop as it is', () => {
+    const plain = { ...DEFAULT_DEVELOP, exposure: 0.3 };
+    expect(withMaterialOf(plain, plain)).toBe(plain);
+    expect(withMaterialOf(null, null)).toBeNull();
   });
 });

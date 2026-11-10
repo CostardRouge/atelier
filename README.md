@@ -1929,8 +1929,12 @@ stay in Develop: the frame is the slide's. It is a **copy** with where it came
 from, not a link: a later change in Develop is offered as **Update**, never
 pushed, and the ✕ takes the edit off while the correction and the look stay.
 It belongs to the file it was made on — a slide given another picture draws
-none of it — and a picture developed on its sensor is refused, the slide
-drawing the camera's own render. Several rolls holding the picture are listed
+none of it. A picture developed on its **sensor** in Develop is taken
+too, when this slide can reach that sensor (the file is the RAW, or the
+Winnow picture's original is): the slide then reads its sensor and draws the
+develop exactly as Develop renders it; the Develop sheet goes on editing its
+numbers over that sensor. Where the sensor is out of reach it is refused, and
+the slide draws the camera's own render. Several rolls holding the picture are listed
 behind the row's ⋯. The Develop sheet itself shows the correction and the
 look; it says so when the picture also carries an edit it does not draw.
 

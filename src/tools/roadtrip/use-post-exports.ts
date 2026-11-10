@@ -1,3 +1,4 @@
+import { isRawDevelop } from '../../shared/develop/develop';
 import { materialForFile, sensorStillFile } from '../../shared/develop/sensor-still';
 import { useRef, useState } from 'react';
 import type { FilmTexture } from '../../shared/film/film-texture';
@@ -204,11 +205,13 @@ function slideUnit(slide: DeckSlide, name: string, moving: boolean): RunUnit {
  * 4096 px at most — a phone's export ceiling, and twice the deck's edge — else
  * the file itself. A sensor out of reach leaves the file, never the slide empty.
  */
-async function stillOf(slide: Pick<DeckSlide, 'rawMaterial'>, file: File, signal?: AbortSignal): Promise<File> {
+async function stillOf(slide: Pick<DeckSlide, 'rawMaterial' | 'develop'>, file: File, signal?: AbortSignal): Promise<File> {
   if (classifyPart(file.name) === 'video') return file;
+  // A develop made on the sensor in Develop is rendered whole from it (`lutFor` leaves it out of the cube).
+  const develop = isRawDevelop(slide.develop) ? slide.develop : null;
   try {
-    if ((await materialForFile(file, slide.rawMaterial)) !== 'sensor') return file;
-    return (await sensorStillFile(file, { edge: 4096, purpose: 'export', signal })) ?? file;
+    if ((await materialForFile(file, develop ? 'sensor' : slide.rawMaterial)) !== 'sensor') return file;
+    return (await sensorStillFile(file, { edge: 4096, purpose: 'export', signal, develop })) ?? file;
   } catch (err) {
     if (isAbortError(err)) throw err;
     return file;
