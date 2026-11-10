@@ -21,10 +21,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { PRESS_LOOK } from '../../../shared/ui/press';
-import { ChapterFoot, ChapterHead, ChapterIndex, type ChapterRow } from '../../../shared/ui/Chapters';
-import { ChapterScope } from '../../../shared/roadtrip/hooks/panel-ui';
-import { chapterChanged, chapterSummary, numbered, resetChapter, searchChapters } from '../../../shared/roadtrip/hooks/opener-chapters';
-import { useOpenerChapter } from '../opener-chapter';
+import OpenerPanel from '../../../shared/roadtrip/hooks/OpenerPanel';
 import {
   DEFAULT_HOOK_ID,
   setHookOptions,
@@ -104,7 +101,6 @@ export default function HookPicker({
   // A slide with no opener is showing the NONE card, the badge variant's.
   const currentId = layers[0]?.id ?? (slideOpener ? DEFAULT_HOOK_ID : '');
   const current: HookVariant | undefined = HOOK_VARIANTS.find((v) => v.id === currentId);
-  const Panel = current?.Panel;
 
   // A refused tile the author touched: its reason is shown, nothing is picked.
   const [said, setSaid] = useState<string | null>(null);
@@ -123,12 +119,9 @@ export default function HookPicker({
     [],
   );
   // The editor re-renders on every frame of the transport's clock, and its
-  // callbacks are new each time. A variant's panel computes the whole road
-  // (Virée: the route, the plan, the vehicles, the coast) when it renders, so
-  // it must render when what it SHOWS changes and never per frame — the
-  // Look tab crawled while the piece played (his report, 2026-10-09). The
-  // callbacks are read through a ref, and the panel's element is memoised on
-  // its options, its context and its host.
+  // callbacks are new each time: they are read through a ref, so the panel's
+  // host and its `onChange` stay the same objects and `OpenerPanel` can keep
+  // its element (his report, 2026-10-09: the Look tab crawled while the piece played).
   const latest = useRef({ layers, onChange, onConfigureVehicle, onChooseHop, onCrossBoat });
   latest.current = { layers, onChange, onConfigureVehicle, onChooseHop, onCrossBoat };
   const hasGarage = !!onConfigureVehicle;
@@ -156,11 +149,6 @@ export default function HookPicker({
     [],
   );
   const options = layers[0]?.options;
-  const panel = useMemo(
-    () =>
-      Panel ? <Panel options={options ?? {}} ctx={ctx} host={host} onChange={onPanelChange} /> : null,
-    [Panel, options, ctx, host, onPanelChange],
-  );
   const settle = (picked: HookPickedPicture[] | null) => {
     choosing?.resolve(picked);
     setChoosing(null);
@@ -175,44 +163,6 @@ export default function HookPicker({
   const shownUnmet = saidVariant ? hookUnmet(saidVariant, ctx) : null;
   const shown = shownUnmet ? saidVariant : current;
   const noneHere = (variant: HookVariant) => slideOpener && variant.id === DEFAULT_HOOK_ID;
-
-  // The panel as numbered CHAPTERS (`opener-chapters.ts`): an index, then one
-  // chapter at a time — the one last open on this device, «All» a tap away.
-  const [openId, setOpenId] = useOpenerChapter(currentId);
-  const chapters = current?.chapters;
-  const rows = useMemo<ChapterRow[]>(() => {
-    if (!current || !chapters) return [];
-    const read = { ...current.defaults, ...(options ?? {}) };
-    return numbered(chapters).map(({ n, chapter }) => ({
-      id: chapter.id,
-      n,
-      title: chapter.title,
-      summary: chapterSummary(chapter, read),
-      changed: chapterChanged(chapter, options ?? {}, current.defaults),
-      unmet: chapter.unmet?.(options ?? {}, ctx) ?? null,
-    }));
-  }, [current, chapters, options, ctx]);
-  // A search over the chapters' rows (step 7): «colour» or «ahead» names the
-  // chapter it lives in, with the words that matched. Only where there are
-  // enough chapters for searching to beat reading them.
-  const [query, setQuery] = useState('');
-  const searchable = rows.length >= 5;
-  const found = useMemo<ChapterRow[] | null>(() => {
-    if (!searchable || !chapters || !query.trim()) return null;
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    return searchChapters(chapters, query).flatMap((hit) => {
-      const row = byId.get(hit.chapter.id);
-      return row ? [{ ...row, matched: hit.words }] : [];
-    });
-  }, [searchable, chapters, query, rows]);
-  const openIndex = rows.findIndex((row) => row.id === openId);
-  const openRow = openIndex >= 0 ? rows[openIndex] : null;
-  const scope = useMemo(() => ({ open: openRow?.id ?? null, title: openRow?.title }), [openRow?.id, openRow?.title]);
-  const resetOpen = () => {
-    const chapter = chapters?.find((c) => c.id === openRow?.id);
-    if (!chapter || !current) return;
-    onChange(setHookOptions(layers, resetChapter(chapter, options ?? {}, current.defaults)));
-  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -274,41 +224,7 @@ export default function HookPicker({
         </p>
       )}
 
-      {chapters && rows.length ? (
-        <div className="flex flex-col gap-3">
-          {openRow && (
-            <ChapterHead row={openRow} of={rows.length} onBack={() => setOpenId(null)} onReset={resetOpen} />
-          )}
-          <ChapterScope.Provider value={scope}>{panel}</ChapterScope.Provider>
-          {openRow ? (
-            <ChapterFoot
-              prev={rows[openIndex - 1] ?? null}
-              next={rows[openIndex + 1] ?? null}
-              onOpen={setOpenId}
-            />
-          ) : (
-            <>
-              {searchable && (
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={`Search ${current?.name ?? 'the opener'}’s settings…`}
-                  aria-label={`Search ${current?.name ?? 'the opener'}’s settings`}
-                  className="w-full font-sans h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-sm text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-                />
-              )}
-              {found && !found.length ? (
-                <p className="m-0 text-xs text-muted">Nothing called «{query.trim()}» — try colour, speed, names, camera.</p>
-              ) : (
-                <ChapterIndex rows={found ?? rows} onOpen={setOpenId} label={`${current?.name ?? 'Opener'} settings`} />
-              )}
-            </>
-          )}
-        </div>
-      ) : (
-        panel
-      )}
+      {current && <OpenerPanel variant={current} options={options} ctx={ctx} host={host} onChange={onPanelChange} />}
 
       {choosing && (
         <HookPicturesModal
