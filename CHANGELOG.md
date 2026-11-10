@@ -210,6 +210,11 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Recap no longer slows to a crawl once the Trip card is chosen: its settings were rebuilt and its six face previews
+  redrawn on every frame of the player, so the stage stuttered and every click waited seconds. The settings of
+  Trips' openers in Recap now redraw only when something they show changes.
+- Picking the Trip card's face, look or words — in Recap, and for Virée's summary card in Trips — answers at once
+  instead of after a second or two.
 - Recap: a highlight's grid of candidates said «2 300 that day» but showed the whole period's best 60, with no way to
   reach the rest; the days are now the days.
 - Recap's day shading reads under the editor's dark surround (the heatmap's night rungs were missing there).

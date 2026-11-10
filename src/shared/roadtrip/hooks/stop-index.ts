@@ -125,19 +125,64 @@ export function townNamed(
   return (near.find((h) => !h.city.section) ?? near[0]).city;
 }
 
-/** Every town of the index within `km` of a point, nearest first. */
-function townsWithin(cities: readonly GazetteerCity[], point: GeoPoint, km: number): { city: GazetteerCity; km: number }[] {
+/**
+ * The index's towns filed by one-degree cell, built ONCE per list (2026-11-10,
+ * his report: Recap's Trip card crawled). Reading a point's state scanned all
+ * 130 000 towns for every stop, and a card's six face thumbnails read every
+ * stop's state: two seconds a change. A cell key is `lat * 360 + lon`, both
+ * floored, the longitude in [-180, 180).
+ */
+interface TownGrid {
+  size: number;
+  cells: Map<number, number[]>;
+}
+const grids = new WeakMap<readonly GazetteerCity[], TownGrid>();
+
+const cellLon = (lon: number) => ((((Math.floor(lon) + 180) % 360) + 360) % 360) - 180;
+const cellKey = (lat: number, lon: number) => Math.floor(lat) * 360 + cellLon(lon);
+
+function townGrid(cities: readonly GazetteerCity[]): TownGrid {
+  const kept = grids.get(cities);
+  if (kept && kept.size === cities.length) return kept;
+  const cells = new Map<number, number[]>();
+  cities.forEach((city, i) => {
+    const key = cellKey(city.lat, city.lon);
+    const list = cells.get(key);
+    if (list) list.push(i);
+    else cells.set(key, [i]);
+  });
+  const grid = { size: cities.length, cells };
+  grids.set(cities, grid);
+  return grid;
+}
+
+/** Every town of the index within `km` of a point, nearest first (the index's order between equals). */
+export function townsWithin(cities: readonly GazetteerCity[], point: GeoPoint, km: number): { city: GazetteerCity; km: number }[] {
   const { dLat: latWindow, dLon } = degreeWindow(point.lat, km);
   const lonWindow = dLon ?? 181;
-  const out: { city: GazetteerCity; km: number }[] = [];
-  for (const city of cities) {
-    if (Math.abs(city.lat - point.lat) > latWindow) continue;
+  const hits: { city: GazetteerCity; km: number; at: number }[] = [];
+  const consider = (i: number) => {
+    const city = cities[i];
+    if (Math.abs(city.lat - point.lat) > latWindow) return;
     const gap = Math.abs(city.lon - point.lon) % 360;
-    if (lonWindow <= 180 && (gap > 180 ? 360 - gap : gap) > lonWindow) continue;
+    if (lonWindow <= 180 && (gap > 180 ? 360 - gap : gap) > lonWindow) return;
     const d = haversineKm(point, city);
-    if (d <= km) out.push({ city, km: d });
+    if (d <= km) hits.push({ city, km: d, at: i });
+  };
+  // Near a pole (or a window wider than half the globe) the cells would be every cell: read the list.
+  if (lonWindow > 90 || latWindow > 45) {
+    for (let i = 0; i < cities.length; i++) consider(i);
+  } else {
+    const { cells } = townGrid(cities);
+    const lat0 = Math.max(-90, Math.floor(point.lat - latWindow));
+    const lat1 = Math.min(90, Math.floor(point.lat + latWindow));
+    const lon0 = Math.floor(point.lon - lonWindow);
+    const lon1 = Math.floor(point.lon + lonWindow);
+    for (let la = lat0; la <= lat1; la++) {
+      for (let lo = lon0; lo <= lon1; lo++) for (const i of cells.get(la * 360 + cellLon(lo)) ?? []) consider(i);
+    }
   }
-  return out.sort((a, b) => a.km - b.km);
+  return hits.sort((a, b) => a.km - b.km || a.at - b.at).map(({ city, km: d }) => ({ city, km: d }));
 }
 
 /**

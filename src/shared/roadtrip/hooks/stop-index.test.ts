@@ -12,8 +12,10 @@ import {
   regionAround,
   townNamed,
   townNames,
+  townsWithin,
   withCityFacts,
 } from './stop-index';
+import { haversineKm } from './geo';
 
 function city(
   name: string,
@@ -204,5 +206,41 @@ describe('the line a fill says', () => {
     expect(fillSummary(3, 0)).toBe('3 stops learnt their state from the town index.');
     expect(fillSummary(1, 2)).toMatch(/^1 stop learnt its state .* 2 are left to you/);
     expect(fillSummary(0, 1)).toMatch(/^The town index placed no stop without doubt\. 1 is left to you/);
+  });
+});
+
+describe('the towns around a point, read through the index’s grid', () => {
+  /** What the grid must answer: every town, scanned, nearest first, the list's order between equals. */
+  function scanned(cities: readonly GazetteerCity[], point: { lat: number; lon: number }, km: number) {
+    return cities
+      .map((c, i) => ({ c, i, km: haversineKm(point, c) }))
+      .filter((h) => h.km <= km)
+      .sort((a, b) => a.km - b.km || a.i - b.i)
+      .map((h) => h.c);
+  }
+
+  it('finds exactly what a scan of the whole list finds — across cell edges, the antimeridian and near a pole', () => {
+    let seed = 11;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const cities: GazetteerCity[] = [];
+    for (let i = 0; i < 4000; i++) cities.push(city(`t${i}`, -89 + rnd() * 178, -180 + rnd() * 360, 'R', 'X.1'));
+    // Dense clusters on a cell corner, astride the antimeridian, and by a pole.
+    for (const [lat, lon] of [[-35, 118], [-16.5, 179.9], [-16.5, -179.9], [88.9, 10], [0, 0]]) {
+      for (let i = 0; i < 300; i++) cities.push(city(`c${lat},${lon},${i}`, lat + (rnd() - 0.5) * 0.8, ((lon + (rnd() - 0.5) * 0.8 + 540) % 360) - 180, 'R', 'X.1'));
+    }
+    // Two towns at the very same spot keep the list's order.
+    cities.push(city('twinA', -35.2, 118.2, 'R', 'X.1'), city('twinB', -35.2, 118.2, 'R', 'X.1'));
+    for (const [lat, lon] of [[-35, 118], [-35.2, 118.2], [-16.5, 180], [-16.5, -180], [-16.5, 179.99], [88.9, 10], [89.9, 0], [0, 0], [-0.01, -0.01], [45.5, 7.2]]) {
+      for (const km of [10, 25, 80]) {
+        expect(townsWithin(cities, { lat, lon }, km).map((h) => h.city)).toEqual(scanned(cities, { lat, lon }, km));
+      }
+    }
+  });
+
+  it('reads a list that grew since its grid was made', () => {
+    const cities = [city('A', -33.9, 151.2, ...NSW)];
+    expect(townsWithin(cities, { lat: -33.9, lon: 151.2 }, 10)).toHaveLength(1);
+    cities.push(city('B', -33.91, 151.21, ...NSW));
+    expect(townsWithin(cities, { lat: -33.9, lon: 151.2 }, 10)).toHaveLength(2);
   });
 });
