@@ -10,15 +10,15 @@ Status: **fixed** (the commit), **open** (with the fix in one line), **not repro
 
 | Where | Finding | Status |
 | --- | --- | --- |
-| Recap | `OpenerSection` handed an inline `change`, so `OpenerPanel`'s memo broke every frame: the Trip card's panel planned its road and repainted six faces per frame | **fixed** `01542bc` (the brick reads its host through a ref, `panel-host.ts`) |
-| Recap | `setT`/`setPage` in the rAF loop re-rendered the 1 200-line editor 62×/s | **fixed** `9bb0b25` (`PlayClock`, `useClockPaint`, `useClockSelect`): 434 → 46 ms of script/s, root 60 → 0 renders/s |
-| Recap | `pictures.still` was a new function every render: the strip repainted every slide and the poster re-armed after any click | **fixed** `e4056d3` |
-| Recap | `FrameBox`'s paint keyed on an inline `frameSource` | **mitigated** by `9bb0b25` (the editor no longer renders per frame); **open**: key it on the source's identity |
-| Recap | ~40 command specs rebuilt per render (`use-recap-commands.ts`) | **mitigated** by `9bb0b25`; **open** (cheap) |
+| Recap | `OpenerSection` handed an inline `change`, so `OpenerPanel`'s memo broke every frame: the Trip card's panel planned its road and repainted six faces per frame | **fixed** `2b49a38` (#459: the brick reads its host through a ref, `panel-host.ts`) |
+| Recap | `setT`/`setPage` in the rAF loop re-rendered the 1 200-line editor 62×/s | **fixed** `369e162` (`PlayClock`, `useClockPaint`, `useClockSelect`): 434 → 46 ms of script/s, root 60 → 0 renders/s |
+| Recap | `pictures.still` was a new function every render: the strip repainted every slide and the poster re-armed after any click | **fixed** `b8c3cde` |
+| Recap | `FrameBox`'s paint keyed on an inline `frameSource` | **mitigated** by `369e162` (the editor no longer renders per frame); **open**: key it on the source's identity |
+| Recap | ~40 command specs rebuilt per render (`use-recap-commands.ts`) | **mitigated** by `369e162`; **open** (cheap) |
 | Trips | The piece editor sets `still` per frame (`use-deck-transport.ts`) and `playhead` per video frame (`BadgeStage` `onTime`): the 3 000-line `PostEditor` re-renders 60×/s (`check-perf` trips-viree: root 60.5/s, ~160–250 ms of script/s) | **open** — the next pass: the deck's time in a `PlayClock`, the needle, the trim, the motion cards and the strip reading it |
-| Trips | `normaliseFraming(cell.framing)` fresh per render → every motion card repainted per frame (B2) | **fixed** `3ec680e` (not measured: needs a picture with EXIF) |
-| Trips | `readPlateSpec` fresh `fields` → eight camera layout tiles re-laid and repainted per frame (B3) | **fixed** `3ec680e` (same) |
-| Trips | `LookTab` hands `layers={[...layers]}` and inline hop callbacks | **covered** by `HookPicker`'s ref and `OpenerPanel`'s own (`01542bc`) |
+| Trips | `normaliseFraming(cell.framing)` fresh per render → every motion card repainted per frame (B2) | **fixed** `599a0d8` (not measured: needs a picture with EXIF) |
+| Trips | `readPlateSpec` fresh `fields` → eight camera layout tiles re-laid and repainted per frame (B3) | **fixed** `599a0d8` (same) |
+| Trips | `LookTab` hands `layers={[...layers]}` and inline hop callbacks | **covered** by `HookPicker`'s ref and `OpenerPanel`'s own (`2b49a38`) |
 | Composer, Map | `useActiveCue` sets state per presented video frame (a DJI SRT has a cue per frame): the whole tool re-renders 30–60×/s while playing | **open**: the cue in a ref for the painter, React state only at ~10 Hz or on what the panels show |
 | Develop | The making-of sheet sets `t` per frame; `captions ?? {}` busts its script memo | **open** (cheap: a module-level empty object, the time in a clock) |
 | Studio | The whole editor at ~4 Hz (`timeupdate`) | **open**, low |
@@ -28,14 +28,14 @@ Status: **fixed** (the commit), **open** (with the fix in one line), **not repro
 
 | Where | Finding | Status |
 | --- | --- | --- |
-| ffmpeg.wasm | Kept for the session (wasm memory never shrinks), files left in its FS on failure, core blob URLs (~31 MB) never revoked, again per cancel | **fixed** `1cc46f9` (`shared/lib/idle-release.ts`, files freed in `finally`, URLs revoked) |
-| Converted clips | `transcodeStore` kept every H.264 copy until the Library was cleared | **fixed** `2c9e026` (forgotten with their asset); **open**: a byte ceiling |
-| Subject model | MediaPipe worker (wasm, tflite, a GPU delegate's WebGL context, the last picture) kept for the page | **fixed** `e848c1a` (rests 15 s on a phone, 3 min elsewhere) |
-| Flight Atlas | Every log's text held in `sessionLogs` for the tab, stored or not | **fixed** `a9dc957`; **open**: `parsed` grows per `log|name` (an LRU) |
-| Storytelling | Map grounds (20–40 MB a key) never evicted, a key per tone or route edit | **fixed** `1e353fd` (2 on a phone, 6 elsewhere) |
-| Trips collage | A cell's grader (a WebGL context, ~100 MB at a phone's budget) kept after its cell left | **fixed** `9a36e6c` (not measured: needs looks per cell) |
-| LUT tool | The preview's renderer rebuilt on a React `<canvas>` whose context `dispose()` lost: shaders failed, the preview drew BLACK after a clip switch (from the first clip under StrictMode) | **fixed** `f776bff` (the hook owns its canvas); reproduced and checked headless |
-| Composer | Loop drew every frame while paused; a WebGL grader rebuilt per step of the strength slider | **fixed** `eac1f9c` + `0865c6f`: paused 125 → 1 ms of script/s |
+| ffmpeg.wasm | Kept for the session (wasm memory never shrinks), files left in its FS on failure, core blob URLs (~31 MB) never revoked, again per cancel | **fixed** `652d955` (`shared/lib/idle-release.ts`, files freed in `finally`, URLs revoked) |
+| Converted clips | `transcodeStore` kept every H.264 copy until the Library was cleared | **fixed** `ecafa65` (forgotten with their asset); **open**: a byte ceiling |
+| Subject model | MediaPipe worker (wasm, tflite, a GPU delegate's WebGL context, the last picture) kept for the page | **fixed** `732b097` (rests 15 s on a phone, 3 min elsewhere) |
+| Flight Atlas | Every log's text held in `sessionLogs` for the tab, stored or not | **fixed** `748f8c9`; **open**: `parsed` grows per `log|name` (an LRU) |
+| Storytelling | Map grounds (20–40 MB a key) never evicted, a key per tone or route edit | **fixed** `b4a6803` (2 on a phone, 6 elsewhere) |
+| Trips collage | A cell's grader (a WebGL context, ~100 MB at a phone's budget) kept after its cell left | **fixed** `e769e14` (not measured: needs looks per cell) |
+| LUT tool | The preview's renderer rebuilt on a React `<canvas>` whose context `dispose()` lost: shaders failed, the preview drew BLACK after a clip switch (from the first clip under StrictMode) | **fixed** `8c2d1fc` (the hook owns its canvas); reproduced and checked headless |
+| Composer | Loop drew every frame while paused; a WebGL grader rebuilt per step of the strength slider | **fixed** `43a01f2` + `d782ae3`: paused 125 → 1 ms of script/s |
 | Recap clips | One `<video preload="auto">` + blob URL per clip key, kept until the editor closes even when the clip left the recap | **open**: release `held` entries whose key left `keysKey` |
 | Storytelling wall and prints | Bitmaps dropped without `close()`; `loadPrints` decodes every id at once; module globals kept after leaving | **open**: close in cleanup and on abort, cap at 6, clear on unmount |
 | Flight logs (Winnow picker) | Up to 600 SRT files held, by count | **open**: a byte ceiling (`held-budget.ts`) |
@@ -50,12 +50,12 @@ Status: **fixed** (the commit), **open** (with the fix in one line), **not repro
 
 | Where | Finding | Status |
 | --- | --- | --- |
-| Trip card faces | `townsWithin` scanned 130 000 towns per stop, six thumbnails per change | **fixed** `3183630`: a face pick 1.3–2.2 s → 150–270 ms at CPU ×4 |
-| Gazetteer | `nearestCity` (Winnow statistics: up to 20 000 rows; a deduction's legs; a Develop export's pictures) and `homonyms` (every trip edit, two component bodies) scanned the whole index | **fixed** `ef3fb2f`: 1.28 → 0.012 ms and 22.5 → 0.002 ms a call |
-| Recap blurred ground | Re-ranked the pool and ran a full-page `blur` every frame | **fixed** `74f88fd`: 25 → 48 fps at CPU ×4 |
+| Trip card faces | `townsWithin` scanned 130 000 towns per stop, six thumbnails per change | **fixed** `2b49a38` (#459): a face pick 1.3–2.2 s → 150–270 ms at CPU ×4 |
+| Gazetteer | `nearestCity` (Winnow statistics: up to 20 000 rows; a deduction's legs; a Develop export's pictures) and `homonyms` (every trip edit, two component bodies) scanned the whole index | **fixed** `f8bab48`: 1.28 → 0.012 ms and 22.5 → 0.002 ms a call |
+| Recap blurred ground | Re-ranked the pool and ran a full-page `blur` every frame | **fixed** `0162b67`: 25 → 48 fps at CPU ×4 |
 | Trips, each edit | Every opener prepared ~2K+3 times per keystroke (`deckSlides`, the rail's thumbnails JSON-stringified, the open slide), each Virée prepare planning the drive and baking its camera | **open** — the largest edit-time cost left: a cache on `variant.prepare` by (variant, options, ctx inputs), `hookStages`/`hookContextFor` by `trip.stages` identity |
 | Trips, Virée's pins | `parts()` plans the whole drive per paint | **not reproduced** while playing (pins are drawn at rest); left |
-| Recap Layout tab | `hasStyle` → `readRecapDoc` of the whole pool + two `JSON.stringify` per render | **mitigated** by `9bb0b25`; **open**: `useMemo` on `[doc, kept]` |
+| Recap Layout tab | `hasStyle` → `readRecapDoc` of the whole pool + two `JSON.stringify` per render | **mitigated** by `369e162`; **open**: `useMemo` on `[doc, kept]` |
 | Recap look-alike filter | O(n²) per `resolveRecap` (twice), again in `CarouselPanel` | **open**: compare within the `ALIKE_SECONDS` window after a sort; `factsOf` in a `WeakMap` |
 | Itinerary, Virée, Trip card painters | Re-fit and re-project the whole road per frame (`mapFit`, `planBounds`, `path.points.map`) | **open**: bounds on the plan, one reused `Float32Array` |
 | Vehicles, sea hops | One stop edited invalidates every hop's water reading; uncached `hopTerrain` scans whole coastlines | **open**: key each hop by its own endpoints; give `seaHops` `trip-hops.ts`'s cache |
