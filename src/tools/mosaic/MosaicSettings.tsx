@@ -47,8 +47,10 @@ interface MosaicSettingsProps {
   cropped: boolean;
   onWhole: () => void;
   onChoose: () => void;
-  /** On a phone: the one part of the panel its drawer shows. */
+  /** The one part of the panel shown: a tab of the inspector's block, a drawer of a phone's bottom bar. */
   only?: SettingsTab;
+  /** Beside the stage, in the block: a tab's second section folds under its sticky title, and the block pads. */
+  docked?: boolean;
   /** The Export section's body (`MosaicExportPanel`), drawn last. */
   exporting: ReactNode;
 }
@@ -102,7 +104,7 @@ const REVEAL_LABELS: Record<RevealDirection, string> = { toPhoto: 'To the photo'
 const SHARPNESS_LABELS: Record<Sharpness, string> = { early: 'Early', late: 'Late', never: 'Never' };
 const AIM_LABELS: Record<Aim, string> = { queue: 'The chain’s', best: 'Best match', random: 'Any' };
 
-export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose, only, exporting }: MosaicSettingsProps) {
+export default function MosaicSettings({ settings, update, view, setView, state, perf, setPerf, workers, fps, chain = null, target, cropped, onWhole, onChoose, only, docked = false, exporting }: MosaicSettingsProps) {
   const scene = state.status === 'ready' ? state.scene : null;
   // A part set by hand: the motion bounded, the mode the recipe it still is — or custom.
   const setMotion = (patch: Partial<Motion>) =>
@@ -111,12 +113,13 @@ export default function MosaicSettings({ settings, update, view, setView, state,
       return { ...s, motion, mode: s.mode === 'single' ? 'single' : recipeOf(motion, s.mode) };
     });
   /**
-   * A section in place: folded and remembered beside the stage; on a phone, where each tab of the bottom bar opens
-   * ONE part in a drawer titled by it, the tab's first section is drawn bare and a second keeps its header, unfolded.
+   * A section in place. The panel shows ONE part at a time — a tab of the block beside the stage (lab 13's frame,
+   * his word of 2026-11-10 making it Mosaic's), a drawer titled by it on a phone: the tab's first section is drawn
+   * bare (the tab already names it), a second keeps its header — foldable and sticky in the block, unfolded in a drawer.
    */
   const section = (tab: SettingsTab, id: string, title: string, props: { remember: 'local' | 'session'; defaultOpen?: boolean }, body: ReactNode) => {
     if (only && only !== tab) return null;
-    if (only) return id === FIRST_OF_TAB[tab] ? <div className="flex flex-col gap-3">{body}</div> : <InspectorSection id={id} title={title} foldable={false}>{body}</InspectorSection>;
+    if (only) return id === FIRST_OF_TAB[tab] ? <div className="flex flex-col gap-3">{body}</div> : <InspectorSection id={id} title={title} foldable={docked} remember="session">{body}</InspectorSection>;
     return (
       <InspectorSection id={id} title={title} {...props}>
         {body}
@@ -126,7 +129,7 @@ export default function MosaicSettings({ settings, update, view, setView, state,
   // Every hint behind its ⓘ, opened as a bubble over what follows: the panel stays short, the target card large.
   return (
     <FoldHints float>
-    <div className="flex flex-col gap-3 px-1.5">
+    <div className={`flex flex-col gap-3 ${docked ? 'pt-1' : 'px-1.5'}`}>
       {section('target', 'mosaic-target', 'Target', { remember: 'session' }, <>
         {target}
         <div className="flex flex-wrap items-center gap-2">
