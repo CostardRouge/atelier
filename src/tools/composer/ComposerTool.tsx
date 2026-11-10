@@ -8,7 +8,7 @@ import { useActiveCue } from '../../shared/telemetry/use-active-cue';
 import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
 import { DEFAULT_OVERLAY, OVERLAY_FIELDS, type OverlayConfig, type OverlayFont } from './overlay';
 import { drawReadout, type Box } from './draw-readout';
-import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
+import { makeFrameGrader, type PassGrader } from '../../shared/lut/frame-grader';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
 import {
@@ -169,21 +169,28 @@ export default function ComposerTool() {
   const { getCanvas, resize } = map;
 
   // --- frame grader (LUT) -------------------------------------------------
-  const graderRef = useRef<FrameGrader | null>(null);
+  const graderRef = useRef<PassGrader | null>(null);
   const graderDimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const intensityRef = useRef(intensity);
+  intensityRef.current = intensity;
   useEffect(() => {
     graderRef.current?.dispose();
     graderRef.current = null;
     if (!lut || !videoDims) return;
     const gw = Math.min(videoDims.w, GRADE_MAX);
     const gh = Math.round((gw * videoDims.h) / videoDims.w);
-    graderRef.current = makeFrameGrader(lut, gw, gh, intensity);
+    graderRef.current = makeFrameGrader(lut, gw, gh, intensityRef.current);
     graderDimsRef.current = { w: gw, h: gh };
     return () => {
       graderRef.current?.dispose();
       graderRef.current = null;
     };
-  }, [lut, intensity, videoDims?.w, videoDims?.h]);
+  }, [lut, videoDims?.w, videoDims?.h]);
+  // A step of the strength slider is a uniform, never a new WebGL2 context and its shaders compiled again.
+  useEffect(() => {
+    graderRef.current?.setIntensity?.(intensity);
+    dirtyRef.current = true;
+  }, [intensity]);
 
   // --- live values for the draw loop (refs to avoid stale closures) --------
   const cueRef = useRef<Cue | null>(null);
@@ -193,6 +200,8 @@ export default function ComposerTool() {
   const overlayRef = useRef(overlay);
   overlayRef.current = overlay;
   const readoutBoxRef = useRef<Box | null>(null);
+  /** Something drawn changed since the last composite. */
+  const dirtyRef = useRef(true);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -250,16 +259,35 @@ export default function ComposerTool() {
   const drawRef = useRef(draw);
   drawRef.current = draw;
 
-  // Continuous compositing loop while a clip is active (keeps the map fresh too).
+  // The compositing loop while a clip is active: it DRAWS only while the clip plays or when something drawn
+  // changed — a setting, a seek, a map frame (`performance.md`). Paused, it used to grade and composite the
+  // same frame sixty times a second: a phone's battery and heat for nothing.
+  useEffect(() => {
+    dirtyRef.current = true;
+  });
+  const { onRender } = map;
+  useEffect(() => onRender(() => (dirtyRef.current = true)), [onRender]);
   useEffect(() => {
     if (!active) return;
     let raf = 0;
     const tick = () => {
-      drawRef.current();
+      const v = videoRef.current;
+      if (dirtyRef.current || (v && !v.paused && !v.ended)) {
+        dirtyRef.current = false;
+        drawRef.current();
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const v = videoRef.current;
+    const mark = () => (dirtyRef.current = true);
+    v?.addEventListener('seeked', mark);
+    v?.addEventListener('loadeddata', mark);
+    return () => {
+      cancelAnimationFrame(raf);
+      v?.removeEventListener('seeked', mark);
+      v?.removeEventListener('loadeddata', mark);
+    };
   }, [active?.id]);
 
   // Transport state from the offscreen video element.

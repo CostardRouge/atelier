@@ -28,6 +28,8 @@ export interface ComposerMap {
   /** The map's WebGL canvas, for compositing into the output frame. */
   getCanvas: () => HTMLCanvasElement | null;
   resize: () => void;
+  /** Call `fn` on every frame the map renders (tiles landing, a move); answers its unsubscribe. */
+  onRender: (fn: () => void) => () => void;
 }
 
 /**
@@ -102,6 +104,9 @@ export function useComposerMap(
           canvasContextAttributes: { preserveDrawingBuffer: true },
         });
         mapRef.current = map;
+        map.on('render', () => {
+          for (const fn of renderListeners.current) fn();
+        });
         map.on('load', () => {
           if (cancelled || !map) return;
           addTrackLine(map, track);
@@ -165,6 +170,13 @@ export function useComposerMap(
   }, [ready, tilesOn]);
 
   const getCanvas = useCallback(() => mapRef.current?.getCanvas() ?? null, []);
+  const renderListeners = useRef(new Set<() => void>());
+  const onRender = useCallback((fn: () => void) => {
+    renderListeners.current.add(fn);
+    return () => {
+      renderListeners.current.delete(fn);
+    };
+  }, []);
   const resize = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -172,5 +184,5 @@ export function useComposerMap(
     applyCamera(map);
   }, [applyCamera]);
 
-  return { ready, error, getCanvas, resize };
+  return { ready, error, getCanvas, resize, onRender };
 }
