@@ -1,14 +1,21 @@
 /**
- * The gallery's SUGGESTIONS (lab 9 + lab 10, his yes of 2026-11-07): when a
- * month (or a week) has ended, each kind of recap he made for the one before
- * comes back ready for it — a month calendar and a dump in September, both
- * for October — and from 1 December (and through January) the year's
- * Wrapped. A suggestion is only a proposal: nothing is saved until he makes
- * it (`readyRecap`), and «Not this month» hides it by its key.
+ * The gallery's SUGGESTIONS (labs 9–10, his yes of 2026-11-07; the series
+ * rule his ask of 2026-11-10). They follow HIS SERIES, not only today's
+ * calendar: for each kind of recap about a month (and for the week), the one
+ * he MADE last is the head of its series, and the next period after it comes
+ * back in the same dress — July 2025 made, August 2025 suggested, whatever
+ * today is. A period already made or hidden is stepped over; one that has not
+ * ended is never suggested; and when a trip of Trips covers the head, the
+ * series stops after the trip's last day. Today's calendar still speaks: the
+ * month (or week) that just ended when he made the one before, and from
+ * 1 December (through January) the year's Wrapped.
+ *
+ * A suggestion is only a proposal: nothing is saved until he makes it
+ * (`readyRecap`), and «Not this month» hides it by its key.
  *
  * Atelier has no server, so «ready» means ready when he opens the gallery.
  *
- * Pure and DOM-free.
+ * Pure and DOM-free: the trips come in as data.
  */
 
 import { addDays, type IsoDate } from '../roadtrip/trip-days';
@@ -25,11 +32,27 @@ export interface Suggestion {
   model: RecapDoc | null;
   /** «October 2026», «Week of 26 Oct», «2026». */
   label: string;
-  /** «as in September», «as last week», «your year». */
+  /** «as in September», «as in July 2025», «as last week», «your year». */
   as: string;
 }
 
+/** What a series needs of a trip of Trips: its days, and its name for the line that says why it stopped. */
+export interface TripSpan {
+  name?: string;
+  startDate: IsoDate;
+  endDate: IsoDate;
+}
+
+/** Why the section holds nothing: one short line, and the rule behind an ⓘ. */
+export interface SuggestionHint {
+  line: string;
+  why: string;
+}
+
 const MONTH_RE = /^\d{4}-\d{2}$/;
+/** A series walks at most this many periods past its head (a century of months, of weeks). */
+const MAX_MONTHS = 1200;
+const MAX_WEEKS = 5300;
 
 /** `YYYY-MM` moved by `by` months. */
 export function shiftMonthKey(key: string, by: number): string {
@@ -61,49 +84,124 @@ function recapYear(doc: Pick<RecapDoc, 'template' | 'range'>): string | null {
 
 const latest = (list: readonly RecapDoc[]) => list.reduce<RecapDoc | null>((a, b) => (!a || b.updatedAt > a.updatedAt ? b : a), null);
 
-/** What the gallery suggests on `today`: never one already made, never one he hid. */
-export function suggestions(recaps: readonly RecapDoc[], today: IsoDate, hidden: ReadonlySet<string> = new Set()): Suggestion[] {
-  const out: Suggestion[] = [];
+/** The trip a series belongs to: one whose days meet `from → to`; of several, the one ending last. */
+function tripOver(trips: readonly TripSpan[], from: IsoDate, to: IsoDate): TripSpan | null {
+  let best: TripSpan | null = null;
+  for (const t of trips) {
+    if (!t.startDate || !t.endDate || t.startDate > to || t.endDate < from) continue;
+    if (!best || t.endDate > best.endDate) best = t;
+  }
+  return best;
+}
+
+/** «July», and its year when it is not today's: «July 2025». */
+const monthAs = (key: string, today: IsoDate) => `${monthName(`${key}-01`)}${key.slice(0, 4) === today.slice(0, 4) ? '' : ` ${key.slice(0, 4)}`}`;
+/** «28 Jul», and its year when it is not today's. */
+const weekAs = (day: IsoDate, today: IsoDate) => `${Number(day.slice(8, 10))} ${monthName(day).slice(0, 3)}${day.slice(0, 4) === today.slice(0, 4) ? '' : ` ${day.slice(0, 4)}`}`;
+
+/** A series with nothing to suggest: what comes next, and what holds it back. */
+interface Wait {
+  /** When its head was made: the hint speaks of the series he worked on last. */
+  made: number;
+  next: string;
+  /** `open`: the next period has not ended. `trip`: the trip it belongs to has. */
+  reason: 'open' | 'trip';
+  trip?: TripSpan;
+}
+
+interface Plan {
+  list: Suggestion[];
+  waits: Wait[];
+}
+
+function plan(recaps: readonly RecapDoc[], today: IsoDate, hidden: ReadonlySet<string>, trips: readonly TripSpan[]): Plan {
+  const out = new Map<string, Suggestion>();
+  const waits: Wait[] = [];
+  const push = (s: Suggestion) => {
+    if (!out.has(s.key)) out.set(s.key, s);
+  };
   const cur = today.slice(0, 7);
   const ended = shiftMonthKey(cur, -1);
   const before = shiftMonthKey(cur, -2);
-  // A month: each template he made for the month before the one that ended.
-  const byTemplate = new Map<RecapTemplate, { ended: boolean; models: RecapDoc[] }>();
+
+  // Months: each template's recaps about exactly one calendar month.
+  const byTemplate = new Map<RecapTemplate, Map<string, RecapDoc[]>>();
   for (const doc of recaps) {
     const m = recapMonth(doc);
     if (!m || !MONTH_RE.test(m) || doc.template === 'wrapped') continue;
-    const slot = byTemplate.get(doc.template) ?? { ended: false, models: [] };
-    if (m === ended) slot.ended = true;
-    if (m === before) slot.models.push(doc);
-    byTemplate.set(doc.template, slot);
+    const months = byTemplate.get(doc.template) ?? new Map<string, RecapDoc[]>();
+    months.set(m, [...(months.get(m) ?? []), doc]);
+    byTemplate.set(doc.template, months);
   }
-  for (const [template, slot] of byTemplate) {
-    const model = latest(slot.models);
-    const key = `${template}:${ended}`;
-    if (!model || slot.ended || hidden.has(key)) continue;
-    out.push({
-      key,
+  for (const [template, months] of byTemplate) {
+    const monthly = (m: string, model: RecapDoc, from: string): Suggestion => ({
+      key: `${template}:${m}`,
       template,
-      anchor: `${ended}-01`,
-      range: template === 'month' ? null : { from: `${ended}-01`, to: monthLast(ended) },
+      anchor: `${m}-01`,
+      range: template === 'month' ? null : { from: `${m}-01`, to: monthLast(m) },
       model,
-      label: `${monthName(`${ended}-01`)} ${ended.slice(0, 4)}`,
-      as: `as in ${monthName(`${before}-01`)}`,
+      label: `${monthName(`${m}-01`)} ${m.slice(0, 4)}`,
+      as: `as in ${monthAs(from, today)}`,
     });
+    // Today's calendar: the month that just ended, when he made the one before.
+    const live = latest(months.get(before) ?? []);
+    if (live && !months.has(ended) && !hidden.has(`${template}:${ended}`)) push(monthly(ended, live, before));
+    // His series: after the recap he made last, the first month neither made nor hidden.
+    let head: { doc: RecapDoc; month: string } | null = null;
+    for (const [month, docs] of months) {
+      for (const doc of docs) {
+        if (!head || doc.createdAt > head.doc.createdAt || (doc.createdAt === head.doc.createdAt && month > head.month)) head = { doc, month };
+      }
+    }
+    if (!head) continue;
+    const trip = tripOver(trips, `${head.month}-01`, monthLast(head.month));
+    let m = shiftMonthKey(head.month, 1);
+    for (let i = 0; i < MAX_MONTHS; i++, m = shiftMonthKey(m, 1)) {
+      const label = `${monthName(`${m}-01`)} ${m.slice(0, 4)}`;
+      if (trip && `${m}-01` > trip.endDate) {
+        waits.push({ made: head.doc.createdAt, next: label, reason: 'trip', trip });
+        break;
+      }
+      if (m >= cur) {
+        waits.push({ made: head.doc.createdAt, next: label, reason: 'open' });
+        break;
+      }
+      if (months.has(m) || hidden.has(`${template}:${m}`)) continue;
+      push(monthly(m, head.doc, head.month));
+      break;
+    }
   }
-  // A week: the week that ended, when he made the one before it.
+
+  // Weeks, the same two ways.
   const weeks = recaps.filter((d) => d.template === 'week');
   if (weeks.length) {
+    const made = new Set(weeks.map((d) => d.anchor));
+    const weekly = (w: IsoDate, model: RecapDoc, as: string): Suggestion => ({ key: `week:${w}`, template: 'week', anchor: w, range: null, model, label: `Week of ${weekAs(w, today)}`, as });
     const ws = latest(weeks)!.cells.weekStart;
     const thisWeek = weekStartOf(today, ws) ?? today;
     const endedWeek = addDays(thisWeek, -7) ?? thisWeek;
     const beforeWeek = addDays(thisWeek, -14) ?? thisWeek;
-    const model = latest(weeks.filter((d) => d.anchor === beforeWeek));
-    const key = `week:${endedWeek}`;
-    if (model && !weeks.some((d) => d.anchor === endedWeek) && !hidden.has(key)) {
-      out.push({ key, template: 'week', anchor: endedWeek, range: null, model, label: `Week of ${Number(endedWeek.slice(8, 10))} ${monthName(endedWeek).slice(0, 3)}`, as: 'as last week' });
+    const live = latest(weeks.filter((d) => d.anchor === beforeWeek));
+    if (live && !made.has(endedWeek) && !hidden.has(`week:${endedWeek}`)) push(weekly(endedWeek, live, 'as last week'));
+    const head = weeks.reduce((a, b) => (b.createdAt > a.createdAt || (b.createdAt === a.createdAt && b.anchor > a.anchor) ? b : a));
+    const trip = tripOver(trips, head.anchor, addDays(head.anchor, 6) ?? head.anchor);
+    let w = addDays(head.anchor, 7);
+    for (let i = 0; w && i < MAX_WEEKS; i++, w = addDays(w, 7)) {
+      const label = `Week of ${weekAs(w, today)}`;
+      if (trip && w > trip.endDate) {
+        waits.push({ made: head.createdAt, next: label, reason: 'trip', trip });
+        break;
+      }
+      if ((addDays(w, 6) ?? w) >= today) {
+        waits.push({ made: head.createdAt, next: label, reason: 'open' });
+        break;
+      }
+      if (made.has(w) || hidden.has(`week:${w}`)) continue;
+      push(weekly(w, head, `as the week of ${weekAs(head.anchor, today)}`));
+      break;
     }
   }
+
   // The year's Wrapped: through December, and January for the year that ended.
   const month = Number(today.slice(5, 7));
   if (month === 12 || month === 1) {
@@ -111,16 +209,46 @@ export function suggestions(recaps: readonly RecapDoc[], today: IsoDate, hidden:
     const key = `wrapped:${year}`;
     if (!recaps.some((d) => recapYear(d) === year) && !hidden.has(key)) {
       const model = latest(recaps.filter((d) => d.template === 'wrapped'));
-      out.push({ key, template: 'wrapped', anchor: `${year}-01-01`, range: { from: `${year}-01-01`, to: `${year}-12-31` }, model, label: year, as: model ? 'as your last Wrapped' : 'your year in numbers' });
+      push({ key, template: 'wrapped', anchor: `${year}-01-01`, range: { from: `${year}-01-01`, to: `${year}-12-31` }, model, label: year, as: model ? 'as your last Wrapped' : 'your year in numbers' });
     }
   }
-  // In the catalogue's order: the month calendar first.
-  return out.sort((a, b) => TEMPLATES.indexOf(a.template) - TEMPLATES.indexOf(b.template));
+  // In the catalogue's order — the month calendar first — then the older period first.
+  const list = [...out.values()].sort((a, b) => TEMPLATES.indexOf(a.template) - TEMPLATES.indexOf(b.template) || (a.anchor < b.anchor ? -1 : a.anchor > b.anchor ? 1 : 0));
+  return { list, waits };
+}
+
+/**
+ * What the gallery suggests on `today`: never a period already made, never
+ * one he hid, never one that has not ended — and, where a trip in `trips`
+ * covers a series, nothing past its last day.
+ */
+export function suggestions(recaps: readonly RecapDoc[], today: IsoDate, hidden: ReadonlySet<string> = new Set(), trips: readonly TripSpan[] = []): Suggestion[] {
+  return plan(recaps, today, hidden, trips).list;
+}
+
+const WHY =
+  'Suggestions follow your series: after the recap you made last of each kind comes the next month or week, in the same dress, once that period has ended — and never past the last day of the trip it belongs to. From 1 December, the year’s Wrapped.';
+
+/**
+ * Why nothing is suggested, for the section that never vanishes: no series
+ * yet, or the series he worked on last is up to date (its next period has not
+ * ended, or its trip has). Null while there is a suggestion.
+ */
+export function suggestionHint(recaps: readonly RecapDoc[], today: IsoDate, hidden: ReadonlySet<string> = new Set(), trips: readonly TripSpan[] = []): SuggestionHint | null {
+  const { list, waits } = plan(recaps, today, hidden, trips);
+  if (list.length) return null;
+  const wait = waits.reduce<Wait | null>((a, b) => (!a || b.made > a.made ? b : a), null);
+  if (!wait) return { line: 'Make a month or a week recap: the next one will be suggested here', why: WHY };
+  if (wait.reason === 'trip' && wait.trip) {
+    const end = wait.trip.endDate;
+    return { line: `Up to date · ${wait.trip.name?.trim() || 'your trip'} ended on ${weekAs(end, today)}`, why: WHY };
+  }
+  return { line: `Up to date · ${wait.next} comes once it has ended`, why: WHY };
 }
 
 /**
  * The recap a suggestion makes: its model's dress (a copy of the recap it
- * repeats) on the new period, its pictures, pins, words of the old period
+ * repeats — of any earlier period, not only the one before) on the new period, its pictures, pins, words of the old period
  * and frozen selection left behind — the editor fills it from the connected
  * Winnow when it opens. With no model, the template's own recipe.
  */

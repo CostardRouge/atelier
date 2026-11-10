@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applySettings, recapOutline } from './recap-commands';
-import { createRecapDoc, withPictures } from './recap-doc';
+import { applySettings, openerOutline, openerTrips, recapOutline, withOpenerTripFile, withOpenerTripOf } from './recap-commands';
+import { createRecapDoc, withPictures, type RecapDoc } from './recap-doc';
+import { serializeTripFile, toTripFile } from '../roadtrip/trip-file';
+import { createTripDoc, createTripPlace, createTripStage } from '../roadtrip/trip-types';
 import { resolveRecap } from './recap-slots';
 
 describe('recap commands', () => {
@@ -110,5 +112,46 @@ describe('the pool an agent browses, and the carousel it sets', () => {
     expect(chooseCarousel(dump, ['a', 'a'])).toMatchObject({ ok: false, error: expect.stringMatching(/twice/) });
     const single = createRecapDoc('single', 'local', { now: 1 });
     expect(chooseCarousel(single, ['a'])).toMatchObject({ ok: false, error: expect.stringMatching(/no carousel/) });
+  });
+});
+
+describe('the trip an agent gives a recap’s opener', () => {
+  const trip = (id: string, name: string, from: string, to: string, updatedAt: number) => {
+    const t = createTripDoc(name, from as never, to as never);
+    t.stages = [createTripStage('Leg', '', from as never, to as never, [createTripPlace('A', '', { lat: -35, lon: 117 }), createTripPlace('B', '', { lat: -32, lon: 116 })])];
+    return { ...t, id, updatedAt };
+  };
+  const trips = [trip('tas', 'Tasmania', '2026-02-12', '2026-02-26', 9), trip('wa', 'West coast', '2026-10-01', '2026-10-20', 3)];
+  const month = () => createRecapDoc('month', 'local', { anchor: '2026-10-01', now: 1 });
+  const DAYS = ['2026-10-01', '2026-10-31'];
+
+  it('lists this device’s trips, the covering one first, the kept one marked', () => {
+    expect(openerTrips(month(), trips, DAYS).map((t) => [t.id, t.covers, t.kept, t.places])).toEqual([['wa', true, false, 2], ['tas', false, false, 2]]);
+    const r = withOpenerTripOf(month(), trips, 'wa', 50);
+    expect(r.ok && r.kept).toMatchObject({ from: 'trips', name: 'West coast', places: 2, road: false });
+    const doc = (r as { doc: RecapDoc }).doc;
+    expect(doc.opener.tripAuto).toBe(false);
+    expect(openerTrips(doc, trips, DAYS)[0]).toMatchObject({ id: 'wa', kept: true });
+    // Changed in Trips since the copy: said, never followed by itself.
+    expect(openerTrips(doc, [trips[0], { ...trips[1], updatedAt: 4 }], DAYS)[0].changedSince).toBe(true);
+  });
+
+  it('reads the opener without its road, drops the copy on «none», and refuses what is no trip', () => {
+    const r = withOpenerTripOf(month(), trips, 'wa', 50) as { doc: RecapDoc };
+    const out = openerOutline(r.doc.opener);
+    expect('tripCopy' in out).toBe(false);
+    expect(out.tripKept).toMatchObject({ name: 'West coast', days: 20 });
+    const none = withOpenerTripOf(r.doc, trips, 'none');
+    expect(none.ok && none.kept).toBeNull();
+    expect(none.ok && none.doc.opener).toMatchObject({ tripCopy: null, tripAuto: false });
+    const missing = withOpenerTripOf(month(), trips, 'nope');
+    expect(!missing.ok && missing.error).toMatch(/recap\.openerTrips/);
+    const file = withOpenerTripFile(month(), serializeTripFile(toTripFile(trips[0])), 'tas.roadtrip.json', 5);
+    expect(file.ok && file.kept).toMatchObject({ from: 'file', name: 'Tasmania' });
+    expect(withOpenerTripFile(month(), '{"a":1}', 'x.json').ok).toBe(false);
+    // A variant's own settings travel through recap.set like any other: kept as written, an unknown variant left out.
+    const set = applySettings(r.doc, { opener: { kind: 'drive', options: { drive: { secondsPerPicture: 1.2 } } } });
+    expect(set.ok && set.doc.opener.options.drive).toEqual({ secondsPerPicture: 1.2 });
+    expect(set.ok && set.doc.opener.tripCopy).not.toBeNull();
   });
 });

@@ -170,6 +170,35 @@ export default function DeliverBar({
   );
 }
 
+/**
+ * A host's run that is ONE sentence and a share done (Mosaic's, the atlas's): drawn as `running`, in place of the
+ * verbs — a bar that fills where the share is known and sweeps where it is not, the sentence on one truncated line,
+ * the Cancel at a fixed place.
+ */
+export function PlainRun({ words, ratio, onCancel }: { words: string; ratio: number | null; onCancel: () => void }) {
+  const known = ratio !== null && ratio > 0;
+  return (
+    <div className="flex flex-col gap-1.5 min-w-0" role="status" aria-live="polite">
+      <div className="relative h-1.5 rounded-[2px] bg-line overflow-hidden" role="progressbar" aria-label="Export" aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? Math.round((ratio as number) * 100) : undefined}>
+        {known ? (
+          <span className="absolute inset-y-0 left-0 bg-accent transition-[width] duration-200" style={{ width: `${Math.min(1, ratio as number) * 100}%` }} />
+        ) : (
+          <span className="absolute inset-y-0 left-0 w-1/2 bg-accent animate-deck-load motion-reduce:animate-none" />
+        )}
+      </div>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="flex-1 min-w-0 font-mono text-2xs text-ink truncate" title={words}>
+          {words}
+        </span>
+        <span className="flex-none w-[5ch] text-right font-mono text-2xs text-muted tabular-nums">{known ? `${Math.round((ratio as number) * 100)} %` : ''}</span>
+        <Button size="sm" onClick={onCancel} className="flex-none">
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Past this many units a segment each would be thinner than a hairline: one bar instead. */
 const MAX_SEGMENTS = 48;
 

@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { describeVehicle, type VehicleSpec } from '../../shared/roadtrip/vehicle-spec';
-import { vehicleLight } from '../../shared/roadtrip/hooks/car-model';
-import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
-import { paintGroundShadow, paintMesh, renderOrder, type Pose } from '../../shared/roadtrip/hooks/mesh3d';
-import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
+import { describeVehicle, type VehicleSpec } from '../vehicle-spec';
+import { vehicleLight } from '../hooks/car-model';
+import { vehicleModel } from '../hooks/vehicle-registry';
+import { paintGroundShadow, paintMesh, renderOrder, type Pose } from '../hooks/mesh3d';
+import { prefersReducedMotion } from '../../ui/reduced-motion';
 
 interface CarTurntableProps {
   spec: VehicleSpec;

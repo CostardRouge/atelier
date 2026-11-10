@@ -49,8 +49,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   *Pictures* as well as in *Layout* — and pictures you add by hand join the carousel.
   A recap's Reel can start with an **opener**, as in Trips: a **Défilé** (its pictures flicking by, faster and faster,
   over a tape of its days, with a tick at each) or a **Badge** (one picture slowly pushed in, its day, its place and
-  its camera) — then the recap; and, when a trip of Trips covers its days, **Virée** or **Itinerary** over that
-  trip, from picture to picture. The Badge, Virée or Itinerary can also be the carousel's first slide.
+  its camera) — then the recap; or one of Trips' own openers with every one of its settings, in the same numbered
+  chapters as in Trips: **Virée**, **Itinerary**, **Vitrine** or the **Trip card**. The trip they drive is chosen in a
+  small drawer of thumbnails — your trips on this device, or a `.roadtrip.json` dropped on it — and copied into the
+  recap (its legs, places, road and vehicles, never its pieces), so the recap reopens without it and what you change
+  from the recap never changes the trip; with no trip, the recap's located pictures are the road. A Badge or one of
+  Trips' openers can also be the carousel's first slide. An agent can list the trips an opener can drive, give the
+  recap one (or a trip file) and set an opener's own settings.
   A new template, **Wrapped**: a year (or any period) in numbers, a slide each — your pictures counted, the busiest
   day, your camera, the place you came back to, the hour you shoot most, your best picture — then the rest in a
   grid.
@@ -147,13 +152,37 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Mosaic and Flight Atlas wear the inspector Recap got: one block beside the stage, what chooses its content pinned
+  at its top, a section's title in sight while its rows scroll, and what the Export writes as ONE button pinned at
+  its foot — *Save film* / *Save image* in Mosaic, *Export the video* in the atlas, the others behind ▾ — which
+  becomes the progress and its Cancel while a file is written, on every tab. Mosaic's five parts are tabs on one row,
+  the same five a phone opens as drawers.
+- Flight Atlas: `←` `→` step the film a second (five with Shift) and `Home` goes back to its start.
+- The bands and stages of every editor share one corner radius (the Flight Atlas, the Trips map, Grade, Compare,
+  Composer, Flight Map and Overlay bars had kept the larger one of cards).
+- Recap: Enter keeps a framing and Escape gives the picture back as it was (Escape used to keep it too). While you
+  frame, the arrows move the picture, `+` `−` zoom, `[` `]` turn it and `0` centres it. Outside a framing, `←` `→`
+  turn the pages, Enter frames what is selected, Delete empties the place in hand, and `H` or `?` lists every key.
+- The picture in hand in Recap is one card: a larger thumbnail, one wide **Develop** button that says *Developed*
+  and what was changed once it is, *Replace* and *Frame* beside it, and the rarer verbs (centre, back to the rule,
+  empty) behind ⋯. Trips' Picture tab and the Studio's Grade tab wear the same Develop button.
+
 - Trips' Vehicles panel in the overview's Map view folds: one row per stage says its vehicle, hops, kilometres and a
   strip of its hops, and opens on the stage of the day shown or one that drives over the sea; inside, only the hops
   that differ are listed and the others fold into one line. On a wide screen the whole card folds to its one line.
 - An older trip's question about the sea no longer takes a band across the top of the overview: it waits in the
   Vehicles panel, with a dot on the Map switch and on the panel pointing to it.
+- Recap's Suggestions follow your series, whatever today's date: after the recap you made last of each kind comes the
+  next month or week in the same dress (July 2025 made, August 2025 suggested), never one already made or not yet
+  ended, and never past the last day of the trip it belongs to. With nothing to suggest, the section stays and says
+  why in one line.
 
 ### Fixed
+
+- Mosaic: Space no longer does nothing after a slider was dragged, and no longer plays behind the target chooser.
+- Recap: Space, Enter and Escape no longer do nothing — or press the last button again — after a click on any button:
+  a button a click left focused gives the key back to the editor. Enter after *Frame* used to start the framing
+  again instead of ending it.
 
 - *Transcode to H.264* — converting a clip your browser cannot play — failed before it started: ffmpeg could not be
   loaded. It loads again.

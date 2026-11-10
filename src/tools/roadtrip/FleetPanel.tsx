@@ -17,7 +17,7 @@ import { addDays, daysBetween, formatIsoDate, type IsoDate } from '../../shared/
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
 import { DateField } from '../../shared/ui/DateField';
 import { TextField } from '../../shared/ui/Inspector';
-import GaragePanel from './GaragePanel';
+import GaragePanel from '../../shared/roadtrip/garage/GaragePanel';
 import { dangerLink, linkButton } from './panels/ui';
 
 interface FleetPanelProps {

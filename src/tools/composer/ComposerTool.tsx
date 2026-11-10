@@ -380,7 +380,7 @@ export default function ComposerTool() {
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem] overflow-y-auto" aria-label="Composer">
       {/* Clip + output settings. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 py-2 border border-line rounded-control bg-surface shadow-paper-soft">
         {clips.length === 0 ? (
           <span className="text-sm text-muted px-1">
             Select a DJI clip (video + <code className="font-mono">.srt</code>) in
@@ -426,7 +426,7 @@ export default function ComposerTool() {
       {active && (
         <>
           {/* Controls. */}
-          <div className="flex flex-col gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft text-xs">
+          <div className="flex flex-col gap-2 px-2 py-2 border border-line rounded-control bg-surface shadow-paper-soft text-xs">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted w-14">Aspect</span>
               {ASPECTS.map((a) => (

@@ -29,7 +29,8 @@ import RecapGallery from './RecapGallery';
 import { RECAP_BASE, RECAP_HOME, recapFromRef, recapPath, recapRef, parseRecapPath } from './recap-route';
 import { RECAP_DOC_KIND, moveRecap, pullRecap, pushOnce } from './recap-remote';
 import { askPersistence, deleteRecap, deleteSyncRecord, getRecap, getSyncRecord, getValue, listRecaps, putRecap, putSyncRecord, styled } from './recap-store';
-import { readyRecap, suggestions } from '../../shared/recap/recap-suggest';
+import { readyRecap, suggestionHint, suggestions } from '../../shared/recap/recap-suggest';
+import { listTrips } from '../../shared/roadtrip/trip-store';
 import { plannedWeeks } from '../../shared/recap/recap-planned';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmSlotLabel, slotLabel, slotsWithState } from '../../shared/sources/postiz/rhythm';
@@ -396,19 +397,28 @@ export default function RecapTool() {
       id: 'recap.suggestions',
       title: 'The recaps ready to make',
       description:
-        'What the gallery suggests today (lab 9): when a month or a week has ended, each kind of recap the person made for the one before, ready for it in the same dress — and the year’s Wrapped in December and January. Answers each one’s key, template, period, label and the recap it repeats. recap.makeSuggestion makes one.',
+        'What the gallery suggests (labs 9–10): the person’s SERIES — after the recap they made last of each kind about a month (and of the week), the next period in the same dress, whatever today is, never one already made, hidden or not yet ended, never past the last day of a trip of Trips covering it — plus the month or week that just ended when they made the one before, and the year’s Wrapped in December and January. Answers each one’s key, template, period, label and the recap it repeats, and with none a `hint` saying why. recap.makeSuggestion makes one.',
       run: async () => {
-        const hidden = new Set((await getValue<string[]>('suggest:hidden')) ?? []);
-        return { suggestions: suggestions(await listRecaps(), todayIso(), hidden).map((s) => ({ key: s.key, template: s.template, anchor: s.anchor, range: s.range, label: s.label, as: s.as, repeats: s.model ? { id: s.model.id, title: s.model.title } : null })) };
+        const [recaps, kept, trips] = await Promise.all([listRecaps(), getValue<string[]>('suggest:hidden'), listTrips()]);
+        const hidden = new Set(kept ?? []);
+        const list = suggestions(recaps, todayIso(), hidden, trips);
+        const hint = suggestionHint(recaps, todayIso(), hidden, trips);
+        return {
+          suggestions: list.map((s) => ({ key: s.key, template: s.template, anchor: s.anchor, range: s.range, label: s.label, as: s.as, repeats: s.model ? { id: s.model.id, title: s.model.title } : null })),
+          ...(hint ? { hint: hint.line } : {}),
+        };
       },
     },
     {
       id: 'recap.makeSuggestion',
       title: 'Make a suggested recap',
-      description: 'Make the suggestion of that key (recap.suggestions) — a recap in its model’s dress on the new period, its pictures left behind — keep it on this device and open it; it fills itself from the connected Winnow as it opens. Answers its id.',
-      params: { key: { type: 'string', description: 'The suggestion’s key, e.g. month:2026-10.' } },
+      description:
+        'Make the suggestion of that key (recap.suggestions) — a recap in its model’s dress on the new period, its pictures left behind — keep it on this device and open it; it fills itself from the connected Winnow as it opens. A key the person hid in the gallery can still be made when it is the next of its series. Answers its id.',
+      params: { key: { type: 'string', description: 'The suggestion’s key, e.g. month:2025-08.' } },
       run: async (p) => {
-        const s = suggestions(await listRecaps(), todayIso()).find((x) => x.key === p.key);
+        const [recaps, kept, trips] = await Promise.all([listRecaps(), getValue<string[]>('suggest:hidden'), listTrips()]);
+        // The list the gallery shows first; then the one it would show with nothing hidden (hiding is the gallery's, not a refusal).
+        const s = suggestions(recaps, todayIso(), new Set(kept ?? []), trips).find((x) => x.key === p.key) ?? suggestions(recaps, todayIso(), new Set(), trips).find((x) => x.key === p.key);
         if (!s) throw new CommandError('invalid', `no suggestion "${String(p.key)}" today — recap.suggestions lists them`);
         let doc = readyRecap(s, DEFAULT_SOURCE_ID);
         doc = { ...doc, title: uniqueDocName(doc.title, (await listRecaps()).map((m) => m.title)) };

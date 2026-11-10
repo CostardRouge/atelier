@@ -6,6 +6,9 @@ import { DEFAULT_FRAME, MAX_ZOOM, panFrame, rotateFrame, sourceRect, zoomFrame, 
 import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
 import { paintFilm } from '../../shared/recap/recap-opener-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
+import { Icons } from '../../shared/ui/icons';
+import { PRESS_LOOK } from '../../shared/ui/press';
+import useEditorKeys from '../../shared/ui/use-editor-keys';
 
 /** What the author has in hand on the stage: a cell's slot, a text, the background. */
 export type Selection = { kind: 'cell'; id: string } | { kind: 'text'; id: string } | { kind: 'background' } | null;
@@ -52,6 +55,10 @@ interface Props {
 
 const DRAG_PX = 6;
 
+/** A key of the framing bar: a round target on the bar's ink, 34 px under a finger, that goes down when pressed. */
+const BAR_KEY = `touch-row inline-flex items-center justify-center h-7 pointer-coarse:h-[2.125rem] rounded-full cursor-pointer transition-[background-color,translate] hover:bg-paper/15 data-pressed:bg-paper/30 focus-visible:outline-2 focus-visible:outline-accent ${PRESS_LOOK}`;
+const BAR_GLYPH = `${BAR_KEY} w-7 pointer-coarse:w-[2.125rem] [&>svg]:w-4 [&>svg]:h-4`;
+
 /**
  * The recap on its stage: the painter at the box's size, a click selecting
  * what it lands on (the inspector follows), a cell's picture dragged onto
@@ -64,6 +71,8 @@ export default function RecapStage(props: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  /** The room the stage has, whatever the page's shape: the framing bar drops its words where it is tight. */
+  const [roomW, setRoomW] = useState(0);
   const pageBox = layout.pages[Math.min(page, layout.pages.length - 1)];
   const aspect = pageBox ? pageBox.width / pageBox.height : 9 / 16;
 
@@ -79,6 +88,7 @@ export default function RecapStage(props: Props) {
         w = h * aspect;
       }
       setSize({ w: Math.floor(w), h: Math.floor(h) });
+      setRoomW(Math.floor(r.width));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -251,6 +261,25 @@ export default function RecapStage(props: Props) {
     const f = frameNow();
     onFrame(framing, zoomFrame(f, Math.min(MAX_ZOOM, f.zoom * by)));
   };
+  const turnBy = (by: number) => onFrame(framing, rotateFrame(frameNow(), (frameNow().rotate ?? 0) + by));
+  // The framing's own keys (the editor holds Enter and Escape): the arrows move the picture as a drag does — a
+  // hundredth of its box, a twentieth with ⇧ —, + and − zoom, [ and ] turn, 0 centres.
+  useEditorKeys((k) => {
+    if (!framing || !frameSrc || !frameBox) return false;
+    if (k.dx || k.dy) {
+      const step = frameBox.w * (k.shift ? 0.05 : 0.01);
+      onFrame(framing, panFrame(frameNow(), k.dx * step, k.dy * step, frameSrc.width, frameSrc.height, frameBox.w, frameBox.h));
+      return true;
+    }
+    if (k.name !== 'char') return false;
+    if (k.char === '+' || k.char === '=') zoomBy(1.15);
+    else if (k.char === '-' || k.char === '_') zoomBy(1 / 1.15);
+    else if (k.char === '[') turnBy(-0.5);
+    else if (k.char === ']') turnBy(0.5);
+    else if (k.char === '0') onFrame(framing, DEFAULT_FRAME);
+    else return false;
+    return true;
+  }, Boolean(framing));
 
   // The selected part's outline, in the stage's pixels.
   let outline: Box | null = null;
@@ -264,6 +293,7 @@ export default function RecapStage(props: Props) {
   const overBox = ghost?.over && pageBox ? pageBox.parts.find((p) => p.kind === 'cell' && p.id === ghost.over)?.box : null;
   const css = (b: Box) => ({ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale });
   const story = doc.format === 'story';
+  const tight = roomW > 0 && roomW < 560;
 
   return (
     <div ref={boxRef} className="relative w-full h-full min-h-0 flex items-center justify-center">
@@ -303,27 +333,33 @@ export default function RecapStage(props: Props) {
           <div className="pointer-events-none absolute border-2 border-accent" style={css(frameBox)} />
         )}
         {framing && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-2 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-ink/85 text-paper shadow-paper text-2xs font-mono whitespace-nowrap" role="toolbar" aria-label="Framing">
-            <span className="px-1">{framing.kind === 'background' ? 'Background' : 'Picture'} · drag to move</span>
-            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.15)} className="w-7 h-7 rounded-full hover:bg-paper/15">
-              −
+          <div className="absolute left-1/2 -translate-x-1/2 top-2 z-10 flex items-center gap-0.5 px-1 py-1 rounded-full bg-ink/85 text-paper shadow-paper text-2xs font-mono whitespace-nowrap" role="toolbar" aria-label="Framing">
+            {!tight && <span className="pl-2 pr-1">{framing.kind === 'background' ? 'Background' : 'Picture'} · drag to move</span>}
+            <button type="button" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomBy(1 / 1.15)} className={BAR_GLYPH}>
+              {Icons.minus}
             </button>
             <span className="tabular-nums w-10 text-center">{Math.round(frameNow().zoom * 100)} %</span>
-            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)} className="w-7 h-7 rounded-full hover:bg-paper/15">
-              +
+            <button type="button" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomBy(1.15)} className={BAR_GLYPH}>
+              {Icons.plus}
             </button>
-            <button type="button" aria-label="Turn left" title="Turn half a degree left (Shift + wheel)" onClick={() => onFrame(framing, rotateFrame(frameNow(), (frameNow().rotate ?? 0) - 0.5))} className="w-7 h-7 rounded-full hover:bg-paper/15">
-              ↺
+            <button type="button" aria-label="Turn left" title="Turn half a degree left ([ · Shift + wheel)" onClick={() => turnBy(-0.5)} className={BAR_GLYPH}>
+              {Icons.undo}
             </button>
-            <span className="tabular-nums w-11 text-center">{(frameNow().rotate ?? 0).toFixed(1)}°</span>
-            <button type="button" aria-label="Turn right" title="Turn half a degree right (Shift + wheel)" onClick={() => onFrame(framing, rotateFrame(frameNow(), (frameNow().rotate ?? 0) + 0.5))} className="w-7 h-7 rounded-full hover:bg-paper/15">
-              ↻
+            {!tight && <span className="tabular-nums w-11 text-center">{(frameNow().rotate ?? 0).toFixed(1)}°</span>}
+            <button type="button" aria-label="Turn right" title="Turn half a degree right (] · Shift + wheel)" onClick={() => turnBy(0.5)} className={BAR_GLYPH}>
+              {Icons.redo}
             </button>
-            <button type="button" onClick={() => onFrame(framing, DEFAULT_FRAME)} className="h-7 px-2 rounded-full hover:bg-paper/15">
-              Centre
+            <button type="button" aria-label="Centre" title="Back to the centre, whole and level (0)" onClick={() => onFrame(framing, DEFAULT_FRAME)} className={tight ? BAR_GLYPH : `${BAR_KEY} px-2`}>
+              {tight ? Icons.reset : 'Centre'}
             </button>
-            <button type="button" onClick={() => onFraming(null)} className="h-7 px-2.5 rounded-full bg-accent text-paper font-semibold">
+            <button
+              type="button"
+              title="Keep this framing (Enter) — Escape gives the picture back as it was"
+              onClick={() => onFraming(null)}
+              className={`${BAR_KEY} gap-1 px-2.5 bg-accent text-paper font-semibold hover:bg-accent data-pressed:bg-accent-ink`}
+            >
               Done
+              <kbd className="font-mono font-normal opacity-80 pointer-coarse:hidden">↵</kbd>
             </button>
           </div>
         )}

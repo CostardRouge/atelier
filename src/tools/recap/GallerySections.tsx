@@ -134,7 +134,7 @@ export function SuggestionCard({ s, onMake, onHide }: { s: Suggestion; onMake: (
           <Button size="sm" variant="primary" onClick={onMake} title="Made now and opened — it fills itself from your Winnow">
             Make it
           </Button>
-          <Button size="sm" variant="ghost" onClick={onHide} title="Hidden until the next one">
+          <Button size="sm" variant="ghost" onClick={onHide} title="Hidden — the next one of the series is suggested instead">
             {s.key.startsWith('week:') ? 'Not this week' : s.key.startsWith('wrapped:') ? 'Not this year' : 'Not this month'}
           </Button>
         </div>

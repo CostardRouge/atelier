@@ -16,7 +16,7 @@ import type { RecapLayout } from '../../shared/recap/recap-layout';
 import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/recap-motion';
 import { drawCover, paintSlideTitle, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { paintFilm, paintOpener } from '../../shared/recap/recap-opener-paint';
-import { defileTicks } from '../../shared/recap/recap-opener-plan';
+import { defileTicks, openerRest } from '../../shared/recap/recap-opener-plan';
 import type { SoundEvent } from '../../shared/audio/sound-event';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 import { getClip, getSound, putClip } from './recap-store';
@@ -396,7 +396,7 @@ export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal 
   canvas.width = W;
   canvas.height = H;
   const g = canvas.getContext('2d')!;
-  paintOpener(g, W, input.doc, input.layout, plan, { still: stills.still }, Math.max(0, plan.seconds - 0.01));
+  paintOpener(g, W, input.doc, input.layout, plan, { still: stills.still }, openerRest(plan));
   return new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
 }
 

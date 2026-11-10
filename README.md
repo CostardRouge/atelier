@@ -67,7 +67,7 @@ Today it ships twelve tools, converging into a few editors:
 >   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
 >   tile server. The flight path, the stops, the legs and the towns always draw locally;
 >   the choice is never remembered past the tab. The same tiles can also be
->   drawn **into** an Itinerary or a Virée — in the preview and in the
+>   drawn **into** an Itinerary or a Virée, in Trips or at the head of a recap — in the preview and in the
 >   exported file, credited «© OpenStreetMap contributors» as the licence
 >   requires — when a piece asks for them and this device has said yes: the
 >   yes is kept on the device, never in the trip, so a trip opened elsewhere
@@ -3436,20 +3436,32 @@ the chain had to hold. *Screen* takes the stage
 to the whole screen — a Mac left open on Atelier is the screen saver.
 *Speed* is in the dials.
 
-**Export.** The Export section writes the mosaic out at a size named by its
+**The inspector** is one block beside the stage: its five parts — Target,
+Cells, Motion, Export, Performance — are tabs pinned on one row at its top
+(the same five a phone's bottom bar opens as drawers), a part's settings
+scroll under them, and what Export writes is a button pinned at its foot.
+
+**Export.** The Export tab writes the mosaic out at a size named by its
 short side — 720p, 1080p, 1440p or 4K — in the stage's shape. *More cells*
 keeps a cell's width in the file's pixels, so a bigger file holds more
 pictures; *As on screen* keeps the stage's cells, each drawn bigger, up to
-a tile's own 160 px; the line under them gives the file's size and its
-cells. *Save image* writes the target's mosaic as a PNG. *Save film* writes
+a tile's own 160 px. The foot of the inspector says the file's size and its
+cells over ONE button — *Save film* while a mode plays, *Save image* in
+Still — with the other behind ▾; while a file is being written that foot is
+its progress and its Cancel, whatever tab is open. *Save image* writes the
+target's mosaic as a PNG. *Save film* writes
 the mode's motion as an MP4 (H.264, 30 frames a second, no sound): the
 opening, then the number of **steps** asked (a pull-back plays once), drawn
 by the stage's own painter from the mosaic's seed and its chain's band, so
-the film shows what Play shows — the line under the slider says how long it
-lasts. It needs a mode under the stage, and a browser that encodes video
-(WebCodecs); the image saves everywhere. Either runs as a task in the
-masthead with its Cancel, and downloads under the mosaic's name, its size
-and the moment.
+the film shows what Play shows — the foot says how long it lasts. It needs
+a mode under the stage, and a browser that encodes video (WebCodecs); the
+image saves everywhere. Either also shows as a task in the masthead, and
+downloads under the mosaic's name, its size and the moment.
+
+**Keys.** `Space` plays and stops, `Escape` stops, `Z` fits the view then
+gives the whole picture back, the arrows pan a kept zoom or walk the targets
+visited. A slider you just dragged keeps only its own arrows, and a button
+you just clicked keeps none of them.
 
 **For an agent.** Connected through the agent bridge (`#/agents`), an
 agent drives a mosaic with the same gestures: `mosaic.list`, `.create`,
@@ -3473,11 +3485,17 @@ exports and keeping a recap on a Winnow (`docs/recap.md`).
 **The gallery** has three sections you open and close, remembered on this
 device: **Suggestions** (closed, one line with its small posters), **Your
 recaps** and **New recap** (closed once you have a recap; *+ New* opens it).
-When a month has ended, each kind of recap you made for the month before is
-**ready** for it — a month calendar and a dump in September, both for October
-— and a week likewise; from 1 December, the year's Wrapped. *Make it* makes
-it in the same dress and opens it, filling itself from your Winnow; *Not this
-month* hides it. Nothing is saved until you make it.
+Suggestions follow **your series**, whatever today's date: after the recap you
+made last of each kind about a month — a month calendar, a dump of a whole
+month — the next month is **ready** in the same dress (July 2025 made, August
+2025 suggested, then September once August exists), and a week likewise. A
+period already made is never suggested, nor one that has not ended; and when
+a trip of Trips kept on this device covers the series, it stops after the
+trip's last day. The month or week that just ended still comes when you made
+the one before, and from 1 December the year's Wrapped. *Make it* makes it in
+the same dress and opens it, filling itself from your Winnow; *Not this
+month* skips it for the next one. Nothing is saved until you make it. With
+nothing to suggest the section stays, and says why in one line.
 
 **Templates.** *New recap* is a **catalogue**: each card is the template drawn
 by the real painter over colour fields, and plays its entrance when you hover
@@ -3538,7 +3556,7 @@ days it is about (references only: a picture is fetched when a cell shows it);
 *Pick…* opens the shared Winnow picker, and *Add files…* reads photos and clips
 from this device — never uploaded. The copy a cell draws (a JPEG of at most
 2048 px) is kept on this device, so a recap reopens and exports without its
-files; the legal notice says so. **Develop…** on a picture opens Develop's own
+files; the legal notice says so. **Develop** on a picture opens Develop's own
 sheet: its correction is the picture's, the look the whole recap's.
 
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
@@ -3563,10 +3581,18 @@ cell keeps what you framed. In the *Background* tab the whole clip or picture is
 shown with the page's shape on it — drag it, pull a corner to zoom; a cell's
 picture has its zoom in *Pictures*. Or **double-click** the background or a cell
 on the stage: drag moves it, the wheel or a pinch zooms, and the rest of a
-cell's picture shows faintly around it; *Done* or Escape leaves. **Straighten**
-turns a picture or the background by up to 45° — it grows just enough that no
-corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
-framing wherever it goes.
+cell's picture shows faintly around it. **Enter** or *Done* keeps the framing;
+**Escape** gives the picture back as it was. While it frames, the arrows move
+the picture (a bigger step with Shift), `+` and `−` zoom, `[` and `]` turn it
+and `0` centres it. **Straighten** turns a picture or the background by up to
+45° — it grows just enough that no corner goes empty (↺ ↻ on the stage, or
+Shift + wheel). A picture keeps its framing wherever it goes.
+
+**Keys.** `Space` plays and pauses, `←` `→` turn the pages, `Enter` frames the
+place or the background in hand, `Delete` empties the place in hand, `Escape`
+lets go of the selection, and `H` or `?` opens the sheet that lists them all
+(the ⌨ beside the transport). A field, a slider or a select keeps the keys it
+uses.
 
 **Places.** In *Layout › Places*, a picture can say the town it was taken in
 — as your Winnow named it from its GPS — in a small glass pill with a red map
@@ -3656,12 +3682,35 @@ before its own first page: **Défilé** — its pictures flick by, faster and
 faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its
 days, with a tick at each picture — or **Badge** — one picture full screen,
 slowly pushed in, with its day, its place (as your Winnow names it) and its
-camera; the best picture unless you choose one, its big line yours to write. When
-a trip of Trips on this device covers the recap's days, **Virée** (the trip's
-vehicle driving from picture to picture along its road) and **Itinerary** (its
-map, the stops lit one by one, the pictures pinned) are offered too — the stops
-are the recap's own pictures that carry a position, else the trip's places. A
-Badge, a Virée or an Itinerary can also be the carousel's first slide. The opener's seconds count in the
+camera; the best picture unless you choose one, its big line yours to write.
+
+Four more are **Trips' own openers, with every one of their settings**: **Virée**
+(a vehicle driving from picture to picture), **Itinerary** (a map, the stops lit
+one by one, the pictures pinned), **Vitrine** (the vehicle on its own, in a place)
+and the **Trip card** (the road, its days and its distance on one card, over the
+recap's best picture — Trips calls it the Recap card). Their panel is the one
+Trips shows, as numbered chapters — stops, road, pictures, vehicle, map, motion,
+camera, sound — and what each was given is kept apart, so switching loses
+nothing. They start where a recap wants them (eight stops and short halts for a
+Virée, twelve for an Itinerary) and every start is yours to change. The six
+openers are tiles; the section's switch turns the opener off.
+
+The **trip** they drive is chosen in a small drawer that rises in the inspector
+and leaves the stage in view: your trips on this device as cards — their cover,
+else their road traced; the ones covering the recap's days first — and a tile
+that takes a `.roadtrip.json` (drop it on the drawer, or choose it). A click
+copies the trip **into the recap**: its legs, places, road and vehicles, never
+its pieces. The recap then reopens without the trip, on another device or from
+your Winnow, and what you change from here — the vehicle in the garage, how a
+hop is made — changes the recap's copy, never the trip in Trips; a trip changed
+in Trips since is marked on its card, and a click takes it again. A file
+imported here is not added to Trips. **With no trip**, the recap's pictures
+that carry a position are the road, as the crow flies, and the default vehicle
+drives it. The stops are the recap's located pictures, evenly thinned, until you
+choose your own (*Change pictures…*, or a map of your own). A map ground from
+OpenStreetMap is fetched only where this device allows it, as in Trips.
+
+A Badge, a Virée or an Itinerary can also be the carousel's first slide. The opener's seconds count in the
 film's length; *Play the opener* plays the film from its first second.
 
 **Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its
@@ -4539,9 +4588,12 @@ the rest folds behind **N more**, remembered in this browser.
   the zones show hatched on the stage while *Export* is open, never in the
   file —, and a **mount**: a border, a deeper band under the map for the
   text, rounded corners, its colour, and whether the text sits on the map or
-  across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter: an MP4 (H.264,
-  no sound), the frame on screen as a PNG, or a *poster* with every route
-  drawn whole.
+  across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter. What it
+  writes is ONE button pinned at the inspector's foot while *Export* is open — *Export the video* (an MP4, H.264, no
+  sound), with *Save this frame* (the frame on screen as a PNG) and *Save a poster* (every route drawn whole) behind
+  ▾ — under a line that says the file's size, rate, length and flights; while a file is written that foot is its
+  progress and its Cancel, whatever layer is shown. A section's title stays in sight while its rows scroll.
+- **Keys.** `Space` plays and pauses, `←` `→` step a second (five with Shift), `Home` goes back to the start.
 - **Presets.** Every dial under a name of your own: a chip applies its preset
   and stays lit while the dials match it, *Save* keeps the dials on screen (or
   *Replace*s a preset of the same name), × removes one. A preset keeps how the

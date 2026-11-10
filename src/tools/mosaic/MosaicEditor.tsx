@@ -28,21 +28,23 @@ import { motionOf, recipeOf, type Recipe } from '../../shared/mosaic/motion';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
+import InspectorBlock, { BLOCK_TABS } from '../../shared/ui/InspectorBlock';
 import PanelHost from '../../shared/ui/PanelHost';
+import Segmented from '../../shared/ui/Segmented';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
 import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
 import { Icons } from '../../shared/ui/icons';
+import useEditorKeys from '../../shared/ui/use-editor-keys';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
-import { revealInScroller } from '../../shared/ui/reveal';
 import ChainBand from './ChainBand';
 import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
 import MosaicSettings, { SETTINGS_TABS, type SettingsTab } from './MosaicSettings';
-import MosaicExportPanel from './MosaicExportPanel';
+import MosaicExportPanel, { MosaicDeliver } from './MosaicExportPanel';
 import { useMosaicExport } from './use-mosaic-export';
 import { useMosaicEditorCommands, useMosaicStageCommands } from './use-mosaic-commands';
 import MosaicStage, { type Reveal, type StageView, type ZoomDetail } from './MosaicStage';
@@ -271,17 +273,14 @@ function MosaicWorkbench({
     pendingPlay.current = false;
     play();
   }, [mode, play, status.playing]);
-  // Custom opens the Motion section where its parts are: a tab's drawer on a phone, the section unfolded beside.
+  // Custom opens Motion where its parts are: the tab's drawer on a phone, the block's tab beside the stage.
   const openMotion = useCallback(() => {
     if (compact) {
       setTab('motion');
       setTabOpen(true);
       return;
     }
-    const section = document.querySelector<HTMLElement>('section[data-section="mosaic-motion"]');
-    const fold = section?.querySelector<HTMLElement>('[aria-expanded]');
-    if (fold?.getAttribute('aria-expanded') === 'false') fold.click();
-    revealInScroller(section, { behavior: 'smooth' });
+    setTab('motion');
   }, [compact]);
 
   // --- the zoom over the stage, whatever the mode while nothing plays: a crop with auto-frame, a look without (F6) ---
@@ -315,42 +314,35 @@ function MosaicWorkbench({
   });
   const cropped = Boolean(doc.crop);
 
-  // Space plays and stops (the transport's key); Escape stops; Z fits the view, then the whole picture; the arrows pan a kept zoom.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-      if (e.key === 'Escape' && status.playing) {
-        e.preventDefault();
-        stop();
-        return;
-      }
-      if (e.key === ' ') {
-        e.preventDefault();
-        if (status.playing) stop();
-        else playFrom();
-        return;
-      }
-      if (status.playing) return;
-      const press = describeZoomKey(e);
-      const action = zoomKeyAction(press, zoom.zoomed);
-      // ← and → walk the targets visited while no zoom is kept (a kept zoom pans with them).
-      if (!action && !zoom.zoomed && !press.altKey && !press.ctrlKey && !press.metaKey && !press.defaultPrevented && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-        e.preventDefault();
-        if (e.key === 'ArrowLeft') steps.back();
-        else steps.forward();
-        return;
-      }
-      if (!action) return;
-      e.preventDefault();
-      if (action.kind === 'toggle') {
-        if (zoom.zoomed) zoom.fit();
-        else if (cropped) setCrop(undefined);
-      } else zoom.pan(action.dx, action.dy);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [status.playing, playFrom, stop, zoom, cropped, setCrop, steps]);
+  // Space plays and stops (the transport's key); Escape stops; Z fits the view, then the whole picture; the arrows pan
+  // a kept zoom, or walk the targets visited. Who owns a press is `editor-keys.ts`'s call: a slider a drag left
+  // focused keeps only its arrows, a button a click left focused keeps nothing, a sheet over the editor keeps all.
+  useEditorKeys((k, e) => {
+    if (k.name === 'escape') {
+      if (!status.playing) return false;
+      stop();
+      return true;
+    }
+    if (k.name === 'space') {
+      if (status.playing) stop();
+      else playFrom();
+      return true;
+    }
+    if (status.playing) return false;
+    const action = zoomKeyAction(describeZoomKey(e), zoom.zoomed);
+    // ← and → walk the targets visited while no zoom is kept (a kept zoom pans with them).
+    if (!action && !zoom.zoomed && (k.name === 'left' || k.name === 'right')) {
+      if (k.name === 'left') steps.back();
+      else steps.forward();
+      return true;
+    }
+    if (!action) return false;
+    if (action.kind === 'toggle') {
+      if (zoom.zoomed) zoom.fit();
+      else if (cropped) setCrop(undefined);
+    } else zoom.pan(action.dx, action.dy);
+    return true;
+  });
 
   const fullscreen = useCallback(() => {
     const el = boxRef.current;
@@ -468,9 +460,12 @@ function MosaicWorkbench({
       compact={compact}
     />
   );
-  const settings = (only?: SettingsTab) => (
+  const exportReady = Boolean(builder) && doc.target !== undefined;
+  const deliver = (placement: 'panel' | 'drawer') => <MosaicDeliver settings={doc.settings} stageW={stageW} stageH={stageH} exporter={exporter} ready={exportReady} placement={placement} />;
+  const settings = (only: SettingsTab, docked = false) => (
     <MosaicSettings
       only={only}
+      docked={docked}
       settings={doc.settings}
       update={update}
       view={view}
@@ -484,7 +479,7 @@ function MosaicWorkbench({
       cropped={Boolean(doc.crop) && !status.playing}
       onWhole={() => setCrop(undefined)}
       onChoose={() => setChoosing({ for: 'target' })}
-      exporting={<MosaicExportPanel settings={doc.settings} update={update} stageW={stageW} stageH={stageH} exporter={exporter} ready={Boolean(builder) && doc.target !== undefined} />}
+      exporting={<MosaicExportPanel settings={doc.settings} update={update} />}
       target={
         <TargetFrame
           bitmap={onScreen ? onScreen.bitmap : targetBitmap}
@@ -533,6 +528,7 @@ function MosaicWorkbench({
         {transport}
         <PanelHost asSheet compactAs="drawer" open={tabOpen} onClose={() => setTabOpen(false)} title={SETTINGS_TABS.find((t) => t.id === tab)?.title ?? 'Settings'}>
           <div className="px-1 pb-4 overflow-x-hidden">{settings(tab)}</div>
+          {(tab === 'export' || exporter.running !== null) && deliver('drawer')}
         </PanelHost>
         {chooser}
       </>
@@ -553,10 +549,18 @@ function MosaicWorkbench({
         {band}
         {transport}
       </div>
-      <aside className="flex-none min-w-0 overflow-x-hidden @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto" aria-label="Mosaic settings">
-        {settings()}
-        {chooser}
-      </aside>
+      {/* The inspector as a block (`InspectorBlock`, lab 13 — Mosaic's since his word of 2026-11-10): the phone's five
+          parts as tabs pinned on one row, a part's sections under them, the two export verbs at its foot — on the
+          Export tab, and on every tab while a file is being written. */}
+      <InspectorBlock
+        label="Mosaic settings"
+        bodyClassName="gap-3"
+        head={<Segmented<SettingsTab> size="sm" fill label="Settings" value={tab} onChange={setTab} options={SETTINGS_TABS.map((t) => ({ id: t.id, label: t.title }))} className={BLOCK_TABS} />}
+        foot={tab === 'export' || exporter.running !== null ? deliver('panel') : undefined}
+      >
+        {settings(tab, true)}
+      </InspectorBlock>
+      {chooser}
     </div>
   );
 }

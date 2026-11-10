@@ -4,6 +4,7 @@ import type { CarouselSlide, RecapLayout } from '../../shared/recap/recap-layout
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { drawCover, paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { paintOpener } from '../../shared/recap/recap-opener-paint';
+import { openerRest } from '../../shared/recap/recap-opener-plan';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
 
 const THUMB_W = 46;
@@ -67,7 +68,7 @@ export default function SlideStrip({
           paintRecap(g, c.width, doc, resolved, layout, film, sources, { t: (film.pages[s.page]?.allOn ?? 0) + 0.05, page: s.page, aliases, clipSlides });
         } else if (s.kind === 'opener') {
           // Its last frame, as the carousel's first slide shows it.
-          if (film.opener) paintOpener(g, c.width, doc, layout, film.opener, sources, Math.max(0, film.opener.seconds - 0.01));
+          if (film.opener) paintOpener(g, c.width, doc, layout, film.opener, sources, openerRest(film.opener));
         } else {
           g.fillStyle = '#141210';
           g.fillRect(0, 0, c.width, c.height);

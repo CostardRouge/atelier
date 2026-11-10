@@ -136,13 +136,13 @@ import { hasCardSlide, leadSlideOf, withBadgeOn } from '../../shared/roadtrip/pi
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
-import { openOpenerChapter } from './opener-chapter';
+import { openOpenerChapter } from '../../shared/roadtrip/hooks/opener-chapter-pref';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import { useSlideIntake } from './use-slide-intake';
 import AuditionSheet from './AuditionSheet';
 import { splitAssetsBySource } from '../../shared/library/asset-source';
-import GarageModal from './GarageModal';
+import GarageModal from '../../shared/roadtrip/garage/GarageModal';
 import { mainVehicle, replaceVehicle, withLookOn } from '../../shared/roadtrip/vehicle-fleet';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
@@ -2725,7 +2725,7 @@ export default function PostEditor({
 
       {/* Floating, the deck band rides over the stage, above the shell's bar. */}
       {compact && floating && !hidden && (
-        <div className={`absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] p-1.5 border border-line rounded-paper-lg ${GLASS}`}>
+        <div className={`absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] p-1.5 border border-line rounded-control ${GLASS}`}>
           {deckStrip}
         </div>
       )}
