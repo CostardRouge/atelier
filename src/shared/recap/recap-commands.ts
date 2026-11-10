@@ -12,6 +12,9 @@
  */
 
 import { readRecapDoc, withRecap, type RecapDoc, type RecapPicture } from './recap-doc';
+import type { RecapOpener } from './recap-opener';
+import { isGivenTrip, openerTripFrom, openerTripFromText, orderTrips, tripFacts, tripStale } from './recap-opener-trip';
+import type { TripDoc } from '../roadtrip/trip-types';
 import { deviceLabel, type DeviceAliases, type ResolvedRecap } from './recap-slots';
 import { placeName, placeWords } from './recap-places';
 import { DEFAULT_CAPTION, captionText, captionWords } from './recap-publish';
@@ -37,7 +40,7 @@ export const SETTABLE: Record<string, string> = {
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed; onBeat: true = the cuts and entrances land on the sound\'s beats and the film ends on a bar (the sound\'s beat is found when it is added); bands (a week): "none"|"accordion"|"spotlight"|"wave"|"slide"|"focus" — each day takes the stage in turn once everything is on; bandHold: 0.4–3 s a day; bandPan: true = each picture drifts in its band}',
   background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160; picture: the pool key the blurred ground softens (absent = the best photograph of the period); frame: {x, y: 0–1 the focus, zoom: 1–4, rotate: −45–45 degrees}}',
   clipSlides: 'true: each clip gets a carousel slide of its own and its cell says which',
-  opener: '{kind: "none"|"defile"|"badge"|"drive"|"map"|"showcase"|"card" (the last four are Trips\' Virée, Itinerary, Vitrine and Trip card: they drive the trip the recap keeps a copy of, or its located pictures alone); seconds: 0.6–8; easing: "ease-out"|"ease-out-hard"|"linear"|"ease-in"|"ease-in-out" (Défilé); tape, ticks: booleans (Défilé); picture: a pool key or null (Badge: the best); lines: {date, place, camera: booleans}; title: the Badge\'s big line or null (its place, else the title); slide: true = also the carousel\'s first slide (Badge, one of Trips\' openers); options: {drive|map|showcase|card: that variant\'s own settings, as Trips\' panel writes them (stopsOn, secondsPerPicture, ground, camera…)}} — the first seconds of the Reel, before the first page; the length counts them',
+  opener: '{kind: "none"|"defile"|"badge"|"drive"|"map"|"showcase"|"card" (the last four are Trips\' Virée, Itinerary, Vitrine and Trip card: they drive the trip the recap keeps a copy of — recap.openerTrips, recap.openerTrip, recap.openerTripFile; recap.get says it as opener.tripKept — or its located pictures alone); seconds: 0.6–8; easing: "ease-out"|"ease-out-hard"|"linear"|"ease-in"|"ease-in-out" (Défilé); tape, ticks: booleans (Défilé); picture: a pool key or null (Badge: the best); lines: {date, place, camera: booleans}; title: the Badge\'s big line or null (its place, else the title); slide: true = also the carousel\'s first slide (Badge, one of Trips\' openers); options: {drive|map|showcase|card: that variant\'s own settings, as Trips\' panel writes them (stopsOn, secondsPerPicture, ground, camera…)}} — the first seconds of the Reel, before the first page; the length counts them',
   places: '{cells: "off"|"changes"|"every"|"first" (the town in a pill with the pin: off, where the place changes from the cell before, on every cell, on the first picture of each place); corner: "bottomLeft"|"topLeft"|"topRight"|"bottomRight"; runs: boolean (a month\'s or a week\'s runs of days in one place under the calendar, off by default); titlePin: boolean ({place} in a text leads with the pin)} — the place is Winnow\'s geocoding, read at fill',
   length: 'the film’s length in seconds, 3–90, or null for the recap’s own (entrances, clips, hold); set, it wins over the sound’s whole loops',
 };
@@ -93,6 +96,50 @@ export function applySettings(doc: RecapDoc, patch: unknown, now: number = Date.
   return { ok: true, doc: next, changed: asked.map(([p]) => p) };
 }
 
+/**
+ * The opener as an agent reads it: every setting, and the trip it keeps a
+ * copy of said in a line (`tripKept`) — never the copy itself, which is a
+ * whole road.
+ */
+export function openerOutline(o: RecapOpener) {
+  const { tripCopy, ...rest } = o;
+  return { ...rest, tripKept: isGivenTrip(tripCopy) ? { from: tripCopy.from.kind, ...tripFacts(tripCopy.file) } : null };
+}
+
+/** The trips of this device an opener can drive, as an agent lists them: the ones covering `days` first, the one kept marked. */
+export function openerTrips(doc: Pick<RecapDoc, 'opener'>, trips: readonly TripDoc[], days: readonly string[]) {
+  const copy = doc.opener.tripCopy;
+  const keptId = copy?.from.kind === 'trips' ? copy.from.id : null;
+  return orderTrips(trips, days).map(({ trip, covers }) => ({
+    id: trip.id,
+    ...tripFacts(trip),
+    covers,
+    kept: trip.id === keptId,
+    ...(trip.id === keptId && tripStale(copy, trips) ? { changedSince: true } : {}),
+  }));
+}
+
+type OpenerTripResult = { ok: true; doc: RecapDoc; kept: ReturnType<typeof openerOutline>['tripKept'] } | { ok: false; error: string };
+
+const kept = (doc: RecapDoc, tripCopy: RecapOpener['tripCopy']): OpenerTripResult => {
+  const next = withRecap(doc, { opener: { ...doc.opener, tripCopy, tripAuto: false } });
+  return { ok: true, doc: next, kept: openerOutline(next.opener).tripKept };
+};
+
+/** The recap keeping a copy of the trip `id` of this device — or none, for `"none"`: its located pictures alone are then the road. */
+export function withOpenerTripOf(doc: RecapDoc, trips: readonly TripDoc[], id: string, now: number = Date.now()): OpenerTripResult {
+  if (id === 'none') return kept(doc, null);
+  const trip = trips.find((t) => t.id === id);
+  if (!trip) return { ok: false, error: `no trip "${id}" on this device — recap.openerTrips lists them${trips.length ? ` (${trips.slice(0, 3).map((t) => t.id).join(', ')}…)` : ' (there is none: give a trip file with recap.openerTripFile)'}` };
+  return kept(doc, openerTripFrom(trip, now));
+}
+
+/** The recap keeping a copy of the trip a `.roadtrip.json`'s text holds; the file reader's own words when it is not one. */
+export function withOpenerTripFile(doc: RecapDoc, text: string, name: string, now: number = Date.now()): OpenerTripResult {
+  const read = openerTripFromText(text, name, now);
+  return read.ok ? kept(doc, read.trip) : { ok: false, error: read.error };
+}
+
 /** The recap as an agent reads it: what it is about, its settings, and every slot with what it shows. */
 export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: number, seconds: number, aliases: DeviceAliases = {}, slides?: string[]) {
   return {
@@ -137,7 +184,7 @@ export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: numb
     font: doc.font,
     cells: doc.cells,
     motion: doc.motion,
-    opener: doc.opener,
+    opener: openerOutline(doc.opener),
     background: { ...doc.background },
     sound: doc.sound,
     look: doc.look ? doc.look.layers.map((l) => l.name) : null,

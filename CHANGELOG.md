@@ -54,7 +54,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   small drawer of thumbnails — your trips on this device, or a `.roadtrip.json` dropped on it — and copied into the
   recap (its legs, places, road and vehicles, never its pieces), so the recap reopens without it and what you change
   from the recap never changes the trip; with no trip, the recap's located pictures are the road. A Badge or one of
-  Trips' openers can also be the carousel's first slide.
+  Trips' openers can also be the carousel's first slide. An agent can list the trips an opener can drive, give the
+  recap one (or a trip file) and set an opener's own settings.
   A new template, **Wrapped**: a year (or any period) in numbers, a slide each — your pictures counted, the busiest
   day, your camera, the place you came back to, the hour you shoot most, your best picture — then the rest in a
   grid.

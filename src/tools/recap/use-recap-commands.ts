@@ -19,16 +19,17 @@ import { CommandError, type CommandSpec } from '../../shared/commands/registry';
 import { imageResult } from '../../shared/commands/image-result';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { downloadBlob } from '../../shared/media/save';
-import { applySettings, recapOutline, SETTABLE } from '../../shared/recap/recap-commands';
+import { applySettings, openerOutline, openerTrips, recapOutline, SETTABLE, withOpenerTripFile, withOpenerTripOf } from '../../shared/recap/recap-commands';
 import { withCaption, withCleared, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc } from '../../shared/recap/recap-doc';
 import { DEFAULT_FRAME, readFrame } from '../../shared/recap/recap-frame';
 import { slugOf } from '../../shared/recap/recap-file';
 import { carouselSlides, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
-import { resolveRecap, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
+import { resolveRecap, templateDays, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
 import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
-import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
+import { hasOpenerSlide, shownPictures } from '../../shared/recap/recap-opener-plan';
+import { listTrips } from '../../shared/roadtrip/trip-store';
 import { chooseCarousel, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { withJoined } from '../../shared/recap/recap-selection';
@@ -65,6 +66,11 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
     const s = r.slots.find((x) => x.id === id);
     if (!s) throw new CommandError('invalid', `no slot "${String(id)}" — recap.get lists them (${r.slots.slice(0, 3).map((x) => x.id).join(', ')}…)`);
     return s;
+  };
+  /** The recap's days as the openers read them: its own, else its shown pictures'. */
+  const openerDays = () => {
+    const own = templateDays(doc());
+    return own.length ? own : shownPictures(c.current.resolved).flatMap((x) => (x.day ? [x.day] : []));
   };
   const input = () => ({ doc: doc(), resolved: c.current.resolved, layout: c.current.layout, film: c.current.film, stills: c.current.sources.still, aliases: c.current.aliases, clipSlides: c.current.clipSlides });
 
@@ -169,6 +175,42 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
         if (!r.ok) throw new CommandError('invalid', r.error);
         c.current.change(() => r.doc);
         return { changed: r.changed };
+      },
+    },
+    {
+      id: 'recap.openerTrips',
+      title: 'List the trips an opener can drive',
+      description:
+        'The trips of Trips on this device that Trips’ openers at the head of the recap (opener.kind drive, map, showcase, card) can drive: id, name, span, located places, whether it has a road — the ones covering the recap’s days first (covers), the one the recap keeps a copy of marked (kept; changedSince when it was changed in Trips after the copy). Read from this device, nothing is fetched.',
+      run: async () => ({ trips: openerTrips(doc(), await listTrips(), openerDays()), tripKept: openerOutline(doc().opener).tripKept }),
+    },
+    {
+      id: 'recap.openerTrip',
+      title: 'Give the opener its trip',
+      description:
+        'Copy a trip of this device INTO the recap for its opener — its legs, places, road and vehicles, never its pieces; the trip in Trips is not touched and later changes to it are not followed (call again to take them). "none" drops the copy: the recap’s located pictures alone are then the road. Does not choose the opener: recap.set {opener: {kind: "drive"}}. One undo step.',
+      params: { trip: { type: 'string', description: 'A trip id from recap.openerTrips, or "none".' } },
+      run: async (p) => {
+        const r = withOpenerTripOf(doc(), await listTrips(), String(p.trip));
+        if (!r.ok) throw new CommandError('invalid', r.error);
+        c.current.change(() => r.doc);
+        return { tripKept: r.kept };
+      },
+    },
+    {
+      id: 'recap.openerTripFile',
+      title: 'Give the opener a trip file',
+      description:
+        'Copy the trip a .roadtrip.json holds (Trips’ export) into the recap for its opener, from the file’s text. It is NOT added to Trips. Refused, with the reason, when the text is not a trip file or was written by a newer Atelier.',
+      params: {
+        text: { type: 'string', description: 'The whole text of the .roadtrip.json.' },
+        name: { type: 'string', description: 'The file’s name, to remember where the copy came from.', optional: true },
+      },
+      run: (p) => {
+        const r = withOpenerTripFile(doc(), String(p.text), typeof p.name === 'string' && p.name ? p.name : 'trip.roadtrip.json');
+        if (!r.ok) throw new CommandError('invalid', r.error);
+        c.current.change(() => r.doc);
+        return { tripKept: r.kept };
       },
     },
     {
