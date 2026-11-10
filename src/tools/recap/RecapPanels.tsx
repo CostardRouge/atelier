@@ -285,9 +285,15 @@ export function SlotSection({
   onFrameStage,
   onPickFor,
   resolved,
+  title,
+  candidates = true,
 }: {
   doc: RecapDoc;
   slot: RecapSlot;
+  /** The band's words when the place is better named by where it shows («Slide 3 · 2 of 4»). */
+  title?: string;
+  /** Its own grid of candidates — off where the day chooser (`DayChooser.tsx`) offers the days under it. */
+  candidates?: boolean;
   client: WinnowClient | null;
   instance: string | null;
   files: ReadonlyMap<string, File>;
@@ -308,7 +314,7 @@ export function SlotSection({
   const [offer, setOffer] = useState<RawMaterial | null>(null);
   useEffect(() => setOffer(null), [slot.id]);
   return (
-    <InspectorSection id="recap-slot" title={slot.label} foldable={false}>
+    <InspectorSection id="recap-slot" title={title ?? slot.label} foldable={false}>
       <div className={row}>
         {/* The picture in hand as ONE card (`PictureCard`): the way into Develop across it, two quiet verbs, the rest behind ⋯. */}
         <PictureCard
@@ -412,7 +418,7 @@ export function SlotSection({
             {pic.exifParts !== undefined && <ExifChips parts={pic.exifParts} onParts={(exifParts) => change((d) => withPicture(d, pic.key, { exifParts }))} label="The camera's settings this picture says" />}
           </div>
         )}
-        {shown.length > 0 && (
+        {candidates && shown.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className={legend}>
               {slot.day ? `${slot.candidates.length} that day` : `${slot.candidates.length} in the period`} · a tap pins one here

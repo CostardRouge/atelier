@@ -11,6 +11,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Recap's *Pictures* tab follows the slide on the stage: on a highlight slide it shows that slide's pictures, names
+  the one in hand by its slide (*Slide 3 · 2 of 4*), and offers the recap's days under it — a month shaded by each
+  day's shots, then the open day's photos, all of them, best first, 24 at a time, narrowed to your ♥ or picks. A tap
+  puts a photo in the place in hand, **+** adds one to the highlights right after it, and each photo says where it
+  already shows. A photo you liked on the calendar's day can now become a highlight in one tap.
+
 - Recap reads a camera RAW from its sensor, at full quality: a drone DNG no longer shows the 960 × 540 picture
   inside the file, blown up. The picture's name in its card chooses between its camera render (or Winnow's proxy)
   and its sensor, and one line applies the choice to every RAW of the recap; a RAW file of yours whose render is
@@ -191,6 +197,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   why in one line.
 
 ### Fixed
+
+- Recap: a highlight's grid of candidates said «2 300 that day» but showed the whole period's best 60, with no way to
+  reach the rest; the days are now the days.
+- Recap's day shading reads under the editor's dark surround (the heatmap's night rungs were missing there).
 
 - Recap's export with *Originals* no longer replaces a drone DNG's sharp copy with the tiny picture inside the file:
   an original that gives a page no more pixels than the copy already shown is left aside.

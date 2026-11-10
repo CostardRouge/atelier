@@ -7,6 +7,9 @@ import { cleanRecapTitle, withCleared, withPick, withPicture, withPictures, with
 import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, styleRoleOfText, type CarouselSlide } from '../../shared/recap/recap-layout';
 import SlideStrip from './SlideStrip';
 import PlacesTray from './PlacesTray';
+import SlideTray from './SlideTray';
+import DayChooser from './DayChooser';
+import { slideLabel } from '../../shared/recap/recap-chooser';
 import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { defileTicks, hasOpenerSlide, openerRest, planOpener } from '../../shared/recap/recap-opener-plan';
@@ -448,6 +451,17 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     setPage(pageOfSlot(layoutRef.current, selectedCell));
   }, [selectedCell, playing]);
 
+  // The Pictures tab follows the slide on the stage (lab 17, part II): on a carousel slide the tab holds one of ITS
+  // pictures — the one in hand if it is there, else its first — so the card and the day chooser speak of that slide.
+  const shownPage = layout.pages[Math.min(page, Math.max(0, pageCount - 1))];
+  const flowPage = Boolean(shownPage?.parts.some((p) => p.kind === 'cell' && resolved.slots.some((s) => s.id === p.id && s.flow)));
+  const firstOnPage = flowPage ? (shownPage!.parts.find((p) => p.kind === 'cell' && resolved.slots.some((s) => s.id === p.id && s.flow && s.picture))?.id ?? null) : null;
+  useEffect(() => {
+    if (tab !== 'pictures' || playing || !firstOnPage) return;
+    const onIt = selectedCell !== null && layoutRef.current.pages[pageRef.current]?.parts.some((p) => p.kind === 'cell' && p.id === selectedCell);
+    if (!onIt) setSelection({ kind: 'cell', id: firstOnPage });
+  }, [tab, page, firstOnPage, selectedCell, playing]);
+
   // ---- the keys (`editor-keys.ts` decides who owns a press; `RecapShortcuts` lists them) ----
   const [keysOpen, setKeysOpen] = useState(false);
   const stepPage = (by: number) => {
@@ -748,6 +762,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     change((d) => withRecap(withPictures(d, [p]), { background: { ...d.background, kind: 'video', video: p.key } }));
   }, [change]);
 
+  // The days under the place in hand: every template whose places are days or a period — a Wrapped's are its stats.
+  const chooser = doc.template !== 'wrapped' && resolved.inScope.some((p) => p.day && !p.loose);
   const panel = (which: Tab) => {
     switch (which) {
       case 'pictures':
@@ -776,8 +792,18 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
                 favourites={connection?.capabilities?.curation?.favourites === true || doc.pictures.some((p) => p.fav)}
               />
             )}
-            {/* The template's own places, dragged to swap (a dump's and a sheet's ARE the carousel's tray). */}
-            {doc.template !== 'dump' && doc.template !== 'sheets' && (
+            {/* The slide on the stage: a carousel slide shows ITS pictures; the template's own page, its places, dragged to swap (a dump's and a sheet's ARE the carousel's tray). */}
+            {flowPage && shownPage ? (
+              <SlideTray
+                page={shownPage}
+                index={Math.min(page, pageCount - 1)}
+                resolved={resolved}
+                held={selection?.kind === 'cell' ? selection.id : null}
+                onHold={(id) => select({ kind: 'cell', id })}
+                change={change}
+                thumbs={{ client: instance ? client : null, instance, files }}
+              />
+            ) : doc.template !== 'dump' && doc.template !== 'sheets' && (
               <PlacesTray
                 doc={doc}
                 resolved={resolved}
@@ -799,9 +825,24 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
                 onFrameStage={() => startFraming({ kind: 'cell', id: slot.id })}
                 onPickFor={connection && client ? () => setPicking(true) : null}
                 resolved={resolved}
+                title={slot.flow ? (slideLabel(layout, slot.id) ?? slot.label) : slot.label}
+                candidates={!chooser}
               />
             ) : (
               <p className="m-0 px-1 text-xs text-muted">Click a cell on the stage to choose its picture, develop it or empty it. Drag a picture onto another cell to swap them.</p>
+            )}
+            {chooser && (
+              <DayChooser
+                doc={doc}
+                resolved={resolved}
+                layout={layout}
+                held={slot}
+                change={change}
+                thumbs={{ client: instance ? client : null, instance, files }}
+                // On the template's own page, a day opened in the month is that day's place in hand.
+                onDay={flowPage ? undefined : (d) => resolved.slots.some((s) => s.id === d && !s.flow) && select({ kind: 'cell', id: d })}
+                onElsewhere={connection && client ? () => setPicking(true) : null}
+              />
             )}
           </>
         );
