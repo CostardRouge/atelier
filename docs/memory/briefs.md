@@ -21,6 +21,11 @@ anything about media sources or document storage:
   its measured line, the phone, the second device) and what to send back.
   OPEN until he runs it; update it with what breaks.
 
+- **`docs/audit-2026-11-10-performance.md`** — the performance audit (2026-11-10, his
+  Trip card report then «refaire une passe sur les autres instruments»): three audits
+  (per-frame re-renders, resources that outlive their use, heavy work in render paths),
+  every finding with its status and its fix in one line. Read before touching a
+  transport, a stage, a panel, an engine or a cache; the rules are `performance.md`.
 - **`docs/audit-2026-10-02.md`** — the project audit (2026-10-02): the
   inventory (Phase 0), every finding with its location, impact, fix, effort,
   risk and verification (Phase 1, domains A–I plus Develop's own), the

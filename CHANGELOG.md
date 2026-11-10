@@ -210,6 +210,16 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- The LUT tool's preview no longer goes black after switching to another clip.
+- Recap over a blurred background plays smoothly: the blurred picture is chosen and blurred once, not on every frame.
+- Composer no longer works the machine while a clip is paused, and its strength slider no longer rebuilds the grade
+  on every step.
+- Naming places is much faster everywhere it happens in bulk: Winnow's statistics, Trips' deduced legs, place names
+  written into Develop's exports.
+- On a phone or a tablet, what a heavy job held is let go once it is done: the video converter and the subject mask
+  free their memory after a short rest, a converted clip leaves with its file, Flight Atlas no longer keeps every
+  log in memory, Storytelling keeps only its last map backgrounds, and a Trips collage frees the looks of cells it
+  no longer shows.
 - Recap plays its film far lighter: the editor no longer redraws all its panels on every frame, only the stage and
   the playhead follow the film — on a phone or a tablet the player stays smooth and the panels answer while it plays.
 - Recap no longer slows to a crawl once the Trip card is chosen: its settings were rebuilt and its six face previews
