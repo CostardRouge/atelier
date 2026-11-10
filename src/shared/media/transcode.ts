@@ -18,6 +18,8 @@
  */
 
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
+import { deviceClass } from '../lib/device-class';
+import { idleRelease } from '../lib/idle-release';
 
 // Single-threaded core — needs no cross-origin isolation, so it works on plain
 // static hosting (GitHub Pages). Pinned so the runtime fetch can't drift.
@@ -55,7 +57,13 @@ function loadFFmpeg(): Promise<FFmpeg> {
         toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, 'text/javascript'),
         toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, 'application/wasm'),
       ]);
-      await ffmpeg.load({ coreURL, wasmURL });
+      try {
+        await ffmpeg.load({ coreURL, wasmURL });
+      } finally {
+        // The worker has read both; a blob URL kept is ~31 MB kept, once per load (and a cancel loads again).
+        URL.revokeObjectURL(coreURL);
+        URL.revokeObjectURL(wasmURL);
+      }
       instance = ffmpeg;
       return ffmpeg;
     })().catch((err) => {
@@ -66,7 +74,16 @@ function loadFFmpeg(): Promise<FFmpeg> {
   return loadPromise;
 }
 
-/** Tear down the worker (after a hard cancel) so the next run reloads cleanly. */
+/**
+ * The core rests, then goes (`idle-release.ts`): wasm memory never shrinks, and one clip
+ * transcoded leaves its size in it. 8 s on a phone or a tablet, a minute elsewhere.
+ */
+const rest = idleRelease({
+  restMs: () => (deviceClass() === 'constrained' ? 8_000 : 60_000),
+  release: () => resetFFmpeg(),
+});
+
+/** Tear down the worker (after a hard cancel, or once it rested) so the next run reloads cleanly. */
 function resetFFmpeg(): void {
   try {
     instance?.terminate();
@@ -112,7 +129,14 @@ async function runTranscode(
     throw new DOMException('Transcode cancelled', 'AbortError');
   }
 
-  const ffmpeg = await loadFFmpeg();
+  rest.busy();
+  let ffmpeg: FFmpeg;
+  try {
+    ffmpeg = await loadFFmpeg();
+  } catch (err) {
+    rest.settled();
+    throw err;
+  }
   const inName = inputName(file.name);
   const outName = 'output.mp4';
 
@@ -142,13 +166,17 @@ async function runTranscode(
     // Copy into a fresh ArrayBuffer-backed view (the wasm FS may hand back a
     // SharedArrayBuffer-backed one, which isn't a valid BlobPart).
     const bytes = new Uint8Array(raw);
-    // Best-effort cleanup so the in-memory FS doesn't grow across runs.
-    await ffmpeg.deleteFile(inName).catch(() => {});
-    await ffmpeg.deleteFile(outName).catch(() => {});
     return new Blob([bytes], { type: 'video/mp4' });
   } finally {
     ffmpeg.off('progress', onProg);
     signal?.removeEventListener('abort', onAbort);
+    // On EVERY path: a failed or refused clip left its copy (and a partial output) in the in-memory FS,
+    // under a name per extension, so two kinds of clip piled up. A cancelled instance is already gone.
+    if (instance === ffmpeg) {
+      await ffmpeg.deleteFile(inName).catch(() => {});
+      await ffmpeg.deleteFile(outName).catch(() => {});
+    }
+    rest.settled();
   }
 }
 
