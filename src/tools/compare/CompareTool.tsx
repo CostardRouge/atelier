@@ -207,7 +207,7 @@ export default function CompareTool() {
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem]" aria-label="Compare A/B">
       {/* Control bar: choose A and B, swap. */}
-      <div className="flex flex-wrap items-center gap-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+      <div className="flex flex-wrap items-center gap-2 px-2 py-2 border border-line rounded-control bg-surface shadow-paper-soft">
         {options.length === 0 ? (
           <span className="text-sm text-muted px-1">
             Select two photos or clips in the Library to compare.

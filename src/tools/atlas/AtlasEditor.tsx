@@ -312,7 +312,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
       {band}
       <div className="flex-1 min-h-0 flex flex-col gap-3 @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-2 min-h-0 min-w-0 flex-[1.4] @min-[860px]:flex-none">
-          <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+          <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft">
             <span className="font-mono text-2xs text-muted tabular-nums">
               {reading
                 ? `reading ${reading.done}/${reading.total}…`
@@ -324,7 +324,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
               </IconButton>
             </span>
           </div>
-          <div className="relative flex-1 min-h-[220px] flex rounded-paper-lg bg-frame border border-line p-2">
+          <div className="relative flex-1 min-h-[220px] flex rounded-control bg-frame border border-line p-2">
             <AtlasStage
               core={scene.core}
               viewAt={scene.viewAt}
@@ -355,7 +355,9 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
           </div>
           <AtlasTransport clock={clock} activity={scene.core.activity} story={scene.core.story} streets={streetsSwitch} />
         </div>
-        <aside className="flex-1 min-h-0 flex flex-col overflow-hidden border border-line rounded-paper-lg bg-surface shadow-paper-soft @min-[860px]:flex-none" aria-label="Flight Atlas settings">
+        {/* The inspector's frame is the block's (`frontend.md` «An instrument's inspector», his word of 2026-11-10): the
+            layers pinned at its top, their sections under sticky titles, the export's verbs pinned at its foot. */}
+        <aside className="flex-1 min-h-0 flex flex-col overflow-hidden border border-line rounded-paper bg-surface @min-[860px]:flex-none" aria-label="Flight Atlas settings">
           <AtlasInspector
             layer={layer}
             onLayer={setLayer}

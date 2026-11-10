@@ -334,7 +334,7 @@ export default function LutStudio() {
       aria-label="LUT Studio"
     >
       <div className="min-w-0 min-h-0 flex-1 flex flex-col gap-[0.6rem]">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-[1.1rem] px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-[1.1rem] px-2 py-2 border border-line rounded-control bg-surface shadow-paper-soft">
             <LutPicker
               selected={selected}
               customName={customName}

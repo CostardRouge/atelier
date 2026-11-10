@@ -31,6 +31,8 @@ import { WRAPPED_COLLAGE_MAX, deviceLabel, poolDevices, type DeviceAliases, type
 import { carouselCount, countMax, withCount, withRemoved, withReplaced } from '../../shared/recap/recap-selection';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
+import PictureCard from '../../shared/ui/PictureCard';
+import DevelopDoor from '../../shared/develop/DevelopDoor';
 import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
@@ -290,69 +292,63 @@ export function SlotSection({
   return (
     <InspectorSection id="recap-slot" title={slot.label} foldable={false}>
       <div className={row}>
-        <div className="flex gap-3">
-          {pic ? (
-            <PictureThumb pic={pic} client={client} instance={instance} file={files.get(pic.key) ?? null} className="flex-none w-28 h-20 rounded-[6px]" />
-          ) : (
-            <span className="flex-none w-28 h-20 rounded-[6px] border border-dashed border-line-strong flex items-center justify-center text-2xs text-muted text-center px-1">
-              {slot.cleared ? 'emptied by hand' : 'no picture that day'}
-            </span>
-          )}
-          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-            {pic && (
-              <>
-                <p className="m-0 font-mono text-2xs text-muted truncate" title={pic.name}>
-                  {pic.name}
-                  {pic.day ? ` · ${shortDate(pic.day)}` : ''}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {pic.kind === 'photo' && (
-                    <Button size="sm" variant="primary" onClick={() => onDevelop(pic.key)} title="Its own correction and the recap's look — Develop's sheet">
-                      {pic.develop ? 'Developed · edit…' : 'Develop…'}
-                    </Button>
-                  )}
-                  {slot.flow && resolved ? (
-                    <Button size="sm" variant="ghost" onClick={() => change((d) => withRemoved(d, resolved, pic.key))} title="Remove it — one fewer in the carousel, nothing comes in">
-                      Remove
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="ghost" onClick={() => change((d) => withCleared(d, slot.id))} title="Leave this place empty">
-                      Empty
-                    </Button>
-                  )}
-                </div>
-              </>
-            )}
-            {pic && slot.pinned && slot.day && pic.day && pic.day !== slot.day && (
-              <span className="self-start inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-accent-wash font-mono text-3xs text-accent-ink" title="Chosen by hand from another day — the recap shows it on this one">
-                from {shortDate(pic.day)} · chosen by hand
+        {/* The picture in hand as ONE card (`PictureCard`): the way into Develop across it, two quiet verbs, the rest behind ⋯. */}
+        <PictureCard
+          thumb={
+            pic ? (
+              <PictureThumb pic={pic} client={client} instance={instance} file={files.get(pic.key) ?? null} className="w-full h-full" />
+            ) : (
+              <span className="absolute inset-0 border border-dashed border-line-strong rounded-control flex items-center justify-center text-2xs text-muted text-center px-1">
+                {slot.cleared ? 'emptied by hand' : 'no picture that day'}
               </span>
-            )}
-            {onPickFor && (
-              <Button size="sm" variant={pic ? 'ghost' : 'primary'} onClick={onPickFor} title="Open your Winnow on this day — any picture, even one from another day, lands here">
-                {pic ? 'Choose another…' : 'Choose one…'}
+            )
+          }
+          mark={pic && slot.pinned && slot.day && pic.day && pic.day !== slot.day ? <span title="Chosen by hand from another day — the recap shows it on this one">from {shortDate(pic.day)} · by hand</span> : undefined}
+          // The name is where a RAW's source menu goes (camera render · sensor — `sensor-outside-develop.md`).
+          name={pic ? <span title={pic.name}>{pic.name}</span> : undefined}
+          meta={pic?.day ? shortDate(pic.day) : undefined}
+          primary={
+            pic?.kind === 'photo' ? (
+              <DevelopDoor develop={pic.develop} onOpen={() => onDevelop(pic.key)} onReset={() => change((d) => withPicture(d, pic.key, { develop: null }))} title="Its own correction and the recap's look — Develop's sheet" />
+            ) : !pic && onPickFor ? (
+              <Button variant="primary" icon={Icons.image} onClick={onPickFor} title="Open your Winnow on this day — any picture, even one from another day, lands here" className="justify-start">
+                Choose a picture
               </Button>
-            )}
-            {(slot.pinned || slot.cleared) && (
-              <button type="button" onClick={() => change((d) => withPick(d, slot.id, null))} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">
-                Give it back to the rule
-              </button>
-            )}
-          </div>
-        </div>
+            ) : undefined
+          }
+          verbs={
+            <>
+              {pic && onPickFor && (
+                <Button size="sm" variant="ghost" icon={Icons.swap} onClick={onPickFor} title="Open your Winnow on this day — any picture, even one from another day, lands here">
+                  <span className="truncate">Replace</span>
+                </Button>
+              )}
+              {pic && (
+                <Button size="sm" variant="ghost" icon={Icons.crop} onClick={onFrameStage} title="Frame it in its place on the stage (Enter, or double-click the place) — Enter keeps, Escape gives back">
+                  <span className="truncate">Frame</span>
+                </Button>
+              )}
+              {!pic && (slot.pinned || slot.cleared) && (
+                <Button size="sm" variant="ghost" icon={Icons.reset} onClick={() => change((d) => withPick(d, slot.id, null))} title="The rule picks for this place again">
+                  <span className="truncate">Back to the rule</span>
+                </Button>
+              )}
+            </>
+          }
+          menu={
+            pic
+              ? [
+                  { id: 'centre', label: 'Centre the frame', title: 'Centred, the place just covered (0 while framing)', disabled: isDefaultFrame(pic.frame), onSelect: () => setFrame(undefined) },
+                  ...(slot.pinned || slot.cleared ? [{ id: 'rule', label: 'Give it back to the rule', title: 'The rule picks for this place again', onSelect: () => change((d) => withPick(d, slot.id, null)) }] : []),
+                  slot.flow && resolved
+                    ? { id: 'remove', label: 'Remove from the carousel', title: 'One fewer in the carousel, nothing comes in (Delete)', danger: true, onSelect: () => change((d) => withRemoved(d, resolved, pic.key)) }
+                    : { id: 'empty', label: 'Empty this place', title: 'Leave this place empty (Delete)', danger: true, onSelect: () => change((d) => withCleared(d, slot.id)) },
+                ]
+              : undefined
+          }
+        />
         {pic && (
           <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className={legend}>Its frame</span>
-              <span className="inline-flex gap-1">
-                <Button size="sm" variant="ghost" onClick={onFrameStage} title="Drag it in its cell on the stage — or double-click the cell">
-                  Frame on the stage
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setFrame(undefined)} disabled={isDefaultFrame(pic.frame)} title="Centred, the cell just covered">
-                  Centre
-                </Button>
-              </span>
-            </div>
             <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />
             <SliderRow label="Straighten" value={pic.frame?.rotate ?? 0} min={-MAX_ROTATE} max={MAX_ROTATE} step={0.1} reset={0} format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}°`} onChange={(v) => setFrame(rotateFrame(pic.frame ?? DEFAULT_FRAME, v))} />
           </div>

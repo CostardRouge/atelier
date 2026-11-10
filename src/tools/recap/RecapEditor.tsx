@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../../app/use-hash-route';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
 import { gradeKey, type SavedGrade } from '../../shared/lut/saved-grade';
-import { cleanRecapTitle, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
+import { cleanRecapTitle, withCleared, withPick, withPicture, withPictures, withRecap, withSwap, type RecapDoc, type RecapPicture } from '../../shared/recap/recap-doc';
 import { carouselSlides, clipSlideNumbers, layoutRecap, pageOfSlot, styleRoleOfText, type CarouselSlide } from '../../shared/recap/recap-layout';
 import SlideStrip from './SlideStrip';
 import PlacesTray from './PlacesTray';
@@ -12,10 +12,10 @@ import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/re
 import { defileTicks, hasOpenerSlide, openerRest, planOpener } from '../../shared/recap/recap-opener-plan';
 import { inOpener } from '../../shared/recap/recap-opener-paint';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
-import { isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
+import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
 import ClipDrawer from './ClipDrawer';
-import { withJoined, withSwappedFlow } from '../../shared/recap/recap-selection';
+import { withJoined, withRemoved, withSwappedFlow } from '../../shared/recap/recap-selection';
 import StyleSection from './StyleSection';
 import { backgroundPicture, resolveRecap, templateDays, type DeviceAliases } from '../../shared/recap/recap-slots';
 import { todayIso } from '../../shared/roadtrip/trip-days';
@@ -24,9 +24,13 @@ import WinnowPicker from '../../shared/sources/winnow/picker/WinnowPicker';
 import type { PickerHost } from '../../shared/sources/winnow/picker/picker-host';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import Button from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
+import InspectorBlock, { BLOCK_TABS } from '../../shared/ui/InspectorBlock';
 import PageBar from '../../shared/ui/PageBar';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
+import { isHelpKey } from '../../shared/ui/editor-keys';
+import useEditorKeys from '../../shared/ui/use-editor-keys';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
 import { AboutSection, BackgroundSection, LayoutSection, MotionSection, SlotSection, SourcesSection, type Change } from './RecapPanels';
@@ -48,6 +52,7 @@ import { useRecapSound } from './use-recap-sound';
 import { useTripOpener } from './use-trip-opener';
 import SoundSection from './SoundSection';
 import RecapExportPanel from './RecapExportPanel';
+import RecapShortcuts from './RecapShortcuts';
 import { OPEN_TAB_KEY } from './PlannedSection';
 
 export type SaveState = 'saved' | 'saving' | 'failed';
@@ -62,10 +67,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'motion', label: 'Motion' },
   { id: 'export', label: 'Export' },
 ];
-
-/** Every section's title band sticks under the tabs while its section scrolls (lab 13). */
-const STICKY_BANDS =
-  '[&_section[data-section]>div:first-child]:sticky [&_section[data-section]>div:first-child]:top-[var(--bands-top)] [&_section[data-section]>div:first-child]:z-[2] [&_section[data-section]>div:first-child]:bg-surface';
 
 /** Which tab a selection opens: the inspector follows what was clicked on the stage. */
 function tabOf(s: Selection): Tab | null {
@@ -135,16 +136,6 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const exportSeen = useRef(false);
   if (tab === 'export') exportSeen.current = true;
   const [footEl, setFootEl] = useState<HTMLDivElement | null>(null);
-  // The pinned tabs' height: on a phone the sections' titles stick just under them.
-  const tabsRef = useRef<HTMLDivElement>(null);
-  const [tabsH, setTabsH] = useState(0);
-  useEffect(() => {
-    const el = tabsRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setTabsH(Math.round(el.getBoundingClientRect().height)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const [filling, setFilling] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -343,27 +334,6 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   }, []);
   const framingRef = useRef(framing);
   framingRef.current = framing;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      // A framing ends on Escape wherever the focus is — its own bar's buttons hold it while it runs.
-      if (e.key === 'Escape' && framingRef.current && !(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) {
-        setFraming(null);
-        return;
-      }
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName))) return;
-      if (e.key === ' ') {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key === 'Escape' || e.key === 'Enter') {
-        // A framing ends first; a second Escape lets go of the selection.
-        if (framingRef.current) setFraming(null);
-        else if (e.key === 'Escape') setSelection(null);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [togglePlay]);
 
   const sources = useMemo<PaintSources>(
     () => ({ still: pictures.still, ...clips.sources }),
@@ -402,8 +372,18 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     },
     [change, resolved],
   );
+  /** The frame a selection wears now — the background's, or its cell's picture's. */
+  const frameOf = (s: Selection): Frame | undefined =>
+    s?.kind === 'background' ? doc.background.frame : s?.kind === 'cell' ? resolved.slots.find((x) => x.id === s.id)?.picture?.frame : undefined;
+  const frameOfRef = useRef(frameOf);
+  frameOfRef.current = frameOf;
+  const setFrameRef = useRef(setFrame);
+  setFrameRef.current = setFrame;
+  /** The frame as it was when the framing began: what Escape gives back. */
+  const framedFrom = useRef<Frame | undefined>(undefined);
   const startFraming = useCallback(
     (s: Selection) => {
+      if (s) framedFrom.current = frameOfRef.current(s);
       setFraming(s);
       if (s) {
         setPlaying(false);
@@ -413,6 +393,14 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     },
     [],
   );
+  /** Escape: the framing ends and the picture is back where it was (⌘Z brings the framing back). */
+  const cancelFraming = useCallback(() => {
+    const s = framingRef.current;
+    if (!s) return;
+    const was = framedFrom.current ?? DEFAULT_FRAME;
+    if (JSON.stringify(was) !== JSON.stringify(frameOfRef.current(s) ?? DEFAULT_FRAME)) setFrameRef.current(s, was);
+    setFraming(null);
+  }, []);
 
   // ---- the poster: the gallery's card, drawn from the stage's own painter -------------
   const posterTimer = useRef<number | null>(null);
@@ -457,6 +445,60 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     if (shown?.parts.some((p) => p.kind === 'cell' && p.id === selectedCell)) return;
     setPage(pageOfSlot(layoutRef.current, selectedCell));
   }, [selectedCell, playing]);
+
+  // ---- the keys (`editor-keys.ts` decides who owns a press; `RecapShortcuts` lists them) ----
+  const [keysOpen, setKeysOpen] = useState(false);
+  const stepPage = (by: number) => {
+    scrubbed.current = false;
+    peekOpener.current = false;
+    setPlaying(false);
+    setPage((p) => Math.max(0, Math.min(pageCount - 1, p + by)));
+  };
+  useEditorKeys((k) => {
+    if (isHelpKey(k)) {
+      setKeysOpen((o) => !o);
+      return true;
+    }
+    if (k.name === 'space') {
+      togglePlay();
+      return true;
+    }
+    if (framingRef.current) {
+      // Enter keeps the framing, Escape gives the picture back; the arrows, + − and 0 are the stage's while it frames.
+      if (k.name === 'enter') setFraming(null);
+      else if (k.name === 'escape') cancelFraming();
+      else return false;
+      return true;
+    }
+    switch (k.name) {
+      case 'escape':
+        if (!selection) return false;
+        setSelection(null);
+        return true;
+      case 'enter': {
+        // What a double-click on the stage does, on what is in hand.
+        const can = selection?.kind === 'cell' ? Boolean(slot?.picture) : selection?.kind === 'background' && (doc.background.kind === 'video' || doc.background.kind === 'blur');
+        if (!can) return false;
+        startFraming(selection);
+        return true;
+      }
+      case 'left':
+      case 'right':
+        if (pageCount < 2) return false;
+        stepPage(k.dx);
+        return true;
+      case 'delete': {
+        // The inspector's own verb for the place in hand: one fewer in a carousel, an empty place elsewhere.
+        const pic = slot?.picture;
+        if (!slot || !pic) return false;
+        if (slot.flow) change((d) => withRemoved(d, resolved, pic.key));
+        else change((d) => withCleared(d, slot.id));
+        return true;
+      }
+      default:
+        return false;
+    }
+  });
 
   // ---- bringing pictures in ------------------------------------------------------------
   const fill = useCallback(async (): Promise<string> => {
@@ -847,21 +889,26 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       </span>
       {pageCount > 1 && (
         <span className="inline-flex items-center gap-1" role="group" aria-label="Page">
-          <button type="button" aria-label="Previous page" disabled={page === 0} onClick={() => ((scrubbed.current = false), (peekOpener.current = false), setPlaying(false), setPage((p) => Math.max(0, p - 1)))} className="w-8 h-8 inline-flex items-center justify-center rounded-control border border-line disabled:opacity-40">
+          <IconButton size="sm" label="Previous page (←)" disabled={page === 0} onClick={() => stepPage(-1)}>
             {Icons.back}
-          </button>
+          </IconButton>
           <span className="font-mono text-2xs tabular-nums">
             {page + 1}/{pageCount}
           </span>
-          <button type="button" aria-label="Next page" disabled={page >= pageCount - 1} onClick={() => ((scrubbed.current = false), (peekOpener.current = false), setPlaying(false), setPage((p) => Math.min(pageCount - 1, p + 1)))} className="w-8 h-8 inline-flex items-center justify-center rounded-control border border-line disabled:opacity-40">
+          <IconButton size="sm" label="Next page (→)" disabled={page >= pageCount - 1} onClick={() => stepPage(1)}>
             {Icons.forward}
-          </button>
+          </IconButton>
         </span>
       )}
       {doc.format === 'story' && (
-        <button type="button" aria-pressed={guides} onClick={() => setGuides((g) => !g)} title="Shade where a Reel's buttons and caption cover the frame" className={`h-8 px-2 rounded-control border text-2xs ${guides ? 'border-accent text-accent-ink' : 'border-line text-muted'}`}>
+        <Button size="sm" variant="ghost" aria-pressed={guides} onClick={() => setGuides((g) => !g)} title="Shade where a Reel's buttons and caption cover the frame" className="aria-pressed:text-accent-ink aria-pressed:bg-accent-wash">
           Safe zones
-        </button>
+        </Button>
+      )}
+      {!compact && (
+        <IconButton size="sm" variant="ghost" label="Keys and gestures (H)" onClick={() => setKeysOpen(true)}>
+          {Icons.keyboard}
+        </IconButton>
       )}
     </div>
   );
@@ -1006,16 +1053,13 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             {status}
           </p>
         </div>
-        {/* The inspector is a block of its own (lab 13, `frontend.md` «An instrument's inspector»): the tabs
-            pinned at its top on one row, the sections scrolling under them with their titles sticky. On a
-            phone it is the drawer under the stage: the page scrolls, the tabs stick to its top. */}
-        <aside
-          ref={setAsideEl}
-          className="flex-none min-w-0 flex flex-col border border-line rounded-paper bg-surface [--bands-top:var(--tabs-h,0px)] @min-[860px]:relative @min-[860px]:min-h-0 @min-[860px]:[--bands-top:0px]"
-          style={{ '--tabs-h': `${tabsH}px` } as CSSProperties}
-          aria-label="Recap settings"
-        >
-          <div ref={tabsRef} className="flex-none sticky top-0 z-[3] rounded-t-paper bg-surface px-3 pt-3 pb-2 @min-[860px]:static">
+        {/* The inspector is a block of its own (`InspectorBlock`, lab 13): the tabs pinned at its top on one row, the
+            sections scrolling under them with their titles sticky, what Export TRIGGERS at its foot. */}
+        <InspectorBlock
+          label="Recap settings"
+          blockRef={setAsideEl}
+          footRef={setFootEl}
+          head={
             <Segmented<Tab>
               size="sm"
               fill
@@ -1023,29 +1067,25 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               value={tab}
               onChange={setTab}
               options={TABS.map((x) => ({ id: x.id, label: x.label }))}
-              // Each tab as wide as its word, so the six hold one row; a screen too narrow scrolls it sideways.
-              className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:flex-auto [&>button]:min-w-max [&>button]:px-1.5 [&>button]:text-2xs"
+              // Six tabs hold one row at this size only (measured: 340 of 340 px at 23rem).
+              className={`${BLOCK_TABS} [&>button]:text-2xs`}
             />
-          </div>
-          <div
-            className={`flex flex-col gap-1 px-3 pb-4 overflow-x-clip @min-[860px]:overflow-x-hidden @min-[860px]:flex-1 @min-[860px]:min-h-0 @min-[860px]:overflow-y-auto @min-[860px]:overscroll-contain ${STICKY_BANDS}`}
-          >
-            {panel(tab)}
-            {exportSeen.current && (
-              <RecapExportPanel
-                ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }}
-                natural={natural}
-                change={change}
-                visible={tab === 'export'}
-                foot={footEl}
-              />
-            )}
-          </div>
-          {/* The foot: what the Export tab TRIGGERS, pinned at the inspector's bottom (a run keeps it on every tab). */}
-          <div ref={setFootEl} className="flex-none sticky bottom-0 z-[3] px-3 pb-3 empty:hidden @min-[860px]:static" />
-        </aside>
+          }
+        >
+          {panel(tab)}
+          {exportSeen.current && (
+            <RecapExportPanel
+              ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }}
+              natural={natural}
+              change={change}
+              visible={tab === 'export'}
+              foot={footEl}
+            />
+          )}
+        </InspectorBlock>
       </div>
 
+      {keysOpen && <RecapShortcuts onClose={() => setKeysOpen(false)} />}
       {choosingClip && (
         <ClipDrawer doc={doc} client={instance ? client : null} instance={instance} files={files} lengths={clips.lengths} onChoose={chooseClip} onFile={() => void addBackgroundClip()} onClose={() => setChoosingClip(false)} />
       )}

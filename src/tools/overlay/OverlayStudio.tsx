@@ -364,7 +364,7 @@ export default function OverlayStudio() {
       {/* Toolbar — grade the burn-in through a LUT (reusing LUT Studio's picker)
           and toggle the editor-only composition guides. */}
       {activeClip && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2 py-2 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-2 py-2 border border-line rounded-control bg-surface shadow-paper-soft">
           <LutPicker
             selected={lutSel.selected}
             customName={lutSel.customName}

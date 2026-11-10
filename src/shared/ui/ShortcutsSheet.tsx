@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { describeKeyTarget, targetTakesText } from '../media/transport-keys';
 import useDialogKeys from './use-dialog-keys';
 
 export interface Shortcut {
@@ -21,6 +22,16 @@ export interface ShortcutGroup {
  */
 export default function ShortcutsSheet({ groups, foot, onClose }: { groups: readonly ShortcutGroup[]; foot?: ReactNode; onClose: () => void }) {
   useDialogKeys({ onCancel: onClose, onConfirm: onClose });
+  // The key that opened it closes it, heard HERE: a host on `use-editor-keys` stands down while a sheet is up, and a
+  // host that toggles on the same press (Develop, Storytelling) arrives at the same closed state.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || targetTakesText(describeKeyTarget(e.target))) return;
+      if (e.key === '?' || e.key === 'h' || e.key === 'H') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.55)] backdrop-blur-[2px] max-[820px]:p-0"
