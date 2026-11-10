@@ -157,6 +157,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   that differ are listed and the others fold into one line. On a wide screen the whole card folds to its one line.
 - An older trip's question about the sea no longer takes a band across the top of the overview: it waits in the
   Vehicles panel, with a dot on the Map switch and on the panel pointing to it.
+- Recap's Suggestions follow your series, whatever today's date: after the recap you made last of each kind comes the
+  next month or week in the same dress (July 2025 made, August 2025 suggested), never one already made or not yet
+  ended, and never past the last day of the trip it belongs to. With nothing to suggest, the section stays and says
+  why in one line.
 
 ### Fixed
 

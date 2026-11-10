@@ -3473,11 +3473,17 @@ exports and keeping a recap on a Winnow (`docs/recap.md`).
 **The gallery** has three sections you open and close, remembered on this
 device: **Suggestions** (closed, one line with its small posters), **Your
 recaps** and **New recap** (closed once you have a recap; *+ New* opens it).
-When a month has ended, each kind of recap you made for the month before is
-**ready** for it — a month calendar and a dump in September, both for October
-— and a week likewise; from 1 December, the year's Wrapped. *Make it* makes
-it in the same dress and opens it, filling itself from your Winnow; *Not this
-month* hides it. Nothing is saved until you make it.
+Suggestions follow **your series**, whatever today's date: after the recap you
+made last of each kind about a month — a month calendar, a dump of a whole
+month — the next month is **ready** in the same dress (July 2025 made, August
+2025 suggested, then September once August exists), and a week likewise. A
+period already made is never suggested, nor one that has not ended; and when
+a trip of Trips kept on this device covers the series, it stops after the
+trip's last day. The month or week that just ended still comes when you made
+the one before, and from 1 December the year's Wrapped. *Make it* makes it in
+the same dress and opens it, filling itself from your Winnow; *Not this
+month* skips it for the next one. Nothing is saved until you make it. With
+nothing to suggest the section stays, and says why in one line.
 
 **Templates.** *New recap* is a **catalogue**: each card is the template drawn
 by the real painter over colour fields, and plays its entrance when you hover
