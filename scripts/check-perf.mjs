@@ -200,9 +200,9 @@ async function seedTrip(page, post) {
 }
 
 /** A month recap over October 2026: `n` located pictures, their prints kept, its opener `opener`. */
-async function seedRecap(page, n, opener) {
+async function seedRecap(page, n, opener, background = null) {
   return page.evaluate(
-    async ({ places, n, opener }) => {
+    async ({ places, n, opener, background }) => {
       const B = new URL('src/', document.baseURI).pathname;
       const rd = await import(`${B}shared/recap/recap-doc.ts`);
       const rs = await import(`${B}tools/recap/recap-store.ts`);
@@ -227,10 +227,11 @@ async function seedRecap(page, n, opener) {
       }
       doc = rd.withPictures(doc, pics);
       doc = rd.withRecap(doc, { opener: { ...ro.readOpener({ kind: opener }), ...(trip ? { tripCopy: rot.openerTripFrom(trip) } : {}) } });
+      if (background) doc = rd.withRecap(doc, { background: { ...doc.background, ...background } });
       await rs.putRecap(doc);
       return { id: doc.id };
     },
-    { places: PLACES, n, opener },
+    { places: PLACES, n, opener, background },
   );
 }
 
@@ -276,11 +277,32 @@ const SCENARIOS = {
     const clicks = await clickLatency(page, tabs);
     return { play, clicks };
   },
+  /** Recap, the film playing over a blurred picture of the period (the ground every page is drawn on). */
+  async 'recap-blur'(page, cdp) {
+    const { id } = await seedRecap(page, 28, 'none', { kind: 'blur', blur: 40, veil: 0.2 });
+    await page.goto(new URL(`#/recap/october-${id.slice(0, 8)}`, BASE).href);
+    await page.waitForTimeout(3000);
+    const play = await measure(page, cdp, 'RecapEditor', 4000, () => page.keyboard.press('Space'));
+    await page.keyboard.press('Space');
+    return { play };
+  },
   /** Trips, a Reel whose opener is a Virée over the twelve places, playing. */
   async 'trips-viree'(page, cdp) {
     const { trip, postId } = await seedTrip(page, { hook: 'drive' });
     await page.goto(new URL(`#/roadtrip/west-coast-${trip.id.slice(0, 8)}/2026-10-27/${postId}`, BASE).href);
     await page.waitForTimeout(4000);
+    const play = await measure(page, cdp, 'PostEditor', 4000, () => page.keyboard.press('Space'));
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(400);
+    return { play };
+  },
+  /** Trips, the same Reel playing with its Look tab open: Virée's chapters pinned on the stage. */
+  async 'trips-viree-look'(page, cdp) {
+    const { trip, postId } = await seedTrip(page, { hook: 'drive' });
+    await page.goto(new URL(`#/roadtrip/west-coast-${trip.id.slice(0, 8)}/2026-10-27/${postId}`, BASE).href);
+    await page.waitForTimeout(4000);
+    await page.getByRole('button', { name: 'Look', exact: true }).first().click();
+    await page.waitForTimeout(1500);
     const play = await measure(page, cdp, 'PostEditor', 4000, () => page.keyboard.press('Space'));
     await page.keyboard.press('Space');
     await page.waitForTimeout(400);
