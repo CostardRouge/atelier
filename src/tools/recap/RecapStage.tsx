@@ -9,6 +9,8 @@ import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slot
 import { Icons } from '../../shared/ui/icons';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import useEditorKeys from '../../shared/ui/use-editor-keys';
+import type { PlayClock } from '../../shared/media/play-clock';
+import { useClockPaint } from '../../shared/media/use-play-clock';
 
 /** What the author has in hand on the stage: a cell's slot, a text, the background. */
 export type Selection = { kind: 'cell'; id: string } | { kind: 'text'; id: string } | { kind: 'background' } | null;
@@ -26,7 +28,8 @@ interface Props {
   film: FilmPlan;
   sources: PaintSources;
   page: number;
-  t: number;
+  /** The film's playhead: the stage repaints on every move of it, without a render (`performance.md`). */
+  clock: PlayClock;
   /** Moves whenever a picture lands — a repaint. */
   version: number;
   selection: Selection;
@@ -67,7 +70,7 @@ const BAR_GLYPH = `${BAR_KEY} w-7 pointer-coarse:w-[2.125rem] [&>svg]:w-4 [&>svg
  * carries the editor's chrome.
  */
 export default function RecapStage(props: Props) {
-  const { doc, resolved, layout, film, sources, page, t, version, selection, onSelect, onSwap, onMoveHeading, aliases, clipSlides, guides, framing, onFraming, frameSource, onFrame } = props;
+  const { doc, resolved, layout, film, sources, page, clock, version, selection, onSelect, onSwap, onMoveHeading, aliases, clipSlides, guides, framing, onFraming, frameSource, onFrame } = props;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
@@ -96,7 +99,8 @@ export default function RecapStage(props: Props) {
     return () => ro.disconnect();
   }, [aspect]);
 
-  useEffect(() => {
+  const pan = props.pan;
+  const paint = (t: number) => {
     const c = canvas.current;
     if (!c || !size.w) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -108,8 +112,13 @@ export default function RecapStage(props: Props) {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
-    paintFilm(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan: props.pan });
-  }, [doc, resolved, layout, film, sources, page, t, version, size, aliases, clipSlides]);
+    paintFilm(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan });
+  };
+  // What is drawn changed: one paint now. The playhead moved: one paint per move, outside React.
+  useEffect(() => {
+    paint(clock.t);
+  }, [doc, resolved, layout, film, sources, page, version, size, aliases, clipSlides, pan, clock]);
+  useClockPaint(clock, paint);
 
   // ---- pointer: select, drag a picture onto another cell, drag the heading ----
   const drag = useRef<{ hit: Hit; x: number; y: number; moved: boolean; pointer: number } | null>(null);

@@ -210,6 +210,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Recap plays its film far lighter: the editor no longer redraws all its panels on every frame, only the stage and
+  the playhead follow the film — on a phone or a tablet the player stays smooth and the panels answer while it plays.
 - Recap no longer slows to a crawl once the Trip card is chosen: its settings were rebuilt and its six face previews
   redrawn on every frame of the player, so the stage stuttered and every click waited seconds. The settings of
   Trips' openers in Recap now redraw only when something they show changes.

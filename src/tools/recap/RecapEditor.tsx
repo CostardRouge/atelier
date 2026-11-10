@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../../app/use-hash-route';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import { useLutStack } from '../../shared/lut/use-lut-stack';
@@ -16,6 +16,9 @@ import { CarouselSection, SheetSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { defileTicks, hasOpenerSlide, openerRest, planOpener } from '../../shared/recap/recap-opener-plan';
 import { inOpener } from '../../shared/recap/recap-opener-paint';
+import { PlayClock } from '../../shared/media/play-clock';
+import { useClockSelect } from '../../shared/media/use-play-clock';
+import FilmScrubber from './FilmScrubber';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
 import { backgroundChoices, type ClipChoice } from '../../shared/recap/recap-clips';
@@ -267,9 +270,17 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const [page, setPage] = useState(0);
   const pageCount = layout.pages.length;
   const restT = (p: number) => (film.pages[p]?.allOn ?? 0) + 0.05;
-  const [t, setT] = useState(() => restT(0));
-  const tRef = useRef(t);
-  tRef.current = t;
+  // The playhead lives OUTSIDE React state (`performance.md`): the stage paints from the clock and the scrubber reads it,
+  // so a playing film re-renders the editor only when its page or its opener changes — never per frame.
+  const [clock] = useState(() => {
+    const c = new PlayClock();
+    c.setTotal(film.total);
+    c.seek(restT(0));
+    return c;
+  });
+  useLayoutEffect(() => clock.setTotal(film.total), [clock, film.total]);
+  const setT = useCallback((v: number) => clock.seek(v), [clock]);
+  const pageNow = useRef(0);
   const scrubbed = useRef(false);
   /** The stage holds the opener's last frame while it is being set (the Opener section, its slide in the strip). */
   const peekOpener = useRef(false);
@@ -316,7 +327,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     let raf = 0;
     let last = performance.now();
     // Play starts the film from its beginning, unless the author scrubbed to a moment: then from there.
-    let now = scrubbed.current && tRef.current < filmRef.current.total - 0.05 ? tRef.current : 0;
+    let now = scrubbed.current && clock.t < filmRef.current.total - 0.05 ? clock.t : 0;
     scrubbed.current = false;
     soundRef.current.cue(ticksRef.current, now);
     const tick = () => {
@@ -327,15 +338,17 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         now = 0;
         soundRef.current.cue(ticksRef.current, 0);
       }
-      setT(now);
-      setPage(pageAt(filmRef.current, now));
+      clock.seek(now);
+      // The page only when it turns: the editor re-renders a few times a film, not sixty times a second.
+      const p = pageAt(filmRef.current, now);
+      if (p !== pageNow.current) setPage(p);
       clipsRef.current.drive(now, filmRef.current, slotKeys);
       soundRef.current.drive(now, filmRef.current.total);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, slotKeys]);
+  }, [playing, slotKeys, clock]);
   const togglePlay = useCallback(() => setPlaying((p) => !p), []);
   /** The film from its first second: the opener, then the recap. */
   const playOpener = useCallback(() => {
@@ -450,6 +463,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   // slide shows the same days as the calendar).
   const pageRef = useRef(page);
   pageRef.current = page;
+  pageNow.current = page;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
   const selectedCell = selection?.kind === 'cell' ? selection.id : null;
@@ -949,33 +963,22 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     }
   };
 
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}.${Math.floor((s % 1) * 10)}`;
   const transport = (
     <div className="flex-none flex flex-wrap items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft">
       <Button size="sm" variant={playing ? 'default' : 'primary'} icon={playing ? Icons.pause : Icons.play} onClick={togglePlay} title={playing ? 'Pause (Space)' : 'Play the recap as it will be exported (Space)'}>
         {playing ? 'Pause' : 'Play'}
       </Button>
-      <input
-        type="range"
-        min={0}
-        max={Math.max(0.1, film.total)}
-        step={0.01}
-        value={Math.min(t, film.total)}
-        aria-label="The film's time"
-        data-playhead
-        onChange={(e) => {
+      <FilmScrubber
+        clock={clock}
+        total={film.total}
+        onScrub={(v) => {
           setPlaying(false);
           scrubbed.current = true;
           peekOpener.current = false;
-          const v = Number(e.target.value);
           setPage(pageAt(film, v));
           setT(v);
         }}
-        className="flex-1 min-w-[6rem] accent-[var(--color-accent)]"
       />
-      <span className="font-mono text-2xs tabular-nums text-muted" role="status">
-        {fmt(Math.min(t, film.total))} / {fmt(film.total)}
-      </span>
       {pageCount > 1 && (
         <span className="inline-flex items-center gap-1" role="group" aria-label="Page">
           <IconButton size="sm" label="Previous page (←)" disabled={page === 0} onClick={() => stepPage(-1)}>
@@ -1028,7 +1031,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       film={film}
       sources={sources}
       page={Math.min(page, pageCount - 1)}
-      t={t}
+      clock={clock}
       version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded + tripOpener.version}
       selection={selection}
       onSelect={select}
@@ -1060,6 +1063,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     // The stills' identity is the hook's; it repaints through `version`.
     [pictures.still, clips.peek, pictures.version, clips.version],
   );
+  // The strip's current slide is the opener's only while the playhead is in it: read off the clock, re-rendered when it flips.
+  const openerNow = useClockSelect(clock, (c) => openerSlide && inOpener(film, c.t));
   const showSlide = (s: CarouselSlide) => {
     scrubbed.current = false;
     peekOpener.current = false;
@@ -1086,7 +1091,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       aliases={aliases}
       clipSlides={clipSlides}
       version={pictures.version + clips.version + (fontsReady ? 1 : 0) + facesLoaded}
-      current={openerSlide && inOpener(film, t) ? 'opener' : (layout.pages[Math.min(page, pageCount - 1)]?.key ?? null)}
+      current={openerNow ? 'opener' : (layout.pages[Math.min(page, pageCount - 1)]?.key ?? null)}
       onShow={showSlide}
       onOrder={(order) => change((d) => withRecap(d, { carousel: { ...d.carousel, order } }))}
     />
