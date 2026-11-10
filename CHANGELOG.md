@@ -171,6 +171,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Recap: a click in the empty space around the page lets go of the cell, text or ground in hand, as Escape does, so a
+  recap can be looked at with nothing selected.
+
 - Mosaic and Flight Atlas wear the inspector Recap got: one block beside the stage, what chooses its content pinned
   at its top, a section's title in sight while its rows scroll, and what the Export writes as ONE button pinned at
   its foot — *Save film* / *Save image* in Mosaic, *Export the video* in the atlas, the others behind ▾ — which
