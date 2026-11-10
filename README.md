@@ -67,7 +67,7 @@ Today it ships twelve tools, converging into a few editors:
 >   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
 >   tile server. The flight path, the stops, the legs and the towns always draw locally;
 >   the choice is never remembered past the tab. The same tiles can also be
->   drawn **into** an Itinerary or a Virée — in the preview and in the
+>   drawn **into** an Itinerary or a Virée, in Trips or at the head of a recap — in the preview and in the
 >   exported file, credited «© OpenStreetMap contributors» as the licence
 >   requires — when a piece asks for them and this device has said yes: the
 >   yes is kept on the device, never in the trip, so a trip opened elsewhere
@@ -3656,12 +3656,35 @@ before its own first page: **Défilé** — its pictures flick by, faster and
 faster (*Settle*, *Brake*, *Even*, *Wind up* or *Glide*), over a tape of its
 days, with a tick at each picture — or **Badge** — one picture full screen,
 slowly pushed in, with its day, its place (as your Winnow names it) and its
-camera; the best picture unless you choose one, its big line yours to write. When
-a trip of Trips on this device covers the recap's days, **Virée** (the trip's
-vehicle driving from picture to picture along its road) and **Itinerary** (its
-map, the stops lit one by one, the pictures pinned) are offered too — the stops
-are the recap's own pictures that carry a position, else the trip's places. A
-Badge, a Virée or an Itinerary can also be the carousel's first slide. The opener's seconds count in the
+camera; the best picture unless you choose one, its big line yours to write.
+
+Four more are **Trips' own openers, with every one of their settings**: **Virée**
+(a vehicle driving from picture to picture), **Itinerary** (a map, the stops lit
+one by one, the pictures pinned), **Vitrine** (the vehicle on its own, in a place)
+and the **Trip card** (the road, its days and its distance on one card, over the
+recap's best picture — Trips calls it the Recap card). Their panel is the one
+Trips shows, as numbered chapters — stops, road, pictures, vehicle, map, motion,
+camera, sound — and what each was given is kept apart, so switching loses
+nothing. They start where a recap wants them (eight stops and short halts for a
+Virée, twelve for an Itinerary) and every start is yours to change. The six
+openers are tiles; the section's switch turns the opener off.
+
+The **trip** they drive is chosen in a small drawer that rises in the inspector
+and leaves the stage in view: your trips on this device as cards — their cover,
+else their road traced; the ones covering the recap's days first — and a tile
+that takes a `.roadtrip.json` (drop it on the drawer, or choose it). A click
+copies the trip **into the recap**: its legs, places, road and vehicles, never
+its pieces. The recap then reopens without the trip, on another device or from
+your Winnow, and what you change from here — the vehicle in the garage, how a
+hop is made — changes the recap's copy, never the trip in Trips; a trip changed
+in Trips since is marked on its card, and a click takes it again. A file
+imported here is not added to Trips. **With no trip**, the recap's pictures
+that carry a position are the road, as the crow flies, and the default vehicle
+drives it. The stops are the recap's located pictures, evenly thinned, until you
+choose your own (*Change pictures…*, or a map of your own). A map ground from
+OpenStreetMap is fetched only where this device allows it, as in Trips.
+
+A Badge, a Virée or an Itinerary can also be the carousel's first slide. The opener's seconds count in the
 film's length; *Play the opener* plays the film from its first second.
 
 **Your style.** *Keep as my style* (in *Layout*) keeps a recap's look — its

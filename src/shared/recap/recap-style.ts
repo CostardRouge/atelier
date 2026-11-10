@@ -10,6 +10,7 @@
  * Pure.
  */
 
+import { lookOptions, withLookOptions } from './recap-trip-opener';
 import { readRecapDoc, withRecap, type RecapDoc, type RecapTemplate } from './recap-doc';
 
 /** The fields a style carries, as written on the device. */
@@ -34,8 +35,8 @@ export interface RecapStyle {
   clipSlides: RecapDoc['clipSlides'];
   length: RecapDoc['length'];
   delivery: RecapDoc['delivery'];
-  /** The opener's kind and dress — never its picture, its words nor its trip (those are this recap's). */
-  opener?: Omit<RecapDoc['opener'], 'picture' | 'title' | 'trip'>;
+  /** The opener's kind and dress, a Trips variant's LOOK included — never its picture, its words, its stops nor its trip (those are this recap's). */
+  opener?: Omit<RecapDoc['opener'], 'picture' | 'title' | 'trip' | 'tripCopy' | 'tripAuto'>;
   places?: RecapDoc['places'];
 }
 
@@ -72,11 +73,13 @@ export function styleOf(doc: RecapDoc): RecapStyle {
 }
 
 function openerStyle(o: RecapDoc['opener']): RecapStyle['opener'] {
-  const { picture: _p, title: _t, trip: _r, ...rest } = o;
+  const { picture: _p, title: _t, trip: _r, tripCopy: _c, tripAuto: _a, ...rest } = o;
   void _p;
   void _t;
   void _r;
-  return rest;
+  void _c;
+  void _a;
+  return { ...rest, options: lookOptions(o.options) };
 }
 
 /**
@@ -107,7 +110,7 @@ export function withStyle(doc: RecapDoc, style: unknown, now: number = Date.now(
     ...(s.clipSlides !== undefined ? { clipSlides: s.clipSlides } : {}),
     ...(s.length !== undefined ? { length: s.length } : {}),
     ...(s.delivery !== undefined ? { delivery: s.delivery } : {}),
-    opener: { ...doc.opener, ...(s.opener ?? {}), picture: doc.opener.picture, title: doc.opener.title, trip: doc.opener.trip },
+    opener: { ...doc.opener, ...(s.opener ?? {}), options: withLookOptions(doc.opener.options, s.opener?.options), picture: doc.opener.picture, title: doc.opener.title, trip: doc.opener.trip },
     ...(s.places !== undefined ? { places: s.places } : {}),
   };
   const read = readRecapDoc(merged, doc.sourceId, now);
