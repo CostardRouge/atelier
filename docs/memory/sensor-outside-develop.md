@@ -13,8 +13,11 @@ camera render the way the Develop instrument does, so a drone DNG comes out at
 full quality."* This IS call (1) of `raw.md`'s open item «RAW by default»,
 answered for everything OUTSIDE Develop: a RAW may be read from its sensor
 there. Whether it goes there BY ITSELF, and inside Develop, are questions 1 and
-5 of the lab — unanswered. **Status: audit and lab done, NOTHING BUILT; the
-build waits for his yes** on https://claude.ai/artifact/AY2Z7mmPpxc8g13BHLa9w1.
+5 of the lab. **His yes came 2026-11-10 («oui, tes recommandations») on
+https://claude.ai/artifact/AY2Z7mmPpxc8g13BHLa9w1**: Auto never downloads, the
+whole-document line after a pick, Trips and the Studio TAKE a sensor develop,
+Storytelling and Mosaic unchanged, Develop unchanged (no «RAW by default»
+inside it). The build log is the section «Built» below.
 
 ## The audit (2026-11-10, read in the code)
 
@@ -91,3 +94,18 @@ deliver. **Trap**: `renderFromRaw` asks `minLongEdge: decodeEdge * 2`, so a
 needs no crop margin and should ask for the half. Timings under SwiftShader
 mean nothing; his Mac's are `raw.md`'s (4.4 s whole the first time, 456 ms at
 the stage budget).
+
+## Built
+
+- **S0 (2026-11-10) — the rule and the brick.** `shared/develop/raw-choice.ts`
+  (pure): `autoMaterial` (sensor only for a RAW in hand whose render's long
+  edge is under half the sensor's; unknown sizes keep the render),
+  `materialOf` (own → document → Auto), `openOnSensor` — the develop a
+  picture goes on its sensor with, now also what `use-roll-export.ts` calls in
+  its two follower branches, so Develop and the others share one recipe.
+  `shared/develop/sensor-still.ts`: `sensorStill(file, { edge, purpose })`
+  meters, takes the top rung, renders through `renderRollPicture` and hands
+  back a JPEG as taken; the last six are held per file and edge.
+  `RollRenderOptions.rawMargin` (default 2): the brick passes 1, so a 2048 px
+  print decodes at half size (measured headless: 8.7 s against 32 s whole
+  under SwiftShader; the timings mean nothing on his Mac, the ratio does).
