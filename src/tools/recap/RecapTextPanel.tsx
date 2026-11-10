@@ -15,7 +15,7 @@ const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const AUTO: FontChoice = { id: '', label: 'Auto', family: 'inherit', weights: [400], group: 'This recap', note: 'its typeface', system: true };
 const FACES = [AUTO, ...storyFaceChoices()];
 
-const NUMBER_LABEL: Record<NumberAt, string> = { topLeft: 'Top left', topRight: 'Top right', centre: 'Centre', bottomLeft: 'Bottom left' };
+const NUMBER_LABEL: Record<NumberAt, string> = { topLeft: 'Top left', topRight: 'Top right', centre: 'Centre', bottomLeft: 'Bottom left', foot: 'Under the picture' };
 
 /** A preset's name written in its own dress — the tile shows what it does (Jakob: the suite's own styles). */
 function PresetTile({ id, name, tagline, style, on, onPick }: { id: string; name: string; tagline: string; style: Omit<TextStyle, 'preset'>; on: boolean; onPick: () => void }) {

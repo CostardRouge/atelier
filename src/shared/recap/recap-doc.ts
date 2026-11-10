@@ -21,14 +21,14 @@ import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
 import { readFrame, type Frame } from './recap-frame';
 import { readDelivery, type RecapDelivery } from './recap-delivery';
-import { readCarousel, type RecapCarousel } from './recap-carousel';
+import { defaultCarousel, readCarousel, type RecapCarousel } from './recap-carousel';
 import { readOpener, type RecapOpener } from './recap-opener';
 import { readPlaces, type RecapPlaces } from './recap-places';
 import { readPublish, type RecapPublish } from './recap-publish';
 import { readBeat, type RecapBeat } from './recap-beat';
 import { BAND_HOLD, BAND_MOTIONS, type BandMotion } from './recap-bands';
 import { readSheet, type RecapSheet } from './recap-sheet';
-import { ARRANGES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type ExifPart } from './recap-cellwords';
+import { ARRANGES, DATE_FORMATS, DATE_PLACES, DEFAULT_EXIF_PARTS, readExifParts, type Arrange, type DateFormat, type ExifPart, type NumberAt } from './recap-cellwords';
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
 import { addDays } from '../roadtrip/trip-days';
@@ -214,16 +214,18 @@ export interface RecapCells {
   shadow: number;
   shadowBlur: number;
   shadowY: number;
-  /** Where a cell's number sits in it. */
+  /** Where a cell's number (its date) sits in it. */
   numberAt: NumberAt;
+  /** How its date reads when `number` is on (`recap-cellwords.ts`); `auto` = what it always printed. */
+  date: DateFormat;
   /** Which of the camera's settings its line says (a picture may choose its own, `RecapPicture.exifParts`). */
   exifParts: ExifPart[];
   /** How a cell's words lie: one line, stacked, or packed to fit (`recap-cellwords.ts`). */
   arrange: Arrange;
 }
 
-export type NumberAt = 'topLeft' | 'topRight' | 'centre' | 'bottomLeft';
-export const NUMBER_PLACES: readonly NumberAt[] = ['topLeft', 'topRight', 'centre', 'bottomLeft'];
+export type { NumberAt, DateFormat } from './recap-cellwords';
+export { NUMBER_PLACES } from './recap-cellwords';
 
 export interface RecapMotion {
   title: TitleEntrance;
@@ -343,6 +345,7 @@ export const DEFAULT_CELLS: RecapCells = {
   shadowBlur: 0.12,
   shadowY: 0.04,
   numberAt: 'topLeft',
+  date: 'auto',
   exifParts: [...DEFAULT_EXIF_PARTS],
   arrange: 'auto',
 };
@@ -659,7 +662,8 @@ export function sanitizeCells(raw: unknown, base: RecapCells = DEFAULT_CELLS): R
     shadow: num(r.shadow, 0, 1, base.shadow),
     shadowBlur: num(r.shadowBlur, 0, 0.5, base.shadowBlur),
     shadowY: num(r.shadowY, 0, 0.25, base.shadowY),
-    numberAt: oneOf(r.numberAt, NUMBER_PLACES, base.numberAt),
+    numberAt: oneOf(r.numberAt, DATE_PLACES, base.numberAt),
+    date: oneOf(r.date, DATE_FORMATS, base.date),
     exifParts: readExifParts(r.exifParts) ?? [...base.exifParts],
     arrange: oneOf(r.arrange, ARRANGES, base.arrange),
   };
@@ -801,6 +805,8 @@ export function createRecapDoc(
       template,
       anchor: opts.anchor ?? todayIso(new Date(now)),
       motion: { ...DEFAULT_MOTION, ...recipe.motion, seed: (now % 2147483645) + 1 },
+      // Written whole: a document read WITHOUT a carousel is an old one, whose slides keep what they printed.
+      carousel: defaultCarousel(template),
       createdAt: now,
       updatedAt: now,
     },
