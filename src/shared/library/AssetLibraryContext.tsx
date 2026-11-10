@@ -289,8 +289,11 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
       if (!asset) return;
       // The siblings leave with it, or the RAW half of a pair would come back
       // as a photo of its own on the next build.
-      const drop = new Set(assetFiles(asset.parts).map(fileIdentity));
+      const files = assetFiles(asset.parts);
+      const drop = new Set(files.map(fileIdentity));
       dropMeta([id]);
+      // A converted copy is a whole H.264 file held in memory: it leaves with its source.
+      for (const f of files) transcodeStore.forget(f);
       setFiles((prev) => prev.filter((f) => !drop.has(fileIdentity(f))));
       setSelection((sel) => {
         if (!sel.has(id)) return sel;
@@ -310,6 +313,7 @@ export function AssetLibraryProvider({ children }: { children: ReactNode }) {
         assetFiles(a.parts).some((p) => fileIdentity(p) === target),
       );
       if (owner) dropMeta([owner.id]); // the asset's cover may now be wrong
+      transcodeStore.forget(file);
       setFiles((prev) => prev.filter((f) => fileIdentity(f) !== target));
     },
     [dropMeta],
