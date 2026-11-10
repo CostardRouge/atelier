@@ -36,7 +36,11 @@ export interface Ingested {
   kept: boolean;
 }
 
-/** The texts read this visit, by hash — what the editor draws before the store answers, and where it refused. */
+/**
+ * The texts read this visit, by hash — what the editor draws before the store answers, and where it refused.
+ * A text the store took is dropped from here (it reads back from the store): a folder of two hundred logs
+ * was hundreds of MB of strings held for the tab's life (`performance.md` rule 4).
+ */
 export const sessionLogs = new Map<string, string>();
 
 const baseName = (name: string) => name.replace(/\.[^.]+$/, '');
@@ -71,11 +75,18 @@ export async function ingestLogs(items: readonly IngestItem[], onProgress?: (don
     onProgress?.(i + 1, items.length);
     // Kept in batches, so a folder of two hundred logs is a handful of writes.
     if (texts.size >= 32) {
-      kept = (await putLogs(texts)) && kept;
+      kept = (await keepLogs(texts)) && kept;
       texts.clear();
     }
     if (i % 8 === 7) await yieldToMain();
   }
-  if (texts.size) kept = (await putLogs(texts)) && kept;
+  if (texts.size) kept = (await keepLogs(texts)) && kept;
   return { refs, failed, idOf, kept };
+}
+
+/** Write a batch to the store; what it took no longer needs holding in memory. */
+export async function keepLogs(texts: ReadonlyMap<string, string>): Promise<boolean> {
+  const ok = await putLogs(texts);
+  if (ok) for (const log of texts.keys()) sessionLogs.delete(log);
+  return ok;
 }
