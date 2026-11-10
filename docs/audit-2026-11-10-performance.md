@@ -15,7 +15,7 @@ Status: **fixed** (the commit), **open** (with the fix in one line), **not repro
 | Recap | `pictures.still` was a new function every render: the strip repainted every slide and the poster re-armed after any click | **fixed** `b8c3cde` |
 | Recap | `FrameBox`'s paint keyed on an inline `frameSource` | **mitigated** by `369e162` (the editor no longer renders per frame); **open**: key it on the source's identity |
 | Recap | ~40 command specs rebuilt per render (`use-recap-commands.ts`) | **mitigated** by `369e162`; **open** (cheap) |
-| Trips | The piece editor sets `still` per frame (`use-deck-transport.ts`) and `playhead` per video frame (`BadgeStage` `onTime`): the 3 000-line `PostEditor` re-renders 60×/s (`check-perf` trips-viree: root 60.5/s, ~160–250 ms of script/s) | **open** — the next pass: the deck's time in a `PlayClock`, the needle, the trim, the motion cards and the strip reading it |
+| Trips | The piece editor set `still` per frame (`use-deck-transport.ts`) and `playhead` per video frame (`BadgeStage` `onTime`): the 3 000-line `PostEditor` re-rendered 60×/s (`check-perf` trips-viree: root 60.5/s, ~160–250 ms of script/s) | **fixed** in the second pass (the deck's clock; `BadgeStage`'s `live`, the band in `ClockValue`): root 0/s, ×4 p50 33 → 16.7 ms |
 | Trips | `normaliseFraming(cell.framing)` fresh per render → every motion card repainted per frame (B2) | **fixed** `599a0d8` (not measured: needs a picture with EXIF) |
 | Trips | `readPlateSpec` fresh `fields` → eight camera layout tiles re-laid and repainted per frame (B3) | **fixed** `599a0d8` (same) |
 | Trips | `LookTab` hands `layers={[...layers]}` and inline hop callbacks | **covered** by `HookPicker`'s ref and `OpenerPanel`'s own (`2b49a38`) |

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { PlayClock } from '../../shared/media/play-clock';
 import { scheduleScore } from '../../shared/audio/render-bed';
 import type { SoundEvent } from '../../shared/audio/sound-event';
 
@@ -20,6 +21,11 @@ export function useHookSound(
   playing: boolean,
   time: number,
   enabled: boolean,
+  /**
+   * The film's live moment while it plays (`performance.md` rule 1): the editor no longer renders per frame, so
+   * a loop coming round is heard on the clock — `time` is then the snapshot the play started from.
+   */
+  clock?: PlayClock,
 ): void {
   const ctxRef = useRef<AudioContext | null>(null);
   const passRef = useRef<GainNode | null>(null);
@@ -65,6 +71,17 @@ export function useHookSound(
     lastTime.current = time;
     if (running && time < previous - 0.25) start(time);
   }, [time, running]);
+
+  useEffect(() => {
+    if (!running || !clock) return;
+    let previous = clock.t;
+    return clock.subscribe(() => {
+      const now = clock.t;
+      if (now < previous - 0.25) start(now);
+      previous = now;
+    });
+    // `start` reads the score of this render; a new score restarts the pass above.
+  }, [running, clock, score]);
 
   useEffect(
     () => () => {
