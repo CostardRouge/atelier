@@ -3610,10 +3610,18 @@ RAW's small camera render in place of the copy already on the stage.
 
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
 to action, with words counted for you: `{month}`, `{count}`, `{days}`,
-`{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says: the day's number,
-how many shots that day, the camera's line — which settings it says, for every
+`{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says — its date, how
+many shots that day, the camera's line — which settings it says, for every
 cell or one picture, on one line, stacked or packed to fit, never past its cell —,
-the device, a word per day, a clip's badge, today ringed; how an empty day reads), *Background* (paper, ink, a
+the device, a word per day — for the **first slide**, the **slides after it** or
+**this slide** alone, a chip above the cells naming whom you set and following
+the stage: a month's calendar can lose its day numbers while its highlights keep
+theirs. The date reads *10*, *Mon 10*, *10 Nov*, *Mon 10 Nov* or *Monday 10
+November 2025* (the long two refused by a calendar's small cells), in a corner or
+**under the picture**, where a full date has room; the highlights' dates have
+their own text style in *Text*. On *This slide* what it does not set shows its
+highlights' value greyed, ↺ gives one back, and its layout is chosen there; a
+clip's badge, today ringed and how an empty day reads stay where they belong), *Background* (paper, ink, a
 colour, a blurred picture — the best photograph of the recap's days unless you
 choose another among them, or force one from the whole pool — or a **looping video** under a veil —
 chosen from a drawer of thumbnails with their lengths, the recap's own days
@@ -3692,9 +3700,10 @@ instead — the order is yours from then on. The
 rule draws from your Winnow **picks** when they fill the carousel (or always,
 or never), and leaves out screenshots, all but the best of a **burst** (its ×n
 lets you choose the frame) and **look-alikes** — the same conditions as
-Storytelling's wall, in the same panel. In *Layout*, a slide keeps the rhythm (*Auto*)
-or takes the layout you set, and the first slide's title can repeat on the
-others — small with the slide's number, or as big as on the first. The carousel
+Storytelling's wall, in the same panel. In *Layout › Cells*, a slide keeps the rhythm (*Auto*)
+or takes the layout you set (*This slide*), and the first slide's title can repeat on the
+others (*Highlights*) — small with the slide's number and, if you ask, its days
+(*NOVEMBER · 3 – 8 NOV · 2/4*), or as big as on the first. The carousel
 export writes the slides in that order, a clip as its own video slide.
 
 **The inspector.** Recap's settings are a panel of their own beside the stage

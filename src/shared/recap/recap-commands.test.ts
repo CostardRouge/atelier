@@ -25,6 +25,12 @@ describe('recap commands', () => {
   it('refuses an unknown key and an out-of-range value, never clamping', () => {
     expect(applySettings(doc, { colour: 'red' })).toEqual({ ok: false, error: expect.stringContaining('unknown setting "colour"') });
     expect(applySettings(doc, { cells: { gap: 0.5 } })).toEqual({ ok: false, error: expect.stringContaining('cells.gap: 0.5') });
+    // Lab 17: a date format, the slides after the first, one slide — each by its own field.
+    const scoped = applySettings(doc, { cells: { date: 'd' }, carousel: { cells: { date: 'full', numberAt: 'foot' }, slideCells: { 'p:1': { number: false } }, headDates: true } }, 6);
+    expect(scoped.ok && scoped.doc.carousel.cells).toEqual({ date: 'full', numberAt: 'foot' });
+    expect(scoped.ok && scoped.doc.carousel.slideCells).toEqual({ 'p:1': { number: false } });
+    expect(applySettings(doc, { cells: { date: 'long' } })).toMatchObject({ ok: false });
+    expect(applySettings(doc, { carousel: { cells: { date: 'long' } } })).toMatchObject({ ok: false });
     expect(applySettings(doc, { motion: { order: 'sideways' } }).ok).toBe(false);
     expect(applySettings(doc, { pictures: [] }).ok).toBe(false);
     expect(applySettings(doc, 'x').ok).toBe(false);

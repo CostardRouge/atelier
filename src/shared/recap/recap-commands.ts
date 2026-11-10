@@ -17,6 +17,8 @@ import { isGivenTrip, openerTripFrom, openerTripFromText, orderTrips, tripFacts,
 import type { TripDoc } from '../roadtrip/trip-types';
 import { deviceLabel, type DeviceAliases, type ResolvedRecap } from './recap-slots';
 import { placeName, placeWords } from './recap-places';
+import { inFamily, wordsOn } from './recap-scope';
+import { WORD_KEYS } from './recap-cellwords';
 import { DEFAULT_CAPTION, captionText, captionWords } from './recap-publish';
 import { nextFreeSlot, zonedInstant, type Rhythm } from '../sources/postiz/rhythm';
 
@@ -33,9 +35,9 @@ export const SETTABLE: Record<string, string> = {
   cta: '{text, show} — the call to action',
   font: '"sans", "serif" or "mono"',
   headingOffset: '{x, y}, fractions of the page, −0.5…0.5',
-  cells: '{number, count, exif, device, caption, videoBadge, today, headers: booleans; empty: "number"|"dashed"|"hidden"; weekStart: 0|1; gap: 0–0.04; radius: 0–0.25; shadow: 0–1 (0 = none); shadowBlur: 0–0.5; shadowY: 0–0.25; numberAt: "topLeft"|"topRight"|"centre"|"bottomLeft"; exifParts: the camera settings the line says, a list in this order: "device","lens","focal","aperture","shutter","iso"; arrange: "auto"|"line"|"stack" (words never pass their cell)}',
+  cells: 'the FIRST slide\'s cells (a month\'s calendar, a dump\'s cover) — the slides after it set their own in carousel.cells, one slide in carousel.slideCells: {number, count, exif, device, caption, videoBadge, today, headers: booleans; empty: "number"|"dashed"|"hidden"; weekStart: 0|1; gap: 0–0.04; radius: 0–0.25; shadow: 0–1 (0 = none); shadowBlur: 0–0.5; shadowY: 0–0.25; numberAt: "topLeft"|"topRight"|"centre"|"bottomLeft"|"foot" (foot: a band low over the picture, room for a long date — never on a calendar cell); date: "auto"|"d"|"wd"|"dMon"|"wdMon"|"full"|"rank" (how the date reads when number is on: auto = what the cell always printed, the day on a calendar, the rank elsewhere; 10 · Mon 10 · 10 Nov · Mon 10 Nov · Monday 10 November 2025 · its rank); exifParts: the camera settings the line says, a list in this order: "device","lens","focal","aperture","shutter","iso"; arrange: "auto"|"line"|"stack" (words never pass their cell)}',
   sheet: '{arrangement: "rows"|"collage"|"film"|"timeline"; slides: 2–10 or null (counted from the pictures); camera: "stops"|"glide" (the Reel along the sheet); rows: {rows: 1–4|null, big, loose: booleans, margin: 0.02–0.2}; collage: {density: 0–1, tilt: 0–12°, spread: 0–1, border: "white"|"thin"|"none"}; film: {strips: 1|2, shape: "3:2"|"1:1"|"4:5", where: "high"|"centre"|"low", edge: boolean}; timeline: {spacing: "time"|"even", sides: "both"|"one", stars, days: booleans}; own: {"<slide index ≥ 1>": {layout: "hero"|"pair"|"breather", text?: a breather\'s line}}} — the Sheets template only; the cut rule (no face across a cut, one picture per cut) is fixed',
-  carousel: '{after: "none"|"highlights"|"weeks" (weeks: a month only; a dump and a sheet are highlights already); highlights: 1–60; rules: {leave: {screen|burst|alike: false to keep them}, prefer: ["pick","stars","edited","faces","sharp"] in order}; picksOnly: true|false|null (null = picks when they fill the places); chosen: picture keys of a FROZEN selection (null = the rule chooses) — removing a key removes the picture, nothing comes in; left: removed keys; burstPick: {burstId: key}; layouts: {"p:0": "full"|"two"|"oneTwo"|"three"|"four"|"six"} a flow slide set by hand; order: slide keys ("first", "p:0", "w:1", "clip:<slot>") or null; titles: "first"|"head"|"same" — the first slide\'s title on the others}',
+  carousel: '{after: "none"|"highlights"|"weeks" (weeks: a month only; a dump and a sheet are highlights already); highlights: 1–60; rules: {leave: {screen|burst|alike: false to keep them}, prefer: ["pick","stars","edited","faces","sharp"] in order}; picksOnly: true|false|null (null = picks when they fill the places); chosen: picture keys of a FROZEN selection (null = the rule chooses) — removing a key removes the picture, nothing comes in; left: removed keys; burstPick: {burstId: key}; layouts: {"p:0": "full"|"two"|"oneTwo"|"three"|"four"|"six"} a flow slide set by hand; order: slide keys ("first", "p:0", "w:1", "clip:<slot>") or null; titles: "first"|"head"|"same" — the first slide\'s title on the others; headDates: boolean (the running head also says the slide\'s days, «3 – 8 Nov»); cells: what the slides after the first SAY — any of cells\' number, date, numberAt, count, exif, device, caption, exifParts, arrange, the rest inherited from cells; slideCells: {"p:2": the same words} one slide\'s own over its family\'s (page keys as layouts)}',
   delivery: '{quality: "standard"|"high"|"max" (≈8, 16, 28 Mb/s at 1080×1920 30 fps); fps: 30|60; passes: 1|2 (2 = measured two-pass, where the browser\'s encoder has a constant-quality mode, else one VBR pass); media: "proxy"|"original" (painted from the originals: every clip, the background first, and every picture a print would blow up — fetched for the export)}',
   motion: '{title: "none"|"fade"|"rise"|"type"|"mask"; order: "inOrder"|"random"|"wave"|"columns"|"spiral"; entrance: "none"|"fade"|"slide"|"pop"|"drop"|"develop"|"flicker"; stagger: 0–1 s; hold: 0.5–30 s; videos: "turn"|"zoom"|"together"|"poster"; seed; onBeat: true = the cuts and entrances land on the sound\'s beats and the film ends on a bar (the sound\'s beat is found when it is added); bands (a week): "none"|"accordion"|"spotlight"|"wave"|"slide"|"focus" — each day takes the stage in turn once everything is on; bandHold: 0.4–3 s a day; bandPan: true = each picture drifts in its band}',
   background: '{kind: "paper"|"ink"|"colour"|"blur"|"video"; colour: "#rrggbb"; loopIn, loopOut (s); speed: 0.25–2; veil: 0–0.8; blur: 0–160; picture: the pool key the blurred ground softens (absent = the best photograph of the period); frame: {x, y: 0–1 the focus, zoom: 1–4, rotate: −45–45 degrees}}',
@@ -141,6 +143,12 @@ export function withOpenerTripFile(doc: RecapDoc, text: string, name: string, no
 }
 
 /** The recap as an agent reads it: what it is about, its settings, and every slot with what it shows. */
+/** What a page's cells say once the scopes are merged — the words only, not the look. */
+const saidOn = (doc: RecapDoc, key: string) => {
+  const w = wordsOn(doc, key);
+  return Object.fromEntries(WORD_KEYS.map((k) => [k, w[k]]));
+};
+
 export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: number, seconds: number, aliases: DeviceAliases = {}, slides?: string[]) {
   return {
     id: doc.id,
@@ -183,6 +191,8 @@ export function recapOutline(doc: RecapDoc, resolved: ResolvedRecap, pages: numb
     cta: doc.cta,
     font: doc.font,
     cells: doc.cells,
+    // What each slide's cells actually say once the scopes are merged (lab 17): the first slide's, the family's, a slide's own.
+    ...(slides ? { slideWords: Object.fromEntries(slides.filter((k) => k === 'first' || inFamily(k)).map((k) => [k, saidOn(doc, k)])) } : {}),
     motion: doc.motion,
     opener: openerOutline(doc.opener),
     background: { ...doc.background },
