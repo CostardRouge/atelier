@@ -68,6 +68,20 @@ rung menu is the button `What this picture is developed from`, its items
 are named `DJI_0101.DNG → Gain` and the like, and the chip is uppercase on
 screen — match `/16-bit/i`, not the source string.
 
+**A DJI-shaped DNG with a real scene, as a file (2026-11-10)**:
+`python3 scripts/gen-dji-shaped-dng.py out.DNG` (numpy + Pillow, ten seconds,
+73 MB — never commit the output) writes the measured shape of his FC8482
+whole: 8064 × 4536 RGGB, the 960 × 540 render, a 32 × 32 × 3 GainMap at his
+corner gains and a WarpRectilinear of `k0 = 0.953`, over a procedural scene
+with text and line pairs, the sensor plane vignetted by the map's inverse — so
+the top rung visibly matches the render and `gain` alone does not. Serve it
+with `page.route('**/__media/**', (r) => r.fulfill({ path }))` and `fetch` it
+into a `File`; the suite's modules import in the page as
+`import('/src/shared/…ts')` from the dev server (`BASE_PATH=/`). Chromium
+needs `--use-angle=swiftshader --enable-unsafe-swiftshader` for the half-float
+graph; `require('playwright')` resolves, an ESM `import` of it does not
+(`createRequire`).
+
 ## The deployed pair is NOT required: two localhosts are same-site (2026-09-07)
 
 **Fact, measured.** `docs/roadtrip-persistence.md` §10 and several memory entries said the remote-document flow could only be exercised on `atelier.steeve.website` ↔ `winnow.steeve.website`, because `localhost` is cross-site to the deployed Winnow. True of THAT pair, and it hid the obvious: run **both** locally and the problem disappears. A cookie is scoped to a HOST, not an origin, so `127.0.0.1:5199` → `127.0.0.1:3000` is cross-origin but same-site, and Winnow's session cookie travels. Verified: `POST /api/auth/login` from the Atelier page, then `credentials: 'include'` on every bucket call, all the way to a 201.
