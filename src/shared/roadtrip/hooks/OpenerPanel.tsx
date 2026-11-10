@@ -10,12 +10,13 @@
  * itself (`HookPanelHost`); everything under the choice is drawn here.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChapterFoot, ChapterHead, ChapterIndex, type ChapterRow } from '../../ui/Chapters';
 import { ChapterScope } from './panel-ui';
 import { chapterChanged, chapterSummary, numbered, resetChapter, searchChapters } from './opener-chapters';
 import { useOpenerChapter } from './opener-chapter-pref';
 import type { HookContext, HookOptions, HookPanelHost, HookVariant } from './hook-variant';
+import { hostShape, steadyHost } from './panel-host';
 
 interface OpenerPanelProps {
   variant: HookVariant;
@@ -27,16 +28,25 @@ interface OpenerPanelProps {
   onChange: (options: HookOptions) => void;
 }
 
-export default function OpenerPanel({ variant, options, ctx, host, onChange }: OpenerPanelProps) {
+export default function OpenerPanel({ variant, options, ctx, host, onChange: givenOnChange }: OpenerPanelProps) {
   const Panel = variant.Panel;
   // A host re-renders on every frame of its transport's clock. A variant's
   // panel computes the whole road (Virée: the route, the plan, the vehicles,
-  // the coast) when it renders, so it must render when what it SHOWS changes
-  // and never per frame — the element is memoised on its options, its context
-  // and its host, which the caller keeps stable.
+  // the coast; the Trip card: six faces painted) when it renders, so it must
+  // render when what it SHOWS changes and never per frame — the element is
+  // memoised on its options and its context, which the caller keeps stable,
+  // while its `onChange` and its host's asks are read through a ref here: a
+  // caller handing new functions each frame cannot re-render it (`panel-host.ts`).
+  const live = useRef({ host, onChange: givenOnChange });
+  live.current = { host, onChange: givenOnChange };
+  const onChange = useCallback((next: HookOptions) => live.current.onChange(next), []);
+  const shape = hostShape(host);
+  const pictureStatus = host?.pictureStatus;
+  const hasHost = host !== undefined;
+  const steady = useMemo(() => (hasHost ? steadyHost(shape, pictureStatus, () => live.current.host) : undefined), [hasHost, shape, pictureStatus]);
   const panel = useMemo(
-    () => (Panel ? <Panel options={options ?? {}} ctx={ctx} host={host} onChange={onChange} /> : null),
-    [Panel, options, ctx, host, onChange],
+    () => (Panel ? <Panel options={options ?? {}} ctx={ctx} host={steady} onChange={onChange} /> : null),
+    [Panel, options, ctx, steady, onChange],
   );
 
   const [openId, setOpenId] = useOpenerChapter(variant.id);
