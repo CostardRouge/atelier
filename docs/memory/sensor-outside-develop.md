@@ -138,3 +138,24 @@ the stage budget).
   exported as PNG three ways — camera render, sensor print, sensor under
   *Originals* — side by side; the finest line pairs alias in the print and
   resolve under *Originals*. The MP4 path was not encoded here.
+- **T (2026-11-10) — Trips.** `PostSlide.rawMaterial` (absent = Auto),
+  carried into `DeckSlide` by `deckSlides` through `readMaterial` (a trip file
+  is a stranger's JSON; the migrations spread a slide, so nothing else reads
+  it). `shared/develop/use-sensor-file.ts`: a host's `File` read from its
+  material — the file itself on its render, `sensorStillFile` (the brick at
+  4096 on the stage budget: 2560 on a phone) on its sensor; the file stays on
+  screen while the sensor is read and when it cannot be. `sensorReachable`
+  offers the menu for a RAW in hand AND for a proxy whose original or
+  companion is a RAW (`sensor-source.ts`); Auto never fetches. In
+  `PostEditor.tsx` the stage (`stageFile`) and the Develop sheet draw it; a
+  COLLAGE's cells keep their render (each cell is a fraction of the frame).
+  The exports swap it in `use-post-exports.ts`'s `stillOf` (4096,
+  `purpose: 'export'`): `pixelsForStills` before `deliveryFor`, the hook's
+  still path, and `renderStill` — the last with the sensor swap ALONE, since it
+  never fetched originals and must not start to. The menu sits BESIDE the
+  door (`DevelopSection.aside`, `MaterialMenu.materialOnly`), never in it.
+  EXIF for the camera credit is still read from the slide's own file (the
+  sensor's JPEG carries none). Driven headless: a trip, a Single photo piece,
+  the DNG from the Library — Auto on the sensor, *Camera render* blurred,
+  «This slide as a PNG» on each side by side; the menu at 390 in the Picture
+  drawer.

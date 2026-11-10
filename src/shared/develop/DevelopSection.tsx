@@ -22,6 +22,7 @@ export default function DevelopSection({
   onOpen,
   onReset,
   children,
+  aside,
 }: {
   /** The section's id, which keeps its fold remembered per editor. */
   id: string;
@@ -36,10 +37,21 @@ export default function DevelopSection({
   onReset: () => void;
   /** Rows after the correction — where it came from in Develop (`FromDevelopRow`). */
   children?: ReactNode;
+  /** Beside the door, never inside it: a RAW's material menu (`MaterialMenu`). */
+  aside?: ReactNode;
 }) {
   return (
     <InspectorSection id={id} title="Develop" badge={badge} info={info}>
-      <DevelopDoor develop={develop} onOpen={onOpen} onReset={onReset} disabled={!canOpen} title={openTitle} size="sm" />
+      {aside ? (
+        <div className="flex items-stretch gap-1.5 min-w-0">
+          <span className="flex-1 min-w-0">
+            <DevelopDoor develop={develop} onOpen={onOpen} onReset={onReset} disabled={!canOpen} title={openTitle} size="sm" />
+          </span>
+          <span className="flex-none max-w-[45%] min-w-0 flex">{aside}</span>
+        </div>
+      ) : (
+        <DevelopDoor develop={develop} onOpen={onOpen} onReset={onReset} disabled={!canOpen} title={openTitle} size="sm" />
+      )}
       {children}
     </InspectorSection>
   );

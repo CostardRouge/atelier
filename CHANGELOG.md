@@ -17,6 +17,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   too small goes to its sensor by itself, a RAW on your Winnow only when you ask, since its original is downloaded.
 - Recap's export with *Originals* reads a RAW on its sensor again at the page's density for every picture a page
   enlarges, in the video, the PNGs and the carousel.
+- Trips reads a slide's camera RAW from its sensor at full quality: a menu beside its Develop door chooses the
+  camera render (or Winnow's proxy) or the sensor, and the stage, the Develop sheet and every export follow; a
+  drone DNG of yours goes to its sensor by itself.
 - Recap, a new editor that turns your pictures into recaps to post: a month as a calendar of its days, the same day
   a year, a month and a week ago, a week, a grid, a single picture or a photo dump over a carousel. It fills itself
   from your Winnow's days (or your files), lets you pin, swap or empty any day, filter by device, develop each picture

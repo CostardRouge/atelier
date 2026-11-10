@@ -32,6 +32,11 @@ import { meterRaw } from './roll-choice-source';
 import { renderRollPicture } from './roll-render';
 import { openOnSensor } from './raw-choice';
 import type { DevelopBase } from './develop';
+import { isRawImage } from '../library/assets';
+import { rawSizes } from '../exif/raw-probe';
+import { knownIdentity, mediaOrigin } from '../projects/media-identity';
+import { fetchSourceFile, sensorSourceFor } from './sensor-source';
+import { autoFactsOf, autoMaterial, materialOf, type RawMaterial } from './raw-choice';
 
 export interface SensorStill {
   /** The picture as taken, a JPEG of at most the asked long edge. */
@@ -114,4 +119,47 @@ async function makeSensorStill(file: File, edge: number, opts: SensorStillOption
     gain: metered.gain,
     rung,
   };
+}
+
+// ---- a host's file, on its sensor -------------------------------------------------
+
+/**
+ * Whether a RAW stands behind `file` at all: the file itself, the proxy's own
+ * original, or the capture's companion on its instance (`sensor-source.ts`).
+ * What decides whether a host offers the material menu.
+ */
+export function sensorReachable(file: File | null): boolean {
+  if (!file) return false;
+  if (isRawImage(file.name)) return true;
+  return sensorSourceFor(file, mediaOrigin(file), [], knownIdentity(file)?.assetId ?? null) !== null;
+}
+
+/**
+ * The material `file` is read from, `own` being the host's stored choice:
+ * Auto otherwise — the sensor only for a RAW in hand whose render is under
+ * half its sensor (`raw-choice.ts`); a proxy whose RAW must be downloaded
+ * stays on its proxy.
+ */
+export async function materialForFile(file: File, own: RawMaterial | null | undefined): Promise<RawMaterial> {
+  if (own) return own;
+  if (!isRawImage(file.name)) return 'render';
+  return materialOf(null, null, autoMaterial(autoFactsOf(true, await rawSizes(file))));
+}
+
+/**
+ * `file`'s sensor as a JPEG `File` named after it — what a host draws and
+ * exports in place of the file when a picture is on its sensor. The RAW is the
+ * file in hand, or fetched once (the proxy's original, the companion) and held
+ * for the session. Null when no RAW stands behind it.
+ */
+export async function sensorStillFile(file: File, opts: SensorStillOptions): Promise<File | null> {
+  let raw: File | null = isRawImage(file.name) ? file : null;
+  if (!raw) {
+    const assetId = knownIdentity(file)?.assetId ?? null;
+    const source = sensorSourceFor(file, mediaOrigin(file), [], assetId);
+    if (!source) return null;
+    raw = await fetchSourceFile(source, assetId, opts.signal);
+  }
+  const still = await sensorStill(raw, opts);
+  return new File([still.blob], `${raw.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
 }

@@ -18,6 +18,7 @@
  */
 
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
+import type { RawMaterial } from '../develop/raw-choice';
 import { defaultHookSeconds } from './hook-video';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import { readMotion, type FramingMotion } from '../media/framing-motion';
@@ -754,6 +755,13 @@ export interface PostSlide {
   develop: DevelopSettings | null;
   /** This picture's own grade, or null to follow the piece — see `PostBadge.grade`. */
   grade: TripGrade | null;
+  /**
+   * A RAW's material, chosen for this slide (`raw-choice.ts`): its camera
+   * render (or a source's proxy) or its sensor. Absent: Auto — the sensor for a
+   * RAW in hand whose render is too small, the render otherwise
+   * (`sensor-outside-develop.md`).
+   */
+  rawMaterial?: RawMaterial;
   /**
    * The rest of a Develop picture's edit, taken from a roll (v35, item 34 of
    * `docs/lightroom-gaps.md`): its perspective, lens, detail, repair, layers

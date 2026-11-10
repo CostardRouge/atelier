@@ -1861,6 +1861,17 @@ error-correction level M, versions 1 to 10 (213 characters); a link that does
 not fit is refused with a reason rather than drawn as a code that scans to half
 a URL.
 
+**A RAW at full quality.** Beside the Develop door of a slide whose picture
+is a camera RAW — a file of yours, or a Winnow picture whose original is a RAW
+— a small menu chooses what it is read from: its **camera render** (or the
+Winnow proxy) or its **sensor**, decoded in your browser by Develop's own
+engine, with the file's lens shading and warp corrected. A drone DNG of yours,
+whose render is a 960 × 540 picture, goes to its sensor by itself; a Winnow
+picture only when you ask, since its original is downloaded once for the
+session. The stage, the Develop sheet and every export (video, stills, the
+opener) then draw the sensor's picture, at up to 4096 px. A collage's cells
+keep their render.
+
 **Develop: a picture's own correction.** On the Picture tab, one settled row
 says what has been done to the open slide's picture — `As shot`, or
 `+0.7 EV · highlights −40 · vibrance +15` — and **Develop…** opens a sheet

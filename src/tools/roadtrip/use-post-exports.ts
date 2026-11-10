@@ -1,3 +1,4 @@
+import { materialForFile, sensorStillFile } from '../../shared/develop/sensor-still';
 import { useRef, useState } from 'react';
 import type { FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
@@ -197,6 +198,23 @@ function slideUnit(slide: DeckSlide, name: string, moving: boolean): RunUnit {
  * when there is one, else the file itself — the Studio's own preference. The
  * transcode keeps the picture's size, so the measured dimensions still hold.
  */
+/**
+ * The file a STILL slide is drawn from in an export: its sensor's picture when
+ * the slide is on its sensor (`raw-choice.ts`, `sensor-still.ts`), read at
+ * 4096 px at most — a phone's export ceiling, and twice the deck's edge — else
+ * the file itself. A sensor out of reach leaves the file, never the slide empty.
+ */
+async function stillOf(slide: Pick<DeckSlide, 'rawMaterial'>, file: File, signal?: AbortSignal): Promise<File> {
+  if (classifyPart(file.name) === 'video') return file;
+  try {
+    if ((await materialForFile(file, slide.rawMaterial)) !== 'sensor') return file;
+    return (await sensorStillFile(file, { edge: 4096, purpose: 'export', signal })) ?? file;
+  } catch (err) {
+    if (isAbortError(err)) throw err;
+    return file;
+  }
+}
+
 function deliverable(file: File): File {
   return transcodeStore.get(file).file ?? file;
 }
@@ -264,6 +282,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       if (slide.collage) continue;
       const file = base(slide.media);
       if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
+      // A RAW on its sensor leaves from its sensor (`sensor-outside-develop.md`), never its render nor its proxy.
+      const sensor = await stillOf(slide, file, signal);
+      if (sensor !== file) {
+        swap.set(file, sensor);
+        continue;
+      }
       try {
         // A picture that moves needs the pixels of its CLOSEST frame, not of its rest.
         // Bounded and cut by a Cancel: an original that never finishes
@@ -552,7 +576,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             })()
           : await exportHookStillVideo({
               ...shared,
-              file: hookFile,
+              file: await stillOf(inputs.hookSlide, hookFile, signal),
               seconds: inputs.hookLength,
               onAudioSkipped: (reason) => {
                 audioSkipped = reason;
@@ -905,14 +929,26 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   }
 
   async function renderStill(position: number, longEdge: number): Promise<Blob | null> {
-    const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
+    const all = deckSlides(inputs.trip, inputs.post);
+    const looks = freezeLooks(all, inputs.lutFor, inputs.filmFor);
+    // The one slide's still, from its sensor when it is on it (nothing else is fetched here, as before).
+    const one = all.find((s) => s.position === position);
+    const own = one && !one.collage ? inputs.resolve(one.media) : null;
+    const sensor = one && own ? await stillOf(one, own) : null;
+    const resolve =
+      sensor && own && sensor !== own
+        ? (ref: { name: string } | null) => {
+            const f = inputs.resolve(ref);
+            return f === own ? sensor : f;
+          }
+        : inputs.resolve;
     const [file] = await renderDeck({
       trip: inputs.trip,
       post: inputs.post,
       aspect: inputs.aspect,
       longEdge,
       timeSeconds: inputs.timeSeconds,
-      resolve: inputs.resolve,
+      resolve,
       pictures: livePictures(),
       exif: inputs.exif,
       lutFor: looks.lutFor,

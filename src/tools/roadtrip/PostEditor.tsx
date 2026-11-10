@@ -1,3 +1,4 @@
+import { useSensorFile } from '../../shared/develop/use-sensor-file';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
@@ -647,6 +648,10 @@ export default function PostEditor({
     [collage, cellCount, lead, resolve, slideFile],
   );
   const cellFile = cellFiles[cellIndex] ?? null;
+  // A RAW slide read from its material (`use-sensor-file.ts`): the stage and the Develop sheet draw
+  // its sensor's picture when it is on its sensor. One picture only — a collage's cells keep their render.
+  const sensor = useSensorFile(collage ? null : slideFile, slide.rawMaterial);
+  const stageFile = collage ? slideFile : sensor.file;
   /** What each cell holds, by name — what a drop target says it will replace. */
   const cellLabels = useMemo(
     () => cellFiles.map((f) => (f ? f.name.replace(/\.[^.]+$/, '') : null)),
@@ -2636,7 +2641,7 @@ export default function PostEditor({
             onClick={onStageMargin}
           >
           <BadgeStage
-            file={slideFile}
+            file={stageFile}
             taskScope={`piece:${post.id}`}
             videoTimeSeconds={isClipSlide ? playhead : slide.videoTimeSeconds}
             playback={
@@ -2832,6 +2837,7 @@ export default function PostEditor({
               slide={slide}
               slideFile={slideFile}
               missing={missing}
+              material={{ state: sensor, onPick: (m) => patchSlide({ rawMaterial: m }) }}
               recovery={recovery}
               isVideo={isVideo}
               duration={duration}
@@ -2957,7 +2963,7 @@ export default function PostEditor({
 
     {developOpen && !isCta && (
       <DevelopSheet
-        file={cellFile}
+        file={collage ? cellFile : stageFile}
         videoTimeSeconds={cellIndex === 0 ? slide.videoTimeSeconds : 0}
         title={cellFile?.name ?? 'this slide'}
         emptyText="This slide has no picture yet — tick one in the Library."

@@ -30,6 +30,7 @@ export default function MaterialMenu({
   rows,
   onPick,
   busy = false,
+  materialOnly = false,
   className = '',
 }: {
   name: string;
@@ -40,6 +41,8 @@ export default function MaterialMenu({
   onPick: (material: RawMaterial) => void;
   /** The sensor is being read — said on the trigger. */
   busy?: boolean;
+  /** The trigger says the material alone (the name is said elsewhere): beside a Develop door. */
+  materialOnly?: boolean;
   className?: string;
 }) {
   const on = rows.find((r) => r.material === current) ?? rows[0];
@@ -74,7 +77,7 @@ export default function MaterialMenu({
           'group flex w-full min-w-0 items-center gap-1.5 rounded-control border border-line-strong bg-paper-2 px-1.5 py-0.5 min-h-7 font-mono text-2xs text-ink-soft cursor-pointer hover:border-ink-soft',
         text: (
           <>
-            <span className="min-w-0 flex-1 truncate text-left">{name}</span>
+            {!materialOnly && <span className="min-w-0 flex-1 truncate text-left">{name}</span>}
             <span className="flex-none text-accent-ink">{busy ? `${on.short ?? on.label}…` : (on.short ?? on.label)}</span>
             <span className="flex-none text-3xs opacity-70" aria-hidden="true">
               ▾
