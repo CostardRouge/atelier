@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { describeVehicle, sameVehicleSpec, type VehicleSpec } from '../../shared/roadtrip/vehicle-spec';
-import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
-import type { TripDoc } from '../../shared/roadtrip/trip-types';
-import type { IsoDate } from '../../shared/roadtrip/trip-days';
-import { changeOn, mainVehicle, vehicleOnDay } from '../../shared/roadtrip/vehicle-fleet';
-import Button from '../../shared/ui/Button';
-import useDialogKeys from '../../shared/ui/use-dialog-keys';
+import { describeVehicle, sameVehicleSpec, type VehicleSpec } from '../vehicle-spec';
+import { vehicleModel } from '../hooks/vehicle-registry';
+import type { TripDoc } from '../trip-types';
+import type { IsoDate } from '../trip-days';
+import { changeOn, mainVehicle, vehicleOnDay } from '../vehicle-fleet';
+import Button from '../../ui/Button';
+import useDialogKeys from '../../ui/use-dialog-keys';
 import GaragePanel from './GaragePanel';
 
 interface GarageModalProps {

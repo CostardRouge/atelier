@@ -26,6 +26,7 @@ export default function InspectorBlock({
   children,
   foot,
   footRef,
+  blockRef,
   bodyClassName = 'gap-1',
 }: {
   /** Names the block for assistive tech — «Recap settings». */
@@ -34,6 +35,8 @@ export default function InspectorBlock({
   children: ReactNode;
   foot?: ReactNode;
   footRef?: Ref<HTMLDivElement>;
+  /** The block itself, for a host that raises a drawer inside it (Recap's trip drawer). */
+  blockRef?: Ref<HTMLElement>;
   /** The body's own stacking — its gap. */
   bodyClassName?: string;
 }) {
@@ -48,7 +51,8 @@ export default function InspectorBlock({
   }, []);
   return (
     <aside
-      className="flex-none min-w-0 flex flex-col border border-line rounded-paper bg-surface [--bands-top:var(--head-h,0px)] @min-[860px]:min-h-0 @min-[860px]:[--bands-top:0px]"
+      ref={blockRef}
+      className="flex-none min-w-0 flex flex-col @min-[860px]:relative border border-line rounded-paper bg-surface [--bands-top:var(--head-h,0px)] @min-[860px]:min-h-0 @min-[860px]:[--bands-top:0px]"
       style={{ '--head-h': `${head ? headH : 0}px` } as CSSProperties}
       aria-label={label}
     >

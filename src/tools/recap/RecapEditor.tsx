@@ -9,7 +9,7 @@ import SlideStrip from './SlideStrip';
 import PlacesTray from './PlacesTray';
 import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
-import { defileTicks, hasOpenerSlide, planOpener } from '../../shared/recap/recap-opener-plan';
+import { defileTicks, hasOpenerSlide, openerRest, planOpener } from '../../shared/recap/recap-opener-plan';
 import { inOpener } from '../../shared/recap/recap-opener-paint';
 import { PAINT_FONTS, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { DEFAULT_FRAME, isDefaultFrame, type Frame } from '../../shared/recap/recap-frame';
@@ -34,6 +34,8 @@ import useEditorKeys from '../../shared/ui/use-editor-keys';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useSurface } from '../../shared/ui/use-surface';
 import { AboutSection, BackgroundSection, LayoutSection, MotionSection, SlotSection, SourcesSection, type Change } from './RecapPanels';
+import { isTripOpener } from '../../shared/recap/recap-opener';
+import { openerTripFrom } from '../../shared/recap/recap-opener-trip';
 import OpenerSection from './OpenerSection';
 import RecapTextPanel from './RecapTextPanel';
 import { textStyleOf, type TextRole, type TextStyle } from '../../shared/recap/recap-text';
@@ -190,8 +192,20 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   }, [facesWanted]);
   const layout = useMemo(() => layoutRecap(view, resolved, today), [view, resolved, today]);
   // The opener leads the film (`recap-opener.ts`): planned once, read by the film plan, the stage, the strip and the exports.
-  // Virée and Itinerary drive a trip of Trips that covers these days (`recap-trip-opener.ts`).
+  // Trips' own variants drive the copy of a trip the recap keeps, or its located pictures alone (`recap-trip-opener.ts`).
   const tripOpener = useTripOpener(view, resolved);
+  // The inspector's block: what the trip drawer rises in (lab 16).
+  const [asideEl, setAsideEl] = useState<HTMLElement | null>(null);
+  // A recap that plays a trip opener with no copy of a trip — one made before lab 16, which read the trip of this
+  // device covering its days — takes that trip's copy once, when it opens, unless he chose to use none.
+  const tookTrip = useRef(false);
+  useEffect(() => {
+    if (tookTrip.current || !tripOpener.trips) return;
+    tookTrip.current = true;
+    const o = doc.opener;
+    const from = tripOpener.covering;
+    if (isTripOpener(o.kind) && !o.tripCopy && o.tripAuto && from) change((d) => withRecap(d, { opener: { ...d.opener, tripCopy: openerTripFrom(from), tripAuto: false } }));
+  }, [tripOpener.trips, tripOpener.covering, doc.opener, change]);
   const opener = useMemo(() => planOpener(view, resolved, aliases, tripOpener.plan), [view, resolved, aliases, tripOpener.plan]);
   const openerSlide = hasOpenerSlide(doc, opener);
   const clipSlides = useMemo(() => clipSlideNumbers(doc, resolved, layout, openerSlide), [doc, resolved, layout, openerSlide]);
@@ -251,7 +265,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   // Paused, the stage shows the page with everything on: an edit is seen at once.
   useEffect(() => {
     if (playing) return;
-    if (peekOpener.current && film.lead) setT(Math.max(0, film.lead - 0.02));
+    // Its still (`openerRest`: the last frame, a Virée's just before its map fades), on the film's clock — a set length scales the opener.
+    if (peekOpener.current && film.lead && film.opener) setT(Math.max(0, Math.min(film.lead - 0.02, (openerRest(film.opener) / film.opener.seconds) * film.lead)));
     else if (!scrubbed.current) setT(restT(Math.min(page, pageCount - 1)));
   }, [film, page, playing, pageCount]);
   useEffect(() => {
@@ -829,7 +844,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
                 peekAtOpener();
               }}
               plan={opener}
-              trip={tripOpener.trip ? { name: tripOpener.trip.name } : null}
+              trip={tripOpener}
+              host={asideEl}
               client={instance ? client : null}
               instance={instance}
               files={files}
@@ -1041,6 +1057,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
             sections scrolling under them with their titles sticky, what Export TRIGGERS at its foot. */}
         <InspectorBlock
           label="Recap settings"
+          blockRef={setAsideEl}
           footRef={setFootEl}
           head={
             <Segmented<Tab>

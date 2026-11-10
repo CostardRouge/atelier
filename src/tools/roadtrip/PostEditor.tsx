@@ -136,13 +136,13 @@ import { hasCardSlide, leadSlideOf, withBadgeOn } from '../../shared/roadtrip/pi
 import { canvasThumbnail } from '../../shared/roadtrip/thumbnail';
 import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
-import { openOpenerChapter } from './opener-chapter';
+import { openOpenerChapter } from '../../shared/roadtrip/hooks/opener-chapter-pref';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import { useSlideIntake } from './use-slide-intake';
 import AuditionSheet from './AuditionSheet';
 import { splitAssetsBySource } from '../../shared/library/asset-source';
-import GarageModal from './GarageModal';
+import GarageModal from '../../shared/roadtrip/garage/GarageModal';
 import { mainVehicle, replaceVehicle, withLookOn } from '../../shared/roadtrip/vehicle-fleet';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';

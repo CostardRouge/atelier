@@ -9,12 +9,12 @@ import {
   type VehicleGear,
   type VehicleModelId,
   type VehicleSpec,
-} from '../../shared/roadtrip/vehicle-spec';
-import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from '../../shared/roadtrip/hooks/vehicle-registry';
-import { FieldRow, SelectField, SwitchRow, swatchClass } from '../../shared/ui/Inspector';
-import Segmented from '../../shared/ui/Segmented';
+} from '../vehicle-spec';
+import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from '../hooks/vehicle-registry';
+import { FieldRow, SelectField, SwitchRow, swatchClass } from '../../ui/Inspector';
+import Segmented from '../../ui/Segmented';
 import VehicleTurntable from './VehicleTurntable';
-import { linkButton } from './panels/ui';
+import { resetLink as linkButton } from '../hooks/panel-ui';
 
 interface GaragePanelProps {
   value: VehicleSpec;
