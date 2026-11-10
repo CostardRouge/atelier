@@ -868,7 +868,9 @@ export default function PostEditor({
   );
 
   /** The SELECTED cell's framing — the slide's own when it is cell 0 — and how it moves. */
-  const cellFraming = normaliseFraming(cell ? cell.framing : slide.framing);
+  // Read once per stored framing: a fresh object each render broke the motion cards' memos and repainted every card per frame.
+  const framingStored = cell ? cell.framing : slide.framing;
+  const cellFraming = useMemo(() => normaliseFraming(framingStored), [framingStored]);
   const cellMotion = cell ? cell.motion : slide.motion;
 
   const patchSlide = (patch: Partial<PostSlide>) => {

@@ -175,7 +175,9 @@ interface CameraPanelProps {
  * the first control touched writes the choice onto the piece.
  */
 export default function CameraPanel({ trip, post, exif, patchBadge, shades, onShades, onChangeTrip }: CameraPanelProps) {
-  const spec = readPlateSpec(post.badge.camera ?? null);
+  // Read once per stored spec: a fresh `fields` array each render re-laid and repainted every layout tile per frame while the piece played.
+  const stored = post.badge.camera ?? null;
+  const spec = useMemo(() => readPlateSpec(stored), [stored]);
   const setSpec = (patch: Partial<CameraPlateSpec>) => patchBadge({ camera: { ...spec, ...patch } });
   const names = trip.cameraNames;
   const facts = useMemo(() => cameraFacts(exif, names), [exif, names]);
