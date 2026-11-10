@@ -32,7 +32,7 @@ import { Icons } from '../../shared/ui/icons';
  */
 export default function LutStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewHostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const wipeRef = useRef<HTMLDivElement>(null);
   // Last before/after wipe position (0..1), kept in a ref so pointer moves
@@ -87,9 +87,10 @@ export default function LutStudio() {
   const activeSource = activeTranscode.transcoded ?? activeClip?.file ?? null;
   const activeUrl = useObjectUrl(activeSource);
 
-  const { supported, setSplit } = useLutPreview(
+  const { supported, setSplit, canvasRef } = useLutPreview(
     videoRef,
-    canvasRef,
+    previewHostRef,
+    'block w-auto h-auto max-w-full max-h-full object-contain bg-frame',
     lut,
     intensity,
     bypass,
@@ -489,10 +490,8 @@ export default function LutStudio() {
               </div>
             )}
             {activeUrl ? (
-              <canvas
-                ref={canvasRef}
-                className="block w-auto h-auto max-w-full max-h-full object-contain bg-frame"
-              />
+              // The preview's canvas is the hook's own, one per renderer (`use-lut-preview.ts`).
+              <div ref={previewHostRef} className="contents" />
             ) : (
               <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-sm">
                 {clips.length === 0
