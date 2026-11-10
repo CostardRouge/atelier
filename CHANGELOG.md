@@ -11,6 +11,15 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Recap's *Layout* sets what the cells say for the first slide, the slides after it, or one slide alone — a chip above
+  the cells names whom you set and follows the stage. A month's calendar can lose its day numbers while its highlights
+  keep theirs. The date has a format (*10*, *Mon 10*, *10 Nov*, *Mon 10 Nov*, *Monday 10 November 2025*) and can sit
+  under the picture; the highlights' dates have their own text style; the running head can say each slide's days. A
+  new month's highlights say their date («10 Nov») instead of their rank; a recap made before keeps what it showed.
+- Recap writes a place as Trips does — *Albany*, *Albany, WA*, *Albany, Western Australia*, *Albany (WA)* — and can
+  add the country never, after a border, or on every pill. A picture's card says its place and where it comes from,
+  and gives it another: one of the recap's places, one of the covering trip's, or one typed — a picture with no GPS
+  can be placed too, and the day's other photos without a place with it. ↺ gives Winnow's back.
 - Recap's *Pictures* tab follows the slide on the stage: on a highlight slide it shows that slide's pictures, names
   the one in hand by its slide (*Slide 3 · 2 of 4*), and offers the recap's days under it — a month shaded by each
   day's shots, then the open day's photos, all of them, best first, 24 at a time, narrowed to your ♥ or picks. A tap

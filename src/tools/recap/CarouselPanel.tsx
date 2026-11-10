@@ -15,7 +15,6 @@ import { replaceCandidates, withMovedFlow, withRemoved, withReplaced, withRestor
 import { leaves } from '../../shared/sources/winnow/picture-rules';
 import PictureRulesFields from '../../shared/ui/PictureRulesFields';
 import { MAX_SHEET_SLIDES, MIN_SHEET_SLIDES, SHEET_ARRANGEMENTS, SHEET_ARRANGEMENT_LABEL, sheetSlides, type RecapSheet, type SheetArrangement, type SheetCamera, type SheetOwn } from '../../shared/recap/recap-sheet';
-import type { RecapPage } from '../../shared/recap/recap-layout';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { InspectorSection, SliderRow, TextField, ToggleField } from '../../shared/ui/Inspector';
@@ -357,13 +356,12 @@ function Glyph({ layout }: { layout: SlideLayout }) {
 }
 
 /**
- * The slide on the stage (carousel lab, D and E): its layout — Auto (the
- * rhythm) or one set for it alone, the pictures flowing on to the next — and
- * whether the first slide's title repeats on the others.
+ * A carousel slide's own layout (carousel lab, D): Auto (the rhythm) or one
+ * set for it alone, the pictures flowing on to the next — lab 17 moved it into
+ * Layout › Cells › *This slide*.
  */
-export function SlideSection({ doc, page, change }: { doc: RecapDoc; page: RecapPage | undefined; change: Change }) {
+export function SlideLayoutPicker({ doc, flowKey, change }: { doc: RecapDoc; flowKey: string | null; change: Change }) {
   const c = doc.carousel;
-  const flowKey = page && page.key.startsWith('p:') ? page.key : null;
   const set = flowKey ? c.layouts[flowKey] : undefined;
   const layoutOf = (k: string) => {
     const { [k]: _gone, ...rest } = c.layouts;
@@ -371,49 +369,58 @@ export function SlideSection({ doc, page, change }: { doc: RecapDoc; page: Recap
     return rest;
   };
   return (
-    <InspectorSection id="recap-slide" title="Slides">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className={legend}>{flowKey ? 'This slide’s layout' : 'This slide keeps its template'}</span>
-          <div role="group" aria-label="This slide's layout" className="grid grid-cols-7 gap-1 p-[3px] rounded-[10px] border border-line bg-paper2 max-[400px]:grid-cols-4">
-            {(['auto', ...SLIDE_LAYOUTS] as const).map((l) => {
-              const on = flowKey ? (l === 'auto' ? !set : set === l) : false;
-              return (
-                <button
-                  key={l}
-                  type="button"
-                  disabled={!flowKey}
-                  aria-pressed={on}
-                  title={l === 'auto' ? 'The rhythm chooses' : `${SLIDE_LAYOUT_LABEL[l]} — the pictures after it flow on to the next slides`}
-                  onClick={() => flowKey && setCarousel(change, { layouts: l === 'auto' ? layoutOf(flowKey) : { ...c.layouts, [flowKey]: l } })}
-                  className={`h-9 pointer-coarse:h-11 inline-flex items-center justify-center gap-1 rounded-[8px] border text-2xs font-mono cursor-pointer disabled:opacity-40 disabled:cursor-default ${on ? 'bg-surface border-line-strong text-ink font-semibold' : 'border-transparent text-ink-soft'}`}
-                >
-                  {l === 'auto' ? 'Auto' : <Glyph layout={l} />}
-                  {l !== 'auto' && <span className="max-[400px]:hidden">{SLIDE_LAYOUT_LABEL[l]}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <Segmented<SlideTitles>
-          size="sm"
-          fill
-          label="The title on the other slides"
-          value={c.titles}
-          onChange={(titles) => setCarousel(change, { titles })}
-          options={(['first', 'head', 'same'] as const).map((t) => ({
-            id: t,
-            label: TITLES_LABEL[t],
-            title: t === 'first' ? 'Only the first slide carries the title' : t === 'head' ? 'A small line with the title and the slide’s number on every other slide, the clips’ included' : 'The title as big as on the first slide, the pictures moved under it',
-          }))}
-        />
-        {c.order && (
-          <button type="button" onClick={() => setCarousel(change, { order: null })} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">
-            Put the slides back in their own order
+    <div role="group" aria-label="This slide's layout" className="grid grid-cols-7 gap-1 p-[3px] rounded-[10px] border border-line bg-paper2 max-[400px]:grid-cols-4">
+      {(['auto', ...SLIDE_LAYOUTS] as const).map((l) => {
+        const on = flowKey ? (l === 'auto' ? !set : set === l) : false;
+        return (
+          <button
+            key={l}
+            type="button"
+            disabled={!flowKey}
+            aria-pressed={on}
+            title={l === 'auto' ? 'The rhythm chooses' : `${SLIDE_LAYOUT_LABEL[l]} — the pictures after it flow on to the next slides`}
+            onClick={() => flowKey && setCarousel(change, { layouts: l === 'auto' ? layoutOf(flowKey) : { ...c.layouts, [flowKey]: l } })}
+            className={`h-9 pointer-coarse:h-11 inline-flex items-center justify-center gap-1 rounded-[8px] border text-2xs font-mono cursor-pointer disabled:opacity-40 disabled:cursor-default ${on ? 'bg-surface border-line-strong text-ink font-semibold' : 'border-transparent text-ink-soft'}`}
+          >
+            {l === 'auto' ? 'Auto' : <Glyph layout={l} />}
+            {l !== 'auto' && <span className="max-[400px]:hidden">{SLIDE_LAYOUT_LABEL[l]}</span>}
           </button>
-        )}
-      </div>
-    </InspectorSection>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The first slide's title on the slides after it — none, a running head, or as on the first — and the slides' own order given back. */
+export function SlideTitlesRow({ doc, change }: { doc: RecapDoc; change: Change }) {
+  const c = doc.carousel;
+  return (
+    <>
+      <Segmented<SlideTitles>
+        size="sm"
+        fill
+        label="The title on the other slides"
+        value={c.titles}
+        onChange={(titles) => setCarousel(change, { titles })}
+        options={(['first', 'head', 'same'] as const).map((t) => ({
+          id: t,
+          label: TITLES_LABEL[t],
+          title: t === 'first' ? 'Only the first slide carries the title' : t === 'head' ? 'A small line with the title and the slide’s number on every other slide, the clips’ included' : 'The title as big as on the first slide, the pictures moved under it',
+        }))}
+      />
+      {c.titles === 'head' && (
+        <span title="The running head says each slide’s days, in the slides’ date format — «NOVEMBER · 3 – 8 NOV · 2/4»">
+          <ToggleField checked={c.headDates} onChange={(headDates) => setCarousel(change, { headDates })} label="The slide's days in the head">
+            The slide’s days in the head
+          </ToggleField>
+        </span>
+      )}
+      {c.order && (
+        <button type="button" onClick={() => setCarousel(change, { order: null })} className="self-start text-2xs text-accent-ink underline-offset-2 hover:underline">
+          Put the slides back in their own order
+        </button>
+      )}
+    </>
   );
 }
 

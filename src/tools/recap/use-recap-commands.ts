@@ -33,6 +33,7 @@ import { listTrips } from '../../shared/roadtrip/trip-store';
 import { chooseCarousel, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { withJoined } from '../../shared/recap/recap-selection';
+import { withPlaceByHand } from '../../shared/recap/recap-places';
 import { pictureOfRow } from './recap-media';
 import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
 import { PostizClient } from '../../shared/sources/postiz/client';
@@ -137,6 +138,28 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
         if ((p.text as string).length > 80) throw new CommandError('invalid', 'a caption is 80 characters at most');
         c.current.change((d) => withCaption(d, s.id, p.text as string));
         return { slot: s.id, caption: p.text };
+      },
+    },
+    {
+      id: 'recap.place',
+      title: 'Give pictures a place by hand',
+      description:
+        'The place pictures say, by hand (lab 17): a town (or a sight), its region and its country — what their pin, {place}, the runs of days and the caption\'s tags then say. Winnow\'s own is kept: with none of place, region or country given, the pictures say Winnow\'s again. Keys from recap.pool. How a place is WRITTEN is recap.set places.writing / places.country.',
+      params: {
+        keys: { type: 'strings', description: 'Picture keys, from recap.pool.' },
+        place: { type: 'string', description: 'The town or the sight, e.g. "Albany".', optional: true },
+        region: { type: 'string', description: 'Its state or region, e.g. "Western Australia".', optional: true },
+        country: { type: 'string', description: 'Its country, e.g. "Australia".', optional: true },
+      },
+      run: (p) => {
+        const keys = p.keys as string[];
+        const pool = new Set(doc().pictures.map((x) => x.key));
+        const missing = keys.filter((k) => !pool.has(k));
+        if (missing.length) throw new CommandError('invalid', `not in this recap's pool: ${missing.slice(0, 5).join(', ')}`);
+        const facts = { place: p.place as string | undefined, region: p.region as string | undefined, country: p.country as string | undefined };
+        const back = !facts.place?.trim() && !facts.region?.trim() && !facts.country?.trim();
+        c.current.change((d) => withPlaceByHand(d, keys, back ? null : facts));
+        return { keys, place: back ? 'Winnow’s' : facts };
       },
     },
     {

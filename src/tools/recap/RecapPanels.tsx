@@ -48,9 +48,13 @@ import { beatOfFile } from './recap-beat-find';
 import { bpmOf } from '../../shared/recap/recap-beat';
 import FrameBox from './FrameBox';
 import PlacesSection from './PlacesSection';
+import CellsSection from './CellsSection';
+import type { RecapPage } from '../../shared/recap/recap-layout';
+import PicturePlace from './PicturePlace';
+import type { PlaceFacts } from '../../shared/recap/recap-places';
 import LoopTrimmer from './LoopTrimmer';
 import { DEFAULT_FRAME, MAX_ROTATE, isDefaultFrame, rotateFrame, type Frame } from '../../shared/recap/recap-frame';
-import { ARRANGES, EXIF_LABEL, EXIF_PARTS, type Arrange, type ExifPart } from '../../shared/recap/recap-cellwords';
+import { EXIF_LABEL, EXIF_PARTS, type ExifPart } from '../../shared/recap/recap-cellwords';
 import type { Drawable } from '../../shared/recap/recap-paint';
 
 export type Change = (fn: (doc: RecapDoc) => RecapDoc) => void;
@@ -287,9 +291,12 @@ export function SlotSection({
   resolved,
   title,
   candidates = true,
+  trip = null,
 }: {
   doc: RecapDoc;
   slot: RecapSlot;
+  /** The trip covering the recap (its copy for an opener, else the covering one): its places, offered to a picture. */
+  trip?: { name: string; places: PlaceFacts[] } | null;
   /** The band's words when the place is better named by where it shows («Slide 3 · 2 of 4»). */
   title?: string;
   /** Its own grid of candidates — off where the day chooser (`DayChooser.tsx`) offers the days under it. */
@@ -397,6 +404,7 @@ export function SlotSection({
             </button>
           </span>
         )}
+        {pic && <PicturePlace doc={doc} pic={pic} change={change} trip={trip} />}
         {pic && (
           <div className="flex flex-col gap-1">
             <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />
@@ -454,7 +462,7 @@ export function SlotSection({
 // ---- the camera's words -------------------------------------------------------------
 
 /** Which of the camera's settings a line says — toggles, in the line's own order. */
-function ExifChips({ parts, onParts, label }: { parts: readonly ExifPart[]; onParts: (parts: ExifPart[]) => void; label: string }) {
+export function ExifChips({ parts, onParts, label }: { parts: readonly ExifPart[]; onParts: (parts: ExifPart[]) => void; label: string }) {
   return (
     <div role="group" aria-label={label} className="flex flex-wrap gap-1">
       {EXIF_PARTS.map((part) => {
@@ -475,14 +483,12 @@ function ExifChips({ parts, onParts, label }: { parts: readonly ExifPart[]; onPa
   );
 }
 
-const ARRANGE_LABEL: Record<Arrange, string> = { auto: 'Auto', line: 'One line', stack: 'Stacked' };
 
 // ---- layout --------------------------------------------------------------------------
 
-export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }) {
+export function LayoutSection({ doc, change, page, pages, onPage }: { doc: RecapDoc; change: Change; page: RecapPage | undefined; pages: readonly RecapPage[]; onPage: (index: number) => void }) {
   const c = doc.cells;
   const set = (patch: Partial<RecapDoc['cells']>) => change((d) => withRecap(d, { cells: { ...d.cells, ...patch } }));
-  const dayTemplate = doc.template === 'month' || doc.template === 'week' || doc.template === 'onThisDay';
   return (
     <>
       <InspectorSection id="recap-format" title="Format">
@@ -521,86 +527,23 @@ export function LayoutSection({ doc, change }: { doc: RecapDoc; change: Change }
             <SliderRow label="The last slide's pictures" value={doc.count} min={1} max={WRAPPED_COLLAGE_MAX} step={1} reset={9} onChange={(count) => change((d) => withRecap(d, { count }))} />
           )}
           {(doc.template === 'dump' || doc.template === 'sheets') && <CountRow doc={doc} change={change} />}
-          {doc.template === 'month' && (
-            <ToggleField checked={c.weekStart === 0} onChange={(on) => set({ weekStart: on ? 0 : 1 })} label="Weeks start on Sunday">
-              Weeks start on Sunday
-            </ToggleField>
-          )}
         </div>
       </InspectorSection>
-      <InspectorSection id="recap-cells" title="On every cell">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-          <ToggleField checked={c.number} onChange={(number) => set({ number })} label="Number">
-            {dayTemplate ? 'Day number' : 'Number'}
-          </ToggleField>
-          <ToggleField checked={c.count} onChange={(count) => set({ count })} label="Shots that day">
-            Shots that day
-          </ToggleField>
-          <ToggleField checked={c.exif} onChange={(exif) => set({ exif })} label="Camera settings">
-            Camera settings
-          </ToggleField>
-          <ToggleField checked={c.device} onChange={(device) => set({ device })} label="Device">
-            Device
-          </ToggleField>
-          <ToggleField checked={c.caption} onChange={(caption) => set({ caption })} label="A word per day">
-            A word per day
-          </ToggleField>
-          <ToggleField checked={c.videoBadge} onChange={(videoBadge) => set({ videoBadge })} label="Clip badge">
-            Clip badge
-          </ToggleField>
-          {dayTemplate && (
-            <ToggleField checked={c.today} onChange={(today) => set({ today })} label="Ring today">
-              Ring today
-            </ToggleField>
-          )}
-          {doc.template === 'month' && (
-            <ToggleField checked={c.headers} onChange={(headers) => set({ headers })} label="Weekdays">
-              Weekdays
-            </ToggleField>
-          )}
-          <ToggleField checked={doc.clipSlides} onChange={(clipSlides) => change((d) => withRecap(d, { clipSlides }))} label="Clips as slides">
-            Clips as slides
-          </ToggleField>
-        </div>
-        {(c.exif || c.device || c.caption) && (
-          <div className="mt-2 flex flex-col gap-2">
-            {c.exif && (
-              <div className="flex flex-col gap-1">
-                <span className={legend}>The camera says</span>
-                <ExifChips parts={c.exifParts} onParts={(exifParts) => set({ exifParts })} label="The camera's settings every cell says" />
-              </div>
-            )}
-            <div title="Words never pass their cell: a long line shrinks, then ends in “…”. Auto packs them into lines that fit, and stacks them in a tall cell.">
-              <Segmented<Arrange>
-                size="sm"
-                fill
-                label="How a cell's words lie"
-                value={c.arrange}
-                onChange={(arrange) => set({ arrange })}
-                options={ARRANGES.map((a) => ({ id: a, label: ARRANGE_LABEL[a] }))}
-              />
-            </div>
-          </div>
-        )}
-        {(doc.template === 'month' || doc.template === 'week') && (
-          <div className="mt-2">
-            <Segmented
-              size="sm"
-              fill
-              label="A day with no picture"
-              value={c.empty}
-              onChange={(empty) => set({ empty })}
-              options={[
-                { id: 'number', label: 'Its number' },
-                { id: 'dashed', label: 'Dashed' },
-                { id: 'hidden', label: 'Hidden' },
-              ]}
-            />
-          </div>
-        )}
-        <div className="mt-2 flex flex-col gap-1">
+      {/* What a cell says, for the first slide, the slides after it, or the slide on the stage (lab 17). */}
+      <CellsSection doc={doc} change={change} page={page} pages={pages} onPage={onPage} />
+      {/* What every slide shares — the rest moved into Cells' scopes (lab 17). */}
+      <InspectorSection id="recap-every-slide" title="On every slide">
+        <div className="flex flex-col gap-1">
           <SliderRow label="Gap" value={Math.round(c.gap * 1000)} min={0} max={40} step={1} reset={8} onChange={(v) => set({ gap: v / 1000 })} />
           <SliderRow label="Corners" value={Math.round(c.radius * 100)} min={0} max={25} step={1} reset={0} format={(v) => `${v} %`} onChange={(v) => set({ radius: v / 100 })} />
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-1">
+            <ToggleField checked={c.videoBadge} onChange={(videoBadge) => set({ videoBadge })} label="Clip badge">
+              Clip badge
+            </ToggleField>
+            <ToggleField checked={doc.clipSlides} onChange={(clipSlides) => change((d) => withRecap(d, { clipSlides }))} label="Clips as slides">
+              Clips as slides
+            </ToggleField>
+          </div>
         </div>
       </InspectorSection>
       <PlacesSection doc={doc} change={change} />

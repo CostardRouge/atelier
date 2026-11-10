@@ -17,6 +17,7 @@
  */
 
 import type { RecapPicture, RecapTemplate } from './recap-doc';
+import { readWords, type CellWords } from './recap-cellwords';
 import { looksAlike, leaves, phashOf, rankBy, readPictureRules, type PictureFacts, type PictureRules } from '../sources/winnow/picture-rules';
 
 /** A flow slide's arrangement — the photo dump's patterns, plus six. */
@@ -54,18 +55,31 @@ export interface RecapCarousel {
   order: string[] | null;
   /** The first slide's title on the others: not at all, as a running head, or as on the first. */
   titles: SlideTitles;
+  /**
+   * What the slides after the first SAY (lab 17 part I): the highlights' or
+   * the weeks' own cell words over the first slide's (`cells`) — what they do
+   * not set, they inherit (`recap-scope.ts`).
+   */
+  cells: Partial<CellWords>;
+  /** One slide's own words over its family's, by page key (`p:3`, `w:1`) — kept like `layouts`. */
+  slideCells: Record<string, Partial<CellWords>>;
+  /** The running head also says the slide's days in the highlights' format («NOVEMBER · 3 – 8 NOV · 2/4»). */
+  headDates: boolean;
 }
 
 export const MAX_HIGHLIGHTS = 60;
 
 export function defaultCarousel(template: RecapTemplate): RecapCarousel {
-  return { after: template === 'month' ? 'highlights' : 'none', highlights: 8, rules: readPictureRules(null), picksOnly: null, chosen: null, left: [], burstPick: {}, layouts: {}, order: null, titles: 'first' };
+  // A NEW month's highlights say their date «10 Nov» (Q1); a recap made before keeps what it printed (`readCarousel`).
+  const cells: Partial<CellWords> = template === 'month' ? { date: 'dMon' } : {};
+  return { after: template === 'month' ? 'highlights' : 'none', highlights: 8, rules: readPictureRules(null), picksOnly: null, chosen: null, left: [], burstPick: {}, layouts: {}, order: null, titles: 'first', cells, slideCells: {}, headDates: false };
 }
 
 const strings = (v: unknown, max: number): string[] => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 400))].slice(0, max) : []);
 
 export function readCarousel(raw: unknown, template: RecapTemplate): RecapCarousel {
-  const base = defaultCarousel(template);
+  // A document without these words was made before them: its slides say what they always did (Q2), never the new default.
+  const base = { ...defaultCarousel(template), cells: {} };
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Record<string, unknown>;
   const after = r.after === 'none' || r.after === 'highlights' || (r.after === 'weeks' && template === 'month') ? r.after : base.after;
@@ -91,6 +105,17 @@ export function readCarousel(raw: unknown, template: RecapTemplate): RecapCarous
     layouts: record(r.layouts, (x): x is SlideLayout => SLIDE_LAYOUTS.includes(x as SlideLayout)),
     order: Array.isArray(r.order) ? strings(r.order, 200) : null,
     titles: r.titles === 'head' || r.titles === 'same' ? r.titles : 'first',
+    cells: r.cells !== undefined ? readWords(r.cells) : base.cells,
+    slideCells: (() => {
+      const out: Record<string, Partial<CellWords>> = {};
+      if (r.slideCells && typeof r.slideCells === 'object' && !Array.isArray(r.slideCells))
+        for (const [k, v] of Object.entries(r.slideCells as Record<string, unknown>).slice(0, 200)) {
+          const w = readWords(v);
+          if (k.length <= 40 && Object.keys(w).length) out[k] = w;
+        }
+      return out;
+    })(),
+    headDates: r.headDates === true,
   };
 }
 

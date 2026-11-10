@@ -10,7 +10,9 @@ import PlacesTray from './PlacesTray';
 import SlideTray from './SlideTray';
 import DayChooser from './DayChooser';
 import { slideLabel } from '../../shared/recap/recap-chooser';
-import { CarouselSection, SheetSection, SlideSection } from './CarouselPanel';
+import { tripPlaceFacts } from '../../shared/recap/recap-places';
+import { tripOf } from '../../shared/recap/recap-opener-trip';
+import { CarouselSection, SheetSection } from './CarouselPanel';
 import { filledOf, naturalLength, pageAt, planFilm } from '../../shared/recap/recap-motion';
 import { defileTicks, hasOpenerSlide, openerRest, planOpener } from '../../shared/recap/recap-opener-plan';
 import { inOpener } from '../../shared/recap/recap-opener-paint';
@@ -200,6 +202,12 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   // The opener leads the film (`recap-opener.ts`): planned once, read by the film plan, the stage, the strip and the exports.
   // Trips' own variants drive the copy of a trip the recap keeps, or its located pictures alone (`recap-trip-opener.ts`).
   const tripOpener = useTripOpener(view, resolved);
+  // The trip whose places a picture is offered (lab 17 part III): the opener's copy when the recap keeps one, else the trip covering its days.
+  const placesTrip = useMemo(() => {
+    const t = doc.opener.tripCopy ? tripOf(doc.opener.tripCopy) : tripOpener.covering;
+    const places = tripPlaceFacts(t);
+    return t && places.length ? { name: t.name, places } : null;
+  }, [doc.opener.tripCopy, tripOpener.covering]);
   // The inspector's block: what the trip drawer rises in (lab 16).
   const [asideEl, setAsideEl] = useState<HTMLElement | null>(null);
   // A recap that plays a trip opener with no copy of a trip — one made before lab 16, which read the trip of this
@@ -843,6 +851,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
                 resolved={resolved}
                 title={slot.flow ? (slideLabel(layout, slot.id) ?? slot.label) : slot.label}
                 candidates={!chooser}
+                trip={placesTrip}
               />
             ) : (
               <p className="m-0 px-1 text-xs text-muted">Click a cell on the stage to choose its picture, develop it or empty it. Drag a picture onto another cell to swap them.</p>
@@ -876,12 +885,18 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       case 'layout':
         return (
           <>
-            <LayoutSection doc={doc} change={change} />
-            {doc.template === 'sheets' ? (
-              <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} />
-            ) : doc.template !== 'wrapped' && doc.template !== 'second' ? (
-              <SlideSection doc={doc} page={layout.pages[Math.min(page, pageCount - 1)]} change={change} />
-            ) : null}
+            <LayoutSection
+              doc={doc}
+              change={change}
+              page={layout.pages[Math.min(page, pageCount - 1)]}
+              pages={layout.pages}
+              onPage={(i) => {
+                scrubbed.current = false;
+                setPlaying(false);
+                setPage(i);
+              }}
+            />
+            {doc.template === 'sheets' && <SheetSection doc={doc} change={change} pictures={resolved.slots.filter((s) => s.picture).length} page={Math.min(page, pageCount - 1)} />}
             <StyleSection doc={doc} change={change} />
           </>
         );
