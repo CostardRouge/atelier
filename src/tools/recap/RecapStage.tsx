@@ -296,7 +296,14 @@ export default function RecapStage(props: Props) {
   const tight = roomW > 0 && roomW < 560;
 
   return (
-    <div ref={boxRef} className="relative w-full h-full min-h-0 flex items-center justify-center">
+    <div
+      ref={boxRef}
+      // A click in the empty surround, off the page, lets go of what is in hand (his ask, 2026-11-10): the stage seen with nothing selected.
+      onClick={(e) => {
+        if (!framing && e.target === e.currentTarget) onSelect(null);
+      }}
+      className="relative w-full h-full min-h-0 flex items-center justify-center"
+    >
       <div className="relative" style={{ width: size.w || undefined, height: size.h || undefined }}>
         <canvas
           ref={(el) => {

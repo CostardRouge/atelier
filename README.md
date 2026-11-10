@@ -3574,7 +3574,10 @@ stage: on a carousel slide it lists **that slide's pictures** instead of the
 calendar's places, holds one of them (*Slide 3 · 2 of 4*), and the same days
 offer its replacements — a tap puts a photo in its place (one already on another
 slide trades places with it), **+** adds a photo right after it; a photo on the
-calendar never joins the highlights, the same picture twice reading as a mistake. *Choose one…* opens your Winnow for that place: any
+calendar never joins the highlights, the same picture twice reading as a mistake. A click in the empty
+space around the page (or Escape) lets go of what is in hand, so the stage can be
+looked at with nothing selected; showing another slide then selects nothing by
+itself, and the month and its days stay open to browse. *Choose one…* opens your Winnow for that place: any
 picture — even one from another day, then marked *chosen by hand* — lands
 there, so an empty day can be filled and developed. Drag a picture onto another cell to swap them; drag
 the heading to move it. The **filter** keeps only some devices — *your iPhone,

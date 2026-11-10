@@ -456,11 +456,18 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const shownPage = layout.pages[Math.min(page, Math.max(0, pageCount - 1))];
   const flowPage = Boolean(shownPage?.parts.some((p) => p.kind === 'cell' && resolved.slots.some((s) => s.id === p.id && s.flow)));
   const firstOnPage = flowPage ? (shownPage!.parts.find((p) => p.kind === 'cell' && resolved.slots.some((s) => s.id === p.id && s.flow && s.picture))?.id ?? null) : null;
+  // Only when the PAGE changes with a cell in hand elsewhere: the hold follows the slide shown. Nothing in hand stays
+  // nothing — a click in the void or Escape lets go, and the stage is then seen with nothing selected (his ask).
+  const selectedRef = useRef(selectedCell);
+  selectedRef.current = selectedCell;
+  const heldPage = useRef(page);
   useEffect(() => {
-    if (tab !== 'pictures' || playing || !firstOnPage) return;
-    const onIt = selectedCell !== null && layoutRef.current.pages[pageRef.current]?.parts.some((p) => p.kind === 'cell' && p.id === selectedCell);
-    if (!onIt) setSelection({ kind: 'cell', id: firstOnPage });
-  }, [tab, page, firstOnPage, selectedCell, playing]);
+    if (heldPage.current === page) return;
+    heldPage.current = page;
+    const cell = selectedRef.current;
+    if (tab !== 'pictures' || playing || !firstOnPage || cell === null) return;
+    if (!layoutRef.current.pages[page]?.parts.some((p) => p.kind === 'cell' && p.id === cell)) setSelection({ kind: 'cell', id: firstOnPage });
+  }, [tab, page, firstOnPage, playing]);
 
   // ---- the keys (`editor-keys.ts` decides who owns a press; `RecapShortcuts` lists them) ----
   const [keysOpen, setKeysOpen] = useState(false);
@@ -1104,7 +1111,15 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       )}
       <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto overflow-x-hidden @min-[860px]:overflow-visible @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_23rem]">
         <div className="flex-none min-w-0 flex flex-col gap-2 @min-[860px]:min-h-0">
-          <div className="flex-none h-[calc(var(--app-h,100dvh)*0.58)] min-h-[260px] min-w-0 rounded-control bg-paper-2 p-2 @min-[860px]:h-auto @min-[860px]:flex-1">{stage}</div>
+          <div
+            // The frame's own margin is void too: a click there lets go of what is in hand, as the stage's surround does.
+            onClick={(e) => {
+              if (!framing && e.target === e.currentTarget) setSelection(null);
+            }}
+            className="flex-none h-[calc(var(--app-h,100dvh)*0.58)] min-h-[260px] min-w-0 rounded-control bg-paper-2 p-2 @min-[860px]:h-auto @min-[860px]:flex-1"
+          >
+            {stage}
+          </div>
           {strip}
           {transport}
           <p className="m-0 px-1 font-mono text-3xs tabular-nums text-muted" role="status">
