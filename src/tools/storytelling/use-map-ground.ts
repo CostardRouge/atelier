@@ -3,6 +3,7 @@ import { proj, type RoadPoints, type Stop } from '../../shared/story/geo';
 import { groundBoxes, MAP_GROUND_DEFAULTS, seaBand, seaColour, type GroundLayer, type MapGround } from '../../shared/story/map-ground';
 import { loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
 import { toneRaster } from '../../shared/map/tile-tone';
+import { deviceClass } from '../../shared/lib/device-class';
 
 export type MapGroundState =
   | { state: 'off' }
@@ -11,11 +12,20 @@ export type MapGroundState =
   | { state: 'ready'; layers: GroundLayer[] }
   | { state: 'failed'; message: string };
 
-/** The rasters kept for the visit, by what they were asked for — a post opened again asks nothing. */
+/**
+ * The rasters kept for the visit, by what they were asked for — a post opened again asks nothing. Each key
+ * holds two toned rasters (20–40 MB), and a tone or a route edited is a new key: the most recent few are
+ * kept, by device (`performance.md` rule 4), in the Map's order (a key read is moved to its end).
+ */
 const kept = new Map<string, Promise<GroundLayer[]>>();
+const keptMost = () => (deviceClass() === 'constrained' ? 2 : 6);
 
 async function fetchLayers(key: string, boxes: ReturnType<typeof groundBoxes>, tone: MapGround['tone']): Promise<GroundLayer[]> {
   let pending = kept.get(key);
+  if (pending) {
+    kept.delete(key);
+    kept.set(key, pending);
+  }
   if (!pending) {
     pending = Promise.all(
       boxes.map(async ({ box, width, height, fade }) => {
@@ -50,6 +60,7 @@ async function fetchLayers(key: string, boxes: ReturnType<typeof groundBoxes>, t
     );
     pending.catch(() => kept.delete(key));
     kept.set(key, pending);
+    while (kept.size > keptMost()) kept.delete(kept.keys().next().value!);
   }
   return pending;
 }
