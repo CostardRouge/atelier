@@ -221,8 +221,13 @@ on its **proxy** — a 720p H.264, a 2048 px WebP: light, quick to scrub,
 decodable everywhere. A chip beside the media's name says so (`Proxy ▾`), and
 its menu lists the capture's other files with their pixels and weight — the
 rush itself behind a clip, the camera's JPEG behind a still, and the render
-inside a RAW the instance paired with it — the same list as Develop's, minus
-the sensor. Pick one and it is fetched (the chip shows `↓` and the proxy stays
+inside a RAW the instance paired with it — the same list as Develop's — and,
+for a photo whose file or original is a camera RAW, its **sensor**: decoded in
+your browser by Develop's engine, with the file's lens shading and warp
+corrected, drawn on the stage and delivered by the export at up to 4096 px. A
+drone DNG of yours opens on its sensor by itself (its own render is 960 × 540);
+a Winnow picture only when you pick it, since its original is downloaded once
+for the session. Pick one and it is fetched (the chip shows `↓` and the proxy stays
 up meanwhile), kept for the session, and put on the stage at its own
 resolution, the playhead and the trim where they were; the chip then names its
 type (`MP4`, `JPEG`, `DNG render`). The choice is remembered per media in the
@@ -1861,6 +1866,17 @@ error-correction level M, versions 1 to 10 (213 characters); a link that does
 not fit is refused with a reason rather than drawn as a code that scans to half
 a URL.
 
+**A RAW at full quality.** Beside the Develop door of a slide whose picture
+is a camera RAW — a file of yours, or a Winnow picture whose original is a RAW
+— a small menu chooses what it is read from: its **camera render** (or the
+Winnow proxy) or its **sensor**, decoded in your browser by Develop's own
+engine, with the file's lens shading and warp corrected. A drone DNG of yours,
+whose render is a 960 × 540 picture, goes to its sensor by itself; a Winnow
+picture only when you ask, since its original is downloaded once for the
+session. The stage, the Develop sheet and every export (video, stills, the
+opener) then draw the sensor's picture, at up to 4096 px. A collage's cells
+keep their render.
+
 **Develop: a picture's own correction.** On the Picture tab, one settled row
 says what has been done to the open slide's picture — `As shot`, or
 `+0.7 EV · highlights −40 · vibrance +15` — and **Develop…** opens a sheet
@@ -1913,8 +1929,12 @@ stay in Develop: the frame is the slide's. It is a **copy** with where it came
 from, not a link: a later change in Develop is offered as **Update**, never
 pushed, and the ✕ takes the edit off while the correction and the look stay.
 It belongs to the file it was made on — a slide given another picture draws
-none of it — and a picture developed on its sensor is refused, the slide
-drawing the camera's own render. Several rolls holding the picture are listed
+none of it. A picture developed on its **sensor** in Develop is taken
+too, when this slide can reach that sensor (the file is the RAW, or the
+Winnow picture's original is): the slide then reads its sensor and draws the
+develop exactly as Develop renders it; the Develop sheet goes on editing its
+numbers over that sensor. Where the sensor is out of reach it is refused, and
+the slide draws the camera's own render. Several rolls holding the picture are listed
 behind the row's ⋯. The Develop sheet itself shows the correction and the
 look; it says so when the picture also carries an edit it does not draw.
 
@@ -3558,6 +3578,23 @@ from this device — never uploaded. The copy a cell draws (a JPEG of at most
 2048 px) is kept on this device, so a recap reopens and exports without its
 files; the legal notice says so. **Develop** on a picture opens Develop's own
 sheet: its correction is the picture's, the look the whole recap's.
+
+**A RAW at full quality.** A camera RAW (a DJI `.DNG`, a Sony `.ARW`…) is
+read either from the **camera render** inside it — or, from a Winnow, its
+proxy — or from its **sensor**, decoded in your browser by the same engine
+as Develop, with the file's own lens shading and warp corrected. The
+picture's name in its card is the menu that chooses (*Render · Sensor ▾*);
+after a choice, a line offers the same for every RAW of the recap. By
+default (*auto*) a RAW file of yours goes to its sensor when its camera
+render is under half its size — a drone DNG, whose render is 960 × 540 of a
+36-megapixel sensor — and stays on its render otherwise (a Sony ARW carries a
+full-size one). A RAW on your Winnow stays on its proxy until you choose its
+sensor, since that means downloading the whole original (about 74 MB for a
+drone DNG), once for the session. The sensor's copy is kept like any other,
+decoded once per picture and device; on a phone it is decoded at 2560 px at
+most. An export with *Originals* reads a RAW on its sensor again at the
+density of the page that enlarges it (4096 px at most), and never takes a
+RAW's small camera render in place of the copy already on the stage.
 
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
 to action, with words counted for you: `{month}`, `{count}`, `{days}`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deliveryBitrate, deliverySize, needsOriginal, readDelivery, sizeText } from './recap-delivery';
+import { beatsPrint, deliveryBitrate, deliverySize, needsOriginal, readDelivery, sizeText } from './recap-delivery';
 
 describe('how a recap’s video is delivered', () => {
   it('scales its target with the size and the frame rate', () => {
@@ -22,5 +22,18 @@ describe('how a recap’s video is delivered', () => {
     expect(needsOriginal(2048, 1365, { x: 0, y: 0, w: 140, h: 140 })).toBe(false);
     // The same cell zoomed ×4 on a small print: yes.
     expect(needsOriginal(400, 300, { x: 0, y: 0, w: 140, h: 140 }, { x: 0.5, y: 0.5, zoom: 4 })).toBe(true);
+  });
+});
+
+describe('beatsPrint', () => {
+  it('refuses a DNG’s 960 × 540 render in place of its 2048 px print', () => {
+    expect(beatsPrint(960, 540, { width: 2048, height: 1152 })).toBe(false);
+  });
+  it('takes a sensor read at 4096 over the same print', () => {
+    expect(beatsPrint(4096, 2304, { width: 2048, height: 1152 })).toBe(true);
+  });
+  it('takes any original where no print is held, never an empty one', () => {
+    expect(beatsPrint(800, 600, null)).toBe(true);
+    expect(beatsPrint(0, 0, null)).toBe(false);
   });
 });

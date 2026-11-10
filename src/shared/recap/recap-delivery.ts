@@ -95,3 +95,15 @@ export function sizeText(bytes: number): string {
   if (bytes >= 1e6) return `${bytes >= 1e7 ? Math.round(bytes / 1e6) : (bytes / 1e6).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1e3))} kB`;
 }
+
+/**
+ * True when an original decoded at `w × h` gives a page more than the print
+ * it would replace (`print`). A RAW's original read through its camera render
+ * is the case: a DJI DNG's 960 × 540 render must never stand in for its
+ * 2048 px print (`sensor-outside-develop.md`).
+ */
+export function beatsPrint(w: number, h: number, print: { width: number; height: number } | null): boolean {
+  if (!(w > 0) || !(h > 0)) return false;
+  if (!print) return true;
+  return w * h > print.width * print.height;
+}

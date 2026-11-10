@@ -34,6 +34,7 @@ export default function StageRenditionMenu({
   current,
   fetching,
   onChoose,
+  sensor = null,
 }: {
   /** The media's name, drawn beside the chip. */
   baseName: string;
@@ -42,10 +43,16 @@ export default function StageRenditionMenu({
   /** The chosen file is on its way; the stage keeps the proxy meanwhile. */
   fetching: boolean;
   onChoose: (id: string) => void;
+  /**
+   * A RAW stands behind the media: the row that reads its SENSOR
+   * (`sensor-outside-develop.md`) — on the stage when `on`, Auto's answer
+   * when `auto`, being read when `busy`.
+   */
+  sensor?: { on: boolean; auto: boolean; busy: boolean; pixels: string | null; onPick: () => void } | null;
 }) {
-  if (rows.length < 2 || !current) return null;
+  if (!current || rows.length + (sensor ? 1 : 0) < 2) return null;
   const items: OverflowItem[] = rows.map((row) => {
-    const marked = row.id === current.id;
+    const marked = !sensor?.on && row.id === current.id;
     const facts = renditionFacts(row, formatBytes);
     const hint = marked && fetching ? 'on its way — the proxy stays on the stage until it lands' : describe(row);
     return {
@@ -65,9 +72,28 @@ export default function StageRenditionMenu({
       ),
     };
   });
-  const onProxy = current.role === 'proxy';
-  const label = stageChipLabel(current, baseName);
-  const whole = viewLabel(current);
+  if (sensor) {
+    items.push({
+      id: 'sensor',
+      title: 'the sensor itself, decoded here by Develop’s engine with the file’s own lens shading corrected — the export delivers from it',
+      onSelect: sensor.onPick,
+      label: (
+        <span className="flex flex-col items-start gap-0.5 text-left">
+          <span className="font-mono text-xs">
+            {sensor.on ? '· ' : '  '}
+            Sensor{sensor.auto && sensor.on ? <span className="text-faint"> · auto</span> : null}
+            {sensor.pixels && <span className="text-faint"> · {sensor.pixels}</span>}
+          </span>
+          <span className="font-mono text-3xs text-faint leading-relaxed max-w-[22rem] whitespace-normal">
+            {sensor.busy ? 'being read — the stage keeps its file until it lands' : 'full quality, decoded once'}
+          </span>
+        </span>
+      ),
+    });
+  }
+  const onProxy = !sensor?.on && current.role === 'proxy';
+  const label = sensor?.on ? 'Sensor' : stageChipLabel(current, baseName);
+  const whole = sensor?.on ? `${baseName} · sensor` : viewLabel(current);
   return (
     <OverflowMenu
       label="Which file of this media the stage shows"

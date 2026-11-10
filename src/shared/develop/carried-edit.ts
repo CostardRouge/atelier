@@ -54,6 +54,20 @@ export interface EditOffer {
   refusal: string | null;
 }
 
+/** Why a develop made on the sensor cannot be taken by a host that cannot reach that sensor. */
+export const SENSOR_REFUSAL =
+  'developed on its sensor in Develop — this side cannot reach that sensor here, and those numbers mean something else on the camera’s render; export it from Develop instead';
+
+/**
+ * The offer as a host that CAN reach the picture's sensor sees it
+ * (`sensor-outside-develop.md`): a develop made on the sensor is no longer
+ * refused there — the host reads the sensor and the develop is rendered from
+ * it whole (`sensor-still.ts`). Any other refusal stands.
+ */
+export function offerWithSensor(offer: EditOffer, reachable: boolean): EditOffer {
+  return reachable && offer.refusal === SENSOR_REFUSAL ? { ...offer, refusal: null } : offer;
+}
+
 /**
  * The offer a roll picture makes. A clip carries its develop and its look
  * alone — the rest are a still's passes. A develop made on the sensor is
@@ -62,9 +76,7 @@ export interface EditOffer {
 export function offerFrom(roll: RollDoc, picture: RollPicture, now: number = Date.now()): EditOffer {
   const edits = new Set(pictureEdits(picture));
   const stays = FRAME_SECTIONS.filter((s) => edits.has(s));
-  const refusal = isRawDevelop(picture.develop)
-    ? 'developed on its sensor in Develop — this side draws the camera’s own render, where those numbers mean something else; export it from Develop instead'
-    : null;
+  const refusal = isRawDevelop(picture.develop) ? SENSOR_REFUSAL : null;
   const carried = isClipPicture(picture) ? [] : CARRIED_SECTIONS.filter((s) => edits.has(s));
   const profile = picture.lensProfile && picture.lensProfile.onRender ? picture.lensProfile : null;
   const edit: CarriedEdit = {

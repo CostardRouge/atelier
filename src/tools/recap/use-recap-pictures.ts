@@ -5,6 +5,7 @@ import { gradeKey } from '../../shared/lut/saved-grade';
 import type { RecapDoc, RecapPicture } from '../../shared/recap/recap-doc';
 import type { Drawable } from '../../shared/recap/recap-paint';
 import { printOf, type PrintContext } from './recap-media';
+import { pictureMaterial, printKey } from '../../shared/recap/recap-raw';
 
 export interface PicturesState {
   /** The still a picture draws now — developed and wearing the look — or null while it is not in hand. */
@@ -53,9 +54,33 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
   const byKey = useMemo(() => new Map(doc.pictures.map((p) => [p.key, p])), [doc.pictures]);
   const byKeyRef = useRef(byKey);
   byKeyRef.current = byKey;
+  const docRef = useRef(doc);
+  docRef.current = doc;
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+  // A RAW is loaded from its material (`recap-raw.ts`): a change of material is a different print.
+  const wantKeys = keys.map((k) => {
+    const pic = byKey.get(k);
+    return pic ? printKey(k, pictureMaterial(pic, doc)) : k;
+  });
+  const loadedAs = useRef(new Map<string, string>());
   const keysKey = keys.join('|');
+  const wantKey = wantKeys.join('|');
+  useEffect(() => {
+    let changed = false;
+    keys.forEach((k, i) => {
+      const was = loadedAs.current.get(k);
+      if (was !== undefined && was !== wantKeys[i]) {
+        bitmaps.current.get(k)?.close();
+        bitmaps.current.delete(k);
+        graded.current.delete(k);
+        asked.current.delete(k);
+        loadedAs.current.delete(k);
+        changed = true;
+      }
+    });
+    if (changed) setVersion((v) => v + 1);
+  }, [wantKey]);
   // A picture that was missing is asked again when a way to it arrives (a file handed over, a Winnow connected).
   const ctxKey = `${ctx.instance ?? ''}|${ctx.files.size}`;
 
@@ -71,10 +96,13 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
       const pic = byKeyRef.current.get(key);
       let ok = false;
       try {
-        const blob = pic ? await printOf(pic, ctxRef.current) : null;
+        const material = pic ? pictureMaterial(pic, docRef.current) : 'render';
+        const blob = pic ? await printOf(pic, ctxRef.current, material) : null;
         if (blob) {
           const bmp = await createImageBitmap(blob);
+          bitmaps.current.get(key)?.close();
           bitmaps.current.set(key, bmp);
+          loadedAs.current.set(key, printKey(key, material));
           ok = true;
         }
       } catch {
@@ -95,7 +123,7 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
       // What was asked and not landed is asked again by the next run.
       for (const k of todo) if (!bitmaps.current.has(k)) asked.current.delete(k);
     };
-  }, [keysKey, ctxKey]);
+  }, [keysKey, ctxKey, wantKey]);
 
   // A different look, or a picture's develop changed: its graded copy is made again at its next draw.
   const look = `${gradeKey(doc.look ?? null)}|${stack.composed ? 'c' : '-'}|${stack.layers.length}`;
@@ -107,6 +135,7 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
     () => () => {
       for (const b of bitmaps.current.values()) b.close();
       bitmaps.current.clear();
+      loadedAs.current.clear();
       // Emptied, so all of it is asked again if the editor comes back (a remount keeps the refs).
       asked.current.clear();
       graded.current.clear();

@@ -22,7 +22,7 @@ import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slot
 import { getClip, getSound, putClip } from './recap-store';
 import { transcodeWith } from '../../shared/media/transcode';
 import { cellWindow, coverScale, loopWindow, shiftedLoop, transcodeArgs, transcodeKey, type TranscodeWindow } from '../../shared/recap/recap-transcode';
-import { deliveryBitrate, needsOriginal } from '../../shared/recap/recap-delivery';
+import { beatsPrint, deliveryBitrate, needsOriginal } from '../../shared/recap/recap-delivery';
 
 export interface ExportInput {
   doc: RecapDoc;
@@ -77,7 +77,9 @@ async function originalStills(input: ExportInput, signal: AbortSignal, onEach?: 
       if (signal.aborted) throw err;
       return null;
     });
-    if (d) got.set(k, d);
+    // An original that gives the page no more than its print stays the print (a DNG's tiny render).
+    const print = input.stills(k);
+    if (d && beatsPrint(d.width, d.height, print)) got.set(k, d);
     else kept += 1;
   }
   return { still: (key) => got.get(key) ?? input.stills(key), kept };

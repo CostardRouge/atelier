@@ -20,6 +20,7 @@ import {
 } from '../overlay/overlay-types';
 import { charBudget, wrapText } from '../lib/wrap-text';
 import { classifyPart } from '../library/assets';
+import { readMaterial, type RawMaterial } from '../develop/raw-choice';
 import { DEFAULT_FRAMING, normaliseFraming, type Framing } from '../media/framing';
 import { hasMotion, type FramingMotion } from '../media/framing-motion';
 import type { DevelopSettings } from '../develop/develop';
@@ -92,6 +93,8 @@ export interface DeckSlide {
    * asks it for the cube rather than reading this.
    */
   grade: TripGrade | null;
+  /** The slide's RAW material, when it chose one (`PostSlide.rawMaterial`). */
+  rawMaterial?: RawMaterial;
   /**
    * The rest of a Develop picture's edit (`PostSlide.edit`), resolved: null
    * unless it was made on this slide's own picture and draws a pass
@@ -256,6 +259,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       motion: slide.motion ?? null,
       develop: slide.develop ?? null,
       grade: slide.grade ?? null,
+      // Read, not trusted: a trip file is a stranger's JSON.
+      ...(readMaterial(slide.rawMaterial) ? { rawMaterial: readMaterial(slide.rawMaterial) } : {}),
       edit: drawnEdit(slide.edit, slide.media),
       collage: slide.collage ?? null,
       caption: slide.caption,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CELL_ENTRANCES,
   CELL_ORDERS,
@@ -32,6 +32,9 @@ import { carouselCount, countMax, withCount, withRemoved, withReplaced } from '.
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import Button from '../../shared/ui/Button';
 import PictureCard from '../../shared/ui/PictureCard';
+import MaterialMenu, { type MaterialRow } from '../../shared/develop/MaterialMenu';
+import type { RawMaterial } from '../../shared/develop/raw-choice';
+import { isRawPicture, materialIsAuto, materialLabel, pictureMaterial, rawCount, withRawMaterial } from '../../shared/recap/recap-raw';
 import DevelopDoor from '../../shared/develop/DevelopDoor';
 import { InspectorSection, SliderRow, TextField, ToggleField, fieldClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
@@ -259,6 +262,18 @@ export function SourcesSection({
   );
 }
 
+/** A RAW's two rows: its camera render (an instance's proxy) and its sensor, with what each costs. */
+function materialRows(pic: RecapPicture): MaterialRow[] {
+  const sensor = pic.width && pic.height ? `${pic.width} × ${pic.height}` : null;
+  const local = pic.origin === 'local';
+  return [
+    local
+      ? { material: 'render', label: 'Camera render', short: 'Render', hint: 'The picture inside the file · instant', pixels: pic.renderEdge ? `${pic.renderEdge} px` : null }
+      : { material: 'render', label: 'Proxy', hint: 'Winnow’s copy · instant', pixels: null },
+    { material: 'sensor', label: 'Sensor', hint: local ? 'Full quality · decoded once, kept as its print' : 'Full quality · downloads the original once', pixels: sensor },
+  ];
+}
+
 export function SlotSection({
   doc,
   slot,
@@ -289,6 +304,9 @@ export function SlotSection({
   const zoom = pic?.frame?.zoom ?? 1;
   const setFrame = (frame: Frame | undefined) => pic && change((d) => withPicture(d, pic.key, { frame: frame && !isDefaultFrame(frame) ? frame : undefined }));
   const shown = slot.candidates.slice(0, 60);
+  // The line a pick offers — the same material for every RAW of the recap — until dismissed or another place is shown.
+  const [offer, setOffer] = useState<RawMaterial | null>(null);
+  useEffect(() => setOffer(null), [slot.id]);
   return (
     <InspectorSection id="recap-slot" title={slot.label} foldable={false}>
       <div className={row}>
@@ -305,7 +323,23 @@ export function SlotSection({
           }
           mark={pic && slot.pinned && slot.day && pic.day && pic.day !== slot.day ? <span title="Chosen by hand from another day — the recap shows it on this one">from {shortDate(pic.day)} · by hand</span> : undefined}
           // The name is where a RAW's source menu goes (camera render · sensor — `sensor-outside-develop.md`).
-          name={pic ? <span title={pic.name}>{pic.name}</span> : undefined}
+          name={
+            pic && isRawPicture(pic) ? (
+              <MaterialMenu
+                name={pic.name}
+                current={pictureMaterial(pic, doc)}
+                auto={materialIsAuto(pic, doc)}
+                rows={materialRows(pic)}
+                className="w-full"
+                onPick={(m) => {
+                  change((d) => withPicture(d, pic.key, { material: m }));
+                  setOffer(m);
+                }}
+              />
+            ) : pic ? (
+              <span title={pic.name}>{pic.name}</span>
+            ) : undefined
+          }
           meta={pic?.day ? shortDate(pic.day) : undefined}
           primary={
             pic?.kind === 'photo' ? (
@@ -347,6 +381,16 @@ export function SlotSection({
               : undefined
           }
         />
+        {offer && rawCount(doc) > 1 && doc.raw !== offer && (
+          <span className="flex items-stretch rounded-control bg-accent-wash text-accent-ink text-2xs">
+            <button type="button" onClick={() => { change((d) => withRawMaterial(d, offer)); setOffer(null); }} className="flex-1 min-w-0 text-left px-2.5 py-2 min-h-9 hover:underline underline-offset-2">
+              Use {materialLabel(offer, pic?.origin ?? 'local')} for every RAW of this recap
+            </button>
+            <button type="button" aria-label="Dismiss" onClick={() => setOffer(null)} className="flex-none px-2.5 min-w-9 hover:text-accent">
+              ✕
+            </button>
+          </span>
+        )}
         {pic && (
           <div className="flex flex-col gap-1">
             <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />

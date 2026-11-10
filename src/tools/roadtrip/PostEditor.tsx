@@ -1,3 +1,5 @@
+import { materialHalf, numbersHalf, withMaterialOf } from '../../shared/develop/raw-choice';
+import { useSensorFile } from '../../shared/develop/use-sensor-file';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
@@ -21,7 +23,7 @@ import DevelopSheet, { type SheetDeck, type SheetDeckPicture } from '../../share
 import FromDevelopRow from '../../shared/develop/FromDevelopRow';
 import { carriedWords, type EditOffer } from '../../shared/develop/carried-edit';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
-import type { DevelopSettings } from '../../shared/develop/develop';
+import { isRawDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
 import {
   KEY_SNAP_SECONDS,
@@ -647,6 +649,12 @@ export default function PostEditor({
     [collage, cellCount, lead, resolve, slideFile],
   );
   const cellFile = cellFiles[cellIndex] ?? null;
+  // A RAW slide read from its material (`use-sensor-file.ts`): the stage and the Develop sheet draw
+  // its sensor's picture when it is on its sensor. One picture only — a collage's cells keep their render.
+  // A develop made on the sensor in Develop is rendered whole by the sensor's picture; the cube adds only the look.
+  const rawDevelop = !collage && isRawDevelop(slide.develop) ? slide.develop : null;
+  const sensor = useSensorFile(collage ? null : slideFile, rawDevelop ? 'sensor' : slide.rawMaterial, { develop: rawDevelop });
+  const stageFile = collage ? slideFile : sensor.file;
   /** What each cell holds, by name — what a drop target says it will replace. */
   const cellLabels = useMemo(
     () => cellFiles.map((f) => (f ? f.name.replace(/\.[^.]+$/, '') : null)),
@@ -970,6 +978,8 @@ export default function PostEditor({
             ? {
                 ...s,
                 ...(offer.develop ? { develop: offer.develop } : {}),
+                // Developed on its sensor in Develop: the slide reads its sensor, rendered whole from that develop.
+                ...(isRawDevelop(offer.develop) ? { rawMaterial: 'sensor' as const } : {}),
                 ...(offer.look ? { grade: { layers: offer.look.layers, output: offer.look.output, film: offer.look.film ?? null } } : {}),
                 edit: offer.edit,
               }
@@ -980,6 +990,8 @@ export default function PostEditor({
   );
   const takeOffFromDevelop = () => patchSlide({ edit: null });
   const [developOpen, setDevelopOpen] = useState(false);
+  // The sheet over a sensor develop edits its NUMBERS on its material alone (`materialHalf`), read only while it is open.
+  const sheetSensor = useSensorFile(developOpen && rawDevelop ? slideFile : null, 'sensor', { develop: rawDevelop ? materialHalf(rawDevelop) : null });
   // The sheet's time-savers (`docs/photo-develop.md` §8): the presets are the
   // person's own book, drawn by the sheet itself; the trip adds two batch verbs that write a COPY onto each target now — the open
   // slide is left to Done, which is what `picture` keeps out of the count (the
@@ -2636,7 +2648,7 @@ export default function PostEditor({
             onClick={onStageMargin}
           >
           <BadgeStage
-            file={slideFile}
+            file={stageFile}
             taskScope={`piece:${post.id}`}
             videoTimeSeconds={isClipSlide ? playhead : slide.videoTimeSeconds}
             playback={
@@ -2832,6 +2844,7 @@ export default function PostEditor({
               slide={slide}
               slideFile={slideFile}
               missing={missing}
+              material={{ state: sensor, onPick: (m) => patchSlide({ rawMaterial: m }) }}
               recovery={recovery}
               isVideo={isVideo}
               duration={duration}
@@ -2889,6 +2902,7 @@ export default function PostEditor({
                     media={slide.media}
                     edit={storedEdit}
                     onUse={takeFromDevelop}
+                    sensorReach={!collage && sensor.reachable}
                     onTakeOff={takeOffFromDevelop}
                     frameWord="the frame is this slide’s own"
                   />
@@ -2957,14 +2971,15 @@ export default function PostEditor({
 
     {developOpen && !isCta && (
       <DevelopSheet
-        file={cellFile}
+        file={collage ? cellFile : rawDevelop ? sheetSensor.file : stageFile}
         videoTimeSeconds={cellIndex === 0 ? slide.videoTimeSeconds : 0}
         title={cellFile?.name ?? 'this slide'}
         emptyText="This slide has no picture yet — tick one in the Library."
         stack={grade.stack}
-        value={cellDevelop}
+        value={rawDevelop ? numbersHalf(rawDevelop) : cellDevelop}
         onDone={(develop) => {
-          setDevelop(develop);
+          // On a sensor develop the sheet edited its numbers over its material; they go back onto it.
+          setDevelop(rawDevelop ? withMaterialOf(develop, rawDevelop) : develop);
           setDevelopOpen(false);
         }}
         onCancel={() => setDevelopOpen(false)}

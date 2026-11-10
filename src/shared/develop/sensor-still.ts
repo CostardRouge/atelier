@@ -25,13 +25,18 @@
 import { composeLutStack } from '../lut/lut-stack';
 import { deviceClass } from '../lib/device-class';
 import { rawDecodeEdge, type RawPurpose } from '../raw/raw-budget';
-import { calibrationAt, readRawCalibration, topRung } from '../raw/calibration';
+import { calibrationAt, readRawCalibration, rungsFor, topRung } from '../raw/calibration';
 import { fileKey } from '../raw/decoded-cache';
 import { maxRenderSize } from '../render/graph-grader';
 import { meterRaw } from './roll-choice-source';
 import { renderRollPicture } from './roll-render';
 import { openOnSensor } from './raw-choice';
-import type { DevelopBase } from './develop';
+import { appliedProfile, decodeProfileOf, isRawDevelop, type DevelopBase, type DevelopSettings } from './develop';
+import { isRawImage } from '../library/assets';
+import { rawSizes } from '../exif/raw-probe';
+import { knownIdentity, mediaOrigin } from '../projects/media-identity';
+import { fetchSourceFile, sensorSourceFor } from './sensor-source';
+import { autoFactsOf, autoMaterial, materialOf, type RawMaterial } from './raw-choice';
 
 export interface SensorStill {
   /** The picture as taken, a JPEG of at most the asked long edge. */
@@ -54,6 +59,14 @@ export interface SensorStillOptions {
   signal?: AbortSignal;
   /** JPEG quality, 0..1. */
   quality?: number;
+  /**
+   * A develop made on this RAW's sensor in the Develop tool, taken by the
+   * host (`offerWithSensor`): rendered WHOLE from the sensor — its rung, its
+   * stored gain, its white, its profile, its curve and its numbers, the cube
+   * Develop's own export builds — so the host draws it as Develop delivers it
+   * and adds only its look and its passes. Absent: as taken (`openOnSensor`).
+   */
+  develop?: DevelopSettings | null;
 }
 
 const HELD = 6;
@@ -68,14 +81,15 @@ export function sensorStillEdge(edge: number, purpose: Exclude<RawPurpose, 'loup
 export function sensorStill(file: File, opts: SensorStillOptions): Promise<SensorStill> {
   const purpose = opts.purpose ?? 'stage';
   const edge = sensorStillEdge(opts.edge, purpose);
-  const key = `${fileKey(file)}|${edge}|${opts.quality ?? 0.92}`;
+  const develop = opts.develop && isRawDevelop(opts.develop) ? opts.develop : null;
+  const key = `${fileKey(file)}|${edge}|${opts.quality ?? 0.92}|${develop ? JSON.stringify(develop) : '-'}`;
   const hit = held.get(key);
   if (hit) {
     held.delete(key);
     held.set(key, hit);
     return hit;
   }
-  const made = makeSensorStill(file, edge, opts);
+  const made = makeSensorStill(file, edge, { ...opts, develop });
   held.set(key, made);
   // A failed or cancelled one is never held.
   made.catch(() => held.delete(key));
@@ -89,10 +103,14 @@ export function dropSensorStills(): void {
 }
 
 async function makeSensorStill(file: File, edge: number, opts: SensorStillOptions): Promise<SensorStill> {
-  const metered = await meterRaw(file, opts.signal, 'resolve');
+  const own = opts.develop ?? null;
+  const metered = await meterRaw(file, opts.signal, own ? decodeProfileOf(own) ?? 'resolve' : 'resolve');
   const cal = await readRawCalibration(file);
-  const rung = topRung(cal);
-  const develop = { ...openOnSensor(null), base: rung, rawGain: metered.gain, ...(metered.profile ? { rawProfile: metered.profile } : {}) };
+  // A taken develop keeps its rung where the file still carries it, else the top it can reach (`raw.md`).
+  const rung = own && own.base && rungsFor(cal).includes(own.base) ? own.base : topRung(cal);
+  const gain = own && own.rawGain && own.rawGain > 0 ? own.rawGain : metered.gain;
+  const profile = (own && appliedProfile(own)) ?? metered.profile ?? null;
+  const develop = { ...(own ?? openOnSensor(null)), base: rung, rawGain: gain, ...(profile ? { rawProfile: profile } : {}) };
   const lut = composeLutStack([], 'none', 'tetrahedral', develop);
   const out = await renderRollPicture(file, {
     signal: opts.signal,
@@ -101,7 +119,7 @@ async function makeSensorStill(file: File, edge: number, opts: SensorStillOption
     border: null,
     lut,
     targets: [{ size: { mode: 'long', value: edge }, quality: opts.quality ?? 0.92, sharpen: 'off', format: 'jpeg' }],
-    raw: { file, gain: metered.gain, profile: metered.profile ?? null },
+    raw: { file, gain, profile },
     // A still delivered whole is never cropped: its half-size decode is enough as soon as it holds the edge.
     rawMargin: 1,
     calibration: calibrationAt(rung, cal),
@@ -111,7 +129,50 @@ async function makeSensorStill(file: File, edge: number, opts: SensorStillOption
     width: out.width,
     height: out.height,
     sensor: out.sensor ?? out.source,
-    gain: metered.gain,
+    gain,
     rung,
   };
+}
+
+// ---- a host's file, on its sensor -------------------------------------------------
+
+/**
+ * Whether a RAW stands behind `file` at all: the file itself, the proxy's own
+ * original, or the capture's companion on its instance (`sensor-source.ts`).
+ * What decides whether a host offers the material menu.
+ */
+export function sensorReachable(file: File | null): boolean {
+  if (!file) return false;
+  if (isRawImage(file.name)) return true;
+  return sensorSourceFor(file, mediaOrigin(file), [], knownIdentity(file)?.assetId ?? null) !== null;
+}
+
+/**
+ * The material `file` is read from, `own` being the host's stored choice:
+ * Auto otherwise — the sensor only for a RAW in hand whose render is under
+ * half its sensor (`raw-choice.ts`); a proxy whose RAW must be downloaded
+ * stays on its proxy.
+ */
+export async function materialForFile(file: File, own: RawMaterial | null | undefined): Promise<RawMaterial> {
+  if (own) return own;
+  if (!isRawImage(file.name)) return 'render';
+  return materialOf(null, null, autoMaterial(autoFactsOf(true, await rawSizes(file))));
+}
+
+/**
+ * `file`'s sensor as a JPEG `File` named after it — what a host draws and
+ * exports in place of the file when a picture is on its sensor. The RAW is the
+ * file in hand, or fetched once (the proxy's original, the companion) and held
+ * for the session. Null when no RAW stands behind it.
+ */
+export async function sensorStillFile(file: File, opts: SensorStillOptions): Promise<File | null> {
+  let raw: File | null = isRawImage(file.name) ? file : null;
+  if (!raw) {
+    const assetId = knownIdentity(file)?.assetId ?? null;
+    const source = sensorSourceFor(file, mediaOrigin(file), [], assetId);
+    if (!source) return null;
+    raw = await fetchSourceFile(source, assetId, opts.signal);
+  }
+  const still = await sensorStill(raw, opts);
+  return new File([still.blob], `${raw.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
 }

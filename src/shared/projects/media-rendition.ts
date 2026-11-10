@@ -20,6 +20,7 @@
  * Pure and DOM-free.
  */
 
+import type { RawMaterial } from '../develop/raw-choice';
 import { captureFileType, classifyPart, fileBaseName, isDrawableImage } from '../library/assets';
 import { captureInput, type CaptureFacts } from '../develop/capture-files';
 import { viewableRenditions } from '../develop/capture-view';
@@ -102,7 +103,30 @@ export function readRenditions(raw: unknown): Record<string, string> {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof value === 'string' && value.startsWith('delivered:')) out[key] = value;
+    if (typeof value === 'string' && (value.startsWith('delivered:') || value.startsWith('sensor:') || value === RENDER_CHOICE)) out[key] = value;
   }
   return out;
+}
+
+/**
+ * The stored word for «its camera render, chosen» — where Auto would read a
+ * RAW in hand from its sensor (`raw-choice.ts`), picking the file it opens on
+ * must be remembered, since storing nothing means Auto.
+ */
+export const RENDER_CHOICE = 'render';
+
+/** The stored choice for a RAW's sensor: `sensor:<name>`, the rendition vocabulary's id. */
+export function sensorChoice(name: string): string {
+  return `sensor:${name.toLowerCase()}`;
+}
+
+/**
+ * The RAW material a stored choice means (`sensor-outside-develop.md`): the
+ * sensor for `sensor:…`, the render for a delivered file or `render`, and
+ * nothing — Auto — for no choice.
+ */
+export function storedMaterial(stored: string | null | undefined): RawMaterial | undefined {
+  if (!stored) return undefined;
+  if (stored.startsWith('sensor:')) return 'sensor';
+  return 'render';
 }

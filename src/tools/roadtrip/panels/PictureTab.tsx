@@ -1,3 +1,6 @@
+import MaterialMenu from '../../../shared/develop/MaterialMenu';
+import type { SensorFile } from '../../../shared/develop/use-sensor-file';
+import type { RawMaterial } from '../../../shared/develop/raw-choice';
 import type { ReactNode } from 'react';
 import type { DevelopSettings } from '../../../shared/develop/develop';
 import DevelopSection from '../../../shared/develop/DevelopSection';
@@ -56,6 +59,8 @@ interface PictureTabProps {
   slideFile: File | null;
   /** The slide names a picture the Library does not hold right now. */
   missing: boolean;
+  /** A RAW slide's material — its camera render or its sensor — and how to change it (`use-sensor-file.ts`). */
+  material?: { state: SensorFile; onPick: (m: RawMaterial) => void };
   /** What became of a picture being fetched back from its instance. */
   recovery: SlideRecovery | null;
   isVideo: boolean;
@@ -175,6 +180,7 @@ export default function PictureTab({
   slide,
   slideFile,
   missing,
+  material,
   recovery,
   isVideo,
   duration,
@@ -472,6 +478,20 @@ export default function PictureTab({
           openTitle={(collage ? cellFile : slideFile) ? 'Open the Develop sheet' : 'Tick a picture first'}
           onOpen={onOpenDevelop}
           onReset={onResetDevelop}
+          aside={
+            material && material.state.reachable && !collage && slideFile ? (
+              <MaterialMenu
+                name={slideFile.name}
+                current={material.state.material}
+                auto={material.state.auto}
+                busy={material.state.busy}
+                rows={material.state.rows}
+                onPick={material.onPick}
+                className="w-full"
+                materialOnly
+              />
+            ) : undefined
+          }
         >
           {(!collage || selectedCell === 0) && fromDevelop}
         </DevelopSection>

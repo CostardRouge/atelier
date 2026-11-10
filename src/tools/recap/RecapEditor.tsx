@@ -42,7 +42,9 @@ import { textStyleOf, type TextRole, type TextStyle } from '../../shared/recap/r
 import { STORY_FONTS, type StoryFontId } from '../../shared/story/fonts';
 import RecapStage, { sameSelection, type Selection } from './RecapStage';
 import { fillFromWinnow } from './recap-fill';
-import { pictureOfFile, pictureOfRow, printOf } from './recap-media';
+import { pictureOfFile, pictureOfRow, printOf, sensorFileOf } from './recap-media';
+import { sensorStill } from '../../shared/develop/sensor-still';
+import { pictureMaterial } from '../../shared/recap/recap-raw';
 import { getClip, getValue, putThumb, setValue } from './recap-store';
 import { gradedCopy, useRecapPictures } from './use-recap-pictures';
 import { decodePhoto } from '../../shared/media/photo-frame';
@@ -629,12 +631,14 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     let alive = true;
     setDevelopFile(null);
     if (!developPic) return;
-    const local = files.get(developPic.key);
+    // On its sensor a RAW is developed on its sensor's print — the file in hand would give the sheet its embedded render.
+    const material = pictureMaterial(developPic, doc);
+    const local = material === 'render' ? files.get(developPic.key) : undefined;
     if (local) {
       setDevelopFile(local);
       return;
     }
-    void printOf(developPic, ctx).then((b) => alive && b && setDevelopFile(new File([b], `${developPic.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })));
+    void printOf(developPic, ctx, material).then((b) => alive && b && setDevelopFile(new File([b], `${developPic.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })));
     return () => {
       alive = false;
     };
@@ -690,6 +694,19 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     async (key: string, signal: AbortSignal): Promise<Drawable | null> => {
       const pic = doc.pictures.find((p) => p.key === key);
       if (!pic || pic.kind !== 'photo') return null;
+      // On its sensor, the RAW is read again at the page's density (at most 4096, a phone's export ceiling).
+      if (pictureMaterial(pic, doc) === 'sensor') {
+        const raw = await sensorFileOf(pic, { ...ctx, signal });
+        if (!raw) return null;
+        const still = await sensorStill(raw, { edge: 4096, purpose: 'export', signal });
+        const bmp = await createImageBitmap(still.blob);
+        const graded = gradedCopy(stack, pic, bmp);
+        if (graded) {
+          bmp.close();
+          return graded;
+        }
+        return { image: bmp, width: bmp.width, height: bmp.height };
+      }
       const file = pic.origin === 'winnow' ? (pic.asset !== undefined && client && pic.instance === instance ? await client.fetchFile(client.originalUrl(pic.asset), pic.name, '', 0, { signal }) : null) : (files.get(key) ?? null);
       if (!file) return null;
       // At most 4096 on its long side: four times a page's width is past any zoom a cell takes.
@@ -701,7 +718,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       }
       return { image: bmp, width: bmp.width, height: bmp.height };
     },
-    [doc.pictures, client, instance, files, stack],
+    [doc, ctx, client, instance, files, stack],
   );
   const originals = useMemo(
     () => resolved.slots.some((s) => s.picture && (s.picture.origin === 'winnow' || files.has(s.picture.key))) || doc.pictures.some((p) => clipKeys.includes(p.key) && (p.origin === 'winnow' || files.has(p.key))),

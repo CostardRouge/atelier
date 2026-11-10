@@ -1,3 +1,6 @@
+import { materialHalf, numbersHalf, withMaterialOf } from '../../shared/develop/raw-choice';
+import { useSensorFile } from '../../shared/develop/use-sensor-file';
+import { sensorStillFile } from '../../shared/develop/sensor-still';
 import {
   useEffect,
   useMemo,
@@ -57,7 +60,8 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
-import { readRenditions, writeRendition } from '../../shared/projects/media-rendition';
+import { readRenditions, RENDER_CHOICE, sensorChoice, stageChoice, storedMaterial, writeRendition } from '../../shared/projects/media-rendition';
+import { isRawImage } from '../../shared/library/assets';
 import { fetchHeld } from '../../shared/sources/held-fetch';
 import { trackedFetch } from '../../shared/tasks/tracked';
 import { fileIdentity, imageTypeLabel, type Asset } from '../../shared/library/assets';
@@ -131,7 +135,7 @@ import useHistory from '../../shared/history/use-history';
 import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet, { type SheetDeckPicture } from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
-import type { DevelopSettings } from '../../shared/develop/develop';
+import { isRawDevelop, type DevelopSettings } from '../../shared/develop/develop';
 import { restoreCarried, restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import FromDevelopRow from '../../shared/develop/FromDevelopRow';
 import { savedMediaRef, type SavedMediaRef } from '../../shared/projects/media-ref';
@@ -469,6 +473,8 @@ export default function StudioEditor({
     if (!activeId) return;
     const settings = offer.develop ?? activeDevelop;
     setDevelops((prev) => writeDevelop(prev, activeId, settings, activeHash, offer.edit));
+    // Developed on its sensor in Develop: the media reads its sensor, rendered whole from that develop.
+    if (isRawDevelop(offer.develop) && activeFile) setRenditions((prev) => writeRendition(prev, activeId, sensorChoice(mediaOrigin(activeFile)?.name ?? activeFile.name)));
   }
   function takeOffFromDevelop() {
     if (!activeId) return;
@@ -478,7 +484,9 @@ export default function StudioEditor({
   // The cube every renderer here takes: the stack baked with THIS media's
   // stored develop. While the sheet is open its draft rides `lutStack.composed`,
   // which only the sheet paints from — the stage keeps the stored value.
-  const lut = lutStack.composeWith(activeDevelop);
+  // A develop made on the sensor is already in the sensor's picture (`sensor-still.ts`): the cube adds the look alone.
+  const rawDevelop = activeImage && isRawDevelop(activeDevelop) ? activeDevelop : null;
+  const lut = lutStack.composeWith(rawDevelop ? null : activeDevelop);
 
   // --- which file of the media is on the stage -----------------------------
   // A Winnow media opens on its proxy; a choice stored per media (keyed by
@@ -502,7 +510,32 @@ export default function StudioEditor({
   /** The file the stage draws: the Library's, or the one chosen once it has landed. */
   const stageFile = stageRendition.file;
   const stageVideo = activeVideo ? stageFile : null;
-  const stageImage = activeImage ? stageFile : null;
+  // A RAW still read from its material (`use-sensor-file.ts`): the sensor's picture on the stage
+  // and in the export when the media is on its sensor — chosen here, or Auto for a RAW in hand.
+  const storedRendition = activeId ? (renditions[activeId] ?? null) : null;
+  const sensorView = useSensorFile(activeImage ? activeFile : null, rawDevelop ? 'sensor' : storedMaterial(storedRendition), { develop: rawDevelop });
+  // The sheet over a sensor develop edits its NUMBERS on its material alone (`materialHalf`), read only while it is open.
+  const sheetSensor = useSensorFile(developOpen && rawDevelop ? activeFile : null, 'sensor', { develop: rawDevelop ? materialHalf(rawDevelop) : null });
+  const onSensor = Boolean(activeImage) && sensorView.reachable && sensorView.material === 'sensor';
+  const stageImage = activeImage ? (onSensor ? sensorView.file : stageFile) : null;
+  /**
+   * A file of the capture picked in the stage chip. Picking where the media
+   * opens is remembered as the RENDER when Auto would otherwise read a RAW in
+   * hand from its sensor — storing nothing means Auto.
+   */
+  const chooseRendition = (id: string) => {
+    if (!activeId) return;
+    const openingId = stageChoice(stageRendition.rows, null).current?.id;
+    if (activeFile && isRawImage(activeFile.name) && id === openingId) {
+      setRenditions((prev) => writeRendition(prev, activeId, RENDER_CHOICE));
+      return;
+    }
+    if (storedMaterial(storedRendition) && !storedRendition?.startsWith('delivered:')) {
+      // Leaving a stored sensor or render: the pick is the stage chip's again.
+      setRenditions((prev) => writeRendition(prev, activeId, null));
+    }
+    stageRendition.choose(id);
+  };
   /** True while the stage draws a file other than the one the Library holds. */
   const stageOnOther = !!stageFile && !stageRendition.onLibraryFile;
   // The trim bar's gestures are spelled out under it until one has been used.
@@ -1790,7 +1823,18 @@ export default function StudioEditor({
       photo && photoNatural ? deliveryFrame(photoNatural) : null;
     let fetchedStill: ImageBitmap | null = null;
     try {
-      if (photo && activeImage && photoProxy && stillFrame) {
+      // On its sensor, the still leaves from its sensor read at 4096 px (a phone's export
+      // ceiling) — never from the proxy's original, which would be read through its small render.
+      if (photo && activeImage && activeFile && onSensor) {
+        say('render', 'Reading the sensor…');
+        const sensorFile = await sensorStillFile(activeFile, { edge: 4096, purpose: 'export', develop: rawDevelop }).catch(() => null);
+        if (sensorFile) {
+          const decoded = await decodeStillForExport(sensorFile, runVariants);
+          fetchedStill = decoded.bitmap;
+          still = fetchedStill;
+          runFrame = decoded.frame;
+        }
+      } else if (photo && activeImage && photoProxy && stillFrame) {
         const chosen = await deliveryFor(activeImage, null, stillFrame);
         if (chosen.file !== activeImage) {
           say('render', `Fetching the original from ${photoProxy.sourceId}…`);
@@ -2242,7 +2286,18 @@ export default function StudioEditor({
           rows={stageRendition.rows}
           current={stageRendition.current}
           fetching={stageRendition.fetching}
-          onChoose={stageRendition.choose}
+          onChoose={chooseRendition}
+          sensor={
+            activeImage && activeFile && sensorView.reachable
+              ? {
+                  on: onSensor,
+                  auto: sensorView.auto,
+                  busy: sensorView.busy,
+                  pixels: sensorView.rows.find((r) => r.material === 'sensor')?.pixels ?? null,
+                  onPick: () => activeId && setRenditions((prev) => writeRendition(prev, activeId, sensorChoice(mediaOrigin(activeFile)?.name ?? activeFile.name))),
+                }
+              : null
+          }
         />
         {/* On a phone's one header line the name and its files are what fit. */}
         {activeDetail && !immersive && (
@@ -2369,13 +2424,14 @@ export default function StudioEditor({
           // the proxy included — so the sheet judges the pixels the stage
           // shows. The develop itself is the MEDIA's, keyed and hash-guarded
           // by the Library's file whatever is on screen.
-          file={stageFile ?? activeFile}
+          file={rawDevelop ? (sheetSensor.file ?? activeFile) : (stageFile ?? activeFile)}
           videoTimeSeconds={developAt}
           title={(stageFile ?? activeFile).name}
           stack={lutStack}
-          value={activeDevelop}
+          value={rawDevelop ? numbersHalf(rawDevelop) : activeDevelop}
           onDone={(next) => {
-            setActiveDevelop(next);
+            // On a sensor develop the sheet edited its numbers over its material; they go back onto it.
+            setActiveDevelop(rawDevelop ? withMaterialOf(next, rawDevelop) : next);
             setDevelopOpen(false);
           }}
           onCancel={() => setDevelopOpen(false)}
@@ -3030,6 +3086,7 @@ export default function StudioEditor({
                       media={activeRef}
                       edit={activeCarried}
                       onUse={takeFromDevelop}
+                      sensorReach={Boolean(activeImage) && sensorView.reachable}
                       onTakeOff={takeOffFromDevelop}
                       carriesLook={false}
                       frameWord="the project’s look and frame are its own"
