@@ -11,7 +11,7 @@
 
 import type { RecapDoc, RecapPicture } from './recap-doc';
 import { insets, type Box, type CellPart, type RecapLayout, type RecapPage, type TextPart } from './recap-layout';
-import { PIN, placeMarks, placeName, type PinCorner } from './recap-places';
+import { PIN, placeMarks, placeName, writtenPlace, type PinCorner } from './recap-places';
 import { cellLook, clipTime, loopTime, textLook, zoomedBox, type FilmPlan, type PagePlan } from './recap-motion';
 import { backgroundPicture, deviceLabel, fillText, type DeviceAliases, type RecapSlot, type ResolvedRecap } from './recap-slots';
 import { shortDate } from './recap-days';
@@ -433,14 +433,19 @@ interface PinPill {
 const marksKept = new WeakMap<RecapLayout, { mode: string; slots: ResolvedRecap['slots']; marks: Map<string, string> }>();
 function cellMarks(doc: RecapDoc, resolved: ResolvedRecap, layout: RecapLayout): Map<string, string> {
   const kept = marksKept.get(layout);
-  if (kept && kept.mode === doc.places.cells && kept.slots === resolved.slots) return kept.marks;
+  const mode = `${doc.places.cells}|${doc.places.writing}|${doc.places.country}`;
+  if (kept && kept.mode === mode && kept.slots === resolved.slots) return kept.marks;
   const byId = new Map(resolved.slots.map((s) => [s.id, s]));
   const cells = layout.pages.flatMap((p) => p.parts.filter((x): x is CellPart => x.kind === 'cell').sort((a, b) => a.index - b.index));
   const marks = placeMarks(
-    cells.map((c) => ({ id: c.id, place: placeName(byId.get(c.id)?.picture) })),
+    cells.map((c) => {
+      const pic = byId.get(c.id)?.picture;
+      return { id: c.id, place: placeName(pic), written: writtenPlace(pic, doc.places.writing), country: pic?.country ?? null };
+    }),
     doc.places.cells,
+    doc.places.country,
   );
-  marksKept.set(layout, { mode: doc.places.cells, slots: resolved.slots, marks });
+  marksKept.set(layout, { mode, slots: resolved.slots, marks });
   return marks;
 }
 

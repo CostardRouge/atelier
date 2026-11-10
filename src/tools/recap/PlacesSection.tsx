@@ -1,5 +1,6 @@
 import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
-import { placeName, type PinCorner, type PlaceMarks } from '../../shared/recap/recap-places';
+import { knownPlaces, placeName, writtenPlace, type PinCorner, type PlaceCountry, type PlaceMarks } from '../../shared/recap/recap-places';
+import { PLACE_STYLE_OPTIONS } from '../../shared/roadtrip/place-style';
 import { InspectorSection, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
@@ -10,6 +11,16 @@ const MARKS_HINT: Record<Exclude<PlaceMarks, 'off'>, string> = {
   every: 'On every picture that knows its town',
   first: 'Once per town, on its first picture',
 };
+const COUNTRY_LABEL: Record<PlaceCountry, string> = { never: 'Never', changes: 'When it changes', always: 'Always' };
+const COUNTRY_HINT: Record<PlaceCountry, string> = {
+  never: 'The place alone',
+  changes: 'On the first pill, then again only after a border',
+  always: 'On every pill',
+};
+/** What the writings are drawn on when the recap knows no town with its region yet. */
+const SAMPLE = { place: 'Albany', region: 'Western Australia', country: 'Australia' };
+const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
+
 const CORNER_LABEL: Record<PinCorner, string> = { bottomLeft: 'Bottom left', topLeft: 'Top left', topRight: 'Top right', bottomRight: 'Bottom right' };
 
 /**
@@ -22,11 +33,12 @@ export default function PlacesSection({ doc, change }: { doc: RecapDoc; change: 
   const set = (patch: Partial<RecapDoc['places']>) => change((d) => withRecap(d, { places: { ...d.places, ...patch } }));
   const on = p.cells !== 'off';
   const known = doc.pictures.some((x) => placeName(x));
+  const sample = knownPlaces(doc.pictures, 40).find((x) => x.place && x.region) ?? SAMPLE;
   return (
     <InspectorSection
       id="recap-places"
       title="Places"
-      info="The town each picture was taken in, as Winnow named it, with one mark — the pin."
+      info="The town each picture was taken in, as Winnow named it or as you gave it (in its card, Pictures), with one mark — the pin. Written as Trips writes a place."
       marked={on}
       mark={<ToggleField checked={on} onChange={(v) => set({ cells: v ? 'changes' : 'off' })} label="The place on the cells" />}
     >
@@ -40,6 +52,32 @@ export default function PlacesSection({ doc, change }: { doc: RecapDoc; change: 
             value={on ? (p.cells as Exclude<PlaceMarks, 'off'>) : 'changes'}
             onChange={(cells) => set({ cells })}
             options={(['changes', 'every', 'first'] as const).map((id) => ({ id, label: MARKS_LABEL[id], title: MARKS_HINT[id] }))}
+          />
+          {/* How the place is written (lab 17 part III): Trips' writings, drawn on a place of the recap. */}
+          <span className={legend}>Written</span>
+          <div role="group" aria-label="How a place is written" className="grid grid-cols-2 gap-1">
+            {PLACE_STYLE_OPTIONS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={p.writing === o.id}
+                title={o.label}
+                onClick={() => set({ writing: o.id })}
+                className={`min-w-0 text-left px-2.5 py-1.5 pointer-coarse:min-h-11 rounded-[9px] border cursor-pointer ${p.writing === o.id ? 'border-ink bg-surface shadow-[inset_0_0_0_1px_var(--color-ink)]' : 'border-line bg-paper hover:border-line-strong'}`}
+              >
+                <b className="block truncate text-xs font-semibold text-ink">{writtenPlace(sample, o.id)}</b>
+                <small className="block font-mono text-3xs text-muted">{o.label}</small>
+              </button>
+            ))}
+          </div>
+          <span className={legend}>The country</span>
+          <Segmented<PlaceCountry>
+            size="sm"
+            fill
+            label="The country after the place"
+            value={p.country}
+            onChange={(country) => set({ country })}
+            options={(['never', 'changes', 'always'] as const).map((id) => ({ id, label: COUNTRY_LABEL[id], title: COUNTRY_HINT[id] }))}
           />
           <Segmented<PinCorner>
             size="sm"

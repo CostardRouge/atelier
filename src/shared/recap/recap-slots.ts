@@ -347,7 +347,7 @@ function textVars(doc: RecapDoc, inScope: readonly RecapPicture[], days: number,
   const a = doc.anchor;
   // The places, from the period's pictures — else from the pictures shown (a ladder's steps back lie outside any one period).
   const shown = slots.flatMap((s) => (s.picture ? [s.picture] : []));
-  const words = placeWords(inScope.some((p) => placeName(p)) ? inScope : shown);
+  const words = placeWords(inScope.some((p) => placeName(p)) ? inScope : shown, doc.places.writing);
   const first = slots.find((s) => s.picture)?.picture?.day ?? doc.range?.from ?? a;
   const month = doc.template === 'month' || doc.template === 'week' || doc.template === 'onThisDay' ? a : first;
   const end = doc.template === 'week' ? (addDays(a, 6) ?? a) : (doc.range?.to ?? a);
@@ -364,7 +364,7 @@ function textVars(doc: RecapDoc, inScope: readonly RecapPicture[], days: number,
     days: String(days),
     videos: `${clips} ${clips === 1 ? 'video' : 'videos'}`,
     // The pin leads the place (lab 11), unless he turned it off; nothing at all when no picture knows its place.
-    place: words.place ? `${doc.places.titlePin ? PIN : ''}${words.place}` : '',
+    place: words.place ? `${doc.places.titlePin ? PIN : ''}${words.written ?? words.place}` : '',
     places: routeLine(words.route),
   };
 }

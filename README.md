@@ -3653,7 +3653,16 @@ alone. On a month or a week, **Runs of days** (off until you turn it on) draws
 a red line under the days spent in one place, with the pin and its words —
 *Albany · 8–14*. In any text, `{place}` is the place you came back to most,
 the same pin before it (*Pin before {place}* takes it away), and `{places}`
-the route: *Esperance → Albany → Perth*.
+the route: *Esperance → Albany → Perth*. A place is **written** as Trips writes
+one — *Albany*, *Albany, WA*, *Albany, Western Australia* or *Albany (WA)*, the
+state's official code where one is known — and the **country** follows it
+never, on the first pill and again after a border, or always; `{place}` follows
+the writing too. In *Pictures*, a picture's card says **its place** and where it
+comes from (*Winnow*, *by hand*, *none*): give it one of the recap's places, one
+of the trip of Trips covering its days, or type one — to correct Winnow or to
+place a picture with no GPS — and, once given, the same place for that day's
+other photos that have none. ↺ gives Winnow's back. A place given by hand is
+what the pill, the runs, `{place}` and the caption's tags say.
 
 **Carousels.** Every recap is a carousel: a strip under the stage shows each
 slide in its order — click one to see it, drag it to move it (the video

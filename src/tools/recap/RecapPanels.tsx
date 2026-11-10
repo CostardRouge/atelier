@@ -48,6 +48,8 @@ import { beatOfFile } from './recap-beat-find';
 import { bpmOf } from '../../shared/recap/recap-beat';
 import FrameBox from './FrameBox';
 import PlacesSection from './PlacesSection';
+import PicturePlace from './PicturePlace';
+import type { PlaceFacts } from '../../shared/recap/recap-places';
 import LoopTrimmer from './LoopTrimmer';
 import { DEFAULT_FRAME, MAX_ROTATE, isDefaultFrame, rotateFrame, type Frame } from '../../shared/recap/recap-frame';
 import { ARRANGES, EXIF_LABEL, EXIF_PARTS, type Arrange, type ExifPart } from '../../shared/recap/recap-cellwords';
@@ -287,9 +289,12 @@ export function SlotSection({
   resolved,
   title,
   candidates = true,
+  trip = null,
 }: {
   doc: RecapDoc;
   slot: RecapSlot;
+  /** The trip covering the recap (its copy for an opener, else the covering one): its places, offered to a picture. */
+  trip?: { name: string; places: PlaceFacts[] } | null;
   /** The band's words when the place is better named by where it shows («Slide 3 · 2 of 4»). */
   title?: string;
   /** Its own grid of candidates — off where the day chooser (`DayChooser.tsx`) offers the days under it. */
@@ -397,6 +402,7 @@ export function SlotSection({
             </button>
           </span>
         )}
+        {pic && <PicturePlace doc={doc} pic={pic} change={change} trip={trip} />}
         {pic && (
           <div className="flex flex-col gap-1">
             <SliderRow label="Zoom" value={Math.round(zoom * 100)} min={100} max={400} step={1} reset={100} format={(v) => `${v} %`} onChange={(v) => setFrame({ ...(pic.frame ?? DEFAULT_FRAME), zoom: v / 100 })} />

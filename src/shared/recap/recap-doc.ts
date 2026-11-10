@@ -148,6 +148,12 @@ export interface RecapPicture {
   place?: string;
   region?: string;
   country?: string;
+  /**
+   * Present when the place above was given BY HAND (lab 17 part III): what
+   * Winnow (or the file) said before, empty when it said nothing — ↺ gives it
+   * back (`withPlaceByHand`). A re-fill never overwrites a picture already in the pool.
+   */
+  placeWinnow?: { place?: string; region?: string; country?: string };
   /** Where it was taken, decimal degrees — a GPS a camera wrote. */
   lat?: number;
   lon?: number;
@@ -568,6 +574,15 @@ export function readPicture(raw: unknown): RecapPicture | null {
   for (const k of ['device', 'lens', 'shutter', 'place', 'region', 'country'] as const) {
     const v = str(r[k])?.trim().slice(0, 120);
     if (v) out[k] = v;
+  }
+  if (r.placeWinnow && typeof r.placeWinnow === 'object') {
+    const w = r.placeWinnow as Record<string, unknown>;
+    const kept: NonNullable<RecapPicture['placeWinnow']> = {};
+    for (const k of ['place', 'region', 'country'] as const) {
+      const v = str(w[k])?.trim().slice(0, 120);
+      if (v) kept[k] = v;
+    }
+    out.placeWinnow = kept;
   }
   if (r.picked === true) out.picked = true;
   if (r.fav === true) out.fav = true;
