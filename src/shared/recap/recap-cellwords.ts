@@ -170,3 +170,23 @@ export function fitText(value: string, maxW: number, measure: (s: string) => num
   }
   return { text: lo > 0 ? value.slice(0, lo).trimEnd() + '…' : '…', scale: minScale };
 }
+
+/**
+ * A slide's days as a running head says them (lab 17): «3 – 8 Nov», «Mon 3 –
+ * Sat 8 Nov», one day alone as itself, across a month «30 Oct – 2 Nov». A
+ * format that prints no date (`auto`, `rank`) reads as `dMon`.
+ */
+export function daysRange(days: readonly string[], format: DateFormat): string {
+  const sorted = [...new Set(days.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  if (!sorted.length) return '';
+  const f: DateFormat = format === 'auto' || format === 'rank' ? 'dMon' : format;
+  const a = sorted[0];
+  const b = sorted[sorted.length - 1];
+  if (a === b) return cellDate(a, f, '');
+  if (f === 'd') return `${Number(a.slice(8))} – ${Number(b.slice(8))}`;
+  const sameMonth = a.slice(0, 7) === b.slice(0, 7);
+  // Within a month the first day drops its month: «3 – 8 Nov», «Mon 3 – Sat 8 Nov»; the full form keeps both whole.
+  const start = f === 'full' ? cellDate(a, 'wdMon', '') : sameMonth ? cellDate(a, f === 'dMon' ? 'd' : 'wd', '') : cellDate(a, f === 'wd' ? 'wdMon' : f, '');
+  const end = f === 'full' ? cellDate(b, 'full', '') : cellDate(b, f === 'wd' ? 'wdMon' : f, '');
+  return `${start} – ${end}`;
+}

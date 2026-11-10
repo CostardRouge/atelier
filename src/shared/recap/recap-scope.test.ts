@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { cellDate, readWords } from './recap-cellwords';
-import { createRecapDoc, readRecapDoc } from './recap-doc';
+import { cellDate, daysRange, readWords } from './recap-cellwords';
+import { createRecapDoc, readRecapDoc, withPictures, withRecap } from './recap-doc';
+import { layoutRecap } from './recap-layout';
+import { resolveRecap } from './recap-slots';
 import { docOn, familyWords, hasFamily, scopeNames, withWords, withoutSlideWords, wordsOn } from './recap-scope';
 
 describe('a cell’s date', () => {
@@ -10,6 +12,18 @@ describe('a cell’s date', () => {
     expect(cellDate(day, 'auto', '10')).toBe('10');
     expect(cellDate(day, 'rank', '3')).toBe('3');
     expect(cellDate(null, 'full', '3')).toBe('3');
+  });
+
+  it('says a slide’s days as a range', () => {
+    const days = ['2025-11-08', '2025-11-03', '2025-11-07'];
+    expect(daysRange(days, 'dMon')).toBe('3 – 8 Nov');
+    expect(daysRange(days, 'auto')).toBe('3 – 8 Nov');
+    expect(daysRange(days, 'wdMon')).toBe('Mon 3 – Sat 8 Nov');
+    expect(daysRange(days, 'd')).toBe('3 – 8');
+    expect(daysRange(days, 'full')).toBe('Mon 3 Nov – Saturday 8 November 2025');
+    expect(daysRange(['2025-10-30', '2025-11-02'], 'dMon')).toBe('30 Oct – 2 Nov');
+    expect(daysRange(['2025-11-10'], 'wd')).toBe('Mon 10');
+    expect(daysRange([], 'dMon')).toBe('');
   });
 
   it('reads only the words it knows', () => {
@@ -64,5 +78,19 @@ describe('who a cell setting belongs to', () => {
     expect(hasFamily(dump)).toBe(true);
     expect(scopeNames(dump)).toMatchObject({ first: 'Cover', family: 'Pictures' });
     expect(hasFamily(createRecapDoc('grid', 'local', { now: 1 }))).toBe(false);
+  });
+});
+
+describe('the running head says its slide’s days', () => {
+  it('in the slide’s date format, only when asked', () => {
+    const pics = Array.from({ length: 30 }, (_, i) => ({ key: `p${i}`, origin: 'local' as const, name: `p${i}.jpg`, kind: 'photo' as const, day: `2026-10-${String(1 + (i % 20)).padStart(2, '0')}`, minute: 600 + i }));
+    let doc = withPictures(createRecapDoc('month', 'local', { anchor: '2026-10-01', now: 1 }), pics);
+    doc = withRecap(doc, { carousel: { ...doc.carousel, titles: 'head' } }, 2);
+    const run = (d: typeof doc) => layoutRecap(d, resolveRecap(d)).pages[1].parts.find((p) => p.kind === 'text' && p.role === 'running');
+    const off = run(doc);
+    expect(off && off.kind === 'text' ? off.text : '').toMatch(/^\{?October/);
+    expect(off && off.kind === 'text' ? off.text : '').not.toMatch(/Oct ·/);
+    const on = run(withRecap(doc, { carousel: { ...doc.carousel, headDates: true } }, 3));
+    expect(on && on.kind === 'text' ? on.text : '').toMatch(/^October · \d+ – \d+ Oct · 2\/\d+$/);
   });
 });

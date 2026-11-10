@@ -17,14 +17,15 @@
 import { STORY_FONTS, isStoryFont, type StoryFontId } from '../story/fonts';
 import { TITLE_STYLE_PRESETS } from '../overlay/title-styles';
 
-export type TextRole = 'heading' | 'subheading' | 'cta' | 'weekdays' | 'dayNumber' | 'cellWords' | 'labels';
-export const TEXT_ROLES: readonly TextRole[] = ['heading', 'subheading', 'cta', 'weekdays', 'dayNumber', 'cellWords', 'labels'];
+export type TextRole = 'heading' | 'subheading' | 'cta' | 'weekdays' | 'dayNumber' | 'flowDate' | 'cellWords' | 'labels';
+export const TEXT_ROLES: readonly TextRole[] = ['heading', 'subheading', 'cta', 'weekdays', 'dayNumber', 'flowDate', 'cellWords', 'labels'];
 export const TEXT_ROLE_LABEL: Record<TextRole, string> = {
   heading: 'Heading',
   subheading: 'Subheading',
   cta: 'Call to action',
   weekdays: 'Weekdays',
   dayNumber: 'Day numbers',
+  flowDate: 'Highlight dates',
   cellWords: 'Cell words',
   labels: 'Labels',
 };
@@ -169,7 +170,8 @@ export function readTextStyles(raw: unknown): Partial<Record<TextRole, TextStyle
 
 /** A role's style, its defaults filled in. */
 export function textStyleOf(styles: Partial<Record<TextRole, TextStyle>> | undefined, role: TextRole): TextStyle {
-  return styles?.[role] ?? DEFAULT_TEXT_STYLE;
+  // The highlights' dates borrow the day numbers' style until they have their own (lab 17: nothing moves until he sets one).
+  return styles?.[role] ?? (role === 'flowDate' ? styles?.dayNumber : undefined) ?? DEFAULT_TEXT_STYLE;
 }
 
 /** A preset's style, ready to keep on a role. */
@@ -196,11 +198,13 @@ export function italicOf(style: TextStyle): boolean {
 }
 
 /** Which roles a template draws — what the Text tab lists. */
-export function rolesOf(template: string): TextRole[] {
+export function rolesOf(template: string, highlights = false): TextRole[] {
   const base: TextRole[] = ['heading', 'subheading', 'cta'];
-  if (template === 'month') return [...base, 'weekdays', 'dayNumber', 'cellWords'];
-  if (template === 'week') return [...base, 'dayNumber', 'labels', 'cellWords'];
-  if (template === 'onThisDay') return [...base, 'labels', 'cellWords'];
-  if (template === 'single') return [...base, 'cellWords'];
-  return [...base, 'dayNumber', 'cellWords'];
+  // The slides after the first have their dates' own style (lab 17) — listed only where there are such slides.
+  const flow: TextRole[] = highlights ? ['flowDate'] : [];
+  if (template === 'month') return [...base, 'weekdays', 'dayNumber', ...flow, 'cellWords'];
+  if (template === 'week') return [...base, 'dayNumber', ...flow, 'labels', 'cellWords'];
+  if (template === 'onThisDay') return [...base, 'labels', ...flow, 'cellWords'];
+  if (template === 'single') return [...base, ...flow, 'cellWords'];
+  return [...base, 'dayNumber', ...flow, 'cellWords'];
 }

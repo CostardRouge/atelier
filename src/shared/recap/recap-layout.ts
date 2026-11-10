@@ -19,6 +19,8 @@ import { arrangeSheet, sheetSlides, type SheetArea, type SheetDecorItem, type Sh
 import { TEXT_ROLES, textStyleOf, type TextRole as StyleRole } from './recap-text';
 import { countWord, hourWord } from './recap-wrapped';
 import { placeName, placeRuns, writtenPlace } from './recap-places';
+import { daysRange } from './recap-cellwords';
+import { wordsOn } from './recap-scope';
 import type { PlaceStyle } from '../roadtrip/trip-types';
 /** «12 Oct» — a day as the film's edge print and the timeline write it. */
 const shortDay = (day: string) => shortDate(day).replace(/\s\d{4}$/, '');
@@ -422,10 +424,12 @@ export function flowLayouts(count: number, fixed: Readonly<Record<string, SlideL
 }
 
 /** The running head's words: the title, and the slide's number once the order is known (`layoutRecap`). */
-function runningPart(doc: RecapDoc, resolved: ResolvedRecap, W: number, m: number): TextPart | null {
+function runningPart(doc: RecapDoc, resolved: ResolvedRecap, W: number, m: number, slideKey = '', ids: readonly string[] = []): TextPart | null {
   if (!doc.heading.show) return null;
+  // Its slide's days in the slide's date format, when he asked for them (lab 17: «NOVEMBER · 3 – 8 NOV · 2/4»).
+  const days = doc.carousel.headDates ? daysRange(ids.flatMap((id) => resolved.slots.find((s) => s.id === id)?.picture?.day ?? []), wordsOn(doc, slideKey).date) : '';
   const size = Math.round(W * 0.026 * textStyleOf(doc.texts, 'heading').size);
-  return { kind: 'text', role: 'running', id: 'running', box: { x: m, y: Math.round(m * 0.18), w: W - 2 * m, h: Math.round(size * 1.3) }, text: fillText(doc.heading.text, resolved.vars), size, align: 'left', face: 'mono', tracking: 0.08, upper: true };
+  return { kind: 'text', role: 'running', id: 'running', box: { x: m, y: Math.round(m * 0.18), w: W - 2 * m, h: Math.round(size * 1.3) }, text: `${fillText(doc.heading.text, resolved.vars)}${days ? ` · ${days}` : ''}`, size, align: 'left', face: 'mono', tracking: 0.08, upper: true };
 }
 
 /**
@@ -450,7 +454,7 @@ function flowPages(doc: RecapDoc, resolved: ResolvedRecap, ids: readonly string[
       // Over a full-page picture the title sits on it; elsewhere the pictures move down under it.
       if (!full && head.parts.length) area = { x: m, y: head.bottom + Math.round(W * 0.03), w: W - 2 * m, h: H - m - (head.bottom + Math.round(W * 0.03)) };
     } else if (titles === 'head') {
-      const run = runningPart(doc, resolved, W, m);
+      const run = runningPart(doc, resolved, W, m, `p:${k}`, these);
       if (run) heads.push(run);
     }
     parts.push(...gridCells(FLOW_SHAPES[layout], area, full ? 0 : gap, these, numberFrom + at), ...heads);
@@ -504,7 +508,7 @@ function weekPages(doc: RecapDoc, resolved: ResolvedRecap, W: number, H: number)
         titleParts.push(...head.parts);
         top = head.bottom + Math.round(label * 1.6);
       } else if (doc.carousel.titles === 'head') {
-        const run = runningPart(doc, resolved, W, m);
+        const run = runningPart(doc, resolved, W, m, `w:${i}`, w.map((x) => x.id));
         if (run) titleParts.push(run);
       }
       parts.push({ kind: 'text', role: 'header', id: `header:week${i}`, box: { x: m, y: top - Math.round(label * 1.4), w: W - 2 * m, h: Math.round(label * 1.3) }, text: `Week ${isoWeek(w[0].day!)}`, size: label, align: 'left', face: 'mono', tracking: 0.1, upper: true });

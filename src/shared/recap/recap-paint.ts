@@ -19,7 +19,8 @@ import { framedDraw, type Frame } from './recap-frame';
 import { sheetView, type SheetDecorItem } from './recap-sheet';
 import { pushIn } from './recap-second';
 import { bandsAt } from './recap-bands';
-import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, exifBits, fitText } from './recap-cellwords';
+import { DEFAULT_EXIF_PARTS, JOIN, arrangeBits, cellDate, exifBits, fitText } from './recap-cellwords';
+import { docOn, inFamily } from './recap-scope';
 import { DEFAULT_TEXT_STYLE, familyOf, italicOf, shippedWeight, textStyleOf, type TextRole } from './recap-text';
 import { glowLayersFor, halolight, warmDrift } from '../overlay/title-styles';
 
@@ -339,6 +340,7 @@ function numberAt(doc: RecapDoc, box: Box, s: number, size: number): { x: number
     case 'centre':
       return { x: box.x + box.w / 2, y: box.y + box.h / 2 + size * 0.36, align: 'center' };
     case 'bottomLeft':
+    case 'foot':
       return { x: box.x + pad, y: box.y + box.h - pad, align: 'left' };
     default:
       return { x: box.x + pad, y: box.y + size * 1.15, align: 'left' };
@@ -522,6 +524,8 @@ function drawCell(
   fx: { dim: number; pan: number } | null = null,
   /** The place its pill says (`recap-places.ts`), and whether its page bleeds; null = no pill. */
   pin: { name: string; bleed: boolean } | null = null,
+  /** The style its date wears: the day numbers', or the highlights' own (`flowDate`, lab 17). */
+  dateRole: TextRole = 'dayNumber',
 ): void {
   const pic = slotPicture(slot);
   const span = plan.cells.get(part.id);
@@ -539,6 +543,8 @@ function drawCell(
   const words = part.words;
   const s = Math.min(box.w, box.h);
   const small = Math.max(10, Math.min(W * 0.022, s * 0.16));
+  // The date as this page's words say it (lab 17): `auto` prints what the cell always printed.
+  const label = cellDate(slot?.picture?.day ?? slot?.day, doc.cells.date, part.number);
 
   // The rung's words beside its picture (on this day) are drawn whatever the picture's state.
   if (words === 'beside') {
@@ -570,7 +576,7 @@ function drawCell(
     if (doc.cells.empty !== 'hidden') {
       const size = Math.min(box.w * 0.42, W * 0.05);
       const cx = box.x + box.w / 2;
-      if (doc.cells.number) styled(g, doc, 'dayNumber', part.number, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ink, align: 'center' });
+      if (doc.cells.number) styled(g, doc, dateRole, label, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ink, align: 'center' });
       if (part.label) styled(g, doc, 'labels', part.label, cx, box.y + box.h - H * 0.16 + sizeIn(doc, 'dayNumber', size) * 0.9, size * 0.42, { face: FACES.sans, colour: ink, align: 'center', spacing: 0.12, upper: true });
     }
     g.globalAlpha = 1;
@@ -591,8 +597,8 @@ function drawCell(
         g.restore();
       }
       if (empty !== 'hidden' && doc.cells.number && words === 'inside') {
-        const at = numberAt(doc, box, s, sizeIn(doc, 'dayNumber', small));
-        styled(g, doc, 'dayNumber', part.number, at.x, at.y, small, { face: FACES.sans, colour: ink, weight: 500, align: at.align });
+        const at = numberAt(doc, box, s, sizeIn(doc, dateRole, small));
+        styled(g, doc, dateRole, label, at.x, at.y, small, { face: FACES.sans, colour: ink, weight: 500, align: at.align, maxWidth: box.w - s * 0.16 });
       }
       g.globalAlpha = 1;
     } else if (opts.editing) {
@@ -682,7 +688,7 @@ function drawCell(
     g.fillRect(box.x, box.y + box.h * 0.55, box.w, box.h * 0.45);
     if (doc.template === 'week') {
       const size = Math.min(box.w * 0.42, W * 0.05);
-      if (doc.cells.number) styled(g, doc, 'dayNumber', part.number, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ON_MEDIA, align: 'center' });
+      if (doc.cells.number) styled(g, doc, dateRole, label, cx, box.y + box.h - H * 0.16, size, { face: MONO, colour: ON_MEDIA, align: 'center' });
       if (part.label) styled(g, doc, 'labels', part.label, cx, box.y + box.h - H * 0.16 + sizeIn(doc, 'dayNumber', size) * 0.9, size * 0.42, { face: FACES.sans, colour: ON_MEDIA, align: 'center', spacing: 0.12, upper: true });
     } else {
       const size = W * 0.021;
@@ -700,11 +706,22 @@ function drawCell(
       lines.forEach((l, i) => styled(g, doc, 'cellWords', l, box.x + inset, bottom - (lines.length - 1 - i) * step, size, { ...place, maxWidth: maxW }));
     }
   } else if (words === 'inside') {
-    if (doc.cells.number) {
-      const at = numberAt(doc, box, s, sizeIn(doc, 'dayNumber', small));
-      styled(g, doc, 'dayNumber', part.number, at.x, at.y, small, { face: FACES.sans, colour: ON_MEDIA, weight: 500, shadow: true, align: at.align });
-    }
     let by = box.y + box.h - s * 0.08 - lift;
+    if (doc.cells.number && doc.cells.numberAt === 'foot') {
+      // Under the picture (lab 17): a soft band low over it and the date on one line — room for «Monday 10 November 2025».
+      const size = Math.max(9, Math.min(W * 0.034, s * 0.12));
+      const band = Math.min(box.h * 0.45, sizeIn(doc, dateRole, size) * 3.2 + lift);
+      const grad = g.createLinearGradient(0, box.y + box.h - band, 0, box.y + box.h);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.6)');
+      g.fillStyle = grad;
+      g.fillRect(box.x, box.y + box.h - band, box.w, band);
+      styled(g, doc, dateRole, label, box.x + s * 0.07, by, size, { face: MONO, colour: ON_MEDIA, spacing: 0.02, maxWidth: box.w - s * 0.14 });
+      by -= sizeIn(doc, dateRole, size) * 1.5;
+    } else if (doc.cells.number) {
+      const at = numberAt(doc, box, s, sizeIn(doc, dateRole, small));
+      styled(g, doc, dateRole, label, at.x, at.y, small, { face: FACES.sans, colour: ON_MEDIA, weight: 500, shadow: true, align: at.align, maxWidth: box.w - s * 0.16 });
+    }
     const tag = (label: string, fill: string) => {
       const size = Math.max(9, small * 0.72);
       g.font = `500 ${Math.round(size)}px ${MONO}`;
@@ -896,9 +913,12 @@ function drawPage(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, layout: Reca
     const name = marks?.get(c.id);
     return name ? { name, bleed: page.bleed } : null;
   };
-  for (const c of cells) if (!zooming.includes(c)) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, looks.get(c.id) ?? null, pinOf(c));
+  // This page's own words (lab 17): the first slide's, the family's, the slide's — and the highlights' date style.
+  const pageDoc = docOn(doc, page.key);
+  const dateRole: TextRole = inFamily(page.key) ? 'flowDate' : 'dayNumber';
+  for (const c of cells) if (!zooming.includes(c)) drawCell(g, pageDoc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, looks.get(c.id) ?? null, pinOf(c), dateRole);
   for (const p of page.parts) if (p.kind === 'text') drawText(g, doc, p, plan, t, light, page.bleed);
-  for (const c of zooming) drawCell(g, doc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, null, pinOf(c));
+  for (const c of zooming) drawCell(g, pageDoc, c, slots.get(c.id), plan, t, page.width, page.height, src, opts, light && !page.bleed, null, pinOf(c), dateRole);
   if (page.runs?.length) drawRuns(g, doc, page, cells, plan, t, light && !page.bleed);
   g.restore();
 }
