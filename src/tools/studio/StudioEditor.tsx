@@ -2424,7 +2424,7 @@ export default function StudioEditor({
           // the proxy included — so the sheet judges the pixels the stage
           // shows. The develop itself is the MEDIA's, keyed and hash-guarded
           // by the Library's file whatever is on screen.
-          file={rawDevelop ? (sheetSensor.file ?? activeFile) : (stageFile ?? activeFile)}
+          file={rawDevelop ? (sheetSensor.file ?? activeFile) : ((onSensor ? sensorView.file : stageFile) ?? activeFile)}
           videoTimeSeconds={developAt}
           title={(stageFile ?? activeFile).name}
           stack={lutStack}

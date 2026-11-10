@@ -22,6 +22,7 @@
  * stage that re-renders does not decode again.
  */
 
+import { markSensorStill } from './sensor-still-mark';
 import { composeLutStack } from '../lut/lut-stack';
 import { deviceClass } from '../lib/device-class';
 import { rawDecodeEdge, type RawPurpose } from '../raw/raw-budget';
@@ -174,5 +175,7 @@ export async function sensorStillFile(file: File, opts: SensorStillOptions): Pro
     raw = await fetchSourceFile(source, assetId, opts.signal);
   }
   const still = await sensorStill(raw, opts);
-  return new File([still.blob], `${raw.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
+  const out = new File([still.blob], `${raw.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg', lastModified: raw.lastModified });
+  // Said for what it is wherever it is shown — the Develop sheet's chip reads it (`sensor-still-mark.ts`).
+  return markSensorStill(out, { raw: raw.name, sensor: still.sensor, rung: still.rung, developed: Boolean(opts.develop && isRawDevelop(opts.develop)) });
 }

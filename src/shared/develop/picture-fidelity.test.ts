@@ -1,3 +1,4 @@
+import { markSensorStill } from './sensor-still-mark';
 import { describe, expect, it } from 'vitest';
 import { megapixels, pictureFidelity, pixelsLabel, shortfallLabel } from './picture-fidelity';
 
@@ -97,5 +98,19 @@ describe('pictureFidelity', () => {
     // No WebGL2 means no chain at all, which is not an 8-bit one.
     expect(pictureFidelity(file('A.jpg'), null, null, null)).toEqual(pictureFidelity(file('A.jpg')));
     expect(pictureFidelity(null, null, null, 'byte')).toEqual({ chip: null, note: null });
+  });
+  it('names a RAW’s sensor read for a host, never «JPEG · 8-bit» (his report)', () => {
+    const still = markSensorStill(new File([new Uint8Array(4)], 'DJI_0001.jpg', { type: 'image/jpeg' }), {
+      raw: 'DJI_0001.DNG',
+      sensor: { width: 8064, height: 4536 },
+      rung: 'gainMapWarp',
+      developed: false,
+    });
+    const f = pictureFidelity(still, null, { width: 2048, height: 1152 });
+    expect(f.chip).toBe('RAW · sensor · gain map + warp · 8-bit · 2048 × 1152');
+    expect(f.chip).not.toMatch(/JPEG/);
+    expect(f.note).toMatch(/sensor of DJI_0001\.DNG \(8064 × 4536\)/);
+    // The same bytes unmarked are what they look like.
+    expect(pictureFidelity(new File([new Uint8Array(4)], 'DJI_0001.jpg', { type: 'image/jpeg' })).chip).toMatch(/^JPEG/);
   });
 });

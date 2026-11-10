@@ -21,6 +21,7 @@ import { imageTypeLabel } from '../media/image-meta';
 import { mediaOrigin } from '../projects/media-identity';
 import type { RenderPrecision } from '../render/graph';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from './working-preview';
+import { sensorStillMark } from './sensor-still-mark';
 
 export interface PictureFidelity {
   /** The chip beside the sheet's title, or null with no picture. */
@@ -146,6 +147,19 @@ function fidelityOf(
     return {
       chip: `RAW · 16-bit linear${adds}${chipPixels(pixels)}`,
       note: `the sensor’s own data, decoded to linear light${applied}: what it kept above the displayed white is here to bring back${sizeClause(pixels)}`,
+    };
+  }
+  // A RAW's SENSOR read for a host (Recap, Trips, the Studio) reaches this sheet as a JPEG of
+  // what it rendered: named for what it is, never «JPEG · 8-bit» (`sensor-still-mark.ts`).
+  const sensor = sensorStillMark(file);
+  if (sensor) {
+    const adds = sensor.rung === 'gainMapWarp' ? ' · gain map + warp' : sensor.rung === 'gainMap' ? ' · gain map' : '';
+    const of = `${sensor.sensor.width} × ${sensor.sensor.height}`;
+    return {
+      chip: `RAW · sensor${adds} · 8-bit${chipPixels(pixels)}`,
+      note: `the sensor of ${sensor.raw} (${of}), decoded by Develop’s engine${
+        sensor.developed ? ' with the develop made on it in Develop,' : ''
+      } and handed to this sheet in 8 bits: highlights above white are gone here — the Develop tool reaches them${sizeClause(pixels)}`,
     };
   }
   if (isWorkingPreview(file)) {

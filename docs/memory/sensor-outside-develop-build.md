@@ -99,3 +99,15 @@ before touching `raw-choice.ts`, `sensor-still.ts`, `use-sensor-file.ts`,
   rail's thumbnails (they draw the render with no develop). Driven at the
   brick only (+1 EV brighter, −1 EV darker, a stored `gain` rung kept); the
   take from a real roll was not driven headless.
+- **The sheet's chip on a sensor still (2026-11-10, his report).** A host
+  hands the Develop sheet a JPEG of the sensor, and the fidelity chip read its
+  name: «JPEG · 8-bit» over a DNG on its sensor. `sensor-still-mark.ts` (a
+  WeakMap beside the `File`, kept out of the brick so the chip stays light)
+  marks every `sensorStillFile` — and Recap's sheet file made from a kept
+  `#sensor` print (rung unknown there) — and `pictureFidelity` asks it first:
+  «RAW · sensor · gain map + warp · 8-bit», the note naming the RAW and its
+  sensor size. **Rule**: a host that draws a picture from something other
+  than its own file marks what it hands on; never let a derived file be named
+  by its own extension. The Studio's sheet also opened on the STAGE file
+  (the DNG's render) while the stage showed the sensor — now the sensor's
+  picture. Driven headless in Recap at 1280 and 390.

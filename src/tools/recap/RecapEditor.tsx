@@ -48,6 +48,7 @@ import { fillFromWinnow } from './recap-fill';
 import { pictureOfFile, pictureOfRow, printOf, sensorFileOf } from './recap-media';
 import { sensorStill } from '../../shared/develop/sensor-still';
 import { pictureMaterial } from '../../shared/recap/recap-raw';
+import { markSensorStill } from '../../shared/develop/sensor-still-mark';
 import { getClip, getValue, putThumb, setValue } from './recap-store';
 import { gradedCopy, useRecapPictures } from './use-recap-pictures';
 import { decodePhoto } from '../../shared/media/photo-frame';
@@ -659,7 +660,15 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
       setDevelopFile(local);
       return;
     }
-    void printOf(developPic, ctx, material).then((b) => alive && b && setDevelopFile(new File([b], `${developPic.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })));
+    void printOf(developPic, ctx, material).then((b) => {
+      if (!alive || !b) return;
+      const file = new File([b], `${developPic.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' });
+      // On its sensor the sheet's chip says so, not «JPEG · 8-bit» (`sensor-still-mark.ts`).
+      if (material === 'sensor' && developPic.width && developPic.height) {
+        markSensorStill(file, { raw: developPic.name, sensor: { width: developPic.width, height: developPic.height }, rung: null, developed: false });
+      }
+      setDevelopFile(file);
+    });
     return () => {
       alive = false;
     };
