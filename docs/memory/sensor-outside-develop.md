@@ -63,7 +63,14 @@ build waits for his yes** on https://claude.ai/artifact/AY2Z7mmPpxc8g13BHLa9w1.
   own grammar, two rows and no rungs; after a pick, a line offers the same for
   every RAW of the recap (the roll's «C + B»). No new control at export:
   *Originals* re-renders a Sensor picture from its sensor at the page's
-  density.
+  density. **It is drawn on `shared/ui/PictureCard.tsx`** (PR #453, branch
+  `claude/fervent-thompson-l4uqb0`, not merged on 2026-11-10; `frontend.md`
+  there, «The picture in hand is ONE card»): the chip is passed as the card's
+  `name` for a RAW — a column of ~190 px at the 23 rem inspector, so the file
+  name truncates and «Sensor ▾» stays whole — and the whole-recap line sits
+  under the card in the same `row`. In Trips and the Studio the menu goes
+  BESIDE `DevelopDoor`, never inside it. Build R1 on that branch, or after it
+  merges: `SlotSection` conflicts otherwise.
 - **Kept on the device**: the 2048 px print only, in the existing
   `atelier-recap` store under a key per material; the RAW never (a Winnow
   original held for the session, `original-cache.ts`). No new store, no new
