@@ -894,6 +894,14 @@ export default function BadgeStage({
     },
     [],
   );
+  /** Dispose the graders of every cell from `from` on — a collage that shrank, or a slide with none. */
+  const dropCellGraders = useCallback((from: number) => {
+    for (const [i, entry] of cellGradersRef.current) {
+      if (i < from) continue;
+      entry.grader.dispose();
+      cellGradersRef.current.delete(i);
+    }
+  }, []);
   useEffect(
     () => () => {
       for (const entry of cellGradersRef.current.values()) entry.grader.dispose();
@@ -999,8 +1007,12 @@ export default function BadgeStage({
         };
       });
       collageRender = { collage, items, seconds: collageSeconds };
+      // A cell that is no longer drawn lets its grader go: each holds a WebGL context and two float16 targets
+      // (~100 MB at a phone's stage budget), and the browser takes back its OLDEST context past ~16 — the stage's.
+      dropCellGraders(rects.length);
     } else {
       cellRectsRef.current = [];
+      dropCellGraders(1);
     }
     const opts: RenderBadgeOptions = {
       live: () => seq === paintSeq.current,
@@ -1056,6 +1068,7 @@ export default function BadgeStage({
     collageLuts,
     collageSeconds,
     cellGraderFor,
+    dropCellGraders,
     cellSeq,
     lut,
     filmKey,
