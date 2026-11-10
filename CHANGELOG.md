@@ -147,6 +147,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Recap: Enter keeps a framing and Escape gives the picture back as it was (Escape used to keep it too). While you
+  frame, the arrows move the picture, `+` `−` zoom, `[` `]` turn it and `0` centres it. Outside a framing, `←` `→`
+  turn the pages, Enter frames what is selected, Delete empties the place in hand, and `H` or `?` lists every key.
+- The picture in hand in Recap is one card: a larger thumbnail, one wide **Develop** button that says *Developed*
+  and what was changed once it is, *Replace* and *Frame* beside it, and the rarer verbs (centre, back to the rule,
+  empty) behind ⋯. Trips' Picture tab and the Studio's Grade tab wear the same Develop button.
+
 - Trips' Vehicles panel in the overview's Map view folds: one row per stage says its vehicle, hops, kilometres and a
   strip of its hops, and opens on the stage of the day shown or one that drives over the sea; inside, only the hops
   that differ are listed and the others fold into one line. On a wide screen the whole card folds to its one line.
@@ -154,6 +161,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   Vehicles panel, with a dot on the Map switch and on the panel pointing to it.
 
 ### Fixed
+
+- Recap: Space, Enter and Escape no longer do nothing — or press the last button again — after a click on any button:
+  a button a click left focused gives the key back to the editor. Enter after *Frame* used to start the framing
+  again instead of ending it.
 
 - *Transcode to H.264* — converting a clip your browser cannot play — failed before it started: ffmpeg could not be
   loaded. It loads again.

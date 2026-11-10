@@ -3538,7 +3538,7 @@ days it is about (references only: a picture is fetched when a cell shows it);
 *Pick…* opens the shared Winnow picker, and *Add files…* reads photos and clips
 from this device — never uploaded. The copy a cell draws (a JPEG of at most
 2048 px) is kept on this device, so a recap reopens and exports without its
-files; the legal notice says so. **Develop…** on a picture opens Develop's own
+files; the legal notice says so. **Develop** on a picture opens Develop's own
 sheet: its correction is the picture's, the look the whole recap's.
 
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
@@ -3563,10 +3563,18 @@ cell keeps what you framed. In the *Background* tab the whole clip or picture is
 shown with the page's shape on it — drag it, pull a corner to zoom; a cell's
 picture has its zoom in *Pictures*. Or **double-click** the background or a cell
 on the stage: drag moves it, the wheel or a pinch zooms, and the rest of a
-cell's picture shows faintly around it; *Done* or Escape leaves. **Straighten**
-turns a picture or the background by up to 45° — it grows just enough that no
-corner goes empty (↺ ↻ on the stage, or Shift + wheel). A picture keeps its
-framing wherever it goes.
+cell's picture shows faintly around it. **Enter** or *Done* keeps the framing;
+**Escape** gives the picture back as it was. While it frames, the arrows move
+the picture (a bigger step with Shift), `+` and `−` zoom, `[` and `]` turn it
+and `0` centres it. **Straighten** turns a picture or the background by up to
+45° — it grows just enough that no corner goes empty (↺ ↻ on the stage, or
+Shift + wheel). A picture keeps its framing wherever it goes.
+
+**Keys.** `Space` plays and pauses, `←` `→` turn the pages, `Enter` frames the
+place or the background in hand, `Delete` empties the place in hand, `Escape`
+lets go of the selection, and `H` or `?` opens the sheet that lists them all
+(the ⌨ beside the transport). A field, a slider or a select keeps the keys it
+uses.
 
 **Places.** In *Layout › Places*, a picture can say the town it was taken in
 — as your Winnow named it from its GPS — in a small glass pill with a red map
