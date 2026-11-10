@@ -3559,6 +3559,21 @@ from this device — never uploaded. The copy a cell draws (a JPEG of at most
 files; the legal notice says so. **Develop** on a picture opens Develop's own
 sheet: its correction is the picture's, the look the whole recap's.
 
+**A RAW at full quality.** A camera RAW (a DJI `.DNG`, a Sony `.ARW`…) is
+read either from the **camera render** inside it — or, from a Winnow, its
+proxy — or from its **sensor**, decoded in your browser by the same engine
+as Develop, with the file's own lens shading and warp corrected. The
+picture's name in its card is the menu that chooses (*Render · Sensor ▾*);
+after a choice, a line offers the same for every RAW of the recap. By
+default (*auto*) a RAW file of yours goes to its sensor when its camera
+render is under half its size — a drone DNG, whose render is 960 × 540 of a
+36-megapixel sensor — and stays on its render otherwise (a Sony ARW carries a
+full-size one). A RAW on your Winnow stays on its proxy until you choose its
+sensor, since that means downloading the whole original (about 74 MB for a
+drone DNG), once for the session. The sensor's copy is kept like any other,
+decoded once per picture and device; on a phone it is decoded at 2560 px at
+most.
+
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
 to action, with words counted for you: `{month}`, `{count}`, `{days}`,
 `{videos}`…), *Layout* (9:16, 4:5 or 1:1; what each cell says: the day's number,

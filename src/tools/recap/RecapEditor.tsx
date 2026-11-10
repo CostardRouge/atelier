@@ -43,6 +43,7 @@ import { STORY_FONTS, type StoryFontId } from '../../shared/story/fonts';
 import RecapStage, { sameSelection, type Selection } from './RecapStage';
 import { fillFromWinnow } from './recap-fill';
 import { pictureOfFile, pictureOfRow, printOf } from './recap-media';
+import { pictureMaterial } from '../../shared/recap/recap-raw';
 import { getClip, getValue, putThumb, setValue } from './recap-store';
 import { gradedCopy, useRecapPictures } from './use-recap-pictures';
 import { decodePhoto } from '../../shared/media/photo-frame';
@@ -629,12 +630,14 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     let alive = true;
     setDevelopFile(null);
     if (!developPic) return;
-    const local = files.get(developPic.key);
+    // On its sensor a RAW is developed on its sensor's print — the file in hand would give the sheet its embedded render.
+    const material = pictureMaterial(developPic, doc);
+    const local = material === 'render' ? files.get(developPic.key) : undefined;
     if (local) {
       setDevelopFile(local);
       return;
     }
-    void printOf(developPic, ctx).then((b) => alive && b && setDevelopFile(new File([b], `${developPic.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })));
+    void printOf(developPic, ctx, material).then((b) => alive && b && setDevelopFile(new File([b], `${developPic.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })));
     return () => {
       alive = false;
     };

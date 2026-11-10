@@ -12,7 +12,12 @@
  */
 
 import { decodePhoto } from '../../shared/media/photo-frame';
-import { isClipName } from '../../shared/library/assets';
+import { isClipName, isRawImage } from '../../shared/library/assets';
+import { rawSizes } from '../../shared/exif/raw-probe';
+import { sensorStill } from '../../shared/develop/sensor-still';
+import type { RawMaterial } from '../../shared/develop/raw-choice';
+import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
+import { printKey } from '../../shared/recap/recap-raw';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { captureDay, captureMinute, captureSecond, dayFromName } from '../../shared/recap/recap-days';
 import { localKey, winnowKey, type RecapPicture } from '../../shared/recap/recap-doc';
@@ -126,6 +131,13 @@ export async function pictureOfFile(file: File): Promise<RecapPicture> {
     } catch {
       // No EXIF: the name or the file's date says the day below.
     }
+    // A RAW's two sizes, from its head: the sensor as shown, and the render
+    // inside it — what Auto compares (`recap-raw.ts`).
+    if (isRawImage(file.name)) {
+      const sizes = await rawSizes(file);
+      if (sizes.sensor) Object.assign(base, { width: sizes.sensor.width, height: sizes.sensor.height });
+      base.renderEdge = sizes.render ? Math.max(sizes.render.width, sizes.render.height) : 0;
+    }
   } else {
     try {
       const meta = await clipMeta(file);
@@ -221,11 +233,35 @@ export interface PrintContext {
 }
 
 /**
- * The print of `pic`: kept on this device, else made — from the connected
- * Winnow or the local file in hand — and kept. Null when nothing can give it
- * (a local file not handed over in this visit, another instance).
+ * The print of `pic` read from `material`: kept on this device, else made —
+ * from the connected Winnow or the local file in hand — and kept. Null when
+ * nothing can give it (a local file not handed over in this visit, another
+ * instance).
+ *
+ * On the SENSOR the RAW itself is read (`sensor-still.ts`): the local file,
+ * or the instance's original, fetched once and held for the session. A sensor
+ * that cannot be reached or decoded leaves the render's print instead, kept
+ * under the render's key only — never a render passed off as the sensor.
  */
-export async function printOf(pic: RecapPicture, ctx: PrintContext): Promise<Blob | null> {
+export async function printOf(pic: RecapPicture, ctx: PrintContext, material: RawMaterial = 'render'): Promise<Blob | null> {
+  if (material === 'sensor' && pic.kind === 'photo') {
+    const kept = await getPrint(printKey(pic.key, 'sensor'));
+    if (kept) return kept;
+    const raw = await sensorFileOf(pic, ctx).catch((err) => {
+      if (ctx.signal?.aborted) throw err;
+      return null;
+    });
+    if (raw) {
+      const still = await sensorStill(raw, { edge: PRINT_EDGE, purpose: 'stage', signal: ctx.signal, quality: 0.88 }).catch((err) => {
+        if (ctx.signal?.aborted) throw err;
+        return null;
+      });
+      if (still) {
+        await putPrint(printKey(pic.key, 'sensor'), still.blob);
+        return still.blob;
+      }
+    }
+  }
   const kept = await getPrint(pic.key);
   if (kept) return kept;
   let blob: Blob | null = null;
@@ -246,6 +282,22 @@ export async function printOf(pic: RecapPicture, ctx: PrintContext): Promise<Blo
   }
   if (blob) await putPrint(pic.key, blob);
   return blob;
+}
+
+/**
+ * The RAW itself, for its sensor: the local file in hand, or the instance's
+ * original (`/download`, the route Recap's *Originals* already takes), held
+ * for the session under the picture's key so the export never fetches it twice.
+ */
+export async function sensorFileOf(pic: RecapPicture, ctx: PrintContext): Promise<File | null> {
+  if (pic.origin === 'local') return ctx.files.get(pic.key) ?? null;
+  if (pic.asset === undefined || !ctx.client || pic.instance !== ctx.instance) return null;
+  const held = heldOriginal(pic.key);
+  if (held) return held;
+  const c = ctx.client;
+  const file = await c.fetchFile(c.originalUrl(pic.asset), pic.name, '', 0, { signal: ctx.signal });
+  holdOriginal(pic.key, file);
+  return file;
 }
 
 /**

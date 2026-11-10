@@ -109,3 +109,22 @@ the stage budget).
   `RollRenderOptions.rawMargin` (default 2): the brick passes 1, so a 2048 px
   print decodes at half size (measured headless: 8.7 s against 32 s whole
   under SwiftShader; the timings mean nothing on his Mac, the ratio does).
+- **R1 (2026-11-10) — Recap's print and menu.** `RecapPicture.material`
+  (own choice), `.renderEdge` (a local RAW's render long edge, read at add
+  time with the SENSOR's size into `width`/`height`) and `RecapDoc.raw` (the
+  recap's choice, null = Auto); `shared/recap/recap-raw.ts` (pure) resolves
+  them — a LOCAL RAW counts as in hand even when its file is not handed over
+  in this visit, so Auto answers the same on every visit, and a picture added
+  before `renderEdge` existed stays on its render. The sensor's print is kept
+  BESIDE the render's under `<key>#sensor` (the store's prune already strips
+  `#…`), so switching back and forth never re-decodes; a sensor that cannot be
+  reached or decoded falls back to the render's print, never stored as the
+  sensor's. A Winnow RAW's original comes through `/download` and is held in
+  `original-cache.ts` under the picture's key. The stage reloads a picture
+  whose material changed (`use-recap-pictures.ts`, `loadedAs`); the Develop
+  sheet opens on the SENSOR's print, never on the DNG in hand (whose render it
+  would read). `shared/develop/MaterialMenu.tsx` is the chip: the name
+  truncates, the material word stays — «Render» on the trigger, since «Camera
+  render» left no room for the name in the 190 px column. Driven headless
+  (1280 and 390, a synthetic DJI DNG dropped as a file): Auto opened it on the
+  sensor, the line pairs sharp at the stage; *Render* gave the grey blur back.

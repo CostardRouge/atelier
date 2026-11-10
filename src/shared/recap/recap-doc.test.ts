@@ -28,6 +28,15 @@ describe('recap document', () => {
     expect(day.background.kind).toBe('paper');
   });
 
+  it('keeps a RAW’s material, its render edge and the recap’s choice', () => {
+    const base = withPictures(createRecapDoc('month', 'local', { anchor: '2026-10-14', now: 1000 }), [pic('a.DNG', '2026-10-02', { material: 'sensor', renderEdge: 960 }), pic('b.DNG', '2026-10-03', { material: 'proxy' as never })]);
+    const back = readRecapDoc(JSON.parse(JSON.stringify({ ...base, raw: 'render' })), 'local')!;
+    expect(back.raw).toBe('render');
+    expect(back.pictures[0].material).toBe('sensor');
+    expect(back.pictures[0].renderEdge).toBe(960);
+    expect(back.pictures[1].material).toBeUndefined();
+    expect(readRecapDoc(JSON.parse(JSON.stringify({ ...base, raw: 'x' })), 'local')!.raw).toBeNull();
+  });
   it('reads untrusted input without breaking', () => {
     expect(readRecapDoc(null, 'local')).toBeNull();
     expect(readRecapDoc({ id: 'x', version: 99 }, 'local')).toBeNull();

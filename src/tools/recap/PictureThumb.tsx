@@ -4,6 +4,7 @@ import type { RecapPicture } from '../../shared/recap/recap-doc';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { Icons } from '../../shared/ui/icons';
 import { getPrint } from './recap-store';
+import { printKey } from '../../shared/recap/recap-raw';
 
 /**
  * A pool picture as a small square: Winnow's thumbnail, the local file in
@@ -29,7 +30,10 @@ export default function PictureThumb({
   useEffect(() => {
     if (remote || localImage) return;
     let alive = true;
-    void getPrint(pic.key).then((b) => alive && setKept(b));
+    // A RAW on its sensor may have only its sensor's print kept (`recap-raw.ts`).
+    void getPrint(pic.key)
+      .then((b) => b ?? getPrint(printKey(pic.key, 'sensor')))
+      .then((b) => alive && setKept(b));
     return () => {
       alive = false;
     };

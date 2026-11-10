@@ -11,6 +11,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- Recap reads a camera RAW from its sensor, at full quality: a drone DNG no longer shows the 960 × 540 picture
+  inside the file, blown up. The picture's name in its card chooses between its camera render (or Winnow's proxy)
+  and its sensor, and one line applies the choice to every RAW of the recap; a RAW file of yours whose render is
+  too small goes to its sensor by itself, a RAW on your Winnow only when you ask, since its original is downloaded.
 - Recap, a new editor that turns your pictures into recaps to post: a month as a calendar of its days, the same day
   a year, a month and a week ago, a week, a grid, a single picture or a photo dump over a carousel. It fills itself
   from your Winnow's days (or your files), lets you pin, swap or empty any day, filter by device, develop each picture

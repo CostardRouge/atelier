@@ -16,6 +16,7 @@
  */
 
 import { developOrNull, type DevelopSettings } from '../develop/develop';
+import { readMaterial, type RawMaterial } from '../develop/raw-choice';
 import { gradeOrNull, type SavedGrade } from '../lut/saved-grade';
 import { DEFAULT_TEXT_STYLE, readTextStyle, readTextStyles, type TextRole, type TextStyle } from './recap-text';
 import { readFrame, type Frame } from './recap-frame';
@@ -136,6 +137,13 @@ export interface RecapPicture {
   motion?: number;
   /** A clip that IS a Live Photo's motion: the still's asset, whose thumbnail it shows. */
   liveStill?: number;
+  /**
+   * A RAW's material, chosen for this picture (`recap-raw.ts`): its camera
+   * render (an instance's proxy) or its sensor. Absent: the recap's, else Auto.
+   */
+  material?: RawMaterial;
+  /** A local RAW's embedded render, long edge, as its head states it — 0 for none; what Auto compares with the sensor (`width`/`height`). */
+  renderEdge?: number;
   /** Where Winnow's geocoding put it: the most local name (a town, else a sight, else a region), its region, its country. */
   place?: string;
   region?: string;
@@ -286,6 +294,8 @@ export interface RecapDoc {
   sound: RecapSound | null;
   /** One look over every picture of the recap — its series' colour. */
   look: SavedGrade | null;
+  /** The material every RAW without a choice of its own is read from («Use … for every RAW of this recap»); null = Auto. */
+  raw: RawMaterial | null;
   /** The clips follow as slides of their own on a carousel (and the badges count them). */
   clipSlides: boolean;
   /**
@@ -550,6 +560,9 @@ export function readPicture(raw: unknown): RecapPicture | null {
   if (typeof r.phash === 'string' && /^\d{1,20}$/.test(r.phash)) out.phash = r.phash;
   optNum('motion', 1, Number.MAX_SAFE_INTEGER);
   optNum('liveStill', 1, Number.MAX_SAFE_INTEGER);
+  optNum('renderEdge', 0, 100000);
+  const material = readMaterial(r.material);
+  if (material) out.material = material;
   optNum('lat', -90, 90);
   optNum('lon', -180, 180);
   for (const k of ['device', 'lens', 'shutter', 'place', 'region', 'country'] as const) {
@@ -740,6 +753,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     motion: sanitizeMotion(r.motion, { ...DEFAULT_MOTION, ...recipe.motion }),
     sound: readSound(r.sound),
     look: gradeOrNull(r.look),
+    raw: readMaterial(r.raw) ?? null,
     clipSlides: bool(r.clipSlides, true),
     length: typeof r.length === 'number' && Number.isFinite(r.length) ? Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Math.round(r.length * 10) / 10)) : null,
     delivery: readDelivery(r.delivery),
