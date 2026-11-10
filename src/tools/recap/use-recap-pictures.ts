@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { gradeKey } from '../../shared/lut/saved-grade';
@@ -58,6 +58,8 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
   docRef.current = doc;
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
   // A RAW is loaded from its material (`recap-raw.ts`): a change of material is a different print.
   const wantKeys = keys.map((k) => {
     const pic = byKey.get(k);
@@ -143,7 +145,9 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
     [],
   );
 
-  const still = (key: string): Drawable | null => {
+  // ONE function while the look holds: the editor memoises its paint sources on it, and a new one per render
+  // repainted every slide of the strip and re-armed the poster's encode on every render (`performance.md`).
+  const still = useCallback((key: string): Drawable | null => {
     const bmp = bitmaps.current.get(key);
     if (!bmp) return null;
     const pic = byKeyRef.current.get(key);
@@ -152,10 +156,11 @@ export function useRecapPictures(doc: RecapDoc, keys: readonly string[], ctx: Pr
     const wants = `${look}|${pic.develop ? JSON.stringify(pic.develop) : '-'}`;
     const held = graded.current.get(key);
     if (held && held.key === wants) return held.drawable ?? plain;
-    const drawable = gradedCopy(stack, pic, bmp);
+    const drawable = gradedCopy(stackRef.current, pic, bmp);
     graded.current.set(key, { key: wants, drawable });
     return drawable ?? plain;
-  };
+    // `look` keys the stack's composition; the stack itself is a fresh object per render, read through its ref.
+  }, [look]);
 
   return { still, loading, missing, version };
 }
