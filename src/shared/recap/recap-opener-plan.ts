@@ -13,7 +13,8 @@ import { TICK_KITS } from '../roadtrip/hooks/tick-kits';
 import type { SoundEvent } from '../audio/sound-event';
 import type { IsoDate } from '../roadtrip/trip-days';
 import type { RecapDoc, RecapPicture } from './recap-doc';
-import type { RecapOpener } from './recap-opener';
+import { isTripOpener, type RecapOpener, type TripOpenerKind } from './recap-opener';
+import type { HookBasemapWant, HookPicture } from '../roadtrip/hooks/hook-variant';
 import { byTime, deviceLabel, fillText, templateDays, type DeviceAliases, type ResolvedRecap } from './recap-slots';
 import { rankByRules } from './recap-carousel';
 
@@ -57,16 +58,22 @@ export interface BadgePlan {
 
 /** A trip opener's own plan lives with Trips' engine; Recap only needs its length and its painter (`recap-trip-opener.ts`). */
 export interface TripOpenerPlan {
-  kind: 'drive' | 'map';
+  kind: TripOpenerKind;
   seconds: number;
   /** Paints the opener's frame at `t` into a `w × h` page, its pictures read through `read` (the painter's stills). */
   paint(g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, w: number, h: number, t: number, read?: (key: string) => { image: CanvasImageSource; width: number; height: number } | null): void;
   /** The stills it draws (pool keys), for the painter's sources. */
   keys: string[];
-  /** What it needs before it paints (fonts, an OSM ground the trip asked for). */
+  /** What it needs before it paints (fonts, a streamed map ground). */
   ready?: () => Promise<void>;
-  /** The trip it drives, for the panel's words. */
-  tripName: string;
+  /** The map grounds its settings ask the shell for (OpenStreetMap, where this device allows it); none on paper. */
+  wantsGround(): readonly HookBasemapWant[];
+  /** The grounds the shell loaded, by the keys asked — read when it paints. */
+  setGrounds(grounds: ReadonlyMap<string, HookPicture> | null): void;
+  /** The trip it drives, for the panel's words; null on the recap's own pictures alone. */
+  tripName: string | null;
+  /** The moment its frame is WHOLE — a Virée gives the frame back at its end (its map fades), so its still is taken just before. */
+  rest: number;
 }
 
 export type OpenerPlan = DefilePlan | BadgePlan | TripOpenerPlan;
@@ -207,7 +214,7 @@ export function badgeCamera(p: RecapPicture, aliases: DeviceAliases = {}): strin
 export function planOpener(doc: RecapDoc, resolved: ResolvedRecap, aliases: DeviceAliases = {}, trip: OpenerPlan | null = null): OpenerPlan | null {
   const o = doc.opener;
   if (o.kind === 'none') return null;
-  if (o.kind === 'drive' || o.kind === 'map') return trip && trip.kind === o.kind ? trip : null;
+  if (isTripOpener(o.kind)) return trip && trip.kind === o.kind ? trip : null;
   const shown = shownPictures(resolved);
   if (o.kind === 'defile') return planDefile(o, shown, templateDays(doc).length ? templateDays(doc) : dayRun(shown));
   return planBadge(o, doc, shown, (p) => badgeCamera(p, aliases), fillText(doc.heading.text, resolved.vars));
@@ -221,6 +228,15 @@ function dayRun(pictures: readonly RecapPicture[]): IsoDate[] {
   const end = Date.parse(`${days[days.length - 1]}T00:00:00Z`);
   for (let t = Date.parse(`${days[0]}T00:00:00Z`); t <= end && out.length < 400; t += 86_400_000) out.push(new Date(t).toISOString().slice(0, 10) as IsoDate);
   return out;
+}
+
+/**
+ * The moment of an opener's STILL — what the stage holds while it is being
+ * set, and what its carousel slide shows: its last frame, or a trip opener's
+ * own `rest`.
+ */
+export function openerRest(plan: OpenerPlan): number {
+  return 'rest' in plan ? plan.rest : Math.max(0, plan.seconds - 0.01);
 }
 
 /** True when the opener is also the carousel's first slide: asked, and a still that says something (a Badge, a trip's map — never a Défilé's flicker). */

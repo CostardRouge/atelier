@@ -6,8 +6,11 @@
  *   own curves (`easing.ts`) and over its tape (`paintTape`), then the cover.
  * - **Badge**: one picture full screen, slowly pushed in, with a block that
  *   names its day, its place and its camera — then the cover.
- * - **Virée** and **Itinerary** (`drive`, `map`): a trip's road, offered only
- *   when a trip of Trips covers the recap's days (`recap-trip-opener.ts`).
+ * - **Virée**, **Itinerary**, **Vitrine** and the **Trip card** (`drive`,
+ *   `map`, `showcase`, `card`): Trips' own variants with their own settings
+ *   (`options`), over the trip the recap keeps a copy of (`tripCopy`,
+ *   `recap-opener-trip.ts`) — or, with none, over its located pictures alone
+ *   (lab 16, `recap-trip-opener.ts`).
  *
  * The opener LEADS the film: `planFilm` shifts every page by its seconds, so
  * the clips, the sound and the stage's clock read one timeline. The author's
@@ -21,11 +24,15 @@
  */
 
 import { EASING_IDS, type HookEasing } from '../roadtrip/hooks/easing';
+import type { HookOptions } from '../roadtrip/hooks/hook-variant';
+import { readOpenerTrip, type OpenerTrip } from './recap-opener-trip';
 
-export type OpenerKind = 'none' | 'defile' | 'badge' | 'drive' | 'map';
-export const OPENER_KINDS: readonly OpenerKind[] = ['none', 'defile', 'badge', 'drive', 'map'];
-/** The openers that need a trip of Trips over the recap's days. */
-export const TRIP_OPENERS: readonly OpenerKind[] = ['drive', 'map'];
+/** The openers that are Trips' own variants, by their id in Trips' registry. */
+export type TripOpenerKind = 'drive' | 'map' | 'showcase' | 'card';
+export type OpenerKind = 'none' | 'defile' | 'badge' | TripOpenerKind;
+export const TRIP_OPENERS: readonly TripOpenerKind[] = ['drive', 'map', 'showcase', 'card'];
+export const OPENER_KINDS: readonly OpenerKind[] = ['none', 'defile', 'badge', ...TRIP_OPENERS];
+export const isTripOpener = (kind: unknown): kind is TripOpenerKind => (TRIP_OPENERS as readonly unknown[]).includes(kind);
 
 export const OPENER_LABEL: Record<OpenerKind, string> = {
   none: 'None',
@@ -33,14 +40,19 @@ export const OPENER_LABEL: Record<OpenerKind, string> = {
   badge: 'Badge',
   drive: 'Virée',
   map: 'Itinerary',
+  showcase: 'Vitrine',
+  // Trips calls it «Recap card»; inside a recap that name says nothing (lab 16, Q5).
+  card: 'Trip card',
 };
 
 export const OPENER_HINT: Record<OpenerKind, string> = {
   none: 'The recap starts on its own first page',
   defile: 'Its pictures flick by, faster and faster, then the cover',
   badge: 'One picture, its day, its place and its camera, then the cover',
-  drive: "The drive along the trip's road over these days, then the cover",
-  map: "The trip's map, its stops lit one by one, then the cover",
+  drive: 'A little vehicle drives the map from stop to stop, showing pictures',
+  map: "The trip's map, its stops lit one by one",
+  showcase: 'The vehicle on its own: a place, an entrance, an ending, a look',
+  card: 'The trip told on one card: its road, its days, its distance',
 };
 
 /** Which lines the Badge says. */
@@ -68,12 +80,18 @@ export interface RecapOpener {
   title: string | null;
   /** Badge or a trip opener: also the carousel's first slide (its last frame). */
   slide: boolean;
-  /** A trip opener: the trip, by id; null = the one covering the recap's days. */
+  /** A trip opener, on a recap made before lab 16: the trip of Trips it named, by id — the one `tripAuto` takes its copy from first. */
   trip: string | null;
+  /** What each of Trips' variants was given HERE — its own settings, kept apart per variant so a switch loses nothing. Absent = Recap's starting values. */
+  options: Partial<Record<TripOpenerKind, HookOptions>>;
+  /** The trip the trip openers drive: a copy kept in the recap, or null (the located pictures alone). */
+  tripCopy: OpenerTrip | null;
+  /** With no copy, take one from the trip of this device covering the recap's days when a trip opener is chosen — false once he chose «Use no trip». */
+  tripAuto: boolean;
 }
 
 export const OPENER_SECONDS = { min: 0.6, max: 8 } as const;
-const DEFAULT_SECONDS: Record<OpenerKind, number> = { none: 0, defile: 1.8, badge: 2.4, drive: 4, map: 4 };
+const DEFAULT_SECONDS: Record<OpenerKind, number> = { none: 0, defile: 1.8, badge: 2.4, drive: 4, map: 4, showcase: 4, card: 2.4 };
 
 export const DEFAULT_OPENER: RecapOpener = {
   kind: 'none',
@@ -86,6 +104,9 @@ export const DEFAULT_OPENER: RecapOpener = {
   title: null,
   slide: false,
   trip: null,
+  options: {},
+  tripCopy: null,
+  tripAuto: true,
 };
 
 /** The seconds a kind starts on when it is chosen. */
@@ -94,9 +115,20 @@ export const openerSecondsFor = (kind: OpenerKind) => DEFAULT_SECONDS[kind];
 const num = (v: unknown, min: number, max: number, fallback: number) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
 
+/** Each variant's settings as stored: a plain record per known variant, kept by reference (a variant reads it through its own defaults). */
+function readOptions(raw: unknown): RecapOpener['options'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: RecapOpener['options'] = {};
+  for (const kind of TRIP_OPENERS) {
+    const v = (raw as Record<string, unknown>)[kind];
+    if (v && typeof v === 'object' && !Array.isArray(v)) out[kind] = v as HookOptions;
+  }
+  return out;
+}
+
 /** The opener read from anything: an unknown kind is none, every number clamped. */
 export function readOpener(raw: unknown): RecapOpener {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_OPENER, lines: { ...DEFAULT_OPENER.lines } };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_OPENER, lines: { ...DEFAULT_OPENER.lines }, options: {} };
   const r = raw as Record<string, unknown>;
   const kind = OPENER_KINDS.includes(r.kind as OpenerKind) ? (r.kind as OpenerKind) : 'none';
   const l = r.lines && typeof r.lines === 'object' ? (r.lines as Record<string, unknown>) : {};
@@ -112,5 +144,8 @@ export function readOpener(raw: unknown): RecapOpener {
     title: title && title.trim() ? title : null,
     slide: r.slide === true,
     trip: typeof r.trip === 'string' && r.trip ? r.trip.slice(0, 200) : null,
+    options: readOptions(r.options),
+    tripCopy: readOpenerTrip(r.tripCopy),
+    tripAuto: r.tripAuto !== false,
   };
 }

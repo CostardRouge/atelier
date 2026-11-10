@@ -8,7 +8,7 @@
  * chapter is where the author is looking, not what the piece is.
  */
 
-import { localPref, useLocalPref } from '../../shared/ui/local-pref';
+import { localPref, useLocalPref } from '../../ui/local-pref';
 
 type OpenChapters = Readonly<Record<string, string>>;
 
