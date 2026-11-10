@@ -36,6 +36,8 @@
  * the layer pass needs nothing new to draw it.
  */
 
+import { deviceClass } from '../lib/device-class';
+import { idleRelease } from '../lib/idle-release';
 import type { BrushRaster } from '../render/brush-raster';
 import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
 import { startSegmentWorker, type SegmentWorker } from './segment-worker-client';
@@ -260,11 +262,28 @@ export async function segmentPoint(
   point: SubjectPoint,
   timeoutMs = SEGMENT_TIMEOUT_MS,
 ): Promise<BrushRaster | null> {
-  const model = await loadSegmenter();
-  if (!model) return null;
-  if (model.kind === 'worker') return model.worker.segment(source, point, timeoutMs);
-  return segmentHere(model.task, source, point, timeoutMs);
+  rest.busy();
+  try {
+    const model = await loadSegmenter();
+    if (!model) return null;
+    if (model.kind === 'worker') return await model.worker.segment(source, point, timeoutMs);
+    return await segmentHere(model.task, source, point, timeoutMs);
+  } finally {
+    rest.settled();
+  }
 }
+
+/**
+ * The model rests, then goes (`idle-release.ts`): its worker holds a wasm heap, the tflite model, a GPU
+ * delegate (a WebGL context) and the last picture it was shown — for the page's life, before. Taps come in
+ * bursts, so the rest is long enough to span one: 15 s on a phone or a tablet, 3 min elsewhere.
+ */
+const rest = idleRelease({
+  restMs: () => (deviceClass() === 'constrained' ? 15_000 : 180_000),
+  release: () => {
+    if (!loading) disposeSegmenter();
+  },
+});
 
 /** One point asked of the model on THIS thread — the path a worker spares the interface. */
 function segmentHere(
