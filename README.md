@@ -3564,8 +3564,17 @@ which day, which period — and makes it:
 a step back, a place of the grid — and the rule fills it from the recap's pool:
 Winnow's pick first, then its stars, then a photo over a clip, then the one
 nearest the middle of the day. Click a cell on the stage and the inspector shows
-that day's pictures: a tap pins one there, *Empty* leaves it empty, *Give it back
-to the rule* undoes both. *Choose one…* opens your Winnow for that place: any
+the recap's **days** under it: a month of them, each shaded by how many shots it
+holds, opened on that cell's day, then the open day's photos — all of them, the
+best first, 24 at a time, narrowed to your ♥ or your picks. A tap pins one there
+(open another day in the month and its place is the one in hand), *Empty* leaves it empty, *Give it back
+to the rule* undoes both. A photo already shown says where (*calendar*, *slide
+4*), and **+** adds a photo to the highlights. The tab follows the slide on the
+stage: on a carousel slide it lists **that slide's pictures** instead of the
+calendar's places, holds one of them (*Slide 3 · 2 of 4*), and the same days
+offer its replacements — a tap puts a photo in its place (one already on another
+slide trades places with it), **+** adds a photo right after it; a photo on the
+calendar never joins the highlights, the same picture twice reading as a mistake. *Choose one…* opens your Winnow for that place: any
 picture — even one from another day, then marked *chosen by hand* — lands
 there, so an empty day can be filled and developed. Drag a picture onto another cell to swap them; drag
 the heading to move it. The **filter** keeps only some devices — *your iPhone,

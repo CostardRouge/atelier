@@ -173,6 +173,11 @@ html[data-surface='darkroom'] {
   --color-accent-ink: #ef6c52;
   --color-accent-wash: rgba(217, 68, 42, 0.16);
   --color-frame: #101010;
+  /* The day heatmap's rungs at night, as the dark theme's: Recap's day chooser draws them in the darkroom. */
+  --color-heat-1: #3f231b;
+  --color-heat-2: #7a3624;
+  --color-heat-3: #d4583a;
+  --color-heat-4: #ef5638;
   --color-danger: #f08a80;
   --color-danger-ink: #f7a79f;
   --color-danger-wash: rgba(154, 58, 35, 0.22);
