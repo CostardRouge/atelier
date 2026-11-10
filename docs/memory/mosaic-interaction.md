@@ -101,3 +101,8 @@ none with the switch off, none with Auto-frame on; the veil changes the
 pixel. **Open**: the cell pass sits ~4 device px off the enlarged mosaic at
 ×4.5 in the stub drive; the outline and the click follow the pass, so what
 is seen and clicked agree — cause not found.
+
+## The inspector is the block, its five parts tabs (2026-11-10)
+
+His word («do the same for … mosaic»): `InspectorBlock` (`frontend.md`). Beside the stage the panel shows ONE part at a time, the phone's own five (`SETTINGS_TABS`, `only` on both layouts now; `docked` makes a tab's second section — Cells' *Reading* — foldable under its sticky title); the old all-sections column is gone, and *Custom* opens the Motion TAB (`openMotion`), no longer a fold. Export's two verbs left the section for the foot (`MosaicDeliver` over `DeliverBar`: the film primary while a mode plays, the image in Still, the other behind ▾; `PlainRun` while a file is written, on every tab; the same bar ends the phone's Export drawer, placement `drawer`). The lines «w × h px · cells» and «film · N s» are the foot's summary only. Keys are `useEditorKeys` (`zoom-keys.ts` still reads Z and the pan). Driven headless over a stubbed Winnow (60 colour fields added by `mosaic.add { ids, wait }` — `/api/assets` answering `{ assets, next_cursor }`, any `/api/assets/N/thumb` a PNG) at 1360 and 390: five tabs on one row (324 of 324 px at 22rem), the foot on Export, Space playing with the focus left on a clicked tab. Never by him.
+

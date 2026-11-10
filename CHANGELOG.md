@@ -147,6 +147,14 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Mosaic and Flight Atlas wear the inspector Recap got: one block beside the stage, what chooses its content pinned
+  at its top, a section's title in sight while its rows scroll, and what the Export writes as ONE button pinned at
+  its foot — *Save film* / *Save image* in Mosaic, *Export the video* in the atlas, the others behind ▾ — which
+  becomes the progress and its Cancel while a file is written, on every tab. Mosaic's five parts are tabs on one row,
+  the same five a phone opens as drawers.
+- Flight Atlas: `←` `→` step the film a second (five with Shift) and `Home` goes back to its start.
+- The bands and stages of every editor share one corner radius (the Flight Atlas, the Trips map, Grade, Compare,
+  Composer, Flight Map and Overlay bars had kept the larger one of cards).
 - Recap: Enter keeps a framing and Escape gives the picture back as it was (Escape used to keep it too). While you
   frame, the arrows move the picture, `+` `−` zoom, `[` `]` turn it and `0` centres it. Outside a framing, `←` `→`
   turn the pages, Enter frames what is selected, Delete empties the place in hand, and `H` or `?` lists every key.
@@ -162,6 +170,7 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Mosaic: Space no longer does nothing after a slider was dragged, and no longer plays behind the target chooser.
 - Recap: Space, Enter and Escape no longer do nothing — or press the last button again — after a click on any button:
   a button a click left focused gives the key back to the editor. Enter after *Frame* used to start the framing
   again instead of ending it.

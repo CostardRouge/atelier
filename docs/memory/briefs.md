@@ -344,3 +344,6 @@ anything about media sources or document storage:
   tone curves, nine commits and his seven questions. Read it before touching
   `librawSettings`' colour, `linearDngColor`, the kelvin maths' matrices, or
   anything that would load a `.dcp` / `.icc`.
+
+- **A signature in the exports** (2026-11-10, his ask: «an atelier logo or watermark … Made with Atelier / Recap, a sticker logo»): lab only, NOTHING BUILT — https://claude.ai/artifact/Divt1R8MoTts4c97PTx6cF. Five faces drawn from the app's mark (A a line, B a die-cut sticker, C a round stamp, D the frame's corner, E a 1.2 s end card for films), a bench (tool, words, corner, ground, size, Instagram's zones) and six questions with picks to copy back. Recommended: B on stills and slides, E alone on films, «Made with Atelier · Recap», on for Recap / Trips / Mosaic / Atlas / Storytelling and off for Develop and the Studio, bottom left above the caption zone, a carousel's last slide only. It is NOT Develop's roll watermark (the author's own name on his photograph, `export-targets.ts`), which stays. To build on his picks: one vector painter in `shared/` (no image file, the suite's faces), a switch per document, the mark kept inside the social zones.
+

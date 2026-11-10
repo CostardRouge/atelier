@@ -3436,20 +3436,32 @@ the chain had to hold. *Screen* takes the stage
 to the whole screen — a Mac left open on Atelier is the screen saver.
 *Speed* is in the dials.
 
-**Export.** The Export section writes the mosaic out at a size named by its
+**The inspector** is one block beside the stage: its five parts — Target,
+Cells, Motion, Export, Performance — are tabs pinned on one row at its top
+(the same five a phone's bottom bar opens as drawers), a part's settings
+scroll under them, and what Export writes is a button pinned at its foot.
+
+**Export.** The Export tab writes the mosaic out at a size named by its
 short side — 720p, 1080p, 1440p or 4K — in the stage's shape. *More cells*
 keeps a cell's width in the file's pixels, so a bigger file holds more
 pictures; *As on screen* keeps the stage's cells, each drawn bigger, up to
-a tile's own 160 px; the line under them gives the file's size and its
-cells. *Save image* writes the target's mosaic as a PNG. *Save film* writes
+a tile's own 160 px. The foot of the inspector says the file's size and its
+cells over ONE button — *Save film* while a mode plays, *Save image* in
+Still — with the other behind ▾; while a file is being written that foot is
+its progress and its Cancel, whatever tab is open. *Save image* writes the
+target's mosaic as a PNG. *Save film* writes
 the mode's motion as an MP4 (H.264, 30 frames a second, no sound): the
 opening, then the number of **steps** asked (a pull-back plays once), drawn
 by the stage's own painter from the mosaic's seed and its chain's band, so
-the film shows what Play shows — the line under the slider says how long it
-lasts. It needs a mode under the stage, and a browser that encodes video
-(WebCodecs); the image saves everywhere. Either runs as a task in the
-masthead with its Cancel, and downloads under the mosaic's name, its size
-and the moment.
+the film shows what Play shows — the foot says how long it lasts. It needs
+a mode under the stage, and a browser that encodes video (WebCodecs); the
+image saves everywhere. Either also shows as a task in the masthead, and
+downloads under the mosaic's name, its size and the moment.
+
+**Keys.** `Space` plays and stops, `Escape` stops, `Z` fits the view then
+gives the whole picture back, the arrows pan a kept zoom or walk the targets
+visited. A slider you just dragged keeps only its own arrows, and a button
+you just clicked keeps none of them.
 
 **For an agent.** Connected through the agent bridge (`#/agents`), an
 agent drives a mosaic with the same gestures: `mosaic.list`, `.create`,
@@ -4547,9 +4559,12 @@ the rest folds behind **N more**, remembered in this browser.
   the zones show hatched on the stage while *Export* is open, never in the
   file —, and a **mount**: a border, a deeper band under the map for the
   text, rounded corners, its colour, and whether the text sits on the map or
-  across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter: an MP4 (H.264,
-  no sound), the frame on screen as a PNG, or a *poster* with every route
-  drawn whole.
+  across the whole frame. The preview is letterboxed to it. The preview is drawn by the export's own painter. What it
+  writes is ONE button pinned at the inspector's foot while *Export* is open — *Export the video* (an MP4, H.264, no
+  sound), with *Save this frame* (the frame on screen as a PNG) and *Save a poster* (every route drawn whole) behind
+  ▾ — under a line that says the file's size, rate, length and flights; while a file is written that foot is its
+  progress and its Cancel, whatever layer is shown. A section's title stays in sight while its rows scroll.
+- **Keys.** `Space` plays and pauses, `←` `→` step a second (five with Shift), `Home` goes back to the start.
 - **Presets.** Every dial under a name of your own: a chip applies its preset
   and stays lit while the dials match it, *Save* keeps the dials on screen (or
   *Replace*s a preset of the same name), × removes one. A preset keeps how the
