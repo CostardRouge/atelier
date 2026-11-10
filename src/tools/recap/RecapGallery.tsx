@@ -5,6 +5,7 @@ import { RECIPES, TEMPLATES, aboutLine, cleanRecapTitle, createRecapDoc, default
 import { RECAP_FILE_ACCEPT, RECAP_FILE_EXTENSION, backupFileName, parseRecapFile, recapFileName, serializeRecapFile, toRecapFile } from '../../shared/recap/recap-file';
 import type { RecapSummary } from '../../shared/recap/recap-summary';
 import { todayIso } from '../../shared/roadtrip/trip-days';
+import { listTrips } from '../../shared/roadtrip/trip-store';
 import { pickFile } from '../../shared/sources/file-sources';
 import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
 import { sourceLabel } from '../../shared/sources/document-gallery';
@@ -14,6 +15,7 @@ import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
+import InfoDot from '../../shared/ui/InfoDot';
 import LoadingState from '../../shared/ui/LoadingState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { focusOnMount } from '../../shared/ui/focus';
@@ -27,7 +29,7 @@ import NewRecapDialog, { type NewRecapChoice } from './NewRecapDialog';
 import TemplatePreview from './TemplatePreview';
 import { RECAP_DOC_KIND, deleteRemoteRecap, fetchRemoteRecap, listRemoteRecaps, mirrorRecap, moveRecap, pushRecap, type RemoteRecapRow } from './recap-remote';
 import { askPersistence, deleteRecap, deleteSyncRecord, getSyncRecord, getThumb, getValue, listRecaps, mediaStorage, putRecap, setValue, styled } from './recap-store';
-import { readyRecap, suggestions, type Suggestion } from '../../shared/recap/recap-suggest';
+import { readyRecap, suggestionHint, suggestions, type Suggestion, type TripSpan } from '../../shared/recap/recap-suggest';
 import { GallerySection, SuggestionCard, SuggestionPoster, useSectionState } from './GallerySections';
 import PlannedSection from './PlannedSection';
 
@@ -270,7 +272,18 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
   useEffect(() => {
     void getValue<string[]>(HIDDEN_KEY).then((keys) => keys && setHidden(new Set(keys)));
   }, []);
-  const ready = useMemo(() => (recaps ? suggestions(recaps, todayIso(), hidden) : []), [recaps, hidden]);
+  // The trips kept on this device bound a series (never fetched): nothing is suggested before they are read, so no card flashes past a trip's end.
+  const [trips, setTrips] = useState<TripSpan[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void listTrips().then((all) => alive && setTrips(all));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const ready = useMemo(() => (recaps && trips ? suggestions(recaps, todayIso(), hidden, trips) : []), [recaps, hidden, trips]);
+  // The section never vanishes: with nothing to suggest it says why, in one line.
+  const hint = useMemo(() => (recaps && trips ? suggestionHint(recaps, todayIso(), hidden, trips) : null), [recaps, hidden, trips]);
   const hide = (s: Suggestion) => {
     const next = new Set(hidden).add(s.key);
     setHidden(next);
@@ -386,30 +399,43 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
   return (
     <section className={`${pageScroll} ${compact ? 'pt-3' : ''}`} aria-label="Recaps">
       <h1 className="sr-only">Recaps</h1>
-      {ready.length > 0 && (
+      {(ready.length > 0 || hint) && (
         <GallerySection
           id="suggestions"
           title="Suggestions"
-          count={ready.length}
+          count={ready.length || null}
           hot
           open={sections.isOpen('suggestions')}
           onToggle={() => sections.toggle('suggestions')}
           peek={
-            <>
-              <span className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis">ready for {[...new Set(ready.map((x) => x.label))].join(', ')}</span>
-              {ready.slice(0, 4).map((x) => (
-                <span key={x.key} className="flex-none h-8 w-[26px] rounded-[3px] overflow-hidden border border-line bg-frame flex items-center justify-center">
-                  <SuggestionPoster s={x} height={32} />
-                </span>
-              ))}
-            </>
+            hint ? (
+              <span className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis" title={hint.why}>
+                {hint.line}
+              </span>
+            ) : (
+              <>
+                <span className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis">ready for {[...new Set(ready.map((x) => x.label))].join(', ')}</span>
+                {ready.slice(0, 4).map((x) => (
+                  <span key={x.key} className="flex-none h-8 w-[26px] rounded-[3px] overflow-hidden border border-line bg-frame flex items-center justify-center">
+                    <SuggestionPoster s={x} height={32} />
+                  </span>
+                ))}
+              </>
+            )
           }
         >
-          <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4'}>
-            {ready.map((x) => (
-              <SuggestionCard key={x.key} s={x} onMake={() => void makeReady(x)} onHide={() => hide(x)} />
-            ))}
-          </div>
+          {hint ? (
+            <p className="m-0 flex flex-wrap items-center gap-x-2 text-sm text-muted">
+              {hint.line}
+              <InfoDot about="suggestions">{hint.why}</InfoDot>
+            </p>
+          ) : (
+            <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4'}>
+              {ready.map((x) => (
+                <SuggestionCard key={x.key} s={x} onMake={() => void makeReady(x)} onHide={() => hide(x)} />
+              ))}
+            </div>
+          )}
         </GallerySection>
       )}
 
