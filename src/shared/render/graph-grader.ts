@@ -60,6 +60,8 @@ export interface GraphGrader extends FrameGrader {
    * the uploaded source all survive; only the cube's texture is new.
    */
   setLut(lut: CubeLut | null): void;
+  /** The look's STRENGTH, in place — a uniform of the cube; no rebuild, no new context (`performance.md` rule 4). */
+  setIntensity(intensity: number): void;
   /**
    * The graded picture read back as HALF-FLOATS from the chain's own
    * buffers (`RenderGraph.readHalf`) — never the 8-bit canvas — for a 16-bit
@@ -137,6 +139,7 @@ export function makeGraphGrader(
       setExtraPasses() {},
       setFilm() {},
       setLut() {},
+      setIntensity() {},
       renderHalf: () => null,
       dispose() {},
     };
@@ -171,6 +174,11 @@ export function makeGraphGrader(
       // The same lattice under a new head keeps its texture (`withLut`).
       const replaced = cube;
       cube = replaced.withLut(next);
+      graph.releasePass(replaced);
+    },
+    setIntensity(next) {
+      const replaced = cube;
+      cube = replaced.withIntensity(next);
       graph.releasePass(replaced);
     },
     render(source, sourceSeconds) {
