@@ -159,3 +159,18 @@ the stage budget).
   the DNG from the Library — Auto on the sensor, *Camera render* blurred,
   «This slide as a PNG» on each side by side; the menu at 390 in the Picture
   drawer.
+- **St (2026-11-10) — the Studio.** The stage chip (`StageRenditionMenu`)
+  takes a `sensor` row beside the capture's files; the choice lives in the
+  SAME per-media map, `ProjectMedia.renditions`: `sensor:<name>` (the
+  renditions' own id) or `render` — needed because storing nothing means Auto,
+  and Auto reads a local DJI DNG from its sensor, so picking the file it opens
+  on must be remembered (`chooseRendition` in `StudioEditor.tsx`).
+  `readRenditions` keeps the two; `stageChoice` still fetches only a
+  `delivered:` row, so a stored sensor is never taken for a file to fetch.
+  `storedMaterial` (pure) maps the map to a material for `useSensorFile`. The
+  export decodes `sensorStillFile` at 4096 and SKIPS `deliveryFor` on the
+  sensor — a proxy's original would be read through its 960 px render.
+  Found, not changed: the chip's row for a RAW's own render shows the
+  LIBRARY's size (the sensor's 8064 × 4536, from `useAssetMeta`), not the
+  render's. Driven headless at 1280 and 390: Auto on the sensor (4096 × 2304),
+  *DNG render* back to 960 × 540, «Export the JPEG» from the sensor.

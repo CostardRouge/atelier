@@ -1,3 +1,5 @@
+import { useSensorFile } from '../../shared/develop/use-sensor-file';
+import { sensorStillFile } from '../../shared/develop/sensor-still';
 import {
   useEffect,
   useMemo,
@@ -57,7 +59,8 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
-import { readRenditions, writeRendition } from '../../shared/projects/media-rendition';
+import { readRenditions, RENDER_CHOICE, sensorChoice, stageChoice, storedMaterial, writeRendition } from '../../shared/projects/media-rendition';
+import { isRawImage } from '../../shared/library/assets';
 import { fetchHeld } from '../../shared/sources/held-fetch';
 import { trackedFetch } from '../../shared/tasks/tracked';
 import { fileIdentity, imageTypeLabel, type Asset } from '../../shared/library/assets';
@@ -502,7 +505,30 @@ export default function StudioEditor({
   /** The file the stage draws: the Library's, or the one chosen once it has landed. */
   const stageFile = stageRendition.file;
   const stageVideo = activeVideo ? stageFile : null;
-  const stageImage = activeImage ? stageFile : null;
+  // A RAW still read from its material (`use-sensor-file.ts`): the sensor's picture on the stage
+  // and in the export when the media is on its sensor — chosen here, or Auto for a RAW in hand.
+  const storedRendition = activeId ? (renditions[activeId] ?? null) : null;
+  const sensorView = useSensorFile(activeImage ? activeFile : null, storedMaterial(storedRendition));
+  const onSensor = Boolean(activeImage) && sensorView.reachable && sensorView.material === 'sensor';
+  const stageImage = activeImage ? (onSensor ? sensorView.file : stageFile) : null;
+  /**
+   * A file of the capture picked in the stage chip. Picking where the media
+   * opens is remembered as the RENDER when Auto would otherwise read a RAW in
+   * hand from its sensor — storing nothing means Auto.
+   */
+  const chooseRendition = (id: string) => {
+    if (!activeId) return;
+    const openingId = stageChoice(stageRendition.rows, null).current?.id;
+    if (activeFile && isRawImage(activeFile.name) && id === openingId) {
+      setRenditions((prev) => writeRendition(prev, activeId, RENDER_CHOICE));
+      return;
+    }
+    if (storedMaterial(storedRendition) && !storedRendition?.startsWith('delivered:')) {
+      // Leaving a stored sensor or render: the pick is the stage chip's again.
+      setRenditions((prev) => writeRendition(prev, activeId, null));
+    }
+    stageRendition.choose(id);
+  };
   /** True while the stage draws a file other than the one the Library holds. */
   const stageOnOther = !!stageFile && !stageRendition.onLibraryFile;
   // The trim bar's gestures are spelled out under it until one has been used.
@@ -1790,7 +1816,18 @@ export default function StudioEditor({
       photo && photoNatural ? deliveryFrame(photoNatural) : null;
     let fetchedStill: ImageBitmap | null = null;
     try {
-      if (photo && activeImage && photoProxy && stillFrame) {
+      // On its sensor, the still leaves from its sensor read at 4096 px (a phone's export
+      // ceiling) — never from the proxy's original, which would be read through its small render.
+      if (photo && activeImage && activeFile && onSensor) {
+        say('render', 'Reading the sensor…');
+        const sensorFile = await sensorStillFile(activeFile, { edge: 4096, purpose: 'export' }).catch(() => null);
+        if (sensorFile) {
+          const decoded = await decodeStillForExport(sensorFile, runVariants);
+          fetchedStill = decoded.bitmap;
+          still = fetchedStill;
+          runFrame = decoded.frame;
+        }
+      } else if (photo && activeImage && photoProxy && stillFrame) {
         const chosen = await deliveryFor(activeImage, null, stillFrame);
         if (chosen.file !== activeImage) {
           say('render', `Fetching the original from ${photoProxy.sourceId}…`);
@@ -2242,7 +2279,18 @@ export default function StudioEditor({
           rows={stageRendition.rows}
           current={stageRendition.current}
           fetching={stageRendition.fetching}
-          onChoose={stageRendition.choose}
+          onChoose={chooseRendition}
+          sensor={
+            activeImage && activeFile && sensorView.reachable
+              ? {
+                  on: onSensor,
+                  auto: sensorView.auto,
+                  busy: sensorView.busy,
+                  pixels: sensorView.rows.find((r) => r.material === 'sensor')?.pixels ?? null,
+                  onPick: () => activeId && setRenditions((prev) => writeRendition(prev, activeId, sensorChoice(mediaOrigin(activeFile)?.name ?? activeFile.name))),
+                }
+              : null
+          }
         />
         {/* On a phone's one header line the name and its files are what fit. */}
         {activeDetail && !immersive && (

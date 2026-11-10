@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MediaOrigin } from './media-identity';
-import { canStageDraw, readRenditions, stageChipLabel, stageChoice, stageRenditions, writeRendition } from './media-rendition';
+import { canStageDraw, readRenditions, RENDER_CHOICE, sensorChoice, stageChipLabel, stageChoice, stageRenditions, storedMaterial, writeRendition } from './media-rendition';
 
 function file(name: string, bytes = 1000): File {
   return new File([new Uint8Array(bytes)], name);
@@ -131,10 +131,10 @@ describe('writeRendition', () => {
 });
 
 describe('readRenditions', () => {
-  it('keeps only ids that name a delivered file', () => {
+  it('keeps ids that name a delivered file, a RAW’s sensor or its render, nothing else', () => {
     expect(
-      readRenditions({ a: 'delivered:a.mp4', b: 'proxy', c: 3, d: 'sensor:d.dng' }),
-    ).toEqual({ a: 'delivered:a.mp4' });
+      readRenditions({ a: 'delivered:a.mp4', b: 'proxy', c: 3, d: 'sensor:d.dng', e: 'render', f: 'renders' }),
+    ).toEqual({ a: 'delivered:a.mp4', d: 'sensor:d.dng', e: 'render' });
     expect(readRenditions(undefined)).toEqual({});
     expect(readRenditions(['delivered:a.mp4'])).toEqual({});
   });
@@ -168,5 +168,21 @@ describe('stageChipLabel', () => {
 
   it('says the whole name of a file named otherwise', () => {
     expect(label('delivered:dji_0101.jpg', 'sunset')).toBe('DJI_0101.JPG');
+  });
+});
+
+describe('a RAW’s material, stored', () => {
+  it('reads the sensor, the render, and nothing as Auto', () => {
+    expect(storedMaterial(sensorChoice('DJI_0001.DNG'))).toBe('sensor');
+    expect(storedMaterial(RENDER_CHOICE)).toBe('render');
+    expect(storedMaterial('delivered:dji_0001.jpg')).toBe('render');
+    expect(storedMaterial(null)).toBeUndefined();
+  });
+  it('names the sensor as the renditions do', () => {
+    expect(sensorChoice('DJI_0001.DNG')).toBe('sensor:dji_0001.dng');
+  });
+  it('never takes a stored sensor for a file to fetch', () => {
+    const rows = stageRenditions({ file: file('DJI_0001.webp'), origin: proxyOver('DJI_0001.DNG', 2048, 1152, 74_000_000) } as never);
+    expect(stageChoice(rows, sensorChoice('DJI_0001.DNG')).wanted).toBeNull();
   });
 });

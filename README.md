@@ -221,8 +221,13 @@ on its **proxy** — a 720p H.264, a 2048 px WebP: light, quick to scrub,
 decodable everywhere. A chip beside the media's name says so (`Proxy ▾`), and
 its menu lists the capture's other files with their pixels and weight — the
 rush itself behind a clip, the camera's JPEG behind a still, and the render
-inside a RAW the instance paired with it — the same list as Develop's, minus
-the sensor. Pick one and it is fetched (the chip shows `↓` and the proxy stays
+inside a RAW the instance paired with it — the same list as Develop's — and,
+for a photo whose file or original is a camera RAW, its **sensor**: decoded in
+your browser by Develop's engine, with the file's lens shading and warp
+corrected, drawn on the stage and delivered by the export at up to 4096 px. A
+drone DNG of yours opens on its sensor by itself (its own render is 960 × 540);
+a Winnow picture only when you pick it, since its original is downloaded once
+for the session. Pick one and it is fetched (the chip shows `↓` and the proxy stays
 up meanwhile), kept for the session, and put on the stage at its own
 resolution, the playhead and the trim where they were; the chip then names its
 type (`MP4`, `JPEG`, `DNG render`). The choice is remembered per media in the
