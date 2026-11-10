@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { Icons } from '../../shared/ui/icons';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
-import { describeKeyTarget, targetOwnsSpace } from '../../shared/media/transport-keys';
+import useEditorKeys from '../../shared/ui/use-editor-keys';
 import { formatElapsed } from './atlas-hud';
 import type { PlayClock } from '../../shared/media/play-clock';
 import type { Story } from './atlas-story';
@@ -35,16 +35,14 @@ export default function AtlasTransport({ clock, activity, story, streets }: Atla
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== ' ' || e.repeat || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (targetOwnsSpace(describeKeyTarget(e.target))) return;
-      e.preventDefault();
-      clock.toggle();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [clock]);
+  // Space plays and pauses; ← → step a second (five with ⇧), Home goes back to the start (`editor-keys.ts`).
+  useEditorKeys((k) => {
+    if (k.name === 'space') clock.toggle();
+    else if (k.name === 'left' || k.name === 'right') clock.seek(clock.t + k.dx * (k.shift ? 5 : 1));
+    else if (k.name === 'home') clock.seek(0);
+    else return false;
+    return true;
+  });
 
   const seekAt = useCallback(
     (clientX: number) => {
@@ -89,7 +87,7 @@ export default function AtlasTransport({ clock, activity, story, streets }: Atla
   const fraction = clock.total > 0 ? clock.t / clock.total : 0;
 
   return (
-    <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-paper-lg bg-surface shadow-paper-soft">
+    <div className="flex-none flex items-center gap-2 px-2 py-1.5 border border-line rounded-control bg-surface shadow-paper-soft">
       <IconButton label={clock.playing ? 'Pause (Space)' : 'Play (Space)'} onClick={() => clock.toggle()} variant="primary">
         {clock.playing ? Icons.pause : Icons.play}
       </IconButton>

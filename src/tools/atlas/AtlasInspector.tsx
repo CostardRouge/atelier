@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FieldRow, InspectorSection, Readout, SliderRow, SelectField, SwitchRow, TextField, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
+import DeliverBar, { PlainRun } from '../../shared/ui/DeliverBar';
+import { STICKY_BANDS } from '../../shared/ui/InspectorBlock';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
@@ -1030,35 +1032,29 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
     </InspectorSection>
   );
 
-  const exportSec = (
-    <InspectorSection id="atlas.export" title="Export" info="The preview IS the file: the same painter draws both. A video is H.264 with no sound; a poster draws every route whole.">
-      <p className="m-0 text-sm text-ink-soft">
-        {size.w} × {size.h} · {s.format.fps} fps · {formatElapsed(p.total)} · {shown} flight{shown === 1 ? '' : 's'}
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        <Button variant="primary" size="sm" disabled={!!p.exporter.running || shown === 0} onClick={() => p.onExport('mp4')}>
-          {Icons.export} Video
-        </Button>
-        <Button size="sm" disabled={!!p.exporter.running || shown === 0} onClick={() => p.onExport('still')}>
-          {Icons.image} This frame
-        </Button>
-        <Button size="sm" disabled={!!p.exporter.running || shown === 0} onClick={() => p.onExport('poster')}>
-          {Icons.image} Poster
-        </Button>
-      </div>
-      {p.exporter.running && (
-        <div className="flex items-center gap-2 mt-2">
-          <div className="flex-1 h-1.5 rounded-full bg-paper-2 overflow-hidden">
-            <div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round((p.exporter.progress ?? 0) * 100)}%` }} />
-          </div>
-          <span className="text-xs text-muted">{p.exporter.running}</span>
-          <Button size="sm" variant="ghost" onClick={p.exporter.cancel}>
-            Cancel
-          </Button>
-        </div>
-      )}
-      {p.exporter.note && <p className="m-0 mt-2 text-xs text-muted">{p.exporter.note}</p>}
-    </InspectorSection>
+  // What the atlas TRIGGERS, pinned at the inspector's foot (`DeliverBar`): the video, the frame on screen and the
+  // poster behind ▾, the file's own line above; while one is written the bar IS the run, whatever layer is shown.
+  const deliver = (
+    <DeliverBar
+      verbs={
+        shown === 0
+          ? []
+          : [
+              { id: 'mp4', label: 'Export the video', hint: 'H.264, no sound — the preview is the file: the same painter draws both', run: () => p.onExport('mp4') },
+              { id: 'still', label: 'Save this frame', hint: 'The frame on screen, as a PNG', run: () => p.onExport('still') },
+              { id: 'poster', label: 'Save a poster', hint: 'Every route drawn whole, as a PNG', run: () => p.onExport('poster') },
+            ]
+      }
+      summary={`${size.w} × ${size.h} · ${s.format.fps} fps · ${formatElapsed(p.total)} · ${shown} flight${shown === 1 ? '' : 's'}`}
+      exporting={null}
+      progress={null}
+      onCancel={p.exporter.cancel}
+      note={p.exporter.note}
+      placement="panel"
+      unitWord="file"
+      empty="Add flights first — the Flights in panel, below."
+      running={p.exporter.running ? <PlainRun words={p.exporter.running} ratio={p.exporter.progress ?? null} onCancel={p.exporter.cancel} /> : undefined}
+    />
   );
 
   const groundSec = <AtlasGround settings={s} update={update} tilesOn={p.tilesOn} setTilesOn={p.setTilesOn} />;
@@ -1128,7 +1124,6 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
       <>
         {frameSec}
         {borderSec}
-        {exportSec}
       </>
     ),
     presets: <AtlasPresetsSection settings={s} update={update} />,
@@ -1152,7 +1147,8 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
           <span className="font-mono text-2xs text-muted truncate">{info.hint}</span>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3">{sections[layer]}</div>
+      <div className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 [--bands-top:0px] ${STICKY_BANDS}`}>{sections[layer]}</div>
+      {(layer === 'output' || p.exporter.running) && <div className="flex-none px-3 pb-3">{deliver}</div>}
       <div className="flex-none flex gap-1.5 px-3 py-2 border-t border-line" role="group" aria-label="Flights, file and presets">
         {FOOT_LAYERS.map((l) => (
           <LayerButton key={l.id} id={l.id} foot on={layer === l.id} onPick={onLayer} label={l.id === 'data' ? `${shown} flight${shown === 1 ? '' : 's'}` : l.label} />
