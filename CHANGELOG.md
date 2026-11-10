@@ -15,6 +15,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   inside the file, blown up. The picture's name in its card chooses between its camera render (or Winnow's proxy)
   and its sensor, and one line applies the choice to every RAW of the recap; a RAW file of yours whose render is
   too small goes to its sensor by itself, a RAW on your Winnow only when you ask, since its original is downloaded.
+- Recap's export with *Originals* reads a RAW on its sensor again at the page's density for every picture a page
+  enlarges, in the video, the PNGs and the carousel.
 - Recap, a new editor that turns your pictures into recaps to post: a month as a calendar of its days, the same day
   a year, a month and a week ago, a week, a grid, a single picture or a photo dump over a carousel. It fills itself
   from your Winnow's days (or your files), lets you pin, swap or empty any day, filter by device, develop each picture
@@ -183,6 +185,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Recap's export with *Originals* no longer replaces a drone DNG's sharp copy with the tiny picture inside the file:
+  an original that gives a page no more pixels than the copy already shown is left aside.
 - Mosaic: Space no longer does nothing after a slider was dragged, and no longer plays behind the target chooser.
 - Recap: Space, Enter and Escape no longer do nothing — or press the last button again — after a click on any button:
   a button a click left focused gives the key back to the editor. Enter after *Frame* used to start the framing

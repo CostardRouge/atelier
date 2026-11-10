@@ -3572,7 +3572,9 @@ full-size one). A RAW on your Winnow stays on its proxy until you choose its
 sensor, since that means downloading the whole original (about 74 MB for a
 drone DNG), once for the session. The sensor's copy is kept like any other,
 decoded once per picture and device; on a phone it is decoded at 2560 px at
-most.
+most. An export with *Originals* reads a RAW on its sensor again at the
+density of the page that enlarges it (4096 px at most), and never takes a
+RAW's small camera render in place of the copy already on the stage.
 
 **The inspector.** Six tabs — *Pictures*, *Text* (heading, subheading and a call
 to action, with words counted for you: `{month}`, `{count}`, `{days}`,

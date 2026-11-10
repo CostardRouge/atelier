@@ -128,3 +128,13 @@ the stage budget).
   render» left no room for the name in the 190 px column. Driven headless
   (1280 and 390, a synthetic DJI DNG dropped as a file): Auto opened it on the
   sensor, the line pairs sharp at the stage; *Render* gave the grey blur back.
+- **R2 (2026-11-10) — Recap's exports.** `stillOriginal` (`RecapEditor.tsx`)
+  reads a picture on its SENSOR again through the brick at 4096 (`purpose:
+  'export'`, so a phone's 4096 ceiling); `originalStills` keeps an original
+  only where `beatsPrint` (`recap-delivery.ts`, pure) says its pixels exceed
+  the print's — the general rule that cured the defect the audit found (a
+  Winnow DNG's 960 × 540 render replacing its 2048 px print). The film and the
+  carousel paint from the same stills. Driven headless: a 4:5 Single page
+  exported as PNG three ways — camera render, sensor print, sensor under
+  *Originals* — side by side; the finest line pairs alias in the print and
+  resolve under *Originals*. The MP4 path was not encoded here.
