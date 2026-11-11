@@ -6,6 +6,7 @@ import type {
   Marker as MlMarker,
 } from 'maplibre-gl';
 import { trackBounds, type TrackPoint } from '../../shared/telemetry/flight-path';
+import { markerAt, type CueStore } from '../../shared/telemetry/cue-store';
 import {
   addTrackLine,
   lineFeature,
@@ -29,14 +30,15 @@ export interface FlightMapState {
  * OpenStreetMap raster layer beneath the track.
  *
  * The track line and the moving marker are updated imperatively (the map is not
- * re-created on data change). The marker follows `position`, which the caller
- * drives from the video's active cue, giving the frame-synced scrub.
+ * re-created on data change). The marker follows the cue under the playing
+ * frame, read off its STORE (`cue-store.ts`) outside React, giving the
+ * frame-synced scrub without re-rendering the tool per frame.
  */
 export function useFlightMap(
   containerRef: RefObject<HTMLDivElement | null>,
   track: TrackPoint[],
   tilesOn: boolean,
-  position: [number, number] | null,
+  cues: CueStore,
 ): FlightMapState {
   const mapRef = useRef<MlMap | null>(null);
   const markerRef = useRef<MlMarker | null>(null);
@@ -121,14 +123,19 @@ export function useFlightMap(
     }
   }, [ready, track]);
 
-  // Move the live-position marker (or hide it when there's no fix).
+  // Move the live-position marker (or hide it when there's no fix) — on the cue store, not on a render.
   useEffect(() => {
     const map = mapRef.current;
     const marker = markerRef.current;
     if (!ready || !map || !marker) return;
-    if (position) marker.setLngLat(position).addTo(map);
-    else marker.remove();
-  }, [ready, position]);
+    const move = () => {
+      const position = markerAt(cues.current, track);
+      if (position) marker.setLngLat(position).addTo(map);
+      else marker.remove();
+    };
+    move();
+    return cues.subscribe(move);
+  }, [ready, cues, track]);
 
   // Add/remove the opt-in OpenStreetMap base layer, kept beneath the track.
   useEffect(() => {

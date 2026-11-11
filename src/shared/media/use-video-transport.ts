@@ -54,6 +54,12 @@ export interface TransportOptions {
    * export has its own delivered speed. Clamped to what the browsers accept.
    */
   rate?: number;
+  /**
+   * False: `timeupdate` does not move `time` — for a host whose seek bar is a `VideoSeek` leaf that follows the
+   * element itself, so the whole tool does not re-render ~4 times a second while a clip plays
+   * (`docs/memory/performance.md` rule 1). `time` then moves only on a `setTime`, a range's end or new media.
+   */
+  trackTime?: boolean;
 }
 
 export interface VideoTransport {
@@ -94,6 +100,7 @@ export function useVideoTransport(
     loopRef,
     resumeAcrossMedia,
     rate = 1,
+    trackTime = true,
   } = opts ?? {};
   // Whether the element is playing, readable synchronously — the state above
   // is already reset by the time the new media's events arrive.
@@ -154,7 +161,7 @@ export function useVideoTransport(
       stopWatch();
     };
     const onTime = () => {
-      if (!scrubbingRef?.current) setTime(v.currentTime);
+      if (trackTime && !scrubbingRef?.current) setTime(v.currentTime);
       for (const f of followers?.() ?? []) {
         if (f !== v && Math.abs(f.currentTime - v.currentTime) > DRIFT) {
           f.currentTime = v.currentTime;

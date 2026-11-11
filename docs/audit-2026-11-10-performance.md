@@ -19,7 +19,7 @@ Status: **fixed** (the commit), **open** (with the fix in one line), **not repro
 | Trips | `normaliseFraming(cell.framing)` fresh per render → every motion card repainted per frame (B2) | **fixed** `599a0d8` (not measured: needs a picture with EXIF) |
 | Trips | `readPlateSpec` fresh `fields` → eight camera layout tiles re-laid and repainted per frame (B3) | **fixed** `599a0d8` (same) |
 | Trips | `LookTab` hands `layers={[...layers]}` and inline hop callbacks | **covered** by `HookPicker`'s ref and `OpenerPanel`'s own (`2b49a38`) |
-| Composer, Map | `useActiveCue` sets state per presented video frame (a DJI SRT has a cue per frame): the whole tool re-renders 30–60×/s while playing | **open**: the cue in a ref for the painter, React state only at ~10 Hz or on what the panels show |
+| Composer, Map | `useActiveCue` sets state per presented video frame (a DJI SRT has a cue per frame): the whole tool re-renders 30–60×/s while playing | **fixed** in the fourth pass (`CueStore`; Composer's seek bar a `VideoSeek` leaf with `trackTime: false`): Composer 20 → 0, Flight Map 21 → 0 root renders/s; Composer's composite (`drawImage` of the map's WebGL canvas) stays, inherent |
 | Develop | The making-of sheet sets `t` per frame; `captions ?? {}` busts its script memo | **open** (cheap: a module-level empty object, the time in a clock) |
 | Studio | The whole editor at ~4 Hz (`timeupdate`) | **open**, low |
 | Storytelling, Flight Atlas, Mosaic, Develop's picture | Already right: time outside React, the stage paints itself | **the model** |

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import type { Cue } from './srt-parser';
 import { findCue } from './find-cue';
+import { createCueStore, type CueStore } from './cue-store';
 
 /**
  * Track the telemetry cue active for the currently displayed video frame.
@@ -23,30 +24,35 @@ export function useActiveCue(
   cues: Cue[],
   resetKey?: unknown,
 ): Cue | null {
-  const [cue, setCue] = useState<Cue | null>(null);
+  const store = useCueStore(videoRef, cues, resetKey);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot);
+}
 
-  // Keep the latest cues/current-cue in refs so the frame callback closure
-  // stays stable and we can compare without re-subscribing every render.
+/**
+ * The same tracking into a STORE (`cue-store.ts`), for a host that must not re-render per frame — a DJI SRT
+ * changes its cue on every presented frame. The painters, a map's marker and the readout leaves subscribe to
+ * it; the host reads `store.current` when it needs the moment (`docs/memory/performance.md` rule 1).
+ */
+export function useCueStore(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  cues: Cue[],
+  resetKey?: unknown,
+): CueStore {
+  const [store] = useState(createCueStore);
+
+  // Keep the latest cues in a ref so the frame callback closure stays stable.
   const cuesRef = useRef(cues);
-  const currentCueRef = useRef<Cue | null>(null);
   cuesRef.current = cues;
 
   useEffect(() => {
     // Reset whenever the source changes.
-    currentCueRef.current = null;
-    setCue(null);
+    store.set(null);
 
     const video = videoRef.current;
     if (!video) return;
 
-    // Only update React state when the active cue actually changes.
-    const update = (t: number) => {
-      const next = findCue(cuesRef.current, t);
-      if (next !== currentCueRef.current) {
-        currentCueRef.current = next;
-        setCue(next);
-      }
-    };
+    // The store tells its listeners only when the active cue actually changes.
+    const update = (t: number) => store.set(findCue(cuesRef.current, t));
 
     const supportsRVFC =
       typeof video.requestVideoFrameCallback === 'function';
@@ -77,7 +83,7 @@ export function useActiveCue(
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('seeked', onSeeked);
     };
-  }, [videoRef, resetKey]);
+  }, [videoRef, resetKey, store]);
 
-  return cue;
+  return store;
 }

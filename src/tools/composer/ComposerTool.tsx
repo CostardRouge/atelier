@@ -4,8 +4,9 @@ import { selectedUsableAssets } from '../../shared/library/capabilities';
 import type { Asset } from '../../shared/library/assets';
 import { formatDuration } from '../../shared/lib/format';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
-import { useActiveCue } from '../../shared/telemetry/use-active-cue';
-import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
+import { useCueStore } from '../../shared/telemetry/use-active-cue';
+import VideoSeek from '../../shared/media/VideoSeek';
+import { extractTrack } from '../../shared/telemetry/flight-path';
 import { DEFAULT_OVERLAY, OVERLAY_FIELDS, type OverlayConfig, type OverlayFont } from './overlay';
 import { drawReadout, type Box } from './draw-readout';
 import { makeFrameGrader, type PassGrader } from '../../shared/lut/frame-grader';
@@ -158,14 +159,11 @@ export default function ComposerTool() {
   }, [active?.video]);
 
   const track = useMemo(() => extractTrack(cues), [cues]);
-  const activeCue = useActiveCue(videoRef, cues, url);
-  const position = useMemo<[number, number] | null>(() => {
-    const live = activeCue ? parsePosition(activeCue) : null;
-    if (live) return live;
-    return track.length ? [track[0].lon, track[0].lat] : null;
-  }, [activeCue, track]);
+  // The cue under the playing frame, OUTSIDE React (`cue-store.ts`): the composite, the readout and the map's
+  // marker read it; the tool no longer re-renders on every frame of a clip (`performance.md` rule 1).
+  const cueStore = useCueStore(videoRef, cues, url);
 
-  const map = useComposerMap(mapContainerRef, track, tilesOn, zoomOffset, follow, position);
+  const map = useComposerMap(mapContainerRef, track, tilesOn, zoomOffset, follow, cueStore);
   const { getCanvas, resize } = map;
 
   // --- frame grader (LUT) -------------------------------------------------
@@ -193,8 +191,7 @@ export default function ComposerTool() {
   }, [intensity]);
 
   // --- live values for the draw loop (refs to avoid stale closures) --------
-  const cueRef = useRef<Cue | null>(null);
-  cueRef.current = activeCue;
+
   const readoutRef = useRef(readoutPos);
   readoutRef.current = readoutPos;
   const overlayRef = useRef(overlay);
@@ -248,7 +245,7 @@ export default function ComposerTool() {
 
     readoutBoxRef.current = drawReadout(
       ctx,
-      cueRef.current,
+      cueStore.current,
       readoutRef.current,
       w,
       h,
@@ -267,6 +264,8 @@ export default function ComposerTool() {
   });
   const { onRender } = map;
   useEffect(() => onRender(() => (dirtyRef.current = true)), [onRender]);
+  // A cue that changes while paused (a seek) redraws the readout.
+  useEffect(() => cueStore.subscribe(() => (dirtyRef.current = true)), [cueStore]);
   useEffect(() => {
     if (!active) return;
     let raf = 0;
@@ -291,11 +290,11 @@ export default function ComposerTool() {
   }, [active?.id]);
 
   // Transport state from the offscreen video element.
-  const { playing, time, duration, setTime, togglePlay } = useVideoTransport(
-    videoRef,
-    url,
-    { onLoadedMetadata: (v) => setVideoDims({ w: v.videoWidth, h: v.videoHeight }) },
-  );
+  // `trackTime: false`: the seek bar is a leaf that follows the clip (`VideoSeek`); the tool renders on play/pause.
+  const { playing, duration, togglePlay } = useVideoTransport(videoRef, url, {
+    onLoadedMetadata: (v) => setVideoDims({ w: v.videoWidth, h: v.videoHeight }),
+    trackTime: false,
+  });
 
   // The offscreen map container is sized to its pane via JSX (below); when that
   // changes, tell MapLibre to re-read the size and re-frame the track.
@@ -616,21 +615,8 @@ export default function ComposerTool() {
             >
               {playing ? Icons.pause : Icons.play}
             </button>
-            <input
-              type="range"
-              data-playhead
-              className="flex-1 accent-accent cursor-pointer"
-              min={0}
-              max={duration || 0}
-              step={0.001}
-              value={Math.min(time, duration || 0)}
-              onChange={(e) => {
-                const v = videoRef.current;
-                if (v) v.currentTime = Number(e.target.value);
-                setTime(Number(e.target.value));
-              }}
-              aria-label="Seek"
-            />
+            {/* The seek bar follows the clip itself: the tool does not re-render for its time. */}
+            <VideoSeek videoRef={videoRef} resetKey={url} duration={duration} className="flex-1 accent-accent cursor-pointer" />
             <span className="font-mono text-xs tabular-nums text-muted flex-none">
               {formatDuration(duration)}
             </span>

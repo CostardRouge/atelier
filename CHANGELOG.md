@@ -220,6 +220,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   free their memory after a short rest, a converted clip leaves with its file, Flight Atlas no longer keeps every
   log in memory, Storytelling keeps only its last map backgrounds, and a Trips collage frees the looks of cells it
   no longer shows.
+- Composer and Flight Map play a clip without redrawing their whole window on every frame of it: only the
+  composite, the map's marker and the live readout follow the clip.
 - Editing a Trips piece that holds several openers answers faster: an edit prepares again only the opener it
   touched, not every Virée or Itinerary of the piece.
 - Trips plays a piece far lighter: the piece editor no longer redraws all its panels on every frame, only the stage
