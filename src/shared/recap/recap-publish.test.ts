@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, readRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
-import { publicationGroups, withPublications } from './recap-publish';
+import { networkCaption, networkTitle, publicationGroups, withNetworkCaption, withNetworkTitle, withPublications } from './recap-publish';
+import { NETWORKS, captionLength } from '../sources/postiz/networks';
 import { DEFAULT_CAPTION, captionText, defaultKind, hashtagOf, placeTags, readPublish, withCaption, withPublication } from './recap-publish';
 import { resolveRecap } from './recap-slots';
 
@@ -16,9 +17,11 @@ describe('a recap’s post', () => {
   ]);
 
   it('reads nothing into an old recap: Recap’s caption, unapproved, nothing sent', () => {
-    expect(doc.publish).toEqual({ caption: null, approved: false, publications: [] });
+    expect(doc.publish).toEqual({ caption: null, captions: {}, titles: {}, approved: false, publications: [] });
     expect(readPublish({ caption: 3, approved: 'yes', publications: [{ postId: '' }, { postId: 'p1', channelId: 'c', kind: 'bogus', at: 'never' }] })).toEqual({
       caption: null,
+      captions: {},
+      titles: {},
       approved: false,
       publications: [{ postId: 'p1', channelId: 'c', channel: '', network: 'instagram', group: null, kind: 'reel', trial: false, at: null, sentAt: 0, caption: '' }],
     });
@@ -56,6 +59,30 @@ describe('a recap’s post', () => {
     expect(publicationGroups(kept.publications).map((g) => g.map((p) => p.postId))).toEqual([['c'], ['a', 'b']]);
     expect(readPublish({ publications: [{ postId: 'old', channelId: 'c' }] }).publications[0]).toMatchObject({ network: 'instagram', group: null });
     expect(withPublications(doc.publish, [])).toBe(doc.publish);
+  });
+
+  it('fits the caption to each network, and keeps a network’s own words when he wrote some', () => {
+    const long = withRecap(doc, { publish: { ...doc.publish, caption: `{heading}{at}\n${'A long day on the road. '.repeat(20)}\n{tags}` } });
+    const r = resolveRecap(long);
+    expect(networkCaption(long, r, 'ig', NETWORKS.instagram)).toMatchObject({ own: false, fitted: false });
+    const bs = networkCaption(long, r, 'bs', NETWORKS.bluesky);
+    expect(bs).toMatchObject({ own: false, fitted: true });
+    expect(captionLength(bs.text, NETWORKS.bluesky)).toBeLessThanOrEqual(300);
+    expect(bs.text.startsWith('October — Hobart')).toBe(true);
+    const own = withRecap(long, { publish: withNetworkCaption({ ...long.publish, approved: true }, 'bs', 'Tasmania, in short. {tags}') });
+    expect(own.publish.approved).toBe(false);
+    expect(networkCaption(own, resolveRecap(own), 'bs', NETWORKS.bluesky)).toEqual({ text: 'Tasmania, in short. #hobart #bayoffires #cradlemountain #tasmania #australia', own: true, fitted: false });
+    expect(withNetworkCaption(own.publish, 'bs', '  ').captions).toEqual({});
+    expect(readRecapDoc(own, 'local')?.publish.captions).toEqual({ bs: 'Tasmania, in short. {tags}' });
+  });
+
+  it('titles a network from the heading, or from his own words there', () => {
+    const r = resolveRecap(doc);
+    expect(networkTitle(doc, r, 'yt', NETWORKS.youtube)).toBe('October');
+    expect(networkTitle(doc, r, 'ig', NETWORKS.instagram)).toBe('');
+    const own = withRecap(doc, { publish: withNetworkTitle(doc.publish, 'yt', '{month} in Tasmania') });
+    expect(networkTitle(own, resolveRecap(own), 'yt', NETWORKS.youtube)).toBe('October in Tasmania');
+    expect(withNetworkTitle(own.publish, 'yt', null).titles).toEqual({});
   });
 
   it('proposes a carousel for a dump, a Reel for a calendar', () => {

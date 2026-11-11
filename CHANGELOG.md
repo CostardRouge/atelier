@@ -20,6 +20,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   never holds the others back, and the note says which and what to do. The accounts ticked are those of your last
   send of that template. *Instagram first, the others 2 h later* staggers them; a send to several networks counts
   once in your rhythm. An agent picks the accounts too (`recap.schedule` `on`).
+- **Words** has a tab per account ticked: each network gets the caption cut to its own length — at a sentence, two
+  hashtags kept — with a dot on its tab until you have read it; type there and those words become that network's own.
+  YouTube and TikTok get a title, the recap's heading until you write one. A counter says how much of the network's
+  length is used.
 
 ### Changed
 

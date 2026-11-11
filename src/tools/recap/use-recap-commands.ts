@@ -35,7 +35,7 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { withJoined } from '../../shared/recap/recap-selection';
 import { withPlaceByHand } from '../../shared/recap/recap-places';
 import { pictureOfRow } from './recap-media';
-import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
+import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, networkCaption, networkTitle, withCaption as withPostCaption, withNetworkCaption, withNetworkTitle, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
 import { defaultDestinations, getPostiz, publishChannels } from '../../shared/sources/postiz/store';
@@ -394,20 +394,49 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
     },
     {
       id: 'recap.postCaption',
-      title: 'Write the post’s caption',
-      description: `The Instagram caption the recap goes out with — a TEMPLATE of Recap's words filled when it is sent: {heading}, {at} (" — Albany"), {route} (Esperance → Albany), {tags} (hashtags from the places), {place}, {places}, {month}, {year}, {count}, {days}, {videos}; plain text and emoji around them. ${CAPTION_MAX} characters at most once filled. Writing it takes the person's approval back: they read it (Export › Publish) and approve, or tell you to (recap.approve). reset: true gives back Recap's own. Answers the text as it would go out.`,
+      title: 'Write the post’s words',
+      description: `The words the recap goes out with — a TEMPLATE of Recap's words filled when it is sent: {heading}, {at} (" — Albany"), {route} (Esperance → Albany), {tags} (hashtags from the places), {place}, {places}, {month}, {year}, {count}, {days}, {videos}; plain text and emoji around them. ${CAPTION_MAX} characters at most once filled. Without on: the caption every network starts from — each network gets it cut to its own length (Bluesky 300, X 280, Threads 500) at a sentence, two hashtags kept. With on (one account or network): THAT network's own words, and title its title (YouTube needs one, TikTok takes one; the heading otherwise). Writing takes the person's approval back: they read them (Export › Publish › Words) and approve, or tell you to (recap.approve). reset: true gives back Recap's own (with on: the shared words there). Answers the text as it would go out, and each account's.`,
       params: {
-        text: { type: 'string', description: 'The caption template.', optional: true },
-        reset: { type: 'boolean', description: 'Back to Recap’s own caption.', optional: true },
+        text: { type: 'string', description: 'The words (a template).', optional: true },
+        on: { type: 'string', description: 'One account or network these words are for; nothing: every network.', optional: true },
+        title: { type: 'string', description: 'With on: that network’s title (YouTube, TikTok).', optional: true },
+        reset: { type: 'boolean', description: 'Back to Recap’s own caption; with on, to the shared words there.', optional: true },
       },
       run: (p) => {
-        if (p.reset !== true && typeof p.text !== 'string') throw new CommandError('invalid', 'give text, or reset: true');
-        const next = p.reset === true ? null : (p.text as string);
-        if (next !== null && !next.trim()) throw new CommandError('invalid', 'an empty caption — reset: true gives back Recap’s own');
-        c.current.change((d) => withRecap(d, { publish: withPostCaption(d.publish, next) }));
-        const after = { ...doc(), publish: withPostCaption(doc().publish, next) };
-        const text = captionText(after, resolveRecap(after));
-        return { text, length: text.length, approved: after.publish.approved, ...(text.length >= CAPTION_MAX ? { cut: `longer than ${CAPTION_MAX} once filled — cut` } : {}) };
+        if (p.reset !== true && typeof p.text !== 'string' && typeof p.title !== 'string') throw new CommandError('invalid', 'give text (or title with on), or reset: true');
+        const next = p.reset === true ? null : ((p.text as string | undefined) ?? undefined);
+        if (typeof next === 'string' && !next.trim()) throw new CommandError('invalid', 'empty words — reset: true gives back Recap’s own');
+        const accounts = publishChannels(getPostiz());
+        let apply: (pub: RecapDoc['publish']) => RecapDoc['publish'];
+        if (p.on !== undefined) {
+          const picked = pickChannels([p.on], accounts, []);
+          if ('error' in picked) throw new CommandError('invalid', picked.error);
+          apply = (pub) =>
+            picked.channels.reduce((acc, ch) => {
+              if (p.reset === true) return withNetworkTitle(withNetworkCaption(acc, ch.id, null), ch.id, null);
+              const worded = typeof next === 'string' ? withNetworkCaption(acc, ch.id, next) : acc;
+              return typeof p.title === 'string' ? withNetworkTitle(worded, ch.id, p.title) : worded;
+            }, pub);
+        } else {
+          if (next === undefined) throw new CommandError('invalid', 'a title is one network’s: say which with on');
+          apply = (pub) => withPostCaption(pub, next);
+        }
+        c.current.change((d) => withRecap(d, { publish: apply(d.publish) }));
+        const after = { ...doc(), publish: apply(doc().publish) };
+        const r = resolveRecap(after);
+        const text = captionText(after, r);
+        return {
+          text,
+          length: text.length,
+          approved: after.publish.approved,
+          ...(text.length >= CAPTION_MAX ? { cut: `longer than ${CAPTION_MAX} once filled — cut` } : {}),
+          accounts: accounts.map((ch) => {
+            const net = networkOf(ch.identifier)!;
+            const mine = networkCaption(after, r, ch.id, net);
+            const title = networkTitle(after, r, ch.id, net);
+            return { on: ch.name, network: net.label, max: net.captionMax, ...(mine.own ? { own: true } : {}), ...(mine.fitted ? { shortened: true } : {}), ...(mine.own || mine.fitted ? { text: mine.text } : {}), ...(title ? { title } : {}) };
+          }),
+        };
       },
     },
     {
@@ -456,7 +485,7 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
         if ('error' in target) throw new CommandError('invalid', target.error);
         const signal = new AbortController().signal;
         const files = await renderPostFiles(input(), kind, order, slugOf(d0.title) || 'recap', () => undefined, signal);
-        const text = captionText(d0, resolveRecap(d0));
+        const resolved = resolveRecap(d0);
         const isInstagram = (identifier: string) => networkOf(identifier)?.id === 'instagram';
         const later = p.stagger === true && picked.channels.some((ch) => isInstagram(ch.identifier)) && target.at !== 'draft' ? new Date((target.at === 'now' ? now.getTime() : target.at.getTime()) + 2 * 3600_000) : null;
         const result = await sendPosts({
@@ -464,7 +493,10 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           kind,
           files,
           seconds: kind === 'carousel' ? null : c.current.film.total,
-          destinations: picked.channels.map((channel) => ({ channel, caption: text, at: later && !isInstagram(channel.identifier) ? later : target.at })),
+          destinations: picked.channels.map((channel) => {
+            const net = networkOf(channel.identifier)!;
+            return { channel, caption: networkCaption(d0, resolved, channel.id, net).text, title: networkTitle(d0, resolved, channel.id, net) || null, at: later && !isInstagram(channel.identifier) ? later : target.at };
+          }),
           trial: p.trial === true,
           graduate: (p.graduate as 'auto' | 'manual' | undefined) ?? 'auto',
           collaborators: p.collaborator !== false && conn.collaborator ? [conn.collaborator] : [],

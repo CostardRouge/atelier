@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
-import { CAPTION_MAX, DEFAULT_CAPTION, captionText, defaultKind, publicationGroups, withCaption, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
+import { defaultKind, networkCaption, networkTitle, publicationGroups, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
 import { placeWords } from '../../shared/recap/recap-places';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import { PostizClient, type PostizChannel, type PostizPost } from '../../shared/sources/postiz/client';
@@ -10,10 +10,10 @@ import { nextFreeSlot, rhythmWarnings, slotLabel } from '../../shared/sources/po
 import { defaultDestinations, publishChannels } from '../../shared/sources/postiz/store';
 import { usePostiz } from '../../shared/sources/postiz/use-postiz';
 import type { startTask } from '../../shared/tasks/tasks';
-import Button from '../../shared/ui/Button';
 import { InspectorSection, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { readWhere, writeWhere } from './publish-where';
+import PublishWords, { unreadWords, type WordsFor } from './PublishWords';
 import { sendPosts, sendSummary, type Destination } from './recap-post';
 import type { Change } from './RecapPanels';
 import WhenCard, { type When } from './WhenCard';
@@ -100,6 +100,8 @@ export function usePublish({
   const [planned, setPlanned] = useState<PostizPost[] | null>(null);
   const [plannedError, setPlannedError] = useState<string | null>(null);
   const [when, setWhen] = useState<When | null>(null);
+  /** The shortened words he has opened, by account: the text he saw there. */
+  const [seen, setSeen] = useState<Record<string, string>>({});
 
   // A Postiz connected, or its accounts changed, since this opened: the ticks follow what exists.
   useEffect(() => {
@@ -132,8 +134,6 @@ export function usePublish({
   const at = chosen.kind === 'slot' || chosen.kind === 'other' ? chosen.at : null;
   const warnings = rhythm && at ? rhythmWarnings(rhythm, takenAt, at) : [];
 
-  const template = doc.publish.caption ?? DEFAULT_CAPTION;
-  const text = captionText(doc, resolved);
   const place = placeWords(resolved.slots.flatMap((s) => (s.picture ? [s.picture] : []))).place;
 
   // What each account would receive of this recap, as `kind`.
@@ -142,6 +142,8 @@ export function usePublish({
   const going = offers.filter((o) => o.plan.ok && ticked.includes(o.channel.id));
   const instagram = going.some((o) => networkOf(o.channel.identifier)?.id === 'instagram');
   const others = going.some((o) => networkOf(o.channel.identifier)?.id !== 'instagram');
+  const wordsFor: WordsFor[] = going.map((o) => ({ channel: o.channel, net: networkOf(o.channel.identifier)! }));
+  const unread = unreadWords(doc, resolved, wordsFor, seen);
 
   const linkTo = (words: string) => (
     <InspectorSection id="recap-publish" title="Publish" summary="not connected">
@@ -182,7 +184,8 @@ export function usePublish({
       const later = (): Date | 'draft' => (target === 'draft' ? 'draft' : new Date((target === 'now' ? Date.now() : target.getTime()) + STAGGER_MS));
       const destinations: Destination[] = going.map((o) => ({
         channel: o.channel,
-        caption: text,
+        caption: networkCaption(doc, resolved, o.channel.id, networkOf(o.channel.identifier)!).text,
+        title: networkTitle(doc, resolved, o.channel.id, networkOf(o.channel.identifier)!) || null,
         at: stagger && instagram && others && networkOf(o.channel.identifier)?.id !== 'instagram' ? later() : target,
       }));
       const result = await sendPosts({
@@ -211,7 +214,7 @@ export function usePublish({
 
   const verbs: PublishVerbs = {
     ready: true,
-    summary: `${KIND_LABEL[kind]} · ${going.length === 1 ? going[0].channel.name : `${going.length} accounts`} · caption ${doc.publish.approved ? 'approved' : 'not approved yet'}`,
+    summary: `${KIND_LABEL[kind]} · ${going.length === 1 ? going[0].channel.name : `${going.length} accounts`} · words ${doc.publish.approved ? 'approved' : 'not approved yet'}`,
     label,
     blocked: busy ? null : blocked,
     send: (as) => void schedule(as),
@@ -314,38 +317,12 @@ export function usePublish({
       <InspectorSection
         id="recap-publish-words"
         title="Words"
-        summary={doc.publish.approved ? 'approved' : 'not approved yet'}
-        actions={<span className={state}>{doc.publish.approved ? 'approved' : doc.publish.caption !== null ? 'not approved yet' : `${text.length} / ${CAPTION_MAX}`}</span>}
-        info="A template: Recap's words — {heading} the title as shown, {at} « — Albany », {route} the route, {tags} hashtags from the places, {place} {places} {month} {year} {count} {days} — are filled when it is sent."
+        marked={unread.length > 0}
+        summary={unread.length ? `${unread.length} to read` : doc.publish.approved ? 'approved' : 'not approved yet'}
+        actions={<span className={state}>{unread.length ? `${unread.length} to read` : doc.publish.approved ? 'approved' : 'not approved yet'}</span>}
+        info="A template: Recap's words — {heading} the title as shown, {at} « — Albany », {route} the route, {tags} hashtags from the places, {place} {places} {month} {year} {count} {days} — are filled when it is sent. Each network gets them cut to its length."
       >
-        <div className="flex flex-col gap-2">
-          <textarea
-            value={template}
-            onChange={(e) => change((d) => withRecap(d, { publish: withCaption(d.publish, e.target.value) }))}
-            rows={5}
-            aria-label="Caption template"
-            spellCheck
-            className="w-full font-sans text-sm leading-snug px-3 py-2 border border-line-strong rounded-paper bg-paper text-ink resize-y focus:outline-none focus:border-accent"
-          />
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted">
-              As it will read · {text.length.toLocaleString('en-GB')} / {CAPTION_MAX.toLocaleString('en-GB')}
-            </summary>
-            <p className="m-0 mt-1.5 whitespace-pre-wrap text-ink-soft border-l-2 border-line pl-2.5">{text || '—'}</p>
-          </details>
-          <div className="flex flex-wrap items-center gap-2">
-            {!doc.publish.approved && (
-              <Button size="sm" variant="ghost" onClick={() => change((d) => withRecap(d, { publish: { ...d.publish, approved: true } }))} title="You read it: an agent may now schedule it">
-                Approve the caption
-              </Button>
-            )}
-            {doc.publish.caption !== null && (
-              <Button size="sm" variant="ghost" onClick={() => change((d) => withRecap(d, { publish: withCaption(d.publish, null) }))} title="Back to Recap's own: the title, the place, the route, the tags">
-                Recap&apos;s caption
-              </Button>
-            )}
-          </div>
-        </div>
+        <PublishWords doc={doc} resolved={resolved} change={change} going={wordsFor} seen={seen} onSeen={(id, text) => setSeen((cur) => (cur[id] === text ? cur : { ...cur, [id]: text }))} />
       </InspectorSection>
 
       {doc.publish.publications.length > 0 && (

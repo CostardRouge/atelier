@@ -3739,8 +3739,13 @@ your ceiling, or a second post the same day, the card says so and lets you;
 several of them counts once in your rhythm. The **caption** is a template of Recap's words —
 `{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
 places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
-shows it. Sending it approves it; an agent can write one, and it waits for
-your approval. The recap keeps what it sent and shows its state in Postiz;
+shows it. **Words** has a tab per account ticked, showing what THAT network
+gets: the same words cut to its length (Bluesky 300, X 280, Threads 500) at a
+sentence with two hashtags kept, a dot on the tab until you have read them;
+type there and they become that network's own, and *The shared words* gives
+the cut back. YouTube and TikTok get a **title** — the heading, until you
+write one. Sending approves the words; an agent can write them, and they wait
+for your approval. The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
 gallery's **Planned** section is one week as a strip of seven days — what went
 out, what will, what failed, and your rhythm's free slots — each post a small

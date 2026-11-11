@@ -328,7 +328,7 @@ export default function RecapGallery({ openRecapId, onOpen }: { openRecapId: str
         cleared: anchor === doc.anchor ? doc.cleared : [],
         captions: anchor === doc.anchor ? doc.captions : {},
         // The caption's words travel; its approval and what was sent stay with the original.
-        publish: { caption: doc.publish.caption, approved: false, publications: [] },
+        publish: { caption: doc.publish.caption, captions: doc.publish.captions, titles: doc.publish.titles, approved: false, publications: [] },
         createdAt: fresh.createdAt,
         updatedAt: fresh.updatedAt,
       };

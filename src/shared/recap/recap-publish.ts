@@ -21,6 +21,7 @@
 import { PIN } from './recap-places';
 import type { ResolvedRecap } from './recap-slots';
 import type { RecapDoc, RecapPicture } from './recap-doc';
+import { fitCaption, titleFrom, type Network } from '../sources/postiz/networks';
 
 /** `{word}` replaced by its value; an unknown word left as typed (`recap-slots.ts`'s `fillText`, here without importing it: `recap-doc.ts` reads this module). */
 const fillText = (text: string, vars: Readonly<Record<string, string>>) => text.replace(/\{(\w+)\}/g, (all, name: string) => vars[name] ?? all);
@@ -51,16 +52,25 @@ export interface Publication {
 export interface RecapPublish {
   /** The caption's template; null = `DEFAULT_CAPTION`. */
   caption: string | null;
+  /**
+   * A network's OWN words (lab 18), by channel id — a template like the
+   * caption. Absent: the caption, fitted to that network's length when sent.
+   */
+  captions: Record<string, string>;
+  /** The title a network asks beside its words (YouTube, TikTok), by channel id. Absent: drawn from the heading. */
+  titles: Record<string, string>;
   approved: boolean;
   publications: Publication[];
 }
 
-export const DEFAULT_PUBLISH: RecapPublish = { caption: null, approved: false, publications: [] };
+export const DEFAULT_PUBLISH: RecapPublish = { caption: null, captions: {}, titles: {}, approved: false, publications: [] };
 
 /** What a recap says when nobody wrote its caption: its title, where, the route, its tags. */
 export const DEFAULT_CAPTION = '{heading}{at}\n{route}\n\n{tags}';
 
 export const CAPTION_MAX = 2200;
+/** The longest words a network takes (YouTube's description). */
+const NETWORK_CAPTION_MAX = 5000;
 /** What a recap remembers sending: a send to six networks is six of them. */
 const MAX_PUBLICATIONS = 120;
 const MAX_TAGS = 5;
@@ -86,11 +96,24 @@ function readPublication(raw: unknown): Publication | null {
   };
 }
 
+/** A map of words by channel id: strings only, a few of them, none empty. */
+function readWords(raw: unknown, max: number): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>)
+      .filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].trim().length > 0 && e[0].length <= 120)
+      .slice(0, 24)
+      .map(([k, v]) => [k, v.slice(0, max)]),
+  );
+}
+
 export function readPublish(raw: unknown): RecapPublish {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const caption = typeof r.caption === 'string' ? r.caption.slice(0, CAPTION_MAX * 2) : null;
   return {
     caption,
+    captions: readWords(r.captions, NETWORK_CAPTION_MAX * 2),
+    titles: readWords(r.titles, 200),
     approved: r.approved === true,
     publications: Array.isArray(r.publications) ? r.publications.flatMap((p) => readPublication(p) ?? []).slice(-MAX_PUBLICATIONS) : [],
   };
@@ -155,6 +178,53 @@ export function captionText(doc: RecapDoc, resolved: ResolvedRecap): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return text.length > CAPTION_MAX ? `${text.slice(0, CAPTION_MAX - 1)}…` : text;
+}
+
+const fold = (text: string) =>
+  text
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+$/g, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * The words ONE network gets (lab 18, his pick: shortened by Atelier, then
+ * read): its own template when he wrote one there, else the caption — either
+ * way filled, and fitted to the network's length (`fitCaption`: cut at a
+ * sentence, two hashtags kept). `own`: written for that network; `fitted`:
+ * shorter than what was written.
+ */
+export function networkCaption(doc: RecapDoc, resolved: ResolvedRecap, channelId: string, net: Pick<Network, 'id' | 'captionMax'>): { text: string; own: boolean; fitted: boolean } {
+  const template = doc.publish.captions[channelId];
+  const own = template !== undefined;
+  const full = own ? fold(fillText(template, captionWords(doc, resolved))) : captionText(doc, resolved);
+  const text = fitCaption(full, net);
+  return { text, own, fitted: text !== full };
+}
+
+/** The title a network asks beside its words: his own there, else the recap's heading, cut to the network's length. */
+export function networkTitle(doc: RecapDoc, resolved: ResolvedRecap, channelId: string, net: Pick<Network, 'titleMax'>): string {
+  if (!net.titleMax) return '';
+  const words = captionWords(doc, resolved);
+  const own = doc.publish.titles[channelId];
+  return titleFrom(own ? fillText(own, words) : words.heading || doc.title, net.titleMax);
+}
+
+const without = (map: Record<string, string>, key: string) => Object.fromEntries(Object.entries(map).filter(([k]) => k !== key));
+
+/** A network's own words changed (null or blank: back to the shared caption): the approval goes with them. */
+export function withNetworkCaption(publish: RecapPublish, channelId: string, text: string | null): RecapPublish {
+  const next = text === null || !text.trim() ? null : text.slice(0, NETWORK_CAPTION_MAX * 2);
+  if ((publish.captions[channelId] ?? null) === next) return publish;
+  return { ...publish, captions: next === null ? without(publish.captions, channelId) : { ...publish.captions, [channelId]: next }, approved: false };
+}
+
+/** A network's title changed (null or blank: back to the heading): the approval goes with it. */
+export function withNetworkTitle(publish: RecapPublish, channelId: string, text: string | null): RecapPublish {
+  const next = text === null || !text.trim() ? null : text.slice(0, 200);
+  if ((publish.titles[channelId] ?? null) === next) return publish;
+  return { ...publish, titles: next === null ? without(publish.titles, channelId) : { ...publish.titles, [channelId]: next }, approved: false };
 }
 
 /** The caption changed: its approval goes with it, unless the words are the same. */
