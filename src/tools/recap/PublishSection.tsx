@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
-import { defaultKind, networkCaption, networkTitle, publicationGroups, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
+import { defaultKind, musicFor, networkCaption, networkTitle, publicationGroups, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
 import { placeWords } from '../../shared/recap/recap-places';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import { PostizClient, type PostizChannel, type PostizPost } from '../../shared/sources/postiz/client';
@@ -13,6 +13,7 @@ import type { startTask } from '../../shared/tasks/tasks';
 import { InspectorSection, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { readWhere, writeWhere } from './publish-where';
+import PublishSound from './PublishSound';
 import PublishWords, { unreadWords, type WordsFor } from './PublishWords';
 import { sendPosts, sendSummary, type Destination } from './recap-post';
 import type { Change } from './RecapPanels';
@@ -59,7 +60,10 @@ interface Offer {
  *   are the last ones this TEMPLATE went to on this device.
  * - **When**: the next free slot (a broken rhythm SAID, never refused), the
  *   other networks two hours after Instagram if he likes.
- * - **Words**: the caption, a template of Recap's words filled when sent.
+ * - **Words**: the caption, a template of Recap's words filled when sent, and
+ *   what each network gets of it (`PublishWords.tsx`).
+ * - **Sound**: the recap's own, or a track of the network's library where an
+ *   account has one (`PublishSound.tsx`).
  *
  * The SETTINGS are these sections and the VERB is the Export tab's pinned
  * foot (lab 13): `usePublish` holds both.
@@ -71,6 +75,8 @@ export function usePublish({
   slides,
   media,
   seconds,
+  cuts,
+  onWithFilm,
   canEncode,
   busy,
   run,
@@ -84,6 +90,10 @@ export function usePublish({
   media: readonly MediaType[];
   /** The film's length. */
   seconds: number;
+  /** When the film cuts, in seconds. */
+  cuts: readonly number[];
+  /** Plays the film on the stage with a library track over it (null: its own sound back). */
+  onWithFilm: (over: { url: string; music: number; film: number } | null) => void;
   canEncode: boolean;
   busy: boolean;
   run: (label: string, job: (signal: AbortSignal, task: Task) => Promise<string>) => Promise<void>;
@@ -186,6 +196,7 @@ export function usePublish({
         channel: o.channel,
         caption: networkCaption(doc, resolved, o.channel.id, networkOf(o.channel.identifier)!).text,
         title: networkTitle(doc, resolved, o.channel.id, networkOf(o.channel.identifier)!) || null,
+        music: musicFor(doc.publish, o.channel.identifier, kind),
         at: stagger && instagram && others && networkOf(o.channel.identifier)?.id !== 'instagram' ? later() : target,
       }));
       const result = await sendPosts({
@@ -221,6 +232,8 @@ export function usePublish({
     when: whenWords,
   };
 
+  const withTrack = going.filter((o) => musicFor(doc.publish, o.channel.identifier, kind)).length;
+  const soundWords = withTrack ? `network music on ${withTrack}` : doc.sound ? 'the recap’s own' : 'silent';
   const cutNotes = going.flatMap((o) => (o.plan.ok && o.plan.note ? [o.plan.note] : []));
   const sections = (
     <>
@@ -323,6 +336,16 @@ export function usePublish({
         info="A template: Recap's words — {heading} the title as shown, {at} « — Albany », {route} the route, {tags} hashtags from the places, {place} {places} {month} {year} {count} {days} — are filled when it is sent. Each network gets them cut to its length."
       >
         <PublishWords doc={doc} resolved={resolved} change={change} going={wordsFor} seen={seen} onSeen={(id, text) => setSeen((cur) => (cur[id] === text ? cur : { ...cur, [id]: text }))} />
+      </InspectorSection>
+
+      <InspectorSection
+        id="recap-publish-sound"
+        title="Sound"
+        summary={soundWords}
+        actions={<span className={state}>{soundWords}</span>}
+        info="A network lays a track of its own library over a Reel: nothing of it is in the file Recap sends, and the network picks the excerpt. The other networks hear the recap's own sound."
+      >
+        <PublishSound doc={doc} change={change} client={client!} going={going.map((o) => o.channel)} kind={kind} cuts={cuts} onWithFilm={onWithFilm} />
       </InspectorSection>
 
       {doc.publish.publications.length > 0 && (

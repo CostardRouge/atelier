@@ -24,6 +24,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   hashtags kept — with a dot on its tab until you have read it; type there and those words become that network's own.
   YouTube and TikTok get a title, the recap's heading until you write one. A counter says how much of the network's
   length is used.
+- **Sound** chooses what a published Reel sounds like: the recap's own sound everywhere, or a track of the network's
+  own music library where your account has one through Postiz (Instagram with the Facebook Business connector, TikTok
+  Business) — the other networks keep the recap's sound, and a list says what each account will hear. You search the
+  library or see what is trending, **listen to any track before choosing it**, see its waveform and its tempo (with a
+  mark when it suits your cuts), set the track's volume and the film's own under it, and *With the film* plays the
+  recap on the stage with the track over it. The network itself picks which excerpt of a track plays. An agent
+  searches and sets it too (`recap.music`, `recap.postMusic`).
 
 ### Changed
 

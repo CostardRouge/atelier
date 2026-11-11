@@ -35,11 +35,11 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { withJoined } from '../../shared/recap/recap-selection';
 import { withPlaceByHand } from '../../shared/recap/recap-places';
 import { pictureOfRow } from './recap-media';
-import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, networkCaption, networkTitle, withCaption as withPostCaption, withNetworkCaption, withNetworkTitle, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
+import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, musicFor, networkCaption, networkTitle, withCaption as withPostCaption, withNetworkCaption, withMusic, withNetworkTitle, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
 import { defaultDestinations, getPostiz, publishChannels } from '../../shared/sources/postiz/store';
-import { networkOf, postMoments } from '../../shared/sources/postiz/networks';
+import { musicLibrary, networkOf, postMoments, type MusicTrack } from '../../shared/sources/postiz/networks';
 import { readWhere, writeWhere } from './publish-where';
 import { sendPosts } from './recap-post';
 
@@ -77,6 +77,8 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
   };
   const input = () => ({ doc: doc(), resolved: c.current.resolved, layout: c.current.layout, film: c.current.film, stills: c.current.sources.still, aliases: c.current.aliases, clipSlides: c.current.clipSlides });
 
+  /** The tracks the agent's searches listed, by network and id — what recap.postMusic picks from. */
+  const heard = useRef(new Map<string, MusicTrack>());
   const specs: CommandSpec[] = [
     {
       id: 'recap.get',
@@ -440,6 +442,67 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
       },
     },
     {
+      id: 'recap.music',
+      title: 'Search a network’s music',
+      description:
+        'The music library of one of the person’s networks, searched through their Postiz — where an account has one: Instagram (with the Facebook Business connector) or TikTok Business. q: what to look for; nothing: what is trending. on: "instagram" (default) or "tiktok". Answers the tracks: id, title, artist, seconds. Give an id to recap.postMusic. The person hears a track in Export › Publish › Sound; you cannot.',
+      params: {
+        q: { type: 'string', description: 'What to search; nothing: trending.', optional: true },
+        on: { type: 'string', description: 'The network: "instagram" (default) or "tiktok".', optional: true },
+      },
+      available: () => (publishChannels(getPostiz()).some((ch) => musicLibrary(ch.identifier)) ? true : 'none of the person’s accounts has a music library through Postiz (Instagram with the Facebook Business connector, TikTok Business)'),
+      run: async (p) => {
+        const conn = getPostiz()!;
+        const want = typeof p.on === 'string' ? p.on.toLowerCase() : 'instagram';
+        const channel = publishChannels(conn).find((ch) => musicLibrary(ch.identifier) && networkOf(ch.identifier)?.id === want);
+        if (!channel) throw new CommandError('invalid', `no account with a music library on "${want}"`);
+        const tracks = await new PostizClient(conn.apiBase, conn.apiKey).searchMusic(channel, typeof p.q === 'string' ? p.q : '');
+        for (const t of tracks) heard.current.set(`${want}:${t.id}`, t);
+        return { on: networkOf(channel.identifier)!.label, tracks: tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, seconds: t.seconds })) };
+      },
+    },
+    {
+      id: 'recap.postMusic',
+      title: 'Set what the post sounds like',
+      description:
+        'What the recap sounds like once published. source: "own" — every network hears the recap’s own sound — or "network" (default): a track of the network’s own library laid over the Reel where an account has one, the other networks keeping the recap’s sound. track: a track’s id from recap.music, with on: its network ("instagram" default, "tiktok"); track: "" removes it. musicVolume and filmVolume: 0–100, the track and the recap’s own sound under it. The network picks which excerpt of the track plays; a carousel or a story carries no library track. Answers what each account will hear.',
+      params: {
+        source: { type: 'string', enum: ['own', 'network'], description: 'The recap’s own sound everywhere, or the networks’ music where there is one.', optional: true },
+        track: { type: 'string', description: 'A track id from recap.music; "" removes it.', optional: true },
+        on: { type: 'string', description: 'The track’s network: "instagram" (default) or "tiktok".', optional: true },
+        musicVolume: { type: 'number', min: 0, max: 100, description: 'The track’s volume.', optional: true },
+        filmVolume: { type: 'number', min: 0, max: 100, description: 'The recap’s own sound under it.', optional: true },
+      },
+      run: (p) => {
+        const want = typeof p.on === 'string' ? p.on.toLowerCase() : 'instagram';
+        let track: MusicTrack | null | undefined;
+        if (typeof p.track === 'string') {
+          track = p.track ? (heard.current.get(`${want}:${p.track}`) ?? null) : null;
+          if (p.track && !track) throw new CommandError('invalid', `no track "${p.track}" in the last searches on ${want} — search it first (recap.music)`);
+        }
+        const apply = (pub: RecapDoc['publish']) => {
+          const tracks = track === undefined ? pub.music.tracks : track === null ? Object.fromEntries(Object.entries(pub.music.tracks).filter(([k]) => k !== want)) : { ...pub.music.tracks, [want]: track };
+          return withMusic(pub, {
+            ...(typeof p.source === 'string' ? { source: p.source as 'own' | 'network' } : track ? { source: 'network' as const } : {}),
+            tracks,
+            ...(typeof p.musicVolume === 'number' ? { musicVolume: p.musicVolume } : {}),
+            ...(typeof p.filmVolume === 'number' ? { filmVolume: p.filmVolume } : {}),
+          });
+        };
+        c.current.change((d) => withRecap(d, { publish: apply(d.publish) }));
+        const after = apply(doc().publish);
+        return {
+          source: after.music.source,
+          musicVolume: after.music.musicVolume,
+          filmVolume: after.music.filmVolume,
+          hears: publishChannels(getPostiz()).map((ch) => {
+            const m = musicFor(after, ch.identifier, 'reel');
+            return { on: ch.name, network: networkOf(ch.identifier)!.label, sound: m ? `${m.track.title} — ${m.track.artist} (the network’s library)` : doc().sound ? 'the recap’s own sound' : 'none' };
+          }),
+        };
+      },
+    },
+    {
       id: 'recap.approve',
       title: 'Approve the caption',
       description: 'Mark the caption approved — ONLY when the person has read it and said so in this conversation. recap.schedule needs it. Any change to the caption takes it back.',
@@ -495,7 +558,7 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           seconds: kind === 'carousel' ? null : c.current.film.total,
           destinations: picked.channels.map((channel) => {
             const net = networkOf(channel.identifier)!;
-            return { channel, caption: networkCaption(d0, resolved, channel.id, net).text, title: networkTitle(d0, resolved, channel.id, net) || null, at: later && !isInstagram(channel.identifier) ? later : target.at };
+            return { channel, caption: networkCaption(d0, resolved, channel.id, net).text, title: networkTitle(d0, resolved, channel.id, net) || null, music: musicFor(d0.publish, channel.identifier, kind), at: later && !isInstagram(channel.identifier) ? later : target.at };
           }),
           trial: p.trial === true,
           graduate: (p.graduate as 'auto' | 'manual' | undefined) ?? 'auto',

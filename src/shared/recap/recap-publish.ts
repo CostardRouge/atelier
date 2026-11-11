@@ -21,7 +21,7 @@
 import { PIN } from './recap-places';
 import type { ResolvedRecap } from './recap-slots';
 import type { RecapDoc, RecapPicture } from './recap-doc';
-import { fitCaption, titleFrom, type Network } from '../sources/postiz/networks';
+import { fitCaption, musicLibrary, networkOf, titleFrom, type MusicTrack, type Network, type PostMusic } from '../sources/postiz/networks';
 
 /** `{word}` replaced by its value; an unknown word left as typed (`recap-slots.ts`'s `fillText`, here without importing it: `recap-doc.ts` reads this module). */
 const fillText = (text: string, vars: Readonly<Record<string, string>>) => text.replace(/\{(\w+)\}/g, (all, name: string) => vars[name] ?? all);
@@ -49,6 +49,24 @@ export interface Publication {
   caption: string;
 }
 
+/**
+ * What a recap SOUNDS like once published (lab 18, his Q4): its own sound on
+ * every network, or — where the account has a music library through Postiz
+ * (Instagram, TikTok Business) — a track of that library laid over the film
+ * by the network itself, the recap's own sound mixed under it at
+ * `filmVolume`. The other networks always hear the recap's own.
+ */
+export interface PublishMusic {
+  source: 'own' | 'network';
+  /** The track picked in each library, by network id (`instagram`, `tiktok`). */
+  tracks: Record<string, MusicTrack>;
+  /** 0–100, as the network mixes them. */
+  musicVolume: number;
+  filmVolume: number;
+}
+
+export const DEFAULT_MUSIC: PublishMusic = { source: 'network', tracks: {}, musicVolume: 100, filmVolume: 0 };
+
 export interface RecapPublish {
   /** The caption's template; null = `DEFAULT_CAPTION`. */
   caption: string | null;
@@ -59,11 +77,12 @@ export interface RecapPublish {
   captions: Record<string, string>;
   /** The title a network asks beside its words (YouTube, TikTok), by channel id. Absent: drawn from the heading. */
   titles: Record<string, string>;
+  music: PublishMusic;
   approved: boolean;
   publications: Publication[];
 }
 
-export const DEFAULT_PUBLISH: RecapPublish = { caption: null, captions: {}, titles: {}, approved: false, publications: [] };
+export const DEFAULT_PUBLISH: RecapPublish = { caption: null, captions: {}, titles: {}, music: DEFAULT_MUSIC, approved: false, publications: [] };
 
 /** What a recap says when nobody wrote its caption: its title, where, the route, its tags. */
 export const DEFAULT_CAPTION = '{heading}{at}\n{route}\n\n{tags}';
@@ -107,6 +126,58 @@ function readWords(raw: unknown, max: number): Record<string, string> {
   );
 }
 
+const level = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(100, Math.max(0, v))) : fallback);
+
+function readTrack(raw: unknown): MusicTrack | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== 'string' || !r.id) return null;
+  const url = typeof r.previewUrl === 'string' && /^https:\/\//.test(r.previewUrl) ? r.previewUrl.slice(0, 2000) : null;
+  return {
+    id: r.id.slice(0, 120),
+    title: typeof r.title === 'string' ? r.title.slice(0, 200) : 'Untitled',
+    artist: typeof r.artist === 'string' ? r.artist.slice(0, 200) : '',
+    image: typeof r.image === 'string' && /^https:\/\//.test(r.image) ? r.image.slice(0, 2000) : null,
+    seconds: typeof r.seconds === 'number' && Number.isFinite(r.seconds) && r.seconds > 0 ? Math.round(r.seconds) : 0,
+    previewUrl: url,
+  };
+}
+
+export function readMusic(raw: unknown): PublishMusic {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const tracks = r.tracks && typeof r.tracks === 'object' && !Array.isArray(r.tracks) ? (r.tracks as Record<string, unknown>) : {};
+  return {
+    source: r.source === 'own' ? 'own' : 'network',
+    tracks: Object.fromEntries(
+      Object.entries(tracks)
+        .slice(0, 6)
+        .flatMap(([k, v]) => {
+          const t = readTrack(v);
+          return t ? [[k.slice(0, 40), t] as [string, MusicTrack]] : [];
+        }),
+    ),
+    musicVolume: level(r.musicVolume, DEFAULT_MUSIC.musicVolume),
+    filmVolume: level(r.filmVolume, DEFAULT_MUSIC.filmVolume),
+  };
+}
+
+/**
+ * The library track ONE account's post carries: only a Reel, only where the
+ * account has a library and a track was picked in it — else null, and the
+ * network hears the recap's own sound.
+ */
+export function musicFor(publish: RecapPublish, identifier: string, kind: PublishKind): PostMusic | null {
+  if (publish.music.source !== 'network' || kind !== 'reel' || !musicLibrary(identifier)) return null;
+  const net = networkOf(identifier);
+  const track = net ? publish.music.tracks[net.id] : undefined;
+  return track ? { track, musicVolume: publish.music.musicVolume, filmVolume: publish.music.filmVolume } : null;
+}
+
+/** The music changed. It is not words: the approval stays. */
+export function withMusic(publish: RecapPublish, patch: Partial<PublishMusic>): RecapPublish {
+  return { ...publish, music: readMusic({ ...publish.music, ...patch }) };
+}
+
 export function readPublish(raw: unknown): RecapPublish {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const caption = typeof r.caption === 'string' ? r.caption.slice(0, CAPTION_MAX * 2) : null;
@@ -114,6 +185,7 @@ export function readPublish(raw: unknown): RecapPublish {
     caption,
     captions: readWords(r.captions, NETWORK_CAPTION_MAX * 2),
     titles: readWords(r.titles, 200),
+    music: readMusic(r.music),
     approved: r.approved === true,
     publications: Array.isArray(r.publications) ? r.publications.flatMap((p) => readPublication(p) ?? []).slice(-MAX_PUBLICATIONS) : [],
   };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, readRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
+import { DEFAULT_MUSIC, musicFor, readMusic, withMusic } from './recap-publish';
 import { networkCaption, networkTitle, publicationGroups, withNetworkCaption, withNetworkTitle, withPublications } from './recap-publish';
 import { NETWORKS, captionLength } from '../sources/postiz/networks';
 import { DEFAULT_CAPTION, captionText, defaultKind, hashtagOf, placeTags, readPublish, withCaption, withPublication } from './recap-publish';
@@ -17,11 +18,12 @@ describe('a recap’s post', () => {
   ]);
 
   it('reads nothing into an old recap: Recap’s caption, unapproved, nothing sent', () => {
-    expect(doc.publish).toEqual({ caption: null, captions: {}, titles: {}, approved: false, publications: [] });
+    expect(doc.publish).toEqual({ caption: null, captions: {}, titles: {}, music: DEFAULT_MUSIC, approved: false, publications: [] });
     expect(readPublish({ caption: 3, approved: 'yes', publications: [{ postId: '' }, { postId: 'p1', channelId: 'c', kind: 'bogus', at: 'never' }] })).toEqual({
       caption: null,
       captions: {},
       titles: {},
+      music: DEFAULT_MUSIC,
       approved: false,
       publications: [{ postId: 'p1', channelId: 'c', channel: '', network: 'instagram', group: null, kind: 'reel', trial: false, at: null, sentAt: 0, caption: '' }],
     });
@@ -83,6 +85,19 @@ describe('a recap’s post', () => {
     const own = withRecap(doc, { publish: withNetworkTitle(doc.publish, 'yt', '{month} in Tasmania') });
     expect(networkTitle(own, resolveRecap(own), 'yt', NETWORKS.youtube)).toBe('October in Tasmania');
     expect(withNetworkTitle(own.publish, 'yt', null).titles).toEqual({});
+  });
+
+  it('lays a library track over a Reel only where the account has a library, and keeps the approval', () => {
+    const track = { id: '667', title: 'Oceanside', artist: 'Jasmine', image: null, seconds: 233, previewUrl: 'https://cdn/a.mp4' };
+    const pub = withMusic({ ...doc.publish, approved: true }, { tracks: { instagram: track }, musicVolume: 80, filmVolume: 140 });
+    expect(pub.approved).toBe(true);
+    expect(musicFor(pub, 'instagram', 'reel')).toEqual({ track, musicVolume: 80, filmVolume: 100 });
+    expect(musicFor(pub, 'instagram', 'carousel')).toBeNull();
+    expect(musicFor(pub, 'instagram-standalone', 'reel')).toBeNull();
+    expect(musicFor(pub, 'tiktok-business', 'reel')).toBeNull();
+    expect(musicFor(pub, 'youtube', 'reel')).toBeNull();
+    expect(musicFor(withMusic(pub, { source: 'own' }), 'instagram', 'reel')).toBeNull();
+    expect(readMusic({ tracks: { instagram: { id: 'x', previewUrl: 'javascript:1', image: 'http://plain' } } }).tracks.instagram).toMatchObject({ previewUrl: null, image: null });
   });
 
   it('proposes a carousel for a dump, a Reel for a calendar', () => {

@@ -108,7 +108,11 @@ Today it ships twelve tools, converging into a few editors:
 > it just rendered and the posts to schedule on the accounts you ticked
 > (Instagram, TikTok, YouTube, Bluesky, Threads, X), and it reads back the
 > posts it planned for the gallery's *Planned* section. Postiz then publishes
-> through each network's own API.
+> through each network's own API. When you search a network's **music** in
+> *Publish › Sound*, the search goes through your Postiz, and the covers and
+> the track you listen to are loaded straight from that network's servers
+> (Meta's, for Instagram): only when you open the picker or press ▶, and
+> nothing of a track is kept on your device or put in a file Recap makes.
 >
 > One more connection never leaves your computer: the **agent bridge** (see
 > "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,
@@ -3745,7 +3749,18 @@ sentence with two hashtags kept, a dot on the tab until you have read them;
 type there and they become that network's own, and *The shared words* gives
 the cut back. YouTube and TikTok get a **title** — the heading, until you
 write one. Sending approves the words; an agent can write them, and they wait
-for your approval. The recap keeps what it sent and shows its state in Postiz;
+for your approval. **Sound** says what a published Reel sounds like: the
+recap's own sound everywhere, or *Network music* — a track of the network's
+own library where your account has one through Postiz (Instagram with the
+Facebook Business connector, TikTok Business), the other networks keeping the
+recap's sound; a list says what each account will hear. *Choose* opens the
+library — what is trending, or a search — where every track **plays before
+you pick it**; the chosen one shows its waveform and its tempo (« suits your
+cuts » when the film's cuts fall on its beat), two sliders set the track's
+volume and the film's own under it, and *With the film* plays the recap on
+the stage with the track over it. Which excerpt of the track plays is the
+network's choice: its API takes a track, never a moment — a Trial Reel shows
+it. The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
 gallery's **Planned** section is one week as a strip of seven days — what went
 out, what will, what failed, and your rhythm's free slots — each post a small

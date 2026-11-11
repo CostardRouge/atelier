@@ -322,6 +322,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     if (!playing) {
       clipsRef.current.halt();
       soundRef.current.halt();
+      // A library track was heard with the film: stopping gives the stage its own sound back.
+      soundRef.current.preview(null);
       return;
     }
     let raf = 0;
@@ -355,6 +357,16 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     setPlaying(false);
     window.setTimeout(() => {
       // Play starts at 0 when nothing was scrubbed.
+      scrubbed.current = false;
+      setPlaying(true);
+    }, 0);
+  }, []);
+  /** The film from its first second with a network's library track over it (Export › Publish › Sound); a pause gives the stage its own sound back. */
+  const listenWithFilm = useCallback((over: { url: string; music: number; film: number } | null) => {
+    setPlaying(false);
+    window.setTimeout(() => {
+      soundRef.current.preview(over);
+      if (!over) return;
       scrubbed.current = false;
       setPlaying(true);
     }, 0);
@@ -1177,7 +1189,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
           {panel(tab)}
           {exportSeen.current && (
             <RecapExportPanel
-              ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals }}
+              ctx={{ doc, film, layout, resolved, sources, aliases, clipSlides, files, original: fetchOriginal, stillOriginal, originals, listen: listenWithFilm }}
               natural={natural}
               change={change}
               visible={tab === 'export'}

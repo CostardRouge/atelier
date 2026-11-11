@@ -37,6 +37,8 @@ export interface ExportContext {
   stillOriginal: (key: string, signal: AbortSignal) => Promise<Drawable | null>;
   /** Some of what the film draws has an original within reach (a Winnow, a file in hand): the choice applies. */
   originals: boolean;
+  /** Plays the film on the stage from its first second with a library track over it (lab 18); null gives its own sound back. */
+  listen: (over: { url: string; music: number; film: number } | null) => void;
 }
 
 /** The constant-quality mode the second pass needs, asked of this browser once. */
@@ -406,6 +408,8 @@ export default function RecapExportPanel({
     slides,
     media: order.map((s) => (s.kind === 'clip' ? 'video' : 'picture')),
     seconds: film.total,
+    cuts: film.pages.map((pg) => pg.start),
+    onWithFilm: ctx.listen,
     canEncode: canEncode !== false,
     busy: busy !== null,
     run,

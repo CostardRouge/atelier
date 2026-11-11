@@ -149,3 +149,20 @@ export function onTheBeat(plan: FilmPlan, grid: readonly number[], fixedTotal: n
   if (last) last.length = total - last.start;
   return { ...plan, pages, total, ...(lead > 0 ? { lead: newLead } : {}) };
 }
+
+/**
+ * True when a film's cuts fall on a beat of `period` (lab 18: a library track
+ * whose tempo suits the recap): the median gap between its cuts is a whole
+ * number of beats — 1 to 16 — within 6 %. Fewer than two gaps say nothing.
+ */
+export function cutsOnBeat(period: number, cuts: readonly number[]): boolean {
+  const gaps = cuts
+    .slice(1)
+    .map((t, i) => t - cuts[i])
+    .filter((g) => g > 0.05)
+    .sort((a, b) => a - b);
+  if (gaps.length < 2 || !(period > 0)) return false;
+  const gap = gaps[Math.floor(gaps.length / 2)];
+  const beats = Math.round(gap / period);
+  return beats >= 1 && beats <= 16 && Math.abs(gap - beats * period) / gap <= 0.06;
+}
