@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { PlayClock } from '../../shared/media/play-clock';
+import { useClockSelect } from '../../shared/media/use-play-clock';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
@@ -143,6 +145,12 @@ interface BadgeStageProps {
   theme: StyleTheme | null;
   /** Where the badge's own animations are up to, in seconds. */
   timeSeconds: number;
+  /**
+   * While the piece PLAYS: the film's clock and what it shows at a moment of it — the badge's time, the
+   * picture's framing and the collage at that moment. The stage follows the clock itself, so the editor does not
+   * re-render per frame (`performance.md` rule 1); absent, `timeSeconds`, `framing` and `collage` are drawn.
+   */
+  live?: StageLive | null;
   /** Darkening over the picture, under the badge. */
   shades?: readonly Shade[];
   /** The badge block's extent, for a shade that follows the hook. */
@@ -318,6 +326,15 @@ const CAPTION_TONES = {
  * stays the export's own, so neither the thumbnail taken from it nor any
  * future consumer can grow a dashed rectangle.
  */
+/** What a playing piece's stage reads off the film's clock (`BadgeStageProps.live`). */
+export interface StageLive {
+  clock: PlayClock;
+  at: (local: number) => { timeSeconds: number; framing: Framing | null; collage: SlideCollage | null };
+}
+
+/** The clock a stage reads when it is given none — never moved. */
+const IDLE_CLOCK = new PlayClock();
+
 export default function BadgeStage({
   file,
   taskScope = null,
@@ -326,7 +343,8 @@ export default function BadgeStage({
   aspect,
   elements,
   theme,
-  timeSeconds,
+  timeSeconds: givenTime,
+  live = null,
   shades,
   block,
   hook = null,
@@ -336,7 +354,7 @@ export default function BadgeStage({
   lut = null,
   film = null,
   edit = null,
-  framing = null,
+  framing: givenFraming = null,
   onFraming,
   selectedId = null,
   onSelect,
@@ -351,7 +369,7 @@ export default function BadgeStage({
   onOpenChapter,
   shadeHandle = null,
   onMoveShadeCentre,
-  collage = null,
+  collage: givenCollage = null,
   collageFiles,
   collageLuts,
   collageSeconds = null,
@@ -368,6 +386,12 @@ export default function BadgeStage({
   onFit,
   caption = null,
 }: BadgeStageProps) {
+  // The film's moment, read off its clock while it plays: this stage re-renders per frame, the editor does not.
+  const liveT = useClockSelect(live?.clock ?? IDLE_CLOCK, (c) => (live ? c.t : -1));
+  const liveView = useMemo(() => (live ? live.at(liveT) : null), [live, liveT]);
+  const timeSeconds = liveView ? liveView.timeSeconds : givenTime;
+  const framing = liveView ? liveView.framing : givenFraming;
+  const collage = liveView ? liveView.collage : givenCollage;
   // Whether anything else is competing for this screen's height — see the
   // wrapper's comment below.
   const compactShell = useIsCompact();

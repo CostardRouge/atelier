@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { PlayClock } from '../../shared/media/play-clock';
 import { locate, nextAtEnd, stripLayout, type LoopScope } from '../../shared/roadtrip/deck-strip';
 
 /** The open slide when it is a loaded clip: its own playhead is its clock. */
@@ -27,13 +28,33 @@ interface DeckTransportInputs {
    * never reports an end; a still loops on this hook's own clock.
    */
   scope: LoopScope;
+  /**
+   * Playback of the piece stopped at `local` seconds into the open slide — the
+   * clock's moment, written back into the caller's state AT ONCE (a clip's
+   * playhead), so the snapshot the editor renders at rest is the moment the
+   * film stopped on, in the same render as the stop.
+   */
+  onStop?: (local: number) => void;
 }
 
 export interface DeckTransport {
-  /** Where the piece is, in seconds from the hook's first frame. */
+  /**
+   * Where the piece is, in seconds from the hook's first frame — the SNAPSHOT
+   * at rest: while the piece plays it holds the moment the slide opened or
+   * the play started, and the moving time is `clock` (`performance.md` rule 1).
+   */
   time: number;
-  /** How far into the open slide. */
+  /** How far into the open slide — the snapshot at rest, like `time`. */
   local: number;
+  /** Where the open slide starts in the piece, in seconds. */
+  start: number;
+  /**
+   * The open slide's LIVE moment, in seconds into it, outside React state:
+   * the still's frame loop and the clip's reported playhead write it on every
+   * frame, a seek or a stop writes it too, and at rest it equals `local`.
+   * Only what draws the moving film reads it (the stage, the band, the sound).
+   */
+  clock: PlayClock;
   /** The whole piece's length. */
   seconds: number;
   playing: boolean;
@@ -81,6 +102,7 @@ export function useDeckTransport({
   clip,
   pending,
   scope,
+  onStop,
 }: DeckTransportInputs): DeckTransport {
   const count = lengths.length;
   const open = Math.max(0, Math.min(index, count - 1));
@@ -89,8 +111,14 @@ export function useDeckTransport({
   const layout = useMemo(() => stripLayout(lengths, 1, 0, 0), [lengths]);
   const start = layout.cells[open]?.start ?? 0;
 
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlayingState] = useState(false);
   const [still, setStill] = useState<{ key: string; local: number }>({ key: '', local: 0 });
+  // The live moment (`DeckTransport.clock`): never clamped by a total, the slide's length is the loop's business.
+  const [clock] = useState(() => {
+    const c = new PlayClock();
+    c.setTotal(Number.MAX_SAFE_INTEGER);
+    return c;
+  });
   const pendingJump = useRef<{ key: string; local: number } | null>(null);
 
   const stillLocal = still.key === key ? still.local : 0;
@@ -99,8 +127,30 @@ export function useDeckTransport({
     : clamp(stillLocal, 0, length);
 
   // Read by callbacks that must not be rebuilt every frame.
-  const live = useRef({ open, key, keys, count, length, local, clip, select, pending, playing, scope });
-  live.current = { open, key, keys, count, length, local, clip, select, pending, playing, scope };
+  const live = useRef({ open, key, keys, count, length, local, clip, select, pending, playing, scope, onStop });
+  live.current = { open, key, keys, count, length, local, clip, select, pending, playing, scope, onStop };
+
+  // At rest the clock IS the snapshot: a scrub, a slide opened, a playhead set by the editor all land on it.
+  useLayoutEffect(() => {
+    if (!playing) clock.seek(local);
+  }, [clock, local, playing]);
+
+  /** Stop the piece where the clock stands, and hand that moment to the snapshots in the same render. */
+  const stop = useCallback(() => {
+    const l = live.current;
+    if (!l.playing) return;
+    const at = clamp(clock.t, 0, l.length);
+    setStill({ key: l.key, local: at });
+    l.onStop?.(at);
+    setPlayingState(false);
+  }, [clock]);
+  const setPlaying = useCallback(
+    (on: boolean) => {
+      if (on) setPlayingState(true);
+      else stop();
+    },
+    [stop],
+  );
 
   const goTo = useCallback((target: number, at = 0) => {
     const l = live.current;
@@ -108,9 +158,10 @@ export function useDeckTransport({
     const k = l.keys[i] ?? '';
     pendingJump.current = { key: k, local: at };
     setStill({ key: k, local: at });
+    clock.seek(at);
     if (i !== l.open) l.select(i);
     else if (l.clip) l.clip.seek(l.clip.start + at * l.clip.speed);
-  }, []);
+  }, [clock]);
 
   const advance = useCallback(() => {
     const l = live.current;
@@ -121,22 +172,22 @@ export function useDeckTransport({
     const l = live.current;
     if (!l.count) return;
     if (l.playing) {
-      setPlaying(false);
+      stop();
       return;
     }
     // Pressing play on the end of a slide goes where the loop would: the next
     // slide (the first after the last), or this one from its start.
     if (l.local >= l.length - END_TOLERANCE) goTo(nextAtEnd(l.open, l.count, l.scope), 0);
-    setPlaying(true);
-  }, [goTo]);
+    setPlayingState(true);
+  }, [goTo, stop]);
 
   const scrub = useCallback(
     (t: number) => {
-      setPlaying(false);
+      stop();
       const at = locate(layout, t);
       goTo(at.index, at.local);
     },
-    [layout, goTo],
+    [layout, goTo, stop],
   );
 
   const onClipEnded = useCallback(() => {
@@ -157,35 +208,40 @@ export function useDeckTransport({
     let raf = 0;
     let last = performance.now();
     let waited = 0;
+    // The still's moment moves on the CLOCK, never in React state: the editor renders when a slide opens or the
+    // piece stops, and only what draws the film follows each frame (`performance.md` rule 1).
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const l = live.current;
+      const at = clock.t;
       if (l.pending && waited < PENDING_GRACE_SECONDS) {
         waited += dt;
-      } else if (l.local + dt >= l.length) {
+      } else if (at + dt >= l.length) {
         const next = nextAtEnd(l.open, l.count, l.scope);
         if (next !== l.open) {
-          setStill({ key: l.key, local: l.length });
+          clock.seek(l.length);
           advance();
           return;
         }
         // The same slide again: nothing this effect depends on changes, so
         // it would never run again — the clock starts the slide over itself
         // and keeps counting.
-        setStill({ key: l.key, local: 0 });
+        clock.seek(0);
       } else {
-        setStill({ key: l.key, local: l.local + dt });
+        clock.seek(at + dt);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, isClip, key, advance]);
+  }, [playing, isClip, key, advance, clock]);
 
   return {
     time: start + local,
     local,
+    start,
+    clock,
     seconds: layout.seconds,
     playing,
     setPlaying,

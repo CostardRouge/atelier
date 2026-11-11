@@ -155,6 +155,7 @@ import type { CardThumbSource } from './panels/MotionCards';
 import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
+import ClockValue from '../../shared/media/ClockValue';
 import { usePostExports } from './use-post-exports';
 import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
@@ -1151,8 +1152,20 @@ export default function PostEditor({
       : null,
     pending: Boolean(slideFile) && !sourceReady,
     scope: loopScope,
+    // The piece stopped: a clip's playhead is set where the film stood, in the same render as the stop.
+    onStop: (local) => {
+      if (isClipSlide) setPlayhead(clipRange.start + local * slide.speed);
+    },
   });
   const goToSlide = deck.goTo;
+  // A clip's reported playhead moves the CLOCK, never this editor's state (`performance.md` rule 1).
+  const clipLive = useRef({ start: clipRange.start, speed: slide.speed });
+  clipLive.current = { start: clipRange.start, speed: slide.speed };
+  const clipTime = useCallback(
+    (sourceSeconds: number) => deck.clock.seek(Math.max(0, (sourceSeconds - clipLive.current.start) / clipLive.current.speed)),
+    [deck.clock],
+  );
+  const clipPlayingRef = useRef(false);
 
   // The Develop sheet's DECK (`DevelopSheet`'s `deck`): with A/B off, a swipe
   // or ←/→ on its picture writes this picture's numbers and opens the slide
@@ -1202,7 +1215,13 @@ export default function PostEditor({
     setTrimming(false);
   }, [slideKey]);
   const stagePlaying = trimOpen ? clipPlaying : deck.playing;
-  const togglePlay = trimOpen ? () => setClipPlaying((p) => !p) : deck.toggle;
+  clipPlayingRef.current = clipPlaying;
+  /** The cut's own loop stops: its playhead is set where the clip stood, read off the clock. */
+  const stopClip = useCallback(() => {
+    if (clipPlayingRef.current) setPlayhead(clipLive.current.start + deck.clock.t * clipLive.current.speed);
+    setClipPlaying(false);
+  }, [deck.clock]);
+  const togglePlay = trimOpen ? () => (clipPlaying ? stopClip() : setClipPlaying(true)) : deck.toggle;
 
   /**
    * Which CARD of the selected picture's move the stage shows and a gesture
@@ -1308,39 +1327,60 @@ export default function PostEditor({
     wasPlaying.current = stagePlaying;
   }, [stagePlaying, deck.local, followNeedle]);
   /** A picture's framing as the stage shows it: the move at the needle while playing, else the card in hand. */
-  const shownFraming = useCallback(
-    (framing: Framing, motion: FramingMotion | null, own: boolean): Framing => {
+  const shownFramingAt = useCallback(
+    (framing: Framing, motion: FramingMotion | null, own: boolean, local: number): Framing => {
       if (!hasMotion(motion)) return framing;
-      const u = motionProgress(motion, deck.local, slideSeconds, openerSeconds);
+      const u = motionProgress(motion, local, slideSeconds, openerSeconds);
       if (stagePlaying) return framingAtProgress(framing, motion, u);
       // Another cell of the collage rests on its composition while this one is worked.
       if (!own) return framing;
       if (cardIndex === null) return framingAtProgress(framing, motion, u);
       return readCards(framing, motion, spanOf(motion)).cards[cardIndex] ?? framing;
     },
-    [deck.local, slideSeconds, openerSeconds, stagePlaying, cardIndex, spanOf],
+    [slideSeconds, openerSeconds, stagePlaying, cardIndex, spanOf],
   );
-  const stageFraming = useMemo(
-    () => shownFraming(slide.framing, slide.motion, cellIndex === 0),
-    [shownFraming, slide.framing, slide.motion, cellIndex],
-  );
-  const stageCollage = useMemo(
-    () =>
+  /** The collage as the stage shows it at `local`: each moving cell framed there. */
+  const collageAt = useCallback(
+    (local: number) =>
       collage && collage.cells.some((c) => hasMotion(c.motion))
         ? {
             ...collage,
             cells: collage.cells.map((c, i) =>
-              hasMotion(c.motion) ? { ...c, framing: shownFraming(c.framing, c.motion, cellIndex === i + 1) } : c,
+              hasMotion(c.motion) ? { ...c, framing: shownFramingAt(c.framing, c.motion, cellIndex === i + 1, local) } : c,
             ),
           }
         : collage,
-    [collage, shownFraming, cellIndex],
+    [collage, shownFramingAt, cellIndex],
+  );
+  const stageFraming = useMemo(
+    () => shownFramingAt(slide.framing, slide.motion, cellIndex === 0, deck.local),
+    [shownFramingAt, slide.framing, slide.motion, cellIndex, deck.local],
+  );
+  const stageCollage = useMemo(() => collageAt(deck.local), [collageAt, deck.local]);
+  /**
+   * While the stage plays, the film's moment is the CLOCK's and the stage reads it itself: the badge's time
+   * (`badgeTime` while playing is how far into the slide — or into the delivered stretch — the needle is) and
+   * every moving picture framed there. The editor renders when a slide opens or the piece stops, not per frame.
+   */
+  const stageLive = useMemo(
+    () =>
+      stagePlaying
+        ? {
+            clock: deck.clock,
+            at: (local: number) => ({
+              timeSeconds: local,
+              framing: shownFramingAt(slide.framing, slide.motion, cellIndex === 0, local),
+              collage: collageAt(local),
+            }),
+          }
+        : null,
+    [stagePlaying, deck.clock, shownFramingAt, slide.framing, slide.motion, cellIndex, collageAt],
   );
   /** A gesture on a moving slide stops it: the card it writes is the one the needle is on. */
   const holdTheNeedle = useCallback(() => {
     if (deck.playing) deck.setPlaying(false);
-    setClipPlaying(false);
-  }, [deck]);
+    stopClip();
+  }, [deck, stopClip]);
   /** Say on the picture, for a moment, why a gesture did nothing. */
   const [refusedUntil, setRefusedUntil] = useState(0);
   const refuse = useCallback(() => setRefusedUntil(Date.now() + 1800), []);
@@ -1371,7 +1411,7 @@ export default function PostEditor({
       if (i !== cellIndex) index = count - 1;
       else if (stagePlaying) {
         holdTheNeedle();
-        index = cardAtNeedle(arrivalsOf(framing, motion), deck.local, KEY_SNAP_SECONDS);
+        index = cardAtNeedle(arrivalsOf(framing, motion), deck.clock.t, KEY_SNAP_SECONDS);
         setCardPick(pickOf(index, count));
       } else index = cardIndex;
       if (index === null) {
@@ -1381,7 +1421,7 @@ export default function PostEditor({
       const placed = writeCard(framing, motion, index, next);
       patchCell(i, { framing: placed.framing, motion: placed.motion });
     },
-    [collage, lead, patchCell, cellIndex, stagePlaying, holdTheNeedle, arrivalsOf, deck.local, cardIndex, spanOf, refuse],
+    [collage, lead, patchCell, cellIndex, stagePlaying, holdTheNeedle, arrivalsOf, deck.clock, cardIndex, spanOf, refuse],
   );
   /** Mirror cell `i` — its rest AND every frame of its move, whatever the needle says. */
   const flipPicture = useCallback(
@@ -1566,14 +1606,16 @@ export default function PostEditor({
   // The OPEN slide's opener, wherever it sits: any slide may hold one.
   const hookScore = useMemo(() => openHook?.score() ?? [], [openHook]);
   const [soundOn, setSoundOn] = useState(false);
-  useHookSound(hookScore, openHook !== null && stagePlaying, badgeTime, soundOn);
+  useHookSound(hookScore, openHook !== null && stagePlaying, badgeTime, soundOn, deck.clock);
 
   // Space plays — the piece, or the cut while it is open — and `I` / `O` cut
   // the open clip at the playhead (Shift: back to the clip's own ends), the
   // Studio's reflexes. On `window`, like every transport in the suite, and
   // read through a ref so the listener is bound once.
-  const keys = useRef({ togglePlay, isClipSlide, clipRange, playhead, duration, setClipRange });
-  keys.current = { togglePlay, isClipSlide, clipRange, playhead, duration, setClipRange };
+  // The playhead a cut is made at: the clock's while the clip plays, the snapshot at rest.
+  const playheadNow = () => (stagePlaying ? clipRange.start + deck.clock.t * slide.speed : playhead);
+  const keys = useRef({ togglePlay, isClipSlide, clipRange, playheadNow, duration, setClipRange });
+  keys.current = { togglePlay, isClipSlide, clipRange, playheadNow, duration, setClipRange };
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1592,10 +1634,10 @@ export default function PostEditor({
       const key = e.key.toLowerCase();
       if (key === 'i') {
         e.preventDefault();
-        k.setClipRange(setStart(k.clipRange, e.shiftKey ? 0 : k.playhead, k.duration, MIN_CUT));
+        k.setClipRange(setStart(k.clipRange, e.shiftKey ? 0 : k.playheadNow(), k.duration, MIN_CUT));
       } else if (key === 'o') {
         e.preventDefault();
-        k.setClipRange(setEnd(k.clipRange, e.shiftKey ? k.duration : k.playhead, k.duration, MIN_CUT));
+        k.setClipRange(setEnd(k.clipRange, e.shiftKey ? k.duration : k.playheadNow(), k.duration, MIN_CUT));
       }
     }
     window.addEventListener('keydown', onKey);
@@ -2334,12 +2376,16 @@ export default function PostEditor({
     [cellFile, frameBox, cellIndex, slide.videoTimeSeconds],
   );
 
+  // The band's needle and the cut's playhead follow the CLOCK while the stage plays: this leaf re-renders, the
+  // editor does not (`performance.md` rule 1). At rest they read the snapshot.
   const deckStrip = (
+    <ClockValue clock={deck.clock} select={(c) => (stagePlaying ? c.t : null)}>
+      {(liveLocal) => (
     <DeckStrip
       slides={slides}
       lengths={lengths}
       index={slideIndex}
-      time={deck.time}
+      time={liveLocal === null ? deck.time : deck.start + liveLocal}
       playing={stagePlaying}
       aspect={aspect}
       thumbFor={railThumb}
@@ -2368,12 +2414,12 @@ export default function PostEditor({
           ? {
               duration,
               range: clipRange,
-              playhead,
+              playhead: liveLocal === null ? playhead : clipRange.start + liveLocal * slide.speed,
               speed: slide.speed,
               onSpeed: setClipSpeed,
               onRangeChange: setClipRange,
               onSeek: seekPlayhead,
-              onScrubStart: () => setClipPlaying(false),
+              onScrubStart: stopClip,
             }
           : null
       }
@@ -2382,7 +2428,7 @@ export default function PostEditor({
       trimming={trimOpen}
       onTrimming={(on) => {
         deck.setPlaying(false);
-        setClipPlaying(false);
+        stopClip();
         setTrimming(on);
       }}
       sound={
@@ -2426,6 +2472,8 @@ export default function PostEditor({
       // What the slide's end cuts off its opener, hatched at the cell's end.
       overflowFor={(i) => slides[i]?.timing.cut ?? 0}
     />
+      )}
+    </ClockValue>
   );
 
   // The piece's ONE primary action, in the header where the maintainer looked
@@ -2664,8 +2712,8 @@ export default function PostEditor({
                     // otherwise the piece moves on when it ends.
                     loop: trimOpen || loopsOpenSlide(loopScope, slides.length),
                     key: slideKey,
-                    onTime: setPlayhead,
-                    onEnded: trimOpen ? () => setClipPlaying(false) : deck.onClipEnded,
+                    onTime: clipTime,
+                    onEnded: trimOpen ? stopClip : deck.onClipEnded,
                   }
                 : null
             }
@@ -2673,6 +2721,7 @@ export default function PostEditor({
             elements={openRender ? openRender.elements : elements}
             theme={isCta ? null : trip.theme}
             timeSeconds={badgeTime}
+            live={stageLive}
             shades={carriesBadge ? (slide.shades.length ? slide.shades : undefined) : openRender?.shades}
             block={carriesBadge ? block : (openRender?.block ?? null)}
             hook={openHook}
@@ -2852,7 +2901,7 @@ export default function PostEditor({
               duration={duration}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
-              framing={shownFraming(cellFraming, cellMotion, true)}
+              framing={shownFramingAt(cellFraming, cellMotion, true, deck.local)}
               onFraming={(f) => placeFraming(cellIndex, f)}
               onFlip={(axis) => flipPicture(cellIndex, axis)}
               panZoom={

@@ -220,6 +220,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   free their memory after a short rest, a converted clip leaves with its file, Flight Atlas no longer keeps every
   log in memory, Storytelling keeps only its last map backgrounds, and a Trips collage frees the looks of cells it
   no longer shows.
+- Trips plays a piece far lighter: the piece editor no longer redraws all its panels on every frame, only the stage
+  and the band follow the film — on a phone or a tablet it stays smooth, the Look tab included.
 - Recap plays its film far lighter: the editor no longer redraws all its panels on every frame, only the stage and
   the playhead follow the film — on a phone or a tablet the player stays smooth and the panels answer while it plays.
 - Recap no longer slows to a crawl once the Trip card is chosen: its settings were rebuilt and its six face previews
