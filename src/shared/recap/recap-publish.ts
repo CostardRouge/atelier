@@ -330,3 +330,34 @@ export function defaultKind(doc: Pick<RecapDoc, 'template'>, slides: number): Pu
   if (slides > 1 && (doc.template === 'dump' || doc.template === 'sheets' || doc.template === 'wrapped')) return 'carousel';
   return 'reel';
 }
+
+/** One thing said above the verb before a recap is sent (lab 18): what is fine, and what is worth a look. */
+export interface PublishCheck {
+  level: 'ok' | 'look';
+  /** Two or three words, for the folded line. */
+  short: string;
+  text: string;
+}
+
+/**
+ * What the foot says BEFORE sending: the file every network will take, then
+ * what is worth a look — never a refusal (what cannot be sent is the verb's
+ * own `blocked`).
+ */
+export function publishChecks(input: {
+  kind: PublishKind;
+  /** The file's facts, as published: `1080 × 1920`, the capped bitrate in Mb/s, what was lowered. */
+  file: { size: string; mbps: number; lowered: string | null; slides: number };
+  /** The networks ticked: its label, whether it hears something (a library track or the recap's own sound). */
+  going: readonly { label: string; sounds: boolean }[];
+  /** How many networks' shortened words he has not read. */
+  unread: number;
+}): PublishCheck[] {
+  const out: PublishCheck[] = [];
+  if (input.kind === 'carousel') out.push({ level: 'ok', short: 'safe files', text: `Safe files · ${input.file.slides} slides, pictures as JPEG, ${input.file.size}` });
+  else out.push({ level: 'ok', short: 'safe file', text: `Safe file · ${input.file.size} · 30 fps · ${input.file.mbps} Mb/s · AAC 128 kb/s${input.file.lowered ? ` (${input.file.lowered} for publishing)` : ''}` });
+  if (input.unread > 0) out.push({ level: 'look', short: 'words to read', text: `Words · ${input.unread} network${input.unread === 1 ? '' : 's'} with shortened words you have not read` });
+  const silent = input.kind === 'carousel' ? [] : [...new Set(input.going.filter((g) => !g.sounds).map((g) => g.label))];
+  if (silent.length) out.push({ level: 'look', short: silent.length === input.going.length ? 'no sound' : `no sound on ${silent.length}`, text: `No sound on ${silent.join(', ')}: the recap has none of its own` });
+  return out;
+}

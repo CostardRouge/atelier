@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PostizPost } from '../sources/postiz/client';
 import { createRecapDoc, withRecap } from './recap-doc';
-import { plannedPeek, plannedWeeks, sameDayClash } from './recap-planned';
+import { plannedPeek, plannedTiles, plannedWeeks, sameDayClash, tileState } from './recap-planned';
 
 const post = (id: string, at: string, state: PostizPost['state'] = 'queue', content = 'A caption\nmore'): PostizPost => ({ id, group: null, content, publishDate: at, state, releaseURL: null, error: state === 'error' ? 'media' : null, channel: null });
 
@@ -51,5 +51,39 @@ describe('the week strip', () => {
     expect(days[1].free).toEqual([]);
     expect(days[4].free).toEqual([]);
     expect(days[6].free.map((d) => d.toISOString())).toEqual(['2026-11-15T09:00:00.000Z']);
+  });
+});
+
+describe('one send on several networks', () => {
+  const ch = (id: string, identifier: string) => ({ id, name: id, identifier, picture: null });
+  const pub = (postId: string, network: string) => ({ postId, channelId: network, channel: network, kind: 'reel' as const, trial: false, at: '2026-11-13T18:00:00.000Z', sentAt: 1, caption: '', network, group: 'g1' });
+  const doc = withRecap(createRecapDoc('week', 'local', { anchor: '2026-10-05', now: 1 }), {
+    title: 'Tasmania',
+    publish: { caption: null, captions: {}, titles: {}, music: { source: 'own', tracks: {}, musicVolume: 100, filmVolume: 0 }, approved: true, publications: [pub('a', 'instagram'), pub('b', 'tiktok'), pub('c', 'bluesky')] },
+  });
+  const posts: PostizPost[] = [
+    { ...post('a', '2026-11-13T18:00:00Z', 'published'), channel: ch('ig', 'instagram') },
+    { ...post('b', '2026-11-13T20:00:00Z', 'error'), channel: ch('tt', 'tiktok') },
+    { ...post('c', '2026-11-13T20:00:00Z'), channel: ch('bs', 'bluesky') },
+    { ...post('x', '2026-11-13T09:00:00Z'), group: 'pz', channel: ch('ig', 'instagram') },
+    { ...post('y', '2026-11-13T09:00:00Z'), group: 'pz', channel: ch('th', 'threads') },
+    { ...post('z', '2026-11-14T09:00:00Z'), group: 'alone', channel: ch('ig', 'instagram') },
+  ];
+  const items = plannedWeeks(posts, [doc], 'Europe/Paris')[0].items;
+
+  it('draws it as one tile, failed as soon as one network failed', () => {
+    const tiles = plannedTiles(items);
+    expect(tiles.map((t) => t.items.map((i) => i.postId))).toEqual([['x', 'y'], ['a', 'b', 'c'], ['z']]);
+    expect(tiles[1].at.toISOString()).toBe('2026-11-13T18:00:00.000Z');
+    expect(tiles.map(tileState)).toEqual(['queue', 'error', 'queue']);
+    expect(tiles[1].items.map((i) => i.network)).toEqual(['instagram', 'tiktok', 'bluesky']);
+  });
+
+  it('counts it once in the week, and never as a clash with itself', () => {
+    const weeks = plannedWeeks(posts, [doc], 'Europe/Paris');
+    expect(plannedPeek(weeks, 'Europe/Paris', new Date('2026-11-12T10:00:00Z'), () => 'then')).toBe('3 this week · next then · 1 failed');
+    // Two SENDS the same day (the 9:00 pair and the 19:00 recap) are a clash; a send's own networks are not.
+    expect(sameDayClash(weeks[0], 'Europe/Paris')).toBe(true);
+    expect(sameDayClash({ monday: weeks[0].monday, items: items.filter((i) => ['a', 'c'].includes(i.postId)) }, 'Europe/Paris')).toBe(false);
   });
 });

@@ -64,7 +64,7 @@ import { useTripOpener } from './use-trip-opener';
 import SoundSection from './SoundSection';
 import RecapExportPanel from './RecapExportPanel';
 import RecapShortcuts from './RecapShortcuts';
-import { OPEN_TAB_KEY } from './PlannedSection';
+import { sendAgainAsked } from './publish-where';
 
 export type SaveState = 'saved' | 'saving' | 'failed';
 const SAVE_WORDS: Record<SaveState, string> = { saved: 'Saved', saving: 'Saving…', failed: 'Not saved' };
@@ -130,19 +130,8 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const [selection, setSelection] = useState<Selection>(null);
   /** What a double-click on the stage is framing — the background or a cell's picture. */
   const [framing, setFraming] = useState<Selection>(null);
-  // *Send again* in the gallery's Planned opens this recap on Export › Publish (`OPEN_TAB_KEY`).
-  const [tab, setTab] = useState<Tab>(() => {
-    try {
-      const asked = sessionStorage.getItem(OPEN_TAB_KEY);
-      if (asked === `${doc.id}:export`) {
-        sessionStorage.removeItem(OPEN_TAB_KEY);
-        return 'export';
-      }
-    } catch {
-      // Storage refused: the usual first tab.
-    }
-    return 'pictures';
-  });
+  // *Send again* in the gallery's Planned opens this recap on Export › Publish (`publish-where.ts`).
+  const [tab, setTab] = useState<Tab>(() => (sendAgainAsked(doc.id) ? 'export' : 'pictures'));
   // The Export panel is mounted the first time its tab opens, then kept: a run it started stays in the foot.
   const exportSeen = useRef(false);
   if (tab === 'export') exportSeen.current = true;

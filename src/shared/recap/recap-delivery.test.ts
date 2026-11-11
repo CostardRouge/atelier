@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { publishDelivery, publishLowered } from './recap-delivery';
 import { beatsPrint, deliveryBitrate, deliverySize, needsOriginal, readDelivery, sizeText } from './recap-delivery';
 
 describe('how a recap’s video is delivered', () => {
@@ -22,6 +23,18 @@ describe('how a recap’s video is delivered', () => {
     expect(needsOriginal(2048, 1365, { x: 0, y: 0, w: 140, h: 140 })).toBe(false);
     // The same cell zoomed ×4 on a small print: yes.
     expect(needsOriginal(400, 300, { x: 0, y: 0, w: 140, h: 140 }, { x: 0.5, y: 0.5, zoom: 4 })).toBe(true);
+  });
+});
+
+describe('a film that is published', () => {
+  it('is capped at what every network takes, and says what was lowered', () => {
+    const max = readDelivery({ quality: 'max', fps: 60, passes: 2, media: 'original' });
+    expect(publishDelivery(max)).toEqual({ ...max, quality: 'high', fps: 30 });
+    expect(deliveryBitrate(publishDelivery(max), 1080, 1920)).toBe(16e6);
+    expect(publishLowered(max)).toBe('Maximum → High, 60 → 30 fps');
+    const std = readDelivery({ quality: 'standard' });
+    expect(publishDelivery(std)).toEqual(std);
+    expect(publishLowered(std)).toBeNull();
   });
 });
 

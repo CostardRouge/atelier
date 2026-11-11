@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
-import { defaultKind, musicFor, networkCaption, networkTitle, publicationGroups, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
+import { FORMATS, withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
+import { deliveryBitrate, publishDelivery, publishLowered } from '../../shared/recap/recap-delivery';
+import { defaultKind, musicFor, networkCaption, networkTitle, publicationGroups, publishChecks, withPublications, type PublishCheck, type PublishKind } from '../../shared/recap/recap-publish';
 import { placeWords } from '../../shared/recap/recap-places';
 import type { ResolvedRecap } from '../../shared/recap/recap-slots';
 import { PostizClient, type PostizChannel, type PostizPost } from '../../shared/sources/postiz/client';
@@ -42,6 +43,8 @@ export interface PublishVerbs {
   send: (as?: 'now' | 'draft') => void;
   /** What the chosen slot is, in a few words. */
   when: string;
+  /** What is said above the verb before it is pressed: the file, and what is worth a look. */
+  checks: PublishCheck[];
 }
 
 interface Offer {
@@ -77,6 +80,7 @@ export function usePublish({
   seconds,
   cuts,
   onWithFilm,
+  again,
   canEncode,
   busy,
   run,
@@ -94,6 +98,8 @@ export function usePublish({
   cuts: readonly number[];
   /** Plays the film on the stage with a library track over it (null: its own sound back). */
   onWithFilm: (over: { url: string; music: number; film: number } | null) => void;
+  /** The accounts the gallery's *Send again* asked for (those that failed), or null. */
+  again: readonly string[] | null;
   canEncode: boolean;
   busy: boolean;
   run: (label: string, job: (signal: AbortSignal, task: Task) => Promise<string>) => Promise<void>;
@@ -102,7 +108,8 @@ export function usePublish({
   const conn = usePostiz();
   const channels = useMemo(() => publishChannels(conn), [conn]);
   const [kind, setKind] = useState<PublishKind>(() => defaultKind(doc, slides));
-  const [ticked, setTicked] = useState<string[]>(() => defaultDestinations(conn, readWhere(doc.template)));
+  // *Send again* in the gallery asks for the networks that failed; else the last ones this template went to.
+  const [ticked, setTicked] = useState<string[]>(() => defaultDestinations(conn, again ?? readWhere(doc.template)));
   const [trial, setTrial] = useState(false);
   const [graduate, setGraduate] = useState<'auto' | 'manual'>('auto');
   const [collab, setCollab] = useState(true);
@@ -165,10 +172,11 @@ export function usePublish({
       </p>
     </InspectorSection>
   );
-  const idle: PublishVerbs = { ready: false, summary: '', label: '', blocked: null, send: () => {}, when: '' };
+  const idle: PublishVerbs = { ready: false, summary: '', label: '', blocked: null, send: () => {}, when: '', checks: [] };
   if (!conn) return { sections: linkTo('Schedule this recap on your networks from here: connect your own Postiz on'), verbs: idle };
   if (!channels.length) return { sections: linkTo('Your Postiz has no account Recap can post to yet. Add one there, then refresh it on'), verbs: idle };
 
+  const { width: W, height: H } = FORMATS[doc.format];
   const kindOk = (k: PublishKind) => (k === 'carousel' ? slides > 1 : canEncode);
   const tz = rhythm!.timeZone;
   const whenWords = chosen.kind === 'now' ? 'now' : chosen.kind === 'draft' ? 'a draft' : at ? slotLabel(at, tz) : 'a time to choose';
@@ -230,6 +238,14 @@ export function usePublish({
     blocked: busy ? null : blocked,
     send: (as) => void schedule(as),
     when: whenWords,
+    checks: going.length
+      ? publishChecks({
+          kind,
+          file: { size: `${W} × ${H}`, mbps: Math.round(deliveryBitrate(publishDelivery(doc.delivery), W, H) / 1e6), lowered: publishLowered(doc.delivery), slides },
+          going: going.map((o) => ({ label: networkOf(o.channel.identifier)!.label, sounds: Boolean(doc.sound) || Boolean(musicFor(doc.publish, o.channel.identifier, kind)) })),
+          unread: unread.length,
+        })
+      : [],
   };
 
   const withTrack = going.filter((o) => musicFor(doc.publish, o.channel.identifier, kind)).length;

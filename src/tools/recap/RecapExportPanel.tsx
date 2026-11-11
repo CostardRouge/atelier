@@ -14,9 +14,10 @@ import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
 import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles, type FilmProgress } from './recap-export';
 import { usePublish } from './PublishSection';
+import { sendAgainAsked } from './publish-where';
 import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import { createPortal } from 'react-dom';
-import type { PublishKind } from '../../shared/recap/recap-publish';
+import type { PublishCheck, PublishKind } from '../../shared/recap/recap-publish';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
 import { carouselSlides } from '../../shared/recap/recap-layout';
 import { QUALITIES, QUALITY_LABEL, deliveryBitrate, deliverySize, sizeText, type Quality, type RecapDelivery } from '../../shared/recap/recap-delivery';
@@ -196,6 +197,41 @@ function ProgressBar({ p, started, onCancel }: { p: FilmProgress; started: numbe
         {left !== null ? ` · ~${time(left)} left` : ''}
       </span>
     </div>
+  );
+}
+
+/**
+ * What Publish says above its verb (lab 18): the file every network takes
+ * when nothing else is worth saying, else what is worth a look in a few
+ * words, the lines behind it — a look, never a refusal.
+ */
+function PublishChecks({ checks }: { checks: readonly PublishCheck[] }) {
+  const look = checks.filter((c) => c.level === 'look');
+  const line = 'font-mono text-3xs leading-snug tabular-nums';
+  if (!look.length) {
+    const fine = checks[0];
+    return (
+      <span className={`${line} text-muted truncate`} title={fine.text}>
+        <span className="text-ok">✓</span> {fine.text}
+      </span>
+    );
+  }
+  return (
+    <details className="group">
+      <summary className={`${line} text-warn cursor-pointer list-none [&::-webkit-details-marker]:hidden truncate`}>
+        <span aria-hidden="true">!</span> {look.length} to look at · {look.map((c) => c.short).join(', ')}
+      </summary>
+      <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-0.5">
+        {checks.map((c) => (
+          <li key={c.text} className={`${line} ${c.level === 'look' ? 'text-warn' : 'text-muted'}`}>
+            <span className={c.level === 'look' ? '' : 'text-ok'} aria-hidden="true">
+              {c.level === 'look' ? '!' : '✓'}
+            </span>{' '}
+            {c.text}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -401,6 +437,8 @@ export default function RecapExportPanel({
 
   /** What a post sends: the film for a Reel or a story, the slides for a carousel. */
   const renderFor = (kind: PublishKind, signal: AbortSignal, task: ReturnType<typeof startTask>): Promise<File[]> => renderPostFiles(input(), kind, order, base, report(task), signal);
+  // The gallery's *Send again* opens this tab on Publish, the networks that failed ticked.
+  const [again] = useState(() => sendAgainAsked(doc.id));
   const publish = usePublish({
     doc,
     resolved,
@@ -410,6 +448,7 @@ export default function RecapExportPanel({
     seconds: film.total,
     cuts: film.pages.map((pg) => pg.start),
     onWithFilm: ctx.listen,
+    again: again?.length ? again : null,
     canEncode: canEncode !== false,
     busy: busy !== null,
     run,
@@ -428,6 +467,10 @@ export default function RecapExportPanel({
   const save: SaveKind = saveOk(savePreferred) ? savePreferred : saveOk('video') ? 'video' : 'stills';
   // His pick (lab 13, Q2): with a Postiz ready the foot opens on Publish, then keeps his last choice.
   const mode: FootMode = publish.verbs.ready ? (choice.mode ?? 'publish') : 'save';
+  // Asked to send again: Publish, whatever this recap's last choice was.
+  useEffect(() => {
+    if (again) setChoice((cur) => ({ ...cur, mode: 'publish' }));
+  }, [again]);
   const pages = layout.pages.length;
   const SAVE: Record<SaveKind, { label: string; hint: string; run: () => void }> = {
     video: { label: `Export video · ${film.total.toFixed(1)} s`, hint: `${W} × ${H} · ${doc.delivery.fps} fps · about ${sizeText(deliverySize(doc.delivery, W, H, film.total, Boolean(doc.sound)))}`, run: () => void exportVideo() },
@@ -455,6 +498,7 @@ export default function RecapExportPanel({
       onCancel={() => abort.current?.abort()}
       note={note}
       unitWord="file"
+      above={mode === 'publish' && pv.checks.length > 0 ? <PublishChecks checks={pv.checks} /> : undefined}
       lead={
         publish.verbs.ready ? (
           <Segmented<FootMode>

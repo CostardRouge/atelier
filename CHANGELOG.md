@@ -31,9 +31,17 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   mark when it suits your cuts), set the track's volume and the film's own under it, and *With the film* plays the
   recap on the stage with the track over it. The network itself picks which excerpt of a track plays. An agent
   searches and sets it too (`recap.music`, `recap.postMusic`).
+- Above *Schedule*, one line says what is about to leave: the file every network takes, or what is worth a look first
+  — words shortened for a network that you have not read, a network that would get no sound.
+- In the gallery's *Planned*, a recap sent to several networks is one tile, its networks stacked on it and the one
+  that failed ringed in red; its card lists each network's state with a link once it is out, says why one failed and
+  what to do, and *Send again* reopens the recap with only that network ticked.
 
 ### Changed
 
+- What Recap **publishes** is capped at what the networks take, whatever the Quality setting: 30 frames a second and
+  *High* at most (16 Mb/s at 1080 × 1920, AAC 128 kb/s). A *Maximum* or 60 fps film could be refused on its bitrate
+  once a network laid its music over it; saving a file to your device keeps your setting.
 - The Export tab shows what matches where the recap goes: the files' choice under *Save*, and *Where · When · Words*
   under *Publish*.
 

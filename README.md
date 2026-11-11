@@ -3760,7 +3760,13 @@ cuts » when the film's cuts fall on its beat), two sliders set the track's
 volume and the film's own under it, and *With the film* plays the recap on
 the stage with the track over it. Which excerpt of the track plays is the
 network's choice: its API takes a track, never a moment — a Trial Reel shows
-it. The recap keeps what it sent and shows its state in Postiz;
+it. What is **published** is capped at what every network takes, whatever
+*Quality* says — 30 frames a second, *High* at most (16 Mb/s at 1080 × 1920,
+AAC 128 kb/s): a heavier film could be refused on its bitrate once a network
+laid its music over it; a file saved to your device keeps your setting. Above
+the verb, one line says the file that will leave, or what is worth a look
+first (words shortened for a network and not read yet, a network that would
+get no sound). The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
 gallery's **Planned** section is one week as a strip of seven days — what went
 out, what will, what failed, and your rhythm's free slots — each post a small
@@ -3768,11 +3774,14 @@ picture of what it sent (kept on this device when it was sent; the recap's
 poster for an older one, your account's for a post made in Postiz) with its
 time, kind and state over it, a failed one ringed in red; the strip scrolls
 sideways on a phone, today first; ‹ › move a week, and *Open Postiz* opens your
-Postiz for the whole calendar. A post opens a small card: its time and state,
-a failure's reason and what to do about it, and its verbs — *Open recap*,
-*Take back* (deleted in Postiz before it goes out), *Send again* (the recap on
-Export › Publish), *View on Instagram*, *Open in Postiz*, *Delete*. Posts
-scheduled outside Recap show too, by their caption.
+Postiz for the whole calendar. A recap sent to several networks is ONE tile,
+its networks' marks stacked on it, the one that failed ringed, and it counts
+once in the week. A tile opens a small card: its time, each network's state
+(with a link once it is out), a failure's reason and what to do about it, and
+its verbs — *Open recap*, *Take back* (deleted in Postiz before it goes out),
+*Send again* (the recap on Export › Publish, only what failed ticked), *View
+on* the network, *Open in Postiz*, *Delete*. Posts scheduled outside Recap
+show too, by their caption.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and

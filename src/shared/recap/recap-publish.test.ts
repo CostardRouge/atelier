@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, readRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
+import { publishChecks } from './recap-publish';
 import { DEFAULT_MUSIC, musicFor, readMusic, withMusic } from './recap-publish';
 import { networkCaption, networkTitle, publicationGroups, withNetworkCaption, withNetworkTitle, withPublications } from './recap-publish';
 import { NETWORKS, captionLength } from '../sources/postiz/networks';
@@ -98,6 +99,16 @@ describe('a recap’s post', () => {
     expect(musicFor(pub, 'youtube', 'reel')).toBeNull();
     expect(musicFor(withMusic(pub, { source: 'own' }), 'instagram', 'reel')).toBeNull();
     expect(readMusic({ tracks: { instagram: { id: 'x', previewUrl: 'javascript:1', image: 'http://plain' } } }).tracks.instagram).toMatchObject({ previewUrl: null, image: null });
+  });
+
+  it('says before sending what the file is and what is worth a look', () => {
+    const file = { size: '1080 × 1920', mbps: 16, lowered: 'Maximum → High', slides: 6 };
+    const fine = publishChecks({ kind: 'reel', file, going: [{ label: 'Instagram', sounds: true }], unread: 0 });
+    expect(fine).toEqual([{ level: 'ok', short: 'safe file', text: 'Safe file · 1080 × 1920 · 30 fps · 16 Mb/s · AAC 128 kb/s (Maximum → High for publishing)' }]);
+    const look = publishChecks({ kind: 'reel', file, going: [{ label: 'Instagram', sounds: true }, { label: 'YouTube', sounds: false }, { label: 'Bluesky', sounds: false }], unread: 2 });
+    expect(look.filter((c) => c.level === 'look').map((c) => c.short)).toEqual(['words to read', 'no sound on 2']);
+    expect(look[2].text).toBe('No sound on YouTube, Bluesky: the recap has none of its own');
+    expect(publishChecks({ kind: 'carousel', file, going: [{ label: 'X', sounds: false }], unread: 0 })).toEqual([{ level: 'ok', short: 'safe files', text: 'Safe files · 6 slides, pictures as JPEG, 1080 × 1920' }]);
   });
 
   it('proposes a carousel for a dump, a Reel for a calendar', () => {
