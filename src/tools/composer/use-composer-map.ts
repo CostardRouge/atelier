@@ -6,6 +6,7 @@ import type {
   Map as MlMap,
 } from 'maplibre-gl';
 import { trackBounds, type TrackPoint } from '../../shared/telemetry/flight-path';
+import { markerAt, type CueStore } from '../../shared/telemetry/cue-store';
 import {
   addTrackLine,
   lineFeature,
@@ -50,7 +51,11 @@ export function useComposerMap(
   tilesOn: boolean,
   zoomOffset: number,
   follow: boolean,
-  position: [number, number] | null,
+  /**
+   * The cue under the playing frame (`cue-store.ts`): the marker and a following camera move on it outside
+   * React — a DJI SRT changes cue every frame, and the tool no longer re-renders per frame for it.
+   */
+  cues: CueStore,
 ): ComposerMap {
   const mapRef = useRef<MlMap | null>(null);
   const trackRef = useRef(track);
@@ -59,8 +64,10 @@ export function useComposerMap(
   offsetRef.current = zoomOffset;
   const followRef = useRef(follow);
   followRef.current = follow;
-  const posRef = useRef(position);
-  posRef.current = position;
+  const cuesRef = useRef(cues);
+  cuesRef.current = cues;
+  /** The marker's place now: the cue's fix, else the path's start. */
+  const positionNow = useCallback(() => markerAt(cuesRef.current.current, trackRef.current), []);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
 
@@ -81,9 +88,10 @@ export function useComposerMap(
       }
     }
     const zoom = Math.max(0, baseZoom + offsetRef.current);
-    const center: LngLatLike = followRef.current && posRef.current ? posRef.current : trackCenter;
+    const at = positionNow();
+    const center: LngLatLike = followRef.current && at ? at : trackCenter;
     map.jumpTo({ center, zoom });
-  }, []);
+  }, [positionNow]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -110,7 +118,7 @@ export function useComposerMap(
         map.on('load', () => {
           if (cancelled || !map) return;
           addTrackLine(map, track);
-          map.addSource('marker', { type: 'geojson', data: pointFeature(posRef.current) });
+          map.addSource('marker', { type: 'geojson', data: pointFeature(positionNow()) });
           map.addLayer({
             id: 'marker',
             type: 'circle',
@@ -154,13 +162,18 @@ export function useComposerMap(
     if (ready && map) applyCamera(map);
   }, [ready, zoomOffset, follow, applyCamera]);
 
-  // Move the marker each time the position changes; pan with it while following.
+  // Move the marker each time the cue changes; pan with it while following — on the store, not on a render.
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    (map.getSource('marker') as GeoJSONSource | undefined)?.setData(pointFeature(position));
-    if (followRef.current && position) map.setCenter(position);
-  }, [ready, position]);
+    const move = () => {
+      const position = positionNow();
+      (map.getSource('marker') as GeoJSONSource | undefined)?.setData(pointFeature(position));
+      if (followRef.current && position) map.setCenter(position);
+    };
+    move();
+    return cues.subscribe(move);
+  }, [ready, cues, track, positionNow]);
 
   // Opt-in OpenStreetMap tiles, beneath the track.
   useEffect(() => {

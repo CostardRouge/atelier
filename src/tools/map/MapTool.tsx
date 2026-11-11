@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { parseSrt, type Cue } from '../../shared/telemetry/srt-parser';
-import { useActiveCue } from '../../shared/telemetry/use-active-cue';
+import { useCueStore } from '../../shared/telemetry/use-active-cue';
+import { markerAt, type CueStore } from '../../shared/telemetry/cue-store';
 import { formatHeading, formatGroundSpeed, motionAt } from '../../shared/telemetry/motion';
-import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
+import { extractTrack, type TrackPoint } from '../../shared/telemetry/flight-path';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useFlightMap } from './use-flight-map';
 import { TILES_TOGGLE } from '../../shared/map/track-map';
@@ -69,27 +70,13 @@ export default function MapTool() {
   }, [active?.srt]);
 
   const track = useMemo(() => extractTrack(cues), [cues]);
-  const activeCue = useActiveCue(videoRef, cues, videoUrl);
+  // The cue under the playing frame, OUTSIDE React (`cue-store.ts`): the marker and the live readout follow
+  // it; the tool no longer re-renders on every frame of a clip (`performance.md` rule 1).
+  const cueStore = useCueStore(videoRef, cues, videoUrl);
 
-  // The marker position: the live cue's fix, or the path's start before/while
-  // there's no fix, so the marker is never orphaned.
-  const position = useMemo<[number, number] | null>(() => {
-    const live = activeCue ? parsePosition(activeCue) : null;
-    if (live) return live;
-    return track.length ? [track[0].lon, track[0].lat] : null;
-  }, [activeCue, track]);
-
-  const { ready, error } = useFlightMap(containerRef, track, tilesOn, position);
+  const { ready, error } = useFlightMap(containerRef, track, tilesOn, cueStore);
 
   const activeIndex = clips.findIndex((c) => c.id === activeId);
-  const liveCoord = position ? `${position[1].toFixed(6)}, ${position[0].toFixed(6)}` : null;
-  const liveAlt = activeCue?.data.rel_alt;
-  const liveMotion = [
-    formatGroundSpeed(motionAt(activeCue).groundSpeed),
-    formatHeading(motionAt(activeCue).heading),
-  ]
-    .filter(Boolean)
-    .join('  ·  ');
 
   return (
     <section className="flex flex-col flex-1 min-h-0 gap-[0.6rem]" aria-label="Flight map">
@@ -171,16 +158,8 @@ export default function MapTool() {
           </div>
         )}
 
-        {/* Live readout, bottom-left. */}
-        {liveCoord && track.length > 0 && (
-          <div className="absolute bottom-2.5 left-2.5 z-[2] font-mono text-2xs leading-[1.5] text-white bg-black/55 px-3 py-1.5 rounded-paper pointer-events-none">
-            <div className="tabular-nums">{liveCoord}</div>
-            <div className="text-white/85">
-              {liveAlt ? `${liveAlt} m` : '—'}
-              {liveMotion && <span className="text-white/70">{'  ·  '}{liveMotion}</span>}
-            </div>
-          </div>
-        )}
+        {/* Live readout, bottom-left: a leaf that follows the cue. */}
+        <LiveReadout cues={cueStore} track={track} />
 
         {/* Tile attribution / privacy note. */}
         {tilesOn ? (
@@ -212,5 +191,24 @@ export default function MapTool() {
           </p>
         ))}
     </section>
+  );
+}
+
+/** The live readout over the map: the one part of the tool that follows the clip frame by frame. */
+function LiveReadout({ cues, track }: { cues: CueStore; track: TrackPoint[] }) {
+  const cue = useSyncExternalStore(cues.subscribe, cues.getSnapshot);
+  const position = markerAt(cue, track);
+  if (!position || track.length === 0) return null;
+  const motion = motionAt(cue);
+  const liveMotion = [formatGroundSpeed(motion.groundSpeed), formatHeading(motion.heading)].filter(Boolean).join('  ·  ');
+  const liveAlt = cue?.data.rel_alt;
+  return (
+    <div className="absolute bottom-2.5 left-2.5 z-[2] font-mono text-2xs leading-[1.5] text-white bg-black/55 px-3 py-1.5 rounded-paper pointer-events-none">
+      <div className="tabular-nums">{`${position[1].toFixed(6)}, ${position[0].toFixed(6)}`}</div>
+      <div className="text-white/85">
+        {liveAlt ? `${liveAlt} m` : '—'}
+        {liveMotion && <span className="text-white/70">{'  ·  '}{liveMotion}</span>}
+      </div>
+    </div>
   );
 }
