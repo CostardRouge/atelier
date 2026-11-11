@@ -31,10 +31,9 @@ import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
-import { hookContextFor, slideHookTiming } from './hooks/hook-context';
+import { resolvedForTiming, slideHookTiming } from './hooks/hook-context';
 import { isCardSlide } from './piece-slides';
 import type { HookLayer, HookSpan, ResolvedHook } from './hooks/hook-variant';
-import { resolveHook } from './hooks/registry';
 import { resolveLength, type ResolvedLength, type SlideLength } from './slide-length';
 import type { Shade } from '../shades/shades';
 import type { SlideBadge } from './slide-capacities';
@@ -243,7 +242,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
     // the hook always did); another slide only when it holds one.
     const layers = piece ? (slide.hook ?? []) : slide.hook?.length ? slide.hook : null;
     const opener = layers
-      ? resolveHook(layers, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(post, slide)))
+      ? resolvedForTiming(trip, post, layers, slideHookTiming(post, slide))
       : null;
     const timing = opener ? timingOf(opener, slide.length, slide.seconds) : resolveLength(slide.length, slide.seconds, 0, 0);
     const openerSeconds = timing.span;

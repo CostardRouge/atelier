@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { deckSlides } from '../deck';
 import { createPostSlide, createTripDoc, createTripPost, type PostSlide, type TripDoc, type TripPost } from '../trip-types';
-import { hookCalendar, standingPiece } from './hook-calendar';
-import { hookContextFor, hookMoves, openerMoves, slideHookTiming } from './hook-context';
+import { hookCalendar, hookStages, standingPiece } from './hook-calendar';
+import { createHookCache, hookContextFor, hookMoves, openerMoves, resolvedForTiming, slideHookTiming } from './hook-context';
 import { hookElementsAt } from './hook-elements';
 import { resolveHook } from './registry';
 import { DEFAULT_BADGE_LAYOUT } from '../badge-layout';
@@ -271,5 +271,52 @@ describe('the trip’s look reaches the opener', () => {
     expect(ctx.theme?.presetId).toBe('or-cine');
     expect(ctx.tripName).toBe('Australia');
     expect(hookContextFor({ ...trip, theme: null }, hero, 1, null).theme).toBeNull();
+  });
+});
+
+describe('an opener resolved for its timing, kept while what it reads holds', () => {
+  it('answers the same resolution when ANOTHER slide changed, and a new one when its own inputs did', () => {
+    const { trip, hero } = fixture();
+    const second = { ...createPostSlide(null), hook: [{ id: 'scrub', options: {} }] };
+    const piece = scrubbing({ ...hero, slides: [hero.slides[0], second] });
+    const t = (post: TripPost) => slideHookTiming(post, post.slides[1]);
+    const first = resolvedForTiming(trip, piece, second.hook, t(piece));
+    // Slide 1 edited: a new piece and a new trip object, slide 2 untouched.
+    const edited = withLead(piece, { seconds: piece.slides[0].seconds + 1 });
+    const trip2 = { ...trip, posts: trip.posts.map((p) => (p.id === piece.id ? edited : p)) };
+    expect(resolvedForTiming(trip2, edited, second.hook, t(edited))).toBe(first);
+    // Its own options, its timing, the trip's legs: each is a new resolution.
+    expect(resolvedForTiming(trip2, edited, [{ id: 'scrub', options: { seconds: 2 } }], t(edited))).not.toBe(first);
+    expect(resolvedForTiming(trip2, edited, second.hook, { ...t(edited), screenSeconds: t(edited).screenSeconds + 3 })).not.toBe(first);
+    expect(resolvedForTiming({ ...trip2, stages: [...trip2.stages] }, edited, second.hook, t(edited))).not.toBe(first);
+    // And it is the resolution the deck would have made by hand.
+    const fresh = resolveHook(second.hook, hookContextFor(trip2, edited, 1, null, undefined, t(edited)));
+    expect(first.seconds).toBe(fresh.seconds);
+    expect(first.natural).toBe(fresh.natural);
+  });
+
+  it('reads the legs as one list per stored legs', () => {
+    const { trip } = fixture();
+    expect(hookStages(trip)).toBe(hookStages({ ...trip }));
+    expect(hookStages({ ...trip, stages: [...trip.stages] })).not.toBe(hookStages(trip));
+  });
+});
+
+describe('a surface’s own cache of resolved openers', () => {
+  it('never hands two surfaces the same resolution, and reads the badge’s words by what they say', () => {
+    const { trip, hero } = fixture();
+    const piece = scrubbing(hero);
+    const layers = piece.slides[0].hook!;
+    const timing = slideHookTiming(piece, piece.slides[0]);
+    const rail = createHookCache();
+    const other = createHookCache();
+    const content = { headline: 'Day 8', label: 'Coast', caption: '' } as never;
+    const a = rail.resolve(trip, piece, layers, timing, { aspect: 0.8, content });
+    // The same words in a new object: the same resolution, from the same cache.
+    expect(rail.resolve(trip, piece, layers, timing, { aspect: 0.8, content: { ...(content as object) } as never })).toBe(a);
+    // Another surface prepares its own: a render carries scratch a canvas paints with.
+    expect(other.resolve(trip, piece, layers, timing, { aspect: 0.8, content })).not.toBe(a);
+    // Another aspect is another drawing.
+    expect(rail.resolve(trip, piece, layers, timing, { aspect: 1, content })).not.toBe(a);
   });
 });

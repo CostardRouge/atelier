@@ -16,6 +16,7 @@ import { carriedKey } from '../../shared/develop/carried-edit';
 import { collageMediaRefs, collageSettleSeconds } from '../../shared/roadtrip/collage';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
+import { createHookCache } from '../../shared/roadtrip/hooks/hook-context';
 import { slideRender, slideSettleSeconds, textsSettleSeconds } from '../../shared/roadtrip/slide-render';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import type { ExifData } from '../../shared/exif/exif-parser';
@@ -143,6 +144,8 @@ export default function useRailThumbs({
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map());
   /** What has been drawn, and from what. A null url is a failed decode. */
   const drawn = useRef(new Map<string, { sig: string; url: string | null }>());
+  /** The rail's OWN resolved openers: an edit of one slide prepares that slide's opener, never the others' (`performance.md`). */
+  const hookCache = useRef(createHookCache());
   /** The one source kept alive between passes, and what it was loaded from. */
   const held = useRef<{ key: string; source: BadgeSource } | null>(null);
   /** False once unmounted, so a decode that lands after it is not held on to. */
@@ -156,7 +159,7 @@ export default function useRailThumbs({
     () =>
       slides.map((slide) => {
         const file = slide.kind === 'cta' ? null : resolve(slide.media);
-        const render = slideRender(trip, post, slide, aspect, pictures, exif);
+        const render = slideRender(trip, post, slide, aspect, pictures, exif, hookCache.current);
         // The cube of THIS slide: the grade it wears, baked with its own
         // develop. The bake is memoised per (grade, develop), so a deck of
         // untouched slides reads one cube and only a slide that departed —

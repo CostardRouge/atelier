@@ -102,7 +102,21 @@ export function standingPiece(day: HookDay): HookDayPiece | undefined {
 }
 
 /** The legs, with only the places a drawing can use — those with coordinates. */
+/**
+ * The legs as an opener reads them, ONE list per stored `stages` (2026-11-10, `performance.md`): a fresh list
+ * on every call meant nothing keyed on it could be cached by identity — every opener of a piece planned its
+ * road again on every edit of any slide.
+ */
+const stagesRead = new WeakMap<TripDoc['stages'], HookStage[]>();
 export function hookStages(trip: TripDoc): HookStage[] {
+  const kept = stagesRead.get(trip.stages);
+  if (kept) return kept;
+  const read = readStages(trip);
+  stagesRead.set(trip.stages, read);
+  return read;
+}
+
+function readStages(trip: TripDoc): HookStage[] {
   return trip.stages.map((stage) => ({
     startDate: stage.startDate,
     endDate: stage.endDate,

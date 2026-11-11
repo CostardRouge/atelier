@@ -29,7 +29,7 @@ import type { TimeAgoMode } from './time-ago';
 import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from '../shades/shades';
 import { resolveHook } from './hooks/registry';
-import { hookContextFor, slideHookTiming } from './hooks/hook-context';
+import { hookContextFor, slideHookTiming, type HookCache } from './hooks/hook-context';
 import { hookElementsAt, windowedBadge, type ElementsAt } from './hooks/hook-elements';
 import type { HookPicture, ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
@@ -78,6 +78,11 @@ export function slideRender(
    * credit. Undefined and null both mean "the picture says nothing".
    */
   exif?: ExifData | null,
+  /**
+   * A surface's OWN cache of resolved openers (`createHookCache`): the rail keeps one, so an edit of one slide
+   * prepares that slide's opener and no other. Never shared with another surface that paints.
+   */
+  cache?: HookCache,
 ): SlideRender {
   if (slide.kind === 'cta') {
     const cta = ctaLayout(trip.cta, aspect);
@@ -116,7 +121,9 @@ export function slideRender(
   const layers = slide.hook;
   const timing = slideHookTiming(post, { seconds: slide.seconds, length: slide.length, badge: slide.badge, pieceBadge: piece });
   const hook = layers
-    ? resolveHook(layers, hookContextFor(trip, post, aspect, content, pictures, timing))
+    ? cache
+      ? cache.resolve(trip, post, layers, timing, { aspect, content, pictures })
+      : resolveHook(layers, hookContextFor(trip, post, aspect, content, pictures, timing))
     : null;
 
   // The badge's LOOK is the piece's on every slide — its pieces' styles and
