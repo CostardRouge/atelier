@@ -9,6 +9,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-11 — Brazilwood
+
 ### Added
 
 - Recap's *Layout* sets what the cells say for the first slide, the slides after it, or one slide alone — a chip above
