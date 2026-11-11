@@ -191,6 +191,7 @@ One line each; the detail is under « Moved from the MEMORY.md index » in the f
 | `docs/memory/mosaic-interaction.md` | how the person PLAYS with the Mosaic editor — the transport and its mode drawer, the target card while a run plays, the stage's gestures, what a zoom draws (lab 4) |
 | `docs/memory/mosaic-remote.md` | how a mosaic LEAVES its tab — kept on a Winnow (`mosaic-remote.ts`, its summary, the sync, the gallery's driver) and driven by an agent (`mosaic.*` commands) |
 | `docs/memory/recap.md` | `src/shared/recap/`, `src/tools/recap/` — the Recap instrument: its templates as recipes, the slots and the rule, the layout, the film plan, the painter, its store and exports |
+| `docs/memory/recap-publish.md` | publishing a recap — `shared/sources/postiz/` (client, networks, rhythm), Export › Publish, `recap-post.ts`, the gallery's *Planned*, the `recap.schedule` commands |
 | `docs/memory/recap-cells.md` | what a Recap cell SAYS and for whom (`recap-scope.ts`, the date formats, `CellsSection.tsx`), choosing a place's picture among the recap's days (`recap-chooser.ts`, `DayChooser.tsx`), a place's writing and a place by hand (`PicturePlace.tsx`) |
 | `docs/memory/performance.md` | anything that runs while a transport PLAYS, a stage, a clock, an inspector panel or thumbnail grid, a read of a shared index (towns, coastline, a pool), a new instrument — and `scripts/check-perf.mjs`, the gate |
 | `docs/memory/briefs.md` | starting new work: the long-form briefs, audits and plans under `docs/`, their status and when to read each |

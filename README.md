@@ -105,9 +105,10 @@ Today it ships twelve tools, converging into a few editors:
 > The same holds for a **Postiz** of your own, connected on `#/sources` with
 > its address and an API key: only when you press *Schedule* in a recap's
 > *Export* tab (or an agent you drive does), Recap sends that Postiz the files
-> it just rendered and the post to schedule on your Instagram, and it reads
-> back the posts it planned for the gallery's *Planned* section. Postiz then
-> publishes through Meta's own API.
+> it just rendered and the posts to schedule on the accounts you ticked
+> (Instagram, TikTok, YouTube, Bluesky, Threads, X), and it reads back the
+> posts it planned for the gallery's *Planned* section. Postiz then publishes
+> through each network's own API.
 >
 > One more connection never leaves your computer: the **agent bridge** (see
 > "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,

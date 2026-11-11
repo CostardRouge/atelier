@@ -9,6 +9,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- Publishing reaches every network your Postiz holds, not only Instagram: the Sources screen lists your Instagram,
+  TikTok, YouTube, Bluesky, Threads and X accounts with their marks, and *Refresh* asks your Postiz again after you
+  add one there.
+
 ## [1.8.0] - 2026-11-11 — Brazilwood
 
 ### Added

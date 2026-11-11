@@ -12,7 +12,10 @@
  * - `POST /upload` (multipart `file`) → `{ id, path }`;
  * - `POST /posts` — `{ type: schedule|now|draft, date, shortLink, tags, posts: [{ integration: { id }, value: [{ content, image }], settings: { __type, … } }] }`;
  * - `GET  /posts?startDate&endDate` → `{ posts }` (state QUEUE · PUBLISHED · ERROR · DRAFT);
- * - `DELETE /posts/:id`.
+ * - `DELETE /posts/:id`;
+ * - `POST /integration-trigger/:id` `{ methodName, data }` → `{ output }` — a
+ *   channel's own tool (lab 18: Instagram's `audioSearch`, TikTok Business's
+ *   `musicSearch`), as `GET /integration-settings/:id` lists them.
  *
  * Limits his instance showed: 90 post requests an hour; an upload over
  * 100 MB is refused by Cloudflare with a 413 that carries no CORS header —
@@ -24,10 +27,12 @@
  * to a `fetch`, so the specs drive it with a stub.
  */
 
+import { musicLibrary, readTracks, settingsFor, type MusicTrack, type PostMusic } from './networks';
+
 export type PostKind = 'reel' | 'carousel' | 'story';
 export type PostState = 'queue' | 'published' | 'error' | 'draft';
 
-/** A channel Postiz publishes to (an Instagram account, here). */
+/** A channel Postiz publishes to: an account on one network (`networks.ts`). */
 export interface PostizChannel {
   id: string;
   name: string;
@@ -94,10 +99,9 @@ export function uploadProblem(file: { size: number; type: string; name: string }
 
 /** Why a post of `kind` cannot carry these files, or null. */
 export function postProblem(kind: PostKind, media: readonly { type: string }[]): string | null {
-  if (!media.length) return 'Instagram needs a picture or a video.';
+  if (!media.length) return 'A post needs a picture or a video.';
   if (kind === 'reel' && (media.length !== 1 || !media[0].type.startsWith('video/'))) return 'A Reel is one video.';
   if (kind === 'story' && media.length !== 1) return 'A story is one picture or one video.';
-  if (kind === 'carousel' && media.length > MAX_CAROUSEL_ITEMS) return `A carousel sent by Instagram's API holds ${MAX_CAROUSEL_ITEMS} slides at most — this one has ${media.length}.`;
   return null;
 }
 
@@ -114,17 +118,27 @@ export interface PostRequest {
   graduate?: 'auto' | 'manual';
   /** Instagram handles invited as collaborators, without the @. */
   collaborators?: readonly string[];
+  /** The title a network asks beside the words (YouTube, TikTok); drawn from the caption when absent. */
+  title?: string | null;
+  /** A track of the network's own library over the film, where the channel has one. */
+  music?: PostMusic | null;
 }
+
+const VIDEO_PATH = /\.(mp4|mov|m4v|webm)(\?|$)/i;
 
 /** The body of `POST /posts` for one post on one channel. */
 export function postBody(req: PostRequest, now: Date = new Date()): Record<string, unknown> {
-  const settings: Record<string, unknown> = { __type: req.channel.identifier || 'instagram', post_type: req.kind === 'story' ? 'story' : 'post' };
-  if (req.kind === 'reel' && req.trial) {
-    settings.is_trial_reel = true;
-    settings.graduation_strategy = req.graduate === 'manual' ? 'MANUAL' : 'SS_PERFORMANCE';
-  }
-  const collaborators = (req.collaborators ?? []).map((c) => c.trim().replace(/^@/, '')).filter(Boolean);
-  if (collaborators.length && req.kind !== 'story') settings.collaborators = collaborators.map((label) => ({ label }));
+  const settings = settingsFor({
+    identifier: req.channel.identifier,
+    kind: req.kind,
+    media: req.media.map((m) => (VIDEO_PATH.test(m.path) ? 'video' : 'picture')),
+    caption: req.caption,
+    title: req.title,
+    trial: req.trial,
+    graduate: req.graduate,
+    collaborators: req.collaborators,
+    music: req.music,
+  });
   return {
     type: req.at === 'now' ? 'now' : req.at === 'draft' ? 'draft' : 'schedule',
     date: (req.at instanceof Date ? req.at : now).toISOString(),
@@ -183,7 +197,9 @@ export function postizText(html: string): string {
 /** What to do about a post Instagram refused, from what Postiz says — null when the error is not one we know. */
 export function failureHint(error: string | null): string | null {
   if (!error) return null;
-  if (/could not process (this|the) video|video format|codec|aspect ratio/i.test(error)) return 'Send it again at Standard quality, 30 fps.';
+  if (/unaudited|can only post to private|private accounts?/i.test(error)) return 'TikTok lets an app it has not audited post privately only: finish the audit of your TikTok app, or set the account private.';
+  if (/bit ?rate|could not process (this|the) video|video format|codec|aspect ratio|frame ?rate/i.test(error)) return 'Send it again: Recap now caps what it publishes at 30 fps and a bitrate the networks take.';
+  if (/title/i.test(error) && /required|empty|missing|short/i.test(error)) return 'Give it a title in Words, then send it again.';
   if (/(fetch|download|retrieve|access).{0,40}(media|image|video|url)|media.{0,20}(not|un)reachable|invalid (image|media) url/i.test(error)) return 'Your Postiz’s uploads must be reachable from the internet. Send it again once they are.';
   if (/token|expired|re-?authori[sz]e|reconnect|session has been invalidated|permission/i.test(error)) return 'Reconnect the account in your Postiz, then send it again.';
   if (/too (long|many)|caption|hashtag/i.test(error)) return 'Shorten the caption or its hashtags, then send it again.';
@@ -307,6 +323,18 @@ export class PostizClient {
 
   async deletePost(id: string): Promise<void> {
     await this.call(`/posts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  /** One of a channel's own tools, by its name, with its string parameters — what it answered. */
+  async trigger(channelId: string, methodName: string, data: Record<string, string>, signal?: AbortSignal): Promise<unknown> {
+    return this.call(`/integration-trigger/${encodeURIComponent(channelId)}`, { method: 'POST', body: JSON.stringify({ methodName, data }), signal });
+  }
+
+  /** The channel's own music library searched (an empty `q`: what is trending); [] where the channel has none. */
+  async searchMusic(channel: Pick<PostizChannel, 'id' | 'identifier'>, q: string, signal?: AbortSignal): Promise<MusicTrack[]> {
+    const lib = musicLibrary(channel.identifier);
+    if (!lib) return [];
+    return readTracks(await this.trigger(channel.id, lib.tool, { q: q.trim(), type: 'music' }, signal));
   }
 }
 
