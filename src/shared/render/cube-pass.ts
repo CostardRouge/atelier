@@ -58,6 +58,8 @@ export interface CubePass extends RenderPass {
    * frees nothing.
    */
   withLut(next: CubeLut | null): CubePass;
+  /** The same look at another strength: a uniform, so the texture is handed over as `withLut` hands it. */
+  withIntensity(next: number): CubePass;
 }
 
 type Uploaded = { gl: WebGL2RenderingContext; tex: WebGLTexture; lut: CubeLut | null };
@@ -84,6 +86,13 @@ function cubePass(options: CubePassOptions, inherited: Uploaded | null, inherite
       uploaded = null;
       head = null;
       return cubePass(opts, handed, handedHead);
+    },
+    withIntensity(next) {
+      const handed = uploaded;
+      const handedHead = head;
+      uploaded = null;
+      head = null;
+      return cubePass({ lut, intensity: next, interpolation }, handed, handedHead);
     },
     id: 'cube',
     key: `cube:${identityKey(lut)}:${intensity}:${interpolation}`,

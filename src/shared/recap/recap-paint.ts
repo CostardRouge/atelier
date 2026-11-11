@@ -372,16 +372,14 @@ function background(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number,
       drew = true;
     }
   } else if (bg.kind === 'blur') {
-    // His picture, else the best photograph of the period (`backgroundPicture`).
-    const first = backgroundPicture(doc, resolved);
+    // His picture, else the best photograph of the period (`backgroundPicture`) — chosen once per document.
+    const first = chosenBackground(doc, resolved);
     const still = first ? src.still(first.key) : null;
     if (still) {
-      const f = g as Ctx2D & { filter?: string };
-      const had = 'filter' in f ? f.filter : undefined;
-      if (had !== undefined) f.filter = `blur(${Math.round(bg.blur * (W / 1080))}px)`;
-      // Drawn a little larger than the page, so the blur's soft edge falls outside it.
-      drawCover(g, still, { x: -W * 0.06, y: -H * 0.06, w: W * 1.12, h: H * 1.12 }, bg.frame);
-      if (had !== undefined) f.filter = had;
+      const px = Math.round(bg.blur * (W / 1080));
+      const held = blurredOnce(still, W, H, px, bg.frame);
+      if (held) g.drawImage(held, 0, 0, W, H);
+      else blurInto(g, still, W, H, px, bg.frame);
       drew = true;
     }
   }
@@ -391,6 +389,49 @@ function background(g: Ctx2D, doc: RecapDoc, resolved: ResolvedRecap, W: number,
       g.fillRect(0, 0, W, H);
     }
   }
+}
+
+/**
+ * The blurred ground does not move with the film: its picture is chosen ONCE per document (a ranking of the
+ * whole pool, per frame before — `performance.md`), and blurred ONCE per picture, size and frame into a page
+ * of its own the frames draw. A full-page blur per frame is the one cost of this painter a phone feels most.
+ */
+const picked = new WeakMap<ResolvedRecap, { doc: RecapDoc; picture: RecapPicture | null }>();
+function chosenBackground(doc: RecapDoc, resolved: ResolvedRecap): RecapPicture | null {
+  const kept = picked.get(resolved);
+  if (kept && kept.doc === doc) return kept.picture;
+  const picture = backgroundPicture(doc, resolved);
+  picked.set(resolved, { doc, picture });
+  return picture;
+}
+
+/** Draw `still` blurred over a `W`×`H` page, a little larger so the blur's soft edge falls outside it. */
+function blurInto(g: Ctx2D, still: Drawable, W: number, H: number, px: number, frame: Frame | undefined): void {
+  const f = g as Ctx2D & { filter?: string };
+  const had = 'filter' in f ? f.filter : undefined;
+  if (had !== undefined) f.filter = `blur(${px}px)`;
+  drawCover(g, still, { x: -W * 0.06, y: -H * 0.06, w: W * 1.12, h: H * 1.12 }, frame);
+  if (had !== undefined) f.filter = had;
+}
+
+/** Each picture's blurred pages, the last few sizes asked (the stage, the strip, an export). */
+const blurred = new WeakMap<object, { key: string; page: OffscreenCanvas }[]>();
+const BLURRED_SIZES = 3;
+function blurredOnce(still: Drawable, W: number, H: number, px: number, frame: Frame | undefined): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined' || !(W > 0) || !(H > 0)) return null;
+  const owner = still.image as object;
+  const key = `${Math.round(W)}x${Math.round(H)}|${px}|${frame ? `${frame.x},${frame.y},${frame.zoom},${frame.rotate ?? 0}` : '-'}`;
+  const list = blurred.get(owner) ?? [];
+  const hit = list.find((e) => e.key === key);
+  if (hit) return hit.page;
+  const page = new OffscreenCanvas(Math.round(W), Math.round(H));
+  const pg = page.getContext('2d');
+  if (!pg) return null;
+  blurInto(pg, still, W, H, px, frame);
+  list.push({ key, page });
+  if (list.length > BLURRED_SIZES) list.shift();
+  blurred.set(owner, list);
+  return page;
 }
 
 function slotPicture(slot: RecapSlot | undefined): RecapPicture | null {

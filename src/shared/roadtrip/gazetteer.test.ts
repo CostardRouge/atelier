@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { homonyms, nearestCity, parseGazetteer, type GazetteerCity } from './gazetteer';
+import { TIE_KM, homonyms, nearestCity, parseGazetteer, type GazetteerCity } from './gazetteer';
+import { haversineKm } from './hooks/geo';
 
 const city = (
   name: string,
@@ -225,5 +226,53 @@ describe('homonyms', () => {
     expect(homonyms(index, 'Exmouth', null).map((h) => h.city.country)).toEqual(['GB', 'AU', 'US']);
     expect(homonyms(index, 'Exmouth', null, 1)).toHaveLength(1);
     expect(homonyms(index, '  ', null)).toEqual([]);
+  });
+});
+
+describe('the index read through its grid', () => {
+  /** The scan of the whole list as `nearestCity` ran it before the grid, verbatim: what the grid must equal. */
+  function scannedNearest(cities: readonly GazetteerCity[], point: { lat: number; lon: number }, maxKm: number): GazetteerCity | null {
+    const near: { city: GazetteerCity; km: number }[] = [];
+    let bestKm = Infinity;
+    for (const c of cities) {
+      const km = haversineKm(point, c);
+      if (km > maxKm) continue;
+      near.push({ city: c, km });
+      if (km < bestKm) bestKm = km;
+    }
+    if (!near.length) return null;
+    const tied = near.filter((c) => c.km <= bestKm + TIE_KM);
+    let best = tied[0];
+    for (const candidate of tied) {
+      if (candidate === best) continue;
+      if (candidate.city.section !== best.city.section) {
+        if (!candidate.city.section) best = candidate;
+      } else if (candidate.city.population !== best.city.population) {
+        if (candidate.city.population > best.city.population) best = candidate;
+      } else if (candidate.km !== best.km) {
+        if (candidate.km < best.km) best = candidate;
+      } else if (candidate.city.name < best.city.name) best = candidate;
+    }
+    return best.city;
+  }
+
+  it('names exactly what a scan of the whole list names — across cell edges, the antimeridian and near a pole', () => {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const cities: GazetteerCity[] = [];
+    for (let i = 0; i < 3000; i++) cities.push(city(`t${i}`, -89 + rnd() * 178, -180 + rnd() * 360, Math.round(rnd() * 5000), rnd() < 0.2));
+    for (const [lat, lon] of [[-35, 118], [-16.5, 179.95], [-16.5, -179.95], [88.5, 20], [0, 0]]) {
+      for (let i = 0; i < 200; i++) cities.push(city(`c${lat}${lon}${i}`, lat + (rnd() - 0.5) * 0.6, ((lon + (rnd() - 0.5) * 0.6 + 540) % 360) - 180, Math.round(rnd() * 5000), rnd() < 0.2));
+    }
+    for (const [lat, lon] of [[-35, 118], [-35.3, 118.7], [-16.5, 180], [-16.5, -179.99], [88.5, 20], [89.95, 0], [0.01, -0.01], [12, 40]]) {
+      for (const km of [5, 30, 120]) expect(nearestCity(cities, { lat, lon }, km)).toBe(scannedNearest(cities, { lat, lon }, km));
+    }
+  });
+
+  it('finds a homonym added after the names were filed', () => {
+    const cities = [city('Exmouth', -21.93, 114.13)];
+    expect(homonyms(cities, 'exmouth', null)).toHaveLength(1);
+    cities.push(city('Exmouth', 50.62, -3.41, 37000, false, 'GB'));
+    expect(homonyms(cities, 'Exmouth', null).map((h) => h.city.country)).toEqual(['GB', 'AU']);
   });
 });

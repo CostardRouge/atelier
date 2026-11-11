@@ -127,6 +127,59 @@ function lonGap(a: number, b: number): number {
 }
 
 /**
+ * The index filed by one-degree cell, built ONCE per list (2026-11-10, the
+ * performance pass: `docs/memory/performance.md`). A scan of 130 000 towns
+ * per question was cheap once and ruinous in a loop — a Winnow's statistics
+ * name 20 000 rows, a deduction names every leg, a card's thumbnails read
+ * every stop's state. A cell key is `lat * 360 + lon`, both floored, the
+ * longitude in [-180, 180); a list that grew is filed again.
+ */
+interface CityGrid {
+  size: number;
+  cells: Map<number, number[]>;
+}
+const grids = new WeakMap<readonly GazetteerCity[], CityGrid>();
+const cellLon = (lon: number) => ((((Math.floor(lon) + 180) % 360) + 360) % 360) - 180;
+
+function cityGrid(cities: readonly GazetteerCity[]): CityGrid {
+  const kept = grids.get(cities);
+  if (kept && kept.size === cities.length) return kept;
+  const cells = new Map<number, number[]>();
+  cities.forEach((city, i) => {
+    const key = Math.floor(city.lat) * 360 + cellLon(city.lon);
+    const list = cells.get(key);
+    if (list) list.push(i);
+    else cells.set(key, [i]);
+  });
+  const grid = { size: cities.length, cells };
+  grids.set(cities, grid);
+  return grid;
+}
+
+/**
+ * Call `visit` with the index of every city that MAY lie within `km` of
+ * `point` — every city of the cells a window of that radius touches (a
+ * superset: the caller measures), the list's order inside a cell. Near a pole,
+ * or for a window wider than a quarter of the globe, every city.
+ */
+export function forEachCityNear(cities: readonly GazetteerCity[], point: GeoPoint, km: number, visit: (index: number) => void): void {
+  const { dLat, dLon } = degreeWindow(point.lat, km);
+  const lonWindow = dLon ?? 181;
+  if (lonWindow > 90 || dLat > 45) {
+    for (let i = 0; i < cities.length; i++) visit(i);
+    return;
+  }
+  const { cells } = cityGrid(cities);
+  const lat0 = Math.max(-90, Math.floor(point.lat - dLat));
+  const lat1 = Math.min(90, Math.floor(point.lat + dLat));
+  const lon0 = Math.floor(point.lon - lonWindow);
+  const lon1 = Math.floor(point.lon + lonWindow);
+  for (let la = lat0; la <= lat1; la++) {
+    for (let lo = lon0; lo <= lon1; lo++) for (const i of cells.get(la * 360 + cellLon(lo)) ?? []) visit(i);
+  }
+}
+
+/**
  * The nearest city to `point`, or null when none is within `maxKm`.
  *
  * A bounding box in degrees rejects almost every row before any trigonometry:
@@ -148,15 +201,16 @@ export function nearestCity(
   const near: { city: GazetteerCity; km: number }[] = [];
   let bestKm = Infinity;
 
-  for (const city of cities) {
-    if (Math.abs(city.lat - point.lat) > latWindow) continue;
-    if (lonWindow <= 180 && lonGap(city.lon, point.lon) > lonWindow) continue;
-
+  // Only the cells around the point (`forEachCityNear`); the box still rejects before any trigonometry.
+  forEachCityNear(cities, point, maxKm, (i) => {
+    const city = cities[i];
+    if (Math.abs(city.lat - point.lat) > latWindow) return;
+    if (lonWindow <= 180 && lonGap(city.lon, point.lon) > lonWindow) return;
     const km = haversineKm(point, city);
-    if (km > maxKm) continue;
+    if (km > maxKm) return;
     near.push({ city, km });
     if (km < bestKm) bestKm = km;
-  }
+  });
 
   if (!near.length) return null;
 
@@ -190,6 +244,22 @@ function folded(name: string): string {
   return name.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 }
 
+/** The index's cities by folded name, in the list's order — folded ONCE per list, never per question. */
+const names = new WeakMap<readonly GazetteerCity[], { size: number; byName: Map<string, GazetteerCity[]> }>();
+function namesOf(cities: readonly GazetteerCity[]): Map<string, GazetteerCity[]> {
+  const kept = names.get(cities);
+  if (kept && kept.size === cities.length) return kept.byName;
+  const byName = new Map<string, GazetteerCity[]>();
+  for (const city of cities) {
+    const key = folded(city.name);
+    const list = byName.get(key);
+    if (list) list.push(city);
+    else byName.set(key, [city]);
+  }
+  names.set(cities, { size: cities.length, byName });
+  return byName;
+}
+
 /**
  * Every city of the index bearing this name — «Exmouth» is a town in
  * Western Australia AND in Devon — nearest `near` first (the pictures, or
@@ -206,9 +276,7 @@ export function homonyms(
 ): { city: GazetteerCity; km: number | null }[] {
   const key = folded(name);
   if (!key) return [];
-  const found = cities
-    .filter((c) => folded(c.name) === key)
-    .map((city) => ({ city, km: near ? haversineKm(near, city) : null }));
+  const found = (namesOf(cities).get(key) ?? []).map((city) => ({ city, km: near ? haversineKm(near, city) : null }));
   found.sort((a, b) =>
     a.km !== null && b.km !== null ? a.km - b.km : b.city.population - a.city.population,
   );

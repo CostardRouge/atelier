@@ -12,8 +12,7 @@ import type { WinnowAssetRow, WinnowClient } from '../../shared/sources/winnow/c
 import { fetchLog } from '../../shared/sources/winnow/materialize';
 import type { AtlasFlightRef } from './atlas-doc';
 import { sha256Hex } from './atlas-file';
-import { sessionLogs } from './atlas-ingest';
-import { putLogs } from './atlas-store';
+import { keepLogs, sessionLogs } from './atlas-ingest';
 
 /** The asset id a flight's `<host>/<id>` names on `host`, or null. */
 export function winnowIdOn(ref: AtlasFlightRef, host: string): number | null {
@@ -82,6 +81,6 @@ export async function fetchLogsBack(
     }
     onProgress?.(i + 1, wanted.length);
   }
-  if (texts.size) await putLogs(texts);
+  if (texts.size) await keepLogs(texts);
   return out;
 }

@@ -12,7 +12,12 @@ import { createLutRenderer, type LutRenderer } from '../../shared/lut/lut-gl';
  * the per-frame loop only ever calls `draw` — swapping LUTs doesn't touch it.
  *
  * @param videoRef The source `<video>` (decoded by the browser).
- * @param canvasRef The `<canvas>` to paint.
+ * @param hostRef Where the hook puts the `<canvas>` it paints. The canvas is the HOOK's, one per renderer:
+ *   a `<canvas>` React keeps hands back the same DEAD context after `dispose()` loses it, so a second
+ *   renderer on it compiled nothing and the preview drew black — after every clip switch, and from the first
+ *   clip under StrictMode (measured 2026-11-10; the rule `LookScene.tsx` wrote first). Read it through the
+ *   returned `canvasRef`.
+ * @param className The canvas's classes.
  * @param lut Active LUT, or null to render ungraded.
  * @param intensity LUT strength multiplier (0..3; 1 = 100%).
  * @param bypass When true, ignore `lut` and show the original (A/B compare).
@@ -23,25 +28,33 @@ import { createLutRenderer, type LutRenderer } from '../../shared/lut/lut-gl';
  */
 export function useLutPreview(
   videoRef: RefObject<HTMLVideoElement | null>,
-  canvasRef: RefObject<HTMLCanvasElement | null>,
+  hostRef: RefObject<HTMLElement | null>,
+  className: string,
   lut: CubeLut | null,
   intensity: number,
   bypass: boolean,
   resetKey?: unknown,
-): { supported: boolean; setSplit: (active: boolean, x: number) => void } {
+): { supported: boolean; setSplit: (active: boolean, x: number) => void; canvasRef: RefObject<HTMLCanvasElement | null> } {
   const [supported, setSupported] = useState(true);
   const rendererRef = useRef<LutRenderer | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Create the renderer and run the per-frame paint loop. Re-runs when the
   // source swaps so the old GL resources are released first.
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const host = hostRef.current;
     const video = videoRef.current;
-    if (!canvas || !video) return;
+    if (!host || !video) return;
 
+    const canvas = document.createElement('canvas');
+    canvas.className = className;
+    host.appendChild(canvas);
+    canvasRef.current = canvas;
     const renderer = createLutRenderer(canvas);
     if (!renderer) {
       setSupported(false);
+      canvas.remove();
+      canvasRef.current = null;
       return;
     }
     rendererRef.current = renderer;
@@ -92,10 +105,12 @@ export function useLutPreview(
       video.removeEventListener('seeked', onReady);
       renderer.dispose();
       rendererRef.current = null;
+      canvas.remove();
+      if (canvasRef.current === canvas) canvasRef.current = null;
     };
     // Intentionally keyed only on the source: lut/bypass are applied by the
     // effect below; seeding them here just avoids a black first frame.
-  }, [resetKey, canvasRef, videoRef]);
+  }, [resetKey, hostRef, videoRef, className]);
 
   // Apply LUT / intensity / bypass changes and repaint immediately so a paused
   // frame updates without waiting for the next presented frame.
@@ -127,5 +142,5 @@ export function useLutPreview(
     [videoRef],
   );
 
-  return { supported, setSplit };
+  return { supported, setSplit, canvasRef };
 }

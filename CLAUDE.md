@@ -181,6 +181,7 @@ agent bridge keeps its own number, v1, v2… (`bridge-version.ts`), apart from t
 
 - Never rewrite history (`rebase -i`, `commit --amend`, `reset --hard`, `push --force`, `filter-repo`) without an explicit request.
 - Do not modify `.git/config`, the hooks or branch settings.
+- **The suite runs on a phone, in JS, on one thread.** Before adding an instrument, a transport, a stage, an inspector panel, an engine or a cache, read `docs/memory/performance.md` and follow its checklist: the playhead in a `PlayClock`, stable props to memoised children, a grid over a shared index, an engine that rests and goes, a painter that redoes per frame only what moves. Measure with `node scripts/check-perf.mjs` at `THROTTLE=4` (green before and after, numbers in the PR) — a defect of this family passes every spec.
 - **Never hardcode the GitHub Pages base path.** `vite.config.ts` derives it from `GITHUB_REPOSITORY` (with a local fallback and a `BASE_PATH` override); a hardcoded value already drifted on a repo rename and 404'd every asset on the deployed site.
 - **Adding or removing a `.cube` LUT under `public/luts/` needs no code change.** The `virtual:luts` Vite plugin scans that folder at build/dev time; the dev server re-scans on add/unlink. Do not maintain a manual list.
 - **`npm run build` type-checks first** (`tsc -b`), and `tsconfig.app.json` has `noUnusedLocals`/`noUnusedParameters` on: a leftover import or parameter fails the build, not just the lint.
