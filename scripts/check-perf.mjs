@@ -24,7 +24,9 @@
  * times (a phone or a tablet, roughly) — the budgets are written for it.
  */
 import { execSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Playwright is not a dependency of the site: the project's own, else the machine's global one.
@@ -267,7 +269,66 @@ async function seedRecap(page, n, opener, background = null) {
 const k = Math.max(1, THROTTLE) / 4;
 const BUDGET = { rootRendersPerS: 2, p95: 70 * Math.max(k, 0.25), longMs: 400 * k, click: 400 * Math.max(k, 0.25) };
 
+/**
+ * A DJI-shaped clip and its SRT (one cue a frame, a moving fix), made once per run with ffmpeg — null where
+ * ffmpeg is not on the machine (the scenarios that need it then say so and are skipped).
+ */
+let media;
+function mediaPair() {
+  if (media !== undefined) return media;
+  media = null;
+  try {
+    execSync('ffmpeg -version', { stdio: 'ignore' });
+  } catch {
+    return media;
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'check-perf-'));
+  const mp4 = join(dir, 'DJI_0001.MP4');
+  execSync(`ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=30 -t 8 -c:v libx264 -pix_fmt yuv420p ${mp4}`);
+  const ts = (t) => `00:00:${String(Math.floor(t)).padStart(2, '0')},${String(Math.round((t % 1) * 1000) % 1000).padStart(3, '0')}`;
+  const cues = Array.from({ length: 240 }, (_, i) => {
+    const lat = (16.05687 + i * 0.00005).toFixed(6);
+    const lon = (-61.748979 + i * 0.00004).toFixed(6);
+    return `${i + 1}\n${ts(i / 30)} --> ${ts((i + 1) / 30)}\n<font size="28">FrameCnt: ${i + 1}, DiffTime: 33ms\n2026-05-30 05:49:34.609\n[iso: 100] [shutter: 1/500.0] [fnum: 1.7] [ev: 0] [color_md: dlog_m] [focal_len: 24.00] [latitude: ${lat}] [longitude: ${lon}] [rel_alt: ${(35 + i * 0.05).toFixed(3)} abs_alt: 80.196] [ct: 5300] </font>\n`;
+  });
+  const srt = join(dir, 'DJI_0001.SRT');
+  writeFileSync(srt, cues.join('\n'));
+  media = [mp4, srt];
+  return media;
+}
+
+/** Hand the pair to the Library through «Add… › Add files». */
+async function addMedia(page, files) {
+  await page.getByRole('button', { name: /^Add/ }).first().click();
+  await page.waitForTimeout(300);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByText('Add files').first().click();
+  await (await chooser).setFiles(files);
+  await page.waitForTimeout(3000);
+}
+
+/** A telemetry instrument playing its clip: `route`, the editor's root component, how to start it. */
+function clipScenario(route, root) {
+  return async (page, cdp) => {
+    const files = mediaPair();
+    if (!files) return { skipped: 'ffmpeg is not on this machine' };
+    await page.goto(new URL(`#/${route}`, BASE).href);
+    await page.waitForTimeout(2000);
+    await addMedia(page, files);
+    await page.getByText('DJI_0001').first().click().catch(() => undefined);
+    await page.waitForTimeout(2500);
+    const play = await measure(page, cdp, root, 4000, async () => {
+      await page.locator('video').first().evaluate((v) => v.play()).catch(() => undefined);
+    });
+    return { play };
+  };
+}
+
 const SCENARIOS = {
+  /** Composer playing a 1280×720 clip with its telemetry: the composite, the map's marker, the readout. */
+  'composer-play': clipScenario('composer', 'ComposerTool'),
+  /** Flight Map playing the same clip: the marker and the live readout follow it. */
+  'map-play': clipScenario('map', 'MapTool'),
   /** Recap, a month with its Trip card opener, the card's chapter open: the 2026-11-10 report. */
   async 'recap-trip-card'(page, cdp) {
     await seedTrip(page, null);
@@ -382,6 +443,11 @@ for (const [name, run] of Object.entries(SCENARIOS)) {
   } catch (err) {
     console.log(`✗ ${name}: ${String(err).split('\n')[0]}`);
     failed = true;
+    await context.close();
+    continue;
+  }
+  if (result.skipped) {
+    console.log(`– ${name}: skipped (${result.skipped})`);
     await context.close();
     continue;
   }
