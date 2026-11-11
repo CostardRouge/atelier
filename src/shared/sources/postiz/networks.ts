@@ -89,6 +89,8 @@ export interface NetworkPlan {
 export interface NetworkRefusal {
   ok: false;
   why: string;
+  /** The same in two or three words, for a chip. */
+  short: string;
 }
 
 /**
@@ -98,18 +100,18 @@ export interface NetworkRefusal {
  * (his pick, lab 18 Q6: the first four on Bluesky and X, said).
  */
 export function networkPlan(net: Network, kind: PostKind, media: readonly MediaType[], seconds: number | null = null): NetworkPlan | NetworkRefusal {
-  if (!media.length) return { ok: false, why: 'Nothing to send.' };
+  if (!media.length) return { ok: false, why: 'Nothing to send.', short: 'nothing to send' };
   if (kind === 'story') {
-    return net.story ? { ok: true, as: 'Story', take: [0], note: null } : { ok: false, why: `A story is Instagram’s: ${net.label} has none through Postiz.` };
+    return net.story ? { ok: true, as: 'Story', take: [0], note: null } : { ok: false, why: `A story is Instagram’s: ${net.label} has none through Postiz.`, short: 'no stories' };
   }
   if (kind === 'reel') {
-    if (net.maxSeconds !== null && seconds !== null && seconds > net.maxSeconds + 0.5) return { ok: false, why: `${net.label} takes a video up to ${net.maxSeconds} s — this film is ${Math.round(seconds)} s.` };
+    if (net.maxSeconds !== null && seconds !== null && seconds > net.maxSeconds + 0.5) return { ok: false, why: `${net.label} takes a video up to ${net.maxSeconds} s — this film is ${Math.round(seconds)} s.`, short: `${net.maxSeconds} s at most` };
     return { ok: true, as: net.film, take: [0], note: null };
   }
-  if (net.pictures === 0) return { ok: false, why: `${net.label} takes a video only — send the film there.` };
+  if (net.pictures === 0) return { ok: false, why: `${net.label} takes a video only — send the film there.`, short: 'video only' };
   const all = media.map((_, i) => i);
   const pool = net.mixed ? all : all.filter((i) => media[i] === 'picture');
-  if (!pool.length) return { ok: false, why: `${net.label} takes pictures or one video, not a carousel of clips.` };
+  if (!pool.length) return { ok: false, why: `${net.label} takes pictures or one video, not a carousel of clips.`, short: 'no pictures in it' };
   const take = pool.slice(0, net.pictures);
   const left = media.length - take.length;
   const what = net.mixed ? `${take.length} slide${take.length === 1 ? '' : 's'}` : `${take.length} picture${take.length === 1 ? '' : 's'}`;

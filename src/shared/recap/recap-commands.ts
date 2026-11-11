@@ -21,6 +21,7 @@ import { inFamily, wordsOn } from './recap-scope';
 import { WORD_KEYS } from './recap-cellwords';
 import { DEFAULT_CAPTION, captionText, captionWords } from './recap-publish';
 import { nextFreeSlot, zonedInstant, type Rhythm } from '../sources/postiz/rhythm';
+import { networkOf } from '../sources/postiz/networks';
 
 /** The settings an agent may set, and what each holds. */
 export const SETTABLE: Record<string, string> = {
@@ -362,4 +363,35 @@ export function chooseCarousel(doc: RecapDoc, keys: readonly string[]): { ok: tr
   const twice = keys.filter((k, i) => keys.indexOf(k) !== i);
   if (twice.length) return { ok: false, error: `twice: ${[...new Set(twice)].join(', ')}` };
   return { ok: true, doc: withRecap(doc, { carousel: { ...doc.carousel, chosen: [...keys], left: doc.carousel.left.filter((k) => !keys.includes(k)) } }) };
+}
+
+/**
+ * The accounts an agent's post goes out on (lab 18): `["all"]`, or each a
+ * network (`"tiktok"` — every account of it), an account's id, or its name
+ * (case aside; a part of it when only one account holds it). Nothing given:
+ * `fallback`, the accounts the person's last send of this template went to.
+ */
+export function pickChannels<C extends { id: string; name: string; identifier: string }>(raw: unknown, channels: readonly C[], fallback: readonly string[]): { channels: C[] } | { error: string } {
+  const listed = () => channels.map((c) => `"${c.name}" (${networkOf(c.identifier)?.label ?? c.identifier})`).join(', ') || 'none';
+  if (raw === undefined || raw === null) {
+    const kept = channels.filter((c) => fallback.includes(c.id));
+    return kept.length ? { channels: kept } : { error: `no account to post to — say which with on: ${listed()}` };
+  }
+  if (!Array.isArray(raw) || !raw.length || raw.some((x) => typeof x !== 'string')) return { error: 'on is a list: ["all"], networks ("instagram", "tiktok"…) or accounts by name' };
+  const out: C[] = [];
+  for (const want of raw as string[]) {
+    const w = want.trim().toLowerCase();
+    const hits =
+      w === 'all'
+        ? [...channels]
+        : (() => {
+            const exact = channels.filter((c) => c.id === want || c.name.toLowerCase() === w || networkOf(c.identifier)?.id === w || networkOf(c.identifier)?.label.toLowerCase() === w || c.identifier.toLowerCase() === w);
+            if (exact.length) return exact;
+            const part = channels.filter((c) => c.name.toLowerCase().includes(w));
+            return part.length === 1 ? part : [];
+          })();
+    if (!hits.length) return { error: `no account "${want}" — there are: ${listed()}` };
+    for (const c of hits) if (!out.includes(c)) out.push(c);
+  }
+  return { channels: out };
 }

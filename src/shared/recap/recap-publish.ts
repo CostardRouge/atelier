@@ -34,6 +34,10 @@ export interface Publication {
   channelId: string;
   /** The channel's name when it was sent, for a gallery that cannot ask. */
   channel: string;
+  /** The channel's provider (`instagram`, `tiktok`, `youtube`…): which network it went out on (lab 18). */
+  network: string;
+  /** The SEND it belongs to — one recap sent to several networks at once is one group; null for a post sent alone before lab 18. */
+  group: string | null;
   kind: PublishKind;
   trial: boolean;
   /** ISO: when it goes out (or went out); null for a draft left in Postiz. */
@@ -57,6 +61,8 @@ export const DEFAULT_PUBLISH: RecapPublish = { caption: null, approved: false, p
 export const DEFAULT_CAPTION = '{heading}{at}\n{route}\n\n{tags}';
 
 export const CAPTION_MAX = 2200;
+/** What a recap remembers sending: a send to six networks is six of them. */
+const MAX_PUBLICATIONS = 120;
 const MAX_TAGS = 5;
 
 const KINDS = new Set<string>(PUBLISH_KINDS);
@@ -69,6 +75,9 @@ function readPublication(raw: unknown): Publication | null {
     postId: r.postId.slice(0, 120),
     channelId: r.channelId.slice(0, 120),
     channel: typeof r.channel === 'string' ? r.channel.slice(0, 120) : '',
+    // A publication kept before lab 18 went to Instagram, alone.
+    network: typeof r.network === 'string' && r.network ? r.network.slice(0, 40) : 'instagram',
+    group: typeof r.group === 'string' && r.group ? r.group.slice(0, 40) : null,
     kind: KINDS.has(r.kind as string) ? (r.kind as PublishKind) : 'reel',
     trial: r.trial === true,
     at: typeof r.at === 'string' && !Number.isNaN(Date.parse(r.at)) ? r.at : null,
@@ -83,7 +92,7 @@ export function readPublish(raw: unknown): RecapPublish {
   return {
     caption,
     approved: r.approved === true,
-    publications: Array.isArray(r.publications) ? r.publications.flatMap((p) => readPublication(p) ?? []).slice(-40) : [],
+    publications: Array.isArray(r.publications) ? r.publications.flatMap((p) => readPublication(p) ?? []).slice(-MAX_PUBLICATIONS) : [],
   };
 }
 
@@ -154,9 +163,24 @@ export function withCaption(publish: RecapPublish, caption: string | null): Reca
   return next === publish.caption ? publish : { ...publish, caption: next, approved: false };
 }
 
+/** The new publications kept, most recent last. */
+export function withPublications(publish: RecapPublish, sent: readonly Publication[]): RecapPublish {
+  if (!sent.length) return publish;
+  const ids = new Set(sent.map((p) => p.postId));
+  return { ...publish, approved: true, publications: [...publish.publications.filter((x) => !ids.has(x.postId)), ...sent].slice(-MAX_PUBLICATIONS) };
+}
+
 /** The new publication kept, most recent last. */
-export function withPublication(publish: RecapPublish, p: Publication): RecapPublish {
-  return { ...publish, approved: true, publications: [...publish.publications.filter((x) => x.postId !== p.postId), p].slice(-40) };
+export const withPublication = (publish: RecapPublish, p: Publication): RecapPublish => withPublications(publish, [p]);
+
+/** What a recap sent, newest send first: the posts of one send together (a post sent alone is its own). */
+export function publicationGroups(publications: readonly Publication[]): Publication[][] {
+  const groups = new Map<string, Publication[]>();
+  for (const p of publications) {
+    const key = p.group ?? `one:${p.postId}`;
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  return [...groups.values()].sort((a, b) => b[0].sentAt - a[0].sentAt);
 }
 
 /** What Recap sends as a recap's default kind: a carousel when it has several slides and no motion of its own to show, else its Reel. */

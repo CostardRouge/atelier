@@ -279,8 +279,9 @@ function writeFoot(id: string, choice: FootChoice) {
 }
 
 /**
- * The Export tab (lab 13): what is SET scrolls — Length, Quality, Export (which
- * of the three deliveries), Publish — and what is TRIGGERED is the inspector's
+ * The Export tab (lab 13): what is SET scrolls — Length, Quality, then Export
+ * (which of the three deliveries) under *Save*, or Where · When · Words under
+ * *Publish* (lab 18) — and what is TRIGGERED is the inspector's
  * pinned foot (`DeliverBar`, portalled into `foot`): a Save · Publish switch
  * when a Postiz is connected, the one verb, the others behind ▾, the run
  * itself while one goes on. The host keeps this mounted once opened, so a run
@@ -398,7 +399,18 @@ export default function RecapExportPanel({
 
   /** What a post sends: the film for a Reel or a story, the slides for a carousel. */
   const renderFor = (kind: PublishKind, signal: AbortSignal, task: ReturnType<typeof startTask>): Promise<File[]> => renderPostFiles(input(), kind, order, base, report(task), signal);
-  const publish = usePublish({ doc, resolved, change, slides, canEncode: canEncode !== false, busy: busy !== null, run, render: renderFor });
+  const publish = usePublish({
+    doc,
+    resolved,
+    change,
+    slides,
+    media: order.map((s) => (s.kind === 'clip' ? 'video' : 'picture')),
+    seconds: film.total,
+    canEncode: canEncode !== false,
+    busy: busy !== null,
+    run,
+    render: renderFor,
+  });
 
   // ---- the foot: Save · Publish, the verb, the others behind ▾ -------------------------
   const [choice, setChoice] = useState<FootChoice>(() => readFoot(doc.id));
@@ -424,8 +436,8 @@ export default function RecapExportPanel({
     ? []
     : [
         { id: 'chosen', label: pv.label, hint: pv.summary, run: () => pv.send() },
-        ...(pv.label !== 'Publish now' ? [{ id: 'now', label: 'Publish now', hint: 'Instagram publishes it as soon as it is sent', run: () => pv.send('now') }] : []),
-        ...(pv.label !== 'Send as a draft' ? [{ id: 'draft', label: 'Send as a draft', hint: 'Nothing is scheduled: you finish it in Postiz', run: () => pv.send('draft') }] : []),
+        ...(!pv.label.startsWith('Publish') ? [{ id: 'now', label: 'Publish now', hint: 'Published as soon as it is sent', run: () => pv.send('now') }] : []),
+        ...(!pv.label.startsWith('Send') ? [{ id: 'draft', label: 'Send as a draft', hint: 'Nothing is scheduled: you finish it in Postiz', run: () => pv.send('draft') }] : []),
       ];
   const footBar = (
     <DeliverBar
@@ -463,32 +475,35 @@ export default function RecapExportPanel({
       <div className={visible ? 'contents' : 'hidden'}>
         <LengthSection doc={doc} natural={natural} change={change} />
         <QualitySection doc={doc} change={change} seconds={film.total} originals={ctx.originals} />
-        <InspectorSection
-          id="recap-export"
-          title="Export"
-          summary={{ video: `Video · ${film.total.toFixed(1)} s`, stills: `Stills · ${pages} PNG`, carousel: `Carousel · ${slides} slides` }[save]}
-          info="Painted here, from the same painter as the stage: what you see is what the files hold. Nothing leaves this device."
-        >
-          <div className="flex flex-col gap-2">
-            <Segmented<SaveKind>
-              size="sm"
-              fill
-              label="What is saved"
-              value={save}
-              onChange={(k) => choose({ save: k, mode: 'save' })}
-              options={[
-                { id: 'video', label: 'Video', title: 'The recap as it plays, its sound under it', disabled: canEncode === false ? 'This browser cannot encode H.264 video' : false },
-                { id: 'stills', label: pages > 1 ? `Stills · ${pages}` : 'Still', title: 'Each page as it rests, everything on, as PNG' },
-                { id: 'carousel', label: `Carousel · ${slides}`, title: 'Every slide in the strip’s order — the pages as PNG, each clip as its own video slide', disabled: slides < 2 ? 'One slide: the still is the carousel' : clips.length > 0 && canEncode === false ? 'Its clips need a video encoder' : false },
-              ]}
-            />
-            <p className="m-0 font-mono text-2xs text-muted tabular-nums">
-              {W} × {H} · {ratio} · {filled}/{resolved.slots.length} places filled
-            </p>
-            {canEncode === false && <span className="text-2xs text-warn">This browser cannot encode video — the stills still export.</span>}
-          </div>
-        </InspectorSection>
-        {publish.section}
+        {/* What is SET follows where it goes (lab 18): the files' choice under Save, the networks' under Publish. */}
+        {mode === 'save' && (
+          <InspectorSection
+            id="recap-export"
+            title="Export"
+            summary={{ video: `Video · ${film.total.toFixed(1)} s`, stills: `Stills · ${pages} PNG`, carousel: `Carousel · ${slides} slides` }[save]}
+            info="Painted here, from the same painter as the stage: what you see is what the files hold. Nothing leaves this device."
+          >
+            <div className="flex flex-col gap-2">
+              <Segmented<SaveKind>
+                size="sm"
+                fill
+                label="What is saved"
+                value={save}
+                onChange={(k) => choose({ save: k, mode: 'save' })}
+                options={[
+                  { id: 'video', label: 'Video', title: 'The recap as it plays, its sound under it', disabled: canEncode === false ? 'This browser cannot encode H.264 video' : false },
+                  { id: 'stills', label: pages > 1 ? `Stills · ${pages}` : 'Still', title: 'Each page as it rests, everything on, as PNG' },
+                  { id: 'carousel', label: `Carousel · ${slides}`, title: 'Every slide in the strip’s order — the pages as PNG, each clip as its own video slide', disabled: slides < 2 ? 'One slide: the still is the carousel' : clips.length > 0 && canEncode === false ? 'Its clips need a video encoder' : false },
+                ]}
+              />
+              <p className="m-0 font-mono text-2xs text-muted tabular-nums">
+                {W} × {H} · {ratio} · {filled}/{resolved.slots.length} places filled
+              </p>
+              {canEncode === false && <span className="text-2xs text-warn">This browser cannot encode video — the stills still export.</span>}
+            </div>
+          </InspectorSection>
+        )}
+        {(mode === 'publish' || !publish.verbs.ready) && publish.sections}
       </div>
       {foot && (visible || busy) && createPortal(footBar, foot)}
     </>

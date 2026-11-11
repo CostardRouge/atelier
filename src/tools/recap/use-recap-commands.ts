@@ -30,16 +30,18 @@ import { resolveRecap, templateDays, type DeviceAliases, type ResolvedRecap } fr
 import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
 import { hasOpenerSlide, shownPictures } from '../../shared/recap/recap-opener-plan';
 import { listTrips } from '../../shared/roadtrip/trip-store';
-import { chooseCarousel, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
+import { chooseCarousel, pickChannels, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { withJoined } from '../../shared/recap/recap-selection';
 import { withPlaceByHand } from '../../shared/recap/recap-places';
 import { pictureOfRow } from './recap-media';
-import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
+import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
-import { getPostiz, publishChannel } from '../../shared/sources/postiz/store';
-import { sendPost } from './recap-post';
+import { defaultDestinations, getPostiz, publishChannels } from '../../shared/sources/postiz/store';
+import { networkOf, postMoments } from '../../shared/sources/postiz/networks';
+import { readWhere, writeWhere } from './publish-where';
+import { sendPosts } from './recap-post';
 
 export interface RecapCommandsContext {
   /** The recap as it is NOW — written the moment an edit is applied, before React renders. */
@@ -419,66 +421,75 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
     },
     {
       id: 'recap.schedule',
-      title: 'Schedule the recap on Instagram',
+      title: 'Schedule the recap on the person’s networks',
       description:
-        'Render the open recap, send it to the person’s Postiz and schedule it on their Instagram — the caption must be approved first (recap.approve). kind: "reel" (the film), "carousel" (the slides, 10 at most) or "story" (default: a carousel for a dump, sheets or Wrapped, else the Reel). at: "next" (default — the next free slot of their rhythm), "now", "draft" (left in Postiz unsent), or a time: YYYY-MM-DDTHH:MM in the rhythm’s time zone, or ISO with its zone. trial: a Trial Reel shown to non-followers first; graduate: "auto" (shared with the followers when it performs, default) or "manual". collaborator: false leaves out the collaborator set on Sources. A broken rhythm (two the same day, past the week’s ceiling) is answered as warnings, not refused. Answers when it goes out and the post’s id.',
+        'Render the open recap ONCE, send it to the person’s Postiz and schedule it on their accounts — the caption must be approved first (recap.approve). on: the accounts — ["all"], networks ("instagram", "tiktok", "youtube", "bluesky", "threads", "x") or accounts by name (recap.calendar lists them); nothing: where this template went the last time. kind: "reel" (the film), "carousel" (the slides — each network takes what it holds: 10 on Instagram, the first 4 pictures on Bluesky and X, none on YouTube) or "story" (Instagram only) — default: a carousel for a dump, sheets or Wrapped, else the Reel. at: "next" (default — the next free slot of their rhythm), "now", "draft" (left in Postiz unsent), or a time: YYYY-MM-DDTHH:MM in the rhythm’s time zone, or ISO with its zone. stagger: true sends the other networks two hours after Instagram. trial: a Trial Reel on Instagram, shown to non-followers first; graduate: "auto" (shared with the followers when it performs, default) or "manual". collaborator: false leaves out the Instagram collaborator set on Sources. A broken rhythm is answered as warnings, not refused; a network that cannot take it, or refuses it, is answered in failed while the others go. Answers when it goes out and each post’s id.',
       params: {
+        on: { type: 'strings', description: 'The accounts: ["all"], networks, or names.', optional: true },
         kind: { type: 'string', enum: [...PUBLISH_KINDS], description: 'What it goes out as.', optional: true },
         at: { type: 'string', description: '"next", "now", "draft" or a time.', optional: true },
-        trial: { type: 'boolean', description: 'A Trial Reel.', optional: true },
+        stagger: { type: 'boolean', description: 'Instagram first, the other networks two hours later.', optional: true },
+        trial: { type: 'boolean', description: 'A Trial Reel on Instagram.', optional: true },
         graduate: { type: 'string', enum: ['auto', 'manual'], description: 'A trial shared with followers when it performs, or by hand.', optional: true },
-        collaborator: { type: 'boolean', description: 'Invite the collaborator set on Sources (default true).', optional: true },
+        collaborator: { type: 'boolean', description: 'Invite the collaborator set on Sources, on Instagram (default true).', optional: true },
       },
       available: () => {
         const conn = getPostiz();
         if (!conn) return 'no Postiz is connected — the person connects theirs on #/sources';
-        return publishChannel(conn) ? true : 'the person has not chosen the Instagram account Recap posts to, on #/sources';
+        return publishChannels(conn).length ? true : 'their Postiz has no account Recap can post to — they add one there, then refresh it on #/sources';
       },
       run: async (p) => {
         const d0 = doc();
         if (!d0.publish.approved) throw new CommandError('unavailable', 'the caption is not approved — show it to the person (recap.facts) and approve it once they say so (recap.approve)');
         const conn = getPostiz()!;
-        const channel = publishChannel(conn)!;
+        const picked = pickChannels(p.on, publishChannels(conn), defaultDestinations(conn, readWhere(d0.template)));
+        if ('error' in picked) throw new CommandError('invalid', picked.error);
         const client = new PostizClient(conn.apiBase, conn.apiKey);
         const order = carouselSlides(d0, c.current.resolved, c.current.layout, hasOpenerSlide(d0, c.current.film.opener));
         const kind = (p.kind as PublishKind | undefined) ?? defaultKind(d0, order.length);
         if (kind === 'carousel' && order.length < 2) throw new CommandError('invalid', 'this recap has one slide — a carousel needs two');
         const now = new Date();
-        const planned = (await client.posts(new Date(now.getTime() - 86400000), new Date(now.getTime() + 63 * 86400000))).filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => new Date(x.publishDate));
+        const planned = postMoments(
+          (await client.posts(new Date(now.getTime() - 86400000), new Date(now.getTime() + 63 * 86400000))).filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => ({ at: new Date(x.publishDate), channelId: x.channel?.id ?? null })),
+        );
         const target = scheduleTarget(p.at, conn.rhythm, planned, now);
         if ('error' in target) throw new CommandError('invalid', target.error);
         const signal = new AbortController().signal;
         const files = await renderPostFiles(input(), kind, order, slugOf(d0.title) || 'recap', () => undefined, signal);
         const text = captionText(d0, resolveRecap(d0));
-        const sent = await sendPost({
+        const isInstagram = (identifier: string) => networkOf(identifier)?.id === 'instagram';
+        const later = p.stagger === true && picked.channels.some((ch) => isInstagram(ch.identifier)) && target.at !== 'draft' ? new Date((target.at === 'now' ? now.getTime() : target.at.getTime()) + 2 * 3600_000) : null;
+        const result = await sendPosts({
           client,
-          channel,
           kind,
-          caption: text,
           files,
-          at: target.at,
+          seconds: kind === 'carousel' ? null : c.current.film.total,
+          destinations: picked.channels.map((channel) => ({ channel, caption: text, at: later && !isInstagram(channel.identifier) ? later : target.at })),
           trial: p.trial === true,
           graduate: (p.graduate as 'auto' | 'manual' | undefined) ?? 'auto',
           collaborators: p.collaborator !== false && conn.collaborator ? [conn.collaborator] : [],
           signal,
         });
-        c.current.change((d) => withRecap(d, { publish: withPublication(d.publish, sent) }));
+        if (result.sent.length) {
+          c.current.change((d) => withRecap(d, { publish: withPublications(d.publish, result.sent) }));
+          writeWhere(d0.template, result.sent.map((x) => x.channelId));
+        }
         return {
-          postId: sent.postId,
           kind,
-          trial: sent.trial,
-          on: channel.name,
           goesOut: target.at instanceof Date ? `${slotLabel(target.at, conn.rhythm.timeZone)} (${conn.rhythm.timeZone})` : target.at,
+          posts: result.sent.map((x) => ({ postId: x.postId, on: x.channel, network: networkOf(x.network)?.label ?? x.network, ...(x.trial ? { trial: true } : {}), ...(later && !isInstagram(x.network) ? { goesOut: slotLabel(later, conn.rhythm.timeZone) } : {}) })),
+          ...(result.failed.length ? { failed: result.failed } : {}),
+          ...(result.notes.length ? { notes: result.notes } : {}),
           files: files.length,
           warnings: target.at instanceof Date ? rhythmWarnings(conn.rhythm, planned, target.at) : [],
-          remember: 'Instagram’s API sets no location: tell the person to add it in Instagram once the post is out.',
+          ...(result.sent.some((x) => isInstagram(x.network)) ? { remember: 'Instagram’s API sets no location: tell the person to add it in Instagram once the post is out.' } : {}),
         };
       },
     },
     {
       id: 'recap.unschedule',
       title: 'Take a scheduled post back',
-      description: 'Delete a post this recap sent from the person’s Postiz, by its id (recap.get › post.publications), before it goes out — and forget it here. A post already out stays on Instagram.',
+      description: 'Delete a post this recap sent from the person’s Postiz, by its id (recap.get › post.publications — one send to several networks is several posts, each with its id), before it goes out — and forget it here. A post already out stays on its network.',
       params: { postId: { type: 'string', description: 'The post’s id.' } },
       available: () => (getPostiz() ? true : 'no Postiz is connected'),
       run: async (p) => {

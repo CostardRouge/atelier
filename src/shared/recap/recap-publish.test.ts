@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRecapDoc, readRecapDoc, withPictures, withRecap, type RecapPicture } from './recap-doc';
+import { publicationGroups, withPublications } from './recap-publish';
 import { DEFAULT_CAPTION, captionText, defaultKind, hashtagOf, placeTags, readPublish, withCaption, withPublication } from './recap-publish';
 import { resolveRecap } from './recap-slots';
 
@@ -19,7 +20,7 @@ describe('a recap’s post', () => {
     expect(readPublish({ caption: 3, approved: 'yes', publications: [{ postId: '' }, { postId: 'p1', channelId: 'c', kind: 'bogus', at: 'never' }] })).toEqual({
       caption: null,
       approved: false,
-      publications: [{ postId: 'p1', channelId: 'c', channel: '', kind: 'reel', trial: false, at: null, sentAt: 0, caption: '' }],
+      publications: [{ postId: 'p1', channelId: 'c', channel: '', network: 'instagram', group: null, kind: 'reel', trial: false, at: null, sentAt: 0, caption: '' }],
     });
   });
 
@@ -44,9 +45,17 @@ describe('a recap’s post', () => {
     const approved = { ...doc.publish, approved: true };
     expect(withCaption(approved, DEFAULT_CAPTION)).toBe(approved);
     expect(withCaption(approved, 'New words').approved).toBe(false);
-    const sent = withPublication(doc.publish, { postId: 'p1', channelId: 'c', channel: 'Steeve', kind: 'reel', trial: true, at: '2026-11-17T08:00:00.000Z', sentAt: 5, caption: 'x' });
+    const sent = withPublication(doc.publish, { postId: 'p1', channelId: 'c', channel: 'Steeve', kind: 'reel', trial: true, at: '2026-11-17T08:00:00.000Z', sentAt: 5, caption: 'x', network: 'instagram', group: null });
     expect(sent.approved).toBe(true);
     expect(readRecapDoc(withRecap(doc, { publish: sent }), 'local')?.publish.publications[0]).toMatchObject({ postId: 'p1', trial: true });
+  });
+
+  it('keeps one send to several networks as one group, and reads an older publication as Instagram alone', () => {
+    const pub = (postId: string, network: string, group: string | null, sentAt: number) => ({ postId, channelId: network, channel: network, kind: 'reel' as const, trial: false, at: null, sentAt, caption: '', network, group });
+    const kept = withPublications(doc.publish, [pub('a', 'instagram', 'g1', 10), pub('b', 'tiktok', 'g1', 10), pub('c', 'bluesky', 'g2', 20)]);
+    expect(publicationGroups(kept.publications).map((g) => g.map((p) => p.postId))).toEqual([['c'], ['a', 'b']]);
+    expect(readPublish({ publications: [{ postId: 'old', channelId: 'c' }] }).publications[0]).toMatchObject({ network: 'instagram', group: null });
+    expect(withPublications(doc.publish, [])).toBe(doc.publish);
   });
 
   it('proposes a carousel for a dump, a Reel for a calendar', () => {

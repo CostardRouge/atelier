@@ -1,12 +1,15 @@
 /**
- * Sending a recap's post to the person's Postiz — the one routine behind
- * Export › *Publish* and `recap.schedule` (lab 12): the files checked before
- * a byte leaves, uploaded one by one, the post made, and the publication the
- * recap keeps.
+ * Sending a recap to the person's Postiz — the one routine behind Export ›
+ * *Publish* and `recap.schedule` (lab 12; several networks since lab 18): the
+ * recap rendered ONCE, what each network takes of it decided (`networkPlan`),
+ * the files checked before a byte leaves and each uploaded once, then ONE post
+ * per network — each made, and failing, alone — and the publications the
+ * recap keeps, one send being one group.
  */
 
 import type { Publication, PublishKind } from '../../shared/recap/recap-publish';
-import { postProblem, uploadProblem, type PostizChannel, type PostizClient } from '../../shared/sources/postiz/client';
+import { failureHint, postProblem, uploadProblem, type PostizChannel, type PostizClient, type PostizMedia } from '../../shared/sources/postiz/client';
+import { mediaTypeOf, networkOf, networkPlan, type PostMusic } from '../../shared/sources/postiz/networks';
 import { putPostThumb } from './recap-store';
 
 /** About 240 px wide: what the gallery's week strip shows of a post. */
@@ -55,44 +58,126 @@ async function vignetteOf(file: File): Promise<Blob | null> {
   }
 }
 
-export interface SendPost {
-  client: PostizClient;
+/** One network a recap goes out on, with what is its own there. */
+export interface Destination {
   channel: PostizChannel;
-  kind: PublishKind;
+  /** The words as that network gets them, already fitted. */
   caption: string;
-  files: readonly File[];
+  title?: string | null;
   at: Date | 'now' | 'draft';
+  music?: PostMusic | null;
+}
+
+export interface SendPosts {
+  client: PostizClient;
+  kind: PublishKind;
+  files: readonly File[];
+  /** The film's length, for the networks that cap it. */
+  seconds: number | null;
+  destinations: readonly Destination[];
   trial: boolean;
   graduate: 'auto' | 'manual';
   collaborators: readonly string[];
   signal: AbortSignal;
   /** Before each file leaves: its place, of how many. */
   onFile?: (n: number, of: number) => void;
+  /** Before each post is made: its place, of how many, and where. */
+  onPost?: (n: number, of: number, channel: string) => void;
 }
 
-export async function sendPost(s: SendPost): Promise<Publication> {
-  const problem = postProblem(s.kind, s.files) ?? s.files.map(uploadProblem).find(Boolean) ?? null;
+export interface SendResult {
+  sent: Publication[];
+  /** The networks nothing was scheduled on, each with its reason. */
+  failed: { channel: string; why: string }[];
+  /** What a network was sent less of (a carousel cut to its count). */
+  notes: string[];
+}
+
+const said = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+export async function sendPosts(s: SendPosts): Promise<SendResult> {
+  const problem = postProblem(s.kind, s.files);
   if (problem) throw new Error(problem);
-  const media = [];
-  for (const [i, f] of s.files.entries()) {
-    s.onFile?.(i + 1, s.files.length);
-    media.push(await s.client.upload(f, s.signal));
+  if (!s.destinations.length) throw new Error('Choose where it goes: no network is ticked.');
+  const media = s.files.map((f) => mediaTypeOf(f.type));
+  const failed: SendResult['failed'] = [];
+  const notes: string[] = [];
+  const going: { d: Destination; take: number[] }[] = [];
+  for (const d of s.destinations) {
+    const net = networkOf(d.channel.identifier);
+    const plan = net ? networkPlan(net, s.kind, media, s.seconds) : ({ ok: false, why: `Recap does not post to ${d.channel.identifier} yet.`, short: 'not yet' } as const);
+    if (!plan.ok) {
+      failed.push({ channel: d.channel.name, why: plan.why });
+      continue;
+    }
+    const heavy = plan.take.map((i) => uploadProblem(s.files[i])).find(Boolean);
+    if (heavy) {
+      failed.push({ channel: d.channel.name, why: heavy });
+      continue;
+    }
+    if (plan.note) notes.push(plan.note);
+    going.push({ d, take: plan.take });
   }
-  const trial = s.kind === 'reel' && s.trial;
-  const ids = await s.client.createPost({ channel: s.channel, kind: s.kind, caption: s.caption, media, at: s.at, trial, graduate: s.graduate, collaborators: s.collaborators }, s.signal);
-  if (!ids.length) throw new Error('Postiz took the post but gave no id back — look in Postiz before sending it again.');
-  // The strip's vignette of what went: best effort, never in the way of the post.
-  void vignetteOf(s.files[0])
-    .then((blob) => blob && putPostThumb(ids[0], blob))
-    .catch(() => undefined);
-  return {
-    postId: ids[0],
-    channelId: s.channel.id,
-    channel: s.channel.name,
-    kind: s.kind,
-    trial,
-    at: s.at instanceof Date ? s.at.toISOString() : s.at === 'now' ? new Date().toISOString() : null,
-    sentAt: Date.now(),
-    caption: s.caption,
-  };
+  if (!going.length) throw new Error(failed.map((f) => `${f.channel}: ${f.why}`).join(' '));
+
+  // Each file leaves once, whatever the number of networks that take it.
+  const needed = [...new Set(going.flatMap((g) => g.take))].sort((a, b) => a - b);
+  const held = new Map<number, PostizMedia>();
+  for (const [n, i] of needed.entries()) {
+    s.onFile?.(n + 1, needed.length);
+    held.set(i, await s.client.upload(s.files[i], s.signal));
+  }
+
+  const group = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const sent: Publication[] = [];
+  for (const [n, { d, take }] of going.entries()) {
+    if (s.signal.aborted) {
+      failed.push({ channel: d.channel.name, why: 'Cancelled before it was sent.' });
+      continue;
+    }
+    s.onPost?.(n + 1, going.length, d.channel.name);
+    const instagram = networkOf(d.channel.identifier)?.id === 'instagram';
+    const trial = instagram && s.kind === 'reel' && s.trial;
+    try {
+      const ids = await s.client.createPost(
+        { channel: d.channel, kind: s.kind, caption: d.caption, media: take.map((i) => held.get(i)!), at: d.at, trial, graduate: s.graduate, collaborators: instagram ? s.collaborators : [], title: d.title, music: d.music },
+        s.signal,
+      );
+      if (!ids.length) throw new Error('Postiz took the post but gave no id back — look in Postiz before sending it again.');
+      // The strip's vignette of what went: best effort, never in the way of the post.
+      void vignetteOf(s.files[take[0]])
+        .then((blob) => blob && putPostThumb(ids[0], blob))
+        .catch(() => undefined);
+      sent.push({
+        postId: ids[0],
+        channelId: d.channel.id,
+        channel: d.channel.name,
+        network: d.channel.identifier,
+        group,
+        kind: s.kind,
+        trial,
+        at: d.at instanceof Date ? d.at.toISOString() : d.at === 'now' ? new Date().toISOString() : null,
+        sentAt: Date.now(),
+        caption: d.caption,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') failed.push({ channel: d.channel.name, why: 'Cancelled before it was sent.' });
+      else failed.push({ channel: d.channel.name, why: said(err) });
+    }
+  }
+  return { sent, failed, notes };
+}
+
+const stop = (t: string) => (/[.!?…]$/.test(t.trim()) ? t.trim() : `${t.trim()}.`);
+
+/** What a send did, in sentences a person reads: where it went, then each network that did not get it, why, and what to do. */
+export function sendSummary(r: SendResult, where: string): string {
+  const names = r.sent.map((p) => p.channel);
+  const on = names.length === 1 ? names[0] : `${names.length} accounts`;
+  const head = r.sent.length ? `${where} on ${on}.` : 'Nothing was sent.';
+  const failed = r.failed.map((f) => {
+    const hint = failureHint(f.why);
+    return `Not on ${f.channel}: ${stop(f.why)}${hint ? ` ${hint}` : ''}`;
+  });
+  return [head, ...r.notes, ...failed].join(' ');
 }

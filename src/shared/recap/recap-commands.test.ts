@@ -83,6 +83,30 @@ describe('what an agent writes a caption from, and when it goes out', () => {
   });
 });
 
+describe('the accounts an agent posts to', () => {
+  const channels = [
+    { id: 'a', name: '📸 Steeve taking photos', identifier: 'instagram' },
+    { id: 'b', name: 'Steeve Pommier', identifier: 'instagram' },
+    { id: 'c', name: 'costardrouge', identifier: 'tiktok' },
+    { id: 'd', name: 'Steeve Pommier', identifier: 'bluesky' },
+  ];
+  it('reads all, a network, a name or a part of one', async () => {
+    const { pickChannels } = await import('./recap-commands');
+    const ids = (raw: unknown, fallback: string[] = []) => {
+      const r = pickChannels(raw, channels, fallback);
+      return 'channels' in r ? r.channels.map((c) => c.id) : r.error;
+    };
+    expect(ids(['all'])).toEqual(['a', 'b', 'c', 'd']);
+    expect(ids(['instagram'])).toEqual(['a', 'b']);
+    expect(ids(['TikTok', 'taking photos'])).toEqual(['c', 'a']);
+    expect(ids(['Steeve Pommier'])).toEqual(['b', 'd']);
+    expect(ids(undefined, ['c'])).toEqual(['c']);
+    expect(ids(undefined)).toMatch(/say which/);
+    expect(ids(['linkedin'])).toMatch(/no account "linkedin"/);
+    expect(ids(['steeve'])).toMatch(/no account/);
+  });
+});
+
 describe('the pool an agent browses, and the carousel it sets', () => {
   it('lists every picture, filtered, with its key, Winnow id and where it shows', async () => {
     const { createRecapDoc, withPictures } = await import('./recap-doc');

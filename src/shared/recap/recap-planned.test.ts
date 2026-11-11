@@ -8,7 +8,7 @@ const post = (id: string, at: string, state: PostizPost['state'] = 'queue', cont
 describe('the planned weeks', () => {
   const doc = withRecap(createRecapDoc('week', 'local', { anchor: '2026-10-05', now: 1 }), {
     title: 'Tasmania · week 45',
-    publish: { caption: null, approved: true, publications: [{ postId: 'p2', channelId: 'c', channel: 'Steeve', kind: 'reel', trial: true, at: '2026-11-17T08:00:00.000Z', sentAt: 1, caption: '' }] },
+    publish: { caption: null, approved: true, publications: [{ postId: 'p2', channelId: 'c', channel: 'Steeve', kind: 'reel', trial: true, at: '2026-11-17T08:00:00.000Z', sentAt: 1, caption: '', network: 'instagram', group: null }] },
   });
   const posts = [post('p1', '2026-11-10T08:00:00Z', 'published'), post('p2', '2026-11-17T08:00:00Z'), post('p3', '2026-11-20T18:00:00Z', 'error', '\n  Bali, the departure'), post('p4', '2026-11-12T07:00:00Z')];
 

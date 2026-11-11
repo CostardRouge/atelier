@@ -14,6 +14,17 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Publishing reaches every network your Postiz holds, not only Instagram: the Sources screen lists your Instagram,
   TikTok, YouTube, Bluesky, Threads and X accounts with their marks, and *Refresh* asks your Postiz again after you
   add one there.
+- A recap goes out on several networks at once: under *Publish*, the Export tab has a **Where** section with a chip
+  per account saying what it will receive there — a Reel, a Short, a video, a carousel's first pictures — or why it
+  cannot. The recap is rendered once, each file sent once, and each network is scheduled on its own: one that refuses
+  never holds the others back, and the note says which and what to do. The accounts ticked are those of your last
+  send of that template. *Instagram first, the others 2 h later* staggers them; a send to several networks counts
+  once in your rhythm. An agent picks the accounts too (`recap.schedule` `on`).
+
+### Changed
+
+- The Export tab shows what matches where the recap goes: the files' choice under *Save*, and *Where · When · Words*
+  under *Publish*.
 
 ## [1.8.0] - 2026-11-11 — Brazilwood
 

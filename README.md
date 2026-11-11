@@ -3718,16 +3718,25 @@ Postiz connected — a *Save · Publish* switch that says where the recap goes
 the foot becomes its progress bar, on every tab.
 
 **Publishing.** Once your own **Postiz** is connected on `#/sources`, the
-*Export* tab has a *Publish* section and its foot a *Publish* side: the recap is rendered, sent to your
-Postiz and scheduled on your Instagram — as a **Reel** (a **Trial Reel**,
-shown to non-followers first, if you like, shared with your followers when it
-works or by hand), a **carousel** (its slides as JPEG, a clip as a video
-slide; Instagram's API takes 10) or a **story**. *When* says the slot it goes out
+*Export* tab's foot has a *Publish* side, and under it the tab shows *Where ·
+When · Words*: the recap is rendered ONCE, sent to your Postiz and scheduled
+on every account you tick in **Where** — Instagram, TikTok, YouTube, Bluesky,
+Threads, X — each chip saying what that network receives: the film as a
+**Reel** (a **Trial Reel** on Instagram, shown to non-followers first, if you
+like, shared with your followers when it works or by hand), a Short or a
+video; a **carousel** cut to what the network holds (its slides as JPEG, a
+clip as a video slide; 10 on Instagram, the first four pictures on Bluesky and
+X, none on YouTube — said on the chip); a **story** on Instagram only. Each
+file leaves once, and each network is scheduled on its own: one that refuses
+never holds the others back, and the note says which, why and what to do.
+The accounts ticked are those of your last send of that template. *When* says the slot it goes out
 in, in big type — the next free one of your rhythm — and *Change* opens your
 rhythm as a small grid, its slots as columns and this week and the next two as
 rows (a slot already taken in Postiz hatched, one gone dashed, the chosen one
 red), with *Another time…*, *Now* and *Draft* (left in Postiz) under it; past
-your ceiling, or a second post the same day, the card says so and lets you. The **caption** is a template of Recap's words —
+your ceiling, or a second post the same day, the card says so and lets you;
+*Instagram first, the others 2 h later* staggers the networks, and a send to
+several of them counts once in your rhythm. The **caption** is a template of Recap's words —
 `{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
 places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
 shows it. Sending it approves it; an agent can write one, and it waits for
