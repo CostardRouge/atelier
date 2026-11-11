@@ -153,6 +153,20 @@ async function measure(page, cdp, rootName, ms, act) {
   };
 }
 
+/** Type `text` into `field` a key at a time: the time from each keydown to the next painted frame. */
+async function typeLatency(page, field, text) {
+  await field.click();
+  const out = [];
+  for (const ch of text) {
+    await page.evaluate(() => {
+      document.addEventListener('keydown', () => (window.__t0 = performance.now()), { once: true, capture: true });
+    });
+    await page.keyboard.type(ch);
+    out.push(await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => setTimeout(() => res(Math.round(performance.now() - window.__t0)), 0)))));
+  }
+  return out;
+}
+
 /** Click each target in turn, the time from the press to the next painted frame. */
 async function clickLatency(page, targets) {
   const out = [];
@@ -190,6 +204,12 @@ async function seedTrip(page, post) {
       if (post) {
         const p = tt.createTripPost('reel', '2026-10-27', 'Perf');
         p.slides[0].hook = [{ id: post.hook, options: {} }];
+        // More slides each carrying an opener: what an edit of the piece prepares again.
+        for (let i = 0; i < (post.more ?? 0); i++) {
+          const s = tt.createPostSlide(null);
+          s.hook = [{ id: post.hook, options: {} }];
+          p.slides.push(s);
+        }
         trip.posts = [p];
       }
       await ts.putTrip(trip);
@@ -295,6 +315,36 @@ const SCENARIOS = {
     await page.keyboard.press('Space');
     await page.waitForTimeout(400);
     return { play };
+  },
+  /** Trips, EDITING a Reel of four slides that each open on a Virée: a key typed in the piece's title. */
+  async 'trips-edit'(page, cdp) {
+    const { trip, postId } = await seedTrip(page, { hook: 'drive', more: 3 });
+    await page.goto(new URL(`#/roadtrip/west-coast-${trip.id.slice(0, 8)}/2026-10-27/${postId}`, BASE).href);
+    await page.waitForTimeout(5000);
+    await page.getByRole('button', { name: 'Content', exact: true }).first().click();
+    await page.waitForTimeout(1500);
+    const clicks = await typeLatency(page, page.getByRole('textbox', { name: 'What this piece shows' }), ' sunset');
+    return { clicks };
+  },
+  /** Trips, the same four-Virée Reel: six steps of the first Virée's «Driving length» slider (each prepares the openers again). */
+  async 'trips-opener-step'(page, cdp) {
+    void cdp;
+    const { trip, postId } = await seedTrip(page, { hook: 'drive', more: 3 });
+    await page.goto(new URL(`#/roadtrip/west-coast-${trip.id.slice(0, 8)}/2026-10-27/${postId}`, BASE).href);
+    await page.waitForTimeout(5000);
+    await page.getByRole('button', { name: 'Look', exact: true }).first().click();
+    await page.waitForTimeout(1200);
+    await page.getByRole('button', { name: /^6 Motion/ }).first().click();
+    await page.waitForTimeout(1200);
+    await page.getByRole('slider', { name: 'Driving length' }).focus();
+    const clicks = [];
+    for (let i = 0; i < 6; i++) {
+      await page.evaluate(() => document.addEventListener('keydown', () => (window.__t0 = performance.now()), { once: true, capture: true }));
+      await page.keyboard.press('ArrowRight');
+      clicks.push(await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => setTimeout(() => res(Math.round(performance.now() - window.__t0)), 0)))));
+      await page.waitForTimeout(150);
+    }
+    return { clicks };
   },
   /** Trips, the same Reel playing with its Look tab open: Virée's chapters pinned on the stage. */
   async 'trips-viree-look'(page, cdp) {
