@@ -20,7 +20,7 @@ import type { TripDoc, TripPost } from '../trip-types';
 import type { SlideLength } from '../slide-length';
 import { hookCalendar, hookStages } from './hook-calendar';
 import { townsIfLoaded } from '../load-gazetteer';
-import type { HookContext, HookLayer, HookPicture } from './hook-variant';
+import type { HookContext, HookLayer, HookPicture, ResolvedHook } from './hook-variant';
 import { resolveHook } from './registry';
 import { resolveRef, vehicleRefForDay } from '../vehicle-fleet';
 import { landIfLoaded } from '../../map/load-terrain';
@@ -118,6 +118,78 @@ export function hookContextFor(
 }
 
 /**
+ * A CACHE of resolved openers, OWNED by one surface (2026-11-10, `performance.md` rule 5). An edit of one slide
+ * prepared every opener of the piece again — each Virée planning its whole road, its vehicles, its crossings —
+ * in the deck's lengths, the rail's thumbnails and the stage alike. A resolution is kept per slide's layers
+ * (the same array while that slide is untouched) and given back while everything an opener reads is the same:
+ * the slide's timing, the aspect, the badge's content, the pictures, and the trip's and the piece's parts.
+ *
+ * A resolution carries mutable scratch (Virée's road, its caches), so a cache is never shared between two
+ * surfaces that paint: each makes its own (`createHookCache()`); the deck's lengths, which never paint, use
+ * `resolvedForTiming`.
+ */
+export interface HookCache {
+  resolve(
+    trip: TripDoc,
+    post: TripPost,
+    layers: readonly HookLayer[],
+    timing: HookTiming,
+    view?: { aspect?: number; content?: BadgeContent | null; pictures?: ReadonlyMap<string, HookPicture> },
+  ): ResolvedHook;
+}
+
+const KEPT_PER_LAYERS = 4;
+
+export function createHookCache(): HookCache {
+  const kept = new WeakMap<readonly HookLayer[], { deps: readonly unknown[]; hook: ResolvedHook }[]>();
+  return {
+    resolve(trip, post, layers, timing, view = {}) {
+      const aspect = view.aspect ?? 1;
+      const content = view.content ?? null;
+      const deps: unknown[] = [
+        aspect,
+        // The badge's words are rebuilt per call: compared by what they say.
+        content ? JSON.stringify(content) : null,
+        view.pictures,
+        timing.durationSeconds,
+        timing.screenSeconds,
+        timing.length,
+        timing.counterMode,
+        post.date,
+        hookCalendar(trip, post.id),
+        trip.stages,
+        trip.vehicles,
+        trip.crossings,
+        trip.road,
+        trip.placeStyle,
+        trip.stateCodes,
+        trip.badgeWords,
+        trip.theme,
+        trip.name,
+        townsIfLoaded(),
+        landIfLoaded(),
+      ];
+      const list = kept.get(layers) ?? [];
+      const hit = list.find((e) => e.deps.length === deps.length && e.deps.every((d, i) => Object.is(d, deps[i])));
+      if (hit) return hit.hook;
+      const hook = resolveHook(layers, hookContextFor(trip, post, aspect, content, view.pictures, timing));
+      list.push({ deps, hook });
+      if (list.length > KEPT_PER_LAYERS) list.shift();
+      kept.set(layers, list);
+      return hook;
+    },
+  };
+}
+
+/** The deck's lengths and `openerMoves`: surfaces that read an opener's TIMING and never paint it. */
+const forTiming = createHookCache();
+
+/** A slide's opener resolved for its timing alone (aspect 1, no content, no pictures), cached. */
+export function resolvedForTiming(trip: TripDoc, post: TripPost, layers: readonly HookLayer[], timing: HookTiming): ResolvedHook {
+  return forTiming.resolve(trip, post, layers, timing);
+}
+
+/**
  * Whether an opener plays anything — what makes an `auto` slide leave as a
  * video even when nothing else on it moves. Measured by preparing it, never
  * guessed from its id: a scrub on the trip's first day has nowhere to sweep
@@ -130,7 +202,7 @@ export function openerMoves(
   timing: HookTiming,
 ): boolean {
   if (!layers?.length) return false;
-  return resolveHook(layers, hookContextFor(trip, post, 1, null, undefined, timing)).seconds > 0;
+  return resolvedForTiming(trip, post, layers, timing).seconds > 0;
 }
 
 /** Whether the opener on the slide carrying the piece's badge plays anything. */
