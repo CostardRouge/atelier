@@ -213,6 +213,8 @@ export function postizText(html: string): string {
 /** What to do about a post Instagram refused, from what Postiz says — null when the error is not one we know. */
 export function failureHint(error: string | null): string | null {
   if (!error) return null;
+  // Postiz uploads a video to Bluesky's video service and waits for its job: none back means Bluesky refused it.
+  if (/jobId|video\.bsky|uploadVideo|bluesky.{0,60}video/i.test(error)) return 'Bluesky refused the video. Its video upload needs the account’s email verified in Bluesky (Settings › Account), within a daily quota — verify it, or send Bluesky a carousel of pictures.';
   if (/unaudited|can only post to private|private accounts?/i.test(error)) return 'TikTok lets an app it has not audited post privately only: finish the audit of your TikTok app, or set the account private.';
   if (/bit ?rate|could not process (this|the) video|video format|codec|aspect ratio|frame ?rate/i.test(error)) return 'Send it again: Recap now caps what it publishes at 30 fps and a bitrate the networks take.';
   if (/title/i.test(error) && /required|empty|missing|short/i.test(error)) return 'Give it a title in Words, then send it again.';

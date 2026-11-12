@@ -96,6 +96,7 @@ describe('what Postiz keeps, read for a person', () => {
     expect(failureHint('unaudited_client_can_only_post_to_private_accounts')).toMatch(/TikTok/);
     expect(failureHint('Failed to fetch media from url')).toMatch(/reachable/);
     expect(failureHint('The access token has expired')).toMatch(/Reconnect/);
+    expect(failureHint('Could not prepare the post for Bluesky, nothing was published: missing jobId')).toMatch(/Bluesky refused the video/);
     expect(failureHint('Something else')).toBeNull();
     expect(failureHint(null)).toBeNull();
     expect(postizHome('https://postiz.example.com/api/public/v1')).toBe('https://postiz.example.com');

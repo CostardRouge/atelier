@@ -58,6 +58,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   take their slots: a line under the week counts them, and the free slots, the next one and the week's ceiling are
   about your whole account. `recap.calendar` lists Atelier's posts the same way, with how many of other apps it left
   out.
+- A post Bluesky refused with "missing jobId" now says why in Recap's *Planned*: Bluesky turned the video down,
+  most often because the account's email is not verified in Bluesky, and what to do about it.
 
 ## [1.8.0] - 2026-11-11 — Brazilwood
 
