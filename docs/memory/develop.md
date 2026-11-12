@@ -521,7 +521,14 @@ Pick grey's arm closes it and a tap on the picture picks — in the tool's
 drawer and the Trips sheet alike. The sheet's FOOTER wraps on a phone (2026-10-20): its
 words (`footerHint` · `told`) are one `line-clamp-2` paragraph that takes the
 row's free width and, under 820 px, a row of its own above Cancel / Done —
-beside them it was squeezed to one word per line.
+beside them it was squeezed to one word per line. The sheet's settings COLUMN keeps a right gutter of
+`pr-2` (2026-11-12, his «slight horizontal scroll»): the presets' rows, their
+naming form and *Save this picture's light…* bleed `-mx-2` for their hover
+wash, and the column's 6 px made it 2 px wider than itself (354/352 at 1440,
+368/366 at 390, measured on every fold and every segmented choice). **Rule**:
+a bleed of N needs a gutter of at least N in the column that scrolls it; the
+tool's own column has `pr-3` (and `overflow-x-hidden`), which is why only the
+sheet showed it. The left half of the bleed is clipped by the scroller in both.
 
 **The Crop tab's Auto level and Crop to subject are switches too** (his
 question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over

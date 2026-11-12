@@ -489,8 +489,11 @@ function DevelopSheetBody({
             <DevelopCaption draft={draft.draft} note={caption} picture={picture} />
           </div>
 
-          {/* The column: the pipeline in order, then the look under it. */}
-          <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-0 max-[820px]:w-full max-[820px]:flex-1">
+          {/* The column: the pipeline in order, then the look under it. Its
+              right gutter is the room the presets' rows bleed into (`-mx-2`,
+              their hover wash): 6 px of it made the column 2 px wider than
+              itself and scroll sideways (2026-11-12). */}
+          <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-2 flex flex-col gap-0 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram
               histogram={picture.histogram}
               clipping={clipping}
