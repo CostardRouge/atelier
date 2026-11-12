@@ -3782,8 +3782,13 @@ once in the week. A tile opens a small card: its time, each network's state
 (with a link once it is out), a failure's reason and what to do about it, and
 its verbs — *Open recap*, *Take back* (deleted in Postiz before it goes out),
 *Send again* (the recap on Export › Publish, only what failed ticked), *View
-on* the network, *Open in Postiz*, *Delete*. Posts scheduled outside Recap
-show too, by their caption.
+on* the network, *Open in Postiz*, *Delete*. Only what Atelier sent is drawn:
+every post Atelier sends carries the tag **Atelier** in Postiz — create a tag
+of that name once in your Postiz for it to stick (its API cannot make one) —
+and a post a recap of this device sent shows even without it. Posts of your
+other apps on the same Postiz (your Sketchbook) are hidden, a quiet line under
+the week counting them, yet they still take their slots: the free slots, the
+next one and the week's ceiling are about your whole account.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and

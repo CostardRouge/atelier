@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { PostizPost } from '../sources/postiz/client';
 import { createRecapDoc, withRecap } from './recap-doc';
-import { plannedPeek, plannedTiles, plannedWeeks, sameDayClash, tileState } from './recap-planned';
+import { atelierPosts, hiddenInWeek, plannedPeek, plannedTiles, plannedWeeks, sameDayClash, tileState, weekStrip } from './recap-planned';
+import { DEFAULT_RHYTHM } from '../sources/postiz/rhythm';
 
-const post = (id: string, at: string, state: PostizPost['state'] = 'queue', content = 'A caption\nmore'): PostizPost => ({ id, group: null, content, publishDate: at, state, releaseURL: null, error: state === 'error' ? 'media' : null, channel: null });
+/** A post Atelier sent (tagged), unless `tags` says otherwise. */
+const post = (id: string, at: string, state: PostizPost['state'] = 'queue', content = 'A caption\nmore', tags: string[] = ['Atelier']): PostizPost => ({ id, group: null, tags, content, publishDate: at, state, releaseURL: null, error: state === 'error' ? 'media' : null, channel: null });
 
 describe('the planned weeks', () => {
   const doc = withRecap(createRecapDoc('week', 'local', { anchor: '2026-10-05', now: 1 }), {
@@ -85,5 +87,48 @@ describe('one send on several networks', () => {
     // Two SENDS the same day (the 9:00 pair and the 19:00 recap) are a clash; a send's own networks are not.
     expect(sameDayClash(weeks[0], 'Europe/Paris')).toBe(true);
     expect(sameDayClash({ monday: weeks[0].monday, items: items.filter((i) => ['a', 'c'].includes(i.postId)) }, 'Europe/Paris')).toBe(false);
+  });
+});
+
+describe('only Atelier’s posts are drawn, every post still counts', () => {
+  const doc = withRecap(createRecapDoc('week', 'local', { anchor: '2026-10-05', now: 1 }), {
+    title: 'Before the tag',
+    publish: { caption: null, captions: {}, titles: {}, music: { source: 'own', tracks: {}, musicVolume: 100, filmVolume: 0 }, approved: true, publications: [{ postId: 'old', channelId: 'c', channel: 'Steeve', kind: 'reel', trial: false, at: '2026-11-11T18:00:00.000Z', sentAt: 1, caption: '', network: 'instagram', group: null }] },
+  });
+  const posts: PostizPost[] = [
+    post('mine', '2026-11-13T18:00:00Z'),
+    post('lower', '2026-11-16T18:00:00Z', 'queue', 'x', ['atelier']),
+    post('old', '2026-11-11T18:00:00Z', 'queue', 'x', []),
+    { ...post('twin', '2026-11-11T20:00:00Z', 'queue', 'x', []), group: 'g-old' },
+    { ...post('old', '2026-11-11T18:00:00Z', 'queue', 'x', []), id: 'old-sibling', group: 'g-old' },
+    post('sketch', '2026-11-15T07:00:00Z', 'queue', 'A p5 sketch', []),
+    post('sketch-tagged', '2026-11-14T07:00:00Z', 'queue', 'Sketchbook', ['Sketchbook']),
+  ];
+
+  it('knows a post by the Atelier tag, by a recap’s publication, or by the group of one', () => {
+    // `twin` and `old-sibling` share a Postiz group, but neither is tied to a recap: they stay out.
+    const { mine, others } = atelierPosts(posts, [doc]);
+    expect(mine.map((p) => p.id)).toEqual(['mine', 'lower', 'old']);
+    expect(others).toBe(4);
+    const grouped = atelierPosts([{ ...posts[2], group: 'g-old' }, posts[3]], [doc]);
+    expect(grouped.mine.map((p) => p.id)).toEqual(['old', 'twin']);
+  });
+
+  it('draws only them, and says how many of another app’s it left out', () => {
+    const items = plannedWeeks(posts, [doc], 'Europe/Paris').flatMap((w) => w.items.map((i) => i.postId));
+    expect(items).toEqual(['old', 'mine', 'lower']);
+    expect(hiddenInWeek(posts, [doc], 'Europe/Paris', '2026-11-09')).toBe(4);
+    expect(hiddenInWeek(posts, [doc], 'Europe/Paris', '2026-11-16')).toBe(0);
+  });
+
+  it('keeps another app’s post taking its day: no free slot is offered there', () => {
+    const now = new Date('2026-11-10T10:00:00Z');
+    const days = weekStrip(posts, [doc], DEFAULT_RHYTHM, '2026-11-09', now);
+    const sunday = days[6];
+    expect(sunday.items).toEqual([]);
+    expect(sunday.free).toEqual([]);
+    // Without the sketch, Sunday's slot is free again.
+    const without = weekStrip(posts.filter((p) => p.id !== 'sketch'), [doc], DEFAULT_RHYTHM, '2026-11-09', now);
+    expect(without[6].free.map((d) => d.toISOString())).toEqual(['2026-11-15T09:00:00.000Z']);
   });
 });

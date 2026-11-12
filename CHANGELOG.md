@@ -52,6 +52,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   they used to come back off while the values stayed. Pictures developed before keep their values, switches off.
 - The Develop window opened from Recap, Trips or the Studio no longer scrolls sideways by a hair in its settings
   column.
+- Recap's **Planned** shows only what Atelier sent, no longer the posts your other apps schedule through the same
+  Postiz (your Sketchbook). Every post Atelier sends now carries the tag *Atelier* — create a tag of that name once in
+  your Postiz so it sticks — and a post a recap of this device sent shows even without it. The posts left out still
+  take their slots: a line under the week counts them, and the free slots, the next one and the week's ceiling are
+  about your whole account. `recap.calendar` lists Atelier's posts the same way, with how many of other apps it left
+  out.
 
 ## [1.8.0] - 2026-11-11 — Brazilwood
 
