@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { autoState, recordAuto, revertAuto, sameSlotValues, slotValues, type AutoMemos, type SlotValues } from './auto-slots';
-import { DEFAULT_DEVELOP, type DevelopSettings } from './develop';
+import {
+  autoState,
+  cloneAutoMemos,
+  normaliseAutoMemos,
+  recordAuto,
+  revertAuto,
+  sameAutoMemos,
+  sameSlotValues,
+  slotValues,
+  type AutoMemos,
+  type SlotValues,
+} from './auto-slots';
+import {
+  DEFAULT_DEVELOP,
+  cloneDevelop,
+  developOrNull,
+  normaliseDevelop,
+  sameDevelop,
+  withoutBase,
+  type DevelopSettings,
+} from './develop';
 import type { Levels } from './curves';
 
 const TONE: Levels = {
@@ -119,5 +138,70 @@ describe('auto slots', () => {
     };
     expect(sameSlotValues('tone', { levels: null }, { levels: neutral })).toBe(true);
     expect(slotValues({ ...DEFAULT_DEVELOP }, 'bands')).toEqual({ shadows: 0, highlights: 0 });
+  });
+});
+
+describe('auto memos kept on the develop', () => {
+  it('round-trips a lit switch through a stored develop', () => {
+    let s = press({}, 'tone', { ...DEFAULT_DEVELOP }, { levels: TONE });
+    s = press(s.memos, 'colour', s.develop, { temperature: -23, tint: 31 });
+    const stored = JSON.parse(JSON.stringify({ ...s.develop, auto: s.memos })) as unknown;
+    const back = normaliseDevelop(stored);
+    expect(sameAutoMemos(back.auto, s.memos)).toBe(true);
+    expect(autoState(back.auto ?? {}, 'tone', back)).toBe('on');
+    expect(autoState(back.auto ?? {}, 'colour', back)).toBe('on');
+    expect(sameDevelop(back, { ...s.develop, auto: s.memos })).toBe(true);
+  });
+
+  it('keeps a turned-off memo marked off, and its undo lights it again', () => {
+    const s = press({}, 'bands', { ...DEFAULT_DEVELOP }, { shadows: 30, highlights: -40 });
+    const off = revertAuto(s.memos, 'bands', s.develop);
+    const back = normaliseDevelop(JSON.parse(JSON.stringify({ ...s.develop, ...off.patch, auto: off.memos })));
+    expect(back.auto?.bands?.off).toBe(true);
+    expect(autoState(back.auto ?? {}, 'bands', back)).toBe('off');
+    expect(autoState(back.auto ?? {}, 'bands', { ...back, shadows: 30, highlights: -40 })).toBe('on');
+  });
+
+  it('opens a develop saved before the memos unchanged, every switch off', () => {
+    const old = { ...DEFAULT_DEVELOP, levels: TONE, temperature: 12 };
+    const back = developOrNull(JSON.parse(JSON.stringify(old)));
+    expect(back?.auto).toBeUndefined();
+    expect(sameDevelop(back, old)).toBe(true);
+    expect(autoState(back?.auto ?? {}, 'tone', back ?? DEFAULT_DEVELOP)).toBe('off');
+  });
+
+  it('drops junk: a verb on the wrong slot, an unknown verb, a missing record', () => {
+    expect(
+      normaliseAutoMemos({
+        tone: { verb: 'colour', before: {}, after: {} },
+        balance: { verb: 'magic', before: {}, after: {} },
+        bands: { verb: 'bands', before: { shadows: 0 } },
+      }),
+    ).toBeNull();
+    expect(normaliseAutoMemos('nope')).toBeNull();
+    const read = normaliseAutoMemos({ balance: { verb: 'pick', before: { temperature: 900 }, after: { temperature: 'x', tint: 4 } } });
+    expect(read?.balance).toEqual({ verb: 'pick', before: { temperature: 100, tint: 0 }, after: { temperature: 0, tint: 4 } });
+  });
+
+  it('a memo is a change of the develop, and a deep copy never shares its levels', () => {
+    const s = press({}, 'tone', { ...DEFAULT_DEVELOP }, { levels: TONE });
+    const withMemo = { ...s.develop, auto: s.memos };
+    expect(sameDevelop(s.develop, withMemo)).toBe(false);
+    const copy = cloneAutoMemos(s.memos);
+    expect(copy?.tone?.after.levels).not.toBe(s.memos.tone?.after.levels);
+    expect(cloneDevelop(withMemo).auto?.tone?.after.levels).not.toBe(s.memos.tone?.after.levels);
+  });
+
+  it('never travels with the numbers to another picture', () => {
+    const s = press({}, 'tone', { ...DEFAULT_DEVELOP }, { levels: TONE });
+    expect(withoutBase({ ...s.develop, auto: s.memos }).auto).toBeUndefined();
+  });
+
+  it('none and an empty set are the same, and a blank develop with only memos stores nothing', () => {
+    expect(sameAutoMemos(null, {})).toBe(true);
+    expect(cloneAutoMemos({})).toBeNull();
+    const s = press({}, 'bands', { ...DEFAULT_DEVELOP }, { shadows: 30, highlights: -40 });
+    const off = revertAuto(s.memos, 'bands', s.develop);
+    expect(developOrNull({ ...s.develop, ...off.patch, auto: off.memos })).toBeNull();
   });
 });

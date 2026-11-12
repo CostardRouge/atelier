@@ -28,6 +28,7 @@ import type { SavedGrade } from '../lut/saved-grade';
 import { apply3, describeWhiteBalance, inverse3, mul3, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
 import { PROFILE_PENDING, rawProfileOrNull, type ProfileRequest, type RawProfile } from '../raw/dng-color';
 import { fromLinear, toLinear } from '../lut/transfer';
+import { cloneAutoMemos, normaliseAutoMemos, sameAutoMemos, type AutoMemos } from './auto-slots';
 import {
   cloneCurves,
   cloneLevels,
@@ -213,12 +214,22 @@ export interface DevelopSettings {
    * of its own. Optional, so nothing stored before it migrates.
    */
   parked?: ParkedDevelop | null;
+  /**
+   * The Auto row's MEMOS (`auto-slots.ts`): each automatic verb's last click,
+   * its slot's values before and after. Not a setting and never drawn: the
+   * switches read their state off the values against these records, so a
+   * picture reopened — after a reload, in any host — shows Auto lit where it
+   * still holds (2026-11-12). This picture's own history, so a preset, the
+   * clipboard and a batch verb never carry it (`withoutBase`). Optional, so
+   * nothing stored before it migrates: those switches read off, as they did.
+   */
+  auto?: AutoMemos | null;
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
 export type DevelopKey = Exclude<
   keyof DevelopSettings,
-  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'rawProfile' | 'baseCurve' | 'parked'
+  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'rawProfile' | 'baseCurve' | 'parked' | 'auto'
 >;
 
 /**
@@ -298,6 +309,9 @@ export function withoutBase(d: DevelopSettings): DevelopSettings {
   // The base CURVE is a choice about the numbers and travels — but an Auto's
   // measurement was taken on one file's render, like the gain on its sensor.
   const out: DevelopSettings = { ...d, base: null, rawGain: null, rawWb: null, rawProfile: null, baseCurve: portableBaseCurve(d.baseCurve) };
+  // The Auto row's memos are THIS picture's clicks: on another picture they
+  // would turn a switch off onto values it never had.
+  delete out.auto;
   // A parked white balance is a RAW's too.
   if (d.parked?.rawWb) {
     const rest: ParkedDevelop = { ...d.parked };
@@ -472,6 +486,9 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   const parked = cloneParked(src.parked);
   if (parked) out.parked = parked;
   else delete out.parked;
+  const auto = cloneAutoMemos(src.auto);
+  if (auto) out.auto = auto;
+  else delete out.auto;
   return out;
 }
 
@@ -499,7 +516,10 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     sameBaseCurve(x.baseCurve, y.baseCurve) &&
     // Switching a setting off is a change the roll must be written: the live
     // field moves, and so does what waits to come back.
-    sameParked(x.parked, y.parked)
+    sameParked(x.parked, y.parked) &&
+    // A memo is work kept too: a click that changed nothing, then Done, must
+    // still be written, or its switch is lost on the way to the document.
+    sameAutoMemos(x.auto, y.auto)
   );
 }
 
@@ -538,6 +558,8 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   }
   const parked = normaliseParked(src.parked, Boolean(base));
   if (parked) out.parked = parked;
+  const auto = normaliseAutoMemos(src.auto);
+  if (auto) out.auto = auto;
   return out;
 }
 

@@ -11,7 +11,11 @@
  * - `GET  /is-connected`, `GET /integrations` — the channels it publishes to;
  * - `POST /upload` (multipart `file`) → `{ id, path }`;
  * - `POST /posts` — `{ type: schedule|now|draft, date, shortLink, tags, posts: [{ integration: { id }, value: [{ content, image }], settings: { __type, … } }] }`;
- * - `GET  /posts?startDate&endDate` → `{ posts }` (state QUEUE · PUBLISHED · ERROR · DRAFT);
+ *   `tags` is `[{ value, label }]`, linked BY NAME (`label`) to a tag that
+ *   already exists in that Postiz — one it does not know is dropped silently,
+ *   and the public API cannot create one (read in Postiz's code 2026-11-12);
+ * - `GET  /posts?startDate&endDate` → `{ posts }` (state QUEUE · PUBLISHED · ERROR · DRAFT;
+ *   each with its `group` and its `tags` as `[{ tag: { name } }]`);
  * - `DELETE /posts/:id`;
  * - `POST /integration-trigger/:id` `{ methodName, data }` → `{ output }` — a
  *   channel's own tool (lab 18: Instagram's `audioSearch`, TikTok Business's
@@ -48,10 +52,22 @@ export interface PostizMedia {
   path: string;
 }
 
+/**
+ * The tag every post Atelier sends carries (2026-11-12, his ask «filter posts
+ * by atelier app in the planned zone»): the same Postiz serves his Sketchbook
+ * (`CostardRouge/p5-templates`), and *Planned* draws only Atelier's. Postiz
+ * links it only once a tag of this NAME exists in his Postiz (Settings ›
+ * tags, made once by hand — the API cannot); until then a post is known as
+ * Atelier's by the recap publications this device keeps.
+ */
+export const ATELIER_TAG = 'Atelier';
+
 /** A post as Postiz lists it. */
 export interface PostizPost {
   id: string;
   group: string | null;
+  /** The names of its tags, as Postiz lists them. */
+  tags: string[];
   content: string;
   publishDate: string;
   state: PostState;
@@ -143,7 +159,7 @@ export function postBody(req: PostRequest, now: Date = new Date()): Record<strin
     type: req.at === 'now' ? 'now' : req.at === 'draft' ? 'draft' : 'schedule',
     date: (req.at instanceof Date ? req.at : now).toISOString(),
     shortLink: false,
-    tags: [],
+    tags: [{ value: ATELIER_TAG, label: ATELIER_TAG }],
     posts: [
       {
         integration: { id: req.channel.id },
@@ -213,6 +229,24 @@ export function postizHome(apiBase: string): string {
   return apiBase.replace(/\/(api\/)?public\/v1\/?$/, '') || apiBase;
 }
 
+/** A post's tag names, whatever shape a version lists them in: `{ tag: { name } }`, `{ name }`, `{ label }` or a bare name. */
+function readTagNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((t) => {
+    if (typeof t === 'string') return t ? [t] : [];
+    if (!t || typeof t !== 'object') return [];
+    const r = t as Record<string, unknown>;
+    const inner = r.tag && typeof r.tag === 'object' ? (r.tag as Record<string, unknown>) : r;
+    const name = str(inner.name) ?? str(inner.label) ?? str(inner.value);
+    return name ? [name] : [];
+  });
+}
+
+/** Whether a post carries Atelier's tag — case aside, a person may have typed it either way. */
+export function hasAtelierTag(post: Pick<PostizPost, 'tags'>): boolean {
+  return post.tags.some((t) => t.trim().toLowerCase() === ATELIER_TAG.toLowerCase());
+}
+
 const STATES: Record<string, PostState> = { QUEUE: 'queue', PUBLISHED: 'published', ERROR: 'error', DRAFT: 'draft' };
 
 /** The posts `GET /posts` lists. */
@@ -229,6 +263,7 @@ export function readPosts(raw: unknown): PostizPost[] {
       {
         id,
         group: str(r.group),
+        tags: readTagNames(r.tags),
         content: typeof r.content === 'string' ? postizText(r.content) : '',
         publishDate,
         state: STATES[String(r.state ?? '').toUpperCase()] ?? 'queue',

@@ -476,11 +476,23 @@ specced) + `use-auto-memory.ts` + `AutoSwitch.tsx`. Rules:
 - **Colour and Pick grey share the `balance` slot**: the newer replaces the
   older and INHERITS its `before` while the slot is held, so turning it off
   returns the balance from before any auto.
-- **Session only, per picture**: keyed memos live in a module map (the
-  Develop tool remounts its workbench per picture, `entry.id`), the sheet's
-  for as long as it is open. Nothing on the document, no migration; a reload
-  shows every switch off over values that stay — the row's old behaviour.
-  Moving it onto the picture is the recorded next step if that bothers him.
+- **Kept on the develop, per picture (2026-11-12, his ask «auto develop
+  status saved in the project»; was session-only since 2026-10-02)**: the memos
+  are `DevelopSettings.auto` (`AutoMemos`, read by `normaliseAutoMemos`,
+  copied by `cloneDevelop`, compared by `sameDevelop`), so every host that
+  stores a develop — the roll, a recap's picture, a Trips slide, a Studio
+  media — keeps them through its own `developOrNull`, with no host code and
+  no migration (absent = every switch off, the old reading). Each click writes
+  its values AND its memos in ONE `onPatch` (one history step); an undo
+  restores both, so ⌘Z still lights and dims the switches. **Rules**: the
+  STATE is still read off the values, never stored; `withoutBase` drops
+  `auto` (a preset, the clipboard, a batch verb carry numbers, never this
+  picture's clicks — elsewhere a turn-off would write values it never had);
+  `setDraft` (paste, preset, As shot) KEEPS the picture's memos, which then
+  read edited/off as the session map did; `isBlankDevelop` ignores them (a
+  develop that is memos only stores null — nothing to turn off). Cost
+  accepted: a memo-only change (a click that changed nothing) re-keys the
+  caches that hash the develop (`JSON.stringify`), once.
 - **"Already neutral" still WRITES 0/0** (kept on purpose): with the switch,
   turning it off gives a hand-set temperature back, which was the hidden cost.
 - **Trap**: the lit look appended to `developButtonClass` LOST to its own
@@ -509,7 +521,14 @@ Pick grey's arm closes it and a tap on the picture picks — in the tool's
 drawer and the Trips sheet alike. The sheet's FOOTER wraps on a phone (2026-10-20): its
 words (`footerHint` · `told`) are one `line-clamp-2` paragraph that takes the
 row's free width and, under 820 px, a row of its own above Cancel / Done —
-beside them it was squeezed to one word per line.
+beside them it was squeezed to one word per line. The sheet's settings COLUMN keeps a right gutter of
+`pr-2` (2026-11-12, his «slight horizontal scroll»): the presets' rows, their
+naming form and *Save this picture's light…* bleed `-mx-2` for their hover
+wash, and the column's 6 px made it 2 px wider than itself (354/352 at 1440,
+368/366 at 390, measured on every fold and every segmented choice). **Rule**:
+a bleed of N needs a gutter of at least N in the column that scrolls it; the
+tool's own column has `pr-3` (and `overflow-x-hidden`), which is why only the
+sheet showed it. The left half of the bleed is clipped by the scroller in both.
 
 **The Crop tab's Auto level and Crop to subject are switches too** (his
 question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over

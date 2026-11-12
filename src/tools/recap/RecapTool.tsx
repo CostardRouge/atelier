@@ -31,7 +31,7 @@ import { RECAP_DOC_KIND, moveRecap, pullRecap, pushOnce } from './recap-remote';
 import { askPersistence, deleteRecap, deleteSyncRecord, getRecap, getSyncRecord, getValue, listRecaps, putRecap, putSyncRecord, styled } from './recap-store';
 import { readyRecap, suggestionHint, suggestions } from '../../shared/recap/recap-suggest';
 import { listTrips } from '../../shared/roadtrip/trip-store';
-import { plannedWeeks } from '../../shared/recap/recap-planned';
+import { hiddenInWeek, plannedWeeks } from '../../shared/recap/recap-planned';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmSlotLabel, slotLabel, slotsWithState } from '../../shared/sources/postiz/rhythm';
 import { getPostiz, publishChannel, publishChannels } from '../../shared/sources/postiz/store';
@@ -432,7 +432,7 @@ export default function RecapTool() {
       id: 'recap.calendar',
       title: 'The publishing calendar',
       description:
-        'What goes out on the person’s networks, read from their Postiz: the accounts a recap can go out on (recap.schedule on), their rhythm (time zone, the week’s slots, the most posts a week), the next slots of it — each free or taken —, and week by week the posts from a week back to `weeks` ahead (default 6): when, scheduled · published · failed (with the reason) · draft, and the recap that sent it when one did. Use it to choose when a recap goes out (recap.schedule at).',
+        'What goes out on the person’s networks, read from their Postiz: the accounts a recap can go out on (recap.schedule on), their rhythm (time zone, the week’s slots, the most posts a week), the next slots of it — each free or taken —, and week by week Atelier’s own posts from a week back to `weeks` ahead (default 6) — another app’s posts on the same Postiz are left out of the list (`otherApps` counts them) yet still take their slots in nextSlots —: when, scheduled · published · failed (with the reason) · draft, and the recap that sent it when one did. Use it to choose when a recap goes out (recap.schedule at).',
       params: { weeks: { type: 'number', integer: true, min: 1, max: 12, description: 'How many weeks ahead (default 6).', optional: true } },
       available: () => (getPostiz() ? true : 'no Postiz is connected — the person connects theirs on #/sources'),
       run: async (p) => {
@@ -441,6 +441,7 @@ export default function RecapTool() {
         const ahead = (p.weeks as number | undefined) ?? 6;
         const posts = await new PostizClient(conn.apiBase, conn.apiKey).posts(new Date(now.getTime() - 7 * 86400000), new Date(now.getTime() + ahead * 7 * 86400000));
         const tz = conn.rhythm.timeZone;
+        const recaps = await listRecaps();
         // One recap on several networks is one moment of the rhythm.
         const taken = postMoments(posts.filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => ({ at: new Date(x.publishDate), channelId: x.channel?.id ?? null })));
         return {
@@ -448,8 +449,11 @@ export default function RecapTool() {
           accounts: publishChannels(conn).map((ch) => ({ name: ch.name, network: networkOf(ch.identifier)?.label ?? ch.identifier })),
           rhythm: { timeZone: tz, slots: conn.rhythm.slots.map(rhythmSlotLabel), perWeek: conn.rhythm.perWeek },
           nextSlots: slotsWithState(conn.rhythm, taken, now, 8).map((s) => ({ at: s.at.toISOString(), label: slotLabel(s.at, tz), taken: s.taken })),
-          weeks: plannedWeeks(posts, await listRecaps(), tz).map((w) => ({
+          // The weeks list ATELIER's posts, as Planned draws them; another
+          // app's still take their slots above (`nextSlots`) and are counted.
+          weeks: plannedWeeks(posts, recaps, tz).map((w) => ({
             weekOf: w.monday,
+            otherApps: hiddenInWeek(posts, recaps, tz, w.monday),
             posts: w.items.map((i) => ({ postId: i.postId, at: i.at.toISOString(), label: slotLabel(i.at, tz), state: i.state, title: i.title, ...(i.recapId ? { recapId: i.recapId } : {}), ...(i.kind ? { kind: i.kind } : {}), ...(i.trial ? { trial: true } : {}), ...(i.error ? { error: i.error } : {}), ...(i.channel ? { on: i.channel.name } : {}) })),
           })),
         };

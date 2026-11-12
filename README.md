@@ -2101,9 +2101,11 @@ of Auto tone and Auto colour you keep the one that helped. A lit switch still
 holds its answer, a dashed one found nothing to change, a half-lit one has
 been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
 Pick grey share the white balance — the newer replaces the older, and turning
-it off gives back the balance from before either. The switches remember
-their clicks for the session only: after a reload they are off and the values
-stay. **My own**, listed in that menu once this device holds a model learned
+it off gives back the balance from before either. The switches are kept
+with the picture's develop — in the roll, the recap, the trip or the Studio
+project that holds it — so a picture reopened, after a reload too, shows
+them as you left them (a develop saved before this shows them off, its
+values unchanged). **My own**, listed in that menu once this device holds a model learned
 from your rolls (Settings › Learning → *Your model*, the two files
 `training/` exports), writes the eleven sliders at once as your hand would
 set them on this picture — from the picture as shot, its light and the
@@ -3780,8 +3782,13 @@ once in the week. A tile opens a small card: its time, each network's state
 (with a link once it is out), a failure's reason and what to do about it, and
 its verbs — *Open recap*, *Take back* (deleted in Postiz before it goes out),
 *Send again* (the recap on Export › Publish, only what failed ticked), *View
-on* the network, *Open in Postiz*, *Delete*. Posts scheduled outside Recap
-show too, by their caption.
+on* the network, *Open in Postiz*, *Delete*. Only what Atelier sent is drawn:
+every post Atelier sends carries the tag **Atelier** in Postiz — create a tag
+of that name once in your Postiz for it to stick (its API cannot make one) —
+and a post a recap of this device sent shows even without it. Posts of your
+other apps on the same Postiz (your Sketchbook) are hidden, a quiet line under
+the week counting them, yet they still take their slots: the free slots, the
+next one and the week's ceiling are about your whole account.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and

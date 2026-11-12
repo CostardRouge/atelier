@@ -9,14 +9,16 @@
  * the click and after it — and taking it back is putting `before` on those
  * fields alone, never touching another verb's.
  *
- * The state is READ from the develop, never stored beside it: a switch is on
- * while its fields still hold what it wrote, off once they hold what was
- * there before (or once it was turned off), edited when anything else moved
- * them. That is what lets an
- * undo turn the switches on and off by itself without the history knowing
- * they exist. Pure; the memory of one session lives in `use-auto-memory.ts`.
+ * The state is READ from the develop's values, never stored as a word: a
+ * switch is on while its fields still hold what it wrote, off once they hold
+ * what was there before (or once it was turned off), edited when anything
+ * else moved them. The MEMOS (each click's before and after) ride the develop
+ * itself, `DevelopSettings.auto` (2026-11-12, his ask «auto develop status
+ * saved in the project»), so every host that keeps a develop keeps them, and
+ * an undo — a whole develop — lights and dims the switches by itself. Pure;
+ * the row's hook is `use-auto-memory.ts`.
  */
-import { cloneLevels, sameLevels } from './curves';
+import { cloneLevels, levelsOrNull, sameLevels } from './curves';
 import type { DevelopSettings } from './develop';
 
 /** The verbs of the Auto row that write the develop. */
@@ -169,4 +171,77 @@ export function revertAuto(
   // The memo is KEPT, marked: an undo of the turn-off brings `after` back and
   // must light the switch again.
   return { memos: { ...memos, [slot]: { ...memo, off: true } }, patch, state };
+}
+
+// --- the memos as a document keeps them (`DevelopSettings.auto`) ------------
+
+const AUTO_VERBS: readonly AutoVerb[] = ['tone', 'colour', 'pick', 'bands'];
+const AUTO_SLOTS: readonly AutoSlot[] = ['tone', 'balance', 'bands'];
+
+/** A slot's record read back safely: levels through their reader, a number clamped to a slider's range. */
+function readSlotValues(slot: AutoSlot, raw: unknown): SlotValues | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  if (slot === 'tone') return { levels: levelsOrNull(src.levels) };
+  const out: SlotValues = {};
+  for (const k of SLOT_FIELDS[slot]) {
+    const v = src[k];
+    out[k] = typeof v === 'number' && Number.isFinite(v) ? Math.max(-100, Math.min(100, v)) : 0;
+  }
+  return out;
+}
+
+/**
+ * The memos a stored develop carries, read back safely; null when there are
+ * none. A memo whose verb is not its slot's, or whose records are unreadable,
+ * is dropped: its switch then reads off, which is what a develop saved before
+ * the memos were kept shows too.
+ */
+export function normaliseAutoMemos(raw: unknown): AutoMemos | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const out: AutoMemos = {};
+  for (const slot of AUTO_SLOTS) {
+    const m = src[slot];
+    if (!m || typeof m !== 'object') continue;
+    const memo = m as Record<string, unknown>;
+    const verb = memo.verb as AutoVerb;
+    if (!AUTO_VERBS.includes(verb) || AUTO_SLOT[verb] !== slot) continue;
+    const before = readSlotValues(slot, memo.before);
+    const after = readSlotValues(slot, memo.after);
+    if (!before || !after) continue;
+    out[slot] = memo.off === true ? { verb, before, after, off: true } : { verb, before, after };
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function cloneSlotValues(slot: AutoSlot, v: SlotValues): SlotValues {
+  return slot === 'tone' ? { levels: cloneLevels(v.levels) } : { ...v };
+}
+
+/** A deep copy, so a stored develop and a draft never share a memo's levels; null when there are none. */
+export function cloneAutoMemos(memos: AutoMemos | null | undefined): AutoMemos | null {
+  if (!memos) return null;
+  const out: AutoMemos = {};
+  for (const slot of AUTO_SLOTS) {
+    const m = memos[slot];
+    if (!m) continue;
+    out[slot] = { ...m, before: cloneSlotValues(slot, m.before), after: cloneSlotValues(slot, m.after) };
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Two sets of memos say the same thing — none and an empty set alike. */
+export function sameAutoMemos(a: AutoMemos | null | undefined, b: AutoMemos | null | undefined): boolean {
+  return AUTO_SLOTS.every((slot) => {
+    const x = a?.[slot];
+    const y = b?.[slot];
+    if (!x || !y) return !x && !y;
+    return (
+      x.verb === y.verb &&
+      Boolean(x.off) === Boolean(y.off) &&
+      sameSlotValues(slot, x.before, y.before) &&
+      sameSlotValues(slot, x.after, y.after)
+    );
+  });
 }

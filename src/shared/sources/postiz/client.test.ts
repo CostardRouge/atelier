@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PostizClient, PostizError, apiCandidates, findApi, postBody, postProblem, readChannels, readCreated, readPosts, uploadProblem } from './client';
+import { ATELIER_TAG, PostizClient, PostizError, apiCandidates, findApi, hasAtelierTag, postBody, postProblem, readChannels, readCreated, readPosts, uploadProblem } from './client';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -26,6 +26,21 @@ describe('the Postiz client', () => {
     expect((story.posts as { settings: Record<string, unknown> }[])[0].settings).toEqual({ __type: 'instagram', post_type: 'story' });
   });
 
+  it('marks every post with the Atelier tag, and reads a post’s tags in any shape', () => {
+    const body = postBody({ channel: { id: 'ch1', identifier: 'instagram' }, kind: 'reel', caption: '', media: [{ id: 'm', path: 'https://p/a.mp4' }], at: 'now' });
+    expect(body.tags).toEqual([{ value: ATELIER_TAG, label: ATELIER_TAG }]);
+    const [a, b] = readPosts({
+      posts: [
+        { id: 'a', publishDate: '2026-11-17T08:00:00Z', tags: [{ tag: { name: 'Atelier', color: '#f00' } }, { name: 'Travel' }, 'x', null, {}] },
+        { id: 'b', publishDate: '2026-11-17T08:00:00Z', tags: [{ tag: { name: 'Sketchbook' } }] },
+      ],
+    });
+    expect(a.tags).toEqual(['Atelier', 'Travel', 'x']);
+    expect(hasAtelierTag(a)).toBe(true);
+    expect(hasAtelierTag(b)).toBe(false);
+    expect(hasAtelierTag({ tags: [' atelier '] })).toBe(true);
+  });
+
   it('says before sending what Instagram or the server would refuse', () => {
     expect(uploadProblem({ size: 12 * 1024 * 1024, type: 'image/png', name: 'a.png' })).toMatch(/10 MB/);
     expect(uploadProblem({ size: 120 * 1024 * 1024, type: 'video/mp4', name: 'a.mp4' })).toMatch(/95 MB/);
@@ -40,6 +55,7 @@ describe('the Postiz client', () => {
     expect(readChannels([{ id: 'a', name: 'Steeve', identifier: 'instagram', picture: 'p', disabled: false, extra: 1 }, { nope: true }])).toEqual([{ id: 'a', name: 'Steeve', identifier: 'instagram', picture: 'p', disabled: false }]);
     const posts = readPosts({ posts: [{ id: 'p1', group: 'g', content: 'hi', publishDate: '2026-11-17T08:00:00Z', state: 'ERROR', error: 'media', releaseURL: null, integration: { id: 'a', name: 'Steeve', providerIdentifier: 'instagram', picture: null } }] });
     expect(posts[0]).toMatchObject({ id: 'p1', state: 'error', error: 'media', channel: { id: 'a', identifier: 'instagram' } });
+    expect(posts[0].tags).toEqual([]);
     expect(readCreated([{ postId: 'x', integration: 'a' }])).toEqual(['x']);
     expect(readCreated({ posts: [{ id: 'y' }] })).toEqual(['y']);
   });

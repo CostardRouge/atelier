@@ -60,6 +60,9 @@ export function useDevelopDraft(value: DevelopSettings | null, stack: LutStack):
         rawProfile: d.rawProfile ?? null,
         // The base curve is kept unless the incoming numbers chose one.
         baseCurve: landBaseCurve(next.baseCurve, d.baseCurve),
+        // The Auto row's memos are this picture's clicks (`auto-slots.ts`):
+        // over new numbers they read edited or off, as they always have.
+        auto: d.auto ?? null,
       })),
     [],
   );

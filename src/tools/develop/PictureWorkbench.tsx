@@ -551,8 +551,8 @@ export default function PictureWorkbench({
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
-  // The Auto row's switches remember their clicks per picture, for the session.
-  const auto = useAutoMemory({ pictureKey: entry.id, develop: draft.draft, onPatch: draft.patch, onTold: tell });
+  // The Auto row's switches remember their clicks on the develop itself.
+  const auto = useAutoMemory({ develop: draft.draft, onPatch: draft.patch, onTold: tell });
   // A CLIP (2026-09-30): played on the stage and developed WHOLE — the global
   // develop and the look, which the export grades every frame through, and
   // (2026-10-01) ONE crop held still over every frame, the same `frame` the

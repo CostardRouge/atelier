@@ -1,14 +1,18 @@
 /**
- * The gallery's *Planned* (lab 12): what goes out on his Instagram, week by
- * week — read from his Postiz (`GET /posts`), each post tied to the recap
- * that sent it when one did (`RecapDoc.publish.publications`), the others
- * shown by their caption's first line, so the rhythm reads true whatever
- * scheduled them.
+ * The gallery's *Planned* (lab 12): what Atelier sends out, week by week —
+ * read from his Postiz (`GET /posts`), each post tied to the recap that sent
+ * it when one did (`RecapDoc.publish.publications`), the others shown by
+ * their caption's first line.
+ *
+ * Only ATELIER's posts are DRAWN (2026-11-12, `atelierPosts`): his Sketchbook
+ * posts through the same Postiz. Every post still COUNTS — the free slots
+ * here, like the rhythm's next slot and its week's ceiling, are about his
+ * whole account, whatever app scheduled what.
  *
  * Pure and DOM-free.
  */
 
-import type { PostizPost, PostState } from '../sources/postiz/client';
+import { hasAtelierTag, type PostizPost, type PostState } from '../sources/postiz/client';
 import { localDay, slotsWithState, weekOf, wallClock, zonedInstant, type Rhythm } from '../sources/postiz/rhythm';
 import type { RecapDoc } from './recap-doc';
 import type { PublishKind } from './recap-publish';
@@ -69,10 +73,36 @@ export interface PlannedWeek {
   items: PlannedItem[];
 }
 
+/**
+ * The posts Atelier sent: tagged `Atelier` in Postiz (`ATELIER_TAG`), or
+ * kept by a recap of this device as one of its publications — which is how a
+ * post sent before the tag, or before the tag existed in his Postiz, is
+ * still known — and any post of the same Postiz group as one of those (one
+ * send on several networks). `others` counts what is left out: another app's.
+ */
+export function atelierPosts(posts: readonly PostizPost[], recaps: readonly RecapDoc[]): { mine: PostizPost[]; others: number } {
+  const sent = new Set<string>();
+  for (const doc of recaps) for (const p of doc.publish.publications) sent.add(p.postId);
+  const own = (p: PostizPost) => hasAtelierTag(p) || sent.has(p.id);
+  const groups = new Set(posts.filter((p) => p.group && own(p)).map((p) => p.group!));
+  const mine = posts.filter((p) => own(p) || (p.group !== null && groups.has(p.group)));
+  return { mine, others: posts.length - mine.length };
+}
+
+/** How many posts of ANOTHER app go out in the week starting `monday` — hidden from the strip, still taking their slots. */
+export function hiddenInWeek(posts: readonly PostizPost[], recaps: readonly RecapDoc[], tz: string, monday: string): number {
+  const mine = new Set(atelierPosts(posts, recaps).mine.map((p) => p.id));
+  return posts.filter((p) => !mine.has(p.id) && !Number.isNaN(new Date(p.publishDate).getTime()) && weekOf(new Date(p.publishDate), tz) === monday).length;
+}
+
+/** What the section says of the posts it leaves out, as a tooltip: they are hidden, and still count. */
+export const HIDDEN_NOTE = 'Only what Atelier sent is drawn here. Posts from your other apps on this Postiz are hidden, yet they still take their slots of your rhythm.';
+
 const firstLine = (s: string) => (s.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 80);
 
-/** The posts, newest week last, each week's in time order; tied to their recaps. */
-export function plannedWeeks(posts: readonly PostizPost[], recaps: readonly RecapDoc[], tz: string): PlannedWeek[] {
+/** Atelier's posts (`atelierPosts`), newest week last, each week's in time order; tied to their recaps. */
+export function plannedWeeks(all: readonly PostizPost[], recaps: readonly RecapDoc[], tz: string): PlannedWeek[] {
+  const posts = atelierPosts(all, recaps).mine;
   const byPost = new Map<string, { doc: RecapDoc; kind: PublishKind; trial: boolean; group: string | null }>();
   for (const doc of recaps) for (const p of doc.publish.publications) byPost.set(p.postId, { doc, kind: p.kind, trial: p.trial, group: p.group });
   // Posts made together in Postiz share its own group.
@@ -162,6 +192,7 @@ export function weekStrip(posts: readonly PostizPost[], recaps: readonly RecapDo
   const tz = rhythm.timeZone;
   const items = plannedWeeks(posts, recaps, tz).find((w) => w.monday === monday)?.items ?? [];
   const today = localDay(now, tz);
+  // EVERY post takes its slot and its day, another app's too: only the tiles are Atelier's.
   const live = posts.filter((p) => p.state !== 'error' && p.state !== 'draft').map((p) => new Date(p.publishDate));
   const start = zonedInstant(Number(monday.slice(0, 4)), Number(monday.slice(5, 7)), Number(monday.slice(8, 10)), 0, 0, tz);
   const slots = slotsWithState(rhythm, live, new Date(Math.max(now.getTime(), start.getTime() - 1)), 30).filter((s) => !s.taken);
@@ -170,7 +201,7 @@ export function weekStrip(posts: readonly PostizPost[], recaps: readonly RecapDo
     d.setUTCDate(d.getUTCDate() + k);
     const day = d.toISOString().slice(0, 10);
     const its = items.filter((i) => localDay(i.at, tz) === day);
-    const busy = its.some((i) => i.state !== 'error' && i.state !== 'draft');
+    const busy = live.some((at) => localDay(at, tz) === day);
     const w = wallClock(new Date(`${day}T12:00:00Z`), 'UTC');
     return {
       day,

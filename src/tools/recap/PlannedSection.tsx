@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { withRecap, type RecapDoc } from '../../shared/recap/recap-doc';
-import { mondayOf, plannedPeek, plannedTiles, plannedWeeks, tileState, weekLabel, weekStrip, type PlannedItem, type PlannedTile, type StripDay } from '../../shared/recap/recap-planned';
+import { HIDDEN_NOTE, hiddenInWeek, mondayOf, plannedPeek, plannedTiles, plannedWeeks, tileState, weekLabel, weekStrip, type PlannedItem, type PlannedTile, type StripDay } from '../../shared/recap/recap-planned';
 import { PostizClient, failureHint, postizHome, type PostizPost } from '../../shared/sources/postiz/client';
 import NetworkMark from '../../shared/sources/postiz/NetworkMark';
 import { networkOf } from '../../shared/sources/postiz/networks';
@@ -128,6 +128,7 @@ export default function PlannedSection({
   const monday = mondayOf(now, tz, offset);
   const days = useMemo(() => (conn ? weekStrip(posts ?? [], recaps, conn.rhythm, monday, new Date()) : []), [posts, recaps, conn, monday]);
   const weeks = useMemo(() => plannedWeeks(posts ?? [], recaps, tz), [posts, recaps, tz]);
+  const hidden = useMemo(() => hiddenInWeek(posts ?? [], recaps, tz, monday), [posts, recaps, tz, monday]);
 
   // On a phone the strip overflows: today is brought to its left edge, never the page scrolled.
   const strip = useRef<HTMLDivElement | null>(null);
@@ -153,7 +154,7 @@ export default function PlannedSection({
       hot={failed}
       open={open}
       onToggle={onToggle}
-      peek={<span className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis">{posts === null ? 'asking your Postiz…' : plannedPeek(weeks, tz, now, (d) => slotLabel(d, tz))}</span>}
+      peek={<span className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis" title={HIDDEN_NOTE}>{posts === null ? 'asking your Postiz…' : plannedPeek(weeks, tz, now, (d) => slotLabel(d, tz))}</span>}
       actions={
         <span className="flex items-center gap-1">
           {open && (
@@ -184,6 +185,11 @@ export default function PlannedSection({
           <Day key={d.day} d={d} tz={tz} docOf={docOf} onPick={(tile, el) => setActive((cur) => (cur?.tile.key === tile.key ? null : { tile, el }))} />
         ))}
       </div>
+      {hidden > 0 && (
+        <p className="m-0 mt-1 text-3xs text-muted" title={HIDDEN_NOTE}>
+          {hidden === 1 ? '1 post from another app hidden' : `${hidden} posts from other apps hidden`} · {hidden === 1 ? 'it still takes its slot' : 'they still take their slots'}
+        </p>
+      )}
       {active && (
         <SendCard
           tile={active.tile}
