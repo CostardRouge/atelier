@@ -476,11 +476,23 @@ specced) + `use-auto-memory.ts` + `AutoSwitch.tsx`. Rules:
 - **Colour and Pick grey share the `balance` slot**: the newer replaces the
   older and INHERITS its `before` while the slot is held, so turning it off
   returns the balance from before any auto.
-- **Session only, per picture**: keyed memos live in a module map (the
-  Develop tool remounts its workbench per picture, `entry.id`), the sheet's
-  for as long as it is open. Nothing on the document, no migration; a reload
-  shows every switch off over values that stay — the row's old behaviour.
-  Moving it onto the picture is the recorded next step if that bothers him.
+- **Kept on the develop, per picture (2026-11-12, his ask «auto develop
+  status saved in the project»; was session-only since 2026-10-02)**: the memos
+  are `DevelopSettings.auto` (`AutoMemos`, read by `normaliseAutoMemos`,
+  copied by `cloneDevelop`, compared by `sameDevelop`), so every host that
+  stores a develop — the roll, a recap's picture, a Trips slide, a Studio
+  media — keeps them through its own `developOrNull`, with no host code and
+  no migration (absent = every switch off, the old reading). Each click writes
+  its values AND its memos in ONE `onPatch` (one history step); an undo
+  restores both, so ⌘Z still lights and dims the switches. **Rules**: the
+  STATE is still read off the values, never stored; `withoutBase` drops
+  `auto` (a preset, the clipboard, a batch verb carry numbers, never this
+  picture's clicks — elsewhere a turn-off would write values it never had);
+  `setDraft` (paste, preset, As shot) KEEPS the picture's memos, which then
+  read edited/off as the session map did; `isBlankDevelop` ignores them (a
+  develop that is memos only stores null — nothing to turn off). Cost
+  accepted: a memo-only change (a click that changed nothing) re-keys the
+  caches that hash the develop (`JSON.stringify`), once.
 - **"Already neutral" still WRITES 0/0** (kept on purpose): with the switch,
   turning it off gives a hand-set temperature back, which was the hidden cost.
 - **Trap**: the lit look appended to `developButtonClass` LOST to its own

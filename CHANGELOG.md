@@ -45,6 +45,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - The Export tab shows what matches where the recap goes: the files' choice under *Save*, and *Where · When · Words*
   under *Publish*.
 
+### Fixed
+
+- Develop's **Auto** switches are kept with the picture: turned on in the Develop window of a recap, a trip or a
+  Studio project (or in the Develop tool), they show lit again when you reopen the picture, after a reload too —
+  they used to come back off while the values stayed. Pictures developed before keep their values, switches off.
+
 ## [1.8.0] - 2026-11-11 — Brazilwood
 
 ### Added

@@ -220,7 +220,8 @@ function DevelopSheetBody({
   const chip = fidelity ?? own.chip;
   const caption = note ?? own.note;
   const [told, tell] = useTold();
-  // The Auto row's switches remember their clicks while the sheet is open.
+  // The Auto row's switches remember their clicks on the develop itself, so
+  // Done keeps them with the numbers in the host's document.
   const auto = useAutoMemory({ develop: draft.draft, onPatch: draft.patch, onTold: tell });
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();

@@ -2101,9 +2101,11 @@ of Auto tone and Auto colour you keep the one that helped. A lit switch still
 holds its answer, a dashed one found nothing to change, a half-lit one has
 been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
 Pick grey share the white balance — the newer replaces the older, and turning
-it off gives back the balance from before either. The switches remember
-their clicks for the session only: after a reload they are off and the values
-stay. **My own**, listed in that menu once this device holds a model learned
+it off gives back the balance from before either. The switches are kept
+with the picture's develop — in the roll, the recap, the trip or the Studio
+project that holds it — so a picture reopened, after a reload too, shows
+them as you left them (a develop saved before this shows them off, its
+values unchanged). **My own**, listed in that menu once this device holds a model learned
 from your rolls (Settings › Learning → *Your model*, the two files
 `training/` exports), writes the eleven sliders at once as your hand would
 set them on this picture — from the picture as shot, its light and the
