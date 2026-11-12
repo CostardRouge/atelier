@@ -59,6 +59,7 @@ export default function DeliverBar({
   settingsLine,
   empty = 'Nothing to export yet.',
   lead,
+  above,
   running,
 }: {
   verbs: readonly ExportVerb[];
@@ -85,6 +86,8 @@ export default function DeliverBar({
   empty?: string;
   /** Drawn at the start of the summary's line — Recap's Save · Publish switch (lab 13). */
   lead?: ReactNode;
+  /** Drawn between the summary and the verb: what a host checks before its verb runs (Recap's Publish, lab 18). */
+  above?: ReactNode;
   /** A host's own run, drawn IN PLACE of the verbs while it goes on (a tool whose progress is not a `RunProgress`). */
   running?: ReactNode;
 }) {
@@ -117,6 +120,7 @@ export default function DeliverBar({
               </span>
             )
           )}
+          {above}
           {primary ? (
             <div className="flex items-stretch gap-1 min-w-0">
               <Button

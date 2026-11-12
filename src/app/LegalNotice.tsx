@@ -150,9 +150,12 @@ export default function LegalNotice() {
           </li>
           <li>
             <b className="text-ink font-medium">A Postiz you connected yourself</b> — your own scheduler: only when you
-            schedule a recap, Atelier sends it the files just rendered and the post to publish on your Instagram, and it
-            reads back the posts planned, with the API key you pasted. Postiz then publishes through Meta’s own service,
-            under your account there.
+            schedule a recap, Atelier sends it the files just rendered and the posts to publish on the accounts you
+            ticked (Instagram, TikTok, YouTube, Bluesky, Threads, X), and it reads back the posts planned, with the API
+            key you pasted. Postiz then publishes through each network’s own service, under your account there. When
+            you search a network’s music for a Reel, the search goes through your Postiz; the covers, and the track
+            you press to listen to, are then loaded from that network’s own servers (Meta’s, for Instagram) — which see
+            your address and that this site asked. Nothing of a track is kept in your browser or put in a file.
           </li>
           <li>
             <b className="text-ink font-medium">The agent bridge</b> — a program on your own computer, reached over{' '}

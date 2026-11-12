@@ -21,6 +21,7 @@
 import { PIN } from './recap-places';
 import type { ResolvedRecap } from './recap-slots';
 import type { RecapDoc, RecapPicture } from './recap-doc';
+import { fitCaption, musicLibrary, networkOf, titleFrom, type MusicTrack, type Network, type PostMusic } from '../sources/postiz/networks';
 
 /** `{word}` replaced by its value; an unknown word left as typed (`recap-slots.ts`'s `fillText`, here without importing it: `recap-doc.ts` reads this module). */
 const fillText = (text: string, vars: Readonly<Record<string, string>>) => text.replace(/\{(\w+)\}/g, (all, name: string) => vars[name] ?? all);
@@ -34,6 +35,10 @@ export interface Publication {
   channelId: string;
   /** The channel's name when it was sent, for a gallery that cannot ask. */
   channel: string;
+  /** The channel's provider (`instagram`, `tiktok`, `youtube`…): which network it went out on (lab 18). */
+  network: string;
+  /** The SEND it belongs to — one recap sent to several networks at once is one group; null for a post sent alone before lab 18. */
+  group: string | null;
   kind: PublishKind;
   trial: boolean;
   /** ISO: when it goes out (or went out); null for a draft left in Postiz. */
@@ -44,19 +49,49 @@ export interface Publication {
   caption: string;
 }
 
+/**
+ * What a recap SOUNDS like once published (lab 18, his Q4): its own sound on
+ * every network, or — where the account has a music library through Postiz
+ * (Instagram, TikTok Business) — a track of that library laid over the film
+ * by the network itself, the recap's own sound mixed under it at
+ * `filmVolume`. The other networks always hear the recap's own.
+ */
+export interface PublishMusic {
+  source: 'own' | 'network';
+  /** The track picked in each library, by network id (`instagram`, `tiktok`). */
+  tracks: Record<string, MusicTrack>;
+  /** 0–100, as the network mixes them. */
+  musicVolume: number;
+  filmVolume: number;
+}
+
+export const DEFAULT_MUSIC: PublishMusic = { source: 'network', tracks: {}, musicVolume: 100, filmVolume: 0 };
+
 export interface RecapPublish {
   /** The caption's template; null = `DEFAULT_CAPTION`. */
   caption: string | null;
+  /**
+   * A network's OWN words (lab 18), by channel id — a template like the
+   * caption. Absent: the caption, fitted to that network's length when sent.
+   */
+  captions: Record<string, string>;
+  /** The title a network asks beside its words (YouTube, TikTok), by channel id. Absent: drawn from the heading. */
+  titles: Record<string, string>;
+  music: PublishMusic;
   approved: boolean;
   publications: Publication[];
 }
 
-export const DEFAULT_PUBLISH: RecapPublish = { caption: null, approved: false, publications: [] };
+export const DEFAULT_PUBLISH: RecapPublish = { caption: null, captions: {}, titles: {}, music: DEFAULT_MUSIC, approved: false, publications: [] };
 
 /** What a recap says when nobody wrote its caption: its title, where, the route, its tags. */
 export const DEFAULT_CAPTION = '{heading}{at}\n{route}\n\n{tags}';
 
 export const CAPTION_MAX = 2200;
+/** The longest words a network takes (YouTube's description). */
+const NETWORK_CAPTION_MAX = 5000;
+/** What a recap remembers sending: a send to six networks is six of them. */
+const MAX_PUBLICATIONS = 120;
 const MAX_TAGS = 5;
 
 const KINDS = new Set<string>(PUBLISH_KINDS);
@@ -69,6 +104,9 @@ function readPublication(raw: unknown): Publication | null {
     postId: r.postId.slice(0, 120),
     channelId: r.channelId.slice(0, 120),
     channel: typeof r.channel === 'string' ? r.channel.slice(0, 120) : '',
+    // A publication kept before lab 18 went to Instagram, alone.
+    network: typeof r.network === 'string' && r.network ? r.network.slice(0, 40) : 'instagram',
+    group: typeof r.group === 'string' && r.group ? r.group.slice(0, 40) : null,
     kind: KINDS.has(r.kind as string) ? (r.kind as PublishKind) : 'reel',
     trial: r.trial === true,
     at: typeof r.at === 'string' && !Number.isNaN(Date.parse(r.at)) ? r.at : null,
@@ -77,13 +115,79 @@ function readPublication(raw: unknown): Publication | null {
   };
 }
 
+/** A map of words by channel id: strings only, a few of them, none empty. */
+function readWords(raw: unknown, max: number): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>)
+      .filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].trim().length > 0 && e[0].length <= 120)
+      .slice(0, 24)
+      .map(([k, v]) => [k, v.slice(0, max)]),
+  );
+}
+
+const level = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(100, Math.max(0, v))) : fallback);
+
+function readTrack(raw: unknown): MusicTrack | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== 'string' || !r.id) return null;
+  const url = typeof r.previewUrl === 'string' && /^https:\/\//.test(r.previewUrl) ? r.previewUrl.slice(0, 2000) : null;
+  return {
+    id: r.id.slice(0, 120),
+    title: typeof r.title === 'string' ? r.title.slice(0, 200) : 'Untitled',
+    artist: typeof r.artist === 'string' ? r.artist.slice(0, 200) : '',
+    image: typeof r.image === 'string' && /^https:\/\//.test(r.image) ? r.image.slice(0, 2000) : null,
+    seconds: typeof r.seconds === 'number' && Number.isFinite(r.seconds) && r.seconds > 0 ? Math.round(r.seconds) : 0,
+    previewUrl: url,
+  };
+}
+
+export function readMusic(raw: unknown): PublishMusic {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const tracks = r.tracks && typeof r.tracks === 'object' && !Array.isArray(r.tracks) ? (r.tracks as Record<string, unknown>) : {};
+  return {
+    source: r.source === 'own' ? 'own' : 'network',
+    tracks: Object.fromEntries(
+      Object.entries(tracks)
+        .slice(0, 6)
+        .flatMap(([k, v]) => {
+          const t = readTrack(v);
+          return t ? [[k.slice(0, 40), t] as [string, MusicTrack]] : [];
+        }),
+    ),
+    musicVolume: level(r.musicVolume, DEFAULT_MUSIC.musicVolume),
+    filmVolume: level(r.filmVolume, DEFAULT_MUSIC.filmVolume),
+  };
+}
+
+/**
+ * The library track ONE account's post carries: only a Reel, only where the
+ * account has a library and a track was picked in it — else null, and the
+ * network hears the recap's own sound.
+ */
+export function musicFor(publish: RecapPublish, identifier: string, kind: PublishKind): PostMusic | null {
+  if (publish.music.source !== 'network' || kind !== 'reel' || !musicLibrary(identifier)) return null;
+  const net = networkOf(identifier);
+  const track = net ? publish.music.tracks[net.id] : undefined;
+  return track ? { track, musicVolume: publish.music.musicVolume, filmVolume: publish.music.filmVolume } : null;
+}
+
+/** The music changed. It is not words: the approval stays. */
+export function withMusic(publish: RecapPublish, patch: Partial<PublishMusic>): RecapPublish {
+  return { ...publish, music: readMusic({ ...publish.music, ...patch }) };
+}
+
 export function readPublish(raw: unknown): RecapPublish {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const caption = typeof r.caption === 'string' ? r.caption.slice(0, CAPTION_MAX * 2) : null;
   return {
     caption,
+    captions: readWords(r.captions, NETWORK_CAPTION_MAX * 2),
+    titles: readWords(r.titles, 200),
+    music: readMusic(r.music),
     approved: r.approved === true,
-    publications: Array.isArray(r.publications) ? r.publications.flatMap((p) => readPublication(p) ?? []).slice(-40) : [],
+    publications: Array.isArray(r.publications) ? r.publications.flatMap((p) => readPublication(p) ?? []).slice(-MAX_PUBLICATIONS) : [],
   };
 }
 
@@ -148,19 +252,112 @@ export function captionText(doc: RecapDoc, resolved: ResolvedRecap): string {
   return text.length > CAPTION_MAX ? `${text.slice(0, CAPTION_MAX - 1)}…` : text;
 }
 
+const fold = (text: string) =>
+  text
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+$/g, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * The words ONE network gets (lab 18, his pick: shortened by Atelier, then
+ * read): its own template when he wrote one there, else the caption — either
+ * way filled, and fitted to the network's length (`fitCaption`: cut at a
+ * sentence, two hashtags kept). `own`: written for that network; `fitted`:
+ * shorter than what was written.
+ */
+export function networkCaption(doc: RecapDoc, resolved: ResolvedRecap, channelId: string, net: Pick<Network, 'id' | 'captionMax'>): { text: string; own: boolean; fitted: boolean } {
+  const template = doc.publish.captions[channelId];
+  const own = template !== undefined;
+  const full = own ? fold(fillText(template, captionWords(doc, resolved))) : captionText(doc, resolved);
+  const text = fitCaption(full, net);
+  return { text, own, fitted: text !== full };
+}
+
+/** The title a network asks beside its words: his own there, else the recap's heading, cut to the network's length. */
+export function networkTitle(doc: RecapDoc, resolved: ResolvedRecap, channelId: string, net: Pick<Network, 'titleMax'>): string {
+  if (!net.titleMax) return '';
+  const words = captionWords(doc, resolved);
+  const own = doc.publish.titles[channelId];
+  return titleFrom(own ? fillText(own, words) : words.heading || doc.title, net.titleMax);
+}
+
+const without = (map: Record<string, string>, key: string) => Object.fromEntries(Object.entries(map).filter(([k]) => k !== key));
+
+/** A network's own words changed (null or blank: back to the shared caption): the approval goes with them. */
+export function withNetworkCaption(publish: RecapPublish, channelId: string, text: string | null): RecapPublish {
+  const next = text === null || !text.trim() ? null : text.slice(0, NETWORK_CAPTION_MAX * 2);
+  if ((publish.captions[channelId] ?? null) === next) return publish;
+  return { ...publish, captions: next === null ? without(publish.captions, channelId) : { ...publish.captions, [channelId]: next }, approved: false };
+}
+
+/** A network's title changed (null or blank: back to the heading): the approval goes with it. */
+export function withNetworkTitle(publish: RecapPublish, channelId: string, text: string | null): RecapPublish {
+  const next = text === null || !text.trim() ? null : text.slice(0, 200);
+  if ((publish.titles[channelId] ?? null) === next) return publish;
+  return { ...publish, titles: next === null ? without(publish.titles, channelId) : { ...publish.titles, [channelId]: next }, approved: false };
+}
+
 /** The caption changed: its approval goes with it, unless the words are the same. */
 export function withCaption(publish: RecapPublish, caption: string | null): RecapPublish {
   const next = caption === null || caption === DEFAULT_CAPTION ? null : caption.slice(0, CAPTION_MAX * 2);
   return next === publish.caption ? publish : { ...publish, caption: next, approved: false };
 }
 
+/** The new publications kept, most recent last. */
+export function withPublications(publish: RecapPublish, sent: readonly Publication[]): RecapPublish {
+  if (!sent.length) return publish;
+  const ids = new Set(sent.map((p) => p.postId));
+  return { ...publish, approved: true, publications: [...publish.publications.filter((x) => !ids.has(x.postId)), ...sent].slice(-MAX_PUBLICATIONS) };
+}
+
 /** The new publication kept, most recent last. */
-export function withPublication(publish: RecapPublish, p: Publication): RecapPublish {
-  return { ...publish, approved: true, publications: [...publish.publications.filter((x) => x.postId !== p.postId), p].slice(-40) };
+export const withPublication = (publish: RecapPublish, p: Publication): RecapPublish => withPublications(publish, [p]);
+
+/** What a recap sent, newest send first: the posts of one send together (a post sent alone is its own). */
+export function publicationGroups(publications: readonly Publication[]): Publication[][] {
+  const groups = new Map<string, Publication[]>();
+  for (const p of publications) {
+    const key = p.group ?? `one:${p.postId}`;
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  return [...groups.values()].sort((a, b) => b[0].sentAt - a[0].sentAt);
 }
 
 /** What Recap sends as a recap's default kind: a carousel when it has several slides and no motion of its own to show, else its Reel. */
 export function defaultKind(doc: Pick<RecapDoc, 'template'>, slides: number): PublishKind {
   if (slides > 1 && (doc.template === 'dump' || doc.template === 'sheets' || doc.template === 'wrapped')) return 'carousel';
   return 'reel';
+}
+
+/** One thing said above the verb before a recap is sent (lab 18): what is fine, and what is worth a look. */
+export interface PublishCheck {
+  level: 'ok' | 'look';
+  /** Two or three words, for the folded line. */
+  short: string;
+  text: string;
+}
+
+/**
+ * What the foot says BEFORE sending: the file every network will take, then
+ * what is worth a look — never a refusal (what cannot be sent is the verb's
+ * own `blocked`).
+ */
+export function publishChecks(input: {
+  kind: PublishKind;
+  /** The file's facts, as published: `1080 × 1920`, the capped bitrate in Mb/s, what was lowered. */
+  file: { size: string; mbps: number; lowered: string | null; slides: number };
+  /** The networks ticked: its label, whether it hears something (a library track or the recap's own sound). */
+  going: readonly { label: string; sounds: boolean }[];
+  /** How many networks' shortened words he has not read. */
+  unread: number;
+}): PublishCheck[] {
+  const out: PublishCheck[] = [];
+  if (input.kind === 'carousel') out.push({ level: 'ok', short: 'safe files', text: `Safe files · ${input.file.slides} slides, pictures as JPEG, ${input.file.size}` });
+  else out.push({ level: 'ok', short: 'safe file', text: `Safe file · ${input.file.size} · 30 fps · ${input.file.mbps} Mb/s · AAC 128 kb/s${input.file.lowered ? ` (${input.file.lowered} for publishing)` : ''}` });
+  if (input.unread > 0) out.push({ level: 'look', short: 'words to read', text: `Words · ${input.unread} network${input.unread === 1 ? '' : 's'} with shortened words you have not read` });
+  const silent = input.kind === 'carousel' ? [] : [...new Set(input.going.filter((g) => !g.sounds).map((g) => g.label))];
+  if (silent.length) out.push({ level: 'look', short: silent.length === input.going.length ? 'no sound' : `no sound on ${silent.length}`, text: `No sound on ${silent.join(', ')}: the recap has none of its own` });
+  return out;
 }

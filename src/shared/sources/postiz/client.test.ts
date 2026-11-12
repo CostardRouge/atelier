@@ -31,7 +31,8 @@ describe('the Postiz client', () => {
     expect(uploadProblem({ size: 120 * 1024 * 1024, type: 'video/mp4', name: 'a.mp4' })).toMatch(/95 MB/);
     expect(uploadProblem({ size: 30 * 1024 * 1024, type: 'video/mp4', name: 'a.mp4' })).toBeNull();
     expect(postProblem('reel', [{ type: 'image/png' }])).toMatch(/one video/);
-    expect(postProblem('carousel', Array.from({ length: 11 }, () => ({ type: 'image/png' })))).toMatch(/10 slides/);
+    // A carousel longer than a network holds is CUT for it (`networkPlan`), never refused.
+    expect(postProblem('carousel', Array.from({ length: 11 }, () => ({ type: 'image/jpeg' })))).toBeNull();
     expect(postProblem('story', [{ type: 'image/png' }])).toBeNull();
   });
 
@@ -75,7 +76,8 @@ describe('what Postiz keeps, read for a person', () => {
 
   it('says what to do about the failures it knows, and the Postiz to open', async () => {
     const { failureHint, postizHome } = await import('./client');
-    expect(failureHint('Instagram could not process this video. If the issue persists…')).toMatch(/Standard quality/);
+    expect(failureHint('Instagram could not process this video. If the issue persists…')).toMatch(/30 fps/);
+    expect(failureHint('unaudited_client_can_only_post_to_private_accounts')).toMatch(/TikTok/);
     expect(failureHint('Failed to fetch media from url')).toMatch(/reachable/);
     expect(failureHint('The access token has expired')).toMatch(/Reconnect/);
     expect(failureHint('Something else')).toBeNull();

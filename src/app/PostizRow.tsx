@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { PostizClient, findApi, type PostizChannel } from '../shared/sources/postiz/client';
-import { forgetPostiz, publishChannel, putPostiz, updatePostiz, type PostizConnection } from '../shared/sources/postiz/store';
+import { forgetPostiz, publishChannel, publishChannels, putPostiz, updatePostiz, type PostizConnection } from '../shared/sources/postiz/store';
+import NetworkMark from '../shared/sources/postiz/NetworkMark';
+import { networkOf } from '../shared/sources/postiz/networks';
 import { usePostiz } from '../shared/sources/postiz/use-postiz';
 import { DEFAULT_RHYTHM, rhythmSlotLabel, type Rhythm, type RhythmSlot } from '../shared/sources/postiz/rhythm';
 import { Fact, SourceRow, danger, ghost, legend, pill, solid } from './source-row';
@@ -11,16 +13,18 @@ const ZONES = ['Europe/Paris', 'Europe/London', 'Australia/Sydney', 'Australia/P
 
 /**
  * Sources › *Publishing* (lab 12): the person's own Postiz — the address and
- * the API key they paste, the Instagram account Recap publishes to, the
- * collaborator it proposes, and their RHYTHM (the week's slots, a ceiling a
- * week). One request on connect (`/is-connected`, then `/integrations`);
- * opening this page re-asks whether it still answers.
+ * the API key they paste, the accounts it publishes to (lab 18: every network
+ * Recap posts to — Instagram, TikTok, YouTube, Bluesky, Threads, X — the one
+ * checked first ringed), the collaborator it proposes, and their RHYTHM (the
+ * week's slots, a ceiling a week). One request on connect (`/is-connected`,
+ * then `/integrations`); opening this page, or *Refresh*, re-asks.
  */
 export default function PostizRow() {
   const conn = usePostiz();
   const [state, setState] = useState<'asking' | 'ok' | 'refused' | 'down'>('asking');
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [asked, setAsked] = useState(0);
 
   useEffect(() => {
     if (!conn) return;
@@ -39,7 +43,7 @@ export default function PostizRow() {
       alive = false;
     };
     // Re-asked when another Postiz is connected, not on every edit of the rhythm.
-  }, [conn?.apiBase, conn?.apiKey]);
+  }, [conn?.apiBase, conn?.apiKey, asked]);
 
   if (!conn) return <PostizConnect />;
   const channel = publishChannel(conn);
@@ -66,7 +70,7 @@ export default function PostizRow() {
       glyph="PZ"
       remote
       name={new URL(conn.apiBase).host}
-      aside="your Postiz · publishes to Instagram"
+      aside="your Postiz · publishes for you"
       pill={health}
       actions={
         confirming ? (
@@ -86,8 +90,8 @@ export default function PostizRow() {
       }
       facts={
         <>
-          <Fact label="accounts" value={String(conn.channels.length)} />
-          <Fact label="Recap posts to" value={channel ? channel.name : 'choose one'} />
+          <Fact label="accounts" value={String(publishChannels(conn).length)} />
+          <Fact label="checked first" value={channel ? channel.name : 'choose one'} />
           <Fact label="rhythm" value={`${conn.rhythm.slots.length} slots · ${conn.rhythm.perWeek} a week`} />
         </>
       }
@@ -98,7 +102,7 @@ export default function PostizRow() {
               {error}
             </p>
           )}
-          <ChannelPicker conn={conn} channels={conn.channels} />
+          <ChannelPicker conn={conn} channels={conn.channels} asking={state === 'asking'} onRefresh={() => setAsked((n) => n + 1)} />
           <label className="flex flex-col gap-1">
             <span className={legend}>A collaborator Recap proposes</span>
             <input
@@ -117,28 +121,46 @@ export default function PostizRow() {
   );
 }
 
-function ChannelPicker({ conn, channels }: { conn: PostizConnection; channels: PostizChannel[] }) {
+function ChannelPicker({ conn, channels, asking, onRefresh }: { conn: PostizConnection; channels: PostizChannel[]; asking: boolean; onRefresh: () => void }) {
   const chosen = publishChannel(conn);
-  if (!channels.length) return <p className="m-0 text-xs text-muted">This Postiz has no account yet: add Instagram there (Add Channel), then come back.</p>;
+  const refresh = (
+    <button type="button" className={ghost} disabled={asking} onClick={onRefresh} title="Ask your Postiz again — after adding a network there">
+      {asking ? 'Asking…' : 'Refresh'}
+    </button>
+  );
+  if (!channels.length)
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="m-0 text-xs text-muted">This Postiz has no account yet: add one there (Add Channel), then refresh.</p>
+        {refresh}
+      </div>
+    );
   return (
-    <div className="flex flex-col gap-1.5" role="radiogroup" aria-label="The account Recap publishes to">
-      <span className={legend}>Recap publishes to</span>
-      <div className="flex flex-wrap gap-2">
-        {channels.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            role="radio"
-            aria-checked={chosen?.id === c.id}
-            disabled={c.disabled}
-            onClick={() => updatePostiz({ channelId: c.id })}
-            className={`inline-flex items-center gap-2 pl-1 pr-3 py-1 min-h-9 pointer-coarse:min-h-11 rounded-full border text-xs cursor-pointer disabled:opacity-40 ${chosen?.id === c.id ? 'border-accent bg-accent-wash text-ink' : 'border-line-strong text-ink-soft hover:border-accent'}`}
-          >
-            {c.picture ? <img src={c.picture} alt="" className="w-6 h-6 rounded-full object-cover" /> : <span className="w-6 h-6 rounded-full bg-paper-2 block" />}
-            {c.name}
-            <span className="font-mono text-2xs text-muted">{c.identifier}</span>
-          </button>
-        ))}
+    <div className="flex flex-col gap-1.5" role="radiogroup" aria-label="The account Recap checks first">
+      <span className={legend} title="A recap goes out on any of these — chosen in its Export › Publish. The ringed one is checked the first time.">
+        Recap publishes to
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        {channels.map((c) => {
+          const net = networkOf(c.identifier);
+          return (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={chosen?.id === c.id}
+              disabled={c.disabled || !net}
+              title={!net ? `Recap does not post to ${c.identifier} yet` : c.disabled ? 'Reconnect it in your Postiz' : `${net.label} · checked first in a recap’s Publish`}
+              onClick={() => updatePostiz({ channelId: c.id })}
+              className={`inline-flex items-center gap-2 pl-1 pr-3 py-1 min-h-9 pointer-coarse:min-h-11 rounded-full border text-xs cursor-pointer disabled:opacity-40 disabled:cursor-default ${chosen?.id === c.id ? 'border-accent bg-accent-wash text-ink' : 'border-line-strong text-ink-soft hover:border-accent'}`}
+            >
+              <NetworkMark identifier={c.identifier} picture={c.picture} size="sm" className="w-6 h-6" />
+              {c.name}
+              <span className="font-mono text-2xs text-muted">{net?.label ?? c.identifier}</span>
+            </button>
+          );
+        })}
+        {refresh}
       </div>
     </div>
   );
@@ -236,7 +258,7 @@ function PostizConnect() {
     <div className="flex flex-col gap-3 border border-dashed border-line-strong rounded-paper-lg px-4 py-4">
       <span className={legend}>Connect your Postiz</span>
       <span className="text-xs text-muted leading-relaxed">
-        Your own Postiz publishes to Instagram for you. Recap renders a recap, sends it there and schedules it. Paste its address and an API key from its{' '}
+        Your own Postiz publishes for you — Instagram, TikTok, YouTube, Bluesky, Threads, X. Recap renders a recap, sends it there and schedules it. Paste its address and an API key from its{' '}
         <strong className="font-semibold text-ink-soft">Settings › Public API</strong>; the key stays in this browser until you forget it.
       </span>
       <input className={`${input} text-base`} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="https://postiz.example" spellCheck={false} aria-label="Postiz address" />

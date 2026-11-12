@@ -22,7 +22,7 @@ import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slot
 import { getClip, getSound, putClip } from './recap-store';
 import { transcodeWith } from '../../shared/media/transcode';
 import { cellWindow, coverScale, loopWindow, shiftedLoop, transcodeArgs, transcodeKey, type TranscodeWindow } from '../../shared/recap/recap-transcode';
-import { beatsPrint, deliveryBitrate, needsOriginal } from '../../shared/recap/recap-delivery';
+import { beatsPrint, deliveryBitrate, needsOriginal, publishDelivery } from '../../shared/recap/recap-delivery';
 
 export interface ExportInput {
   doc: RecapDoc;
@@ -495,7 +495,9 @@ export async function renderPostFiles(
   onProgress: (p: FilmProgress) => void,
   signal: AbortSignal,
 ): Promise<File[]> {
-  if (kind === 'carousel') return renderCarouselFiles(input, order, base, onProgress, signal);
-  const r = await exportFilm(input, onProgress, signal);
+  // What is PUBLISHED is capped at what every network takes (`publishDelivery`): 30 fps, High at most.
+  const safe: ExportInput = { ...input, doc: { ...input.doc, delivery: publishDelivery(input.doc.delivery) } };
+  if (kind === 'carousel') return renderCarouselFiles(safe, order, base, onProgress, signal);
+  const r = await exportFilm(safe, onProgress, signal);
   return [new File([r.blob], `${base}.mp4`, { type: 'video/mp4' })];
 }

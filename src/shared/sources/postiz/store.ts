@@ -10,6 +10,7 @@
  */
 
 import { readChannels, type PostizChannel } from './client';
+import { NETWORK_ORDER, networkOf } from './networks';
 import { DEFAULT_RHYTHM, readRhythm, type Rhythm } from './rhythm';
 
 export interface PostizConnection {
@@ -17,7 +18,7 @@ export interface PostizConnection {
   apiBase: string;
   apiKey: string;
   channels: PostizChannel[];
-  /** The channel Recap publishes to; null until chosen. */
+  /** The channel Recap checks first (lab 18: a recap goes out on several, chosen in Export › Publish); null until chosen. */
   channelId: string | null;
   /** An Instagram handle Recap offers as collaborator (without @), or ''. */
   collaborator: string;
@@ -94,7 +95,30 @@ export function subscribePostiz(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** The channel Recap publishes to: the chosen one, else the only one. */
+/**
+ * The channels a recap can go out on (lab 18): the live ones on a network
+ * Recap posts to, the one chosen on Sources first, then by network.
+ */
+export function publishChannels(conn: PostizConnection | null): PostizChannel[] {
+  if (!conn) return [];
+  const rank = (c: PostizChannel) => (c.id === conn.channelId ? -1 : NETWORK_ORDER.indexOf(networkOf(c.identifier)!.id));
+  return conn.channels.filter((c) => !c.disabled && networkOf(c.identifier)).sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * The channels checked when a recap's Publish opens (his pick, lab 18 Q5):
+ * those of the last time for this template when they still exist, else the
+ * one chosen on Sources, else the first.
+ */
+export function defaultDestinations(conn: PostizConnection | null, remembered: readonly string[] | null | undefined): string[] {
+  const live = publishChannels(conn);
+  const kept = (remembered ?? []).filter((id) => live.some((c) => c.id === id));
+  if (kept.length) return kept;
+  const first = publishChannel(conn) ?? live[0] ?? null;
+  return first && live.some((c) => c.id === first.id) ? [first.id] : live.slice(0, 1).map((c) => c.id);
+}
+
+/** The channel Recap checks first: the chosen one, else the only one. */
 export function publishChannel(conn: PostizConnection | null): PostizChannel | null {
   if (!conn) return null;
   const live = conn.channels.filter((c) => !c.disabled);

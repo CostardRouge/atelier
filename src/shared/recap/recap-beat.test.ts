@@ -65,3 +65,13 @@ describe('cuts on the beat', () => {
     expect(onTheBeat(plan, [])).toBe(plan);
   });
 });
+
+describe('a track whose tempo suits the film', () => {
+  it('fits when the cuts are a whole number of beats apart', async () => {
+    const { cutsOnBeat } = await import('./recap-beat');
+    expect(cutsOnBeat(0.5, [0, 2, 4, 6.02, 8])).toBe(true);
+    expect(cutsOnBeat(0.652, [0, 2, 4, 6, 8])).toBe(true); // 3 beats = 1.956 s, 2.2 % off
+    expect(cutsOnBeat(0.75, [0, 2, 4, 6, 8])).toBe(false);
+    expect(cutsOnBeat(0.5, [0, 2])).toBe(false);
+  });
+});

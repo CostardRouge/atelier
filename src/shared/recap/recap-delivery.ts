@@ -63,6 +63,23 @@ export function readDelivery(raw: unknown): RecapDelivery {
 }
 
 /**
+ * How a film is delivered when it is PUBLISHED (lab 18): his setting, capped
+ * at what every network takes whatever happens to the file there — 30 frames
+ * a second and *High* at most (16 Mb/s at 1080 × 1920, AAC 128 kb/s). A
+ * network that lays its own music over a Reel re-encodes it, and a *Maximum*
+ * 60 fps file was refused on its bitrate. Saving a file keeps his setting.
+ */
+export function publishDelivery(d: RecapDelivery): RecapDelivery {
+  return { ...d, fps: 30, quality: d.quality === 'max' ? 'high' : d.quality };
+}
+
+/** What `publishDelivery` lowered, in words — null when his setting already fits. */
+export function publishLowered(d: Pick<RecapDelivery, 'quality' | 'fps'>): string | null {
+  const bits = [d.quality === 'max' ? 'Maximum → High' : null, d.fps === 60 ? '60 → 30 fps' : null].filter(Boolean);
+  return bits.length ? bits.join(', ') : null;
+}
+
+/**
  * The target in bits per second for a `w × h` film at `fps`: the quality's
  * figure scaled by the pixels, and by the frame rate to the power ¾ — twice
  * the frames do not need twice the bits, each differs less from the last.

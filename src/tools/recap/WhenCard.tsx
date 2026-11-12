@@ -44,7 +44,7 @@ export default function WhenCard({
   const big = chosen.kind === 'now' ? 'Now' : chosen.kind === 'draft' ? 'A draft in Postiz' : at ? slotLabel(at, tz) : 'Choose a time';
   const sub =
     chosen.kind === 'now'
-      ? 'Instagram publishes it as soon as it is sent'
+      ? 'Published as soon as it is sent'
       : chosen.kind === 'draft'
         ? 'Nothing is scheduled: you finish it in Postiz'
         : chosen.kind === 'other'

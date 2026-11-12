@@ -26,6 +26,41 @@ export interface PlannedItem {
   url: string | null;
   /** The account it goes out on, as Postiz names it — for a post with no recap behind it. */
   channel: { name: string; picture: string | null } | null;
+  /** The account's provider (`instagram`, `tiktok`…), for its mark. */
+  network: string | null;
+  /** The SEND it belongs to (lab 18): one recap on several networks is one group; null for a post alone. */
+  group: string | null;
+}
+
+/** What the strip draws as ONE tile: a post, or the posts of one send on several networks. */
+export interface PlannedTile {
+  key: string;
+  /** When the first of them goes out. */
+  at: Date;
+  items: PlannedItem[];
+}
+
+/** A day's posts as tiles: the posts of one send together, in time order. */
+export function plannedTiles(items: readonly PlannedItem[]): PlannedTile[] {
+  const tiles = new Map<string, PlannedTile>();
+  for (const i of items) {
+    const key = i.group ?? `one:${i.postId}`;
+    const t = tiles.get(key);
+    if (t) {
+      t.items.push(i);
+      if (i.at.getTime() < t.at.getTime()) t.at = i.at;
+    } else tiles.set(key, { key, at: i.at, items: [i] });
+  }
+  return [...tiles.values()].sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
+/** A tile's state: failed as soon as one network failed; out, or a draft, when all are; else scheduled. */
+export function tileState(tile: Pick<PlannedTile, 'items'>): PostState {
+  const states = tile.items.map((i) => i.state);
+  if (states.includes('error')) return 'error';
+  if (states.every((s) => s === 'published')) return 'published';
+  if (states.every((s) => s === 'draft')) return 'draft';
+  return 'queue';
 }
 
 export interface PlannedWeek {
@@ -38,8 +73,11 @@ const firstLine = (s: string) => (s.split('\n').find((l) => l.trim()) ?? '').tri
 
 /** The posts, newest week last, each week's in time order; tied to their recaps. */
 export function plannedWeeks(posts: readonly PostizPost[], recaps: readonly RecapDoc[], tz: string): PlannedWeek[] {
-  const byPost = new Map<string, { doc: RecapDoc; kind: PublishKind; trial: boolean }>();
-  for (const doc of recaps) for (const p of doc.publish.publications) byPost.set(p.postId, { doc, kind: p.kind, trial: p.trial });
+  const byPost = new Map<string, { doc: RecapDoc; kind: PublishKind; trial: boolean; group: string | null }>();
+  for (const doc of recaps) for (const p of doc.publish.publications) byPost.set(p.postId, { doc, kind: p.kind, trial: p.trial, group: p.group });
+  // Posts made together in Postiz share its own group.
+  const shared = new Map<string, number>();
+  for (const post of posts) if (post.group) shared.set(post.group, (shared.get(post.group) ?? 0) + 1);
   const weeks = new Map<string, PlannedItem[]>();
   for (const post of posts) {
     const at = new Date(post.publishDate);
@@ -56,6 +94,8 @@ export function plannedWeeks(posts: readonly PostizPost[], recaps: readonly Reca
       error: post.error,
       url: post.releaseURL,
       channel: post.channel ? { name: post.channel.name, picture: post.channel.picture } : null,
+      network: post.channel?.identifier || null,
+      group: from?.group ? `r:${from.group}` : post.group && (shared.get(post.group) ?? 0) > 1 ? `p:${post.group}` : null,
     };
     const key = weekOf(at, tz);
     weeks.set(key, [...(weeks.get(key) ?? []), item]);
@@ -68,15 +108,16 @@ export function plannedWeeks(posts: readonly PostizPost[], recaps: readonly Reca
 /** The closed section's line: `2 this week · next Tue 17 Nov · 9:00`. */
 export function plannedPeek(weeks: readonly PlannedWeek[], tz: string, now: Date, label: (d: Date) => string): string {
   const all = weeks.flatMap((w) => w.items);
-  const thisWeek = all.filter((i) => weekOf(i.at, tz) === weekOf(now, tz) && i.state !== 'draft').length;
+  // One recap on several networks counts once.
+  const thisWeek = plannedTiles(all.filter((i) => weekOf(i.at, tz) === weekOf(now, tz) && i.state !== 'draft')).length;
   const next = all.find((i) => i.state === 'queue' && i.at.getTime() > now.getTime());
-  const failed = all.filter((i) => i.state === 'error').length;
+  const failed = plannedTiles(all).filter((t) => tileState(t) === 'error').length;
   return [thisWeek ? `${thisWeek} this week` : null, next ? `next ${label(next.at)}` : null, failed ? `${failed} failed` : null].filter(Boolean).join(' · ') || 'nothing planned';
 }
 
 /** Two posts the same local day — what the rhythm never wants, said on the week. */
 export function sameDayClash(week: PlannedWeek, tz: string): boolean {
-  const days = week.items.filter((i) => i.state !== 'draft' && i.state !== 'error').map((i) => localDay(i.at, tz));
+  const days = plannedTiles(week.items.filter((i) => i.state !== 'draft' && i.state !== 'error')).map((t) => localDay(t.at, tz));
   return new Set(days).size < days.length;
 }
 
@@ -88,6 +129,8 @@ export interface StripDay {
   today: boolean;
   past: boolean;
   items: PlannedItem[];
+  /** The same as tiles: one per send. */
+  tiles: PlannedTile[];
   /** The rhythm's slots of that day still free: in the future, no post near them, no post that day. */
   free: Date[];
 }
@@ -135,6 +178,7 @@ export function weekStrip(posts: readonly PostizPost[], recaps: readonly RecapDo
       today: day === today,
       past: day < today,
       items: its,
+      tiles: plannedTiles(its),
       free: busy ? [] : slots.filter((s) => localDay(s.at, tz) === day).map((s) => s.at),
     };
   });

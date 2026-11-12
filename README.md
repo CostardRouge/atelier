@@ -105,9 +105,14 @@ Today it ships twelve tools, converging into a few editors:
 > The same holds for a **Postiz** of your own, connected on `#/sources` with
 > its address and an API key: only when you press *Schedule* in a recap's
 > *Export* tab (or an agent you drive does), Recap sends that Postiz the files
-> it just rendered and the post to schedule on your Instagram, and it reads
-> back the posts it planned for the gallery's *Planned* section. Postiz then
-> publishes through Meta's own API.
+> it just rendered and the posts to schedule on the accounts you ticked
+> (Instagram, TikTok, YouTube, Bluesky, Threads, X), and it reads back the
+> posts it planned for the gallery's *Planned* section. Postiz then publishes
+> through each network's own API. When you search a network's **music** in
+> *Publish › Sound*, the search goes through your Postiz, and the covers and
+> the track you listen to are loaded straight from that network's servers
+> (Meta's, for Instagram): only when you open the picker or press ▶, and
+> nothing of a track is kept on your device or put in a file Recap makes.
 >
 > One more connection never leaves your computer: the **agent bridge** (see
 > "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,
@@ -3717,20 +3722,51 @@ Postiz connected — a *Save · Publish* switch that says where the recap goes
 the foot becomes its progress bar, on every tab.
 
 **Publishing.** Once your own **Postiz** is connected on `#/sources`, the
-*Export* tab has a *Publish* section and its foot a *Publish* side: the recap is rendered, sent to your
-Postiz and scheduled on your Instagram — as a **Reel** (a **Trial Reel**,
-shown to non-followers first, if you like, shared with your followers when it
-works or by hand), a **carousel** (its slides as JPEG, a clip as a video
-slide; Instagram's API takes 10) or a **story**. *When* says the slot it goes out
+*Export* tab's foot has a *Publish* side, and under it the tab shows *Where ·
+When · Words*: the recap is rendered ONCE, sent to your Postiz and scheduled
+on every account you tick in **Where** — Instagram, TikTok, YouTube, Bluesky,
+Threads, X — each chip saying what that network receives: the film as a
+**Reel** (a **Trial Reel** on Instagram, shown to non-followers first, if you
+like, shared with your followers when it works or by hand), a Short or a
+video; a **carousel** cut to what the network holds (its slides as JPEG, a
+clip as a video slide; 10 on Instagram, the first four pictures on Bluesky and
+X, none on YouTube — said on the chip); a **story** on Instagram only. Each
+file leaves once, and each network is scheduled on its own: one that refuses
+never holds the others back, and the note says which, why and what to do.
+The accounts ticked are those of your last send of that template. *When* says the slot it goes out
 in, in big type — the next free one of your rhythm — and *Change* opens your
 rhythm as a small grid, its slots as columns and this week and the next two as
 rows (a slot already taken in Postiz hatched, one gone dashed, the chosen one
 red), with *Another time…*, *Now* and *Draft* (left in Postiz) under it; past
-your ceiling, or a second post the same day, the card says so and lets you. The **caption** is a template of Recap's words —
+your ceiling, or a second post the same day, the card says so and lets you;
+*Instagram first, the others 2 h later* staggers the networks, and a send to
+several of them counts once in your rhythm. The **caption** is a template of Recap's words —
 `{heading}`, `{at}` (« — Albany »), `{route}`, `{tags}` (hashtags from the
 places), `{place}`, `{month}`… — filled when it is sent; *As it will read*
-shows it. Sending it approves it; an agent can write one, and it waits for
-your approval. The recap keeps what it sent and shows its state in Postiz;
+shows it. **Words** has a tab per account ticked, showing what THAT network
+gets: the same words cut to its length (Bluesky 300, X 280, Threads 500) at a
+sentence with two hashtags kept, a dot on the tab until you have read them;
+type there and they become that network's own, and *The shared words* gives
+the cut back. YouTube and TikTok get a **title** — the heading, until you
+write one. Sending approves the words; an agent can write them, and they wait
+for your approval. **Sound** says what a published Reel sounds like: the
+recap's own sound everywhere, or *Network music* — a track of the network's
+own library where your account has one through Postiz (Instagram with the
+Facebook Business connector, TikTok Business), the other networks keeping the
+recap's sound; a list says what each account will hear. *Choose* opens the
+library — what is trending, or a search — where every track **plays before
+you pick it**; the chosen one shows its waveform and its tempo (« suits your
+cuts » when the film's cuts fall on its beat), two sliders set the track's
+volume and the film's own under it, and *With the film* plays the recap on
+the stage with the track over it. Which excerpt of the track plays is the
+network's choice: its API takes a track, never a moment — a Trial Reel shows
+it. What is **published** is capped at what every network takes, whatever
+*Quality* says — 30 frames a second, *High* at most (16 Mb/s at 1080 × 1920,
+AAC 128 kb/s): a heavier film could be refused on its bitrate once a network
+laid its music over it; a file saved to your device keeps your setting. Above
+the verb, one line says the file that will leave, or what is worth a look
+first (words shortened for a network and not read yet, a network that would
+get no sound). The recap keeps what it sent and shows its state in Postiz;
 once a post is out, add its location in Instagram (the API cannot). The
 gallery's **Planned** section is one week as a strip of seven days — what went
 out, what will, what failed, and your rhythm's free slots — each post a small
@@ -3738,11 +3774,14 @@ picture of what it sent (kept on this device when it was sent; the recap's
 poster for an older one, your account's for a post made in Postiz) with its
 time, kind and state over it, a failed one ringed in red; the strip scrolls
 sideways on a phone, today first; ‹ › move a week, and *Open Postiz* opens your
-Postiz for the whole calendar. A post opens a small card: its time and state,
-a failure's reason and what to do about it, and its verbs — *Open recap*,
-*Take back* (deleted in Postiz before it goes out), *Send again* (the recap on
-Export › Publish), *View on Instagram*, *Open in Postiz*, *Delete*. Posts
-scheduled outside Recap show too, by their caption.
+Postiz for the whole calendar. A recap sent to several networks is ONE tile,
+its networks' marks stacked on it, the one that failed ringed, and it counts
+once in the week. A tile opens a small card: its time, each network's state
+(with a link once it is out), a failure's reason and what to do about it, and
+its verbs — *Open recap*, *Take back* (deleted in Postiz before it goes out),
+*Send again* (the recap on Export › Publish, only what failed ticked), *View
+on* the network, *Open in Postiz*, *Delete*. Posts scheduled outside Recap
+show too, by their caption.
 
 **Openers.** In *Motion*, a recap's Reel can start with one of Trips' openers
 before its own first page: **Défilé** — its pictures flick by, faster and

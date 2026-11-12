@@ -9,6 +9,42 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- Publishing reaches every network your Postiz holds, not only Instagram: the Sources screen lists your Instagram,
+  TikTok, YouTube, Bluesky, Threads and X accounts with their marks, and *Refresh* asks your Postiz again after you
+  add one there.
+- A recap goes out on several networks at once: under *Publish*, the Export tab has a **Where** section with a chip
+  per account saying what it will receive there — a Reel, a Short, a video, a carousel's first pictures — or why it
+  cannot. The recap is rendered once, each file sent once, and each network is scheduled on its own: one that refuses
+  never holds the others back, and the note says which and what to do. The accounts ticked are those of your last
+  send of that template. *Instagram first, the others 2 h later* staggers them; a send to several networks counts
+  once in your rhythm. An agent picks the accounts too (`recap.schedule` `on`).
+- **Words** has a tab per account ticked: each network gets the caption cut to its own length — at a sentence, two
+  hashtags kept — with a dot on its tab until you have read it; type there and those words become that network's own.
+  YouTube and TikTok get a title, the recap's heading until you write one. A counter says how much of the network's
+  length is used.
+- **Sound** chooses what a published Reel sounds like: the recap's own sound everywhere, or a track of the network's
+  own music library where your account has one through Postiz (Instagram with the Facebook Business connector, TikTok
+  Business) — the other networks keep the recap's sound, and a list says what each account will hear. You search the
+  library or see what is trending, **listen to any track before choosing it**, see its waveform and its tempo (with a
+  mark when it suits your cuts), set the track's volume and the film's own under it, and *With the film* plays the
+  recap on the stage with the track over it. The network itself picks which excerpt of a track plays. An agent
+  searches and sets it too (`recap.music`, `recap.postMusic`).
+- Above *Schedule*, one line says what is about to leave: the file every network takes, or what is worth a look first
+  — words shortened for a network that you have not read, a network that would get no sound.
+- In the gallery's *Planned*, a recap sent to several networks is one tile, its networks stacked on it and the one
+  that failed ringed in red; its card lists each network's state with a link once it is out, says why one failed and
+  what to do, and *Send again* reopens the recap with only that network ticked.
+
+### Changed
+
+- What Recap **publishes** is capped at what the networks take, whatever the Quality setting: 30 frames a second and
+  *High* at most (16 Mb/s at 1080 × 1920, AAC 128 kb/s). A *Maximum* or 60 fps film could be refused on its bitrate
+  once a network laid its music over it; saving a file to your device keeps your setting.
+- The Export tab shows what matches where the recap goes: the files' choice under *Save*, and *Where · When · Words*
+  under *Publish*.
+
 ## [1.8.0] - 2026-11-11 — Brazilwood
 
 ### Added

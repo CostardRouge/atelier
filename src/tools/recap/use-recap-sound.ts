@@ -24,6 +24,12 @@ export function useRecapSound(doc: RecapDoc): {
   cue: (events: readonly SoundEvent[], from: number) => void;
   halt: () => void;
   reload: () => void;
+  /**
+   * A network's library track heard WITH the film (lab 18): from the film's
+   * first second, at `music` (0–1), the recap's own sound under it at `film`.
+   * Null gives the stage its own sound back.
+   */
+  preview: (over: { url: string; music: number; film: number } | null) => void;
 } {
   const [kept, setKept] = useState<KeptSound | null>(null);
   const [nonce, setNonce] = useState(0);
@@ -62,14 +68,38 @@ export function useRecapSound(doc: RecapDoc): {
 
   const docRef = useRef(doc);
   docRef.current = doc;
+  const over = useRef<{ audio: HTMLAudioElement; music: number; film: number } | null>(null);
+  const preview = (next: { url: string; music: number; film: number } | null) => {
+    over.current?.audio.pause();
+    over.current?.audio.removeAttribute('src');
+    over.current = null;
+    if (!next) return;
+    const a = new Audio(next.url);
+    a.preload = 'auto';
+    over.current = { audio: a, music: next.music, film: next.film };
+  };
+  useEffect(() => () => preview(null), []);
+  /** The library track follows the film's clock from its first second; past its end it is silent. */
+  const driveOver = (t: number) => {
+    const o = over.current;
+    if (!o) return;
+    const a = o.audio;
+    a.volume = Math.min(1, Math.max(0, o.music));
+    if (a.duration > 0 && t >= a.duration) return a.pause();
+    if (a.paused) {
+      a.currentTime = t;
+      void a.play().catch(() => undefined);
+    } else if (Math.abs(a.currentTime - t) > 0.25) a.currentTime = t;
+  };
   const drive = (t: number, total: number) => {
+    driveOver(t);
     const a = audio.current;
     const s = docRef.current.sound;
     if (!a || !s) return;
     const loop = s.seconds > 0 ? s.seconds : a.duration || 0;
     if (loop <= 0) return;
     const want = t % loop;
-    a.volume = Math.min(1, soundGain(t, total, s.gain, s.fade));
+    a.volume = Math.min(1, soundGain(t, total, s.gain, s.fade) * (over.current ? over.current.film : 1));
     if (a.paused) {
       a.currentTime = want;
       void a.play().catch(() => undefined);
@@ -105,7 +135,8 @@ export function useRecapSound(doc: RecapDoc): {
   );
   const halt = () => {
     audio.current?.pause();
+    over.current?.audio.pause();
     silence();
   };
-  return { kept, drive, cue, halt, reload: () => setNonce((n) => n + 1) };
+  return { kept, drive, cue, halt, reload: () => setNonce((n) => n + 1), preview };
 }

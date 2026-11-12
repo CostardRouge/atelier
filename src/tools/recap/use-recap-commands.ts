@@ -30,16 +30,18 @@ import { resolveRecap, templateDays, type DeviceAliases, type ResolvedRecap } fr
 import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
 import { hasOpenerSlide, shownPictures } from '../../shared/recap/recap-opener-plan';
 import { listTrips } from '../../shared/roadtrip/trip-store';
-import { chooseCarousel, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
+import { chooseCarousel, pickChannels, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { withJoined } from '../../shared/recap/recap-selection';
 import { withPlaceByHand } from '../../shared/recap/recap-places';
 import { pictureOfRow } from './recap-media';
-import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, withCaption as withPostCaption, withPublication, type PublishKind } from '../../shared/recap/recap-publish';
+import { CAPTION_MAX, PUBLISH_KINDS, captionText, defaultKind, musicFor, networkCaption, networkTitle, withCaption as withPostCaption, withNetworkCaption, withMusic, withNetworkTitle, withPublications, type PublishKind } from '../../shared/recap/recap-publish';
 import { PostizClient } from '../../shared/sources/postiz/client';
 import { rhythmWarnings, slotLabel } from '../../shared/sources/postiz/rhythm';
-import { getPostiz, publishChannel } from '../../shared/sources/postiz/store';
-import { sendPost } from './recap-post';
+import { defaultDestinations, getPostiz, publishChannels } from '../../shared/sources/postiz/store';
+import { musicLibrary, networkOf, postMoments, type MusicTrack } from '../../shared/sources/postiz/networks';
+import { readWhere, writeWhere } from './publish-where';
+import { sendPosts } from './recap-post';
 
 export interface RecapCommandsContext {
   /** The recap as it is NOW — written the moment an edit is applied, before React renders. */
@@ -75,6 +77,8 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
   };
   const input = () => ({ doc: doc(), resolved: c.current.resolved, layout: c.current.layout, film: c.current.film, stills: c.current.sources.still, aliases: c.current.aliases, clipSlides: c.current.clipSlides });
 
+  /** The tracks the agent's searches listed, by network and id — what recap.postMusic picks from. */
+  const heard = useRef(new Map<string, MusicTrack>());
   const specs: CommandSpec[] = [
     {
       id: 'recap.get',
@@ -392,20 +396,110 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
     },
     {
       id: 'recap.postCaption',
-      title: 'Write the post’s caption',
-      description: `The Instagram caption the recap goes out with — a TEMPLATE of Recap's words filled when it is sent: {heading}, {at} (" — Albany"), {route} (Esperance → Albany), {tags} (hashtags from the places), {place}, {places}, {month}, {year}, {count}, {days}, {videos}; plain text and emoji around them. ${CAPTION_MAX} characters at most once filled. Writing it takes the person's approval back: they read it (Export › Publish) and approve, or tell you to (recap.approve). reset: true gives back Recap's own. Answers the text as it would go out.`,
+      title: 'Write the post’s words',
+      description: `The words the recap goes out with — a TEMPLATE of Recap's words filled when it is sent: {heading}, {at} (" — Albany"), {route} (Esperance → Albany), {tags} (hashtags from the places), {place}, {places}, {month}, {year}, {count}, {days}, {videos}; plain text and emoji around them. ${CAPTION_MAX} characters at most once filled. Without on: the caption every network starts from — each network gets it cut to its own length (Bluesky 300, X 280, Threads 500) at a sentence, two hashtags kept. With on (one account or network): THAT network's own words, and title its title (YouTube needs one, TikTok takes one; the heading otherwise). Writing takes the person's approval back: they read them (Export › Publish › Words) and approve, or tell you to (recap.approve). reset: true gives back Recap's own (with on: the shared words there). Answers the text as it would go out, and each account's.`,
       params: {
-        text: { type: 'string', description: 'The caption template.', optional: true },
-        reset: { type: 'boolean', description: 'Back to Recap’s own caption.', optional: true },
+        text: { type: 'string', description: 'The words (a template).', optional: true },
+        on: { type: 'string', description: 'One account or network these words are for; nothing: every network.', optional: true },
+        title: { type: 'string', description: 'With on: that network’s title (YouTube, TikTok).', optional: true },
+        reset: { type: 'boolean', description: 'Back to Recap’s own caption; with on, to the shared words there.', optional: true },
       },
       run: (p) => {
-        if (p.reset !== true && typeof p.text !== 'string') throw new CommandError('invalid', 'give text, or reset: true');
-        const next = p.reset === true ? null : (p.text as string);
-        if (next !== null && !next.trim()) throw new CommandError('invalid', 'an empty caption — reset: true gives back Recap’s own');
-        c.current.change((d) => withRecap(d, { publish: withPostCaption(d.publish, next) }));
-        const after = { ...doc(), publish: withPostCaption(doc().publish, next) };
-        const text = captionText(after, resolveRecap(after));
-        return { text, length: text.length, approved: after.publish.approved, ...(text.length >= CAPTION_MAX ? { cut: `longer than ${CAPTION_MAX} once filled — cut` } : {}) };
+        if (p.reset !== true && typeof p.text !== 'string' && typeof p.title !== 'string') throw new CommandError('invalid', 'give text (or title with on), or reset: true');
+        const next = p.reset === true ? null : ((p.text as string | undefined) ?? undefined);
+        if (typeof next === 'string' && !next.trim()) throw new CommandError('invalid', 'empty words — reset: true gives back Recap’s own');
+        const accounts = publishChannels(getPostiz());
+        let apply: (pub: RecapDoc['publish']) => RecapDoc['publish'];
+        if (p.on !== undefined) {
+          const picked = pickChannels([p.on], accounts, []);
+          if ('error' in picked) throw new CommandError('invalid', picked.error);
+          apply = (pub) =>
+            picked.channels.reduce((acc, ch) => {
+              if (p.reset === true) return withNetworkTitle(withNetworkCaption(acc, ch.id, null), ch.id, null);
+              const worded = typeof next === 'string' ? withNetworkCaption(acc, ch.id, next) : acc;
+              return typeof p.title === 'string' ? withNetworkTitle(worded, ch.id, p.title) : worded;
+            }, pub);
+        } else {
+          if (next === undefined) throw new CommandError('invalid', 'a title is one network’s: say which with on');
+          apply = (pub) => withPostCaption(pub, next);
+        }
+        c.current.change((d) => withRecap(d, { publish: apply(d.publish) }));
+        const after = { ...doc(), publish: apply(doc().publish) };
+        const r = resolveRecap(after);
+        const text = captionText(after, r);
+        return {
+          text,
+          length: text.length,
+          approved: after.publish.approved,
+          ...(text.length >= CAPTION_MAX ? { cut: `longer than ${CAPTION_MAX} once filled — cut` } : {}),
+          accounts: accounts.map((ch) => {
+            const net = networkOf(ch.identifier)!;
+            const mine = networkCaption(after, r, ch.id, net);
+            const title = networkTitle(after, r, ch.id, net);
+            return { on: ch.name, network: net.label, max: net.captionMax, ...(mine.own ? { own: true } : {}), ...(mine.fitted ? { shortened: true } : {}), ...(mine.own || mine.fitted ? { text: mine.text } : {}), ...(title ? { title } : {}) };
+          }),
+        };
+      },
+    },
+    {
+      id: 'recap.music',
+      title: 'Search a network’s music',
+      description:
+        'The music library of one of the person’s networks, searched through their Postiz — where an account has one: Instagram (with the Facebook Business connector) or TikTok Business. q: what to look for; nothing: what is trending. on: "instagram" (default) or "tiktok". Answers the tracks: id, title, artist, seconds. Give an id to recap.postMusic. The person hears a track in Export › Publish › Sound; you cannot.',
+      params: {
+        q: { type: 'string', description: 'What to search; nothing: trending.', optional: true },
+        on: { type: 'string', description: 'The network: "instagram" (default) or "tiktok".', optional: true },
+      },
+      available: () => (publishChannels(getPostiz()).some((ch) => musicLibrary(ch.identifier)) ? true : 'none of the person’s accounts has a music library through Postiz (Instagram with the Facebook Business connector, TikTok Business)'),
+      run: async (p) => {
+        const conn = getPostiz()!;
+        const want = typeof p.on === 'string' ? p.on.toLowerCase() : 'instagram';
+        const channel = publishChannels(conn).find((ch) => musicLibrary(ch.identifier) && networkOf(ch.identifier)?.id === want);
+        if (!channel) throw new CommandError('invalid', `no account with a music library on "${want}"`);
+        const tracks = await new PostizClient(conn.apiBase, conn.apiKey).searchMusic(channel, typeof p.q === 'string' ? p.q : '');
+        for (const t of tracks) heard.current.set(`${want}:${t.id}`, t);
+        return { on: networkOf(channel.identifier)!.label, tracks: tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, seconds: t.seconds })) };
+      },
+    },
+    {
+      id: 'recap.postMusic',
+      title: 'Set what the post sounds like',
+      description:
+        'What the recap sounds like once published. source: "own" — every network hears the recap’s own sound — or "network" (default): a track of the network’s own library laid over the Reel where an account has one, the other networks keeping the recap’s sound. track: a track’s id from recap.music, with on: its network ("instagram" default, "tiktok"); track: "" removes it. musicVolume and filmVolume: 0–100, the track and the recap’s own sound under it. The network picks which excerpt of the track plays; a carousel or a story carries no library track. Answers what each account will hear.',
+      params: {
+        source: { type: 'string', enum: ['own', 'network'], description: 'The recap’s own sound everywhere, or the networks’ music where there is one.', optional: true },
+        track: { type: 'string', description: 'A track id from recap.music; "" removes it.', optional: true },
+        on: { type: 'string', description: 'The track’s network: "instagram" (default) or "tiktok".', optional: true },
+        musicVolume: { type: 'number', min: 0, max: 100, description: 'The track’s volume.', optional: true },
+        filmVolume: { type: 'number', min: 0, max: 100, description: 'The recap’s own sound under it.', optional: true },
+      },
+      run: (p) => {
+        const want = typeof p.on === 'string' ? p.on.toLowerCase() : 'instagram';
+        let track: MusicTrack | null | undefined;
+        if (typeof p.track === 'string') {
+          track = p.track ? (heard.current.get(`${want}:${p.track}`) ?? null) : null;
+          if (p.track && !track) throw new CommandError('invalid', `no track "${p.track}" in the last searches on ${want} — search it first (recap.music)`);
+        }
+        const apply = (pub: RecapDoc['publish']) => {
+          const tracks = track === undefined ? pub.music.tracks : track === null ? Object.fromEntries(Object.entries(pub.music.tracks).filter(([k]) => k !== want)) : { ...pub.music.tracks, [want]: track };
+          return withMusic(pub, {
+            ...(typeof p.source === 'string' ? { source: p.source as 'own' | 'network' } : track ? { source: 'network' as const } : {}),
+            tracks,
+            ...(typeof p.musicVolume === 'number' ? { musicVolume: p.musicVolume } : {}),
+            ...(typeof p.filmVolume === 'number' ? { filmVolume: p.filmVolume } : {}),
+          });
+        };
+        c.current.change((d) => withRecap(d, { publish: apply(d.publish) }));
+        const after = apply(doc().publish);
+        return {
+          source: after.music.source,
+          musicVolume: after.music.musicVolume,
+          filmVolume: after.music.filmVolume,
+          hears: publishChannels(getPostiz()).map((ch) => {
+            const m = musicFor(after, ch.identifier, 'reel');
+            return { on: ch.name, network: networkOf(ch.identifier)!.label, sound: m ? `${m.track.title} — ${m.track.artist} (the network’s library)` : doc().sound ? 'the recap’s own sound' : 'none' };
+          }),
+        };
       },
     },
     {
@@ -419,66 +513,78 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
     },
     {
       id: 'recap.schedule',
-      title: 'Schedule the recap on Instagram',
+      title: 'Schedule the recap on the person’s networks',
       description:
-        'Render the open recap, send it to the person’s Postiz and schedule it on their Instagram — the caption must be approved first (recap.approve). kind: "reel" (the film), "carousel" (the slides, 10 at most) or "story" (default: a carousel for a dump, sheets or Wrapped, else the Reel). at: "next" (default — the next free slot of their rhythm), "now", "draft" (left in Postiz unsent), or a time: YYYY-MM-DDTHH:MM in the rhythm’s time zone, or ISO with its zone. trial: a Trial Reel shown to non-followers first; graduate: "auto" (shared with the followers when it performs, default) or "manual". collaborator: false leaves out the collaborator set on Sources. A broken rhythm (two the same day, past the week’s ceiling) is answered as warnings, not refused. Answers when it goes out and the post’s id.',
+        'Render the open recap ONCE, send it to the person’s Postiz and schedule it on their accounts — the caption must be approved first (recap.approve). on: the accounts — ["all"], networks ("instagram", "tiktok", "youtube", "bluesky", "threads", "x") or accounts by name (recap.calendar lists them); nothing: where this template went the last time. kind: "reel" (the film), "carousel" (the slides — each network takes what it holds: 10 on Instagram, the first 4 pictures on Bluesky and X, none on YouTube) or "story" (Instagram only) — default: a carousel for a dump, sheets or Wrapped, else the Reel. at: "next" (default — the next free slot of their rhythm), "now", "draft" (left in Postiz unsent), or a time: YYYY-MM-DDTHH:MM in the rhythm’s time zone, or ISO with its zone. stagger: true sends the other networks two hours after Instagram. trial: a Trial Reel on Instagram, shown to non-followers first; graduate: "auto" (shared with the followers when it performs, default) or "manual". collaborator: false leaves out the Instagram collaborator set on Sources. A broken rhythm is answered as warnings, not refused; a network that cannot take it, or refuses it, is answered in failed while the others go. Answers when it goes out and each post’s id.',
       params: {
+        on: { type: 'strings', description: 'The accounts: ["all"], networks, or names.', optional: true },
         kind: { type: 'string', enum: [...PUBLISH_KINDS], description: 'What it goes out as.', optional: true },
         at: { type: 'string', description: '"next", "now", "draft" or a time.', optional: true },
-        trial: { type: 'boolean', description: 'A Trial Reel.', optional: true },
+        stagger: { type: 'boolean', description: 'Instagram first, the other networks two hours later.', optional: true },
+        trial: { type: 'boolean', description: 'A Trial Reel on Instagram.', optional: true },
         graduate: { type: 'string', enum: ['auto', 'manual'], description: 'A trial shared with followers when it performs, or by hand.', optional: true },
-        collaborator: { type: 'boolean', description: 'Invite the collaborator set on Sources (default true).', optional: true },
+        collaborator: { type: 'boolean', description: 'Invite the collaborator set on Sources, on Instagram (default true).', optional: true },
       },
       available: () => {
         const conn = getPostiz();
         if (!conn) return 'no Postiz is connected — the person connects theirs on #/sources';
-        return publishChannel(conn) ? true : 'the person has not chosen the Instagram account Recap posts to, on #/sources';
+        return publishChannels(conn).length ? true : 'their Postiz has no account Recap can post to — they add one there, then refresh it on #/sources';
       },
       run: async (p) => {
         const d0 = doc();
         if (!d0.publish.approved) throw new CommandError('unavailable', 'the caption is not approved — show it to the person (recap.facts) and approve it once they say so (recap.approve)');
         const conn = getPostiz()!;
-        const channel = publishChannel(conn)!;
+        const picked = pickChannels(p.on, publishChannels(conn), defaultDestinations(conn, readWhere(d0.template)));
+        if ('error' in picked) throw new CommandError('invalid', picked.error);
         const client = new PostizClient(conn.apiBase, conn.apiKey);
         const order = carouselSlides(d0, c.current.resolved, c.current.layout, hasOpenerSlide(d0, c.current.film.opener));
         const kind = (p.kind as PublishKind | undefined) ?? defaultKind(d0, order.length);
         if (kind === 'carousel' && order.length < 2) throw new CommandError('invalid', 'this recap has one slide — a carousel needs two');
         const now = new Date();
-        const planned = (await client.posts(new Date(now.getTime() - 86400000), new Date(now.getTime() + 63 * 86400000))).filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => new Date(x.publishDate));
+        const planned = postMoments(
+          (await client.posts(new Date(now.getTime() - 86400000), new Date(now.getTime() + 63 * 86400000))).filter((x) => x.state !== 'error' && x.state !== 'draft').map((x) => ({ at: new Date(x.publishDate), channelId: x.channel?.id ?? null })),
+        );
         const target = scheduleTarget(p.at, conn.rhythm, planned, now);
         if ('error' in target) throw new CommandError('invalid', target.error);
         const signal = new AbortController().signal;
         const files = await renderPostFiles(input(), kind, order, slugOf(d0.title) || 'recap', () => undefined, signal);
-        const text = captionText(d0, resolveRecap(d0));
-        const sent = await sendPost({
+        const resolved = resolveRecap(d0);
+        const isInstagram = (identifier: string) => networkOf(identifier)?.id === 'instagram';
+        const later = p.stagger === true && picked.channels.some((ch) => isInstagram(ch.identifier)) && target.at !== 'draft' ? new Date((target.at === 'now' ? now.getTime() : target.at.getTime()) + 2 * 3600_000) : null;
+        const result = await sendPosts({
           client,
-          channel,
           kind,
-          caption: text,
           files,
-          at: target.at,
+          seconds: kind === 'carousel' ? null : c.current.film.total,
+          destinations: picked.channels.map((channel) => {
+            const net = networkOf(channel.identifier)!;
+            return { channel, caption: networkCaption(d0, resolved, channel.id, net).text, title: networkTitle(d0, resolved, channel.id, net) || null, music: musicFor(d0.publish, channel.identifier, kind), at: later && !isInstagram(channel.identifier) ? later : target.at };
+          }),
           trial: p.trial === true,
           graduate: (p.graduate as 'auto' | 'manual' | undefined) ?? 'auto',
           collaborators: p.collaborator !== false && conn.collaborator ? [conn.collaborator] : [],
           signal,
         });
-        c.current.change((d) => withRecap(d, { publish: withPublication(d.publish, sent) }));
+        if (result.sent.length) {
+          c.current.change((d) => withRecap(d, { publish: withPublications(d.publish, result.sent) }));
+          writeWhere(d0.template, result.sent.map((x) => x.channelId));
+        }
         return {
-          postId: sent.postId,
           kind,
-          trial: sent.trial,
-          on: channel.name,
           goesOut: target.at instanceof Date ? `${slotLabel(target.at, conn.rhythm.timeZone)} (${conn.rhythm.timeZone})` : target.at,
+          posts: result.sent.map((x) => ({ postId: x.postId, on: x.channel, network: networkOf(x.network)?.label ?? x.network, ...(x.trial ? { trial: true } : {}), ...(later && !isInstagram(x.network) ? { goesOut: slotLabel(later, conn.rhythm.timeZone) } : {}) })),
+          ...(result.failed.length ? { failed: result.failed } : {}),
+          ...(result.notes.length ? { notes: result.notes } : {}),
           files: files.length,
           warnings: target.at instanceof Date ? rhythmWarnings(conn.rhythm, planned, target.at) : [],
-          remember: 'Instagram’s API sets no location: tell the person to add it in Instagram once the post is out.',
+          ...(result.sent.some((x) => isInstagram(x.network)) ? { remember: 'Instagram’s API sets no location: tell the person to add it in Instagram once the post is out.' } : {}),
         };
       },
     },
     {
       id: 'recap.unschedule',
       title: 'Take a scheduled post back',
-      description: 'Delete a post this recap sent from the person’s Postiz, by its id (recap.get › post.publications), before it goes out — and forget it here. A post already out stays on Instagram.',
+      description: 'Delete a post this recap sent from the person’s Postiz, by its id (recap.get › post.publications — one send to several networks is several posts, each with its id), before it goes out — and forget it here. A post already out stays on its network.',
       params: { postId: { type: 'string', description: 'The post’s id.' } },
       available: () => (getPostiz() ? true : 'no Postiz is connected'),
       run: async (p) => {
