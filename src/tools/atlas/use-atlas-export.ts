@@ -8,6 +8,11 @@ import { AtlasTiles } from './atlas-tiles';
 import { aspectRatio, mapRect, type AtlasSettings } from './atlas-settings';
 import { visibleBox, type AtlasView } from './atlas-view';
 import type { SceneCore } from './use-atlas-scene';
+import { ATLAS_SIGNATURE, ATLAS_SIGNS_AS } from './atlas-doc';
+import { END_CARD_SECONDS, type DocSignature } from '../../shared/signature/signature';
+import { signatureFonts } from '../../shared/signature/signature-fonts';
+import { REEL_SAFE, frameIsDark, paintEndCard, paintSignature } from '../../shared/signature/signature-paint';
+import { SIGNATURE_STYLE_PREF } from '../../shared/signature/signature-pref';
 
 export type ExportKind = 'mp4' | 'still' | 'poster';
 
@@ -23,7 +28,8 @@ export interface AtlasExport {
   progress: number | null;
   note: string | null;
   cancel: () => void;
-  run: (req: ExportRequest, core: SceneCore, viewAt: (t: number) => AtlasView, tilesOn: boolean) => Promise<void>;
+  /** `sign`: the atlas's signature — a mark on a still or a poster, the end card after the video. */
+  run: (req: ExportRequest, core: SceneCore, viewAt: (t: number) => AtlasView, tilesOn: boolean, sign?: DocSignature) => Promise<void>;
 }
 
 /** The frame's pixel size for an aspect and a short side, both even (H.264 refuses odd). */
@@ -56,7 +62,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
   const cancel = useCallback(() => controller.current?.abort(), []);
 
   const run = useCallback<AtlasExport['run']>(
-    async (req, core, viewAt, tilesOn) => {
+    async (req, core, viewAt, tilesOn, sign = ATLAS_SIGNATURE) => {
       if (controller.current) return;
       if (!core.flights.length) {
         setNote('Nothing to export — no flight is shown.');
@@ -92,13 +98,25 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
 
         let blob: Blob;
         let name: string;
+        const style = SIGNATURE_STYLE_PREF.get();
+        if (sign.on) await signatureFonts();
         if (req.kind === 'mp4') {
+          // A signed video wears nothing over the map: it closes on the end card, after the atlas's own outro.
+          const card = sign.on ? END_CARD_SECONDS : 0;
+          let cardDark: boolean | null = null;
           blob = await encodeFrames({
             width: w,
             height: h,
-            seconds: core.story.total,
+            seconds: core.story.total + card,
             fps: settings.format.fps,
-            draw: (t) => paint(t),
+            draw: async (t) => {
+              if (card && t >= core.story.total) {
+                cardDark ??= frameIsDark(ctx, w, h);
+                paintEndCard(ctx, w, h, t - core.story.total, { words: style.words, tool: ATLAS_SIGNS_AS, dark: cardDark });
+                return canvas;
+              }
+              return paint(t);
+            },
             signal: ctl.signal,
             onProgress: (p) => {
               if (p.ratio !== null) {
@@ -110,6 +128,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
           name = `flight-atlas-${stamp()}.mp4`;
         } else {
           const drawn = await paint(req.kind === 'poster' ? core.story.intro + core.story.flights : req.at, req.kind === 'poster');
+          if (sign.on) paintSignature(ctx, w, h, { face: style.face, words: style.words, tool: ATLAS_SIGNS_AS, corner: sign.corner, safe: settings.format.aspect === '9:16' ? REEL_SAFE : null });
           blob =
             'convertToBlob' in drawn
               ? await drawn.convertToBlob({ type: 'image/png' })

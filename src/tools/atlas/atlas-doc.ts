@@ -19,6 +19,7 @@
  */
 
 import { sanitizeSettings, type AtlasSettings } from './atlas-settings';
+import { readDocSignature, type DocSignature } from '../../shared/signature/signature';
 
 export const ATLAS_DOC_VERSION = 1;
 
@@ -54,6 +55,8 @@ export interface AtlasDoc {
   flights: AtlasFlightRef[];
   /** The flights drawn in the list but not on the map. */
   hidden: string[];
+  /** Whether its exports are signed «Made with Atelier · Flight Atlas», and in which corner (`shared/signature/`); absent = signed, by the default. */
+  signature?: DocSignature;
   createdAt: number;
   updatedAt: number;
 }
@@ -160,9 +163,21 @@ export function readAtlasDoc(raw: unknown, sourceIdFallback: string, now: number
     settings: sanitizeSettings(r.settings),
     flights,
     hidden,
+    ...(r.signature !== undefined ? { signature: readDocSignature(r.signature, ATLAS_SIGNATURE) } : {}),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };
+}
+
+/** The tool as a signature names it. */
+export const ATLAS_SIGNS_AS = 'Flight Atlas';
+
+/** An atlas that never chose: signed, top right — its statistics and its clock hold the two bottom corners, its dates the top left. */
+export const ATLAS_SIGNATURE: DocSignature = { on: true, corner: 'tr', slides: 'last' };
+
+/** The atlas's signature as it stands. */
+export function signatureOf(doc: AtlasDoc): DocSignature {
+  return doc.signature ?? ATLAS_SIGNATURE;
 }
 
 /**

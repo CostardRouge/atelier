@@ -14,6 +14,8 @@ import { cameraHeldBy } from './atlas-story';
 import { safeRect } from './atlas-safe';
 import type { SceneCore } from './use-atlas-scene';
 import type { PlayClock } from '../../shared/media/play-clock';
+import SignatureOverlay from '../../shared/signature/SignatureOverlay';
+import type { SignaturePaint } from '../../shared/signature/signature-paint';
 
 interface AtlasStageProps {
   core: SceneCore;
@@ -37,6 +39,8 @@ interface AtlasStageProps {
   onPick: (layer: AtlasLayer) => void;
   /** A piece of the overlay was dragged and let go: back in a spot, or held where it is. */
   onPlace: (piece: PieceId, place: Placement) => void;
+  /** The atlas's signature over the frame, as a still or a poster will wear it; null when none shows. */
+  mark?: SignaturePaint | null;
 }
 
 const SPOT_WORDS = { tl: 'top left', tc: 'top', tr: 'top right', bl: 'bottom left', bc: 'bottom', br: 'bottom right' } as const;
@@ -60,7 +64,7 @@ const REACH = 8;
  * a zone is being drawn, a drag draws it.
  */
 export default function AtlasStage(props: AtlasStageProps) {
-  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick, onPlace } = props;
+  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick, onPlace, mark } = props;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const outlineRef = useRef<HTMLSpanElement>(null);
@@ -343,6 +347,11 @@ export default function AtlasStage(props: AtlasStageProps) {
       />
       <span ref={outlineRef} aria-hidden="true" className="absolute hidden border-2 border-accent rounded-paper pointer-events-none" />
       {safeShown && size.w > 0 && <SafeZones aspect={format.aspect} width={size.w} height={size.h} />}
+      {mark && size.w > 0 && (
+        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{ width: size.w, height: size.h }}>
+          <SignatureOverlay mark={mark} />
+        </span>
+      )}
       {band && (
         <span
           className="absolute border-2 border-accent bg-accent/15 pointer-events-none rounded-sm"
