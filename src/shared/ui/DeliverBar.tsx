@@ -61,6 +61,7 @@ export default function DeliverBar({
   lead,
   above,
   running,
+  head,
 }: {
   verbs: readonly ExportVerb[];
   /** Which verb is the button; the first when unnamed or absent. */
@@ -90,6 +91,8 @@ export default function DeliverBar({
   above?: ReactNode;
   /** A host's own run, drawn IN PLACE of the verbs while it goes on (a tool whose progress is not a `RunProgress`). */
   running?: ReactNode;
+  /** The bar's first line, about the file the verb writes — its signature (`SignatureLine`). Hidden during a run. */
+  head?: ReactNode;
 }) {
   const primary = verbs.find((v) => v.id === primaryId) ?? verbs[0] ?? null;
   const others = verbs.filter((v) => v !== primary);
@@ -104,6 +107,7 @@ export default function DeliverBar({
         <RunBar progress={progress} exporting={exporting} onCancel={onCancel} unitWord={unitWord} settingsLine={settingsLine ?? null} />
       ) : (
         <>
+          {head}
           {lead ? (
             <div className="flex items-center gap-2 min-w-0">
               {lead}

@@ -11,6 +11,15 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- A signature in what Recap, Mosaic and Flight Atlas export: «Made with Atelier · Recap». A still, a poster or a
+  carousel slide wears a small sticker in a corner; a video wears nothing over its pictures and closes on a 1.2 s end
+  card instead — the mark's corners close in, the dot lands, the words rise. One line at the foot of each Export,
+  just above the button that writes the file, says it: its tick turns it on or off for that recap, mosaic or atlas,
+  and the line opens a small panel with the face (a line, the sticker, a round stamp, the frame's corner), the words
+  (the brand alone, with the tool, with the site's address), the corner and, for a carousel, which slides wear it.
+  The face and the words are one choice for every tool, kept on this device; on or off and the corner travel with the
+  document. The stage shows the mark where the file will wear it. It is on by default, and a 9:16 page keeps it clear
+  of where Instagram draws its own buttons and caption.
 - Publishing reaches every network your Postiz holds, not only Instagram: the Sources screen lists your Instagram,
   TikTok, YouTube, Bluesky, Threads and X accounts with their marks, and *Refresh* asks your Postiz again after you
   add one there.
