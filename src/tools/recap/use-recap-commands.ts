@@ -27,7 +27,8 @@ import { carouselSlides, type RecapLayout } from '../../shared/recap/recap-layou
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { paintRecap, type PaintSources } from '../../shared/recap/recap-paint';
 import { resolveRecap, templateDays, type DeviceAliases, type ResolvedRecap } from '../../shared/recap/recap-slots';
-import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
+import { END_CARD_SECONDS } from '../../shared/signature/signature';
+import { carouselMarks, exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles } from './recap-export';
 import { hasOpenerSlide, shownPictures } from '../../shared/recap/recap-opener-plan';
 import { listTrips } from '../../shared/roadtrip/trip-store';
 import { chooseCarousel, pickChannels, poolList, recapFacts, scheduleTarget } from '../../shared/recap/recap-commands';
@@ -269,9 +270,12 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
         if (p.what === 'video') {
           const r = await exportFilm(input(), () => undefined, signal);
           downloadBlob(r.blob, `${base}.mp4`);
-          return { files: [`${base}.mp4`], seconds: c.current.film.total, sound: r.silent ? `none: ${r.silent}` : Boolean(doc().sound), missingClips: r.missingClips };
+          return { files: [`${base}.mp4`], seconds: c.current.film.total + (doc().signature.on ? END_CARD_SECONDS : 0), sound: r.silent ? `none: ${r.silent}` : Boolean(doc().sound), missingClips: r.missingClips };
         }
-        const pages = await exportPages(input());
+        // The carousel's own slides decide where its signature falls; the stills follow the recap's rule over its pages.
+        const order = carouselSlides(doc(), c.current.resolved, c.current.layout, hasOpenerSlide(doc(), c.current.film.opener));
+        const marks = carouselMarks(doc(), order);
+        const pages = await exportPages(input(), signal, p.what === 'carousel' ? marks.pages : undefined);
         if (p.what !== 'carousel') {
           pages.forEach((b, i) => {
             const name = pages.length > 1 ? `${base}-${String(i + 1).padStart(2, '0')}.png` : `${base}.png`;
@@ -281,16 +285,15 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           return { files };
         }
         // The carousel slide by slide in its order, as the Export tab writes it: the opener's still, the pages, the clips.
-        const order = carouselSlides(doc(), c.current.resolved, c.current.layout, hasOpenerSlide(doc(), c.current.film.opener));
         for (const [i, s] of order.entries()) {
           const n = String(i + 1).padStart(2, '0');
           let blob: Blob | null = null;
           let ext = 'png';
           if (s.kind === 'page') blob = pages[s.page] ?? null;
-          else if (s.kind === 'opener') blob = await exportOpenerSlide(input(), signal);
+          else if (s.kind === 'opener') blob = await exportOpenerSlide(input(), signal, marks.at(i));
           else {
             const key = c.current.resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
-            if (key) blob = await exportClipSlide(input(), key, () => undefined, signal);
+            if (key) blob = await exportClipSlide(input(), key, () => undefined, signal, undefined, marks.at(i));
             ext = 'mp4';
           }
           if (!blob) continue;

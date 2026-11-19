@@ -1,6 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { exportCellPx, exportSize } from '../../shared/mosaic/export-size';
-import type { MosaicDoc, MosaicExport as ExportSettings } from '../../shared/mosaic/mosaic-doc';
+import { signatureOf, type MosaicDoc, type MosaicExport as ExportSettings } from '../../shared/mosaic/mosaic-doc';
+import { END_CARD_SECONDS } from '../../shared/signature/signature';
+import { signatureFonts } from '../../shared/signature/signature-fonts';
+import { REEL_SAFE, frameIsDark, paintEndCard, paintSignature } from '../../shared/signature/signature-paint';
+import { SIGNATURE_STYLE_PREF } from '../../shared/signature/signature-pref';
 import { encodeFrames } from '../../shared/media/render-video';
 import { downloadBlob } from '../../shared/media/save';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
@@ -11,6 +15,9 @@ import type { MatchSettings, SceneBuilder } from './scene-builder';
 
 /** A film's frame rate: the screen saver's motion is slow, 30 is smooth and half the bytes of 60. */
 export const FILM_FPS = 30;
+
+/** The tool as a signature names it. */
+export const MOSAIC_SIGNS_AS = 'Mosaic';
 
 export type ExportKind = 'png' | 'mp4';
 
@@ -101,13 +108,28 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
       let blob: Blob;
       let name: string;
       let seconds: number | undefined;
+      // The mosaic's signature: a sticker on the image, the end card after a film — never over a film's frames.
+      const sign = signatureOf(d);
+      const style = SIGNATURE_STYLE_PREF.get();
+      if (sign.on) await signatureFonts();
       if (kind === 'png') {
         const scene = await b.build(d.target, match, { stageW: w, stageH: h, dpr: 1 }, {
           signal: ctl.signal,
           crop: d.crop,
           plan: p ? { pool: p, lot: 0, propagation: 'none', origin: -1, seed: s.seed } : undefined,
         });
-        blob = await new Promise<Blob>((resolve, reject) => scene.canvas.toBlob((x) => (x ? resolve(x) : reject(new Error('The image could not be written.'))), 'image/png'));
+        // Signed on a COPY: the builder's canvas is the scene's own, and a scene is reused.
+        let out: HTMLCanvasElement = scene.canvas;
+        if (sign.on) {
+          const copy = Object.assign(document.createElement('canvas'), { width: scene.canvas.width, height: scene.canvas.height });
+          const g = copy.getContext('2d');
+          if (g) {
+            g.drawImage(scene.canvas, 0, 0);
+            paintSignature(g, copy.width, copy.height, { face: style.face, words: style.words, tool: MOSAIC_SIGNS_AS, corner: sign.corner, safe: copy.height / copy.width > 1.7 ? REEL_SAFE : null });
+            out = copy;
+          }
+        }
+        blob = await new Promise<Blob>((resolve, reject) => out.toBlob((x) => (x ? resolve(x) : reject(new Error('The image could not be written.'))), 'image/png'));
         name = `${slug(d.title)}-${w}x${h}-${stamp()}.png`;
       } else {
         const player = new MosaicPlayer(b);
@@ -128,16 +150,24 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
           { stageW: w, stageH: h, dpr: 1 },
           ctl.signal,
         );
-        seconds = Math.round(film.seconds * 10) / 10;
+        const card = sign.on ? END_CARD_SECONDS : 0;
+        let cardDark: boolean | null = null;
+        seconds = Math.round((film.seconds + card) * 10) / 10;
         const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h });
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('This browser cannot draw the frame.');
         blob = await encodeFrames({
           width: w,
           height: h,
-          seconds: film.seconds,
+          seconds: film.seconds + card,
           fps: FILM_FPS,
           draw: async (t) => {
+            if (card && t >= film.seconds) {
+              // Its ground follows the film: the canvas still holds the last frame when the card begins.
+              cardDark ??= frameIsDark(ctx, w, h);
+              paintEndCard(ctx, w, h, t - film.seconds, { words: style.words, tool: MOSAIC_SIGNS_AS, dark: cardDark });
+              return canvas;
+            }
             await film.draw(t, ctx);
             return canvas;
           },

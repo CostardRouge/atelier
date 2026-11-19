@@ -11,10 +11,12 @@ import {
   queueShuffle,
   refillQueue,
   sanitizeSettings,
+  signatureOf,
   withChainDraw,
   withCrop,
   withMeasures,
   withPictures,
+  withSignature,
   withTarget,
   type MosaicDoc,
   type MosaicSettings as Settings,
@@ -45,7 +47,10 @@ import { runMeasure, type MeasureProgress } from './measure-pool';
 import MosaicPicker from './MosaicPicker';
 import MosaicSettings, { SETTINGS_TABS, type SettingsTab } from './MosaicSettings';
 import MosaicExportPanel, { MosaicDeliver } from './MosaicExportPanel';
-import { useMosaicExport } from './use-mosaic-export';
+import SignatureOverlay from '../../shared/signature/SignatureOverlay';
+import { REEL_SAFE, type SignaturePaint } from '../../shared/signature/signature-paint';
+import { useSignatureStyle } from '../../shared/signature/signature-pref';
+import { MOSAIC_SIGNS_AS, useMosaicExport } from './use-mosaic-export';
 import { useMosaicEditorCommands, useMosaicStageCommands } from './use-mosaic-commands';
 import MosaicStage, { type Reveal, type StageView, type ZoomDetail } from './MosaicStage';
 import { SharpPictures } from './sharp-pictures';
@@ -375,6 +380,15 @@ function MosaicWorkbench({
     ),
   );
 
+  // The signature on the stage: the image as it will be saved — stopped, never over a mode that plays (a film closes on the end card).
+  const [signStyle] = useSignatureStyle();
+  const sign = signatureOf(doc);
+  const stageMark = useMemo<SignaturePaint | null>(
+    () => (sign.on && !status.playing ? { face: signStyle.face, words: signStyle.words, tool: MOSAIC_SIGNS_AS, corner: sign.corner, safe: stageH / Math.max(1, stageW) > 1.7 ? REEL_SAFE : null } : null),
+    [sign.on, sign.corner, status.playing, signStyle, stageW, stageH],
+  );
+  const stageCanvas = useCallback(() => canvasRef.current, []);
+
   const stage = (
     <div ref={stageRef} className="relative touch-none select-none" style={{ width: shownW || undefined, height: shownH || undefined }}>
       <MosaicStage
@@ -401,6 +415,7 @@ function MosaicWorkbench({
         }}
         onSteer={chained ? (cell) => void player?.steer(cell) : undefined}
       />
+      {state.status === 'ready' && !zoom.zoomed && <SignatureOverlay mark={stageMark} source={stageCanvas} />}
       {!status.playing && (zoom.zoomed || cropped) && (
         <div className="absolute right-2 top-2 flex items-center gap-1 rounded-control bg-frame/75 p-1" role="group" aria-label="Zoom">
           {zoom.zoomed && (
@@ -461,7 +476,9 @@ function MosaicWorkbench({
     />
   );
   const exportReady = Boolean(builder) && doc.target !== undefined;
-  const deliver = (placement: 'panel' | 'drawer') => <MosaicDeliver settings={doc.settings} stageW={stageW} stageH={stageH} exporter={exporter} ready={exportReady} placement={placement} />;
+  const deliver = (placement: 'panel' | 'drawer') => (
+    <MosaicDeliver settings={doc.settings} stageW={stageW} stageH={stageH} exporter={exporter} ready={exportReady} placement={placement} signature={signatureOf(doc)} onSignature={(next) => change((d) => withSignature(d, next))} />
+  );
   const settings = (only: SettingsTab, docked = false) => (
     <MosaicSettings
       only={only}

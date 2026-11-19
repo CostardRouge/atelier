@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FieldRow, InspectorSection, Readout, SliderRow, SelectField, SwitchRow, TextField, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import DeliverBar, { PlainRun } from '../../shared/ui/DeliverBar';
+import SignatureLine from '../../shared/signature/SignatureLine';
+import { END_CARD_SECONDS, type DocSignature } from '../../shared/signature/signature';
+import { ATLAS_SIGNS_AS } from './atlas-doc';
 import { STICKY_BANDS } from '../../shared/ui/InspectorBlock';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
@@ -97,6 +100,9 @@ interface AtlasInspectorProps {
   total: number;
   exporter: AtlasExport;
   onExport: (kind: ExportKind) => void;
+  /** The atlas's signature, set from the line at the Export's foot. */
+  signature: DocSignature;
+  onSignature: (next: DocSignature) => void;
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -1036,6 +1042,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
   // poster behind ▾, the file's own line above; while one is written the bar IS the run, whatever layer is shown.
   const deliver = (
     <DeliverBar
+      head={<SignatureLine tool={ATLAS_SIGNS_AS} noun="atlas" value={p.signature} onChange={p.onSignature} />}
       verbs={
         shown === 0
           ? []
@@ -1045,7 +1052,7 @@ export default function AtlasInspector(p: AtlasInspectorProps) {
               { id: 'poster', label: 'Save a poster', hint: 'Every route drawn whole, as a PNG', run: () => p.onExport('poster') },
             ]
       }
-      summary={`${size.w} × ${size.h} · ${s.format.fps} fps · ${formatElapsed(p.total)} · ${shown} flight${shown === 1 ? '' : 's'}`}
+      summary={`${size.w} × ${size.h} · ${s.format.fps} fps · ${formatElapsed(p.total + (p.signature.on ? END_CARD_SECONDS : 0))} · ${shown} flight${shown === 1 ? '' : 's'}${p.signature.on ? ` · end card +${END_CARD_SECONDS} s` : ''}`}
       exporting={null}
       progress={null}
       onCancel={p.exporter.cancel}

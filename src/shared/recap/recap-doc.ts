@@ -32,6 +32,7 @@ import { ARRANGES, DATE_FORMATS, DATE_PLACES, DEFAULT_EXIF_PARTS, readExifParts,
 import { isIsoDate, todayIso, type IsoDate } from '../roadtrip/trip-days';
 import { agoKey, isoWeek, monthName, monthStart, parseAgo, shortDate, weekStartOf } from './recap-days';
 import { addDays } from '../roadtrip/trip-days';
+import { readDocSignature, type DocSignature } from '../signature/signature';
 
 export const RECAP_DOC_VERSION = 1;
 export const MAX_RECAP_TITLE = 120;
@@ -320,6 +321,8 @@ export interface RecapDoc {
   opener: RecapOpener;
   /** Where the places are said: a pin in a cell's corner, runs of days, `{place}` (`recap-places.ts`). */
   places: RecapPlaces;
+  /** Whether its exports are signed «Made with Atelier · Recap», in which corner, on which slides (`shared/signature/`). */
+  signature: DocSignature;
   /** Its post: the caption, its approval, what was sent to Postiz (`recap-publish.ts`). */
   publish: RecapPublish;
   createdAt: number;
@@ -779,6 +782,7 @@ export function readRecapDoc(raw: unknown, sourceIdFallback: string, now: number
     carousel: readCarousel(r.carousel, template),
     opener: readOpener(r.opener),
     places: readPlaces(r.places),
+    signature: readDocSignature(r.signature),
     publish: readPublish(r.publish),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),

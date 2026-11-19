@@ -22,7 +22,9 @@ import { useFilmReady } from './use-film-ready';
 import { frameFontFaces } from './atlas-paint';
 import { phaseAt } from './atlas-story';
 import { DEFAULT_SETTINGS, sanitizeSettings, type AtlasSettings } from './atlas-settings';
-import { cleanAtlasName, withFlights, withoutFlights, type AtlasDoc } from './atlas-doc';
+import { ATLAS_SIGNS_AS, cleanAtlasName, signatureOf, withFlights, withoutFlights, type AtlasDoc } from './atlas-doc';
+import { REEL_SAFE, type SignaturePaint } from '../../shared/signature/signature-paint';
+import { useSignatureStyle } from '../../shared/signature/signature-pref';
 import { ingestLogs, type IngestItem } from './atlas-ingest';
 import { fetchLogsBack, hostOf } from './atlas-refetch';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
@@ -247,9 +249,9 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
   const onExport = useCallback(
     (kind: ExportKind) => {
       clock.setPlaying(false);
-      void exporter.run({ kind, at: clock.t }, scene.core, scene.viewAt, tilesOn);
+      void exporter.run({ kind, at: clock.t }, scene.core, scene.viewAt, tilesOn, signatureOf(doc));
     },
-    [clock, exporter, scene.core, scene.viewAt, tilesOn],
+    [clock, exporter, scene.core, scene.viewAt, tilesOn, doc],
   );
 
   // A zone is drawn on the map, or taken from the view on screen.
@@ -269,6 +271,15 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
   const onPlace = useCallback((piece: PieceId, place: Placement) => update((s) => withPlacement(s, piece, place)), [update]);
 
   const look = useMemo(() => ({ bearing: settings.camera.bearing, tilt: settings.camera.tilt }), [settings.camera.bearing, settings.camera.tilt]);
+
+  // The signature on the stage: the frame or the poster as it will be saved, shown while Export is the layer open
+  // (as its safe zones are) — a video wears nothing over the map and closes on the end card.
+  const [signStyle] = useSignatureStyle();
+  const sign = signatureOf(doc);
+  const stageMark = useMemo<SignaturePaint | null>(
+    () => (sign.on && layer === 'output' && flights.length > 0 ? { face: signStyle.face, words: signStyle.words, tool: ATLAS_SIGNS_AS, corner: sign.corner, safe: settings.format.aspect === '9:16' ? REEL_SAFE : null } : null),
+    [sign.on, sign.corner, layer, flights.length, signStyle, settings.format.aspect],
+  );
 
   const empties = flights.length === 0 && !reading;
   useAtlasCover(doc, scene.core, scene.viewAt, !reading && missing.length === 0, () => clock.playing && phaseAt(storyRef.current, clock.t) !== 'flights');
@@ -341,6 +352,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
               selected={layer}
               onPick={setLayer}
               onPlace={onPlace}
+              mark={stageMark}
             />
             {empties && (
               <div className="absolute inset-0 grid place-items-center p-6 pointer-events-none">
@@ -398,6 +410,8 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
             total={scene.core.story.total}
             exporter={exporter}
             onExport={onExport}
+            signature={sign}
+            onSignature={(signature) => change((d) => ({ ...d, signature, updatedAt: Date.now() }))}
           />
         </aside>
       </div>

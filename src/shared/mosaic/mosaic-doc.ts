@@ -20,6 +20,7 @@ import { DEFAULT_ASPECT, isAspect, isWhole, readCrop, type AspectId, type Crop }
 import { MAX_CELL_PX, MIN_CELL_PX, pickDive, pickNextTarget } from './match';
 import { decodeGrid, type Level, type Space } from './measure';
 import { RECIPES, RECIPE_MOTIONS, departAt, motionOf, sanitizeMotion, type Motion, type MotionMode } from './motion';
+import { readDocSignature, type DocSignature } from '../signature/signature';
 
 /**
  * v2 (2026-11-01): the chain's queue (`chain`) joins the document; a v1 body reads with an empty one.
@@ -132,6 +133,8 @@ export interface MosaicDoc {
   /** The pictures to come after `target` in a chain; absent = none queued, the seed draws them. */
   chain?: MosaicChain;
   settings: MosaicSettings;
+  /** Whether its exports are signed «Made with Atelier · Mosaic», and in which corner (`shared/signature/`); absent = signed, by the default. */
+  signature?: DocSignature;
   createdAt: number;
   updatedAt: number;
 }
@@ -283,9 +286,22 @@ export function readMosaicDoc(raw: unknown, sourceIdFallback: string, now: numbe
     ...(crop && !isWhole(crop) ? { crop } : {}),
     ...(chain ? { chain } : {}),
     settings: sanitizeSettings(r.settings),
+    ...(r.signature !== undefined ? { signature: readDocSignature(r.signature, MOSAIC_SIGNATURE) } : {}),
     createdAt,
     updatedAt: time(r.updatedAt, createdAt),
   };
+}
+
+/** A mosaic that never chose: signed, bottom right — a mosaic has no caption zone to stay clear of. */
+export const MOSAIC_SIGNATURE: DocSignature = { on: true, corner: 'br', slides: 'last' };
+
+/** The mosaic's signature as it stands. */
+export function signatureOf(doc: MosaicDoc): DocSignature {
+  return doc.signature ?? MOSAIC_SIGNATURE;
+}
+
+export function withSignature(doc: MosaicDoc, signature: DocSignature, now: number = Date.now()): MosaicDoc {
+  return { ...doc, signature, updatedAt: now };
 }
 
 /** The two spans' union; one alone when the other is absent. */

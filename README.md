@@ -4548,6 +4548,44 @@ CSS): it stays out of the main bundle and downloads only when you open this
 tool. The cue-to-track extraction (filtering null-island fixes, bounds, line
 coordinates) is pure and unit-tested; the map glue lives in `use-flight-map.ts`.
 
+## The signature
+
+What Recap, Mosaic and Flight Atlas write can say where it was made: *Made
+with Atelier · Recap*. It is one line at the foot of each **Export**, just
+above the button that writes the file — `✓ Signed · Made with Atelier · Recap ›`.
+The **tick** turns it on or off for that recap, mosaic or atlas; the line
+opens a small panel (beside the stage it hangs over the line; on a phone it
+opens inside the drawer, above the line, so the picture stays in sight):
+
+- **Face** — a quiet *line*, the *sticker* (a small label, slightly turned),
+  a round *stamp*, or the frame's own *corner*. Each is drawn by the suite at
+  the file's size, from the app's mark: no image is pasted on.
+- **Words** — *Made with Atelier*, with the tool's name after it, or with the
+  site's address too.
+- **Corner** — one of five places. On a 9:16 page the mark stays clear of
+  where Instagram draws its own buttons and caption.
+- **Slides** (a recap with several) — the last slide, every slide, or the
+  first and the last.
+
+The face and the words are **one choice for every tool**, kept on this device:
+set them in a recap and tomorrow's mosaic wears the same. Whether a document
+is signed, and its corner, are **the document's**: they are saved with it and
+travel in its file. A new document is signed.
+
+**A still, a poster and a carousel slide** wear the face in their corner, and
+the stage shows it where the file will wear it (Recap while paused, Mosaic
+while stopped, Flight Atlas while *Export* is the layer open). **A video
+wears nothing over its pictures**: it closes on a 1.2 second **end card** of
+its own — the mark's corners close in, its dot lands, the words rise — on
+paper after a light film, near-black after a dark one. The export's line says
+the added length. An agent's export and a post sent through your Postiz are
+signed the same way.
+
+This is the tool's signature, not yours: Develop's own watermark — your name
+on your photograph — is a separate setting of Develop's exports and is
+untouched. Trips, the Studio, Storytelling and Develop's rolls are not signed
+yet.
+
 ## Flight Atlas tool
 
 A set of DJI flights — clips with their `.srt`, or loose `.srt` logs — drawn
