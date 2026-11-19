@@ -12,10 +12,13 @@ import Button from '../../shared/ui/Button';
 import { InspectorSection, SliderRow, ToggleField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import type { Change } from './RecapPanels';
-import { exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles, type FilmProgress } from './recap-export';
+import { carouselMarks, exportClipSlide, exportFilm, exportOpenerSlide, exportPages, renderPostFiles, type FilmProgress } from './recap-export';
 import { usePublish } from './PublishSection';
 import { sendAgainAsked } from './publish-where';
 import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
+import SignatureLine from '../../shared/signature/SignatureLine';
+import { END_CARD_SECONDS } from '../../shared/signature/signature';
+import { RECAP_SIGNS_AS } from '../../shared/recap/recap-signature';
 import { createPortal } from 'react-dom';
 import type { PublishCheck, PublishKind } from '../../shared/recap/recap-publish';
 import { hasOpenerSlide } from '../../shared/recap/recap-opener-plan';
@@ -331,6 +334,7 @@ export default function RecapExportPanel({
   change,
   visible,
   foot,
+  onSignPreview,
 }: {
   ctx: ExportContext;
   natural: number;
@@ -339,9 +343,13 @@ export default function RecapExportPanel({
   visible: boolean;
   /** Where the foot is drawn: the inspector's bottom, outside its scroll. */
   foot: HTMLElement | null;
+  /** The signature's popover opened or closed: the editor brings a signed page to the stage. */
+  onSignPreview?: (open: boolean) => void;
 }) {
   const { doc, film, layout, resolved, clipSlides } = ctx;
   const canEncode = useAvcEncodeSupport();
+  // A signed film closes on the end card: its length, its size and what a post is told count it.
+  const filmSeconds = film.total + (doc.signature.on ? END_CARD_SECONDS : 0);
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ p: FilmProgress; started: number } | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -405,7 +413,8 @@ export default function RecapExportPanel({
   const exportCarousel = () =>
     run('carousel', async (signal, task) => {
       // Slide by slide in the carousel's order: a page as a PNG, a clip as its own MP4 — the file's number is its place.
-      const pages = await exportPages(input(), signal);
+      const marks = carouselMarks(doc, order);
+      const pages = await exportPages(input(), signal, marks.pages);
       let made = 0;
       for (const [i, s] of order.entries()) {
         if (signal.aborted) break;
@@ -416,7 +425,7 @@ export default function RecapExportPanel({
             made += 1;
           }
         } else if (s.kind === 'opener') {
-          const blob = await exportOpenerSlide(input(), signal);
+          const blob = await exportOpenerSlide(input(), signal, marks.at(i));
           if (blob) {
             downloadBlob(blob, `${base}-${pad(i + 1)}.png`);
             made += 1;
@@ -425,7 +434,7 @@ export default function RecapExportPanel({
           const key = resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
           if (!key) continue;
           task.update({ detail: `clip slide ${i + 1}`, progress: null });
-          const blob = await exportClipSlide(input(), key, (ratio) => report(task)({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length });
+          const blob = await exportClipSlide(input(), key, (ratio) => report(task)({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }, marks.at(i));
           if (!blob) continue;
           downloadBlob(blob, `${base}-${pad(i + 1)}.mp4`);
           made += 1;
@@ -445,7 +454,7 @@ export default function RecapExportPanel({
     change,
     slides,
     media: order.map((s) => (s.kind === 'clip' ? 'video' : 'picture')),
-    seconds: film.total,
+    seconds: filmSeconds,
     cuts: film.pages.map((pg) => pg.start),
     onWithFilm: ctx.listen,
     again: again?.length ? again : null,
@@ -473,7 +482,7 @@ export default function RecapExportPanel({
   }, [again]);
   const pages = layout.pages.length;
   const SAVE: Record<SaveKind, { label: string; hint: string; run: () => void }> = {
-    video: { label: `Export video · ${film.total.toFixed(1)} s`, hint: `${W} × ${H} · ${doc.delivery.fps} fps · about ${sizeText(deliverySize(doc.delivery, W, H, film.total, Boolean(doc.sound)))}`, run: () => void exportVideo() },
+    video: { label: `Export video · ${filmSeconds.toFixed(1)} s`, hint: `${W} × ${H} · ${doc.delivery.fps} fps · about ${sizeText(deliverySize(doc.delivery, W, H, filmSeconds, Boolean(doc.sound)))}${doc.signature.on ? ` · end card +${END_CARD_SECONDS} s` : ''}`, run: () => void exportVideo() },
     stills: { label: pages > 1 ? `Export ${pages} stills` : 'Export the still', hint: `${pages} PNG · ${W} × ${H}, each page as it rests`, run: () => void exportStills() },
     carousel: { label: `Export the carousel · ${slides}`, hint: `${slides} slides in the strip's order${clips.length ? `, ${clips.length} as video` : ''}, numbered`, run: () => void exportCarousel() },
   };
@@ -489,6 +498,7 @@ export default function RecapExportPanel({
   const footBar = (
     <DeliverBar
       placement="panel"
+      head={<SignatureLine tool={RECAP_SIGNS_AS} noun="recap" value={doc.signature} onChange={(signature) => change((d) => withRecap(d, { signature }))} carousel={slides > 1} onOpen={onSignPreview} />}
       verbs={mode === 'publish' ? publishVerbs : saveVerbs}
       primary={mode === 'publish' ? 'chosen' : save}
       summary={mode === 'publish' ? pv.summary : SAVE[save].hint}
@@ -528,7 +538,7 @@ export default function RecapExportPanel({
           <InspectorSection
             id="recap-export"
             title="Export"
-            summary={{ video: `Video · ${film.total.toFixed(1)} s`, stills: `Stills · ${pages} PNG`, carousel: `Carousel · ${slides} slides` }[save]}
+            summary={{ video: `Video · ${filmSeconds.toFixed(1)} s`, stills: `Stills · ${pages} PNG`, carousel: `Carousel · ${slides} slides` }[save]}
             info="Painted here, from the same painter as the stage: what you see is what the files hold. Nothing leaves this device."
           >
             <div className="flex flex-col gap-2">

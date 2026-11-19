@@ -16,6 +16,11 @@ import type { RecapLayout } from '../../shared/recap/recap-layout';
 import { clipTime, loopTime, pageAt, type FilmPlan } from '../../shared/recap/recap-motion';
 import { drawCover, paintSlideTitle, paintRecap, type Drawable, type PaintSources } from '../../shared/recap/recap-paint';
 import { paintFilm, paintOpener } from '../../shared/recap/recap-opener-paint';
+import { RECAP_SIGNS_AS, recapMark, recapSignedSlides } from '../../shared/recap/recap-signature';
+import { END_CARD_SECONDS } from '../../shared/signature/signature';
+import { signatureFonts } from '../../shared/signature/signature-fonts';
+import { frameIsDark, paintEndCard, paintSignature } from '../../shared/signature/signature-paint';
+import { SIGNATURE_STYLE_PREF } from '../../shared/signature/signature-pref';
 import { defileTicks, openerRest } from '../../shared/recap/recap-opener-plan';
 import type { SoundEvent } from '../../shared/audio/sound-event';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
@@ -319,6 +324,11 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
     const ticks = film.opener?.kind === 'defile' && doc.opener.ticks ? defileTicks(film.opener) : [];
     // A trip opener's fonts and ground, before its first frame.
     if (film.opener && 'ready' in film.opener && film.opener.ready) await film.opener.ready().catch(() => undefined);
+    // A signed film wears nothing over its pictures: it closes on the end card, silent, after its own ending.
+    const style = SIGNATURE_STYLE_PREF.get();
+    const card = doc.signature.on ? END_CARD_SECONDS : 0;
+    let cardDark: boolean | null = null;
+    if (card) await signatureFonts();
     const audio = await soundBed(doc, film.total, ticks);
     if (doc.sound && !audio) silent = 'its sound is not on this device, or this browser cannot read it';
     const canvas = document.createElement('canvas');
@@ -328,7 +338,7 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
     const blob = await encodeFrames({
       width: W,
       height: H,
-      seconds: film.total,
+      seconds: film.total + card,
       fps: d.fps,
       bitrate: deliveryBitrate(d, W, H),
       passes: d.passes,
@@ -340,6 +350,13 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
         silent = reason;
       },
       draw: async (t) => {
+        if (card && t >= film.total) {
+          // Its ground follows the film: the canvas still holds the last frame when the card begins.
+          cardDark ??= frameIsDark(g, W, H);
+          g.setTransform(1, 0, 0, 1, 0, 0);
+          paintEndCard(g, W, H, t - film.total, { words: style.words, tool: RECAP_SIGNS_AS, dark: cardDark });
+          return canvas;
+        }
         const page = pageAt(film, t);
         const plan = film.pages[page];
         const waits: Promise<void>[] = [];
@@ -366,9 +383,25 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
   }
 }
 
-/** Each page, everything on, as a PNG — the post's stills or a carousel's slides. */
-export async function exportPages(input: ExportInput, signal: AbortSignal = new AbortController().signal): Promise<Blob[]> {
+/** Where a carousel's signature falls, slide by slide in its order: the pages that wear it, and whether slide `i` does. */
+export function carouselMarks(doc: RecapDoc, order: readonly ({ kind: 'page'; page: number } | { kind: 'opener' } | { kind: 'clip'; slot: string })[]): { pages: Set<number>; at: (i: number) => boolean } {
+  const signed = recapSignedSlides(doc, order.length);
+  const pages = new Set<number>();
+  order.forEach((s, i) => {
+    if (s.kind === 'page' && signed.has(i)) pages.add(s.page);
+  });
+  return { pages, at: (i) => signed.has(i) };
+}
+
+/**
+ * Each page, everything on, as a PNG — the post's stills or a carousel's slides. The pages in `marked` wear the
+ * recap's signature; left out, the recap's own rule over its pages decides (the stills' delivery).
+ */
+export async function exportPages(input: ExportInput, signal: AbortSignal = new AbortController().signal, marked?: ReadonlySet<number>): Promise<Blob[]> {
   const { doc, film, layout } = input;
+  const mark = recapMark(doc, SIGNATURE_STYLE_PREF.get());
+  const wear = marked ?? recapSignedSlides(doc, layout.pages.length);
+  if (mark) await signatureFonts();
   const stills = await originalStills(input, signal);
   const { width: W, height: H } = FORMATS[doc.format];
   const canvas = document.createElement('canvas');
@@ -381,6 +414,10 @@ export async function exportPages(input: ExportInput, signal: AbortSignal = new 
     g.setTransform(1, 0, 0, 1, 0, 0);
     // Past every entrance and before any clip's turn: the page as it rests.
     paintRecap(g, W, doc, input.resolved, layout, film, { still: stills.still }, { t: (plan?.allOn ?? 0) + 0.01, page: i, aliases: input.aliases, clipSlides: input.clipSlides });
+    if (mark && wear.has(i)) {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      paintSignature(g, W, H, mark);
+    }
     const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
     if (blob) out.push(blob);
   }
@@ -388,7 +425,7 @@ export async function exportPages(input: ExportInput, signal: AbortSignal = new 
 }
 
 /** The opener's last frame as a PNG — the carousel's first slide when it is one. */
-export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal = new AbortController().signal): Promise<Blob | null> {
+export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal = new AbortController().signal, signed = false): Promise<Blob | null> {
   const plan = input.film.opener;
   if (!plan) return null;
   const stills = await originalStills(input, signal);
@@ -399,6 +436,12 @@ export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal 
   canvas.height = H;
   const g = canvas.getContext('2d')!;
   paintOpener(g, W, input.doc, input.layout, plan, { still: stills.still }, openerRest(plan));
+  const mark = signed ? recapMark(input.doc, SIGNATURE_STYLE_PREF.get()) : null;
+  if (mark) {
+    await signatureFonts();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    paintSignature(g, W, H, mark);
+  }
   return new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
 }
 
@@ -406,9 +449,12 @@ export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal 
 export const CLIP_SLIDE_MAX = 30;
 
 /** One clip as a slide of its own, covering the format — the slide a cell's `▶ n` points at. */
-export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal, place?: { n: number; of: number }): Promise<Blob | null> {
+export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal, place?: { n: number; of: number }, signed = false): Promise<Blob | null> {
   const { clip: c } = await openForExport(input, key, signal, onProgress);
   if (!c) return null;
+  // A clip that is the carousel's signed slide wears the mark over its frames: a slide is a slide.
+  const mark = signed ? recapMark(input.doc, SIGNATURE_STYLE_PREF.get()) : null;
+  if (mark) await signatureFonts();
   const { width: W, height: H } = FORMATS[input.doc.format];
   try {
     const canvas = document.createElement('canvas');
@@ -433,6 +479,7 @@ export async function exportClipSlide(input: ExportInput, key: string, onProgres
         drawCover(g, frame(c), { x: 0, y: 0, w: W, h: H });
         // The first slide's title, when the carousel repeats it (its number is the slide's place).
         if (place) paintSlideTitle(g, input.doc, input.resolved, W, H, place.n, place.of);
+        if (mark) paintSignature(g, W, H, mark);
         return canvas;
       },
       onProgress: (p) => onProgress(p.ratio),
@@ -465,7 +512,8 @@ export async function renderCarouselFiles(
   onProgress: (p: FilmProgress) => void,
   signal: AbortSignal,
 ): Promise<File[]> {
-  const pages = await exportPages(input, signal);
+  const marks = carouselMarks(input.doc, order);
+  const pages = await exportPages(input, signal, marks.pages);
   const out: File[] = [];
   const pad = (n: number) => String(n).padStart(2, '0');
   for (const [i, s] of order.entries()) {
@@ -475,11 +523,11 @@ export async function renderCarouselFiles(
       const png = pages[s.page];
       if (png) out.push(new File([await asJpeg(png)], `${base}-${pad(i + 1)}.jpg`, { type: 'image/jpeg' }));
     } else if (s.kind === 'opener') {
-      const png = await exportOpenerSlide(input, signal);
+      const png = await exportOpenerSlide(input, signal, marks.at(i));
       if (png) out.push(new File([await asJpeg(png)], `${base}-${pad(i + 1)}.jpg`, { type: 'image/jpeg' }));
     } else {
       const key = input.resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
-      const blob = key ? await exportClipSlide(input, key, (ratio) => onProgress({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }) : null;
+      const blob = key ? await exportClipSlide(input, key, (ratio) => onProgress({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }, marks.at(i)) : null;
       if (blob) out.push(new File([blob], `${base}-${pad(i + 1)}.mp4`, { type: 'video/mp4' }));
     }
   }

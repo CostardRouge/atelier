@@ -4,8 +4,9 @@ import { hitTest, type Box, type Hit, type RecapLayout } from '../../shared/reca
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { DEFAULT_FRAME, MAX_ZOOM, panFrame, rotateFrame, sourceRect, zoomFrame, type Frame } from '../../shared/recap/recap-frame';
 import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
-import { paintFilm } from '../../shared/recap/recap-opener-paint';
+import { inOpener, paintFilm } from '../../shared/recap/recap-opener-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
+import { paintSignature, type SignaturePaint } from '../../shared/signature/signature-paint';
 import { Icons } from '../../shared/ui/icons';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import useEditorKeys from '../../shared/ui/use-editor-keys';
@@ -54,6 +55,8 @@ interface Props {
   pan?: boolean;
   /** A cell's picture released outside the stage, where the pointer let go. */
   onDropOut?: (slot: string, clientX: number, clientY: number) => void;
+  /** The recap's signature on the page shown, as its still will wear it; null where this page wears none. */
+  mark?: SignaturePaint | null;
 }
 
 const DRAG_PX = 6;
@@ -100,6 +103,7 @@ export default function RecapStage(props: Props) {
   }, [aspect]);
 
   const pan = props.pan;
+  const mark = props.mark ?? null;
   const paint = (t: number) => {
     const c = canvas.current;
     if (!c || !size.w) return;
@@ -113,11 +117,16 @@ export default function RecapStage(props: Props) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
     paintFilm(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan });
+    // The export's own painter, so the preview IS the mark the file wears — never over the opener's frames.
+    if (mark && !(film.lead && inOpener(film, t))) {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      paintSignature(g, w, h, mark);
+    }
   };
   // What is drawn changed: one paint now. The playhead moved: one paint per move, outside React.
   useEffect(() => {
     paint(clock.t);
-  }, [doc, resolved, layout, film, sources, page, version, size, aliases, clipSlides, pan, clock]);
+  }, [doc, resolved, layout, film, sources, page, version, size, aliases, clipSlides, pan, clock, mark]);
   useClockPaint(clock, paint);
 
   // ---- pointer: select, drag a picture onto another cell, drag the heading ----

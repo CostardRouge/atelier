@@ -63,6 +63,9 @@ import { useRecapSound } from './use-recap-sound';
 import { useTripOpener } from './use-trip-opener';
 import SoundSection from './SoundSection';
 import RecapExportPanel from './RecapExportPanel';
+import { recapMark, recapSignedSlides } from '../../shared/recap/recap-signature';
+import { signatureFonts } from '../../shared/signature/signature-fonts';
+import { useSignatureStyle } from '../../shared/signature/signature-pref';
 import RecapShortcuts from './RecapShortcuts';
 import { sendAgainAsked } from './publish-where';
 
@@ -147,7 +150,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   useEffect(() => {
     void getValue<Record<string, string>>(ALIASES_KEY).then((a) => a && setAliases(a));
     // Canvas text needs its faces loaded before the first paint (`frontend.md`).
-    void Promise.all(PAINT_FONTS.map((f) => document.fonts?.load(f).catch(() => undefined))).then(() => setFontsReady(true));
+    void Promise.all([...PAINT_FONTS.map((f) => document.fonts?.load(f).catch(() => undefined)), signatureFonts()]).then(() => setFontsReady(true));
   }, []);
   const [fontsReady, setFontsReady] = useState(false);
 
@@ -1024,8 +1027,31 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
     select({ kind: 'cell', id: first.id });
   };
 
+  // The signature on the stage: the page as its STILL will wear it — paused, on a page the rule signs. A film wears
+  // nothing over its pictures (it closes on the end card), so nothing shows while it plays.
+  const [signStyle] = useSignatureStyle();
+  const signedPages = useMemo(() => recapSignedSlides(doc, pageCount), [doc, pageCount]);
+  const signedHere = !playing && signedPages.has(Math.min(page, pageCount - 1));
+  const stageMark = useMemo(
+    () => (signedHere ? recapMark(doc, signStyle) : null),
+    // The same object while what it draws is the same: the stage repaints on a change, not on every render.
+    [signedHere, doc.signature, doc.format, signStyle],
+  );
+  /** The signature's popover opened: the stage shows a page that wears it. */
+  const onSignPreview = useCallback(
+    (open: boolean) => {
+      if (!open || !signedPages.size) return;
+      scrubbed.current = false;
+      peekOpener.current = false;
+      setPlaying(false);
+      setPage((p) => (signedPages.has(p) ? p : Math.max(...signedPages)));
+    },
+    [signedPages],
+  );
+
   const stage = (
     <RecapStage
+      mark={stageMark}
       doc={view}
       resolved={resolved}
       layout={layout}
@@ -1183,6 +1209,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
               change={change}
               visible={tab === 'export'}
               foot={footEl}
+              onSignPreview={onSignPreview}
             />
           )}
         </InspectorBlock>
