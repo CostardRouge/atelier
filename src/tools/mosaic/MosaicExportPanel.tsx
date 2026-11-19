@@ -4,7 +4,9 @@ import { FieldRow, SliderRow } from '../../shared/ui/Inspector';
 import DeliverBar, { PlainRun, type DeliverPlacement, type ExportVerb } from '../../shared/ui/DeliverBar';
 import Segmented from '../../shared/ui/Segmented';
 import { exportCellPx, exportSize } from '../../shared/mosaic/export-size';
-import type { MosaicExport } from './use-mosaic-export';
+import { MOSAIC_SIGNS_AS, type MosaicExport } from './use-mosaic-export';
+import SignatureLine from '../../shared/signature/SignatureLine';
+import { END_CARD_SECONDS, type DocSignature } from '../../shared/signature/signature';
 import { gridShape } from '../../shared/mosaic/match';
 
 interface MosaicExportPanelProps {
@@ -70,7 +72,16 @@ export default function MosaicExportPanel({ settings, update }: Pick<MosaicExpor
  * the film while a mode plays, the image in Still, the other behind ▾; the line above says what the file will be;
  * while one runs the bar IS the run, on every tab, with its Cancel.
  */
-export function MosaicDeliver({ settings, stageW, stageH, exporter, ready, placement }: Omit<MosaicExportPanelProps, 'update'> & { placement: DeliverPlacement }) {
+export function MosaicDeliver({
+  settings,
+  stageW,
+  stageH,
+  exporter,
+  ready,
+  placement,
+  signature,
+  onSignature,
+}: Omit<MosaicExportPanelProps, 'update'> & { placement: DeliverPlacement; signature: DocSignature; onSignature: (next: DocSignature) => void }) {
   const ex = settings.export;
   const { w, h } = exportSize(stageW, stageH, ex.short);
   const shape = gridShape(w, h, exportCellPx(ex.cells, settings.cellPx, stageW, stageH, w));
@@ -84,9 +95,10 @@ export function MosaicDeliver({ settings, stageW, stageH, exporter, ready, place
         { id: 'png', label: 'Save image', hint: 'The target’s mosaic as a PNG at this size', run: () => void exporter.run('png') },
         ...(film ? [{ id: 'mp4', label: 'Save film', hint: 'The motion as an MP4 (H.264) — the same steps the stage plays, from the same seed', run: () => void exporter.run('mp4') }] : []),
       ];
-  const filmLine = still ? 'a mode under the stage films it' : !exporter.canFilm ? 'this browser cannot encode a film' : `film ${Math.round(seconds)} s at 30 fps`;
+  const filmLine = still ? 'a mode under the stage films it' : !exporter.canFilm ? 'this browser cannot encode a film' : `film ${Math.round(seconds + (signature.on ? END_CARD_SECONDS : 0))} s at 30 fps${signature.on ? `, end card +${END_CARD_SECONDS} s` : ''}`;
   return (
     <DeliverBar
+      head={<SignatureLine tool={MOSAIC_SIGNS_AS} noun="mosaic" value={signature} onChange={onSignature} />}
       verbs={verbs}
       primary={film ? 'mp4' : 'png'}
       summary={`${w} × ${h} px · ${shape.cols} × ${shape.rows} cells · ${filmLine}`}
