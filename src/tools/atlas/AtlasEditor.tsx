@@ -25,6 +25,7 @@ import { DEFAULT_SETTINGS, sanitizeSettings, type AtlasSettings } from './atlas-
 import { ATLAS_SIGNS_AS, cleanAtlasName, signatureOf, withFlights, withoutFlights, type AtlasDoc } from './atlas-doc';
 import { REEL_SAFE, type SignaturePaint } from '../../shared/signature/signature-paint';
 import { useSignatureStyle } from '../../shared/signature/signature-pref';
+import { withPlace, type SignPlace } from '../../shared/signature/signature';
 import { ingestLogs, type IngestItem } from './atlas-ingest';
 import { fetchLogsBack, hostOf } from './atlas-refetch';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
@@ -277,9 +278,10 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
   const [signStyle] = useSignatureStyle();
   const sign = signatureOf(doc);
   const stageMark = useMemo<SignaturePaint | null>(
-    () => (sign.on && layer === 'output' && flights.length > 0 ? { face: signStyle.face, words: signStyle.words, tool: ATLAS_SIGNS_AS, corner: sign.corner, safe: settings.format.aspect === '9:16' ? REEL_SAFE : null } : null),
-    [sign.on, sign.corner, layer, flights.length, signStyle, settings.format.aspect],
+    () => (sign.on && layer === 'output' && flights.length > 0 ? { face: signStyle.face, words: signStyle.words, tool: ATLAS_SIGNS_AS, corner: sign.corner, safe: settings.format.aspect === '9:16' ? REEL_SAFE : null, at: sign.at ?? null } : null),
+    [sign.on, sign.corner, sign.at, layer, flights.length, signStyle, settings.format.aspect],
   );
+  const onPlaceMark = useCallback((at: SignPlace) => change((d) => ({ ...d, signature: withPlace(signatureOf(d), at), updatedAt: Date.now() })), [change]);
 
   const empties = flights.length === 0 && !reading;
   useAtlasCover(doc, scene.core, scene.viewAt, !reading && missing.length === 0, () => clock.playing && phaseAt(storyRef.current, clock.t) !== 'flights');
@@ -353,6 +355,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
               onPick={setLayer}
               onPlace={onPlace}
               mark={stageMark}
+              onPlaceMark={onPlaceMark}
             />
             {empties && (
               <div className="absolute inset-0 grid place-items-center p-6 pointer-events-none">

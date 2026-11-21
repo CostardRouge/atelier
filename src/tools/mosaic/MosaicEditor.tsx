@@ -50,6 +50,7 @@ import MosaicExportPanel, { MosaicDeliver } from './MosaicExportPanel';
 import SignatureOverlay from '../../shared/signature/SignatureOverlay';
 import { REEL_SAFE, type SignaturePaint } from '../../shared/signature/signature-paint';
 import { useSignatureStyle } from '../../shared/signature/signature-pref';
+import { withPlace, type SignPlace } from '../../shared/signature/signature';
 import { MOSAIC_SIGNS_AS, useMosaicExport } from './use-mosaic-export';
 import { useMosaicEditorCommands, useMosaicStageCommands } from './use-mosaic-commands';
 import MosaicStage, { type Reveal, type StageView, type ZoomDetail } from './MosaicStage';
@@ -384,9 +385,10 @@ function MosaicWorkbench({
   const [signStyle] = useSignatureStyle();
   const sign = signatureOf(doc);
   const stageMark = useMemo<SignaturePaint | null>(
-    () => (sign.on && !status.playing ? { face: signStyle.face, words: signStyle.words, tool: MOSAIC_SIGNS_AS, corner: sign.corner, safe: stageH / Math.max(1, stageW) > 1.7 ? REEL_SAFE : null } : null),
-    [sign.on, sign.corner, status.playing, signStyle, stageW, stageH],
+    () => (sign.on && !status.playing ? { face: signStyle.face, words: signStyle.words, tool: MOSAIC_SIGNS_AS, corner: sign.corner, safe: stageH / Math.max(1, stageW) > 1.7 ? REEL_SAFE : null, at: sign.at ?? null } : null),
+    [sign.on, sign.corner, sign.at, status.playing, signStyle, stageW, stageH],
   );
+  const onPlaceMark = useCallback((at: SignPlace) => change((d) => withSignature(d, withPlace(signatureOf(d), at))), [change]);
   const stageCanvas = useCallback(() => canvasRef.current, []);
 
   const stage = (
@@ -415,7 +417,7 @@ function MosaicWorkbench({
         }}
         onSteer={chained ? (cell) => void player?.steer(cell) : undefined}
       />
-      {state.status === 'ready' && !zoom.zoomed && <SignatureOverlay mark={stageMark} source={stageCanvas} />}
+      {state.status === 'ready' && !zoom.zoomed && <SignatureOverlay mark={stageMark} source={stageCanvas} onPlace={onPlaceMark} />}
       {!status.playing && (zoom.zoomed || cropped) && (
         <div className="absolute right-2 top-2 flex items-center gap-1 rounded-control bg-frame/75 p-1" role="group" aria-label="Zoom">
           {zoom.zoomed && (

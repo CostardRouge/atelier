@@ -125,7 +125,7 @@ export function useMosaicExport({ doc, builder, pool, stageW, stageH, queue }: E
           const g = copy.getContext('2d');
           if (g) {
             g.drawImage(scene.canvas, 0, 0);
-            paintSignature(g, copy.width, copy.height, { face: style.face, words: style.words, tool: MOSAIC_SIGNS_AS, corner: sign.corner, safe: copy.height / copy.width > 1.7 ? REEL_SAFE : null });
+            paintSignature(g, copy.width, copy.height, { face: style.face, words: style.words, tool: MOSAIC_SIGNS_AS, corner: sign.corner, safe: copy.height / copy.width > 1.7 ? REEL_SAFE : null, at: sign.at ?? null });
             out = copy;
           }
         }

@@ -16,6 +16,7 @@ import type { SceneCore } from './use-atlas-scene';
 import type { PlayClock } from '../../shared/media/play-clock';
 import SignatureOverlay from '../../shared/signature/SignatureOverlay';
 import type { SignaturePaint } from '../../shared/signature/signature-paint';
+import type { SignPlace } from '../../shared/signature/signature';
 
 interface AtlasStageProps {
   core: SceneCore;
@@ -41,6 +42,8 @@ interface AtlasStageProps {
   onPlace: (piece: PieceId, place: Placement) => void;
   /** The atlas's signature over the frame, as a still or a poster will wear it; null when none shows. */
   mark?: SignaturePaint | null;
+  /** The signature dragged on the frame: where it was dropped (its centre, fractions of the frame). */
+  onPlaceMark?: (at: SignPlace) => void;
 }
 
 const SPOT_WORDS = { tl: 'top left', tc: 'top', tr: 'top right', bl: 'bottom left', bc: 'bottom', br: 'bottom right' } as const;
@@ -64,7 +67,7 @@ const REACH = 8;
  * a zone is being drawn, a drag draws it.
  */
 export default function AtlasStage(props: AtlasStageProps) {
-  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick, onPlace, mark } = props;
+  const { core, viewAt, clock, tiles, focus, format, theme, look, onFreeView, drawingZone, onZone, paintSeq, selected, onPick, onPlace, mark, onPlaceMark } = props;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const outlineRef = useRef<HTMLSpanElement>(null);
@@ -349,7 +352,7 @@ export default function AtlasStage(props: AtlasStageProps) {
       {safeShown && size.w > 0 && <SafeZones aspect={format.aspect} width={size.w} height={size.h} />}
       {mark && size.w > 0 && (
         <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{ width: size.w, height: size.h }}>
-          <SignatureOverlay mark={mark} />
+          <SignatureOverlay mark={mark} onPlace={onPlaceMark} />
         </span>
       )}
       {band && (
