@@ -48,11 +48,28 @@ export interface SignatureStyle {
 }
 export const DEFAULT_SIGNATURE_STYLE: SignatureStyle = { face: 'sticker', words: 'tool' };
 
+/**
+ * Where a mark was put BY HAND: its centre, as fractions of the frame's width
+ * and height — so a place holds whatever size the file is written at.
+ */
+export interface SignPlace {
+  x: number;
+  y: number;
+}
+
 /** The document's half. */
 export interface DocSignature {
   on: boolean;
   corner: SignCorner;
   slides: SignSlides;
+  /** Dragged on the stage of a document with ONE frame (a mosaic, an atlas): wins over `corner`. */
+  at?: SignPlace;
+  /**
+   * Dragged on one SLIDE of several (a recap's page, its opener's still), by
+   * the slide's key: that slide's own place, the others keeping theirs — his
+   * ask of 2026-11-21, «individuellement sur chacun des slides».
+   */
+  places?: Record<string, SignPlace>;
 }
 /** A document that never chose: signed, bottom left (above a Reel's caption), the last slide only. */
 export const DEFAULT_DOC_SIGNATURE: DocSignature = { on: true, corner: 'bl', slides: 'last' };
@@ -69,11 +86,49 @@ export function readSignatureStyle(raw: unknown): SignatureStyle {
 export function readDocSignature(raw: unknown, fallback: DocSignature = DEFAULT_DOC_SIGNATURE): DocSignature {
   if (typeof raw !== 'object' || raw === null) return fallback;
   const r = raw as Record<string, unknown>;
+  const at = readPlace(r.at);
+  const places: Record<string, SignPlace> = {};
+  if (typeof r.places === 'object' && r.places !== null && !Array.isArray(r.places)) {
+    for (const [key, raw] of Object.entries(r.places as Record<string, unknown>).slice(0, MAX_PLACES)) {
+      const place = readPlace(raw);
+      if (place && key.length <= 80) places[key] = place;
+    }
+  }
   return {
     on: typeof r.on === 'boolean' ? r.on : fallback.on,
     corner: oneOf(SIGN_CORNERS, r.corner, fallback.corner),
     slides: oneOf(SIGN_SLIDES, r.slides, fallback.slides),
+    ...(at ? { at } : {}),
+    ...(Object.keys(places).length ? { places } : {}),
   };
+}
+
+/** A carousel holds twenty slides at most; a document never needs more places than a few of those. */
+const MAX_PLACES = 64;
+
+const unit = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 10000) / 10000;
+
+function readPlace(raw: unknown): SignPlace | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.x !== 'number' || typeof r.y !== 'number' || !Number.isFinite(r.x) || !Number.isFinite(r.y)) return null;
+  return { x: unit(r.x), y: unit(r.y) };
+}
+
+/** Where a slide's mark was put by hand — its own place, else the document's — or null: its corner then. */
+export function placeOf(sig: DocSignature, slide?: string | null): SignPlace | null {
+  return (slide ? sig.places?.[slide] : undefined) ?? sig.at ?? null;
+}
+
+/** The mark dragged to `place`: on `slide` alone when one is named, else for the whole document. Signs it, too. */
+export function withPlace(sig: DocSignature, place: SignPlace, slide?: string | null): DocSignature {
+  const at = { x: unit(place.x), y: unit(place.y) };
+  return slide ? { ...sig, on: true, places: { ...sig.places, [slide]: at } } : { ...sig, on: true, at };
+}
+
+/** A corner picked: every mark goes back to it — what was placed by hand is let go, on every slide. */
+export function withCorner(sig: DocSignature, corner: SignCorner): DocSignature {
+  return { on: true, corner, slides: sig.slides };
 }
 
 /** The words of one signature, in the order every face reads them. */

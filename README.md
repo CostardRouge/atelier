@@ -4563,7 +4563,11 @@ opens inside the drawer, above the line, so the picture stays in sight):
 - **Words** — *Made with Atelier*, with the tool's name after it, or with the
   site's address too.
 - **Corner** — one of five places. On a 9:16 page the mark stays clear of
-  where Instagram draws its own buttons and caption.
+  where Instagram draws its own buttons and caption. **Or drag it on the
+  stage**: the mark goes wherever you drop it (the arrows nudge it once it
+  has the focus, a bigger step with Shift), and the file wears it there. In a
+  recap each slide keeps its own place — drag it on one slide and the others
+  stay where they were. Picking a corner again puts every mark back in it.
 - **Slides** (a recap with several) — the last slide, every slide, or the
   first and the last.
 

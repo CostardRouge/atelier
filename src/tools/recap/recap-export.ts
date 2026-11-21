@@ -384,7 +384,8 @@ export async function exportFilm(input: ExportInput, onProgress: (p: FilmProgres
 }
 
 /** Where a carousel's signature falls, slide by slide in its order: the pages that wear it, and whether slide `i` does. */
-export function carouselMarks(doc: RecapDoc, order: readonly ({ kind: 'page'; page: number } | { kind: 'opener' } | { kind: 'clip'; slot: string })[]): { pages: Set<number>; at: (i: number) => boolean } {
+export function carouselMarks(doc: RecapDoc, order: readonly ({ kind: 'page'; page: number } | { kind: 'opener' } | { kind: 'clip'; slot: string; key?: string })[],
+): { pages: Set<number>; at: (i: number) => boolean } {
   const signed = recapSignedSlides(doc, order.length);
   const pages = new Set<number>();
   order.forEach((s, i) => {
@@ -399,9 +400,9 @@ export function carouselMarks(doc: RecapDoc, order: readonly ({ kind: 'page'; pa
  */
 export async function exportPages(input: ExportInput, signal: AbortSignal = new AbortController().signal, marked?: ReadonlySet<number>): Promise<Blob[]> {
   const { doc, film, layout } = input;
-  const mark = recapMark(doc, SIGNATURE_STYLE_PREF.get());
+  const style = SIGNATURE_STYLE_PREF.get();
   const wear = marked ?? recapSignedSlides(doc, layout.pages.length);
-  if (mark) await signatureFonts();
+  if (doc.signature.on) await signatureFonts();
   const stills = await originalStills(input, signal);
   const { width: W, height: H } = FORMATS[doc.format];
   const canvas = document.createElement('canvas');
@@ -414,7 +415,9 @@ export async function exportPages(input: ExportInput, signal: AbortSignal = new 
     g.setTransform(1, 0, 0, 1, 0, 0);
     // Past every entrance and before any clip's turn: the page as it rests.
     paintRecap(g, W, doc, input.resolved, layout, film, { still: stills.still }, { t: (plan?.allOn ?? 0) + 0.01, page: i, aliases: input.aliases, clipSlides: input.clipSlides });
-    if (mark && wear.has(i)) {
+    // Each page where the mark was put on it: its own place when dragged there, the recap's corner otherwise.
+    const mark = wear.has(i) ? recapMark(doc, style, layout.pages[i].key) : null;
+    if (mark) {
       g.setTransform(1, 0, 0, 1, 0, 0);
       paintSignature(g, W, H, mark);
     }
@@ -436,7 +439,7 @@ export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal 
   canvas.height = H;
   const g = canvas.getContext('2d')!;
   paintOpener(g, W, input.doc, input.layout, plan, { still: stills.still }, openerRest(plan));
-  const mark = signed ? recapMark(input.doc, SIGNATURE_STYLE_PREF.get()) : null;
+  const mark = signed ? recapMark(input.doc, SIGNATURE_STYLE_PREF.get(), 'opener') : null;
   if (mark) {
     await signatureFonts();
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -449,11 +452,11 @@ export async function exportOpenerSlide(input: ExportInput, signal: AbortSignal 
 export const CLIP_SLIDE_MAX = 30;
 
 /** One clip as a slide of its own, covering the format — the slide a cell's `▶ n` points at. */
-export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal, place?: { n: number; of: number }, signed = false): Promise<Blob | null> {
+export async function exportClipSlide(input: ExportInput, key: string, onProgress: (ratio: number | null) => void, signal: AbortSignal, place?: { n: number; of: number }, signed = false, slideKey?: string): Promise<Blob | null> {
   const { clip: c } = await openForExport(input, key, signal, onProgress);
   if (!c) return null;
   // A clip that is the carousel's signed slide wears the mark over its frames: a slide is a slide.
-  const mark = signed ? recapMark(input.doc, SIGNATURE_STYLE_PREF.get()) : null;
+  const mark = signed ? recapMark(input.doc, SIGNATURE_STYLE_PREF.get(), slideKey) : null;
   if (mark) await signatureFonts();
   const { width: W, height: H } = FORMATS[input.doc.format];
   try {
@@ -507,7 +510,7 @@ async function asJpeg(png: Blob): Promise<Blob> {
 /** The slides a carousel post sends, in its order: a page or the opener as a JPEG, a clip as its own MP4. */
 export async function renderCarouselFiles(
   input: ExportInput,
-  order: readonly ({ kind: 'page'; page: number } | { kind: 'opener' } | { kind: 'clip'; slot: string })[],
+  order: readonly ({ kind: 'page'; page: number } | { kind: 'opener' } | { kind: 'clip'; slot: string; key?: string })[],
   base: string,
   onProgress: (p: FilmProgress) => void,
   signal: AbortSignal,
@@ -527,7 +530,7 @@ export async function renderCarouselFiles(
       if (png) out.push(new File([await asJpeg(png)], `${base}-${pad(i + 1)}.jpg`, { type: 'image/jpeg' }));
     } else {
       const key = input.resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
-      const blob = key ? await exportClipSlide(input, key, (ratio) => onProgress({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }, marks.at(i)) : null;
+      const blob = key ? await exportClipSlide(input, key, (ratio) => onProgress({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }, marks.at(i), s.key) : null;
       if (blob) out.push(new File([blob], `${base}-${pad(i + 1)}.mp4`, { type: 'video/mp4' }));
     }
   }

@@ -128,7 +128,7 @@ export function useAtlasExport(settings: AtlasSettings): AtlasExport {
           name = `flight-atlas-${stamp()}.mp4`;
         } else {
           const drawn = await paint(req.kind === 'poster' ? core.story.intro + core.story.flights : req.at, req.kind === 'poster');
-          if (sign.on) paintSignature(ctx, w, h, { face: style.face, words: style.words, tool: ATLAS_SIGNS_AS, corner: sign.corner, safe: settings.format.aspect === '9:16' ? REEL_SAFE : null });
+          if (sign.on) paintSignature(ctx, w, h, { face: style.face, words: style.words, tool: ATLAS_SIGNS_AS, corner: sign.corner, safe: settings.format.aspect === '9:16' ? REEL_SAFE : null, at: sign.at ?? null });
           blob =
             'convertToBlob' in drawn
               ? await drawn.convertToBlob({ type: 'image/png' })

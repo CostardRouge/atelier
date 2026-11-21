@@ -20,6 +20,7 @@ import {
   type SignFace,
   type SignSlides,
   type SignWords,
+  withCorner,
 } from './signature';
 import { signatureFonts } from './signature-fonts';
 import { paintSignature } from './signature-paint';
@@ -132,6 +133,9 @@ export default function SignatureLine({
   // Choosing how it looks means wanting it: a pick turns the mark on.
   const set = (patch: Partial<DocSignature>) => onChange({ ...value, on: true, ...patch });
 
+  /** How many marks were dragged to a place of their own — the document's one, or one per slide. */
+  const byHand = (value.at ? 1 : 0) + Object.keys(value.places ?? {}).length;
+
   const panel = (
     <>
       <div className="flex items-center gap-2">
@@ -170,7 +174,7 @@ export default function SignatureLine({
                   aria-label={SIGN_CORNER_LABEL[c]}
                   title={SIGN_CORNER_LABEL[c]}
                   aria-pressed={value.corner === c}
-                  onClick={() => set({ corner: c })}
+                  onClick={() => onChange(withCorner(value, c))}
                   className={`w-[34px] h-7 pointer-coarse:h-[34px] grid place-items-center rounded-[7px] cursor-pointer ${PRESS_LOOK} ${value.corner === c ? 'bg-surface border border-line-strong' : 'border border-transparent data-pressed:bg-line'}`}
                 >
                   <span aria-hidden="true" className={`rounded-full ${value.corner === c ? 'w-2.5 h-2.5 bg-accent' : 'w-2 h-2 bg-line-strong'}`} />
@@ -180,6 +184,8 @@ export default function SignatureLine({
               ),
             )}
           </div>
+          {/* The other way to place it, said once; and what a corner does to marks already placed by hand. */}
+          <span className="max-w-[8rem] font-mono text-3xs leading-snug text-muted">{byHand ? `${byHand} placed by hand · a corner puts ${byHand === 1 ? 'it' : 'them'} back` : 'or drag it on the stage'}</span>
         </Row>
         {carousel && (
           <Row label="Slides" scope={<Scope doc>this {noun}</Scope>}>

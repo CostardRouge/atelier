@@ -11,6 +11,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Added
 
+- The signature can be placed by hand: drag it on the stage in Recap, Mosaic or Flight Atlas and the export wears it
+  where you dropped it (the arrows nudge it). In a recap each slide keeps its own place; picking a corner in the
+  Signature panel puts every mark back in that corner.
 - A signature in what Recap, Mosaic and Flight Atlas export: «Made with Atelier · Recap». A still, a poster or a
   carousel slide wears a small sticker in a corner; a video wears nothing over its pictures and closes on a 1.2 s end
   card instead — the mark's corners close in, the dot lands, the words rise. One line at the foot of each Export,

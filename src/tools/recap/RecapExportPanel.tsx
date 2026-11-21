@@ -434,7 +434,7 @@ export default function RecapExportPanel({
           const key = resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
           if (!key) continue;
           task.update({ detail: `clip slide ${i + 1}`, progress: null });
-          const blob = await exportClipSlide(input(), key, (ratio) => report(task)({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }, marks.at(i));
+          const blob = await exportClipSlide(input(), key, (ratio) => report(task)({ stage: 'encoding', ratio }), signal, { n: i + 1, of: order.length }, marks.at(i), s.key);
           if (!blob) continue;
           downloadBlob(blob, `${base}-${pad(i + 1)}.mp4`);
           made += 1;

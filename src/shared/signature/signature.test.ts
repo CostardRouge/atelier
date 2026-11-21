@@ -5,11 +5,14 @@ import {
   END_CARD_SECONDS,
   cubicBezier,
   endCardBeat,
+  placeOf,
   readDocSignature,
   readSignatureStyle,
   signatureLine,
   signatureParts,
   signedSlides,
+  withCorner,
+  withPlace,
 } from './signature';
 
 describe('signatureParts / signatureLine', () => {
@@ -97,5 +100,40 @@ describe('endCardBeat', () => {
     expect(end.corners).toBe(1);
     expect(end.dot).toBeCloseTo(1, 5);
     expect(end.words).toEqual([1, 1, 1, 1]);
+  });
+});
+
+describe('a mark placed by hand', () => {
+  it('is a slide’s own, the others keeping the corner', () => {
+    const moved = withPlace(DEFAULT_DOC_SIGNATURE, { x: 0.7, y: 0.2 }, 'p:3');
+    expect(placeOf(moved, 'p:3')).toEqual({ x: 0.7, y: 0.2 });
+    expect(placeOf(moved, 'p:4')).toBeNull();
+    expect(placeOf(moved)).toBeNull();
+  });
+
+  it('is the whole document’s where no slide is named, under a slide’s own', () => {
+    const one = withPlace(DEFAULT_DOC_SIGNATURE, { x: 0.5, y: 0.5 });
+    expect(placeOf(one)).toEqual({ x: 0.5, y: 0.5 });
+    expect(placeOf(one, 'first')).toEqual({ x: 0.5, y: 0.5 });
+    expect(placeOf(withPlace(one, { x: 0.1, y: 0.9 }, 'first'), 'first')).toEqual({ x: 0.1, y: 0.9 });
+  });
+
+  it('signs a document that was not, and stays inside the frame', () => {
+    const moved = withPlace({ ...DEFAULT_DOC_SIGNATURE, on: false }, { x: 1.4, y: -0.2 });
+    expect(moved.on).toBe(true);
+    expect(moved.at).toEqual({ x: 1, y: 0 });
+  });
+
+  it('is let go, everywhere, by a corner picked', () => {
+    const moved = withPlace(withPlace(DEFAULT_DOC_SIGNATURE, { x: 0.3, y: 0.3 }), { x: 0.6, y: 0.6 }, 'first');
+    expect(withCorner(moved, 'tr')).toEqual({ on: true, corner: 'tr', slides: 'last' });
+  });
+
+  it('survives storage, and a broken place is dropped', () => {
+    const moved = withPlace(withPlace(DEFAULT_DOC_SIGNATURE, { x: 0.25, y: 0.75 }), { x: 0.6, y: 0.4 }, 'first');
+    expect(readDocSignature(JSON.parse(JSON.stringify(moved)))).toEqual(moved);
+    const read = readDocSignature({ on: true, corner: 'bl', slides: 'last', at: { x: 'left', y: 0 }, places: { a: { x: 0.5 }, b: { x: 0.2, y: 0.8 } } });
+    expect(read.at).toBeUndefined();
+    expect(read.places).toEqual({ b: { x: 0.2, y: 0.8 } });
   });
 });
