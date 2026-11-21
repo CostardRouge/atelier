@@ -9,7 +9,7 @@
  * The mark is the app icon's own 32-unit drawing (`public/icons/icon.svg`).
  */
 
-import { END_CARD_REST, endCardBeat, signatureParts, type EndCardBeat, type SignCorner, type SignFace, type SignWords } from './signature';
+import { END_CARD_REST, endCardBeat, signatureParts, type EndCardBeat, type SignCorner, type SignFace, type SignPlace, type SignWords } from './signature';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -44,6 +44,16 @@ export interface SignaturePaint {
   ink?: 'light' | 'dark';
   /** A size beside the usual one — a small preview tile draws it bigger to stay legible. */
   scale?: number;
+  /** Put by hand: the mark's centre as fractions of the frame, kept whole inside it. Wins over `corner` and `safe`. */
+  at?: SignPlace | null;
+}
+
+/** Where a mark was drawn, in the frame's pixels — what a stage grabs to move it. */
+export interface SignatureBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 /** Where a Reel's own interface covers the frame (`RecapStage`'s hatched bands). */
@@ -374,19 +384,28 @@ function darkUnder(g: Ctx, x: number, y: number, w: number, h: number): boolean 
  * Draw the signature over a frame of `W × H` pixels already painted on `g`
  * (its transform is the frame's: (0, 0) is the frame's top-left corner).
  */
-export function paintSignature(g: Ctx, W: number, H: number, o: SignaturePaint): void {
+export function paintSignature(g: Ctx, W: number, H: number, o: SignaturePaint): SignatureBox {
   const short = Math.min(W, H);
   const em = short * 0.042 * (o.scale ?? 1);
   g.save();
   const laid = LAY[o.face](g, em, o);
   const inset = short * 0.045;
-  const top = o.safe ? H * o.safe.top + short * 0.03 : inset;
-  const bottom = o.safe ? H * o.safe.bottom + short * 0.03 : inset;
-  const x = o.corner === 'tl' || o.corner === 'bl' ? inset : o.corner === 'bc' ? (W - laid.w) / 2 : W - inset - laid.w;
-  const y = o.corner === 'tl' || o.corner === 'tr' ? top : H - bottom - laid.h;
+  let x: number;
+  let y: number;
+  if (o.at) {
+    // By hand: centred where it was dropped, whole inside the frame — a place is the person's, zones included.
+    x = Math.max(0, Math.min(W - laid.w, o.at.x * W - laid.w / 2));
+    y = Math.max(0, Math.min(H - laid.h, o.at.y * H - laid.h / 2));
+  } else {
+    const top = o.safe ? H * o.safe.top + short * 0.03 : inset;
+    const bottom = o.safe ? H * o.safe.bottom + short * 0.03 : inset;
+    x = o.corner === 'tl' || o.corner === 'bl' ? inset : o.corner === 'bc' ? (W - laid.w) / 2 : W - inset - laid.w;
+    y = o.corner === 'tl' || o.corner === 'tr' ? top : H - bottom - laid.h;
+  }
   const ink = o.ink ?? (laid.opaque ? 'dark' : darkUnder(g, x, y, laid.w, laid.h) ? 'light' : 'dark');
   laid.draw(x, y, ink);
   g.restore();
+  return { x, y, w: laid.w, h: laid.h };
 }
 
 /** Whether a frame is dark overall — what decides the end card's ground after it. */

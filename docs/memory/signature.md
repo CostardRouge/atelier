@@ -78,15 +78,44 @@ the person (Recap's verb, the foot's summary, what a post is told, an agent's
 
 ## The stage is the preview
 
-Recap paints the mark in its own paint loop (paused, on a page the rule
-signs, never over the opener); opening the popover brings a signed page up
-(`onSignPreview`). Mosaic and the atlas lay `SignatureOverlay` over their
-frame — a canvas of its own, so a stage's loop learns nothing about marks —
+All three lay `SignatureOverlay` over their frame (Recap: paused, on a page
+the rule signs, never over the opener's frames; opening the popover brings a
+signed page up, `onSignPreview`) — a canvas of its own, so a stage's loop learns nothing about marks —
 shown while stopped (Mosaic, not zoomed) or while *Export* is the layer open
 (the atlas, like its safe zones). The overlay reads its ink from the stage's
 canvas where one is handed (`source`), else assumes a dark ground. A film's
 end card is NOT previewed on any stage — the foot's summary says «end card
 +1.2 s»; a preview of it is an open ask.
+
+## Placed by hand, slide by slide (2026-11-21)
+
+His ask, two days after the build: «déplacer librement le sticker … le choisir
+individuellement sur chacun des slides». **Decision**: a place is the mark's
+CENTRE as fractions of the frame (`SignPlace`), so it holds at any export
+size. `DocSignature.places[slideKey]` is one slide's own (Recap: a page's
+`key`, `opener`, a clip slide's key); `DocSignature.at` is the document's (a
+mosaic, an atlas: one frame); `placeOf(sig, slide)` reads slide → document →
+null (the corner). A hand place wins over `corner` AND `safe`: the zones are
+his to respect then (Recap's hatched bands stay on the stage). `withCorner`
+— a corner picked in the popover — lets go of EVERY hand place, and the row
+says so («N placed by hand · a corner puts them back»).
+
+**The hand is `SignatureOverlay`'s handle**, in all three tools — Recap's
+stage no longer paints the mark in its loop. A `role="slider"` over the box
+`paintSignature` now returns; a drag paints in the overlay and writes ONCE on
+release (one undo step), as the centre of where the mark was DRAWN (clamped
+whole inside the frame), never the raw pointer. **Trap, met in design**: the
+stages under it listen NATIVELY on their own elements (Mosaic's click
+retargets on `clickHost`, the atlas's pointer handlers, `use-zoom-gestures`
+in the CAPTURE phase), below React's root — React's `stopPropagation` would
+arrive too late. So the handle binds its gestures with `addEventListener`
+and stops them there, and wears `data-pan-ignore` (the zoom machine's
+`overControl`). Verified headless: a drag in Mosaic left the target unchanged,
+in the atlas left the Export layer open; exported stills carry the place
+(Recap: slide 2 at its drop, slide 1 still in its corner). Not seen: a drag
+under a finger, the opener's still or a clip slide placed (no stage shows a
+clip slide — it takes the document's corner), the slide strip's thumbnails
+(they do not draw the mark).
 
 ## The line and its popover (`SignatureLine.tsx`)
 
