@@ -293,7 +293,7 @@ export function useRecapCommands(ctx: RecapCommandsContext): void {
           else if (s.kind === 'opener') blob = await exportOpenerSlide(input(), signal, marks.at(i));
           else {
             const key = c.current.resolved.slots.find((x) => x.id === s.slot)?.picture?.key;
-            if (key) blob = await exportClipSlide(input(), key, () => undefined, signal, undefined, marks.at(i));
+            if (key) blob = await exportClipSlide(input(), key, () => undefined, signal, undefined, marks.at(i), s.key);
             ext = 'mp4';
           }
           if (!blob) continue;

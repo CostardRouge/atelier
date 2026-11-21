@@ -66,6 +66,7 @@ import RecapExportPanel from './RecapExportPanel';
 import { recapMark, recapSignedSlides } from '../../shared/recap/recap-signature';
 import { signatureFonts } from '../../shared/signature/signature-fonts';
 import { useSignatureStyle } from '../../shared/signature/signature-pref';
+import { withPlace, type SignPlace } from '../../shared/signature/signature';
 import RecapShortcuts from './RecapShortcuts';
 import { sendAgainAsked } from './publish-where';
 
@@ -1031,12 +1032,16 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   // nothing over its pictures (it closes on the end card), so nothing shows while it plays.
   const [signStyle] = useSignatureStyle();
   const signedPages = useMemo(() => recapSignedSlides(doc, pageCount), [doc, pageCount]);
-  const signedHere = !playing && signedPages.has(Math.min(page, pageCount - 1));
+  const onOpenerFrames = useClockSelect(clock, (c) => Boolean(film.lead) && inOpener(film, c.t));
+  const signedHere = !playing && !onOpenerFrames && signedPages.has(Math.min(page, pageCount - 1));
+  // The slide shown, by its key: a mark dragged here is THIS slide's own place (his ask: each slide its own).
+  const shownSlide = layout.pages[Math.min(page, pageCount - 1)]?.key ?? null;
   const stageMark = useMemo(
-    () => (signedHere ? recapMark(doc, signStyle) : null),
+    () => (signedHere ? recapMark(doc, signStyle, shownSlide) : null),
     // The same object while what it draws is the same: the stage repaints on a change, not on every render.
-    [signedHere, doc.signature, doc.format, signStyle],
+    [signedHere, doc.signature, doc.format, signStyle, shownSlide],
   );
+  const onPlaceMark = useCallback((at: SignPlace) => change((d) => withRecap(d, { signature: withPlace(d.signature, at, shownSlide) })), [change, shownSlide]);
   /** The signature's popover opened: the stage shows a page that wears it. */
   const onSignPreview = useCallback(
     (open: boolean) => {
@@ -1052,6 +1057,7 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
   const stage = (
     <RecapStage
       mark={stageMark}
+      onPlaceMark={onPlaceMark}
       doc={view}
       resolved={resolved}
       layout={layout}

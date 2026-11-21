@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DOC_SIGNATURE, DEFAULT_SIGNATURE_STYLE } from '../signature/signature';
+import { DEFAULT_DOC_SIGNATURE, DEFAULT_SIGNATURE_STYLE, withPlace } from '../signature/signature';
 import { REEL_SAFE } from '../signature/signature-paint';
 import { createRecapDoc, readRecapDoc, withRecap } from './recap-doc';
 import { recapMark, recapSignedSlides } from './recap-signature';
@@ -21,8 +21,15 @@ describe('a recap’s signature', () => {
 
   it('paints the device’s face in the recap’s corner, clear of a Reel’s own interface on a 9:16 page', () => {
     const story = withRecap(doc, { format: 'story' });
-    expect(recapMark(story, DEFAULT_SIGNATURE_STYLE)).toEqual({ face: 'sticker', words: 'tool', tool: 'Recap', corner: 'bl', safe: REEL_SAFE });
+    expect(recapMark(story, DEFAULT_SIGNATURE_STYLE)).toEqual({ face: 'sticker', words: 'tool', tool: 'Recap', corner: 'bl', safe: REEL_SAFE, at: null });
     expect(recapMark(withRecap(doc, { format: 'portrait' }), { face: 'stamp', words: 'made' })?.safe).toBeNull();
+  });
+
+  it('gives a slide the mark was dragged on its own place, the others their corner', () => {
+    const moved = withRecap(doc, { signature: withPlace(doc.signature, { x: 0.8, y: 0.3 }, 'p:2') });
+    expect(recapMark(moved, DEFAULT_SIGNATURE_STYLE, 'p:2')?.at).toEqual({ x: 0.8, y: 0.3 });
+    expect(recapMark(moved, DEFAULT_SIGNATURE_STYLE, 'p:3')?.at).toBeNull();
+    expect(recapMark(moved, DEFAULT_SIGNATURE_STYLE)?.at).toBeNull();
   });
 
   it('paints nothing and signs no slide when it is off', () => {

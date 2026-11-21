@@ -1,12 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecapDoc } from '../../shared/recap/recap-doc';
 import { hitTest, type Box, type Hit, type RecapLayout } from '../../shared/recap/recap-layout';
 import type { FilmPlan } from '../../shared/recap/recap-motion';
 import { DEFAULT_FRAME, MAX_ZOOM, panFrame, rotateFrame, sourceRect, zoomFrame, type Frame } from '../../shared/recap/recap-frame';
 import type { Drawable, PaintSources } from '../../shared/recap/recap-paint';
-import { inOpener, paintFilm } from '../../shared/recap/recap-opener-paint';
+import { paintFilm } from '../../shared/recap/recap-opener-paint';
 import type { DeviceAliases, ResolvedRecap } from '../../shared/recap/recap-slots';
-import { paintSignature, type SignaturePaint } from '../../shared/signature/signature-paint';
+import SignatureOverlay from '../../shared/signature/SignatureOverlay';
+import type { SignPlace } from '../../shared/signature/signature';
+import type { SignaturePaint } from '../../shared/signature/signature-paint';
 import { Icons } from '../../shared/ui/icons';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import useEditorKeys from '../../shared/ui/use-editor-keys';
@@ -57,6 +59,8 @@ interface Props {
   onDropOut?: (slot: string, clientX: number, clientY: number) => void;
   /** The recap's signature on the page shown, as its still will wear it; null where this page wears none. */
   mark?: SignaturePaint | null;
+  /** The signature dragged on the stage: where it was dropped on this page (its centre, fractions of the page). */
+  onPlaceMark?: (at: SignPlace) => void;
 }
 
 const DRAG_PX = 6;
@@ -103,7 +107,7 @@ export default function RecapStage(props: Props) {
   }, [aspect]);
 
   const pan = props.pan;
-  const mark = props.mark ?? null;
+  const stageCanvas = useCallback(() => canvas.current, []);
   const paint = (t: number) => {
     const c = canvas.current;
     if (!c || !size.w) return;
@@ -117,16 +121,11 @@ export default function RecapStage(props: Props) {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
     paintFilm(g, w, doc, resolved, layout, film, sources, { t, page, aliases, clipSlides, editing: true, pan });
-    // The export's own painter, so the preview IS the mark the file wears — never over the opener's frames.
-    if (mark && !(film.lead && inOpener(film, t))) {
-      g.setTransform(1, 0, 0, 1, 0, 0);
-      paintSignature(g, w, h, mark);
-    }
   };
   // What is drawn changed: one paint now. The playhead moved: one paint per move, outside React.
   useEffect(() => {
     paint(clock.t);
-  }, [doc, resolved, layout, film, sources, page, version, size, aliases, clipSlides, pan, clock, mark]);
+  }, [doc, resolved, layout, film, sources, page, version, size, aliases, clipSlides, pan, clock]);
   useClockPaint(clock, paint);
 
   // ---- pointer: select, drag a picture onto another cell, drag the heading ----
@@ -348,6 +347,8 @@ export default function RecapStage(props: Props) {
           }}
         />
         <canvas ref={ghostRef} aria-hidden="true" className="pointer-events-none absolute inset-0 w-full h-full" />
+        {/* The signature, by the export's own painter, over the page — and the hand that moves it (never while a picture is framed). */}
+        {!framing && <SignatureOverlay mark={props.mark ?? null} source={stageCanvas} onPlace={props.onPlaceMark} />}
         {guides && story && size.h > 0 && (
           <>
             <div className="pointer-events-none absolute inset-x-0 top-0 bg-[repeating-linear-gradient(135deg,rgba(217,68,42,0.10)_0_6px,transparent_6px_12px)] border-b border-dashed border-accent/50" style={{ height: size.h * 0.12 }} />
