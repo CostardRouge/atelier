@@ -418,6 +418,14 @@ describe('deckSlides — medium and screen time', () => {
     expect(deckSlides(trip(), post({ slides: [slide] }))[1]).toMatchObject({ medium: 'image', reason: 'settled' });
   });
 
+  it('reads a slide’s re-timed sound, pitch kept for a trip written before the choice', () => {
+    const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
+    p.slides[0].videoSpeed = 0.5;
+    expect(deckSlides(trip(), p)[0].sound).toBe('pitch');
+    p.slides[0].videoSound = 'tape';
+    expect(deckSlides(trip(), p)[0].sound).toBe('tape');
+  });
+
   it('reads an odd stored speed as “as shot”', () => {
     const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
     p.slides[0].videoSpeed = NaN;

@@ -14,6 +14,23 @@ import { FieldRow, Readout, SliderRow } from '../../../shared/ui/Inspector';
 import type { SlideMedium } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import Segmented from '../../../shared/ui/Segmented';
+import type { RetimeSound } from '../../../shared/media/time-stretch';
+
+/** A re-timed clip's two sounds — the Studio variant's words: the result, then how in the tooltip. */
+const RETIME_SOUND_OPTIONS: Array<{ id: RetimeSound; label: string; title: string }> = [
+  { id: 'pitch', label: 'Pitch kept', title: 'Slower or faster, at the same pitch: voices stay voices.' },
+  { id: 'tape', label: 'Tape', title: 'The pitch moves with the speed, like a tape: 0.5× an octave lower, 2× an octave higher.' },
+];
+
+/** The open clip's numbers, as the bar under the picture edits them. */
+export interface SlideClip {
+  range: TrimRange;
+  speed: number;
+  onSpeed: (speed: number) => void;
+  /** How the re-timed sound follows the speed — the Studio variant's choice, per slide. */
+  sound: RetimeSound;
+  onSound: (sound: RetimeSound) => void;
+}
 
 interface SlideDeliveryProps {
   slide: DeckSlide;
@@ -22,7 +39,7 @@ interface SlideDeliveryProps {
   /** The clip's length when this slide holds one and it has loaded; else 0. */
   clipSeconds: number;
   /** The open clip's stretch and speed, when the slide is a clip — the same numbers the bar under the picture edits. */
-  clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
+  clip?: SlideClip | null;
   onMedium: (medium: SlideMedium) => void;
   /** Who decides the length, and the slide's own seconds where they ARE the length. */
   onLength: (edit: LengthEdit) => void;
@@ -130,7 +147,7 @@ export default function SlideDelivery({ slide, animated, clipSeconds, clip, onMe
               {formatTimecode(clip.range.start)} → {formatTimecode(clip.range.end)}
             </Readout>
           </FieldRow>
-          <FieldRow label="Speed" hint={clip.speed !== 1 ? 'Its sound is stretched to match, pitch kept.' : undefined}>
+          <FieldRow label="Speed">
             <Segmented
               fill
               size="sm"
@@ -141,6 +158,21 @@ export default function SlideDelivery({ slide, animated, clipSeconds, clip, onMe
               className="flex-1 min-w-0"
             />
           </FieldRow>
+          {/* Only a re-timed clip has a choice to make about its sound: shown
+              with the speed that asks it, gone at 1× (the Studio's row). */}
+          {clip.speed !== 1 && (
+            <FieldRow label="Sound">
+              <Segmented
+                fill
+                size="sm"
+                label="How the sound follows the speed"
+                value={clip.sound}
+                onChange={clip.onSound}
+                options={RETIME_SOUND_OPTIONS}
+                className="flex-1 min-w-0"
+              />
+            </FieldRow>
+          )}
         </>
       )}
 

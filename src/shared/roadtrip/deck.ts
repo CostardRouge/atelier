@@ -29,6 +29,7 @@ import { OUTRO_SECONDS_DEFAULT } from '../overlay/outro-card';
 import type { SavedMediaRef } from '../projects/project-types';
 import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
+import type { RetimeSound } from '../media/time-stretch';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { resolvedForTiming, slideHookTiming } from './hooks/hook-context';
@@ -152,10 +153,13 @@ export interface DeckSlide {
   seconds: number;
   /**
    * The speed its clip plays at (1 for anything that is not a clip): the
-   * source stretch is `seconds × speed` long, and a speed other than 1 ships
-   * silent. Resolved through the Studio's clamp, so an odd stored value is 1.
+   * source stretch is `seconds × speed` long, and a speed other than 1 keeps
+   * the clip's sound re-timed to match. Resolved through the Studio's clamp,
+   * so an odd stored value is 1.
    */
   speed: number;
+  /** How that re-timed sound follows the speed: its pitch kept, or like a tape. */
+  sound: RetimeSound;
 }
 
 /**
@@ -288,6 +292,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       natural: timing.natural,
       spans: opener?.spans ?? [],
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
+      sound: slide.videoSound === 'tape' ? 'tape' : 'pitch',
     });
   }
   return slides;
@@ -327,6 +332,7 @@ function cardDeckSlide(slideId: string, position: number): DeckSlide {
     natural: 0,
     spans: [],
     speed: 1,
+    sound: 'pitch',
   };
 }
 

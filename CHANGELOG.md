@@ -9,6 +9,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- A clip slide in Trips played at another speed can choose how its sound follows, as a Studio variant can: *Pitch
+  kept* (voices stay voices) or *Tape*, the pitch moving with the speed like a tape — 0.5× an octave lower, 2× an
+  octave higher. The **Sound** row appears under the slide's *Speed* as soon as the clip is re-timed.
+
 ## [1.10.0] - 2026-11-22 — Dioxazine
 
 ### Added

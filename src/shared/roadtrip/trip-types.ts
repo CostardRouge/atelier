@@ -17,6 +17,7 @@
  * Pure and DOM-free.
  */
 
+import type { RetimeSound } from '../media/time-stretch';
 import { isIsoDate, isWithin, type IsoDate } from './trip-days';
 import type { RawMaterial } from '../develop/raw-choice';
 import { defaultHookSeconds } from './hook-video';
@@ -747,6 +748,14 @@ export interface PostSlide {
   videoTimeSeconds: number;
   /** The speed the clip plays at — see `PostBadge.videoSpeed`. */
   videoSpeed: number;
+  /**
+   * How a re-timed clip's sound follows its speed: absent or `'pitch'` keeps
+   * its pitch, `'tape'` lets it move like a tape (0.5× an octave lower) — the
+   * Studio variant's choice (`ExportVariant.sound`), per slide here.
+   * Optional, so a trip written before it reads as `'pitch'` with no
+   * migration. Ignored at speed 1.
+   */
+  videoSound?: RetimeSound;
   /** How this picture sits in the frame — see `PostBadge.framing`. */
   framing: Framing;
   /** How it moves in the frame over the slide, or null — see `PostBadge.motion`. */

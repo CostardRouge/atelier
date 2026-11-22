@@ -1,3 +1,4 @@
+import type { RetimeSound } from '../../shared/media/time-stretch';
 import { materialHalf, numbersHalf, withMaterialOf } from '../../shared/develop/raw-choice';
 import { useSensorFile } from '../../shared/develop/use-sensor-file';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -1129,6 +1130,17 @@ export default function PostEditor({
       });
     },
     [slide, clipRange, post, onChangePost],
+  );
+
+  /** How the re-timed clip's sound follows its speed: pitch kept, or like a tape. */
+  const setClipSound = useCallback(
+    (sound: RetimeSound) => {
+      onChangePost({
+        ...post,
+        slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, videoSound: sound } : s)),
+      });
+    },
+    [slide, post, onChangePost],
   );
 
   // --- the piece's transport: every slide, one after the other --------------
@@ -2851,7 +2863,7 @@ export default function PostEditor({
               exif={hookExif}
               onChangeTrip={onChangeTrip}
               clipSeconds={isVideo ? duration : 0}
-              clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed } : null}
+              clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed, sound: slide.sound, onSound: setClipSound } : null}
               onChangePost={onChangePost}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
