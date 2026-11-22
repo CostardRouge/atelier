@@ -9,6 +9,30 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- A Studio variant exported at another speed can choose how its sound follows: *Pitch kept* (as until now, voices stay
+  voices) or *Tape*, where the pitch moves with the speed like a tape or a record — at 0.5× an octave lower, the
+  slow-motion rumble of an engine or the wind; at 2× an octave higher. The **Sound** row appears under *Speed* as soon
+  as the variant is re-timed, and a *Tape* file is named `-tape` so it sits beside a *Pitch kept* one.
+
+### Changed
+
+- The Studio's transport is one row: Play, the time, the trim rail, then a speaker, the loop, the preview speed, A/B, the
+  capture and a ⌨, all of one shape. The stage now plays the clip's own sound when the speaker is on (`M`, its volume
+  under the speaker on hover; off by default, remembered on this device); `L` loops the range. A cut range is said
+  where the duration was, with a ↺ to take the whole clip back, and the line of hints under the rail is gone: every key
+  and gesture is in a sheet behind ⌨, `?` or `H`. On a phone the row keeps Play, the time, the rail and the speaker,
+  and a ⋯ holds the rest.
+- Every editor's bar says whether its document is saved the same way, at the same place: a round pill with a coloured
+  dot, right after undo and redo — in the Studio, Recap, Mosaic, Flight Atlas and Develop as in Trips. The word
+  *Saved* is gone; hover the dot for the sentence. Only a save the browser refused spells itself out (*Not saved*).
+
+### Fixed
+
+- On a phone, the Studio's black stage now runs to the screen's edges, as Develop's and Mosaic's do: an 8 px grey stripe
+  showed either side of it. Storytelling's stage lost the grey hairline that framed it on the same black.
+
 ## [1.9.0] - 2026-11-22 — Cerulean
 
 ### Added

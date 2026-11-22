@@ -16,10 +16,9 @@ import {
   clampPlaybackRate,
   useVideoTransport,
 } from '../../shared/media/use-video-transport';
-import { formatDuration, formatTimecode } from '../../shared/lib/format';
+import { formatDuration } from '../../shared/lib/format';
 import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
-import TrimBar from '../../shared/media/TrimBar';
 import {
   carryRange,
   clampPlayhead,
@@ -165,17 +164,14 @@ import type { ProjectDoc } from '../../shared/projects/project-types';
 import { hashedMediaRefs, mediaHash } from '../../shared/projects/media-identity';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
-import PageBar, { barPill } from '../../shared/ui/PageBar';
+import PageBar from '../../shared/ui/PageBar';
 import Button from '../../shared/ui/Button';
-import { PRESS_LOOK } from '../../shared/ui/press';
-import { VERB_GROUND, VerbButton } from '../../shared/ui/VerbMarks';
 import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { GLASS, usePublishShellChrome } from '../../shared/ui/shell-chrome';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
-import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
 import { useSurface } from '../../shared/ui/use-surface';
 import { FieldRow, InspectorSection, LockSections, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
@@ -184,14 +180,14 @@ import { deliveryFor } from '../../shared/develop/delivery-source';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
+import SaveDot, { type SaveDotState } from '../../shared/ui/SaveDot';
+import { useLocalPref } from '../../shared/ui/local-pref';
+import StudioTransport from './StudioTransport';
+import StudioShortcuts from './StudioShortcuts';
+import { DEFAULT_STAGE_SOUND, stageSoundPref } from './studio-sound';
+import type { RetimeSound } from '../../shared/media/time-stretch';
 import { revealInScroller } from '../../shared/ui/reveal';
 
-/**
- * A transport tool's touch geometry and press (`docs/press-feedback.md` C1,
- * C5): 34 px under a finger whatever the width — a tablet is a wide shell held
- * by one — and down a pixel when pressed, like every control of the suite.
- */
-const TRANSPORT_TOUCH = `pointer-coarse:min-h-[2.125rem] pointer-coarse:min-w-[2.125rem] pointer-coarse:px-3 transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2`;
 
 /**
  * Clips with or without telemetry, and stills — the studio edits all three.
@@ -232,6 +228,12 @@ const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'grade', label: 'Grade' },
   { id: 'info', label: 'Info' },
   { id: 'export', label: 'Export' },
+];
+
+/** A re-timed variant's two sounds: the words say the result, the tooltip how. */
+const RETIME_SOUND_OPTIONS: Array<{ id: RetimeSound; label: string; title: string }> = [
+  { id: 'pitch', label: 'Pitch kept', title: 'Slower or faster, at the same pitch: voices stay voices.' },
+  { id: 'tape', label: 'Tape', title: 'The pitch moves with the speed, like a tape: 0.5× an octave lower, 2× an octave higher.' },
 ];
 
 const notice =
@@ -356,7 +358,12 @@ export default function StudioEditor({
   useEffect(() => {
     if (inspectorOpen) setChromeHidden(false);
   }, [inspectorOpen]);
-  usePublishShellChrome(useMemo(() => (immersive ? { immersive: true, floating: true, hidden } : null), [immersive, hidden]));
+  // Behind the stage, its black to every edge of the screen: without it the
+  // shell's gutter (`App.tsx`, `px-2`) showed as a grey stripe either side of
+  // the frame (2026-11-22, his report) — Develop's, Mosaic's and Storytelling's.
+  usePublishShellChrome(
+    useMemo(() => (immersive ? { immersive: true, floating: true, hidden, backdrop: 'frame' as const } : null), [immersive, hidden]),
+  );
   /** Over the stage, above the shell's bar; gone with the chrome. */
   const floatingBox = hidden ? 'hidden' : `absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] ${GLASS}`;
   const [activeError, setActiveError] = useState(false);
@@ -538,8 +545,6 @@ export default function StudioEditor({
   };
   /** True while the stage draws a file other than the one the Library holds. */
   const stageOnOther = !!stageFile && !stageRendition.onLibraryFile;
-  // The trim bar's gestures are spelled out under it until one has been used.
-  const trim = useLearnedGesture('studio.trim');
   const [loop, setLoop] = useState(false);
   // The transport wires its listeners once per media, so the live values reach
   // it through refs rather than through captured props.
@@ -568,6 +573,10 @@ export default function StudioEditor({
   // clip's own cadence, so a 4× ralenti plays back at life's pace and a
   // hyperlapse crawls — and it stays right when the clip changes.
   const [previewSpeed, setPreviewSpeed] = useState<number | 'realtime'>(1);
+  // The stage plays the clip's own sound when the speaker is on — a choice of
+  // this device, never of the project (`studio-sound.ts`).
+  const [stageSound, setStageSound] = useLocalPref(stageSoundPref, DEFAULT_STAGE_SOUND);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<StyleTheme | null>(() => project.theme);
   // Scenes — today the introduction alone. Portable project data: an intro
@@ -970,9 +979,6 @@ export default function StudioEditor({
 
   /** Move the handles and remember them for this clip. */
   function applyRange(next: TrimRange) {
-    // Cutting a clip — by handle or by I / O — is the gesture the hint under
-    // the bar teaches, so it retires the hint the first time it lands.
-    if (isTrimmed(next, duration)) trim.learn();
     setRange(next);
     if (!activeId) return;
     setTrims((prev) => {
@@ -1121,6 +1127,17 @@ export default function StudioEditor({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (targetOwnsTyping(describeKeyTarget(e.target))) return;
       const key = e.key.toLowerCase();
+      // M: the clip's sound; L: loop the range — beside I and O, in the sheet.
+      if ((key === 'm' || key === 'l') && !e.repeat) {
+        e.preventDefault();
+        if (key === 'm') {
+          const sound = stageSoundPref.get();
+          stageSoundPref.set({ ...sound, on: !sound.on });
+        } else {
+          setLoop((l) => !l);
+        }
+        return;
+      }
       if (key !== 'i' && key !== 'o') return;
       if (duration <= 0) return;
       e.preventDefault();
@@ -1146,6 +1163,30 @@ export default function StudioEditor({
     // Re-wired when the clip (or its measurements) change: `applyRange` writes
     // the duration it was told into the saved trim, so it must not be stale.
   }, [activeUrl, frameStep, duration, activeId]);
+
+  // The stage video's sound follows the speaker. Set on the element itself:
+  // React's `muted` attribute is read once, at mount, and never again.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !stageSound.on;
+    v.volume = stageSound.volume;
+  }, [stageSound, activeUrl]);
+
+  // ? or H opens the keys and gestures (`StudioShortcuts`). Registered once, at
+  // mount, so it runs BEFORE the sheet's own listener and a press that closes
+  // the sheet lands on the same closed state (`ShortcutsSheet`).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (targetOwnsTyping(describeKeyTarget(e.target))) return;
+      if (e.key !== '?' && e.key !== 'h' && e.key !== 'H') return;
+      e.preventDefault();
+      setShortcutsOpen((open) => !open);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Selecting an element — from the list, or by clicking it on the stage —
   // brings its settings into view. With a long deck the panel sits well below
@@ -1711,6 +1752,7 @@ export default function StudioEditor({
           // for the source frame — the same frame everything else drew for.
           variant.overlays ? outroTail(outro, srcWidth, srcHeight) : null,
           shades,
+          variant.sound,
         );
       }
       if (err instanceof DecodeUnsupportedError) {
@@ -2205,29 +2247,8 @@ export default function StudioEditor({
   const hasTelemetry = cues.length > 0;
 
 
-  /**
-   * The local save state, drawn the way `SyncPill` draws the remote one: a
-   * coloured dot and one word, collapsing to the dot alone on a phone unless
-   * the state is waiting on the author. A row of fixed pills has no room for
-   * a sentence nobody controls the length of, and "Saved" is a reassurance
-   * rather than a thing to read — while "Storage unavailable" is a decision,
-   * and a decision nobody is asked to make does not get made.
-   *
-   * The full text is announced either way, from the live region below.
-   */
-  const saveBadge: Record<SaveState, { label: string; cls: string; dot: string; act: boolean }> = {
-    saved: { label: 'Saved', cls: 'text-ok border-ok-line', dot: 'bg-ok', act: false },
-    saving: { label: 'Saving…', cls: 'text-muted border-line', dot: 'bg-faint', act: false },
-    unsaved: { label: 'Edited', cls: 'text-muted border-line', dot: 'bg-line-strong', act: false },
-    'storage-error': {
-      label: 'Storage unavailable — in-memory only',
-      cls: 'text-danger border-danger-line',
-      dot: 'bg-danger',
-      act: true,
-    },
-  };
-  const save = saveBadge[saveState];
-  const showSaveLabel = !compact || save.act;
+  /** The local save state as the shared dot (`SaveDot`): a refused store is its one word. */
+  const saveDotState: SaveDotState = saveState === 'storage-error' ? 'failed' : saveState;
 
   /** Something is on the stage: a loaded clip, or a decoded still. */
   const hasFrame = !!activeUrl || !!photo;
@@ -2318,6 +2339,7 @@ export default function StudioEditor({
 
   return (
     <section className={`relative flex flex-col flex-1 min-h-0 ${immersive ? 'gap-2' : 'gap-4'}`} aria-label="Studio">
+      {shortcutsOpen && <StudioShortcuts onClose={() => setShortcutsOpen(false)} />}
       {/* Project bar: back to gallery, editable name, then — pinned right —
           the save state and the format/settings pill. Every pill shares one
           height so the row reads as a single band, not a drift of chips.
@@ -2344,16 +2366,7 @@ export default function StudioEditor({
               <>
                 {history.control}
                 {headerExtra}
-                <span
-                  className={`${barPill} bg-paper justify-center w-[2.125rem] px-0 ${save.cls}`}
-                  aria-label={save.label}
-                  title={save.label}
-                >
-                  <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`} aria-hidden="true" />
-                </span>
-                <span className="sr-only" role="status" aria-live="polite">
-                  {save.label}
-                </span>
+                <SaveDot state={saveDotState} noun="project" />
               </>
             }
             menu={[
@@ -2371,25 +2384,11 @@ export default function StudioEditor({
           back={{ label: 'Projects', onClick: onShowProjects }}
           trailing={
             <>
+              {/* The history, then the state as a dot (Trips' shape), then the
+                  format — every editor's order (`SaveDot`). */}
               {history.control}
               {headerExtra}
-              <span
-                className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${
-                  showSaveLabel ? 'gap-1.5' : 'justify-center w-[2.125rem] px-0'
-                } ${save.cls}`}
-                aria-label={save.label}
-              >
-                <span
-                  className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`}
-                  aria-hidden="true"
-                />
-                {showSaveLabel && save.label}
-              </span>
-              {/* The pill is a summary; a live region carries the whole state so
-                  a screen reader hears it change whatever the width. */}
-              <span className="sr-only" role="status" aria-live="polite">
-                {save.label}
-              </span>
+              <SaveDot state={saveDotState} noun="project" />
               <Button
                 onClick={() => setShowSettings(true)}
                 className="font-mono text-2xs tracking-[0.06em]"
@@ -2616,7 +2615,7 @@ export default function StudioEditor({
               src={activeUrl ?? undefined}
               className="absolute w-0.5 h-0.5 left-0 bottom-0 opacity-0 pointer-events-none"
               playsInline
-              muted
+              muted={!stageSound.on}
               preload="auto"
               onError={() => setActiveError(true)}
             />
@@ -2626,148 +2625,35 @@ export default function StudioEditor({
           </div>
 
           {activeUrl && (
-            <div className={`flex flex-col gap-[0.45rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper ${immersive ? floatingBox : 'bg-surface flex-none'}`}>
-             {/* Two groups, and the row wraps between them: the rail (play,
-                 clock, trim, duration) keeps a usable width, and the tools drop
-                 to a line of their own rather than pushing the last one past
-                 the edge — which used to give the whole document a horizontal
-                 scrollbar on a phone. Every tool added here from now on lands
-                 in the second group and costs nothing. */}
-             <div className="flex flex-wrap items-center gap-x-[0.85rem] gap-y-2">
-              <div className="flex items-center gap-[0.85rem] grow shrink basis-[15rem] min-w-0">
-              <button
-                type="button"
-                className="flex-none w-[2.2rem] h-[2.2rem] border-0 rounded-full bg-ink text-paper cursor-pointer text-xs leading-none inline-flex items-center justify-center transition-[background-color] duration-200 ease-paper hover:bg-accent"
-                onClick={togglePlay}
-                aria-label={playing ? 'Pause' : 'Play'}
-                title="Play / pause (Space)"
-              >
-                {playing ? Icons.pause : Icons.play}
-              </button>
-              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
-                {formatTimecode(time)}
-              </span>
-              <TrimBar
-                duration={duration}
-                time={time}
-                range={range}
-                minLength={frameStep}
-                step={frameStep}
-                onSeek={handleScrub}
-                onScrubStart={scrub.begin}
-                onScrubEnd={() => scrub.end()}
-                onRangeChange={applyRange}
-              />
-              <span className="font-mono text-xs tabular-nums text-muted flex-none min-w-[3.2ch] text-center">
-                {formatDuration(duration)}
-              </span>
-              </div>
-
-              {/* The tools. `flex-wrap` on the group itself is the second net:
-                  if even they cannot share one line, they stack instead of
-                  overflowing. */}
-              <div className="flex flex-wrap items-center gap-2 max-w-full">
-              <button
-                type="button"
-                onClick={() => setLoop((l) => !l)}
-                aria-pressed={loop}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer ${TRANSPORT_TOUCH} ${
-                  loop
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
-                }`}
-                title="Loop the trimmed range instead of stopping on the out point"
-              >
-                ↻
-              </button>
-              {/* A capture renders the frame with its overlays and look: the
-                  verb stays down until the file is saved (`useVerb`). */}
-              <VerbButton
-                onRun={handleGrabFrame}
-                disabled={grabbing}
-                className={`flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-xs text-muted cursor-pointer hover:text-accent-ink hover:border-accent disabled:opacity-50 disabled:cursor-default ${TRANSPORT_TOUCH} ${VERB_GROUND}`}
-                title="Save this frame as a JPEG, overlays and look burned in"
-                aria-label="Capture frame"
-              >
-                {grabbing ? '…' : '⌾'}
-              </VerbButton>
-              {/* Preview speed. Viewing only — it moves no readout and no
-                  export; the delivered speed lives in the Export tab. */}
-              <select
-                value={previewSpeed === 'realtime' ? 'realtime' : String(previewSpeed)}
-                onChange={(e) =>
-                  setPreviewSpeed(
-                    e.target.value === 'realtime' ? 'realtime' : Number(e.target.value),
-                  )
-                }
-                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-2xs tracking-[0.06em] cursor-pointer focus:outline-none pointer-coarse:min-h-[2.125rem] transition-colors ${
-                  previewRate === 1
-                    ? 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
-                    : 'border-accent bg-accent-wash text-accent-ink'
-                }`}
-                aria-label="Preview speed"
-                title="Preview speed — the readouts and the export are untouched"
-              >
-                {SPEED_CHOICES.map((sp) => (
-                  <option key={sp} value={sp}>
-                    {sp}×
-                  </option>
-                ))}
-                {realtimeRate !== 1 && (
-                  <option value="realtime">
-                    real ({Math.round(realtimeRate * 100) / 100}×)
-                  </option>
-                )}
-              </select>
-              <button
-                type="button"
-                onClick={() => setCompareOn((c) => !c)}
-                aria-pressed={compareOn}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer ${TRANSPORT_TOUCH} ${
-                  compareOn
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
-                }`}
-                title="Compare original vs composed — drag the divider on the stage"
-              >
-                A/B
-              </button>
-              </div>
-             </div>
-
-             {/* The trim readout sits on its own line, and that line is ALWAYS
-                 rendered: appearing on the first drag, it would resize the row
-                 above and make the rail jump under the pointer mid-gesture.
-                 Untrimmed, it teaches the two shortcuts instead. */}
-             <div className="flex items-center gap-2 h-[1.1rem] pl-[3.05rem] font-mono text-2xs tracking-[0.06em] tabular-nums">
-               {trimmed ? (
-                 <>
-                   <span
-                     className="inline-flex items-center gap-1.5 text-accent-ink"
-                     title="Trimmed range — only this part previews and exports"
-                   >
-                     <span className="uppercase tracking-[0.12em] text-muted">Trim</span>
-                     {formatTimecode(range.start)} → {formatTimecode(range.end)} ·{' '}
-                     {trimDuration(range).toFixed(1)}s
-                   </span>
-                   <button
-                     type="button"
-                     onClick={() => applyRange(fullRange(duration))}
-                     className="border-0 bg-transparent p-0 text-accent-ink cursor-pointer text-xs leading-none hover:text-accent"
-                     title="Use the whole clip again"
-                     aria-label="Clear the trim"
-                   >
-                     ↺
-                   </button>
-                 </>
-               ) : (
-                 <span className="text-faint">
-                   Full clip
-                   {!trim.learned && ' — drag the handles, or press I / O to cut at the playhead'}
-                 </span>
-               )}
-             </div>
-            </div>
+            <StudioTransport
+              playing={playing}
+              onTogglePlay={togglePlay}
+              time={time}
+              duration={duration}
+              range={range}
+              trimmed={trimmed}
+              frameStep={frameStep}
+              onSeek={handleScrub}
+              onScrubStart={scrub.begin}
+              onScrubEnd={() => scrub.end()}
+              onRangeChange={applyRange}
+              onClearTrim={() => applyRange(fullRange(duration))}
+              loop={loop}
+              onLoop={setLoop}
+              sound={stageSound}
+              onSound={setStageSound}
+              previewSpeed={previewSpeed}
+              previewRate={previewRate}
+              speedChoices={SPEED_CHOICES}
+              realtimeRate={realtimeRate}
+              onPreviewSpeed={setPreviewSpeed}
+              compareOn={compareOn}
+              onCompare={setCompareOn}
+              onGrab={handleGrabFrame}
+              onShortcuts={() => setShortcutsOpen(true)}
+              compact={compact}
+              className={immersive ? floatingBox : 'bg-surface flex-none'}
+            />
           )}
 
           {/* A still has no transport to offer — no play, no trim, no cadence,
@@ -2775,24 +2661,23 @@ export default function StudioEditor({
               control that is about the picture rather than about time: the A/B
               wipe, which is how a grade gets judged. */}
           {isPhoto && photo && (
-            <div className={`flex flex-wrap items-center gap-2 px-[0.85rem] py-[0.6rem] border border-line rounded-paper ${immersive ? floatingBox : 'bg-surface flex-none'}`}>
-              <span className="font-mono text-2xs tracking-[0.1em] uppercase text-faint">
+            <div className={`flex items-center gap-1 px-2 py-1.5 border border-line rounded-control ${immersive ? floatingBox : 'bg-surface flex-none'}`}>
+              <span className="pl-1 font-mono text-2xs tracking-[0.1em] uppercase text-muted">
                 Still
               </span>
               <span className="flex-1" />
-              <button
-                type="button"
-                onClick={() => setCompareOn((c) => !c)}
+              <IconButton
+                label={compareOn ? 'Comparing — drag the divider on the stage; click to stop' : 'Compare the original and the composed picture (A/B)'}
+                variant={compareOn ? 'default' : 'ghost'}
+                size={compact ? 'lg' : 'md'}
                 aria-pressed={compareOn}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer transition-colors ${
-                  compareOn
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
-                }`}
-                title="Compare original vs composed — drag the divider on the stage"
+                onClick={() => setCompareOn((c) => !c)}
               >
-                A/B
-              </button>
+                {Icons.compare}
+              </IconButton>
+              <IconButton label="Keys and gestures (?)" variant="ghost" size={compact ? 'lg' : 'md'} onClick={() => setShortcutsOpen(true)}>
+                {Icons.keyboard}
+              </IconButton>
             </div>
           )}
 
@@ -3328,7 +3213,7 @@ export default function StudioEditor({
                                       {duration > 0
                                         ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
                                         : ''}
-                                      , its sound stretched to match, pitch kept.
+                                      .
                                     </>
                                   ) : undefined
                                 }
@@ -3341,6 +3226,21 @@ export default function StudioEditor({
                                     id: String(sp),
                                     label: `${sp === 1 ? 'Normal' : `${sp}×`}${sp !== 1 && sp === realtimeRate ? ' — real time' : ''}`,
                                   }))}
+                                />
+                              </FieldRow>
+                            )}
+                            {/* Only a re-timed variant has a choice to make
+                                about its sound: shown with the speed that
+                                asks it, gone at normal speed. */}
+                            {!isPhoto && variantIsRetimed(v) && (
+                              <FieldRow label="Sound">
+                                <Segmented
+                                  fill
+                                  size="sm"
+                                  label="How the sound follows the speed"
+                                  value={v.sound ?? 'pitch'}
+                                  onChange={(sound) => updateVariant(v.id, { sound })}
+                                  options={RETIME_SOUND_OPTIONS}
                                 />
                               </FieldRow>
                             )}

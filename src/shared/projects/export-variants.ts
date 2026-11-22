@@ -22,6 +22,7 @@
 import { ASPECT_PRESETS } from './aspect-presets';
 import { even } from '../media/compose-layout';
 import { resolveSpeed, speedSuffix, type ExportFrameRate } from '../media/frame-rate';
+import type { RetimeSound } from '../media/time-stretch';
 
 export type VariantAspect = 'source' | string;
 export type VariantResolution = 'source' | 1080 | 720;
@@ -34,6 +35,13 @@ export interface ExportVariant {
   frameRate: ExportFrameRate;
   /** Delivered speed; 1 keeps the clip's own. A re-timed variant's sound is stretched to match. */
   speed: number;
+  /**
+   * How a re-timed variant's sound follows the speed: absent or `'pitch'`
+   * keeps its pitch, `'tape'` lets it move like a tape (0.5× an octave lower).
+   * Optional, so a project written before it reads as `'pitch'` with no
+   * migration. Ignored at speed 1.
+   */
+  sound?: RetimeSound;
   /** Burn the overlay elements (and their theme) in, or deliver clean. */
   overlays: boolean;
 }
@@ -169,6 +177,8 @@ export function variantSuffix(
     if (variant.frameRate !== 'source') parts.push(`${variant.frameRate}fps`);
     const speed = speedSuffix(variant.speed);
     if (speed) parts.push(speed);
+    // Two variants at one speed may differ only by their sound.
+    if (speed && variant.sound === 'tape') parts.push('tape');
   }
   if (!variant.overlays) parts.push('clean');
   return parts.join('-');

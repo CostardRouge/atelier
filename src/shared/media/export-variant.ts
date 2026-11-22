@@ -305,6 +305,7 @@ export async function exportVariantVideo(
       grained: (opts.film?.grain ?? 0) > 0,
       trim: opts.trim ?? null,
       speed: variant.speed,
+      retimeSound: variant.sound,
       tail,
       bed: opts.bed ?? null,
       mixBed: opts.mixBed,

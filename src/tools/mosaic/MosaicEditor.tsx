@@ -30,6 +30,7 @@ import { motionOf, recipeOf, type Recipe } from '../../shared/mosaic/motion';
 import Button from '../../shared/ui/Button';
 import EmptyState from '../../shared/ui/EmptyState';
 import PageBar from '../../shared/ui/PageBar';
+import SaveDot from '../../shared/ui/SaveDot';
 import InspectorBlock, { BLOCK_TABS } from '../../shared/ui/InspectorBlock';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
@@ -71,7 +72,6 @@ import { useTargetSteps, type TargetSteps } from './use-target-steps';
 /** Where the editor's save stands, as its bar says it. */
 export type SaveState = 'saved' | 'saving' | 'failed';
 
-const SAVE_WORDS: Record<SaveState, string> = { saved: 'Saved', saving: 'Saving…', failed: 'Not saved' };
 
 interface MosaicEditorProps {
   doc: MosaicDoc;
@@ -771,15 +771,15 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         title={titleField}
         subtitle={
           <span className={`block px-2 font-mono text-3xs tabular-nums truncate ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`} role="status">
-            {saveState === 'failed' ? `${SAVE_WORDS.failed} · ` : ''}
+            {saveState === 'failed' ? 'Not saved · ' : ''}
             {countLine}
           </span>
         }
         trailing={
           <>
             {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
-            {syncPill}
             {headerExtra}
+            {syncPill}
           </>
         }
         menu={[...extra, ...phoneMenu.map((it, i) => (i === 0 && extra.length ? { ...it, rule: true } : it))]}
@@ -847,19 +847,10 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
         trailing={
           <span className="inline-flex items-center gap-2">
             {doc.tiles.length > 0 && <TargetStepsControl steps={steps} />}
-            {syncPill}
+            {/* The history first, then the state — every editor's order (`SaveDot`). */}
             {headerExtra}
-            <span
-              className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}
-              role="status"
-              title={
-                saveState === 'failed'
-                  ? 'The browser refused to store this mosaic (a private window, or the disk is full) — your edits are still on screen.'
-                  : 'Every change is kept on this device as you go.'
-              }
-            >
-              {SAVE_WORDS[saveState]}
-            </span>
+            {syncPill}
+            <SaveDot state={saveState} noun="mosaic" />
           </span>
         }
       >

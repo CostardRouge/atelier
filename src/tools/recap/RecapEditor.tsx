@@ -35,6 +35,7 @@ import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import InspectorBlock, { BLOCK_TABS } from '../../shared/ui/InspectorBlock';
 import PageBar from '../../shared/ui/PageBar';
+import SaveDot from '../../shared/ui/SaveDot';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import { isHelpKey } from '../../shared/ui/editor-keys';
@@ -71,7 +72,6 @@ import RecapShortcuts from './RecapShortcuts';
 import { sendAgainAsked } from './publish-where';
 
 export type SaveState = 'saved' | 'saving' | 'failed';
-const SAVE_WORDS: Record<SaveState, string> = { saved: 'Saved', saving: 'Saving…', failed: 'Not saved' };
 
 type Tab = 'pictures' | 'text' | 'layout' | 'background' | 'motion' | 'export';
 const TABS: { id: Tab; label: string }[] = [
@@ -1144,11 +1144,10 @@ export default function RecapEditor({ doc, change, saveState, onBack, headerExtr
         back={{ label: 'Recaps', onClick: onBack, iconOnly: compact }}
         trailing={
           <span className="inline-flex items-center gap-2">
-            {syncPill}
+            {/* The history first, then the state — every editor's order (`SaveDot`). */}
             {headerExtra}
-            <span className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`} role="status" title={saveState === 'failed' ? 'The browser refused to store this recap — your edits are still on screen.' : 'Every change is kept on this device as you go.'}>
-              {SAVE_WORDS[saveState]}
-            </span>
+            {syncPill}
+            <SaveDot state={saveState} noun="recap" />
           </span>
         }
       >

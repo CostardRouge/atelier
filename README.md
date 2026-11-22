@@ -278,9 +278,19 @@ are grabbed on the rail, the playhead by its head below — two bands, because
 the two sit on top of each other constantly and neither must ever become
 ungrabbable. The handles never cross (they stop one frame from each other).
 Playback stops on the out point; press play there and it replays from the in
-point, or turn on **↻** to loop the range. `I` and `O` cut at the playhead,
+point, or turn on the loop (`L`) to loop the range. `I` and `O` cut at the playhead,
 `Shift+I` / `Shift+O` put a handle back on the clip's own end, and a focused
-handle steps by a frame with ← → (a second with Shift).
+handle steps by a frame with ← → (a second with Shift). Cut, the range is
+said where the duration was (`0:00.8 → 0:02.2 · 1.4 s`) with a ↺ that gives
+the whole clip back.
+
+**The transport is one row**: Play, the time, the trim rail, then a speaker,
+the loop, the preview speed, A/B, the capture and ⌨. The speaker plays the
+clip's own sound on the stage (`M`; off by default, a choice of this device,
+its volume under the speaker on hover); the stage was always silent before.
+Every key and gesture is in a sheet behind ⌨, `?` or `H` rather than spelled
+under the rail. On a phone the row keeps Play, the time, the rail and the
+speaker, and a ⋯ holds the rest.
 The range is what exports: every
 variant is encoded from the in point, audio included, with the file starting at
 zero — the overlays still read the *source* timeline, so telemetry and the
@@ -441,7 +451,7 @@ The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what
 burns in. An **A/B** toggle on the transport wipes original against composed
-(draggable divider, editor-only), a **shutter** button beside it saves the
+(draggable divider, editor-only), a **camera** button beside it saves the
 frame under the playhead as a JPEG with the look and overlays burned in at
 source resolution; the **Info** tab reads the clip's facts and the live
 telemetry at the playhead; **project settings** (name, format) stay editable
@@ -621,13 +631,17 @@ than implying interpolated motion. The **speed** is the other axis: it moves the
 duration and leaves the cadence alone (2× delivers half as long at the same
 fps), the menu offers the one that puts a conformed clip back at life's pace
 (“4× speed — real time” on a 4× ralenti), and the row states what you will get —
-`2× speed — 0:01 instead of 0:03, its sound stretched to match, pitch kept`.
+`2× speed — 0:01 instead of 0:03`.
 At its own speed a clip's AAC sound is copied bit-for-bit, never re-encoded; a
 re-timed clip's cannot be (a copied track would drift against the picture), so
-it is decoded, stretched to the new length without changing its pitch — voices
-and music sound slower or faster, not lower or higher — and encoded. Very fast
-(4×) or very slow (0.25×) speeds make it choppy or grainy, the price of keeping
-the pitch. The other sound that cannot be copied is uncompressed PCM — what Sony's XAVC S and XAVC
+it is decoded, re-timed to the new length and encoded, and a re-timed variant
+says how in its **Sound** row: *Pitch kept* (the default) stretches it without
+changing its pitch — voices and music sound slower or faster, not lower or
+higher; very fast (4×) or very slow (0.25×) speeds make it choppy or grainy,
+the price of keeping the pitch — while *Tape* lets the pitch move with the
+speed, as a tape or a record would: 0.5× an octave lower, 2× an octave higher,
+the slow-motion rumble of an engine or the wind, with no artefact, and the file
+named `-tape` so it sits beside a *Pitch kept* one. The other sound that cannot be copied is uncompressed PCM — what Sony's XAVC S and XAVC
 HS cameras record (16 or 24 bit, 48 kHz): it is encoded to AAC (Opus in a
 browser without AAC) and lands on its picture as a copy would, its first two
 channels kept when the camera wrote four. Burned-in

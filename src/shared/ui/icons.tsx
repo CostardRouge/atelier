@@ -251,6 +251,20 @@ export const Icons = {
   drawPixels: icon(<path d="M3 17h4v-5h4V7h2v5h4v5h4" />),
   focus: icon(<><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5" /></>),
   keyboard: icon(<><rect x="2.5" y="6" width="19" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" /></>),
+  /** A clip's own sound heard — the transport's speaker. */
+  volume: icon(<path d="M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />),
+  /** The sound off: the speaker crossed. */
+  volumeOff: icon(<path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6" />),
+  /** Keep this frame as a picture. */
+  camera: icon(<><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>),
+  /** The A/B wipe: a frame cut in two, one half the original. */
+  compare: icon(
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M12 4v16" />
+      <path d="M4 5h8v14H4z" fill="currentColor" stroke="none" opacity="0.35" />
+    </>,
+  ),
   // A square of ground crossed by two roads and a lane: the streets under a map.
   streets: icon(
     <>
