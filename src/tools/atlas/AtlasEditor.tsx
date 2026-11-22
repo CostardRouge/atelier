@@ -5,6 +5,7 @@ import { allowTiles, tilesAllowed } from '../../shared/map/osm-tiles';
 import { useSurface } from '../../shared/ui/use-surface';
 import IconButton from '../../shared/ui/IconButton';
 import PageBar from '../../shared/ui/PageBar';
+import SaveDot from '../../shared/ui/SaveDot';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
 import AtlasInspector from './AtlasInspector';
@@ -59,7 +60,6 @@ interface AtlasEditorProps {
   band?: ReactNode;
 }
 
-const SAVE_WORDS: Record<SaveState, string> = { saved: 'Saved', saving: 'Saving…', failed: 'Not saved' };
 
 /**
  * Flight Atlas — EXPERIMENTAL. One ATLAS (`atlas-doc.ts`): its flights drawn
@@ -297,15 +297,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
     <section className="@container flex-1 min-h-0 flex flex-col gap-3" aria-label="Flight Atlas">
       <PageBar
         back={{ label: 'Atlases', onClick: onBack, iconOnly: compact }}
-        trailing={
-          <span
-            className={`font-mono text-2xs ${saveState === 'failed' ? 'text-danger' : 'text-muted'}`}
-            role="status"
-            title={saveState === 'failed' ? 'The browser refused to store this atlas (a private window, or the disk is full) — your edits are still on screen.' : 'Every change is kept on this device as you go.'}
-          >
-            {SAVE_WORDS[saveState]}
-          </span>
-        }
+        trailing={<SaveDot state={saveState} noun="atlas" />}
       >
         <input
           aria-label="Atlas name"

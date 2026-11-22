@@ -165,7 +165,7 @@ import type { ProjectDoc } from '../../shared/projects/project-types';
 import { hashedMediaRefs, mediaHash } from '../../shared/projects/media-identity';
 import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
-import PageBar, { barPill } from '../../shared/ui/PageBar';
+import PageBar from '../../shared/ui/PageBar';
 import Button from '../../shared/ui/Button';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import { VERB_GROUND, VerbButton } from '../../shared/ui/VerbMarks';
@@ -184,6 +184,7 @@ import { deliveryFor } from '../../shared/develop/delivery-source';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
+import SaveDot, { type SaveDotState } from '../../shared/ui/SaveDot';
 import type { RetimeSound } from '../../shared/media/time-stretch';
 import { revealInScroller } from '../../shared/ui/reveal';
 
@@ -2213,29 +2214,8 @@ export default function StudioEditor({
   const hasTelemetry = cues.length > 0;
 
 
-  /**
-   * The local save state, drawn the way `SyncPill` draws the remote one: a
-   * coloured dot and one word, collapsing to the dot alone on a phone unless
-   * the state is waiting on the author. A row of fixed pills has no room for
-   * a sentence nobody controls the length of, and "Saved" is a reassurance
-   * rather than a thing to read — while "Storage unavailable" is a decision,
-   * and a decision nobody is asked to make does not get made.
-   *
-   * The full text is announced either way, from the live region below.
-   */
-  const saveBadge: Record<SaveState, { label: string; cls: string; dot: string; act: boolean }> = {
-    saved: { label: 'Saved', cls: 'text-ok border-ok-line', dot: 'bg-ok', act: false },
-    saving: { label: 'Saving…', cls: 'text-muted border-line', dot: 'bg-faint', act: false },
-    unsaved: { label: 'Edited', cls: 'text-muted border-line', dot: 'bg-line-strong', act: false },
-    'storage-error': {
-      label: 'Storage unavailable — in-memory only',
-      cls: 'text-danger border-danger-line',
-      dot: 'bg-danger',
-      act: true,
-    },
-  };
-  const save = saveBadge[saveState];
-  const showSaveLabel = !compact || save.act;
+  /** The local save state as the shared dot (`SaveDot`): a refused store is its one word. */
+  const saveDotState: SaveDotState = saveState === 'storage-error' ? 'failed' : saveState;
 
   /** Something is on the stage: a loaded clip, or a decoded still. */
   const hasFrame = !!activeUrl || !!photo;
@@ -2352,16 +2332,7 @@ export default function StudioEditor({
               <>
                 {history.control}
                 {headerExtra}
-                <span
-                  className={`${barPill} bg-paper justify-center w-[2.125rem] px-0 ${save.cls}`}
-                  aria-label={save.label}
-                  title={save.label}
-                >
-                  <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`} aria-hidden="true" />
-                </span>
-                <span className="sr-only" role="status" aria-live="polite">
-                  {save.label}
-                </span>
+                <SaveDot state={saveDotState} noun="project" />
               </>
             }
             menu={[
@@ -2379,25 +2350,11 @@ export default function StudioEditor({
           back={{ label: 'Projects', onClick: onShowProjects }}
           trailing={
             <>
+              {/* The history, then the state as a dot (Trips' shape), then the
+                  format — every editor's order (`SaveDot`). */}
               {history.control}
               {headerExtra}
-              <span
-                className={`${barPill} bg-paper font-mono text-2xs tracking-[0.1em] uppercase ${
-                  showSaveLabel ? 'gap-1.5' : 'justify-center w-[2.125rem] px-0'
-                } ${save.cls}`}
-                aria-label={save.label}
-              >
-                <span
-                  className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${save.dot}`}
-                  aria-hidden="true"
-                />
-                {showSaveLabel && save.label}
-              </span>
-              {/* The pill is a summary; a live region carries the whole state so
-                  a screen reader hears it change whatever the width. */}
-              <span className="sr-only" role="status" aria-live="polite">
-                {save.label}
-              </span>
+              <SaveDot state={saveDotState} noun="project" />
               <Button
                 onClick={() => setShowSettings(true)}
                 className="font-mono text-2xs tracking-[0.06em]"

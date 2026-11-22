@@ -2819,8 +2819,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           subtitle={<span ref={setNameSlot} className="min-w-0 flex text-xs" />}
           trailing={
             <>
-              {headerExtra}
+              {/* The history first, then the state — every editor's order. */}
               {historyControl}
+              {headerExtra}
             </>
           }
           menu={moreItems}

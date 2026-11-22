@@ -16,6 +16,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
   slow-motion rumble of an engine or the wind; at 2× an octave higher. The **Sound** row appears under *Speed* as soon
   as the variant is re-timed, and a *Tape* file is named `-tape` so it sits beside a *Pitch kept* one.
 
+### Changed
+
+- Every editor's bar says whether its document is saved the same way, at the same place: a round pill with a coloured
+  dot, right after undo and redo — in the Studio, Recap, Mosaic, Flight Atlas and Develop as in Trips. The word
+  *Saved* is gone; hover the dot for the sentence. Only a save the browser refused spells itself out (*Not saved*).
+
 ## [1.9.0] - 2026-11-22 — Cerulean
 
 ### Added
