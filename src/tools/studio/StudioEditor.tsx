@@ -358,7 +358,12 @@ export default function StudioEditor({
   useEffect(() => {
     if (inspectorOpen) setChromeHidden(false);
   }, [inspectorOpen]);
-  usePublishShellChrome(useMemo(() => (immersive ? { immersive: true, floating: true, hidden } : null), [immersive, hidden]));
+  // Behind the stage, its black to every edge of the screen: without it the
+  // shell's gutter (`App.tsx`, `px-2`) showed as a grey stripe either side of
+  // the frame (2026-11-22, his report) — Develop's, Mosaic's and Storytelling's.
+  usePublishShellChrome(
+    useMemo(() => (immersive ? { immersive: true, floating: true, hidden, backdrop: 'frame' as const } : null), [immersive, hidden]),
+  );
   /** Over the stage, above the shell's bar; gone with the chrome. */
   const floatingBox = hidden ? 'hidden' : `absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] ${GLASS}`;
   const [activeError, setActiveError] = useState(false);

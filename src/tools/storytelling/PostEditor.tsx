@@ -1189,7 +1189,8 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         />
         {/* No minimum height (Develop's stage, `DevelopViewport`): the drawer takes its share of the column, and on a
             phone held sideways a floor here pushed the drawer below the screen. */}
-        <div className="relative flex-1 min-h-0 flex rounded-control bg-frame border border-line p-1.5">
+        {/* No border: on the phone's black backdrop a hairline drew a grey frame round the stage (2026-11-22). */}
+        <div className="relative flex-1 min-h-0 flex rounded-control bg-frame p-1.5">
           <StoryStage
             clock={clock}
             episode={shown}
