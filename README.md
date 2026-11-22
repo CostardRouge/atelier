@@ -621,13 +621,17 @@ than implying interpolated motion. The **speed** is the other axis: it moves the
 duration and leaves the cadence alone (2× delivers half as long at the same
 fps), the menu offers the one that puts a conformed clip back at life's pace
 (“4× speed — real time” on a 4× ralenti), and the row states what you will get —
-`2× speed — 0:01 instead of 0:03, its sound stretched to match, pitch kept`.
+`2× speed — 0:01 instead of 0:03`.
 At its own speed a clip's AAC sound is copied bit-for-bit, never re-encoded; a
 re-timed clip's cannot be (a copied track would drift against the picture), so
-it is decoded, stretched to the new length without changing its pitch — voices
-and music sound slower or faster, not lower or higher — and encoded. Very fast
-(4×) or very slow (0.25×) speeds make it choppy or grainy, the price of keeping
-the pitch. The other sound that cannot be copied is uncompressed PCM — what Sony's XAVC S and XAVC
+it is decoded, re-timed to the new length and encoded, and a re-timed variant
+says how in its **Sound** row: *Pitch kept* (the default) stretches it without
+changing its pitch — voices and music sound slower or faster, not lower or
+higher; very fast (4×) or very slow (0.25×) speeds make it choppy or grainy,
+the price of keeping the pitch — while *Tape* lets the pitch move with the
+speed, as a tape or a record would: 0.5× an octave lower, 2× an octave higher,
+the slow-motion rumble of an engine or the wind, with no artefact, and the file
+named `-tape` so it sits beside a *Pitch kept* one. The other sound that cannot be copied is uncompressed PCM — what Sony's XAVC S and XAVC
 HS cameras record (16 or 24 bit, 48 kHz): it is encoded to AAC (Opus in a
 browser without AAC) and lands on its picture as a copy would, its first two
 channels kept when the camera wrote four. Burned-in

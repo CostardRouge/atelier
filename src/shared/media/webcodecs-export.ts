@@ -34,7 +34,7 @@ import {
 } from 'mp4box';
 import { planAudio } from './audio-plan';
 import { decodeAacWindow, mixPlanar, planar, type DecodeResult, type PlanarAudio } from './audio-mix';
-import { stretchPlanar } from './time-stretch';
+import { retimePlanar, type RetimeSound } from './time-stretch';
 import { aacPrimingSeconds, encodeAudioBuffer, type EncodedAudio } from './audio-encode';
 import {
   bytesPerFrame,
@@ -158,6 +158,12 @@ export interface ExportOptions {
    * says so.
    */
   speed?: number;
+  /**
+   * How a re-timed clip's sound follows the picture: `'pitch'` (the default)
+   * keeps its pitch, `'tape'` lets it move with the speed like a tape — 0.5×
+   * an octave lower. See `time-stretch.ts`. Ignored at speed 1.
+   */
+  retimeSound?: RetimeSound;
   /**
    * Content appended AFTER the footage's last frame — the Studio's outro
    * card. Nothing already encoded moves and the audio simply ends with the
@@ -337,15 +343,16 @@ const CANNOT_RETIME =
  * `[fromMicros, untilMicros)` of the clip's own sound (on its clock), as
  * planar audio READY TO ENCODE: read ahead of AAC's priming so it lands on its
  * picture, exactly as a bed is, and — at a `speed` other than 1 — stretched to
- * `(until − from) / speed`, its pitch kept (`time-stretch.ts`). The stretch
- * runs on the window as recorded; the priming is taken off the stretched
- * result, because it is OUTPUT time the encoder adds.
+ * `(until − from) / speed`, its pitch kept or moving like a tape as `sound`
+ * says (`time-stretch.ts`). The re-time runs on the window as recorded; the
+ * priming is taken off its result, because it is OUTPUT time the encoder adds.
  */
 export async function ownSoundWindow(
   own: OwnSound,
   fromMicros: number,
   untilMicros: number,
   speed = 1,
+  sound: RetimeSound = 'pitch',
 ): Promise<DecodeResult> {
   const { sampleRate } = ownSoundFormat(own);
   const lead = aacPrimingSeconds(sampleRate) * 1_000_000;
@@ -367,7 +374,7 @@ export async function ownSoundWindow(
   if (!read.ok) return retimed ? { ok: false, reason: CANNOT_RETIME } : read;
   if (!retimed) return read;
 
-  const stretched = stretchPlanar(read.audio, speed);
+  const stretched = retimePlanar(read.audio, speed, sound);
   const skip = Math.round((lead / 1_000_000) * sampleRate);
   const length = Math.max(1, Math.ceil(((untilMicros - fromMicros) / 1_000_000 / speed) * sampleRate));
   const channels: Float32Array[] = [];
@@ -391,8 +398,9 @@ export async function encodeOwnSound(
   untilMicros: number,
   speed = 1,
   onSkipped?: (reason: string) => void,
+  sound: RetimeSound = 'pitch',
 ): Promise<EncodedAudio | null> {
-  const read = await ownSoundWindow(own, fromMicros, untilMicros, speed);
+  const read = await ownSoundWindow(own, fromMicros, untilMicros, speed, sound);
   if (!read.ok) {
     onSkipped?.(read.reason);
     return null;
@@ -833,7 +841,7 @@ export async function exportProcessedVideo(
     options.onAudioSkipped?.(audioPlan.droppedBed);
   }
   if (audioPlan.kind === 'copy' && !copyable) {
-    madeAudio = await encodeOwnSound(own, soundFrom, soundUntil, speed, options.onAudioSkipped);
+    madeAudio = await encodeOwnSound(own, soundFrom, soundUntil, speed, options.onAudioSkipped, options.retimeSound);
     throwIfAborted();
   }
   if ((audioPlan.kind === 'bed' || audioPlan.kind === 'mix') && options.bed) {
@@ -850,7 +858,7 @@ export async function exportProcessedVideo(
         copySource = true;
         toEncode = null;
       } else {
-        const sound = await ownSoundWindow(own, soundFrom, soundUntil, speed);
+        const sound = await ownSoundWindow(own, soundFrom, soundUntil, speed, options.retimeSound);
         if (sound.ok) {
           toEncode = bed ? mixPlanar(sound.audio, bed) : sound.audio;
         } else {

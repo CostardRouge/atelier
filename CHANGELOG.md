@@ -9,6 +9,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- A Studio variant exported at another speed can choose how its sound follows: *Pitch kept* (as until now, voices stay
+  voices) or *Tape*, where the pitch moves with the speed like a tape or a record — at 0.5× an octave lower, the
+  slow-motion rumble of an engine or the wind; at 2× an octave higher. The **Sound** row appears under *Speed* as soon
+  as the variant is re-timed, and a *Tape* file is named `-tape` so it sits beside a *Pitch kept* one.
+
 ## [1.9.0] - 2026-11-22 — Cerulean
 
 ### Added

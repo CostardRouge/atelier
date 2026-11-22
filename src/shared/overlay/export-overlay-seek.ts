@@ -45,6 +45,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { type ExportTail } from '../media/export-tail';
 import { framePlan } from '../media/frame-plan';
 import type { TrimRange } from '../media/trim';
+import type { RetimeSound } from '../media/time-stretch';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawOverlays } from './draw-overlays';
 import { ensureOverlayFonts } from './fonts';
@@ -127,6 +128,8 @@ export async function exportOverlayVideoViaSeek(
   tail?: ExportTail | null,
   /** The project's shades over the whole picture, under the scenes. */
   shades?: readonly Shade[],
+  /** A re-timed clip's sound: pitch kept (the default) or moving like a tape. */
+  retimeSound?: RetimeSound,
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -208,7 +211,7 @@ export async function exportOverlayVideoViaSeek(
     const copyable = !pcm && rate === 1;
     const madeAudio =
       !copyable && hasOwnSound(demuxed)
-        ? await encodeOwnSound(demuxed, Math.round(startSec * 1_000_000), Math.round(endSec * 1_000_000), rate)
+        ? await encodeOwnSound(demuxed, Math.round(startSec * 1_000_000), Math.round(endSec * 1_000_000), rate, undefined, retimeSound)
         : null;
     throwIfAborted();
 

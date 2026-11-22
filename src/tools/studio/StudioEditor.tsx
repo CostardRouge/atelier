@@ -184,6 +184,7 @@ import { deliveryFor } from '../../shared/develop/delivery-source';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
+import type { RetimeSound } from '../../shared/media/time-stretch';
 import { revealInScroller } from '../../shared/ui/reveal';
 
 /**
@@ -232,6 +233,12 @@ const TABS: Array<{ id: PanelTab; label: string }> = [
   { id: 'grade', label: 'Grade' },
   { id: 'info', label: 'Info' },
   { id: 'export', label: 'Export' },
+];
+
+/** A re-timed variant's two sounds: the words say the result, the tooltip how. */
+const RETIME_SOUND_OPTIONS: Array<{ id: RetimeSound; label: string; title: string }> = [
+  { id: 'pitch', label: 'Pitch kept', title: 'Slower or faster, at the same pitch: voices stay voices.' },
+  { id: 'tape', label: 'Tape', title: 'The pitch moves with the speed, like a tape: 0.5× an octave lower, 2× an octave higher.' },
 ];
 
 const notice =
@@ -1711,6 +1718,7 @@ export default function StudioEditor({
           // for the source frame — the same frame everything else drew for.
           variant.overlays ? outroTail(outro, srcWidth, srcHeight) : null,
           shades,
+          variant.sound,
         );
       }
       if (err instanceof DecodeUnsupportedError) {
@@ -3328,7 +3336,7 @@ export default function StudioEditor({
                                       {duration > 0
                                         ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
                                         : ''}
-                                      , its sound stretched to match, pitch kept.
+                                      .
                                     </>
                                   ) : undefined
                                 }
@@ -3341,6 +3349,21 @@ export default function StudioEditor({
                                     id: String(sp),
                                     label: `${sp === 1 ? 'Normal' : `${sp}×`}${sp !== 1 && sp === realtimeRate ? ' — real time' : ''}`,
                                   }))}
+                                />
+                              </FieldRow>
+                            )}
+                            {/* Only a re-timed variant has a choice to make
+                                about its sound: shown with the speed that
+                                asks it, gone at normal speed. */}
+                            {!isPhoto && variantIsRetimed(v) && (
+                              <FieldRow label="Sound">
+                                <Segmented
+                                  fill
+                                  size="sm"
+                                  label="How the sound follows the speed"
+                                  value={v.sound ?? 'pitch'}
+                                  onChange={(sound) => updateVariant(v.id, { sound })}
+                                  options={RETIME_SOUND_OPTIONS}
                                 />
                               </FieldRow>
                             )}

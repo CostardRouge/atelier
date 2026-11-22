@@ -81,6 +81,13 @@ describe('naming', () => {
     ).toBe('vol-1080p-4x-clean.mp4');
   });
 
+  it('names a tape-sound variant apart, and only where it is re-timed', () => {
+    expect(variantFileName('vol', variant({ speed: 0.5, sound: 'tape' }))).toBe('vol-0.5x-tape.mp4');
+    expect(variantFileName('vol', variant({ speed: 0.5, sound: 'pitch' }))).toBe('vol-0.5x.mp4');
+    // At normal speed the sound has nothing to follow, so it adds nothing.
+    expect(variantFileName('vol', variant({ speed: 1, sound: 'tape' }))).toBe('vol.mp4');
+  });
+
   it('trims a pasted .mp4 and falls back on an empty base', () => {
     expect(variantFileName(' clip.mp4 ', variant())).toBe('clip.mp4');
     expect(variantFileName('   ', variant())).toBe('export.mp4');

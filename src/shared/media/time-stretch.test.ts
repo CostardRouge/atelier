@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planar } from './audio-mix';
-import { stretchPlanar } from './time-stretch';
+import { retimePlanar, stretchPlanar, tapeResample } from './time-stretch';
 
 const RATE = 16000;
 
@@ -67,9 +67,44 @@ describe('stretchPlanar', () => {
     expect(Array.from(stretchPlanar(planar(RATE, [tone]), 1).getChannelData(0))).toEqual(Array.from(tone));
   });
 
-  it('resamples a sound too short for a grain', () => {
+  it('re-times a sound too short for a grain like a tape', () => {
     const out = stretchPlanar(planar(RATE, [new Float32Array(100).fill(0.25)]), 0.5);
     expect(out.length).toBe(200);
     expect(out.getChannelData(0)[50]).toBeCloseTo(0.25, 6);
+  });
+});
+
+describe('tapeResample', () => {
+  it('lasts the re-timed length', () => {
+    const a = planar(RATE, [sine(2, 440)]);
+    expect(tapeResample(a, 0.5).length).toBe(4 * RATE);
+    expect(tapeResample(a, 2).length).toBe(RATE);
+  });
+
+  it('moves the pitch with the speed, like a tape', () => {
+    const a = planar(RATE, [sine(2, 440)]);
+    expect(Math.abs(frequency(tapeResample(a, 0.5).getChannelData(0)) - 220)).toBeLessThan(220 * 0.01);
+    expect(Math.abs(frequency(tapeResample(a, 2).getChannelData(0)) - 880)).toBeLessThan(880 * 0.01);
+  });
+
+  it('keeps the level of what stays under the new Nyquist', () => {
+    const a = planar(RATE, [sine(2, 1000)]);
+    const level = rms(a.getChannelData(0));
+    for (const speed of [0.5, 2, 3]) {
+      expect(rms(tapeResample(a, speed).getChannelData(0))).toBeCloseTo(level, 2);
+    }
+  });
+
+  it('filters out, sped up, what would fold back above the new Nyquist', () => {
+    // 6 kHz at 2× would be 12 kHz, past 8 kHz: without the filter it folds to 4 kHz.
+    const a = planar(RATE, [sine(2, 6000)]);
+    const out = tapeResample(a, 2).getChannelData(0);
+    expect(rms(out)).toBeLessThan(rms(a.getChannelData(0)) * 0.02);
+  });
+
+  it('is what retimePlanar does for tape, and stretchPlanar for pitch', () => {
+    const a = planar(RATE, [sine(1, 440)]);
+    expect(Array.from(retimePlanar(a, 0.5, 'tape').getChannelData(0))).toEqual(Array.from(tapeResample(a, 0.5).getChannelData(0)));
+    expect(Array.from(retimePlanar(a, 0.5).getChannelData(0))).toEqual(Array.from(stretchPlanar(a, 0.5).getChannelData(0)));
   });
 });
