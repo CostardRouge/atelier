@@ -13,10 +13,10 @@
  *  - {@link resolveSpeed} changes the **duration**: the source timeline is
  *    divided by the speed before it meets the grid, so 2× delivers a clip half
  *    as long at the same cadence (frames dropped), and 0.5× one twice as long
- *    (frames repeated). This is a real re-time, so the audio **cannot** come
- *    along: it is copied bit-for-bit, never re-encoded, and a copied track
- *    against a re-timed picture is a desync. A re-timed variant ships silent,
- *    and the UI says so before the export runs.
+ *    (frames repeated). This is a real re-time, so the audio cannot be
+ *    COPIED (a copied track against a re-timed picture drifts): it is decoded,
+ *    stretched to the new length with its pitch kept (`time-stretch.ts`) and
+ *    encoded.
  */
 
 /** 'source' keeps the clip's own cadence; a number is an explicit target. */

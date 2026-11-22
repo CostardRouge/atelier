@@ -51,6 +51,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- A clip exported at another speed keeps its sound, stretched to match without changing its pitch: at 0.5× voices and
+  music play twice as long, not an octave lower. It used to go out silent. This holds in the Studio's variants, in
+  Trips' slides and wherever else a clip is re-timed. In Trips, an opener's ticks now reach a re-timed clip that has
+  sound only with « Mix in », as they already did at normal speed.
 - What Recap **publishes** is capped at what the networks take, whatever the Quality setting: 30 frames a second and
   *High* at most (16 Mb/s at 1080 × 1920, AAC 128 kb/s). A *Maximum* or 60 fps film could be refused on its bitrate
   once a network laid its music over it; saving a file to your device keeps your setting.

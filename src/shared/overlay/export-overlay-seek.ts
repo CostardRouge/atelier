@@ -14,7 +14,8 @@
  *     decoded frame ≤ that time. The overlay still matches the intended
  *     timeline because the cue lookup uses the same `t`.
  * Audio is still copied through (we demux the source for its audio track),
- * or encoded when the clip recorded linear PCM (`media/pcm-audio.ts`).
+ * or encoded when it cannot be: linear PCM (`media/pcm-audio.ts`), or a
+ * re-timed clip's sound stretched to its new length (`media/time-stretch.ts`).
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
@@ -26,7 +27,8 @@ import {
   copyAudio,
   demux,
   deriveBitrate,
-  encodePcmWindow,
+  encodeOwnSound,
+  hasOwnSound,
   isEncodeSupported,
   makeExportCanvas,
   pickAvcCodec,
@@ -138,7 +140,8 @@ export async function exportOverlayVideoViaSeek(
   onProgress?.({ phase: 'demuxing', ratio: null });
   // Demux only to learn dimensions / rotation / frame rate and to copy audio.
   const buffer = await file.arrayBuffer();
-  const { videoTrack, videoSamples, audioTrack, audioSamples, pcm } = await demux(buffer);
+  const demuxed = await demux(buffer);
+  const { videoTrack, videoSamples, audioTrack, audioSamples, pcm } = demuxed;
   throwIfAborted();
   if (videoSamples.length === 0) throw new Error('No video frames found.');
 
@@ -198,11 +201,14 @@ export async function exportOverlayVideoViaSeek(
     // The <video> frame is already display-oriented, so grade at output dims.
     grade = lut ? makeFrameGrader(lut, outWidth, outHeight, intensity) : null;
 
-    // A PCM clip's sound (Sony's XAVC S/HS) cannot be copied: it is encoded
-    // here, before the muxer exists, whose audio track is fixed at birth.
-    const pcmAudio =
-      pcm && rate === 1
-        ? await encodePcmWindow(pcm, Math.round(startSec * 1_000_000), Math.round(endSec * 1_000_000))
+    // The clip's own sound is copied only when it is AAC at its own speed.
+    // PCM (Sony's XAVC S/HS) and a re-timed clip's sound — stretched to the
+    // new length, its pitch kept — are encoded here, before the muxer exists,
+    // whose audio track is fixed at birth.
+    const copyable = !pcm && rate === 1;
+    const madeAudio =
+      !copyable && hasOwnSound(demuxed)
+        ? await encodeOwnSound(demuxed, Math.round(startSec * 1_000_000), Math.round(endSec * 1_000_000), rate)
         : null;
     throwIfAborted();
 
@@ -211,15 +217,15 @@ export async function exportOverlayVideoViaSeek(
       target: new ArrayBufferTarget(),
       // Pixels are already upright; no rotation flag.
       video: { codec: 'avc', width: outWidth, height: outHeight, rotation: 0 },
-      // Declared only when it will actually be written: a re-timed export is
-      // silent, and an empty audio track is worse than none.
-      audio: pcmAudio
+      // Declared only when it will actually be written: an empty audio track
+      // is worse than none.
+      audio: madeAudio
         ? {
-            codec: pcmAudio.codec,
-            sampleRate: pcmAudio.sampleRate,
-            numberOfChannels: pcmAudio.numberOfChannels,
+            codec: madeAudio.codec,
+            sampleRate: madeAudio.sampleRate,
+            numberOfChannels: madeAudio.numberOfChannels,
           }
-        : audioTrack && rate === 1
+        : audioTrack && copyable
           ? {
               codec: 'aac',
               sampleRate: audioTrack.audio?.sample_rate ?? 48000,
@@ -311,14 +317,13 @@ export async function exportOverlayVideoViaSeek(
     await encoder.flush();
     if (pipelineError) throw pipelineError;
 
-    // Silent when re-timed — a copied track against a re-timed picture is a
-    // desync, and the caller has said so in the UI. See media/frame-rate.ts.
-    if (pcmAudio) {
-      for (const { chunk, meta } of pcmAudio.chunks) muxer.addAudioChunk(chunk, meta);
+    // The sound encoded above, or the clip's AAC copied untouched.
+    if (madeAudio) {
+      for (const { chunk, meta } of madeAudio.chunks) muxer.addAudioChunk(chunk, meta);
     } else {
       copyAudio(
         muxer,
-        rate === 1 ? audioTrack : null,
+        copyable ? audioTrack : null,
         audioSamples,
         trim
           ? {

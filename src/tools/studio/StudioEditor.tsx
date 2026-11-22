@@ -3328,8 +3328,7 @@ export default function StudioEditor({
                                       {duration > 0
                                         ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
                                         : ''}
-                                      , delivered without audio: a copied track would drift against a
-                                      re-timed picture.
+                                      , its sound stretched to match, pitch kept.
                                     </>
                                   ) : undefined
                                 }

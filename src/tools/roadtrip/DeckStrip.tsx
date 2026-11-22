@@ -840,7 +840,7 @@ export default function DeckStrip({
                 : `${pillWide} text-2xs pr-1`
             } ${clip.speed === 1 ? pillOff : pillOn}`}
             aria-label="Clip speed"
-            title="The speed this slide plays at — on the stage and in the file. Other than 1× it goes out without sound"
+            title="The speed this slide plays at — on the stage and in the file. Its sound is stretched to match, pitch kept"
           >
             {CLIP_SPEEDS.map((s) => (
               <option key={s} value={s}>
