@@ -9,6 +9,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-22 — Eosin
+
 ### Added
 
 - A clip slide in Trips played at another speed can choose how its sound follows, as a Studio variant can: *Pitch
