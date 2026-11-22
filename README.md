@@ -278,9 +278,19 @@ are grabbed on the rail, the playhead by its head below — two bands, because
 the two sit on top of each other constantly and neither must ever become
 ungrabbable. The handles never cross (they stop one frame from each other).
 Playback stops on the out point; press play there and it replays from the in
-point, or turn on **↻** to loop the range. `I` and `O` cut at the playhead,
+point, or turn on the loop (`L`) to loop the range. `I` and `O` cut at the playhead,
 `Shift+I` / `Shift+O` put a handle back on the clip's own end, and a focused
-handle steps by a frame with ← → (a second with Shift).
+handle steps by a frame with ← → (a second with Shift). Cut, the range is
+said where the duration was (`0:00.8 → 0:02.2 · 1.4 s`) with a ↺ that gives
+the whole clip back.
+
+**The transport is one row**: Play, the time, the trim rail, then a speaker,
+the loop, the preview speed, A/B, the capture and ⌨. The speaker plays the
+clip's own sound on the stage (`M`; off by default, a choice of this device,
+its volume under the speaker on hover); the stage was always silent before.
+Every key and gesture is in a sheet behind ⌨, `?` or `H` rather than spelled
+under the rail. On a phone the row keeps Play, the time, the rail and the
+speaker, and a ⋯ holds the rest.
 The range is what exports: every
 variant is encoded from the in point, audio included, with the file starting at
 zero — the overlays still read the *source* timeline, so telemetry and the
@@ -441,7 +451,7 @@ The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what
 burns in. An **A/B** toggle on the transport wipes original against composed
-(draggable divider, editor-only), a **shutter** button beside it saves the
+(draggable divider, editor-only), a **camera** button beside it saves the
 frame under the playhead as a JPEG with the look and overlays burned in at
 source resolution; the **Info** tab reads the clip's facts and the live
 telemetry at the playhead; **project settings** (name, format) stay editable

@@ -175,9 +175,10 @@ export function useVideoTransport(
       // the kind of assumption that breaks one release later.
       v.playbackRate = rateRef.current;
       onLoadedMetadata?.(v);
-      // Hand playback over to the new clip. The element is muted, and the
-      // gesture that started playback already happened, so this is allowed;
-      // a rejection (a browser that disagrees) just leaves it paused.
+      // Hand playback over to the new clip. The gesture that started playback
+      // already happened (and the element is muted unless the host turned its
+      // sound on), so this is allowed; a rejection (a browser that disagrees)
+      // just leaves it paused.
       if (resumeAcrossMedia && wasPlaying) void v.play().catch(() => {});
     };
     // A file whose header does not state its length (a browser-recorded WebM
