@@ -6,7 +6,9 @@
  *
  * - `copy` — the clip's own AAC, bit-for-bit. The pipeline's founding rule and
  *   still the DEFAULT whenever a clip has sound of its own: re-encoding
- *   someone's recording is never done behind their back.
+ *   someone's recording is never done behind their back. The one exception
+ *   is linear PCM (Sony's XAVC S/HS), which no muxer here can copy: its
+ *   `copy` is an encode, the only way it keeps any sound (`pcm-audio.ts`).
  * - `bed`  — audio the suite made (a hook's ticks) becomes the track. Only when
  *   there is no clip sound to preserve: a clip recorded without a microphone
  *   (most drone footage), or a re-timed export, which never carries the

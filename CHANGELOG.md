@@ -59,6 +59,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- A video from a Sony camera (XAVC S, XAVC HS) keeps its sound when exported — graded with a LUT in the Studio, in
+  Trips, the LUT tool or anywhere else a clip is exported. Sony records uncompressed PCM, which the export did not
+  recognise as sound at all, so the file came out silent; that sound is now encoded to AAC, in sync with the picture,
+  trims and the "Mix in" switch included. The same holds for any camera or recorder that writes PCM in its MP4 or MOV.
 - Develop's **Auto** switches are kept with the picture: turned on in the Develop window of a recap, a trip or a
   Studio project (or in the Develop tool), they show lit again when you reopen the picture, after a reload too —
   they used to come back off while the values stayed. Pictures developed before keep their values, switches off.

@@ -13,7 +13,8 @@
  *   - Frame timing is approximate — `currentTime = i/fps` lands on the nearest
  *     decoded frame ≤ that time. The overlay still matches the intended
  *     timeline because the cue lookup uses the same `t`.
- * Audio is still copied through (we demux the source for its audio track).
+ * Audio is still copied through (we demux the source for its audio track),
+ * or encoded when the clip recorded linear PCM (`media/pcm-audio.ts`).
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
@@ -25,6 +26,7 @@ import {
   copyAudio,
   demux,
   deriveBitrate,
+  encodePcmWindow,
   isEncodeSupported,
   makeExportCanvas,
   pickAvcCodec,
@@ -136,7 +138,7 @@ export async function exportOverlayVideoViaSeek(
   onProgress?.({ phase: 'demuxing', ratio: null });
   // Demux only to learn dimensions / rotation / frame rate and to copy audio.
   const buffer = await file.arrayBuffer();
-  const { videoTrack, videoSamples, audioTrack, audioSamples } = await demux(buffer);
+  const { videoTrack, videoSamples, audioTrack, audioSamples, pcm } = await demux(buffer);
   throwIfAborted();
   if (videoSamples.length === 0) throw new Error('No video frames found.');
 
@@ -196,15 +198,28 @@ export async function exportOverlayVideoViaSeek(
     // The <video> frame is already display-oriented, so grade at output dims.
     grade = lut ? makeFrameGrader(lut, outWidth, outHeight, intensity) : null;
 
+    // A PCM clip's sound (Sony's XAVC S/HS) cannot be copied: it is encoded
+    // here, before the muxer exists, whose audio track is fixed at birth.
+    const pcmAudio =
+      pcm && rate === 1
+        ? await encodePcmWindow(pcm, Math.round(startSec * 1_000_000), Math.round(endSec * 1_000_000))
+        : null;
+    throwIfAborted();
+
     const bitrate = deriveBitrate(outWidth, outHeight, framerate);
     const muxer = new Muxer({
       target: new ArrayBufferTarget(),
       // Pixels are already upright; no rotation flag.
       video: { codec: 'avc', width: outWidth, height: outHeight, rotation: 0 },
-      // Declared only when it will actually be copied: a re-timed export is
+      // Declared only when it will actually be written: a re-timed export is
       // silent, and an empty audio track is worse than none.
-      audio:
-        audioTrack && rate === 1
+      audio: pcmAudio
+        ? {
+            codec: pcmAudio.codec,
+            sampleRate: pcmAudio.sampleRate,
+            numberOfChannels: pcmAudio.numberOfChannels,
+          }
+        : audioTrack && rate === 1
           ? {
               codec: 'aac',
               sampleRate: audioTrack.audio?.sample_rate ?? 48000,
@@ -298,17 +313,21 @@ export async function exportOverlayVideoViaSeek(
 
     // Silent when re-timed — a copied track against a re-timed picture is a
     // desync, and the caller has said so in the UI. See media/frame-rate.ts.
-    copyAudio(
-      muxer,
-      rate === 1 ? audioTrack : null,
-      audioSamples,
-      trim
-        ? {
-            baseMicros: Math.round(startSec * 1_000_000),
-            endMicros: Math.round(endSec * 1_000_000),
-          }
-        : undefined,
-    );
+    if (pcmAudio) {
+      for (const { chunk, meta } of pcmAudio.chunks) muxer.addAudioChunk(chunk, meta);
+    } else {
+      copyAudio(
+        muxer,
+        rate === 1 ? audioTrack : null,
+        audioSamples,
+        trim
+          ? {
+              baseMicros: Math.round(startSec * 1_000_000),
+              endMicros: Math.round(endSec * 1_000_000),
+            }
+          : undefined,
+      );
+    }
     onProgress?.({ phase: 'finalizing', ratio: null });
     muxer.finalize();
     const { buffer: output } = muxer.target as ArrayBufferTarget;

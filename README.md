@@ -623,7 +623,11 @@ fps), the menu offers the one that puts a conformed clip back at life's pace
 (“4× speed — real time” on a 4× ralenti), and the row states what you will get —
 `2× speed — 0:01 instead of 0:03, delivered without audio`. Silent on purpose:
 audio is copied bit-for-bit and never re-encoded here, and a copied track
-against a re-timed picture is a desync, which is worse than no track. Burned-in
+against a re-timed picture is a desync, which is worse than no track. The one
+sound that cannot be copied is uncompressed PCM — what Sony's XAVC S and XAVC
+HS cameras record (16 or 24 bit, 48 kHz): it is encoded to AAC (Opus in a
+browser without AAC) and lands on its picture as a copy would, its first two
+channels kept when the camera wrote four. Burned-in
 telemetry is unaffected — every frame keeps its own reading, so a sped-up clip
 still says how fast the aircraft was really flying. Names follow automatically
 (`vol-9x16-1080p-30fps-2x-clean.mp4` —

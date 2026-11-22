@@ -9,7 +9,9 @@
  *
  * Pipeline (faster-than-realtime, frame-accurate):
  *   mp4box.js demux → VideoDecoder → processor.draw → VideoEncoder (H.264)
- *   → mp4-muxer, with the original AAC audio track copied through untouched.
+ *   → mp4-muxer, with the original AAC audio track copied through untouched
+ *   — or, for a clip that recorded linear PCM (Sony's XAVC S/HS), that sound
+ *   encoded to AAC, since PCM cannot be copied into the output (`pcm-audio.ts`).
  *
  * The output cadence is the source's unless {@link ExportOptions.frameRate}
  * asks otherwise, in which case frames are resampled onto a regular grid
@@ -32,7 +34,16 @@ import {
 } from 'mp4box';
 import { planAudio } from './audio-plan';
 import { decodeAacWindow, mixPlanar, type PlanarAudio } from './audio-mix';
-import { encodeAudioBuffer, type EncodedAudio } from './audio-encode';
+import { aacPrimingSeconds, encodeAudioBuffer, type EncodedAudio } from './audio-encode';
+import {
+  bytesPerFrame,
+  gatherPcmBytes,
+  isPcmType,
+  MAX_DELIVERED_CHANNELS,
+  pcmFormat,
+  pcmWindow,
+  type PcmSound,
+} from './pcm-audio';
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import {
   frameTimestampMicros,
@@ -257,6 +268,60 @@ export interface DemuxResult {
   videoSamples: Sample[];
   audioTrack: Track | null;
   audioSamples: Sample[];
+  /**
+   * The clip's sound when it is linear PCM (Sony's XAVC S/HS), which mp4box
+   * does not file as audio: `audioTrack` is then null and this holds the
+   * frames, gathered once. Encoded, never copied — see `pcm-audio.ts`.
+   */
+  pcm: PcmSound | null;
+}
+
+/** The little this reads of mp4box's internal track box. */
+interface PcmTrak {
+  mdia?: { minf?: { stbl?: { stsd?: { entries?: { type?: string; data?: Uint8Array }[] } } } };
+  samples?: Sample[];
+}
+
+/**
+ * The first PCM track mp4box left unclassified, read into a {@link PcmSound},
+ * or null. Never throws: a sound it cannot read leaves the export as it was
+ * (silent), it must not cost the picture.
+ */
+function readPcmTrack(file: ISOFile, info: Movie, bytes: Uint8Array): PcmSound | null {
+  try {
+    const track = info.tracks.find((t) => isPcmType(t.codec));
+    if (!track) return null;
+    const trak = (file as unknown as { getTrackById(id: number): PcmTrak | undefined }).getTrackById(track.id);
+    const entry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0];
+    const samples = trak?.samples;
+    if (!entry?.type || !entry.data || !samples?.length) return null;
+    const format = pcmFormat(entry.type, entry.data);
+    if (!format) return null;
+    const pcmBytes = gatherPcmBytes(bytes, samples, bytesPerFrame(format));
+    if (pcmBytes.byteLength < bytesPerFrame(format)) return null;
+    return { format, bytes: pcmBytes, startMicros: toMicros(samples[0].cts, samples[0].timescale) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `[fromMicros, untilMicros)` of a PCM clip's sound, encoded (AAC, else Opus)
+ * and ready to mux — read ahead of AAC's priming so it lands on its picture,
+ * as a bed does. Null, with the sentence told to `onSkipped`, when this
+ * browser cannot encode it: the clip then goes out silent, never broken.
+ */
+export async function encodePcmWindow(
+  pcm: PcmSound,
+  fromMicros: number,
+  untilMicros: number,
+  onSkipped?: (reason: string) => void,
+): Promise<EncodedAudio | null> {
+  const lead = aacPrimingSeconds(pcm.format.sampleRate) * 1_000_000;
+  const encoded = await encodeAudioBuffer(pcmWindow(pcm, fromMicros, untilMicros, lead));
+  if (encoded.ok) return encoded.audio;
+  onSkipped?.(encoded.reason);
+  return null;
 }
 
 /** Convert a sample time (in its track timescale) to microseconds. */
@@ -332,6 +397,7 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
     const videoSamples: Sample[] = [];
     const audioSamples: Sample[] = [];
     let movie: Movie | null = null;
+    let pcm: PcmSound | null = null;
 
     file.onError = (_module, message) => reject(new Error(message));
 
@@ -350,6 +416,11 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
         file.setExtractionOptions(audioTrack.id, null, {
           nbSamples: audioTrack.nb_samples,
         });
+      } else {
+        // PCM is read straight from the bytes, not extracted: its sample table
+        // holds one "sample" per frame, millions of them, each of which
+        // extraction would copy into an object of its own.
+        pcm = readPcmTrack(file, info, new Uint8Array(buffer));
       }
       file.start();
     };
@@ -364,7 +435,7 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
       const videoDone = videoSamples.length >= videoTrack.nb_samples;
       const audioDone = !audioTrack || audioSamples.length >= audioTrack.nb_samples;
       if (videoDone && audioDone) {
-        resolve({ videoTrack, videoSamples, audioTrack, audioSamples });
+        resolve({ videoTrack, videoSamples, audioTrack, audioSamples, pcm });
       }
     };
 
@@ -610,9 +681,9 @@ export async function exportProcessedVideo(
   // Accept already-read bytes so callers can read the file while its handle is
   // freshest (files opened via the folder picker can otherwise go unreadable),
   // or a source already demuxed for a run of several variants.
-  const { videoTrack, videoSamples, audioTrack, audioSamples } = isDemuxed(source)
-    ? source
-    : await demuxSource(source);
+  const demuxed = isDemuxed(source) ? source : await demuxSource(source);
+  const { videoTrack, videoSamples, audioTrack, audioSamples } = demuxed;
+  const pcm = demuxed.pcm ?? null;
   throwIfAborted();
 
   if (videoSamples.length === 0) throw new Error('No video frames found.');
@@ -665,26 +736,44 @@ export async function exportProcessedVideo(
     footageEndMicros = Math.max(footageEndMicros, toMicros(s.cts + s.duration, s.timescale));
   }
   const audioEndMicros = Math.min(audioWin.endMicros, footageEndMicros);
+  // The export window on the author's clock — the one the clip's sound shares.
+  const soundFrom = audioWin.baseMicros - audioWin.leadMicros;
+  const soundUntil = audioEndMicros - audioWin.leadMicros;
   const audioPlan = planAudio({
-    sourceAudio: !!audioTrack && audioSamples.length > 0,
+    sourceAudio: (!!audioTrack && audioSamples.length > 0) || !!pcm,
     retimed: speed !== 1,
     bed: !!options.bed,
     mix: options.mixBed === true,
   });
   let madeAudio: EncodedAudio | null = null;
-  let copySource = audioPlan.kind === 'copy';
+  // AAC is copied; PCM cannot be, so its "copy" is an encode (`pcm-audio.ts`).
+  let copySource = audioPlan.kind === 'copy' && !pcm;
   if (audioPlan.kind === 'copy' && audioPlan.droppedBed) {
     options.onAudioSkipped?.(audioPlan.droppedBed);
   }
+  if (audioPlan.kind === 'copy' && pcm) {
+    madeAudio = await encodePcmWindow(pcm, soundFrom, soundUntil, options.onAudioSkipped);
+    throwIfAborted();
+  }
   if ((audioPlan.kind === 'bed' || audioPlan.kind === 'mix') && options.bed) {
-    const mixing = audioPlan.kind === 'mix' && !!audioTrack;
+    const mixing = audioPlan.kind === 'mix' && (!!audioTrack || !!pcm);
+    const ownRate = pcm ? pcm.format.sampleRate : (audioTrack?.audio?.sample_rate ?? 48000);
+    const ownChannels = pcm
+      ? Math.min(pcm.format.channels, MAX_DELIVERED_CHANNELS)
+      : (audioTrack?.audio?.channel_count ?? 2);
     const bed = await options.bed({
-      sampleRate: mixing ? (audioTrack?.audio?.sample_rate ?? 48000) : 48000,
-      numberOfChannels: mixing ? (audioTrack?.audio?.channel_count ?? 2) : 2,
+      sampleRate: mixing ? ownRate : 48000,
+      numberOfChannels: mixing ? ownChannels : 2,
       seconds: Math.max(0, (audioEndMicros - audioWin.baseMicros) / 1_000_000 / speed),
     });
     let toEncode: PlanarAudio | null = bed;
-    if (mixing && audioTrack) {
+    if (mixing && pcm) {
+      // The clip's PCM read ahead of the priming exactly as a decoded AAC
+      // window is, so both land where the copy would have.
+      const lead = aacPrimingSeconds(ownRate) * 1_000_000;
+      const own = pcmWindow(pcm, soundFrom, soundUntil, lead);
+      toEncode = bed ? mixPlanar(own, bed) : own;
+    } else if (mixing && audioTrack) {
       if (!bed) {
         // Nothing to add after all: the clip keeps its own sound, bit-for-bit.
         copySource = true;
@@ -693,8 +782,8 @@ export async function exportProcessedVideo(
         const decoded = await decodeAacWindow(
           audioTrack,
           audioSamples,
-          audioWin.baseMicros - audioWin.leadMicros,
-          audioEndMicros - audioWin.leadMicros,
+          soundFrom,
+          soundUntil,
           buildAacAsc,
         );
         if (decoded.ok) {
@@ -712,7 +801,8 @@ export async function exportProcessedVideo(
         madeAudio = encoded.audio;
       } else {
         options.onAudioSkipped?.(encoded.reason);
-        copySource = mixing;
+        // An AAC clip falls back to its own sound copied; PCM has no copy.
+        copySource = mixing && !pcm;
       }
     }
     throwIfAborted();
@@ -954,9 +1044,10 @@ export async function exportProcessedVideo(
       await raceAbort(deadline(encoder.flush(), FLUSH_DEADLINE_MS, () => new Error('The video encoder did not finish the clip.')), signal, 'Export cancelled');
       if (pipelineError) throw pipelineError;
 
-      // The audio decided before the muxer was built: a made track (a bed, or
-      // a mix) as encoded, or the clip's own — trimmed to the window and
-      // rebased on it. Re-timed without a bed: no audio at all.
+      // The audio decided before the muxer was built: a made track (a bed, a
+      // mix, or a PCM clip's own sound) as encoded, or the clip's own AAC —
+      // trimmed to the window and rebased on it. Re-timed without a bed: no
+      // audio at all.
       if (madeAudio) {
         for (const { chunk, meta } of madeAudio.chunks) muxer.addAudioChunk(chunk, meta);
       } else {
