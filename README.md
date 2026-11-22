@@ -1877,7 +1877,8 @@ disagree. Exporting burns the badge (or the caption) into the clip through the
 **same WebCodecs pipeline the Studio exports with** — cover-cropped into the
 post's frame, the shades applied per frame, the clip's own audio copied through
 untouched — and a re-timed clip keeps its sound **stretched to match**, its
-pitch kept, as in the Studio. A Défilé's ticks become the track of a photo and
+pitch kept — or, on the slide's **Sound** row under *Speed*, like a tape (the
+pitch moving with the speed), as in the Studio. A Défilé's ticks become the track of a photo and
 of a clip recorded without sound (most drone footage), and are **mixed into** a
 clip's own sound only when its "Mix in" switch is on — off, the clip keeps its
 own sound and the export note says the ticks stayed out. It reads MP4 and MOV (what the demuxer handles) and says so plainly for

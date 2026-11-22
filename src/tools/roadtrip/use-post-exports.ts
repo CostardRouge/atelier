@@ -517,7 +517,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           : hookInfo;
       // The slide's own speed, resolved by the deck (1 for a photograph).
       const speed = hookIsVideo ? clipSpeed(inputs.hookSlide.speed) : 1;
-      const variant = hookVariant(post.badge.aspectId, 1080, speed);
+      const variant = hookVariant(post.badge.aspectId, 1080, speed, inputs.hookSlide.sound);
       const shared = {
         variant,
         elements: inputs.hookElements,
@@ -629,7 +629,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const { slide } = item;
     // The slide carrying the piece's badge burns in what the stage drew for it.
     const isHook = slide.pieceBadge;
-    const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
+    const variant = hookVariant(post.badge.aspectId, 1080, slide.speed, slide.sound);
     const own = isHook ? null : slideRender(trip, post, slide, aspect, livePictures(), inputs.exif);
     const opener = own ? own.hook : liveHook();
     const shared = {

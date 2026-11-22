@@ -29,7 +29,7 @@ import type {
 } from '../../../shared/roadtrip/trip-types';
 import type { ExifData } from '../../../shared/exif/exif-parser';
 import CameraPanel from './CameraPanel';
-import SlideDelivery from './SlideDelivery';
+import SlideDelivery, { type SlideClip } from './SlideDelivery';
 import { DEFAULT_HOLD_SECONDS, defaultSlideLength } from '../../../shared/roadtrip/slide-length';
 import { MAX_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
 import { hookVariantById } from '../../../shared/roadtrip/hooks/registry';
@@ -37,7 +37,6 @@ import { inputClass, linkButton } from './ui';
 import { DateField } from '../../../shared/ui/DateField';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, Readout, SelectField, ToggleField, SliderRow } from '../../../shared/ui/Inspector';
-import type { TrimRange } from '../../../shared/media/trim';
 import { badgeMoveCarriesOpener, badgeSlideOf } from '../../../shared/roadtrip/piece-slides';
 
 interface ContentTabProps {
@@ -67,7 +66,7 @@ interface ContentTabProps {
   /** The open slide's clip length, or 0 when its picture is not one. */
   clipSeconds: number;
   /** The open clip's stretch and speed, when the slide is a clip. */
-  clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
+  clip?: SlideClip | null;
   onChangePost: (post: TripPost) => void;
   /** The camera credit names a body on the TRIP, once for every piece. */
   onChangeTrip: (trip: TripDoc) => void;

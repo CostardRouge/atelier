@@ -189,6 +189,11 @@ describe('hookVariant', () => {
     expect(hookVariant('9:16', 1080, NaN).speed).toBe(1);
   });
 
+  it('carries how the slide’s re-timed sound follows, pitch kept unless asked', () => {
+    expect(hookVariant('9:16', 1080, 0.5).sound).toBe('pitch');
+    expect(hookVariant('9:16', 1080, 0.5, 'tape').sound).toBe('tape');
+  });
+
   it('carries the post’s frame', () => {
     expect(hookVariant('4:5').aspectId).toBe('4:5');
   });

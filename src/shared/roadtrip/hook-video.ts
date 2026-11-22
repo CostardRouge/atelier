@@ -16,6 +16,7 @@
  * happened somewhere in the middle of the rush.
  */
 
+import type { RetimeSound } from '../media/time-stretch';
 import {
   createVariant,
   variantFileName,
@@ -195,12 +196,15 @@ export function hookVariant(
   aspectId: string,
   resolution: VariantResolution = 1080,
   speed = 1,
+  sound: RetimeSound = 'pitch',
 ): ExportVariant {
   return {
     ...createVariant(aspectId),
     resolution,
     frameRate: 'source',
     speed: clipSpeed(speed),
+    // A re-timed clip's sound: pitch kept, or like a tape (the slide's own).
+    sound,
     overlays: true,
   };
 }
