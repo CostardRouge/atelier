@@ -141,7 +141,7 @@ export default function ExportTab({
                 {hookIsVideoSlide
                   ? hookIsVideo
                     ? lead.speed !== 1
-                      ? `${LeadName}’s clip starts on its in point and plays at ${lead.speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                      ? `${LeadName}’s clip starts on its in point and plays at ${lead.speed}×, so the badge animates in on the first frame at its own pace. Its sound is stretched to match, pitch kept`
                       : `${LeadName}’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through`
                     : `${LeadName} is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy`
                   : hookFile
@@ -183,10 +183,9 @@ export default function ExportTab({
                 </span>
                 <span
                   className={`min-w-0 truncate text-sm ${item.blocker ? 'text-faint line-through' : 'text-ink'}`}
-                  title={`${item.name}${item.silent ? ' · silent' : ''}`}
+                  title={item.name}
                 >
                   {item.name}
-                  {item.silent && <span className="text-muted"> · silent</span>}
                 </span>
               </li>
             ))}

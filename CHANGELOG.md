@@ -51,6 +51,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- A clip exported at another speed keeps its sound, stretched to match without changing its pitch: at 0.5× voices and
+  music play twice as long, not an octave lower. It used to go out silent. This holds in the Studio's variants, in
+  Trips' slides and wherever else a clip is re-timed. In Trips, an opener's ticks now reach a re-timed clip that has
+  sound only with « Mix in », as they already did at normal speed.
 - What Recap **publishes** is capped at what the networks take, whatever the Quality setting: 30 frames a second and
   *High* at most (16 Mb/s at 1080 × 1920, AAC 128 kb/s). A *Maximum* or 60 fps film could be refused on its bitrate
   once a network laid its music over it; saving a file to your device keeps your setting.
@@ -59,6 +63,10 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- A video from a Sony camera (XAVC S, XAVC HS) keeps its sound when exported — graded with a LUT in the Studio, in
+  Trips, the LUT tool or anywhere else a clip is exported. Sony records uncompressed PCM, which the export did not
+  recognise as sound at all, so the file came out silent; that sound is now encoded to AAC, in sync with the picture,
+  trims and the "Mix in" switch included. The same holds for any camera or recorder that writes PCM in its MP4 or MOV.
 - Develop's **Auto** switches are kept with the picture: turned on in the Develop window of a recap, a trip or a
   Studio project (or in the Develop tool), they show lit again when you reopen the picture, after a reload too —
   they used to come back off while the values stayed. Pictures developed before keep their values, switches off.

@@ -12,8 +12,8 @@
  * - `frameRate` is the delivery cadence; 'source' keeps the clip's own and is
  *   the only exact pass-through (see media/frame-rate.ts).
  * - `speed` is the delivered speed (1 = as shot). It changes the DURATION, not
- *   the cadence — and a re-timed variant ships silent, because the audio is
- *   copied, never re-encoded.
+ *   the cadence — and a re-timed variant's sound is stretched to match, its
+ *   pitch kept (media/time-stretch.ts).
  * - File names are `<base>[-9x16][-1080p][-30fps][-clean].mp4` — suffixes only
  *   where a variant departs from the source, so the plain export keeps a plain
  *   name.
@@ -32,7 +32,7 @@ export interface ExportVariant {
   resolution: VariantResolution;
   /** Delivery frame rate; 'source' keeps the clip's own cadence. */
   frameRate: ExportFrameRate;
-  /** Delivered speed; 1 keeps the clip's own. Re-timed variants have no audio. */
+  /** Delivered speed; 1 keeps the clip's own. A re-timed variant's sound is stretched to match. */
   speed: number;
   /** Burn the overlay elements (and their theme) in, or deliver clean. */
   overlays: boolean;
@@ -189,7 +189,7 @@ export function variantFileName(
   return suffix ? `${cleanBase}-${suffix}.${ext}` : `${cleanBase}.${ext}`;
 }
 
-/** True when this variant re-times, and therefore delivers without audio. */
+/** True when this variant re-times (its duration and its sound's length move). */
 export function variantIsRetimed(variant: ExportVariant): boolean {
   return resolveSpeed(variant.speed) !== 1;
 }

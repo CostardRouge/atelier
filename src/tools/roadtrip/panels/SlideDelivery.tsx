@@ -32,9 +32,8 @@ interface SlideDeliveryProps {
 
 /** The sentence a resolved slide deserves — the real one, never a generic. */
 export function reasonSentence(reason: SlideReason, seconds: number, speed = 1): string {
-  // A re-timed clip has no sound: audio is copied, never re-encoded. Said
-  // here, beside the length, rather than discovered in the file.
-  const pace = speed !== 1 ? ` at ${speed}×, without sound` : '';
+  // A re-timed clip keeps its sound, stretched to the new length (pitch kept).
+  const pace = speed !== 1 ? ` at ${speed}×` : '';
   switch (reason) {
     case 'animated':
       return `This slide animates, so it goes out as a ${seconds.toFixed(1)}s video${pace}.`;
@@ -131,7 +130,7 @@ export default function SlideDelivery({ slide, animated, clipSeconds, clip, onMe
               {formatTimecode(clip.range.start)} → {formatTimecode(clip.range.end)}
             </Readout>
           </FieldRow>
-          <FieldRow label="Speed" hint={clip.speed !== 1 ? 'A re-timed clip goes out without sound.' : undefined}>
+          <FieldRow label="Speed" hint={clip.speed !== 1 ? 'Its sound is stretched to match, pitch kept.' : undefined}>
             <Segmented
               fill
               size="sm"

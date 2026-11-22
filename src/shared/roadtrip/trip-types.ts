@@ -469,8 +469,8 @@ export interface PostBadgeV33 {
    * shot, 2 twice as fast, 0.5 half — the Studio's own steps (`CLIP_SPEEDS`).
    * The source stretch is `hookSeconds × videoSpeed` long (`clipSlice`), so
    * changing the speed keeps the footage and moves the screen time. A speed
-   * other than 1 ships without sound: audio is copied, never re-encoded.
-   * Ignored for a photo.
+   * other than 1 keeps the clip's sound, stretched to match with its pitch
+   * kept (`media/time-stretch.ts`). Ignored for a photo.
    */
   videoSpeed: number;
   /**

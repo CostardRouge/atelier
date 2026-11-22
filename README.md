@@ -621,9 +621,16 @@ than implying interpolated motion. The **speed** is the other axis: it moves the
 duration and leaves the cadence alone (2× delivers half as long at the same
 fps), the menu offers the one that puts a conformed clip back at life's pace
 (“4× speed — real time” on a 4× ralenti), and the row states what you will get —
-`2× speed — 0:01 instead of 0:03, delivered without audio`. Silent on purpose:
-audio is copied bit-for-bit and never re-encoded here, and a copied track
-against a re-timed picture is a desync, which is worse than no track. Burned-in
+`2× speed — 0:01 instead of 0:03, its sound stretched to match, pitch kept`.
+At its own speed a clip's AAC sound is copied bit-for-bit, never re-encoded; a
+re-timed clip's cannot be (a copied track would drift against the picture), so
+it is decoded, stretched to the new length without changing its pitch — voices
+and music sound slower or faster, not lower or higher — and encoded. Very fast
+(4×) or very slow (0.25×) speeds make it choppy or grainy, the price of keeping
+the pitch. The other sound that cannot be copied is uncompressed PCM — what Sony's XAVC S and XAVC
+HS cameras record (16 or 24 bit, 48 kHz): it is encoded to AAC (Opus in a
+browser without AAC) and lands on its picture as a copy would, its first two
+channels kept when the camera wrote four. Burned-in
 telemetry is unaffected — every frame keeps its own reading, so a sped-up clip
 still says how fast the aircraft was really flying. Names follow automatically
 (`vol-9x16-1080p-30fps-2x-clean.mp4` —
@@ -1855,13 +1862,11 @@ from the three, so the bar, the band's length and the export can never
 disagree. Exporting burns the badge (or the caption) into the clip through the
 **same WebCodecs pipeline the Studio exports with** — cover-cropped into the
 post's frame, the shades applied per frame, the clip's own audio copied through
-untouched — and a re-timed clip therefore goes out **without its own sound**,
-said in the plan before anything runs. The one exception to "never re-encoded"
-is the one you ask for: a Défilé's ticks become the track of a photo, of a clip
-recorded without sound (most drone footage) and of a re-timed clip, and are
-**mixed into** a clip's own sound only when its "Mix in" switch is on — off,
-the clip keeps its sound bit-for-bit and the export note says the ticks stayed
-out. It reads MP4 and MOV (what the demuxer handles) and says so plainly for
+untouched — and a re-timed clip keeps its sound **stretched to match**, its
+pitch kept, as in the Studio. A Défilé's ticks become the track of a photo and
+of a clip recorded without sound (most drone footage), and are **mixed into** a
+clip's own sound only when its "Mix in" switch is on — off, the clip keeps its
+own sound and the export note says the ticks stayed out. It reads MP4 and MOV (what the demuxer handles) and says so plainly for
 anything else; the PNG export has no such limit.
 
 The QR code is generated **on your machine** — a ~250-line encoder in
