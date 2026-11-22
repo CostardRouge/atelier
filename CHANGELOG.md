@@ -9,6 +9,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-22 — Dioxazine
+
 ### Added
 
 - A Studio variant exported at another speed can choose how its sound follows: *Pitch kept* (as until now, voices stay
