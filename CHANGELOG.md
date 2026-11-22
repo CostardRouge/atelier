@@ -9,6 +9,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-22 — Cerulean
+
 ### Added
 
 - The signature can be placed by hand: drag it on the stage in Recap, Mosaic or Flight Atlas and the export wears it
