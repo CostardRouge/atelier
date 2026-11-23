@@ -7,6 +7,7 @@ import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { clamp01, insetForSplit, reconcilePair } from './compare';
 import { Icons } from '../../shared/ui/icons';
+import StageFrame from '../../shared/ui/StageFrame';
 
 /** Asset kinds the compare tool understands (video+telemetry stands in for video). */
 const COMPARE_KINDS = ['photo', 'video'] as const;
@@ -242,11 +243,9 @@ export default function CompareTool() {
       </div>
 
       {/* Stage. */}
-      <div
+      <StageFrame
         ref={stageRef}
-        className={`relative rounded-paper overflow-hidden flex-1 min-h-0 bg-frame max-[820px]:min-h-[260px] ${
-          hasBoth ? 'cursor-ew-resize' : ''
-        }`}
+        className={`flex-1 min-h-0 max-[820px]:min-h-[260px] ${hasBoth ? 'cursor-ew-resize' : ''}`}
         onPointerMove={handlePointerMove}
       >
         {aSide ? (
@@ -301,7 +300,7 @@ export default function CompareTool() {
               : 'Choose A and B above.'}
           </div>
         )}
-      </div>
+      </StageFrame>
 
       {/* Synced transport, when at least one side is a clip. */}
       {hasBoth && hasVideo && (

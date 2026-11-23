@@ -31,6 +31,7 @@ import { useOverlayStage } from '../../shared/overlay/use-overlay-stage';
 import { useLutSelection } from '../../shared/lut/use-lut-selection';
 import LutPicker from '../../shared/lut/LutPicker';
 import { Icons } from '../../shared/ui/icons';
+import StageFrame from '../../shared/ui/StageFrame';
 
 interface OverlayClip {
   id: string;
@@ -433,11 +434,7 @@ export default function OverlayStudio() {
       <div className="flex flex-col min-[900px]:flex-row gap-4 flex-1 min-h-0">
         {/* Stage */}
         <div className="flex flex-col gap-[0.6rem] flex-1 min-w-0 min-h-0">
-          <div
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
-              activeUrl ? 'bg-frame' : 'bg-transparent'
-            }`}
-          >
+          <StageFrame lit={!!activeUrl} className="flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px]">
             {activeUrl ? (
               <canvas
                 ref={canvasRef}
@@ -465,7 +462,7 @@ export default function OverlayStudio() {
               preload="auto"
               onError={() => setActiveError(true)}
             />
-          </div>
+          </StageFrame>
 
           {activeUrl && (
             <div className="flex items-center gap-[0.85rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface flex-none">

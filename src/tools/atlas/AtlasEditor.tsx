@@ -33,6 +33,7 @@ import { useWinnowConnection } from '../../shared/sources/winnow/use-connection'
 import { useAtlasCover } from './use-atlas-cover';
 import { parseLayer, type AtlasLayer } from './atlas-layers';
 import { withPlacement, type PieceId, type Placement } from './atlas-place';
+import StageFrame from '../../shared/ui/StageFrame';
 
 const LAYER_KEY = 'atelier.atlas.layer';
 
@@ -329,7 +330,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
               </IconButton>
             </span>
           </div>
-          <div className="relative flex-1 min-h-[220px] flex rounded-control bg-frame border border-line p-2">
+          <StageFrame round="control" clip={false} className="flex-1 min-h-[220px] flex p-2">
             <AtlasStage
               core={scene.core}
               viewAt={scene.viewAt}
@@ -359,7 +360,7 @@ export default function AtlasEditor({ doc, change, saveState, onBack, band }: At
                 </p>
               </div>
             )}
-          </div>
+          </StageFrame>
           <AtlasTransport clock={clock} activity={scene.core.activity} story={scene.core.story} streets={streetsSwitch} />
         </div>
         {/* The inspector's frame is the block's (`frontend.md` «An instrument's inspector», his word of 2026-11-10): the

@@ -37,7 +37,7 @@ import Segmented from '../../shared/ui/Segmented';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
 import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
-import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import { usePublishShellChrome, stageChrome } from '../../shared/ui/shell-chrome';
 import { Icons } from '../../shared/ui/icons';
 import useEditorKeys from '../../shared/ui/use-editor-keys';
 import { useElementSize } from '../../shared/ui/use-element-width';
@@ -68,6 +68,7 @@ import { randomTarget, useMosaicScene, type MosaicScene } from './use-mosaic-sce
 import { useStageZoom } from './use-stage-zoom';
 import TargetStepsControl from './TargetStepsControl';
 import { useTargetSteps, type TargetSteps } from './use-target-steps';
+import StageFrame from '../../shared/ui/StageFrame';
 
 /** Where the editor's save stands, as its bar says it. */
 export type SaveState = 'saved' | 'saving' | 'failed';
@@ -540,9 +541,9 @@ function MosaicWorkbench({
           ...(canFullscreen ? [{ id: 'screen', label: 'Full screen', onSelect: fullscreen }] : []),
         ])}
         {/* No floor on the stage's height (Develop's rule): the drawer takes its share, and the stage shows smaller. */}
-        <div ref={boxRef} className="relative flex-1 min-h-0 min-w-0 flex items-center justify-center rounded-control bg-frame overflow-hidden [&:fullscreen]:bg-frame">
+        <StageFrame ref={boxRef} round="control" className="flex-1 min-h-0 min-w-0 flex items-center justify-center [&:fullscreen]:bg-frame">
           {stage}
-        </div>
+        </StageFrame>
         {band}
         {transport}
         <PanelHost asSheet compactAs="drawer" open={tabOpen} onClose={() => setTabOpen(false)} title={SETTINGS_TABS.find((t) => t.id === tab)?.title ?? 'Settings'}>
@@ -745,7 +746,7 @@ export default function MosaicEditor({ doc, change, saveState, onBack, band, hea
 
   // --- a phone: the editor's own header line (back · title over the count · targets · history · ⋯), the masthead gone,
   // the settings in the shell's floating bottom bar, each tab a drawer under the stage — Storytelling's and Develop's.
-  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false, backdrop: 'frame' as const } : null), [compact]));
+  usePublishShellChrome(useMemo(() => (compact ? stageChrome({ floating: false, hidden: false }) : null), [compact]));
   const [pickerOpen, setPickerOpen] = useState(false);
   const otherInstance = Boolean(connection && doc.instance && doc.instance !== connection.id);
   const phoneMenu: OverflowItem[] = [

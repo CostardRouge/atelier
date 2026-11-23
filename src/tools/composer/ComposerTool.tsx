@@ -33,6 +33,7 @@ import {
 } from '../../shared/media/webcodecs-export';
 import { Icons } from '../../shared/ui/icons';
 import SliderBar from '../../shared/ui/SliderBar';
+import StageFrame from '../../shared/ui/StageFrame';
 
 const COMPOSER_KINDS = ['video+telemetry'] as const;
 const PREVIEW_MAX = 1440;
@@ -583,7 +584,7 @@ export default function ComposerTool() {
           </div>
 
           {/* Composite preview. */}
-          <div className="flex-none grid place-items-center bg-frame rounded-paper overflow-hidden border border-line p-2 max-h-[calc(var(--app-h)*0.52)]">
+          <StageFrame className="flex-none grid place-items-center p-2 max-h-[calc(var(--app-h)*0.52)]">
             <canvas
               ref={canvasRef}
               width={pw}
@@ -595,7 +596,7 @@ export default function ComposerTool() {
               className="block max-w-full max-h-[calc(var(--app-h)*0.48)] object-contain touch-none cursor-grab"
               title="Drag the telemetry readout to reposition it"
             />
-          </div>
+          </StageFrame>
 
           {map.error && (
             <p className="flex-none m-0 px-4 py-2 rounded-paper bg-accent-wash border border-danger-line text-danger-ink text-sm">
