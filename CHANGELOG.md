@@ -9,6 +9,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-23 — Fuchsine
+
 ### Changed
 
 - Every editor's black stage is drawn the same way — the Studio, Storytelling, Mosaic, Flight Atlas, Compare, the LUT
