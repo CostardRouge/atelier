@@ -19,6 +19,7 @@ import LutPicker from '../../shared/lut/LutPicker';
 import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
 import { Icons } from '../../shared/ui/icons';
+import StageFrame from '../../shared/ui/StageFrame';
 
 /**
  * LUT Studio — grades the videos selected in the shared library through a
@@ -460,10 +461,11 @@ export default function LutStudio() {
             </div>
           )}
 
-          <div
+          <StageFrame
             ref={stageRef}
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
-              activeUrl ? 'bg-frame cursor-pointer' : 'bg-transparent cursor-default'
+            lit={!!activeUrl}
+            className={`flex-1 min-h-0 flex items-center justify-center max-[820px]:min-h-[240px] ${
+              activeUrl ? 'cursor-pointer' : 'cursor-default'
             }${compareOn ? ' cursor-ew-resize' : ''}`}
             onClick={activeUrl && !compareOn ? togglePlay : undefined}
             onPointerMove={handleStagePointerMove}
@@ -508,7 +510,7 @@ export default function LutStudio() {
               playsInline
               onError={() => setActiveError(true)}
             />
-          </div>
+          </StageFrame>
 
           {activeUrl && (
             <div className="flex items-center gap-[0.85rem] mt-[0.9rem] px-[0.85rem] py-[0.6rem] border border-line rounded-paper bg-surface">

@@ -9,6 +9,7 @@ import { extractTrack, type TrackPoint } from '../../shared/telemetry/flight-pat
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useFlightMap } from './use-flight-map';
 import { TILES_TOGGLE } from '../../shared/map/track-map';
+import StageFrame from '../../shared/ui/StageFrame';
 
 /** Asset kinds the flight map understands — it needs telemetry (the GPS). */
 const MAP_KINDS = ['video+telemetry', 'telemetry'] as const;
@@ -141,7 +142,7 @@ export default function MapTool() {
           container and collapse it to zero height (a black box). It also keeps
           no React children, since MapLibre owns that DOM; overlays sit beside
           it, positioned against the stage. */}
-      <div className="relative flex flex-col rounded-paper overflow-hidden flex-1 min-h-0 bg-frame border border-line max-[820px]:min-h-[280px]">
+      <StageFrame className="flex flex-col flex-1 min-h-0 max-[820px]:min-h-[280px]">
         <div ref={containerRef} className="flex-1 min-h-0 w-full" />
 
         {error && (
@@ -173,7 +174,7 @@ export default function MapTool() {
             </span>
           )
         )}
-      </div>
+      </StageFrame>
 
       {/* Video — scrubbing it walks the marker along the path. */}
       {active &&

@@ -68,7 +68,7 @@ import Segmented from '../../shared/ui/Segmented';
 import PanelHost from '../../shared/ui/PanelHost';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
-import { usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import { usePublishShellChrome, stageChrome } from '../../shared/ui/shell-chrome';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import ObjectContent from './ObjectContent';
 import { objectContent } from '../../shared/story/object-content';
@@ -77,6 +77,7 @@ import StudioTree, { PANEL_LABEL, type StudioPanel, type StudioSelection } from 
 import StudioTimeline from './StudioTimeline';
 import { styleIn, withSceneTiming, withStyle, type StyleScope } from '../../shared/story/studio-edit';
 import { objectLabel, objectTracks, sceneSpans, type ObjectTrack } from '../../shared/story/studio';
+import StageFrame from '../../shared/ui/StageFrame';
 
 export interface Sound {
   name: string;
@@ -1146,7 +1147,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
       [compact, inspectorOpen, pane, settingsLabel],
     ),
   );
-  usePublishShellChrome(useMemo(() => (compact ? { immersive: true, floating: false, hidden: false, backdrop: 'frame' as const } : null), [compact]));
+  usePublishShellChrome(useMemo(() => (compact ? stageChrome({ floating: false, hidden: false }) : null), [compact]));
   const openPanel = (id: StudioPanel) => {
     setSelected({ kind: 'panel', id });
     setPane('settings');
@@ -1189,8 +1190,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         />
         {/* No minimum height (Develop's stage, `DevelopViewport`): the drawer takes its share of the column, and on a
             phone held sideways a floor here pushed the drawer below the screen. */}
-        {/* No border: on the phone's black backdrop a hairline drew a grey frame round the stage (2026-11-22). */}
-        <div className="relative flex-1 min-h-0 flex rounded-control bg-frame p-1.5">
+        <StageFrame round="control" clip={false} className="flex-1 min-h-0 flex p-1.5">
           <StoryStage
             clock={clock}
             episode={shown}
@@ -1202,7 +1202,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
             label={`${episode.number} ${episode.title}`}
           />
           {groundChip}
-        </div>
+        </StageFrame>
         <StoryTransport clock={clock} disabled={!fontsReady || exporting !== null} trailing={transportTrailing} />
         <PanelHost
           asSheet
@@ -1237,7 +1237,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
         {mode === 'wide' ? <div className={`${panel} min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain`}>{listPane}</div> : null}
 
         <div className={`flex flex-col gap-2 min-h-0 min-w-0 ${mode === 'narrow' ? 'flex-[1.25]' : ''}`}>
-          <div className="relative flex-1 min-h-[12rem] flex rounded-control bg-frame border border-line p-2">
+          <StageFrame round="control" clip={false} className="flex-1 min-h-[12rem] flex p-2">
             <StoryStage
               clock={clock}
               episode={shown}
@@ -1249,7 +1249,7 @@ export default function PostEditor({ postId, script, onScript, fontsReady, sound
               label={`${episode.number} ${episode.title}`}
             />
             {groundChip}
-          </div>
+          </StageFrame>
           <StoryTransport
             clock={clock}
             disabled={!fontsReady || exporting !== null}

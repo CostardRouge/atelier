@@ -10,6 +10,7 @@ import { DECK_GAP, DECK_SETTLE_MS } from '../ui/use-media-viewer';
 import type { DevelopPicture } from './use-develop-picture';
 import type { SubjectPin } from '../render/mask';
 import type { DeckNeighbour, StageDeckView } from './stage-deck';
+import StageFrame from '../ui/StageFrame';
 
 /**
  * A repair patch as the viewport draws it: two discs in the source's own
@@ -319,9 +320,10 @@ export default function DevelopViewport({
   const tapping = !picking && picture.painting && picture.paintGesture === 'tap';
   const subtracting = tapping && tapTone === 'remove' && !moving;
   return (
-    <div
+    <StageFrame
       ref={view.viewportRef}
-      className={`relative min-h-0 bg-frame ${bleed ? '' : 'rounded-paper'} overflow-hidden touch-none select-none [-webkit-touch-callout:none] ${
+      bleed={bleed}
+      className={`min-h-0 touch-none select-none [-webkit-touch-callout:none] ${
         picking
           ? 'cursor-crosshair'
           : moving
@@ -781,7 +783,7 @@ export default function DevelopViewport({
           )}
         </>
       )}
-    </div>
+    </StageFrame>
   );
 }
 

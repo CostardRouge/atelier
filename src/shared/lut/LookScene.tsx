@@ -87,6 +87,7 @@ import { usePictureZoom } from '../ui/use-picture-zoom';
 import { createLutRenderer, type LutRenderer } from './lut-gl';
 import { sceneFrame, type LutPreviewPicture } from './look-scene';
 import type { Interpolation } from './interpolate';
+import StageFrame from '../ui/StageFrame';
 
 /** Whether a press on the picture places the divider rather than panning. */
 function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
@@ -266,13 +267,14 @@ export default function LookScene({
   const { rect } = view;
 
   return (
-    <div
+    <StageFrame
       ref={view.viewportRef}
       // `touch-none`, unlike every drag surface inside a scroll box: this band
       // is `flex-none` in the modal's column and the grid below it is the
       // scroller, so nothing here is taking a scroll away — and a pinch needs
       // both axes.
-      className={`relative w-full h-full min-h-0 rounded-control overflow-hidden bg-frame touch-none select-none ${
+      round="control"
+      className={`w-full h-full min-h-0 touch-none select-none ${
         view.zoomed
           ? view.panning
             ? 'cursor-grabbing'
@@ -365,6 +367,6 @@ export default function LookScene({
             'Your browser does not expose WebGL2, so this is your picture ungraded — the looks below are still right.'}
         </p>
       )}
-    </div>
+    </StageFrame>
   );
 }

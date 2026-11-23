@@ -148,7 +148,7 @@ import SettingsMenu, { type SettingsSection } from '../../shared/ui/SettingsMenu
 import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
-import { GLASS, usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import { GLASS, usePublishShellChrome, stageChrome } from '../../shared/ui/shell-chrome';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
@@ -2552,7 +2552,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     // Behind the picture, the stage's black to every edge of the screen
     // (2026-10-21, his ask: the most contrast to judge a picture by).
     useMemo(
-      () => (immersive ? { immersive: true, floating, hidden: focus, backdrop: 'frame' as const } : null),
+      () => (immersive ? stageChrome({ floating, hidden: focus }) : null),
       [immersive, floating, focus],
     ),
   );

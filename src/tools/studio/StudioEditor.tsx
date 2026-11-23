@@ -169,7 +169,7 @@ import Button from '../../shared/ui/Button';
 import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
-import { GLASS, usePublishShellChrome } from '../../shared/ui/shell-chrome';
+import { GLASS, usePublishShellChrome, stageChrome } from '../../shared/ui/shell-chrome';
 import PhoneHeader from '../../shared/ui/PhoneHeader';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -187,6 +187,7 @@ import StudioShortcuts from './StudioShortcuts';
 import { DEFAULT_STAGE_SOUND, stageSoundPref } from './studio-sound';
 import type { RetimeSound } from '../../shared/media/time-stretch';
 import { revealInScroller } from '../../shared/ui/reveal';
+import StageFrame from '../../shared/ui/StageFrame';
 
 
 /**
@@ -362,7 +363,7 @@ export default function StudioEditor({
   // shell's gutter (`App.tsx`, `px-2`) showed as a grey stripe either side of
   // the frame (2026-11-22, his report) — Develop's, Mosaic's and Storytelling's.
   usePublishShellChrome(
-    useMemo(() => (immersive ? { immersive: true, floating: true, hidden, backdrop: 'frame' as const } : null), [immersive, hidden]),
+    useMemo(() => (immersive ? stageChrome({ floating: true, hidden }) : null), [immersive, hidden]),
   );
   /** Over the stage, above the shell's bar; gone with the chrome. */
   const floatingBox = hidden ? 'hidden' : `absolute inset-x-0 z-10 bottom-[calc(var(--shell-bar-h,0px)+8px)] ${GLASS}`;
@@ -2579,10 +2580,9 @@ export default function StudioEditor({
             height on a phone too (App.tsx), so the chain above is definite all
             the way up and the picture's height always resolves.
           */}
-          <div
-            className={`relative rounded-paper overflow-hidden flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px] ${
-              hasFrame ? 'bg-frame' : 'bg-transparent'
-            }`}
+          <StageFrame
+            lit={hasFrame}
+            className="flex-1 min-h-0 flex items-center justify-center @max-[800px]:min-h-[240px]"
             // A phone's tap on the frame AROUND the picture shows or hides the chrome.
             onClick={(e) => {
               if (immersive && e.target === e.currentTarget) setChromeHidden((h) => !h);
@@ -2622,7 +2622,7 @@ export default function StudioEditor({
             {/* This media's own tasks along the stage's edge — its capture
                 being fetched, a run of its variants (V1 + V4). */}
             {finalsMedia && <TaskEdge scope={knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)} />}
-          </div>
+          </StageFrame>
 
           {activeUrl && (
             <StudioTransport

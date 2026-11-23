@@ -68,6 +68,17 @@ export function useShellChrome(): ShellChrome | null {
 }
 
 /**
+ * An immersive editor whose stage is BLACK (`StageFrame`): the shell paints
+ * the frame's black to every edge of the screen, its gutter and the island's
+ * band included, so the stage merges into it (2026-11-22/23, his report of a
+ * grey stripe either side of the Studio's stage). Every such editor publishes
+ * this rather than spelling `backdrop` itself.
+ */
+export function stageChrome({ floating, hidden }: { floating: boolean; hidden: boolean }): ShellChrome {
+  return { immersive: true, floating, hidden, backdrop: 'frame' };
+}
+
+/**
  * The tool's side: publish a MEMOISED record (or null), taken back on
  * unmount. Tolerant of a missing provider, like every publish in the suite.
  */

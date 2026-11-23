@@ -16,6 +16,7 @@ import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import { useZoomGestures } from '../../shared/ui/use-zoom-gestures';
 import { cropStageTransform, zoomCropViewAbout, type CropView } from './crop-view';
 import type { CropZoneApi } from './use-crop-zone';
+import StageFrame from '../../shared/ui/StageFrame';
 
 /** The dark laid over what the crop cuts away — the prototype's, measured against paper and black. */
 const VEIL = 'rgba(10, 9, 8, 0.66)';
@@ -498,11 +499,11 @@ export default function CropStage({
     // `touch-none`: every gesture here writes both axes inside a fixed-height
     // stage, which is not a scroll box (`frontend.md`). Focusable, so the
     // arrows nudge the zone once it has been touched — and only then.
-    <div
+    <StageFrame
       ref={stageRef}
       tabIndex={hasSource ? 0 : -1}
       aria-label="Crop: drag inside the zone to move it, on the picture to draw a new one, the handles to resize; the arrows nudge it"
-      className={`relative overflow-hidden touch-none select-none rounded-paper bg-frame outline-none focus-visible:ring-2 focus-visible:ring-accent ${className ?? ''}`}
+      className={`touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-accent ${className ?? ''}`}
     >
       {hasSource ? (
         <>
@@ -526,6 +527,6 @@ export default function CropStage({
           <p className="m-0 max-w-xs text-center text-sm text-muted">{emptyText}</p>
         </div>
       )}
-    </div>
+    </StageFrame>
   );
 }

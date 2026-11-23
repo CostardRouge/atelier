@@ -9,6 +9,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Changed
+
+- Every editor's black stage is drawn the same way — the Studio, Storytelling, Mosaic, Flight Atlas, Compare, the LUT
+  and overlay tools, the flight map, Composer and Develop: the same black and corners, and no grey outline round it
+  any more (Flight Atlas, the map, Composer and Storytelling's wide stage had one).
+
 ## [1.11.0] - 2026-11-22 — Eosin
 
 ### Added
