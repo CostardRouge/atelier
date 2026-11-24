@@ -725,6 +725,10 @@ export interface WinnowSession {
   asset_count: number;
   status: 'empty' | 'to_sort' | 'done';
   root_kind: string;
+  /** Media with no verdict yet (Winnow's list tally); absent on an older instance. */
+  unrated_count?: number;
+  /** Up to 8 ready media, earliest first — the folder's covers, at no extra request. */
+  sample_assets?: { id: number; ext?: string | null; media_type?: string | null }[];
 }
 
 /**

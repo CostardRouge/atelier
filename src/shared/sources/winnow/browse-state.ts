@@ -44,6 +44,8 @@ export interface BrowseState {
    */
   facets?: PickFacets;
   sort?: PickSort;
+  /** The folders last opened in the picker's Folder scope, newest first, five at most. Absent before it. */
+  recentFolders?: number[];
 }
 
 const KEY = 'atelier.sources.winnow.browse.v1';
@@ -99,6 +101,13 @@ export function readBrowseState(sourceId: string): BrowseState | null {
     fidelity: s.fidelity === 'original' || s.fidelity === 'log' ? s.fidelity : 'proxy',
     facets: readFacets(s.facets),
     sort: s.sort === 'stars' ? 'stars' : 'time',
+    ...(Array.isArray(s.recentFolders)
+      ? {
+          recentFolders: s.recentFolders
+            .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+            .slice(0, 5),
+        }
+      : {}),
   };
 }
 

@@ -11,6 +11,8 @@ import {
 } from '../client';
 import type { WinnowConnection } from '../store';
 import { readBrowseState, writeBrowseState } from '../browse-state';
+import FolderPicker from './FolderNavigator';
+import { pushRecent } from './folder-tree';
 import DayPicker from '../DayPicker';
 import { describeCulling } from '../culling';
 import MediaLightbox, { type LightboxItem } from '../../../ui/MediaLightbox';
@@ -32,7 +34,6 @@ import PickerRail from './PickerRail';
 import type { DescribeState, SubjectLists } from './PickerSubject';
 import { kept, pageFor, wantsMore, type Reach } from './describe-reach';
 import { instanceNames } from '../winnow-names';
-import { folderDays, folderDaysLabel } from '../folder-days';
 import { readFlightLog } from './flight-logs';
 import { logFailureOf, type LogFailure } from './log-failures';
 import type { FlightTrack } from './flight-track';
@@ -183,6 +184,7 @@ export default function WinnowPicker({
     host.start.half !== undefined ? host.start.half : (remembered?.filter.half ?? null),
   );
   const [sessionId, setSessionId] = useState<number | null>(remembered?.sessionId ?? null);
+  const [recentFolders, setRecentFolders] = useState<number[]>(remembered?.recentFolders ?? []);
   const [facets, setFacets] = useState<PickFacets>(remembered?.facets ?? DEFAULT_FACETS);
   const [sort, setSort] = useState<PickSort>(remembered?.sort ?? 'time');
 
@@ -421,8 +423,9 @@ export default function WinnowPicker({
       fidelity: stored?.fidelity ?? 'proxy',
       facets,
       sort,
+      recentFolders,
     });
-  }, [connection.id, scope, day, span, half, sessionId, facets, sort]);
+  }, [connection.id, scope, day, span, half, sessionId, facets, sort, recentFolders]);
 
   // --- a DESCRIPTION is a scope of its own ------------------------------------
   // His ask of 2026-11-03 (the Words field's default), fixed the same day after «la recherche par mot clé ml ne
@@ -1022,7 +1025,7 @@ export default function WinnowPicker({
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="relative w-full max-w-[68rem] h-[min(calc(var(--app-h)*0.9),54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-5 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div data-picker-card className="relative w-full max-w-[68rem] h-[min(calc(var(--app-h)*0.9),54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-5 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {/* --- the header: title, destination, scope, the one date control --- */}
         <div className="flex-none flex items-center gap-2 flex-wrap">
           <h2 className="m-0 font-serif text-2xl leading-tight min-w-0 truncate max-[820px]:text-xl max-[820px]:flex-1">
@@ -1068,8 +1071,14 @@ export default function WinnowPicker({
                 <FolderPicker
                   sessions={sessions}
                   current={session}
-                  onPick={(s) => setSessionId(s.id)}
+                  onPick={(s) => {
+                    setSessionId(s.id);
+                    setRecentFolders((r) => pushRecent(r, s.id));
+                  }}
                   openFirst={sessionId === null}
+                  thumb={(id) => client.thumbUrl(id)}
+                  recent={recentFolders}
+                  rootLabel={connection.id}
                 />
               )}
             </div>
@@ -1575,101 +1584,6 @@ function MoreTiles({ onVisible, as = 'li' }: { onVisible: () => void; as?: 'li' 
     <li ref={ref as Ref<HTMLLIElement>} className="col-span-full h-px" aria-hidden />
   ) : (
     <div ref={ref as Ref<HTMLDivElement>} className="h-px" aria-hidden />
-  );
-}
-
-/**
- * The folder half of the one date control: the current folder's name, and
- * the instance's folders in a popover under it — a session as Winnow
- * ingested it, under the same half as the grid.
- */
-function FolderPicker({
-  sessions,
-  current,
-  onPick,
-  openFirst,
-}: {
-  sessions: WinnowSession[] | null;
-  current: WinnowSession | null;
-  onPick: (s: WinnowSession) => void;
-  /** Open on arrival when no folder is chosen yet. */
-  openFirst: boolean;
-}) {
-  const [open, setOpen] = useState(openFirst);
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      // Claimed, so the picker closes the list and not itself.
-      e.preventDefault();
-      setOpen(false);
-    };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-  // The days in this device's zone, never the UTC slice of the instants (`folder-days.ts`).
-  const span = (s: WinnowSession) => folderDaysLabel(folderDays(s));
-  return (
-    <div ref={root} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        className="w-full h-8 flex items-center gap-1.5 px-2.5 rounded-paper border border-line bg-paper text-left text-sm cursor-pointer hover:bg-paper-2"
-      >
-        <span className="text-muted [&_svg]:w-3.5 [&_svg]:h-3.5">{Icons.folder}</span>
-        <span className="flex-1 min-w-0 truncate">{current?.name ?? 'Choose a folder'}</span>
-        <span className="text-3xs text-faint" aria-hidden="true">
-          ▾
-        </span>
-      </button>
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Pick a folder"
-          className="absolute right-0 top-9 z-20 w-[22rem] max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto flex flex-col gap-1 rounded-paper border border-line-strong bg-surface p-2 shadow-paper"
-        >
-          {sessions === null ? (
-            <p className="m-0 p-2 font-mono text-2xs text-muted">asking…</p>
-          ) : sessions.length === 0 ? (
-            <p className="m-0 p-2 text-xs text-muted">No folder in this half of the library.</p>
-          ) : (
-            sessions.map((s) => {
-              const on = current?.id === s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-pressed={on}
-                  title={s.source_path}
-                  onClick={() => {
-                    onPick(s);
-                    setOpen(false);
-                  }}
-                  className={`text-left px-3 py-2 rounded-paper border cursor-pointer ${
-                    on ? 'bg-ink text-paper border-ink' : 'bg-paper border-line hover:border-line-strong'
-                  }`}
-                >
-                  <span className="block text-xs font-medium truncate">{s.name}</span>
-                  <span className={`block font-mono text-3xs tabular-nums ${on ? 'opacity-70' : 'text-muted'}`}>
-                    {span(s)} · {s.asset_count} media{s.device_hint ? ` · ${s.device_hint}` : ''}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 

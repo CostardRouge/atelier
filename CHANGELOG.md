@@ -9,6 +9,14 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Changed
+
+- The Winnow picker's *Folder* scope is a navigator instead of one long list: type any words of a folder's name, a
+  month or a device to find it, go down your own folder tree in **Columns** (with a preview of the folder at the
+  end), a **List** that unfolds or **Icons** with each folder's covers, and come back to your five last folders in
+  one click. Each folder shows how much of it is already sorted in Winnow. On a phone it is a full sheet, one level
+  per screen.
+
 ### Fixed
 
 - The Winnow picker's *Folder* list gives each folder the days it was shot on where you are, not in UTC: in
