@@ -32,6 +32,7 @@ import PickerRail from './PickerRail';
 import type { DescribeState, SubjectLists } from './PickerSubject';
 import { kept, pageFor, wantsMore, type Reach } from './describe-reach';
 import { instanceNames } from '../winnow-names';
+import { folderDays, folderDaysLabel } from '../folder-days';
 import { readFlightLog } from './flight-logs';
 import { logFailureOf, type LogFailure } from './log-failures';
 import type { FlightTrack } from './flight-track';
@@ -1614,11 +1615,8 @@ function FolderPicker({
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
-  const span = (s: WinnowSession) => {
-    const a = s.captured_at_min?.slice(0, 10);
-    const b = s.captured_at_max?.slice(0, 10);
-    return a && b && a !== b ? `${a} → ${b}` : (a ?? b ?? '—');
-  };
+  // The days in this device's zone, never the UTC slice of the instants (`folder-days.ts`).
+  const span = (s: WinnowSession) => folderDaysLabel(folderDays(s));
   return (
     <div ref={root} className="relative">
       <button
