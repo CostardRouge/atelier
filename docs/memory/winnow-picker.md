@@ -87,6 +87,35 @@ clip at UTC+11 into the next day. The true instant with its offset is in Sony's 
 (`C0001M01.XML`, `CreationDate`). **How to apply**: when a day shows a kind missing, check the rail's *Type* count
 (the server's answer, filters aside), then a *Span* around it with *Clips* ticked, before suspecting Atelier.
 
+## The Folder scope is a NAVIGATOR over the rebuilt tree (2026-11-24)
+
+**Decision.** His «la section dossier … complètement dégueulasse» (one flat list of full paths, cut off, no filter,
+no hierarchy) became lab https://claude.ai/artifact/VPiyiFjZCwnaWQJFE1jZMa; his picks **1A 2a 3a 4a 5a 6a 7a** (every
+recommendation): A, the Navigator, over B (tree docked beside the grid — costs the grid ~250 px) and C (by device and
+month — loses his own folder names). Built as `picker/folder-tree.ts` (pure) + `picker/FolderNavigator.tsx`.
+**How to apply**:
+
+- **The tree is rebuilt client-side** from `source_path` (Winnow lists sessions flat). A chain of parents with one
+  child each is ONE step (`sony/photos/2026`, pick 3a) but a parent is never folded into the leaf it holds; a
+  folder that is a Winnow session AND holds others gets its media as a first leaf, *Its own media*. Only a leaf
+  (a real session) opens in the grid; a parent is gone into, never picked (pick 4a — Span covers a stretch of time).
+- **Covers and the ring cost no request**: `/api/sessions` already sends `sample_assets` (8 ready media) and
+  `unrated_count` per folder (read in Winnow's `api/sessions/route.ts`), typed optional on `WinnowSession`. The ring
+  is `1 − unrated / asset_count`, media-weighted up the tree (pick 7a); no tally → no ring.
+- **Views**: Columns (default wide), List, Icons — `atelier.winnow.picker.folders`; a phone has its own pref
+  (`….folders.phone`, the one-level-per-screen list or Icons, pick 2a). Order Newest · A–Z
+  (`….folders.order`, pick 6a; *Its own media* stays first). Days are `folderDays` (local) shown short (`shortDays`).
+- **The filter**: every word must appear in the path, the device or the local days, accents and case aside
+  (`nov 26` → `novembre 2026`); it replaces any view with the hits, their parents as a second line. Enter opens the
+  first hit; the first Escape empties the filter (it stops the event), the next closes the navigator (claimed), the
+  third the picker.
+- **Recent folders**: the last five opened, per instance, `BrowseState.recentFolders` (pick 5a), written with the
+  rest of the place.
+- **Placement**: portalled, fixed over the picker's body (measured from `[data-picker-card]` and the trigger), so
+  the rail and grid underneath stay mounted; under the compact layout a full sheet at `z-[60]` like the rail's.
+- Driven headless against a stub of 15 folders (desktop 1440 and a 390 px phone, no sideways scroll); never against
+  his instance.
+
 ## The modal and its host contract (2026-10-01, P3)
 
 `WinnowPicker` (`picker/WinnowPicker.tsx`, with `PickerRail`, `PickerTile`,
@@ -101,8 +130,8 @@ re-seeded when its rows ARRIVE, never on a facet or a tick. **How to
 apply**:
 
 - **One date control.** `Day` is the shared `DayPicker` (bars or weeks);
-  `Folder` is a button whose popover lists the instance's sessions under the
-  same half. A popover that closes on Escape CLAIMS the key
+  `Folder` is a button that opens the folder NAVIGATOR (next section) under
+  the same half. A popover that closes on Escape CLAIMS the key
   (`preventDefault`) — `useDialogKeys` stands down on a prevented press, so
   the first Escape closes the popover and the second the picker.
 - **A tile's pile badge is a SIBLING of its button**, never inside it: a

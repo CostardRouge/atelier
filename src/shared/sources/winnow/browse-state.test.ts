@@ -64,6 +64,15 @@ describe('the browser\'s remembered place', () => {
     expect(readBrowseState('b.example')).toMatchObject({ facets: DEFAULT_FACETS, sort: 'time' });
   });
 
+  it('remembers the recent folders, numbers only, five at most', () => {
+    writeBrowseState('a.example', place({ recentFolders: [3, 1, 2] }));
+    expect(readBrowseState('a.example')?.recentFolders).toEqual([3, 1, 2]);
+    localStorage.setItem(KEY, JSON.stringify({ 'b.example': { ...place(), recentFolders: [1, 'x', 2, 3, 4, 5, 6] } }));
+    expect(readBrowseState('b.example')?.recentFolders).toEqual([1, 2, 3, 4, 5]);
+    writeBrowseState('c.example', place());
+    expect(readBrowseState('c.example')).not.toHaveProperty('recentFolders');
+  });
+
   it('keeps instances apart', () => {
     writeBrowseState('a.example', place({ month: '2025-07' }));
     writeBrowseState('b.example', place({ month: '2024-01', view: 'session', sessionId: 9 }));

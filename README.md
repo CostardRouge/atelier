@@ -4105,7 +4105,13 @@ day — a whole trip or a whole year at once, loaded in parts as you look, with
 a strip of the months to jump to any of them; the type, the flight log and
 the body ticked in the rail are asked of the instance itself, so a year of
 one drone's flights loads only those clips; past 20 000 media it says where
-it stopped) or by folder, every tile with Winnow's verdict, a rail
+it stopped) or by **folder**: a navigator over your folder tree, rebuilt from
+Winnow's paths, with a filter that takes any words of a name, a month or a body
+(`nov 26`, `dji`), the five folders you opened last, and three views — Columns
+with a preview of the folder at the end, a List that unfolds, Icons with each
+folder's covers — each folder with a small ring of how much of it is sorted in
+Winnow (a phone gets it as a sheet, one level per screen). Every tile wears
+Winnow's verdict, a rail
 of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
 flight log, extension, body, tags, no final yet, not in the library), tick verbs over what
 is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
