@@ -71,6 +71,22 @@ says the same thing. The sidebar now passes its half, so a day its strip
 calls full is full in the half the tab lists; before, the strip counted both
 halves while the grid listed one.
 
+## A folder's days, and a clip on the wrong day (2026-11-24)
+
+**A folder's days are read in the DEVICE's zone** (`folder-days.ts`, pure): `/api/sessions` gives a folder only its
+first and last INSTANTS (`captured_at_min/max`, UTC ISO), never `capture_date`. Slicing the string gave the UTC day,
+so in Australia (UTC+11) every Sony folder listed a day before its own name (`10061122` → 21 Nov) while *Day*, on
+Winnow's local `capture_date`, showed it on the 22nd (his report). The picker's Folder list and `winnow.folders` both
+go through `folderDays`; a folder shot in another zone than the browser's can still be off by one. **The root fix is
+Winnow's**: send a folder's local days (min/max of `capture_date`) on `/api/sessions`, then prefer them here.
+
+**"No clips on this day" was Winnow's dating, not the picker** (same day, his report «la modale … n'affiche pas les
+vidéos»): his Sony clips of the 22nd are listed by Winnow on the 23rd. Winnow dates a video by its MP4
+`CreateDate`/`MediaCreateDate` (`lib/extract.ts`); Sony writes it in LOCAL time, which read as UTC moves an evening
+clip at UTC+11 into the next day. The true instant with its offset is in Sony's XML beside the clip
+(`C0001M01.XML`, `CreationDate`). **How to apply**: when a day shows a kind missing, check the rail's *Type* count
+(the server's answer, filters aside), then a *Span* around it with *Clips* ticked, before suspecting Atelier.
+
 ## The modal and its host contract (2026-10-01, P3)
 
 `WinnowPicker` (`picker/WinnowPicker.tsx`, with `PickerRail`, `PickerTile`,

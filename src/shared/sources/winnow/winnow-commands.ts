@@ -30,6 +30,7 @@ import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
+import { folderDays, folderOverlaps } from './folder-days';
 import { NAME_KINDS, NAME_PARAMS, asksNames, foldKey, instanceNames, nameParams, namesOfKind, passesNames, resolveNames, type NameAsk, type NameKind } from './winnow-names';
 
 /** How many rows a listing may ask for at most — the client's own cap. */
@@ -471,13 +472,15 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       run: async (p) => {
         const from = p.from === undefined ? null : readDay('from', p.from);
         const to = p.to === undefined ? null : readDay('to', p.to);
+        // A folder's days in this device's zone, as the picker lists them (`folder-days.ts`).
         const folders = (await client().sessions())
-          .filter((s) => (!from || (s.captured_at_max ?? '') >= from) && (!to || (s.captured_at_min ?? '9') <= `${to}T23:59:59`))
-          .map((s) => ({
+          .map((s) => ({ s, days: folderDays(s) }))
+          .filter(({ days }) => folderOverlaps(days, from, to))
+          .map(({ s, days }) => ({
             id: s.id,
             name: s.name,
-            from: s.captured_at_min?.slice(0, 10) ?? null,
-            to: s.captured_at_max?.slice(0, 10) ?? null,
+            from: days.from,
+            to: days.to,
             count: s.asset_count,
             status: s.status,
           }));

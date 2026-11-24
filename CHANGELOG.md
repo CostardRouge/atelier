@@ -9,6 +9,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Fixed
+
+- The Winnow picker's *Folder* list gives each folder the days it was shot on where you are, not in UTC: in
+  Australia a folder used to read one day early (Sony's `10061122` listed as 21 November), while *Day* showed its
+  pictures on the right date.
+
 ## [1.12.0] - 2026-11-23 — Fuchsine
 
 ### Changed
