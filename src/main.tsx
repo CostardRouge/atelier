@@ -10,6 +10,7 @@ import { LayoutModeProvider } from './shared/ui/use-layout-mode';
 import { installPressFeedback } from './shared/ui/press-dom';
 import { installCommandConsole } from './shared/commands/console';
 import { resumeBridge } from './shared/commands/bridge-client';
+import { completeSesameReturn } from './shared/sources/stockage/session';
 // The four faces, served from our OWN origin (2026-09-24, his call): they
 // used to come from Google Fonts on every page load, a request to a third
 // party the README's network callout never named. Exactly the weights the
@@ -69,7 +70,10 @@ resumeBridge();
 // library inside `App`: the masthead, the bottom bar, the providers and the
 // shell's own hooks all render outside those two, and a throw in any of them
 // was a blank page. This one offers the same panel — try again, reload.
-createRoot(document.getElementById('root')!).render(
+// Sésame sends a sign-in back to the site's root with a code in the query
+// (`stockage/session.ts`): it is finished before the app draws, and the hash
+// route it started from is put back. An ordinary load resolves at once.
+void completeSesameReturn().finally(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary resetKey="root">
       <LayoutModeProvider>
@@ -85,4 +89,4 @@ createRoot(document.getElementById('root')!).render(
       </LayoutModeProvider>
     </ErrorBoundary>
   </StrictMode>,
-);
+));

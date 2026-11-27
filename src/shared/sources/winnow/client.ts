@@ -34,12 +34,19 @@
 import { healCachedUrl } from './cache-heal';
 import { isAbortError, type FetchOptions } from '../fetch-options';
 import { TIMELINE_SYNC_ENABLED } from './features';
+import { sesameAccessToken } from '../stockage/session';
 
 export type WinnowAuth =
   /** Same-site: the browser sends Winnow's session cookie. */
   | { mode: 'cookie' }
   /** Another site: an app token the user pasted on `#/sources`. */
-  | { mode: 'token'; token: string };
+  | { mode: 'token'; token: string }
+  /**
+   * The person's shared storage (`stockage/`), which speaks the document and
+   * file bucket contracts of Winnow: a Sésame access token for it, asked of
+   * the session on every call (it refreshes itself).
+   */
+  | { mode: 'sesame' };
 
 /**
  * The byte routes Winnow reads `access_token` on (its `QUERY_TOKEN_ROUTES`):
@@ -255,8 +262,10 @@ export interface WinnowCapabilities {
   };
   documents: {
     bucket: boolean;
-    /** The `kind`s the bucket lists by. Absent on an instance without the bucket. */
-    kinds?: string[];
+    /** The `kind`s the bucket lists by. Absent on an instance without the bucket; null on the storage. */
+    kinds?: string[] | null;
+    /** The person's storage keeps ANY kind (CostardRouge/stockage); a Winnow sends no such key. */
+    openKinds?: boolean;
     /** The body cap per document, in bytes; the client checks it BEFORE a PUT. */
     maxBytes?: number | null;
     /**
@@ -492,11 +501,13 @@ export function hasTimeline(caps: WinnowCapabilities | null | undefined): boolea
  * offer to keep a roll on an instance that only knows trips and projects: it
  * would fail on the first push instead of being hidden. An instance that
  * declares a bucket but no `kinds` predates the list and knew exactly the first
- * two kinds; no bucket holds nothing.
+ * two kinds; no bucket holds nothing; the person's storage says `openKinds`
+ * and holds every kind.
  */
-export function bucketHolds(caps: WinnowCapabilities | null | undefined, kind: string): boolean {
+export function bucketHolds(caps: Pick<WinnowCapabilities, 'documents'> | null | undefined, kind: string): boolean {
   const documents = caps?.documents;
   if (!documents?.bucket) return false;
+  if (documents.openKinds === true) return true;
   if (!Array.isArray(documents.kinds)) return kind === 'trip' || kind === 'project';
   return documents.kinds.includes(kind);
 }
@@ -552,7 +563,7 @@ export function searchPaging(caps: WinnowCapabilities | null | undefined): { pag
   return { pageSize: max, pages: true };
 }
 
-export function hasFileBucket(caps: WinnowCapabilities | null | undefined): boolean {
+export function hasFileBucket(caps: Pick<WinnowCapabilities, 'files'> | null | undefined): boolean {
   return caps?.files?.bucket === true;
 }
 
@@ -974,11 +985,13 @@ export class WinnowClient {
    * URLs OUTSIDE this client: an `<img>` tile, the lightbox's own picture.
    */
   heal(url: string): Promise<boolean> {
-    return healCachedUrl(url, () => this.fetchImpl(url, { ...this.init(), cache: 'reload' }));
+    return healCachedUrl(url, () => this.init().then((init) => this.fetchImpl(url, { ...init, cache: 'reload' })));
   }
 
   /** Where to send someone who is not signed in — Winnow's own login page. */
   loginUrl(): string {
+    // The storage has no login page: signing in is Sésame's, started from Sources.
+    if (this.config.auth.mode === 'sesame') return new URL(`${import.meta.env.BASE_URL}#/sources`, location.origin).toString();
     return this.url('/login');
   }
 
@@ -997,10 +1010,15 @@ export class WinnowClient {
     return this.url(`/sessions/${sessionId}`);
   }
 
-  private init(extra: RequestInit = {}): RequestInit {
+  private async init(extra: RequestInit = {}): Promise<RequestInit> {
     const headers = new Headers(extra.headers);
     if (this.config.auth.mode === 'token') {
       headers.set('Authorization', `Bearer ${this.config.auth.token}`);
+    }
+    if (this.config.auth.mode === 'sesame') {
+      const token = await sesameAccessToken();
+      if (!token) throw new WinnowError('unauthenticated', 'Signed out of Sésame — sign in on Sources to reach your storage.', 401);
+      headers.set('Authorization', `Bearer ${token}`);
     }
     return {
       ...extra,
@@ -1021,8 +1039,10 @@ export class WinnowClient {
 
   private async request(url: string, extra?: RequestInit): Promise<Response> {
     let res: Response;
+    // Outside the try: a storage call with no Sésame session is "not signed in", never "unreachable".
+    const init = await this.init(extra);
     try {
-      res = await this.fetchImpl(url, this.init(extra));
+      res = await this.fetchImpl(url, init);
     } catch (err) {
       // A cancelled request is the person's own doing, never a reason to ask
       // again (`tasks/tracked.ts`).
@@ -1036,7 +1056,7 @@ export class WinnowClient {
       const method = (extra?.method ?? 'GET').toUpperCase();
       if (method !== 'GET' && method !== 'HEAD') throw this.unreachable(false);
       try {
-        res = await this.fetchImpl(url, { ...this.init(extra), cache: 'reload' });
+        res = await this.fetchImpl(url, { ...init, cache: 'reload' });
       } catch {
         throw this.unreachable(true);
       }

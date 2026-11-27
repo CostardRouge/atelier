@@ -9,9 +9,12 @@
  * client's own `WinnowError`; nothing retries a write on its own.
  */
 
-import { DOCS_APP, WinnowClient, WinnowError, bucketHolds } from './winnow/client';
+import { DOCS_APP, WinnowClient, WinnowError, bucketHolds, type WinnowCapabilities } from './winnow/client';
 import { getWinnowConnection } from './winnow/store';
 import { DEFAULT_SOURCE_ID } from './source';
+import { STOCKAGE_SOURCE_ID, STOCKAGE_URL } from './stockage/config';
+import { getSesameSession } from './stockage/session';
+import { stockageSheet } from './stockage/store';
 import type { PushFailure, SyncEvent, TheirCopy } from './doc-sync';
 
 export interface RemoteSource {
@@ -38,6 +41,7 @@ export function isRemoteSource(sourceId: string): boolean {
  */
 export function remoteFor(sourceId: string, kind?: string): RemoteSource | null {
   if (!isRemoteSource(sourceId)) return null;
+  if (sourceId === STOCKAGE_SOURCE_ID) return stockageRemote(kind);
   const conn = getWinnowConnection(sourceId);
   if (!conn || !conn.capabilities?.documents?.bucket) return null;
   if (kind !== undefined && !bucketHolds(conn.capabilities, kind)) return null;
@@ -48,6 +52,30 @@ export function remoteFor(sourceId: string, kind?: string): RemoteSource | null 
     maxBytes: conn.capabilities.documents.maxBytes ?? null,
     summaries: conn.capabilities.documents.summaries === true,
   };
+}
+
+/**
+ * The person's storage as a remote, while they are signed in with Sésame: the
+ * same client, the same contract as a Winnow's bucket, a Sésame token in
+ * place of the cookie (`WinnowAuth` `sesame`).
+ */
+function stockageRemote(kind?: string): RemoteSource | null {
+  if (!getSesameSession()) return null;
+  const caps = stockageSheet();
+  if (kind !== undefined && !bucketHolds(caps, kind)) return null;
+  return {
+    sourceId: STOCKAGE_SOURCE_ID,
+    label: STOCKAGE_SOURCE_ID,
+    client: new WinnowClient({ baseUrl: STOCKAGE_URL, auth: { mode: 'sesame' } }),
+    maxBytes: caps.documents.maxBytes ?? null,
+    summaries: caps.documents.summaries === true,
+  };
+}
+
+/** The capabilities a source id is judged on: the storage's sheet, or a connected Winnow's. */
+export function documentSheetFor(sourceId: string): Pick<WinnowCapabilities, 'documents'> | null {
+  if (sourceId === STOCKAGE_SOURCE_ID) return getSesameSession() ? stockageSheet() : null;
+  return getWinnowConnection(sourceId)?.capabilities ?? null;
 }
 
 export interface RemoteFailure {

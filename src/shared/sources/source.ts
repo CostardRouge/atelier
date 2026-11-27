@@ -46,7 +46,7 @@ export interface SourceInfo {
   id: string;
   /** What the gallery prints — the origin as-is, never prettified. */
   label: string;
-  kind: 'local' | 'winnow';
+  kind: 'local' | 'winnow' | 'stockage';
   capabilities: SourceCapabilities;
 }
 
@@ -69,9 +69,20 @@ export function setRemoteSources(sources: readonly SourceInfo[]): void {
   remote = sources.filter((s) => s.id !== LOCAL_SOURCE.id);
 }
 
-/** Every source this session knows: local first, then what was connected. */
+/**
+ * The person's storage (`stockage/store.ts`), its own slot: a second store
+ * mirrors into this registry, and neither may erase the other's sources.
+ */
+let stores: SourceInfo[] = [];
+
+export function setStoreSources(sources: readonly SourceInfo[]): void {
+  stores = sources.filter((s) => s.id !== LOCAL_SOURCE.id);
+}
+
+/** Every source this session knows: local first, then what was connected, then the storage. */
 export function listSources(): SourceInfo[] {
-  return [LOCAL_SOURCE, ...remote];
+  const ids = new Set(remote.map((s) => s.id));
+  return [LOCAL_SOURCE, ...remote, ...stores.filter((s) => !ids.has(s.id))];
 }
 
 export function sourceById(id: string): SourceInfo | null {

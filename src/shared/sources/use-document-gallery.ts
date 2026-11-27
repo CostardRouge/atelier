@@ -14,6 +14,7 @@ import {
 import type { SourceInfo } from './source';
 import { refreshCapabilitiesOnce, type CapabilityProbe } from './winnow/refresh-capabilities';
 import { listWinnowConnections, subscribeWinnowConnections } from './winnow/store';
+import { stockageVersion, subscribeStockage } from './stockage/store';
 
 /** How one kind of document is listed, written and removed — everything a gallery does not decide. */
 export interface DocumentGalleryDriver<D extends { id: string; sourceId: string }, Row extends RemoteDocRow<D>> {
@@ -110,10 +111,13 @@ export function useDocumentGallery<D extends { id: string; sourceId: string }, R
   // The connection list is what makes the memo re-run when an instance comes
   // or goes — `documentSourcesFor` reads the store's mirror itself.
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
+  // The storage comes and goes with the Sésame session.
+  const storage = useSyncExternalStore(subscribeStockage, stockageVersion);
   const documentSources = useMemo(() => {
     void connections;
+    void storage;
     return documentSourcesFor(kind);
-  }, [connections, kind]);
+  }, [connections, storage, kind]);
   const remoteSourceIds = useMemo(
     () => documentSources.filter((s) => isRemoteSource(s.id)).map((s) => s.id),
     [documentSources],
