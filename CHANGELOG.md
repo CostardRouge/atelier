@@ -9,6 +9,13 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- **Your storage, on every device.** Sign in with Sésame on *Sources* and every gallery — trips, Studio projects,
+  rolls, atlases, mosaics, recaps — offers your storage beside this browser and your Winnow: *Keep on* moves a
+  document there, and it reopens on your iPhone, iPad or another computer signed in. Only the document travels,
+  never a photo or a clip; signed out, nothing is asked of the storage.
+
 ### Changed
 
 - The Winnow picker's *Folder* scope is a navigator instead of one long list: type any words of a folder's name, a

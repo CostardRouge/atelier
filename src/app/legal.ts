@@ -56,6 +56,20 @@ export const NETWORK_EXCEPTIONS: readonly NetworkException[] = [
       'Only once you turn it on in Develop’s Lens section: one maker’s file at a time, nothing of yours in the request; what is kept on this device is the matched camera and lens.',
   },
   {
+    name: 'Sésame, the sign-in',
+    host: 'auth.steeve.website',
+    module: 'src/shared/sources/stockage/config.ts',
+    when:
+      'Only when you press Sign in with Sésame on Sources: you sign in there with your passkey, and this page receives a token for your storage, kept on this device until you sign out.',
+  },
+  {
+    name: 'Your storage',
+    host: 'stockage.steeve.website',
+    module: 'src/shared/sources/stockage/config.ts',
+    when:
+      'Only once you are signed in: the documents you keep there or move there (a trip, a project, a roll, a recap…), each under your account and this app, and what it says it can keep. Never a photo or a clip.',
+  },
+  {
     name: 'Audience measurement',
     host: MEASUREMENT_HOST,
     module: 'src/shared/lib/audience.ts',

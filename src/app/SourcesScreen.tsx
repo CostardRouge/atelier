@@ -37,6 +37,7 @@ const AFTER_CONNECT = '/studio/home';
 
 import { Fact, SourceRow, danger, ghost, legend, pill, solid } from './source-row';
 import PostizRow from './PostizRow';
+import StockageRow from './StockageRow';
 
 /** The dot + words for a state, in the four shapes an instance can be in. */
 function HealthPill({ health }: { health: SourceHealth }) {
@@ -502,6 +503,11 @@ export default function SourcesScreen({ query }: { query: string }) {
             {error}
           </p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className={legend}>Storage</p>
+        <StockageRow />
       </div>
 
       <div className="flex flex-col gap-2">

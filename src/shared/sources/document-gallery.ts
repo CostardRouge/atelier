@@ -10,7 +10,7 @@
 
 import { DEFAULT_SOURCE_ID, groupBySource, listSources, sourceById, type SourceInfo } from './source';
 import { bucketHolds } from './winnow/client';
-import { getWinnowConnection } from './winnow/store';
+import { documentSheetFor } from './doc-remote';
 
 /** One document as an instance lists it. */
 export interface RemoteDocRow<D> {
@@ -46,7 +46,7 @@ export function documentSourcesFor(kind: string): SourceInfo[] {
   return listSources().filter(
     (s) =>
       s.capabilities.documents &&
-      (s.id === DEFAULT_SOURCE_ID || bucketHolds(getWinnowConnection(s.id)?.capabilities, kind)),
+      (s.id === DEFAULT_SOURCE_ID || bucketHolds(documentSheetFor(s.id), kind)),
   );
 }
 

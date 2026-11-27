@@ -102,6 +102,12 @@ Today it ships twelve tools, converging into a few editors:
 > fetched from it the first time a picture asks for one — all under your
 > account there. Nothing is sent to a server you did not name yourself.
 >
+> Your **storage** works the same way once you sign in with **Sésame** on
+> `#/sources` (the passkey sign-in of the author's apps): every gallery then
+> offers it beside this browser and your Winnow, a document moves there with
+> the gallery's *Keep on* and reopens on any device signed in — the document
+> only, never a photo or a clip. Signed out, nothing is asked of it.
+>
 > The same holds for a **Postiz** of your own, connected on `#/sources` with
 > its address and an API key: only when you press *Schedule* in a recap's
 > *Export* tab (or an agent you drive does), Recap sends that Postiz the files

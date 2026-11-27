@@ -85,7 +85,7 @@ export default function LegalNotice() {
           Who publishes Atelier, who hosts it, and what it knows about you: very little. Your files never leave your
           machine, and what the app keeps, it keeps in this browser.
         </p>
-        <p className="m-0 mt-2 text-xs text-muted">Last updated on 19 October 2026.</p>
+        <p className="m-0 mt-2 text-xs text-muted">Last updated on 27 November 2026.</p>
       </header>
 
       <Section title="Publisher">
@@ -115,7 +115,7 @@ export default function LegalNotice() {
         <P>
           Your photos, clips and logs are read in this browser and never uploaded. What Atelier keeps, it keeps in this
           browser’s storage, on this device only: your projects, trips, rolls, atlases, mosaics and recaps with their settings and
-          small previews of them; the story script you loaded in Storytelling and its last ten versions, how long its last exports took on this device, with a small square of each picture its wall shows and a larger copy of each developed picture its before/after shows, taken from your Winnow; the colours and a 160-pixel tile of each picture a Mosaic draws, taken from your Winnow and kept until the last mosaic using them is deleted; for each Recap, its settings and choices (and the style you kept for each of its templates), a copy of the trip its opener drives when you gave it one — its legs, places, road and vehicles, taken from your trips on this device or from a trip file you chose, never its pieces — a copy at most 2048 pixels wide of each picture it shows and the clips it plays — taken from your Winnow or from the files you added — and the sound you chose for it, all kept until the last recap using them is deleted, and a small picture of each post it sent to your Postiz, kept while a recap remembers sending it; the Winnow instances you connected, with the app token you
+          small previews of them; the story script you loaded in Storytelling and its last ten versions, how long its last exports took on this device, with a small square of each picture its wall shows and a larger copy of each developed picture its before/after shows, taken from your Winnow; the colours and a 160-pixel tile of each picture a Mosaic draws, taken from your Winnow and kept until the last mosaic using them is deleted; for each Recap, its settings and choices (and the style you kept for each of its templates), a copy of the trip its opener drives when you gave it one — its legs, places, road and vehicles, taken from your trips on this device or from a trip file you chose, never its pieces — a copy at most 2048 pixels wide of each picture it shows and the clips it plays — taken from your Winnow or from the files you added — and the sound you chose for it, all kept until the last recap using them is deleted, and a small picture of each post it sent to your Postiz, kept while a recap remembers sending it; your sign-in to your storage (Sésame’s tokens, until you sign out) and what it says it can keep; the Winnow instances you connected, with the app token you
           pasted for one on another site; the Postiz you connected, with its API key, the account it publishes to and your
           publishing rhythm; the looks and presets you loaded; the map tiles, lens profiles, camera profiles and
           logos you asked for or brought in; and your preferences (theme, layout, the choices each tool remembers). A
@@ -124,7 +124,7 @@ export default function LegalNotice() {
           both are switched in Develop’s settings. Nothing else of a file is kept.
         </P>
         <P>
-          None of this is sent anywhere, except what you send to a Winnow of your own (below) or export yourself. To
+          None of this is sent anywhere, except what you send to a Winnow or your storage (below) or export yourself. To
           erase it, delete the documents in the app, or clear this site’s data in your browser’s settings. An app
           installed from the home screen on iOS has a storage of its own: a document made in Safari is not in it.
         </P>
