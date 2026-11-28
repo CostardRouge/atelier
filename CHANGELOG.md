@@ -30,6 +30,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 - Develop: a film stock's dials and the grain and halation dials carry a ↺ like every other slider — back to the
   stock's own number, or to where the switch turned them on.
+- Develop: the first subject picked says that the model is loading (17 MB, once per visit) — on the stage's hairline,
+  in the masthead and under the Subject buttons — instead of waiting in silence.
 - The Winnow picker's *Folder* list gives each folder the days it was shot on where you are, not in UTC: in
   Australia a folder used to read one day early (Sony's `10061122` listed as 21 November), while *Day* showed its
   pictures on the right date.

@@ -600,10 +600,17 @@ function ShapeControls({
               Clear
             </Button>
           </div>
-          <span className="font-mono text-3xs text-faint">
+          <span
+            role="status"
+            className={`text-xs leading-relaxed ${
+              subject?.working || (mask.points.length > 0 && !subject?.resolved) ? 'text-accent animate-pulse' : 'text-muted'
+            }`}
+          >
             {subject?.state === 'unavailable'
               ? 'the model could not be loaded — every other mask still works'
-              : mask.points.length === 0
+              : subject?.state === 'loading' && mask.points.length > 0
+                ? 'loading the subject model — 17 MB, once per visit…'
+                : mask.points.length === 0
                 ? mask.minus?.length
                   ? 'tap the subject to add it — a removal alone takes away from nothing'
                   : 'tap the subject on the picture'

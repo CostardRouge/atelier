@@ -1541,6 +1541,8 @@ export default function PictureWorkbench({
     view: picture.segmentView,
     // Per PICTURE: one picture's subject must never be shown on another.
     pictureKey: entry.id,
+    // The model's load and answer as a task on the stage: its hairline says it.
+    taskScope,
   });
   const { rasters: resolvedSubjects, fresh: freshSubject } = subject;
   useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);

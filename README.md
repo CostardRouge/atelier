@@ -2437,7 +2437,8 @@ can take a subject **out** of itself (*Except › The subject*): darken the
 whole picture except the person, and the person's own layer alone decides
 them. The model (17 MB) is served from this site and loads the first time a
 subject is asked for, in a worker of its own so the page stays live while it
-thinks; an export segments the same points on the picture it delivers.
+thinks — the stage's hairline, the masthead and the Subject line say so while
+it loads; an export segments the same points on the picture it delivers.
 
 **Combining masks.** A layer's mask can be combined with up to four more,
 the way Lightroom does it, and the mask reads as a **recipe** of them — a

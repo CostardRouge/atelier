@@ -15,6 +15,7 @@ import { subjectLayersToSegment, type AdjustLayer } from './layer';
 import { subjectRefineOf, type SubjectMask } from '../render/mask';
 import { cutConfidence, type GuideImage } from '../segment/subject-refine';
 import type { SegmentView } from './segment-view';
+import { startTask, type TaskHandle } from '../tasks/tasks';
 import { knownSubjectPoints, type KnownPoints } from './subject-known';
 
 /**
@@ -151,16 +152,27 @@ function lruSet<V>(cache: Map<string, V>, key: string, value: V, cap: number): v
   }
 }
 
+/** What the task says while the model is fetched — the one wait a first tap pays. */
+const LOADING_LABEL = 'Loading the subject model';
+const FINDING_LABEL = 'Finding the subject';
+
 export function useSubjectMasks({
   layers,
   view,
   pictureKey,
+  taskScope = null,
 }: {
   layers: readonly AdjustLayer[] | null | undefined;
   /** What the model is shown, and the name of its frame. Null while the picture is decoding. */
   view: SegmentView | null;
   /** Changes when the open picture does, so one picture's masks never serve another. */
   pictureKey: string;
+  /**
+   * The stage's task scope: the model's load and its answer are a TASK there,
+   * so the stage's hairline and the masthead's pill say it — the first tap
+   * waits seconds for a 17 MB model, and a wait is never bare (`tasks.md`).
+   */
+  taskScope?: string | null;
 }): SubjectMasks {
   const [rasters, setRasters] = useState<ReadonlyMap<string, BrushRaster>>(new Map());
   const [working, setWorking] = useState<string | null>(null);
@@ -245,6 +257,14 @@ export function useSubjectMasks({
       void previous?.ready.then((s) => s.release());
     }
     const shownNow = shown.current;
+    // One task per run, started at the first real inference and ended with
+    // the run — or with its cancellation, so a picture left mid-answer does
+    // not leave a task behind.
+    const held: { task: TaskHandle | null } = { task: null };
+    const say = (label: string) => {
+      if (held.task) held.task.update({ label });
+      else held.task = startTask({ label, scope: taskScope, detail: label === LOADING_LABEL ? '17 MB, once per visit' : null });
+    };
 
     void (async () => {
       const input = await shownNow.ready;
@@ -266,8 +286,15 @@ export function useSubjectMasks({
           const key = `${viewKey}#${pointKey(pictureKey, want.model, tap.point)}`;
           let mask = lruGet(pointCache, key) ?? null;
           if (!mask) {
-            mask = await segmentPoint(input.image, { x: tap.point[0], y: tap.point[1] });
+            const asked = segmentPoint(input.image, { x: tap.point[0], y: tap.point[1] });
+            // The model starts loading on the first ask, synchronously — so
+            // the panel and the task say "loading" for as long as it does.
+            const now = segmenterState();
+            setState(now);
+            say(now === 'loading' ? LOADING_LABEL : FINDING_LABEL);
+            mask = await asked;
             setState(segmenterState());
+            held.task?.update({ label: FINDING_LABEL, detail: null });
             if (mask) lruSet(pointCache, key, mask, pointCacheSize());
           }
           if (mask && isNew(want.id, tapKey(pictureKey, want.model, tap)) && !cancelled && runId.current === run) {
@@ -287,14 +314,16 @@ export function useSubjectMasks({
         }
       }
       if (!cancelled && runId.current === run) setWorking(null);
+      held.task?.done();
     })();
 
     return () => {
       cancelled = true;
+      held.task?.done();
     };
     // Keyed on `signature`, the string form of `wanted` — listing the array
     // itself would re-run this on every render, and a re-run is an inference.
-  }, [signature, source, viewKey]);
+  }, [signature, source, viewKey, taskScope]);
 
   // Record every subject layer's points — those with none included, which is
   // what makes the FIRST tap on a fresh layer a new point — after the effect
