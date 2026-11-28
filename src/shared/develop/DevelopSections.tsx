@@ -7,7 +7,7 @@
 
 import type { SavedGrade } from '../lut/saved-grade';
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import GradePanel from '../lut/GradePanel';
+import GradePanel, { LOOKS_COMBINE } from '../lut/GradePanel';
 import type { LutPreviewSource } from '../lut/LutGalleryModal';
 import type { LutStack } from '../lut/use-lut-stack';
 import type { ButtonSize } from '../ui/Button';
@@ -743,17 +743,22 @@ export function DevelopLookSection({
       title="Look"
       marked={stack.layers.length > 0}
       info={
-        legend ?? (
-          <p>
-            The same grade the piece already wears, applied AFTER this correction — set both in one
-            place. Looks apply top to bottom and the output transform last.
-          </p>
-        )
+        <>
+          {legend ?? (
+            <p>
+              The same grade the piece already wears, applied AFTER this correction — set both in one
+              place. The output transform goes last.
+            </p>
+          )}
+          <p>{LOOKS_COMBINE}</p>
+          <p>How a look is interpolated and how a big picture is drawn are this device’s, in Develop’s settings.</p>
+        </>
       }
     >
       {header}
       <GradePanel
         stack={stack}
+        standalone={false}
         previewHeight={previewHeight}
         previewImage={previewImage}
         previewLabel={previewLabel}

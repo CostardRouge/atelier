@@ -17,6 +17,9 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Changed
 
+- Develop's Look section is shorter: *Interpolation* and *Big pictures* live in Develop's settings only, and how looks
+  combine is behind the section's ⓘ instead of a loose ⓘ at its foot.
+
 - The Winnow picker's *Folder* scope is a navigator instead of one long list: type any words of a folder's name, a
   month or a device to find it, go down your own folder tree in **Columns** (with a preview of the folder at the
   end), a **List** that unfolds or **Icons** with each folder's covers, and come back to your five last folders in
@@ -25,6 +28,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ### Fixed
 
+- Develop: a film stock's dials and the grain and halation dials carry a ↺ like every other slider — back to the
+  stock's own number, or to where the switch turned them on.
 - The Winnow picker's *Folder* list gives each folder the days it was shot on where you are, not in UTC: in
   Australia a folder used to read one day early (Sony's `10061122` listed as 21 November), while *Day* showed its
   pictures on the right date.

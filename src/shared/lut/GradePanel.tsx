@@ -55,7 +55,19 @@ interface GradePanelProps {
   previewHeight?: number | null;
   /** False where the host's preview does not draw the film node at all (the Studio's stage). */
   previewDraws?: boolean;
+  /**
+   * False where the host is a SECTION with its own ⓘ and the device's render
+   * preferences live in a settings sheet (Develop): the Interpolation and Big
+   * pictures rows and the trailing "how looks combine" dot are left out — a
+   * fact said twice is said once, and the prose goes behind the section's ⓘ
+   * (`LOOKS_COMBINE`).
+   */
+  standalone?: boolean;
 }
+
+/** How looks combine: standing prose, read once — behind an ⓘ, the panel's or its host section's. */
+export const LOOKS_COMBINE =
+  'Looks apply top to bottom and bake into one LUT — the preview, the stills and every export grade identically. Above 100% a look extrapolates past what it was authored for. A film stock goes after a conversion LUT, never before it. Its grain and halation are not in the LUT: they are drawn after it, at the size the frame is delivered at.';
 
 /**
  * The grade: a stack of looks applied top to bottom, each with its own
@@ -73,6 +85,7 @@ export default function GradePanel({
   previewIsLog = false,
   previewHeight = null,
   previewDraws = true,
+  standalone = true,
 }: GradePanelProps) {
   const packs = useLutPacks();
   const favourites = useLutFavourites();
@@ -343,62 +356,65 @@ export default function GradePanel({
         />
       </FieldRow>
 
-      <FieldRow
-        label="Interpolation"
-        hint={
-          stack.interpolation === 'tetrahedral'
-            ? 'Reads the 4 lattice corners that matter, so greys stay grey — what Resolve uses.'
-            : 'Averages all 8 corners: faster, and it can tint greys. Look at skies and gradients.'
-        }
-      >
-        <Segmented
-          fill
-          size="sm"
-          label="Interpolation"
-          value={stack.interpolation}
-          onChange={(mode) => stack.setInterpolation(mode)}
-          options={[
-            { id: 'tetrahedral', label: 'Tetrahedral' },
-            { id: 'trilinear', label: 'Trilinear' },
-          ]}
-          className="flex-1 min-w-0"
-        />
-      </FieldRow>
+      {standalone && (
+        <>
+          <FieldRow
+            label="Interpolation"
+            hint={
+              stack.interpolation === 'tetrahedral'
+                ? 'Reads the 4 lattice corners that matter, so greys stay grey — what Resolve uses.'
+                : 'Averages all 8 corners: faster, and it can tint greys. Look at skies and gradients.'
+            }
+          >
+            <Segmented
+              fill
+              size="sm"
+              label="Interpolation"
+              value={stack.interpolation}
+              onChange={(mode) => stack.setInterpolation(mode)}
+              options={[
+                { id: 'tetrahedral', label: 'Tetrahedral' },
+                { id: 'trilinear', label: 'Trilinear' },
+              ]}
+              className="flex-1 min-w-0"
+            />
+          </FieldRow>
 
-      {/* The second render preference, the same row as the first: whether a
-          picture past 12 megapixels — the loupe, a full-size export — is drawn
-          whole or a slice at a time (`render/band-policy.ts`). A phone needs
-          the slice; a computer does not, and the maintainer's Mac drew the
-          slices striped, so this is the switch that stops them per browser. */}
-      <FieldRow label="Big pictures" hint={BAND_HINTS[bands.preference]}>
-        <Segmented
-          fill
-          size="sm"
-          label="Big pictures"
-          value={bands.preference}
-          onChange={(mode) => bands.setPreference(mode)}
-          options={[
-            { id: 'auto', label: `Auto · ${autoBandsMean(deviceClass()) === 'bands' ? 'bands' : 'whole'}` },
-            { id: 'whole', label: 'Whole' },
-            { id: 'bands', label: 'In bands' },
-          ]}
-          className="flex-1 min-w-0"
-        />
-      </FieldRow>
+          {/* The second render preference, the same row as the first: whether a
+              picture past 12 megapixels — the loupe, a full-size export — is drawn
+              whole or a slice at a time (`render/band-policy.ts`). A phone needs
+              the slice; a computer does not, and the maintainer's Mac drew the
+              slices striped, so this is the switch that stops them per browser. */}
+          <FieldRow label="Big pictures" hint={BAND_HINTS[bands.preference]}>
+            <Segmented
+              fill
+              size="sm"
+              label="Big pictures"
+              value={bands.preference}
+              onChange={(mode) => bands.setPreference(mode)}
+              options={[
+                { id: 'auto', label: `Auto · ${autoBandsMean(deviceClass()) === 'bands' ? 'bands' : 'whole'}` },
+                { id: 'whole', label: 'Whole' },
+                { id: 'bands', label: 'In bands' },
+              ]}
+              className="flex-1 min-w-0"
+            />
+          </FieldRow>
+        </>
+      )}
 
       {/* How looks combine is read once and true every time: behind the dot.
           How many are on is a state, and stays in the open. */}
-      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted leading-relaxed">
-        {stack.layers.length > 1 && <span>{`${activeCount} of ${stack.layers.length} looks active`}</span>}
-        <InfoDot about="how looks combine">
-          <p>
-            Looks apply top to bottom and bake into one LUT — the preview, the stills and every
-            export grade identically. Above 100% a look extrapolates past what it was authored for.
-            A film stock goes after a conversion LUT, never before it. Its grain and halation are
-            not in the LUT: they are drawn after it, at the size the frame is delivered at.
-          </p>
-        </InfoDot>
-      </div>
+      {(standalone || stack.layers.length > 1) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted leading-relaxed">
+          {stack.layers.length > 1 && <span>{`${activeCount} of ${stack.layers.length} looks active`}</span>}
+          {standalone && (
+            <InfoDot about="how looks combine">
+              <p>{LOOKS_COMBINE}</p>
+            </InfoDot>
+          )}
+        </div>
+      )}
     </div>
   );
 }

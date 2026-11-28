@@ -28,6 +28,9 @@ interface FilmTextureDialsProps {
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
+/** What the switch turns on — and where each dial's ↺ puts it back. */
+const TURNED_ON: Readonly<FilmTexture> = { ...DEFAULT_FILM_TEXTURE, grain: 0.3, halation: 0.2 };
+
 /**
  * The film TEXTURE's dials: grain and halation, the half of a stock the cube
  * cannot carry.
@@ -67,7 +70,7 @@ export default function FilmTextureDials({
       <SwitchRow
         label="Grain and halation"
         checked={on}
-        onChange={(next) => onChange(next ? { ...DEFAULT_FILM_TEXTURE, grain: 0.3, halation: 0.2 } : null)}
+        onChange={(next) => onChange(next ? { ...TURNED_ON } : null)}
         hint="The half of a film stock the cube cannot carry: a grain field, and the bleed a bright highlight leaves through the base. Drawn after the look, at the size the frame is delivered at."
       />
       {on && (
@@ -79,6 +82,7 @@ export default function FilmTextureDials({
             max={TEXTURE_RANGES.grain.max}
             step={TEXTURE_RANGES.grain.step}
             value={t.grain}
+            reset={TURNED_ON.grain}
             onChange={(v) => patch({ grain: v })}
             format={pct}
           />
@@ -105,6 +109,7 @@ export default function FilmTextureDials({
             max={TEXTURE_RANGES.grainSize.max}
             step={TEXTURE_RANGES.grainSize.step}
             value={t.grainSize}
+            reset={TURNED_ON.grainSize}
             onChange={(v) => patch({ grainSize: v })}
             format={(v) => `h/${Math.round(1 / v)}`}
           />
@@ -116,6 +121,7 @@ export default function FilmTextureDials({
             max={TEXTURE_RANGES.grainChroma.max}
             step={TEXTURE_RANGES.grainChroma.step}
             value={t.grainChroma}
+            reset={TURNED_ON.grainChroma}
             onChange={(v) => patch({ grainChroma: v })}
             format={pct}
           />
@@ -127,6 +133,7 @@ export default function FilmTextureDials({
             max={TEXTURE_RANGES.grainFps.max}
             step={TEXTURE_RANGES.grainFps.step}
             value={t.grainFps}
+            reset={TURNED_ON.grainFps}
             onChange={(v) => patch({ grainFps: v })}
             format={(v) => (v <= 0 ? 'Frozen' : `${Math.round(v)}/s`)}
           />
@@ -138,6 +145,7 @@ export default function FilmTextureDials({
             max={TEXTURE_RANGES.halation.max}
             step={TEXTURE_RANGES.halation.step}
             value={t.halation}
+            reset={TURNED_ON.halation}
             onChange={(v) => patch({ halation: v })}
             format={pct}
           />
@@ -150,6 +158,7 @@ export default function FilmTextureDials({
                 max={TEXTURE_RANGES.halationRadius.max}
                 step={TEXTURE_RANGES.halationRadius.step}
                 value={t.halationRadius}
+                reset={TURNED_ON.halationRadius}
                 onChange={(v) => patch({ halationRadius: v })}
                 format={(v) => `h/${Math.round(1 / v)}`}
               />
@@ -161,6 +170,7 @@ export default function FilmTextureDials({
                 max={TEXTURE_RANGES.halationThreshold.max}
                 step={TEXTURE_RANGES.halationThreshold.step}
                 value={t.halationThreshold}
+                reset={TURNED_ON.halationThreshold}
                 onChange={(v) => patch({ halationThreshold: v })}
                 format={pct}
               />

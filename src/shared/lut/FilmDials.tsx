@@ -56,6 +56,10 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
     onChange({ ...settings, response: { ...r, ...over } });
 
   const shown: FilmCurve = channel === 'rgb' ? r.curve.r : r.curve[channel];
+  // Where a dial's ↺ and double-click go: the STOCK's own number, so a dial
+  // puts back what the stock says rather than a neutral the stock never had.
+  const own = stock?.response;
+  const ownCurve: FilmCurve | undefined = own && (channel === 'rgb' ? own.curve.r : own.curve[channel]);
   const patchCurve = (key: keyof FilmCurve, value: number) => {
     const curve =
       channel === 'rgb'
@@ -98,6 +102,7 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
         hint="How much each dye layer also sees its neighbours' light: hue shifts, a little less purity."
         {...RESPONSE_RANGES.coupling}
         value={r.coupling}
+        reset={own?.coupling}
         onChange={(v) => patch({ coupling: v })}
         format={(v) => `${Math.round(v)}%`}
       />
@@ -106,6 +111,7 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
         hint="Coupler inhibition: a saturated colour melts toward neutral instead of clipping to a flat patch."
         {...RESPONSE_RANGES.inhibition}
         value={r.inhibition}
+        reset={own?.inhibition}
         onChange={(v) => patch({ inhibition: v })}
         format={(v) => `${Math.round(v)}%`}
       />
@@ -114,6 +120,7 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
         name="Dye saturation"
         {...RESPONSE_RANGES.dye}
         value={r.dye}
+        reset={own?.dye}
         onChange={(v) => patch({ dye: v })}
         format={(v) => signed(v)}
       />
@@ -135,6 +142,7 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
           label="Paper grade"
           {...RESPONSE_RANGES.paperGrade}
           value={r.paperGrade}
+          reset={own?.paperGrade}
           onChange={(v) => patch({ paperGrade: v })}
           format={(v) => v.toFixed(1)}
         />
@@ -166,6 +174,7 @@ export default function FilmDials({ settings, onChange }: FilmDialsProps) {
           name={`${label} (${channel === 'rgb' ? 'all channels' : channel.toUpperCase()})`}
           {...CURVE_RANGES[key]}
           value={shown[key]}
+          reset={ownCurve?.[key]}
           onChange={(v) => patchCurve(key, v)}
           format={format}
         />
