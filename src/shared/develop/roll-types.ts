@@ -26,7 +26,8 @@ import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
 import { DEFAULT_DEVELOP, developOrNull, isDefaultDevelop, isRawDevelop, type DevelopSettings } from './develop';
 import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
-import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
+import { DEFAULT_FRAMING, isDefaultFraming, normaliseFraming, wrapDegrees, type Framing } from '../media/framing';
+import { splitRotation } from './crop-rect';
 import { isClipName } from '../library/assets';
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
@@ -1052,6 +1053,29 @@ export function copyCropTo(
     return { ...p, aspect: crop.aspect, framing: framing ? { ...framing } : null };
   });
   return found ? { ...roll, pictures, updatedAt: now } : roll;
+}
+
+/**
+ * One picture's STRAIGHTEN — the fine angle, never the crop — written onto
+ * others (his ask, 2026-11-28: a series shot from one tilted tripod levels
+ * once). Each keeps its own quarter turn, flips, format and zone: a stored
+ * framing is rotation-aware (scale 1 covers the frame at any angle), so the
+ * angle alone is a valid crop and the renderer keeps its pan inside. A
+ * picture brought back to 0° with nothing else on it stores no framing.
+ */
+export function copyStraightenTo(roll: RollDoc, ids: readonly string[], fine: number, now: number = Date.now()): RollDoc {
+  const angle = Math.max(-45, Math.min(45, fine));
+  let changed = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id)) return p;
+    const was = p.framing ?? { ...DEFAULT_FRAMING, fit: 'cover' as const };
+    const rotation = wrapDegrees(splitRotation(was.rotation).quarter + angle);
+    if (Math.abs(wrapDegrees(rotation - was.rotation)) < 1e-9) return p;
+    changed = true;
+    const next: Framing = { ...was, rotation };
+    return { ...p, framing: isDefaultFraming(next) ? null : next };
+  });
+  return changed ? { ...roll, pictures, updatedAt: now } : roll;
 }
 
 /**

@@ -346,6 +346,7 @@ export default function PictureWorkbench({
   applyTo,
   lookApplyTo,
   cropApplyTo,
+  angleApplyTo = [],
   borderApplyTo,
   onBorder,
   onDevelop,
@@ -446,6 +447,8 @@ export default function PictureWorkbench({
   lookApplyTo: readonly LookApplyVerb[];
   /** The crop's batch verbs — this picture's aspect and framing written onto others. */
   cropApplyTo: readonly CropApplyVerb[];
+  /** The straighten's batch verbs — this picture's angle alone written onto others, their crops kept. */
+  angleApplyTo?: readonly CropApplyVerb[];
   /** The border's own batch verbs — never the crop (the maintainer's two verbs). */
   borderApplyTo: readonly BorderApplyVerb[];
   onBorder: (border: RollBorder | null) => void;
@@ -2068,6 +2071,13 @@ export default function PictureWorkbench({
           e.preventDefault();
           c.swap();
           return;
+        case 'level':
+          // Auto level from any tab: the same run as the Crop tab's switch,
+          // so the switch's memory (and its turning off) is the same.
+          if (!autoLevelRef.current) return;
+          e.preventDefault();
+          autoLevelRef.current();
+          return;
         case 'crop-view':
           // Only where the stage offers it — zoomed, off the Crop tab.
           if (!cropToViewRef.current) return;
@@ -2148,6 +2158,13 @@ export default function PictureWorkbench({
     : null;
   const cropToViewRef = useRef(cropToView);
   cropToViewRef.current = cropToView;
+  const autoLevelRef = useRef<(() => void) | null>(null);
+  // A switch, like the Crop tab's Auto: pressed again, the crop from before comes back.
+  autoLevelRef.current = picture.source
+    ? () => {
+        if (!cropSwitches.turnOff('level')) runAutoLevel();
+      }
+    : null;
   // The crop stage's pill: the VIEW's zoom (inspection), never the crop's —
   // the zone's size is the crop. Drawn at every width, the pinch's twin
   // (`frontend.md`: a pinch the browser can take away needs a way in that
@@ -3460,6 +3477,7 @@ export default function PictureWorkbench({
               onBorder={onBorder}
               deliveredSize={exports.openDelivery?.out ?? null}
               verbs={cropApplyTo}
+              angleVerbs={angleApplyTo}
               borderVerbs={borderApplyTo}
               clip={clip}
               subjectCrop={subjectCrop}

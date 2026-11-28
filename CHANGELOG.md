@@ -9,6 +9,12 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 
 ## [Unreleased]
 
+### Added
+
+- Develop: **⇧L** levels the picture from any tab (Auto level; pressed again, the crop from before comes back), and
+  **Same angle on…** under Straighten writes the angle alone onto the selected pictures — or the rest of the roll —
+  each keeping its own crop.
+
 ### Changed
 
 - The Winnow picker's *Folder* scope is a navigator instead of one long list: type any words of a folder's name, a

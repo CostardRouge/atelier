@@ -43,6 +43,7 @@ const GROUPS: readonly ShortcutGroup[] = [
     rows: [
       { keys: 'A · D · L · C · E', what: 'the tabs, each by its own initial — Adjust, Detail, Layers, Crop, Export' },
       { keys: 'X', what: 'on the Crop tab, the zone’s portrait ↔ landscape' },
+      { keys: '⇧L', what: 'level the picture (Auto level) from any tab — pressed again, the crop from before comes back' },
       { keys: '⇧C · the crop pill', what: 'zoomed in, make what the screen shows the crop — the view goes back to the fit' },
       { keys: '⌘/Ctrl C · V', what: 'copy everything done to this picture; paste it here, or onto the selected pictures — the ▾ beside paste chooses what goes' },
       { keys: '⌘/Ctrl \'', what: 'a variant of this picture as it stands — the same file with its own edits; Add → as shot starts one bare' },

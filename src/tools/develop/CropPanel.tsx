@@ -50,6 +50,7 @@ export default function CropPanel({
   onBorder,
   deliveredSize,
   verbs = [],
+  angleVerbs = [],
   borderVerbs = [],
   clip = false,
   subjectCrop,
@@ -64,6 +65,8 @@ export default function CropPanel({
   onBorder: (border: RollBorder | null) => void;
   deliveredSize: { w: number; h: number } | null;
   verbs?: readonly CropApplyVerb[];
+  /** The straighten alone onto others (`copyStraightenTo`): drawn under the slider while there is an angle. */
+  angleVerbs?: readonly CropApplyVerb[];
   borderVerbs?: readonly BorderApplyVerb[];
   /** A CLIP: the crop is held still over every frame, and it wears no border (`roll-types.ts`, `isClipPicture`). */
   clip?: boolean;
@@ -79,6 +82,7 @@ export default function CropPanel({
   const touched = !isDefaultFraming(framing) || aspect !== 'original';
   const levelState = switches?.state('level') ?? 'off';
   const subjectState = switches?.state('subject') ?? 'off';
+  const fine = splitRotation(framing.rotation).fine;
   return (
     <>
       <DevelopFold
@@ -105,7 +109,9 @@ export default function CropPanel({
               <strong> Level</strong>: draw a line along the horizon (or an upright) and the angle is
               corrected by it. <strong>Auto</strong> finds that line by itself — the strongest straight
               edge within 15° of level, a horizon or a wall — and says when the picture holds none it can
-              trust. The quarter turns take the zone with the picture.
+              trust; <strong>⇧L</strong> runs it from any tab. <strong>Same angle on…</strong> under the
+              slider writes this angle alone onto the selected pictures (or the rest of the roll), each
+              keeping its own crop. The quarter turns take the zone with the picture.
             </p>
             <p>
               <strong>Crop to subject</strong> draws the zone around the subject — what your Subject
@@ -159,6 +165,25 @@ export default function CropPanel({
           value={splitRotation(framing.rotation).fine}
           onChange={crop.straighten}
           format={(v) => `${v.toFixed(1)}°`}
+          reset={0}
+          trailing={
+            fine !== 0 && angleVerbs.length > 0
+              ? angleVerbs.map((verb) => (
+                  <Button
+                    key={verb.id}
+                    size="sm"
+                    variant="ghost"
+                    title={verb.hint ? `This angle alone, each picture keeping its own crop — ${verb.hint}` : 'This angle alone, each picture keeping its own crop'}
+                    onClick={() => {
+                      verb.run({ aspect, framing: { ...framing } });
+                      onTold?.(`${fine.toFixed(1)}° · ${verb.label.toLowerCase()}`);
+                    }}
+                  >
+                    {verb.label}
+                  </Button>
+                ))
+              : undefined
+          }
         />
         <FieldRow label="Level">
           <Button

@@ -267,6 +267,14 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
   });
 
+  it('levels on ⇧L, and a bare L still opens the layers', () => {
+    expect(editorKeyAction(press({ key: 'L', shiftKey: true }))).toBe('level');
+    expect(editorKeyAction(press({ key: 'l', shiftKey: true }))).toBe('level');
+    expect(editorKeyAction(press({ key: 'L', shiftKey: true, repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'L', shiftKey: true, metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'l' }))).toEqual({ tab: 'layers' });
+  });
+
   it('opens each tab on its own initial', () => {
     expect(editorKeyAction(press({ key: 'a' }))).toEqual({ tab: 'adjust' });
     expect(editorKeyAction(press({ key: 'A' }))).toEqual({ tab: 'adjust' });

@@ -183,6 +183,7 @@ export type EditorKeyAction =
   | { tab: WorkbenchTab }
   | 'swap'
   | 'crop-view'
+  | 'level'
   | 'help'
   | 'facts'
   | 'mask'
@@ -222,7 +223,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * else. ←/→ move along the strip, ⌥←/⌥→ move the open picture IN it, `\` holds "before" (its release is the
  * caller's), `/` turns the A/B divider on and off (`isCompareKey`), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
- * crops to the zoomed view (the caller decides whether there is one), `H`
+ * crops to the zoomed view (the caller decides whether there is one), ⇧L
+ * levels the picture (Auto level, from any tab), `H`
  * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
  * painted on it, `V` black and white, `S` the band's selection (and ⌘A every
  * shown picture while it is on), `B` the band folded to its rail, `G` the
@@ -273,6 +275,9 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   // ⇧C crops to what a zoomed view shows: the crop's own letter, shifted,
   // because it MAKES a crop without opening the tab. The only other shift chord.
   if (press.shiftKey && (press.key === 'C' || press.key === 'c')) return press.repeat ? null : 'crop-view';
+  // ⇧L levels the picture — Auto level without opening the Crop tab: the
+  // Level row's letter, shifted, as ⇧C is the crop's (his ask, 2026-11-28).
+  if (press.shiftKey && (press.key === 'L' || press.key === 'l')) return press.repeat ? null : 'level';
   if (press.shiftKey) return null;
   if (press.key === 'ArrowLeft') return 'previous';
   if (press.key === 'ArrowRight') return 'next';

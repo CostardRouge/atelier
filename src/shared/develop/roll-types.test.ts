@@ -20,6 +20,7 @@ import {
   sortRoll,
   copyBorderTo,
   copyCropTo,
+  copyStraightenTo,
   copyGradeTo,
   delivers,
   isClipPicture,
@@ -190,6 +191,21 @@ describe('editing the strip', () => {
     const plain = copyCropTo(next, ['p2'], { aspect: 'original', framing: { ...DEFAULT_FRAMING } }, 10);
     expect(plain.pictures[1]).toMatchObject({ aspect: 'original', framing: null });
     expect(copyCropTo(doc, ['nope'], { aspect: '1:1', framing: null }, 9)).toBe(doc);
+  });
+
+  it('copies the straighten alone, each picture keeping its own turn, flips, format and zone', () => {
+    let doc = roll(['a', 'b', 'c']);
+    doc = patchPicture(doc, 'p2', { aspect: '4:5', framing: { ...DEFAULT_FRAMING, scale: 1.4, x: 0.1, rotation: 90, flipX: true } }, 5);
+    const next = copyStraightenTo(doc, ['p2', 'p3'], -2.5, 9);
+    expect(next.pictures[0]).toBe(doc.pictures[0]);
+    expect(next.pictures[1]).toMatchObject({ aspect: '4:5', framing: { scale: 1.4, x: 0.1, rotation: 87.5, flipX: true } });
+    expect(next.pictures[2].framing).toMatchObject({ scale: 1, x: 0, y: 0, rotation: -2.5 });
+    expect(next.updatedAt).toBe(9);
+    // Back to level: a picture with nothing else on it stores no framing.
+    const level = copyStraightenTo(next, ['p3'], 0, 10);
+    expect(level.pictures[2].framing).toBeNull();
+    // The same angle again changes nothing, and says so by identity.
+    expect(copyStraightenTo(next, ['p2', 'p3'], -2.5, 11)).toBe(next);
   });
 
   it('copies a border onto other pictures and leaves their crops alone', () => {

@@ -31,6 +31,7 @@ import type { PostCropVignette } from '../../shared/render/post-vignette';
 import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
+import { splitRotation } from '../../shared/develop/crop-rect';
 import {
   openAfterRemovals,
   openPictureId,
@@ -87,6 +88,7 @@ import {
   pictureLabel,
   copyBorderTo,
   copyCropTo,
+  copyStraightenTo,
   copyGradeTo,
   delivers,
   isClipPicture,
@@ -1929,6 +1931,30 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, others, otherIds, selectionTargets, update, markWritten]);
 
+  // The STRAIGHTEN alone (his ask, 2026-11-28): a series shot from one
+  // tilted stance levels once — the angle, never the crop, each picture
+  // keeping its own zone, format and turn (`copyStraightenTo`).
+  const angleApplyTo = useMemo<CropApplyVerb[]>(() => {
+    if (!openId) return [];
+    const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) => {
+      update((r) => copyStraightenTo(r, targets, splitRotation(crop.framing.rotation).fine), 'apply');
+      markWritten(targets);
+    };
+    if (selectionTargets.length > 0) {
+      const n = selectionTargets.length;
+      return [{ id: 'angle-selection', label: `Same angle on ${n} selected`, run: write(selectionTargets) }];
+    }
+    if (others <= 0) return [];
+    return [
+      {
+        id: 'angle-roll',
+        label: `Same angle on ${others} other${others === 1 ? '' : 's'}`,
+        hint: 'select a series in the band (S) to level only those',
+        run: write(otherIds),
+      },
+    ];
+  }, [openId, others, otherIds, selectionTargets, update, markWritten]);
+
   // The look's own verbs, apart from the develop's: a look is chosen per
   // picture, and this is the one gesture that dresses others with it. They
   // copy the open picture's STORED look, which the stack writes through.
@@ -2946,6 +2972,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               applyTo={applyTo}
               lookApplyTo={lookApplyTo}
               cropApplyTo={cropApplyTo}
+              angleApplyTo={angleApplyTo}
               borderApplyTo={borderApplyTo}
               onBorder={(border) => handleBorder(open.id, border)}
               onDevelop={(develop, via) => handleDevelop(open.id, develop, via)}

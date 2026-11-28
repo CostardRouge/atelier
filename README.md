@@ -2469,7 +2469,10 @@ to keep clear of the corners and grows back to what you drew when you
 straighten back; **Level** corrects the angle from a line you draw along the
 horizon, and **Auto** finds that line by itself — the strongest straight edge
 within 15° of level, a horizon or a wall, read off the picture as shot — or
-says that the picture holds none it can trust and turns nothing. **Crop to
+says that the picture holds none it can trust and turns nothing; **⇧L** runs
+Auto level from any tab. Once a picture is straightened, **Same angle on…**
+under the slider writes that angle alone onto the pictures selected in the band
+(or the rest of the roll), each keeping its own crop. **Crop to
 subject** draws the zone around the subject — what your Subject layers point
 at, else what the model finds at the centre of the picture, and the line says
 which — with room around it, in the format chosen, slid inside the picture
