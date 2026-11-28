@@ -236,3 +236,52 @@ describe('one pointer', () => {
     expect(h2.only('gesture')).toHaveLength(0);
   });
 });
+
+describe('handPan — a tool on the primary press, the hand still moves the picture', () => {
+  it('pans on a trackpad glide and still zooms on a notch and a pinch', () => {
+    const h = harness();
+    const m = new ZoomGestureMachine(h.target, { handPan: true });
+    expect(m.onWheel(wheel(0, 6, { wheelDeltaY: -18, t: 0 }))).toBe(true);
+    expect(h.only('pan')).toEqual([['pan', -0, -6, 100, 80, 'wheel']]);
+    expect(h.only('zoom')).toEqual([]);
+    m.onWheel(wheel(0, 100, { wheelDeltaY: -120, t: 1000 }));
+    m.onWheel(wheel(0, 4, { ctrlKey: true, t: 1010 }));
+    expect(h.only('zoom')).toHaveLength(2);
+  });
+
+  it('leaves the glide zooming without it', () => {
+    const h = harness();
+    const m = new ZoomGestureMachine(h.target);
+    m.onWheel(wheel(0, 6, { wheelDeltaY: -18, t: 0 }));
+    expect(h.only('zoom')).toHaveLength(1);
+    expect(h.only('pan')).toEqual([]);
+  });
+
+  it('pans on the middle button without asking the surface', () => {
+    let asked = 0;
+    const h = harness({
+      drag: () => {
+        asked += 1;
+        return null;
+      },
+    });
+    const m = new ZoomGestureMachine(h.target, { handPan: true });
+    expect(m.onDown(mouse(10, 10, 0, { button: 1, overControl: true }))).toBe(true);
+    m.onMove(mouse(10 + DRAG_SLOP + 5, 10, 16, { button: 1 }));
+    m.onUp(mouse(10 + DRAG_SLOP + 5, 10, 32, { button: 1 }));
+    expect(asked).toBe(0);
+    expect(h.only('pan')).toEqual([['pan', DRAG_SLOP + 5, 0, 10 + DRAG_SLOP + 5, 10, 'drag']]);
+    expect(h.only('dragging')).toEqual([
+      ['dragging', true],
+      ['dragging', false],
+    ]);
+  });
+
+  it('ignores the middle button without it', () => {
+    const h = harness({ drag: () => 'pan' });
+    const m = new ZoomGestureMachine(h.target);
+    expect(m.onDown(mouse(10, 10, 0, { button: 1 }))).toBe(false);
+    m.onMove(mouse(40, 10, 16, { button: 1 }));
+    expect(h.only('pan')).toEqual([]);
+  });
+});

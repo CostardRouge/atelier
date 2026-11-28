@@ -44,6 +44,7 @@ export function useZoomGestures({
   enabled = true,
   wheel,
   slop,
+  handPan,
 }: UseZoomGesturesOptions): void {
   const live = useRef(target);
   live.current = target;
@@ -71,7 +72,7 @@ export function useZoomGestures({
           }
         },
       },
-      { wheel, slop },
+      { wheel, slop, handPan },
     );
 
     const read = (e: PointerEvent): GesturePointer => ({
@@ -94,10 +95,16 @@ export function useZoomGestures({
         ctrlKey: e.ctrlKey,
         metaKey: e.metaKey,
         shiftKey: e.shiftKey,
+        deltaMode: e.deltaMode,
+        wheelDeltaY: (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY,
+        t: e.timeStamp,
       });
       if (took) e.preventDefault();
     };
-    const onDown = (e: PointerEvent) => machine.onDown(read(e));
+    const onDown = (e: PointerEvent) => {
+      // A middle-button pan: no autoscroll, no paste on Linux, no tool below.
+      if (machine.onDown(read(e))) e.preventDefault();
+    };
     const onMove = (e: PointerEvent) => {
       if (machine.onMove(read(e))) e.preventDefault();
     };
@@ -118,5 +125,5 @@ export function useZoomGestures({
       el.removeEventListener('pointerup', onUp, capture);
       el.removeEventListener('pointercancel', onCancel, capture);
     };
-  }, [ref, capture, active, enabled, wheel, slop]);
+  }, [ref, capture, active, enabled, wheel, slop, handPan]);
 }

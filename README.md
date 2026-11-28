@@ -2438,7 +2438,10 @@ whole picture except the person, and the person's own layer alone decides
 them. The model (17 MB) is served from this site and loads the first time a
 subject is asked for, in a worker of its own so the page stays live while it
 thinks — the stage's hairline, the masthead and the Subject line say so while
-it loads; an export segments the same points on the picture it delivers.
+it loads; an export segments the same points on the picture it delivers. With
+a brush or a pick armed the primary button is the tool's, so on the Develop
+stage the **middle button** drags a zoomed picture, and a trackpad's **two
+fingers** move it too (the pinch zooms, as does a mouse wheel's notch).
 
 **Combining masks.** A layer's mask can be combined with up to four more,
 the way Lightroom does it, and the mask reads as a **recipe** of them — a

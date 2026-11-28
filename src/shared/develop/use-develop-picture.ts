@@ -2401,6 +2401,9 @@ export function useDevelopPicture({
   };
   const handlers: DevelopPicture['handlers'] = {
     onPointerDown: (e) => {
+      // The middle button is the zoom machine's pan (`handPan`), over any
+      // tool: never a stroke, a pick, a wipe or a hold.
+      if (e.pointerType === 'mouse' && e.button === 1) return;
       const touch = e.pointerType === 'touch';
       if (touch) fingers.current += 1;
       // A second finger is the pinch's (`onTakeover`), never a wipe — nor a hold.

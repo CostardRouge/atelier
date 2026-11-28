@@ -35,10 +35,16 @@
  *  - One pointer is offered to the surface as a DRAG (`drag`): it may pan it
  *    (`'pan'`), read it itself (a swipe, a wipe), or refuse it. A finger over
  *    a control still COUNTS for the pinch, but never starts a drag.
+ *  - Under `handPan` (a Looking surface whose primary press may belong to a
+ *    tool — a mask's brush, a subject's pick): the MIDDLE button always pans,
+ *    whatever the surface says, and a TRACKPAD's two-finger glide pans while
+ *    a mouse's notched wheel still zooms (`wheel-source.ts`); the pinch stays
+ *    the trackpad's zoom.
  */
 
 import { wheelZoomFactor, type Point } from './pan-zoom';
 import { wheelZooms, type WheelZoom } from './stage-zoom';
+import { WheelSource } from './wheel-source';
 
 /** Pixels a pointer travels before its press is a drag and not a tap. */
 export const DRAG_SLOP = 3;
@@ -67,6 +73,12 @@ export interface GestureWheel extends Point {
   ctrlKey: boolean;
   metaKey: boolean;
   shiftKey: boolean;
+  /** 0 pixels, 1 lines, 2 pages — what tells a notched wheel from a glide. */
+  deltaMode?: number;
+  /** The legacy `wheelDeltaY`, where the browser sends it. */
+  wheelDeltaY?: number;
+  /** Event time, ms — a glide is a stream. Absent, read as 0. */
+  t?: number;
 }
 
 export type ZoomBy = 'wheel' | 'pinch';
@@ -135,6 +147,8 @@ export interface ZoomGestureOptions {
   /** What a bare wheel does; `'none'` leaves the wheel entirely to the surface. */
   wheel?: WheelZoom | 'none';
   slop?: number;
+  /** The middle button pans, and a trackpad's glide pans rather than zooms (see the grammar above). */
+  handPan?: boolean;
 }
 
 interface Drag {
@@ -164,13 +178,16 @@ export class ZoomGestureMachine {
   private drag: Drag | null = null;
   private readonly wheel: WheelZoom | 'none';
   private readonly slop: number;
+  private readonly handPan: boolean;
+  private readonly wheelSource = new WheelSource();
 
   constructor(
     private readonly target: ZoomTarget,
-    { wheel = 'any', slop = DRAG_SLOP }: ZoomGestureOptions = {},
+    { wheel = 'any', slop = DRAG_SLOP, handPan = false }: ZoomGestureOptions = {},
   ) {
     this.wheel = wheel;
     this.slop = slop;
+    this.handPan = handPan;
   }
 
   /** Two fingers are on the surface. */
@@ -186,6 +203,20 @@ export class ZoomGestureMachine {
   /** Whether the wheel event was consumed (the caller prevents its default). */
   onWheel(e: GestureWheel): boolean {
     if (this.wheel === 'none') return false;
+    // A trackpad's two fingers gliding PAN under `handPan`; the pinch (a
+    // ctrl-wheel) and a mouse's notches go on below. Read for every bare
+    // event, so the stream's memory sees the whole glide.
+    const glide =
+      this.handPan &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      this.wheelSource.read({ deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, wheelDeltaY: e.wheelDeltaY, t: e.t ?? 0 }) ===
+        'trackpad';
+    if (glide) {
+      this.target.onGesture?.();
+      this.target.panBy(-e.deltaX, -e.deltaY, { x: e.x, y: e.y }, 'wheel');
+      return true;
+    }
     const zooms = wheelZooms(e, this.wheel);
     // Under `modifier` a bare wheel is the page's: nothing here reads it.
     if (!zooms && this.wheel === 'modifier') return false;
@@ -200,7 +231,18 @@ export class ZoomGestureMachine {
     return true;
   }
 
-  onDown(p: GesturePointer): void {
+  /** True when the press is the machine's alone (a middle-button pan): the caller prevents its default. */
+  onDown(p: GesturePointer): boolean {
+    if (this.handPan && p.kind === 'mouse' && p.button === 1) {
+      // The middle button pans whatever the primary one is doing here — a
+      // brush, a pick, a divider — and whatever it landed on: the surface is
+      // not asked, so no tool ever sees it.
+      if (this.pinch || this.drag) return true;
+      this.target.onGesture?.();
+      this.drag = { id: p.id, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y, lastT: p.t, speedX: 0, moving: false, mode: 'pan' };
+      this.target.capture?.(p.id);
+      return true;
+    }
     if (p.kind === 'touch') {
       this.touches.set(p.id, { x: p.x, y: p.y, t: p.t });
       if (this.touches.size === 2) {
@@ -211,16 +253,17 @@ export class ZoomGestureMachine {
         this.pinch = { spread: this.spread(), scale: this.target.scaleAt(this.centre()) };
         this.target.onTakeover?.();
         this.target.onPinch?.(true);
-        return;
+        return false;
       }
-      if (this.touches.size > 2) return;
+      if (this.touches.size > 2) return false;
     } else if (p.button !== 0) {
-      return;
+      return false;
     }
     this.target.onGesture?.();
     // A control keeps its own press; its finger was still counted above.
-    if (p.overControl || this.pinch) return;
+    if (p.overControl || this.pinch) return false;
     this.begin({ x: p.x, y: p.y, pointer: p, handoff: false }, p.id, p.t, p.kind);
+    return false;
   }
 
   onMove(p: GesturePointer): boolean {

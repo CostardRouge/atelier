@@ -14,6 +14,8 @@ Versions 0.1.0 to 0.12.0 were given after the fact to the history's turning poin
 - Develop: **⇧L** levels the picture from any tab (Auto level; pressed again, the crop from before comes back), and
   **Same angle on…** under Straighten writes the angle alone onto the selected pictures — or the rest of the roll —
   each keeping its own crop.
+- Develop: on the stage, the **middle mouse button** drags a zoomed picture whatever tool is armed (a brush, a subject
+  pick), and a trackpad's **two-finger** glide moves it instead of zooming — the pinch zooms, as does a mouse wheel.
 
 ### Changed
 

@@ -188,13 +188,20 @@ export function usePictureZoom({
   // sideways sweep are the caller's to read (a deck's), as in the lightbox.
   useZoomGestures({
     ref: viewportRef,
+    // The middle button pans over any tool, and a trackpad's two fingers pan
+    // while the pinch zooms (`zoom-gestures.ts`) — his ask, 2026-11-28: with a
+    // mask's brush armed, the primary press is the brush's and nothing moved.
+    handPan: true,
     target: {
       scaleAt: () => live.current.view.scale,
       zoomTo: (scale, anchor) => zoomTo(scale, anchorOf(anchor.x, anchor.y)),
       panBy: (dx, dy, _at, by) => {
         const l = live.current;
-        if (by === 'wheel' && l.sweep && l.view.scale <= MIN_VIEW_ZOOM) {
-          l.sweep(dx);
+        if (by === 'wheel' && l.view.scale <= MIN_VIEW_ZOOM) {
+          // Fitted there is nothing to pan: a sideways glide is the caller's
+          // sweep, an upward or downward one nothing (a trackpad's glide pans
+          // here, it no longer zooms — the pinch does).
+          if (l.sweep && Math.abs(dx) >= Math.abs(dy)) l.sweep(dx);
           return;
         }
         panBy(dx, dy);

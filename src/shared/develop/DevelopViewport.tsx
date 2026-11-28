@@ -348,6 +348,8 @@ export default function DevelopViewport({
       onPointerDown={
         picking
           ? (e) => {
+              // The middle button pans (`handPan`); the dropper waits for the primary.
+              if (e.pointerType === 'mouse' && e.button === 1) return;
               e.preventDefault();
               e.stopPropagation();
               const read = picture.pickAt(e.clientX, e.clientY);
